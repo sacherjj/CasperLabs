@@ -26,8 +26,9 @@ no-upnp = false
 # Default timeout for roundtrip connections.
 default-timeout = "5second"
 
-# Bootstrap casperlabs node address for initial seed.
+# Bootstrap casperlabs node addresses for initial seeds. Empty defaut provided for standalone mode.
 # bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
+bootstrap = ""
 
 # Path to data directory.
 data-dir = "$HOME/.casperlabs"
@@ -85,6 +86,9 @@ init-sync-round-period = "30second"
 
 # Maximum number of blocks to allow to be synced initially.
 init-sync-max-block-count = 1000000
+
+# Time to wait between periodic synchronization attempts.
+periodic-sync-round-period = "60second"
 
 # Maximum number of parallel block downloads initiated by the download manager.
 download-max-parallel-blocks = 10
@@ -154,14 +158,20 @@ use-tls = false
 # io.casperlabs.comm.transport.Tls
 [tls]
 
-# Path to node's X.509 certificate file, that is being used for identification.
+# Path to node's X.509 certificate file, that is being used for identification during intra-node gossiping.
+# The Common Name in the certificate should be the same as the Keccak256 hash of the public key in it.
 certificate = "$HOME/.casperlabs/node.certificate.pem"
 
-# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for TLS communication.
+# Path to node's unencrypted secp256r1 PKCS#8 private key file, that is being used for intra-node TLS communication.
 key = "$HOME/.casperlabs/node.key.pem"
 
-# Use a non blocking secure random instance.
-secure-random-non-blocking = false
+# X.509 certificate used for the public facing API, preferrably one signed by a root CA
+# so that clients which can't implement custom SSL verificaton can use standard methods.
+# The Common Name should match the host name where the node is exposed.
+api-certificate = "$HOME/.casperlabs/api.certificate.pem"
+
+# Private key to use with the public API certificate.
+api-key = "$HOME/.casperlabs/api.key.pem"
 
 
 # io.casperlabs.casper.CasperConf

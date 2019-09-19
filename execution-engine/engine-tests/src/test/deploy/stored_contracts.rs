@@ -749,7 +749,7 @@ fn should_produce_same_transforms_as_exec() {
                 .build()
         };
 
-        test_support::WasmTestBuilder::new(config)
+        test_support::InMemoryWasmTestBuilder::new(config)
             .run_genesis(genesis_addr, HashMap::default())
             .exec_with_exec_request(request)
             .expect_success()

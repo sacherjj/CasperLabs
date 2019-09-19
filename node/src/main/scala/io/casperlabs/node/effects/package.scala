@@ -6,7 +6,6 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import cats.mtl._
-import doobie.free.connection
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
@@ -39,7 +38,7 @@ package object effects {
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
-  )(init: Option[Node])(
+  )(init: List[Node])(
       implicit
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
@@ -109,6 +108,11 @@ package object effects {
     config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
     config.setMinimumIdle(1)
     config.setMaximumPoolSize(1)
+    // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
+    // From doobie's docs:
+    // * - Auto-commit will be set to `false`;
+    // * - the transaction will `commit` on success and `rollback` on failure;
+    config.setAutoCommit(false)
     // Using a connection pool with maximum size of 1 becuase with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
@@ -121,13 +125,8 @@ package object effects {
       .map { xa =>
         // Foreign keys support must be enabled explicitly in SQLite
         // https://www.sqlite.org/foreignkeys.html#fk_enable
-        val mxa = Transactor.before
+        Transactor.before
           .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
-        // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
-        // From doobie's docs:
-        // * - Auto-commit will be set to `false`;
-        // * - the transaction will `commit` on success and `rollback` on failure;
-        Transactor.before.modify(mxa, _ >> connection.setAutoCommit(false))
       }
   }
 }

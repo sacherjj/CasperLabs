@@ -5,13 +5,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::iter::IntoIterator;
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
 use itertools::Itertools;
-use num_traits::ToPrimitive;
 use parity_wasm::elements::Module;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
@@ -21,7 +16,7 @@ use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
-use contract_ffi::value::{Account, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
 use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
@@ -30,7 +25,7 @@ use crate::execution::Error::{KeyNotFound, URefNotFound};
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
-use crate::URefAddr;
+use crate::Address;
 
 pub struct Runtime<'a, R> {
     memory: MemoryRef,
@@ -58,7 +53,7 @@ pub fn rename_export_to_call(module: &mut Module, name: String) {
 
 pub fn instance_and_memory(
     parity_module: Module,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<(ModuleRef, MemoryRef), Error> {
     let module = wasmi::Module::from_parity_wasm_module(parity_module)?;
     let resolver = create_module_resolver(protocol_version)?;
@@ -87,7 +82,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
 /// rights per key
 pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
     input: I,
-) -> HashMap<URefAddr, HashSet<AccessRights>> {
+) -> HashMap<Address, HashSet<AccessRights>> {
     input
         .into_iter()
         .map(|uref: URef| (uref.addr(), uref.access_rights()))
@@ -108,7 +103,7 @@ pub fn extract_access_rights_from_urefs<I: IntoIterator<Item = URef>>(
 /// per key.
 pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
     input: I,
-) -> HashMap<URefAddr, HashSet<AccessRights>> {
+) -> HashMap<Address, HashSet<AccessRights>> {
     input
         .into_iter()
         .map(key_to_tuple)
@@ -126,17 +121,6 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
         .collect()
 }
 
-pub fn create_rng(deploy_hahs: [u8; 32], phase: contract_ffi::execution::Phase) -> ChaChaRng {
-    let mut seed: [u8; 32] = [0u8; 32];
-    let mut data: Vec<u8> = Vec::new();
-    let mut hasher = VarBlake2b::new(32).unwrap();
-    data.extend(&deploy_hahs);
-    data.extend_from_slice(&[phase.to_u8().expect("Phase is represented as a u8")]);
-    hasher.input(data);
-    hasher.variable_result(|hash| seed.clone_from_slice(hash));
-    ChaChaRng::from_seed(seed)
-}
-
 fn sub_call<R: StateReader<Key, Value>>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
@@ -146,7 +130,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     // Unforgable references passed across the call boundary from caller to callee
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
-    protocol_version: u64,
+    protocol_version: ProtocolVersion,
 ) -> Result<Vec<u8>, Error>
 where
     R::Error: Into<Error>,
@@ -173,7 +157,7 @@ where
             current_runtime.context.gas_limit(),
             current_runtime.context.gas_counter(),
             current_runtime.context.fn_store_id(),
-            current_runtime.context.rng(),
+            current_runtime.context.address_generator(),
             protocol_version,
             current_runtime.context.correlation_id(),
             current_runtime.context.phase(),
@@ -193,7 +177,7 @@ where
                 match downcasted_error {
                     Error::Ret(ref ret_urefs) => {
                         //insert extra urefs returned from call
-                        let ret_urefs_map: HashMap<URefAddr, HashSet<AccessRights>> =
+                        let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.add_urefs(ret_urefs_map);
                         return Ok(runtime.result);
@@ -224,6 +208,10 @@ where
             host_buf: Vec::new(),
             context,
         }
+    }
+
+    pub fn result(&self) -> &[u8] {
+        self.result.as_slice()
     }
 
     pub fn context(&self) -> &RuntimeContext<'a, R> {

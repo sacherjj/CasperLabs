@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import cats._
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -77,7 +78,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
     }
   }
 
-  "fromBootstrap" should {
+  "fromBootstraps" should {
     "return UNAVAILABLE while there is no candidate" in {
       TestFixture.fromBootstrap(
         remoteCandidate = () => Task.raiseError(Unavailable("No candidate here."))
@@ -479,6 +480,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
     override def discover                            = ???
     override def lookup(id: NodeIdentifier)          = ???
     override def recentlyAlivePeersAscendingDistance = Task.now(peers)
+    override def banTemp(node: Node): Task[Unit]     = ???
   }
 
   class MockGossipService extends GossipService[Task] {
@@ -553,7 +555,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
         implicit scheduler: Scheduler
     ): Unit =
       GenesisApproverImpl
-        .fromBootstrap[Task](
+        .fromBootstraps[Task](
           backend = environment,
           new MockNodeDiscovery(peers),
           connectToGossip = (node: Node) =>
@@ -564,7 +566,7 @@ object GenesisApproverSpec extends ArbitraryConsensus {
                 gossipService
             },
           relayFactor,
-          bootstrap,
+          NonEmptyList.one(bootstrap),
           pollInterval,
           downloadManager = environment
         )

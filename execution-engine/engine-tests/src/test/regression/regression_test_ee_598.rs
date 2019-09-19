@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
-use test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 
 #[allow(unused)]
 mod test_support;
@@ -31,7 +31,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         result
     };
 
-    let result = WasmTestBuilder::default()
+    let result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, genesis_validators)
         .exec_with_args(
             GENESIS_ADDR,

@@ -48,7 +48,6 @@ object NodeUtils {
               protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
             } yield apply(NodeIdentifier(id), host.value, protocol, discovery)
         )
-
       maybePeer.fold[Either[CommError, Node]](Left(ParseError(s"bad address: $str")))(Right(_))
     }
   }

@@ -1,8 +1,12 @@
 use std::collections::HashMap;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
+use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -17,14 +21,16 @@ fn get_uref(key: Key) -> URef {
 fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let transforms = WasmTestBuilder::default()
+    let transforms = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::new())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "ee_441_rng_state.wasm",
+            (pass.to_string(),),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            (pass.to_string(),),
         )
         .expect_success()
         .commit()

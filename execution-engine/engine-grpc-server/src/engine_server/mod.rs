@@ -8,10 +8,10 @@ use std::time::Instant;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::U512;
+use contract_ffi::value::{ProtocolVersion, U512};
 use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
-use engine_core::engine_state::genesis::GenesisURefsSource;
+use engine_core::engine_state::genesis::{GenesisConfig, GenesisURefsSource};
 use engine_core::engine_state::{genesis::GenesisResult, EngineState, GetBondedValidatorsError};
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
@@ -155,7 +155,7 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let protocol_version = exec_request.get_protocol_version();
+        let protocol_version = exec_request.get_protocol_version().into();
 
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
@@ -163,7 +163,7 @@ where
         let blocktime = BlockTime(exec_request.get_block_time());
 
         // TODO: don't unwrap
-        let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
+        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
 
         let deploys = exec_request.get_deploys();
 
@@ -216,7 +216,7 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let protocol_version = exec_request.get_protocol_version();
+        let protocol_version = exec_request.get_protocol_version().into();
 
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
@@ -224,7 +224,7 @@ where
         let blocktime = BlockTime(exec_request.get_block_time());
 
         // TODO: don't unwrap
-        let wasm_costs = WasmCosts::from_version(protocol_version.value).unwrap();
+        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
 
         let deploys = exec_request.get_deploys();
 
@@ -333,8 +333,8 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let pay_mod = wabt::Module::read_binary(
-            validate_request.payment_code,
+        let module = wabt::Module::read_binary(
+            validate_request.wasm_code,
             &wabt::ReadBinaryOptions::default(),
         )
         .and_then(|x| x.validate());
@@ -342,24 +342,11 @@ where
         log_duration(
             correlation_id,
             METRIC_DURATION_VALIDATE,
-            "pay_mod",
+            "module",
             start.elapsed(),
         );
 
-        let ses_mod = wabt::Module::read_binary(
-            validate_request.session_code,
-            &wabt::ReadBinaryOptions::default(),
-        )
-        .and_then(|x| x.validate());
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            "ses_mod",
-            start.elapsed(),
-        );
-
-        let validate_result = match pay_mod.and(ses_mod) {
+        let validate_result = match module {
             Ok(_) => {
                 let mut validate_result = ipc::ValidateResponse::new();
                 validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
@@ -477,7 +464,7 @@ where
             }
         };
 
-        let protocol_version = genesis_request.get_protocol_version().value;
+        let protocol_version = genesis_request.get_protocol_version().into();
 
         let genesis_response = match self.commit_genesis(
             correlation_id,
@@ -537,16 +524,72 @@ where
     fn run_genesis_with_chainspec(
         &self,
         _request_options: ::grpc::RequestOptions,
-        _genesis_config: ipc::ChainSpec_GenesisConfig,
+        genesis_config: ipc::ChainSpec_GenesisConfig,
     ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
-        let mut genesis_response = ipc::GenesisResponse::new();
-        let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-        let err_msg = String::from("Unimplemented!");
+        let correlation_id = CorrelationId::new();
 
-        genesis_deploy_error.set_message(err_msg);
-        genesis_response.set_failed_deploy(genesis_deploy_error);
+        let genesis_config: GenesisConfig = match genesis_config.try_into() {
+            Ok(genesis_config) => genesis_config,
+            Err(error) => {
+                let err_msg = error.to_string();
+                logging::log_error(&err_msg);
+
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                genesis_deploy_error.set_message(err_msg);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
+                return grpc::SingleResponse::completed(genesis_response);
+            }
+        };
+
+        let genesis_response =
+            match self.commit_genesis_with_chainspec(correlation_id, genesis_config) {
+                Ok(GenesisResult::Success {
+                    post_state_hash,
+                    effect,
+                }) => {
+                    let success_message =
+                        format!("run_genesis_with_chainspec successful: {}", post_state_hash);
+                    log_info(&success_message);
+
+                    let mut genesis_response = ipc::GenesisResponse::new();
+                    let mut genesis_result = ipc::GenesisResult::new();
+                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                    genesis_result.set_effect(effect.into());
+                    genesis_response.set_success(genesis_result);
+                    genesis_response
+                }
+                Ok(genesis_result) => {
+                    let err_msg = genesis_result.to_string();
+                    logging::log_error(&err_msg);
+
+                    let mut genesis_response = ipc::GenesisResponse::new();
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+                    genesis_response.set_failed_deploy(genesis_deploy_error);
+                    genesis_response
+                }
+                Err(err) => {
+                    let err_msg = err.to_string();
+                    logging::log_error(&err_msg);
+
+                    let mut genesis_response = ipc::GenesisResponse::new();
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+                    genesis_response.set_failed_deploy(genesis_deploy_error);
+                    genesis_response
+                }
+            };
 
         grpc::SingleResponse::completed(genesis_response)
+    }
+
+    fn upgrade(
+        &self,
+        _request_options: ::grpc::RequestOptions,
+        _upgrade_request: ipc::UpgradeRequest,
+    ) -> ::grpc::SingleResponse<ipc::UpgradeResponse> {
+        unimplemented!("todo: impl upgrade endpoint")
     }
 }
 
@@ -558,7 +601,7 @@ fn run_deploys<A, S, E, P>(
     prestate_hash: Blake2bHash,
     blocktime: BlockTime,
     deploys: &[ipc::Deploy],
-    protocol_version: &state::ProtocolVersion,
+    protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
@@ -628,7 +671,7 @@ where
                 buff.copy_from_slice(hash_slice);
                 buff
             };
-            let protocol_version = protocol_version.value;
+
             engine_state
                 .run_deploy(
                     session_module_bytes,
@@ -659,7 +702,7 @@ fn execute_deploys<A, S, E, P>(
     prestate_hash: Blake2bHash,
     blocktime: BlockTime,
     deploys: &[ipc::DeployItem],
-    protocol_version: &state::ProtocolVersion,
+    protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
@@ -740,7 +783,6 @@ where
                 buff
             };
 
-            let protocol_version = protocol_version.value;
             engine_state
                 .run_deploy_item(
                     session_payload,

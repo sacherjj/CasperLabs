@@ -1,17 +1,20 @@
 import threading
-from test.cl_node.docker_node import DockerNode
+from casperlabs_local_net.docker_node import DockerNode
 from typing import List
 import pytest
 import logging
-from .cl_node.casperlabs_network import ThreeNodeNetwork, CustomConnectionNetwork
-from .cl_node.common import extract_block_hash_from_propose_output
-from .cl_node.wait import (
+from casperlabs_local_net.casperlabs_network import (
+    ThreeNodeNetwork,
+    CustomConnectionNetwork,
+)
+from casperlabs_local_net.common import extract_block_hash_from_propose_output, Contract
+from casperlabs_local_net.wait import (
     wait_for_genesis_block,
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,
     wait_for_peers_count_exactly,
 )
-from test.cl_node.casperlabs_accounts import Account, GENESIS_ACCOUNT
+from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
 
 
 class DeployThread(threading.Thread):
@@ -36,7 +39,6 @@ class DeployThread(threading.Thread):
             for contract in batch:
                 deploy_response = self.node.client.deploy(
                     session_contract=contract,
-                    payment_contract=contract,
                     from_address=self.account.public_key_hex,
                     public_key=self.account.public_key_path,
                     private_key=self.account.private_key_path,
@@ -67,7 +69,7 @@ def nodes(docker_client_fixture):
 
 @pytest.mark.parametrize(
     "contract_paths, expected_number_of_blocks",
-    [([["test_helloname.wasm"], ["test_helloworld.wasm"]], 7)],
+    [([[Contract.HELLONAME], [Contract.HELLOWORLD]], 7)],
 )
 def test_block_propagation(
     nodes, contract_paths: List[List[str]], expected_number_of_blocks
@@ -100,7 +102,6 @@ def deploy_and_propose(node, contract):
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
         session_contract=contract,
-        payment_contract=contract,
     )
     if type(deploy_output) == str:
         assert "Success" in deploy_output
@@ -160,7 +161,7 @@ def four_nodes_network(docker_client_fixture):
         yield network
 
 
-C = ["test_helloname.wasm", "test_mailinglistdefine.wasm", "test_helloworld.wasm"]
+C = [Contract.HELLONAME, Contract.MAILINGLISTDEFINE, Contract.HELLOWORLD]
 
 
 def test_network_partition_and_rejoin(four_nodes_network):

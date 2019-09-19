@@ -1,10 +1,5 @@
 # Running the CasperLabs Node
 ---
-## Known Issues
-
-Currently there is a known issue with building and running the execution-engine binaries on a Mac. We recommend using docker for now until a fix is made.
----
-
 The CasperLabs node consists of two components:
 * `casperlabs-engine-grpc-server`, which executes smart contracts and persists the effects of these executions.
 * `casperlabs-node`, which handles peer-to-peer communication, consensus, and block storage.
@@ -33,13 +28,13 @@ Or you can run the following commands from the root directory of the repo, using
 
 ### Running a validator on the CasperLabs Network
 
-##### Step 1: Create an account at [explorer.casperlabs.io](https://explorer.casperlabs.io)
+##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will run the node.  This will be your validator account and keypair.
 
 ##### Step 2: Add coins to this account
 
-Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/faucet).
+Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
 
 ##### Step 3: Bond your validator onto the network
 
@@ -47,9 +42,14 @@ Add coins to this account using the [faucet](https://explorer.casperlabs.io/#/fa
 casperlabs-client \
     --host deploy.casperlabs.io \
     bond \
+    --payment-amount 1 \
     --amount <bond-amount> \
     --private-key <path-to-private-key>
 ```
+
+Note: `--payment-amount` is used in the standard payment code to pay for the execution.
+For now, the value is not used, but payment code will be enabled on the DEVNET
+in an upcoming release.
 
 ##### Step 4: Start the Execution Engine
 
@@ -76,11 +76,13 @@ First, you must unbond:
 casperlabs-client \
     --host deploy.casperlabs.io \
     unbond \
+    --payment-amount 1 \
     --amount <unbond-amount> \
     --private-key <path-to-private-key>
 ```
 
 The `--amount` argument here is optional: you can partially unbond by providing an amount that is smaller than your bond amount, or you can omit this argument to unbond your full bond amount.
+(See note above about `--payment-amount`).
 
 After that, you can safely stop processes:
 ```
@@ -96,7 +98,7 @@ You can run a single Node in standalone mode for testing purposes.
 
 ```
 mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo "100") >> ~/.casperlabs/genesis/bonds.txt
+(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
 ```
 
 ##### Step 2: Start the Execution Engine
@@ -110,7 +112,7 @@ casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 ```
 casperlabs-node run \
-    --standalone \
+    --casper-standalone \
     --tls-key ./keys/node.key.pem \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \

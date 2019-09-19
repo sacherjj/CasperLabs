@@ -112,10 +112,15 @@ prop_compose! {
 pub fn contract_arb() -> impl Strategy<Value = Contract> {
     any::<u64>().prop_flat_map(move |u64arb| {
         uref_map_arb(20).prop_flat_map(move |urefs| {
-            vec(any::<u8>(), 1..1000)
-                .prop_map(move |body| Contract::new(body, urefs.clone(), u64arb))
+            vec(any::<u8>(), 1..1000).prop_map(move |body| {
+                Contract::new(body, urefs.clone(), ProtocolVersion::new(u64arb))
+            })
         })
     })
+}
+
+pub fn protocol_version_arb() -> impl Strategy<Value = ProtocolVersion> {
+    prop_oneof![Just(ProtocolVersion::new(1)),]
 }
 
 pub fn u128_arb() -> impl Strategy<Value = U128> {

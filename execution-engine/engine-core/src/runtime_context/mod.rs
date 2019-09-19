@@ -6,8 +6,6 @@ use std::rc::Rc;
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
-use rand::RngCore;
-use rand_chacha::ChaChaRng;
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes};
 use contract_ffi::execution::Phase;
@@ -17,15 +15,15 @@ use contract_ffi::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight,
 };
-use contract_ffi::value::{Contract, Value};
+use contract_ffi::value::{Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
 
 use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::execution::Error;
+use crate::execution::{AddressGenerator, Error};
 use crate::tracking_copy::{AddResult, TrackingCopy};
-use crate::URefAddr;
+use crate::Address;
 
 #[cfg(test)]
 mod tests;
@@ -36,7 +34,7 @@ pub struct RuntimeContext<'a, R> {
     // Enables look up of specific uref based on human-readable name
     uref_lookup: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
-    known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
+    known_urefs: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<Vec<u8>>,
@@ -49,8 +47,8 @@ pub struct RuntimeContext<'a, R> {
     gas_limit: Gas,
     gas_counter: Gas,
     fn_store_id: u32,
-    rng: Rc<RefCell<ChaChaRng>>,
-    protocol_version: u64,
+    address_generator: Rc<RefCell<AddressGenerator>>,
+    protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
     phase: Phase,
 }
@@ -63,7 +61,7 @@ where
     pub fn new(
         state: Rc<RefCell<TrackingCopy<R>>>,
         uref_lookup: &'a mut BTreeMap<String, Key>,
-        known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
+        known_urefs: HashMap<Address, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
@@ -73,8 +71,8 @@ where
         gas_limit: Gas,
         gas_counter: Gas,
         fn_store_id: u32,
-        rng: Rc<RefCell<ChaChaRng>>,
-        protocol_version: u64,
+        address_generator: Rc<RefCell<AddressGenerator>>,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         phase: Phase,
     ) -> Self {
@@ -91,7 +89,7 @@ where
             gas_limit,
             gas_counter,
             fn_store_id,
-            rng,
+            address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -206,7 +204,7 @@ where
         self.deploy_hash
     }
 
-    pub fn add_urefs(&mut self, urefs_map: HashMap<URefAddr, HashSet<AccessRights>>) {
+    pub fn add_urefs(&mut self, urefs_map: HashMap<Address, HashSet<AccessRights>>) {
         self.known_urefs.extend(urefs_map);
     }
 
@@ -218,8 +216,8 @@ where
         &self.args
     }
 
-    pub fn rng(&self) -> Rc<RefCell<ChaChaRng>> {
-        Rc::clone(&self.rng)
+    pub fn address_generator(&self) -> Rc<RefCell<AddressGenerator>> {
+        Rc::clone(&self.address_generator)
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -255,7 +253,7 @@ where
         }
     }
 
-    pub fn protocol_version(&self) -> u64 {
+    pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
 
@@ -289,8 +287,7 @@ where
 
     pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
         let uref = {
-            let mut addr = [0u8; 32];
-            self.rng.borrow_mut().fill_bytes(&mut addr);
+            let addr = self.address_generator.borrow_mut().create_address();
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
         let key = Key::URef(uref);

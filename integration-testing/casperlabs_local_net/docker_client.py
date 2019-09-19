@@ -1,22 +1,36 @@
 import time
-from typing import Optional
+from typing import Optional, Union
 import docker.errors
-import os
+import json
 from pathlib import Path
 
-from test.cl_node import LoggingMixin
-from test.cl_node.common import extract_block_count_from_show_blocks
-from test.cl_node.common import extract_block_hash_from_propose_output
-from test.cl_node.client_base import CasperLabsClient
-from test.cl_node.common import random_string
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.client_parser import parse, parse_show_deploys
+from casperlabs_local_net import LoggingMixin
+from casperlabs_local_net.common import (
+    extract_block_count_from_show_blocks,
+    extract_block_hash_from_propose_output,
+    random_string,
+    Contract,
+    MAX_PAYMENT_COST,
+    resources_path,
+)
+from casperlabs_local_net.client_base import CasperLabsClient
+from casperlabs_local_net.errors import NonZeroExitCodeError
+from casperlabs_local_net.client_parser import parse, parse_show_deploys
 from casperlabs_client import extract_common_name
 
 
 def resource(file_name):
-    resources_path = "../../resources/"
-    return Path(os.path.dirname(os.path.realpath(__file__)), resources_path, file_name)
+    return resources_path() / file_name
+
+
+_MAX_PAYMENT_JSON = json.dumps(
+    [
+        {
+            "name": "amount",
+            "value": {"big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}},
+        }
+    ]
+)
 
 
 class DockerClient(CasperLabsClient, LoggingMixin):
@@ -125,20 +139,22 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         self,
         from_address: str = None,
         gas_price: int = 1,
-        session_contract: str = None,
-        payment_contract: str = None,
-        private_key: Optional[str] = None,
-        public_key: Optional[str] = None,
+        nonce: int = None,  # nonce == None means framework should provide correct nonce
+        session_contract: Optional[Union[str, Path]] = None,
+        session_args: Optional[str] = None,
+        payment_contract: Optional[Union[str, Path]] = Contract.STANDARD_PAYMENT,
+        payment_args: Optional[str] = _MAX_PAYMENT_JSON,
+        public_key: Optional[Union[str, Path]] = None,
+        private_key: Optional[Union[str, Path]] = None,
     ) -> str:
 
-        assert session_contract is not None
-        assert payment_contract is not None
+        if session_contract is None:
+            raise ValueError(f"session_contract is required.")
 
         address = from_address or self.node.test_account.public_key_hex
 
         def docker_account_path(p):
             """Convert path of account key file to docker client's path in /data"""
-
             return Path(*(["/data"] + str(p).split("/")[-2:]))
 
         public_key = docker_account_path(
@@ -148,8 +164,6 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             private_key or self.node.test_account.private_key_path
         )
 
-        payment_contract = payment_contract or session_contract
-
         command = (
             f"deploy --from {address}"
             f" --gas-price {gas_price}"
@@ -157,7 +171,10 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             f" --payment=/data/{payment_contract}"
             f" --private-key={private_key}"
             f" --public-key={public_key}"
+            f" --payment-args='{payment_args}'"
         )
+        if session_args:
+            command += f" --session-args='{session_args}'"
 
         return self.invoke_client(command)
 
@@ -205,3 +222,44 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def query_purse_balance(self, block_hash: str, purse_id: str) -> Optional[float]:
         raise NotImplementedError()
+
+    def deploy_and_propose(self, **deploy_kwargs) -> str:
+        if "from_address" not in deploy_kwargs:
+            deploy_kwargs["from_address"] = self.node.from_address
+
+        deploy_output = self.deploy(**deploy_kwargs)
+
+        if "Success!" not in deploy_output:
+            raise Exception(f"Deploy failed: {deploy_output}")
+
+        propose_output = self.propose()
+
+        block_hash = extract_block_hash_from_propose_output(propose_output)
+
+        if block_hash is None:
+            raise Exception(
+                f"Block Hash not extracted from propose output: {propose_output}"
+            )
+
+        self.logger.info(
+            f"The block hash: {block_hash} generated for {self.node.container_name}"
+        )
+
+        return block_hash
+
+    def deploy_and_propose_with_retry(
+        self, max_attempts: int, retry_seconds: int, **deploy_kwargs
+    ) -> str:
+        deploy_output = self.deploy(**deploy_kwargs)
+        if "Success!" not in deploy_output:
+            raise Exception(f"Deploy failed: {deploy_output}")
+
+        block_hash = self.propose_with_retry(max_attempts, retry_seconds)
+        if block_hash is None:
+            raise Exception(f"Block Hash not received from propose_with_retry.")
+
+        self.logger.info(
+            f"The block hash: {block_hash} generated for {self.node.container.name}"
+        )
+
+        return block_hash

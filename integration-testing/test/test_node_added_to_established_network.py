@@ -1,5 +1,5 @@
-from test.cl_node.common import HELLO_NAME_CONTRACT
-from test.cl_node.wait import (
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import (
     get_new_blocks_requests_total,
     wait_for_block_hashes_propagated_to_all_nodes,
     wait_for_gossip_metrics_and_assert_blocks_gossiped,
@@ -14,9 +14,8 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
     network = two_node_network
 
     def propose(node):
-        block_hash = node.deploy_and_propose(
-            session_contract=HELLO_NAME_CONTRACT,
-            payment_contract=HELLO_NAME_CONTRACT,
+        block_hash = node.d_client.deploy_and_propose(
+            session_contract=Contract.HELLONAME,
             from_address=node.genesis_account.public_key_hex,
             public_key=node.genesis_account.public_key_path,
             private_key=node.genesis_account.private_key_path,

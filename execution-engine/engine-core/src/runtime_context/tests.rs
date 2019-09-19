@@ -4,7 +4,6 @@ use std::iter::{self, FromIterator};
 use std::rc::Rc;
 
 use rand::RngCore;
-use rand_chacha::ChaChaRng;
 
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
@@ -13,16 +12,20 @@ use contract_ffi::value::account::{
     AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
     RemoveKeyFailure, SetThresholdFailure, Weight,
 };
-use contract_ffi::value::{self, Account, Contract, Value};
+use contract_ffi::value::{self, Account, Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
 use engine_storage::global_state::{CommitResult, StateProvider};
 
-use super::{Error, RuntimeContext, URefAddr, Validated};
-use crate::execution::{create_rng, extract_access_rights_from_keys};
+use super::{Address, Error, RuntimeContext, Validated};
+use crate::execution::extract_access_rights_from_keys;
+use crate::execution::AddressGenerator;
 use crate::tracking_copy::TrackingCopy;
+
+const DEPLOY_HASH: [u8; 32] = [1u8; 32];
+const PHASE: Phase = Phase::Session;
 
 fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalStateView> {
     let correlation_id = CorrelationId::new();
@@ -82,11 +85,10 @@ fn random_contract_key<G: RngCore>(entropy_source: &mut G) -> Key {
     Key::Hash(key)
 }
 
-// Create random URef Key.
-fn random_uref_key<G: RngCore>(entropy_source: &mut G, rights: AccessRights) -> Key {
-    let mut key = [0u8; 32];
-    entropy_source.fill_bytes(&mut key);
-    Key::URef(URef::new(key, rights))
+// Create URef Key.
+fn create_uref(address_generator: &mut AddressGenerator, rights: AccessRights) -> Key {
+    let address = address_generator.create_address();
+    Key::URef(URef::new(address, rights))
 }
 
 fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
@@ -99,8 +101,8 @@ fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
     uref_map: &'a mut BTreeMap<String, Key>,
-    known_urefs: HashMap<URefAddr, HashSet<AccessRights>>,
-    rng: ChaChaRng,
+    known_urefs: HashMap<Address, HashSet<AccessRights>>,
+    address_generator: AddressGenerator,
 ) -> RuntimeContext<'a, InMemoryGlobalStateView> {
     let tc = mock_tc(base_key, account.clone());
     RuntimeContext::new(
@@ -116,8 +118,8 @@ fn mock_runtime_context<'a>(
         Gas::default(),
         Gas::default(),
         0,
-        Rc::new(RefCell::new(rng)),
-        1,
+        Rc::new(RefCell::new(address_generator)),
+        ProtocolVersion::new(1),
         CorrelationId::new(),
         Phase::Session,
     )
@@ -142,7 +144,7 @@ fn assert_invalid_access<T: std::fmt::Debug>(result: Result<T, Error>, expecting
     }
 }
 
-fn test<T, F>(known_urefs: HashMap<URefAddr, HashSet<AccessRights>>, query: F) -> Result<T, Error>
+fn test<T, F>(known_urefs: HashMap<Address, HashSet<AccessRights>>, query: F) -> Result<T, Error>
 where
     F: Fn(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
@@ -150,17 +152,17 @@ where
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
     let mut uref_map = BTreeMap::new();
-    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
+    let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
     query(runtime_context)
 }
 
 #[test]
 fn use_uref_valid() {
     // Test fixture
-    let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
@@ -171,8 +173,8 @@ fn use_uref_valid() {
 #[test]
 fn use_uref_forged() {
     // Test fixture
-    let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = HashMap::new();
     let query_result = test(known_urefs, |mut rc| rc.write_gs(uref, Value::Int32(43)));
 
@@ -181,14 +183,14 @@ fn use_uref_forged() {
 
 #[test]
 fn store_contract_with_uref_valid() {
-    let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
 
     let contract = Value::Contract(Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     ));
 
     let query_result = test(known_urefs, |mut rc| {
@@ -208,12 +210,12 @@ fn store_contract_with_uref_valid() {
 
 #[test]
 fn store_contract_with_uref_forged() {
-    let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let contract = Value::Contract(Contract::new(
         Vec::new(),
         iter::once(("ForgedURef".to_owned(), uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     ));
 
     let query_result = test(HashMap::new(), |mut rc| rc.store_contract(contract.clone()));
@@ -225,13 +227,13 @@ fn store_contract_with_uref_forged() {
 fn store_contract_under_uref_valid() {
     // Test that storing contract under URef that is known and has WRITE access
     // works.
-    let mut rng = rand::thread_rng();
-    let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
     let contract: Value = Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
-        1,
+        ProtocolVersion::new(1),
     )
     .into();
 
@@ -252,9 +254,10 @@ fn store_contract_under_uref_valid() {
 fn store_contract_under_uref_forged() {
     // Test that storing contract under URef that is not known fails with
     // ForgedReference error.
-    let mut rng = rand::thread_rng();
-    let contract_uref = random_uref_key(&mut rng, AccessRights::READ_WRITE);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
 
     let query_result = test(HashMap::new(), |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -267,10 +270,11 @@ fn store_contract_under_uref_forged() {
 fn store_contract_uref_invalid_access() {
     // Test that storing contract under URef that is known but is not writeable
     // fails.
-    let mut rng = rand::thread_rng();
-    let contract_uref = random_uref_key(&mut rng, AccessRights::READ);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let contract_uref = create_uref(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
 
     let query_result = test(known_urefs, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -323,8 +327,8 @@ fn account_key_readable_invalid() {
 fn account_key_addable_valid() {
     // Account key is addable if it is a "base" key - current context of the
     // execution.
-    let mut rng = rand::thread_rng();
-    let uref = random_uref_key(&mut rng, AccessRights::READ);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref = create_uref(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
     let query_result = test(known_urefs, |mut rc| {
         let base_key = rc.base_key();
@@ -390,11 +394,12 @@ fn contract_key_addable_valid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let deploy_hash = [1u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
+    let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(
@@ -403,9 +408,8 @@ fn contract_key_addable_valid() {
     );
 
     let mut uref_map = BTreeMap::new();
-    let uref = random_uref_key(&mut rng, AccessRights::WRITE);
+    let uref = create_uref(&mut address_generator, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
 
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
@@ -416,14 +420,14 @@ fn contract_key_addable_valid() {
         &account,
         contract_key,
         BlockTime(0),
-        deploy_hash,
+        DEPLOY_HASH,
         Gas::default(),
         Gas::default(),
         0,
-        Rc::new(RefCell::new(chacha_rng)),
-        1,
+        Rc::new(RefCell::new(address_generator)),
+        ProtocolVersion::new(1),
         CorrelationId::new(),
-        Phase::Session,
+        PHASE,
     );
 
     let uref_name = "NewURef".to_owned();
@@ -433,8 +437,12 @@ fn contract_key_addable_valid() {
         .add_gs(contract_key, named_key)
         .expect("Adding should work.");
 
-    let updated_contract: Value =
-        Contract::new(Vec::new(), iter::once((uref_name, uref)).collect(), 1).into();
+    let updated_contract: Value = Contract::new(
+        Vec::new(),
+        iter::once((uref_name, uref)).collect(),
+        ProtocolVersion::new(1),
+    )
+    .into();
 
     assert_eq!(
         *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
@@ -447,12 +455,13 @@ fn contract_key_addable_invalid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let deploy_hash = [1u8; 32];
     let (account_key, account) = mock_account(base_acc_addr);
+    let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
-    let contract: Value = Contract::new(Vec::new(), BTreeMap::new(), 1).into();
+    let contract: Value =
+        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(
@@ -461,9 +470,8 @@ fn contract_key_addable_invalid() {
     );
 
     let mut uref_map = BTreeMap::new();
-    let uref = random_uref_key(&mut rng, AccessRights::WRITE);
+    let uref = create_uref(&mut address_generator, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
@@ -473,14 +481,14 @@ fn contract_key_addable_invalid() {
         &account,
         other_contract_key,
         BlockTime(0),
-        deploy_hash,
+        DEPLOY_HASH,
         Gas::default(),
         Gas::default(),
         0,
-        Rc::new(RefCell::new(chacha_rng)),
-        1,
+        Rc::new(RefCell::new(address_generator)),
+        ProtocolVersion::new(1),
         CorrelationId::new(),
-        Phase::Session,
+        PHASE,
     );
 
     let uref_name = "NewURef".to_owned();
@@ -493,8 +501,8 @@ fn contract_key_addable_invalid() {
 
 #[test]
 fn uref_key_readable_valid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::READ);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
     assert!(query_result.is_ok());
@@ -502,8 +510,8 @@ fn uref_key_readable_valid() {
 
 #[test]
 fn uref_key_readable_invalid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
     assert_invalid_access(query_result, AccessRights::READ);
@@ -511,8 +519,8 @@ fn uref_key_readable_invalid() {
 
 #[test]
 fn uref_key_writeable_valid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
     assert!(query_result.is_ok());
@@ -520,8 +528,8 @@ fn uref_key_writeable_valid() {
 
 #[test]
 fn uref_key_writeable_invalid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::READ);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::READ);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
     assert_invalid_access(query_result, AccessRights::WRITE);
@@ -529,8 +537,8 @@ fn uref_key_writeable_invalid() {
 
 #[test]
 fn uref_key_addable_valid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::ADD_WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::ADD_WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| {
         rc.write_gs(uref_key, Value::Int32(10))
@@ -542,8 +550,8 @@ fn uref_key_addable_valid() {
 
 #[test]
 fn uref_key_addable_invalid() {
-    let mut rng = rand::thread_rng();
-    let uref_key = random_uref_key(&mut rng, AccessRights::WRITE);
+    let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
+    let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
     assert_invalid_access(query_result, AccessRights::ADD);
@@ -836,12 +844,12 @@ fn remove_uref_works() {
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
-    let mut chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
+    let mut address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
-    let uref_key = random_uref_key(&mut chacha_rng, AccessRights::READ);
+    let uref_key = create_uref(&mut address_generator, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
     let mut runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
 
     assert!(runtime_context.contains_uref(&uref_name));
     assert!(runtime_context.remove_uref(&uref_name).is_ok());
@@ -864,10 +872,10 @@ fn validate_valid_purse_id_of_an_account() {
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
-    let chacha_rng = create_rng(deploy_hash, contract_ffi::execution::Phase::Session);
+    let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, chacha_rng);
+        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
 
     // URef that has the same id as purse_id of an account gets validated
     // successfully.

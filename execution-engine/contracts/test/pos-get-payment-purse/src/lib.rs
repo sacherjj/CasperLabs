@@ -5,7 +5,7 @@ extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, PurseTransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
@@ -24,11 +24,11 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     let pos_pointer = {
-        let outer: UPointer<Key> = contract_api::get_uref("pos")
-            .and_then(Key::to_u_ptr)
+        let outer: TURef<Key> = contract_api::get_uref("pos")
+            .and_then(Key::to_turef)
             .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
         if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(UPointer::new(inner.0, AccessRights::READ))
+            ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
         } else {
             contract_api::revert(Error::GetPosOuterURef as u32);
         }
@@ -36,6 +36,8 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
+    // amount passed to payment contract
+    let payment_fund: U512 = contract_api::get_arg(0);
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
@@ -51,7 +53,7 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::GetBalance as u32),
     };
 
-    if payment_balance != payment_amount {
+    if payment_balance.saturating_sub(payment_fund) != payment_amount {
         contract_api::revert(Error::CheckBalance as u32)
     }
 

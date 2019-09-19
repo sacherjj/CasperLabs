@@ -1,9 +1,17 @@
+from pathlib import Path
 import os
 import logging
+import json
 import subprocess
 from operator import add
 from functools import reduce
-from test.cl_node.client_parser import parse_show_blocks, parse_show_deploys, parse
+
+from casperlabs_local_net.client_parser import (
+    parse_show_blocks,
+    parse_show_deploys,
+    parse,
+)
+from casperlabs_local_net.common import MAX_PAYMENT_COST, resources_path
 
 
 class CLIErrorExit(Exception):
@@ -16,6 +24,11 @@ class CLIErrorExit(Exception):
 
 
 class CLI:
+
+    _MAX_PAYMENT_JSON = json.dumps(
+        [{"name": "amount", "value": {"u512": MAX_PAYMENT_COST}}]
+    )
+
     def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
         self.node = node
         self.host = (
@@ -25,6 +38,15 @@ class CLI:
         self.internal_port = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
         self.tls_parameters = tls_parameters or {}
+        self.default_deploy_args = []
+        self.resources_directory = resources_path()
+
+    def set_default_deploy_args(self, *args):
+        """ Set args that will be appended to subsequent deploy command. """
+        self.default_deploy_args = [str(arg) for arg in args]
+
+    def resource(self, file_name):
+        return self.resources_directory / file_name
 
     def expand_args(self, args):
         connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
@@ -33,11 +55,15 @@ class CLI:
                 add,
                 [[str(p), str(self.tls_parameters[p])] for p in self.tls_parameters],
             )
-        string_args = [str(a) for a in args]
+        string_args = [str(a) for a in list(args)]
+
+        if args and args[0] == "deploy":
+            string_args += self.default_deploy_args
 
         return "--help" in args and string_args or connection_details + string_args
 
-    def parse_output(self, command, binary_output):
+    @staticmethod
+    def parse_output(command, binary_output):
 
         if command in ("make-deploy", "sign-deploy"):
             return binary_output
@@ -81,8 +107,37 @@ class CLI:
 
         return self.parse_output(args[0], binary_output)
 
+    def public_key_path(self, account):
+        return account.public_key_path
+
+    def private_key_path(self, account):
+        return account.private_key_path
+
+    def format_json_str(self, args: str) -> str:
+        return args
+
+    @property
+    def payment_json(self) -> str:
+        return self.format_json_str(self._MAX_PAYMENT_JSON)
+
 
 class DockerCLI(CLI):
+
+    _MAX_PAYMENT_JSON = json.dumps(
+        [
+            {
+                "name": "amount",
+                "value": {
+                    "big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}
+                },
+            }
+        ]
+    )
+
+    def __init__(self, node, tls_parameters=None):
+        super().__init__(node, tls_parameters=tls_parameters)
+        self.resources_directory = Path("/data/")
+
     def __call__(self, *args):
         logging.info(f"EXECUTING []: {args}")
         self.host = self.node.container_name
@@ -92,3 +147,12 @@ class DockerCLI(CLI):
             command, decode_stdout=False, add_host=False
         )
         return self.parse_output(args[0], binary_output)
+
+    def public_key_path(self, account):
+        return account.public_key_docker_path
+
+    def private_key_path(self, account):
+        return account.private_key_docker_path
+
+    def format_json_str(self, args: str) -> str:
+        return f"'{args}'"

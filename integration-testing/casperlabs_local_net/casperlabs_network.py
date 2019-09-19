@@ -1,14 +1,19 @@
 import logging
 import os
 import threading
-from test.cl_node.casperlabs_node import CasperLabsNode
-from test.cl_node.common import random_string, MAX_PAYMENT_COST
-from test.cl_node.docker_base import DockerConfig
-from test.cl_node.docker_execution_engine import DockerExecutionEngine
-from test.cl_node.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
-from test.cl_node.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
-from test.cl_node.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from test.cl_node.wait import (
+from casperlabs_local_net.casperlabs_node import CasperLabsNode
+from casperlabs_local_net.common import (
+    random_string,
+    MAX_PAYMENT_COST,
+    INITIAL_MOTES_AMOUNT,
+    TEST_ACCOUNT_INITIAL_BALANCE,
+)
+from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
+from casperlabs_local_net.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
+from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_approved_block_received_handler_state,
     wait_for_node_started,
@@ -38,8 +43,8 @@ class CasperLabsNetwork:
     Convention is naming the bootstrap as number 0 and all others increment from that point.
     """
 
-    is_payment_code_enabled = False
     grpc_encryption = False
+    initial_motes = INITIAL_MOTES_AMOUNT
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
@@ -73,7 +78,7 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
-    def test_account(self, node, amount=1000000) -> Account:
+    def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
         if not name:
             # This happens when a thread tries to deploy.
@@ -135,7 +140,6 @@ class CasperLabsNetwork:
             self.docker_client,
             node_private_key=kp.private_key,
             node_account=kp,
-            is_payment_code_enabled=self.is_payment_code_enabled,
             grpc_encryption=self.grpc_encryption,
         )
         self.add_cl_node(config)
@@ -233,36 +237,44 @@ class CasperLabsNetwork:
 class OneNodeNetwork(CasperLabsNetwork):
     """ A single node network with just a bootstrap """
 
-    is_payment_code_enabled = False
-    initial_motes = MAX_PAYMENT_COST * 100  # 10 millions * 100 = 1 billion motes
     grpc_encryption = False
 
     def create_cl_network(self):
-        kp = self.get_key()
+        account = self.get_key()
+        self.add_bootstrap(self.docker_config(account))
+        wait_for_genesis_block(self.docker_nodes[0])
+
+    def docker_config(self, account):
         config = DockerConfig(
             self.docker_client,
-            node_private_key=kp.private_key,
-            node_public_key=kp.public_key,
+            node_private_key=account.private_key,
+            node_public_key=account.public_key,
             network=self.create_docker_network(),
-            is_payment_code_enabled=self.is_payment_code_enabled,
             initial_motes=self.initial_motes,
-            node_account=kp,
+            node_account=account,
             grpc_encryption=self.grpc_encryption,
         )
-        self.add_bootstrap(config)
-        wait_for_genesis_block(self.docker_nodes[0])
+        return config
+
+
+class ReadOnlyNodeNetwork(OneNodeNetwork):
+    is_payment_code_enabled = True
+
+    def docker_config(self, account):
+        config = super().docker_config(account)
+        config.is_read_only = True
+        return config
 
 
 class PaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
+    pass
 
 
 class TrillionPaymentNodeNetwork(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
     initial_motes = (
         MAX_PAYMENT_COST * 100 * 1000
     )  # 10 millions * 100 * 1000 =  billion motes * 1000 = trillion
@@ -271,13 +283,10 @@ class TrillionPaymentNodeNetwork(OneNodeNetwork):
 class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
     """ A single node network with payment code enabled"""
 
-    is_payment_code_enabled = True
     initial_motes = 10 ** 3
 
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
-    is_payment_code_enabled = True
-    initial_motes = MAX_PAYMENT_COST * 100
     grpc_encryption = True
 
 
@@ -299,8 +308,6 @@ class TwoNodeNetwork(CasperLabsNetwork):
 
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
-    is_payment_code_enabled = True
-    initial_motes = MAX_PAYMENT_COST * 100
     grpc_encryption = True
 
 

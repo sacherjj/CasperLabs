@@ -31,11 +31,11 @@ all: \
 	cargo-package-all
 
 # Push the local artifacts to repositories.
-publish: \
-	docker-push-all \
-	cargo-publish-all
+publish: docker-push-all
+	$(MAKE) -C execution-engine publish
 
-clean: cargo/clean
+clean:
+	$(MAKE) -C execution-engine clean
 	sbt clean
 	cd explorer/ui && rm -rf node_modules build
 	cd explorer/server && rm -rf node_modules dist
@@ -77,7 +77,6 @@ docker-push/%: docker-build/%
 
 
 cargo-package-all: \
-	.make/cargo-package/execution-engine/contract-ffi \
 	cargo-native-packager/execution-engine/engine-grpc-server \
 	package-system-contracts
 
@@ -88,16 +87,6 @@ cargo-native-packager/%:
 	else \
 		$(MAKE) .make/cargo-native-packager/$* ; \
 	fi
-
-# We need to publish the libraries the contracts are supposed to use.
-cargo-publish-all: \
-	.make/cargo-publish/execution-engine/contract-ffi
-
-cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{print $$1"/clean"}')
-
-%/Cargo.toml/clean:
-	cd $* && ([ -d target ] && cargo clean --target-dir target || cargo clean)
-
 
 # Build the `latest` docker image for local testing. Works with Scala.
 .make/docker-build/universal/%: \
@@ -262,49 +251,28 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 	mkdir -p $(dir $@) && touch $@
 
 
-# Re-package cargo if any Rust source code changes (to account for transitive dependencies).
-.make/cargo-package/%: \
-		$(RUST_SRC) \
-		.make/install/protoc
-	cd $* && cargo package
-	mkdir -p $(dir $@) && touch $@
-
-.make/cargo-publish/%: .make/cargo-package/%
-	@#https://doc.rust-lang.org/cargo/reference/publishing.html
-	@#After a package is first published to crates.io run `cargo owner --add github:CasperLabs:crate-owners` once to allow others to push.
-	@#Cargo returns an error if the package has already been published, so we can't break code, we have to publish a newer version.
-	cd $* && \
-	RESULT=$$(cargo publish 2>&1) ; \
-	CODE=$$? ; \
-	if echo $$RESULT | grep -q "already uploaded" ; then \
-		echo "already uploaded" && exit 0 ; \
-	else \
-		echo $$RESULT && exit $$CODE ; \
-	fi
-	mkdir -p $(dir $@) && touch $@
-
-
 # Create .rpm and .deb packages natively. `cargo rpm build` doesn't work on MacOS.
-.make/cargo-native-packager/%: $(RUST_SRC) .make/install/protoc .make/install/cargo-native-packager
-	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
-	@# `rpm init` will create a .rpm/<MODULE>.spec file where we can define dependencies if we have to,
-	@# but the build won't refresh it if it already exists, and trying to init again results in an error,
-	@# and if we `--force` it, then it will add a second set of entries to the Cargo.toml file which will make it invalid.
-	cd $* && ([ -d .rpm ] || cargo rpm init) && cargo rpm build
-	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# This command has a --no-build parameter which can speed it up becuase the RPM compilation seems compatible.
-	cd $* && cargo deb --no-build
+#
+# .rpm will be in execution-engine/target/release/rpmbuild/RPMS/x86_64
+# .deb will be in execution-engine/target/debian
+.make/cargo-native-packager/execution-engine/engine-grpc-server: $(RUST_SRC) \
+		.make/install/protoc \
+		.make/install/cargo-native-packager
+	$(MAKE) -C execution-engine rpm
+	$(MAKE) -C execution-engine deb
 	mkdir -p $(dir $@) && touch $@
 
-# Create .rpm and .deb packages with Docker so people using Macs can build images locally too.
-# We may need to have .rpm and .deb specific builder images that work with what we want to host it in
-# as we seem to get some missing dependencies using the builderenv which didn't happend with Ubuntu.
-.make/cargo-docker-packager/%: $(RUST_SRC)
-	@# .rpm will be at execution-engine/target/release/rpmbuild/RPMS/x86_64/casperlabs-engine-grpc-server-0.1.0-1.x86_64.rpm
-	@# .deb will be at execution-engine/target/debian/casperlabs-engine-grpc-server_0.1.0_amd64.deb
-	@# Need to use the same user ID as outside if we want to continue working with these files,
-	@# otherwise the user running in docker will own them.
-	@# Going to ignore errors with the rpm build here so that we can get the .deb package for docker.
+# Create .rpm and .deb packages with Docker so people using Macs can build
+# images locally too.  We may need to have .rpm and .deb specific builder images
+# that work with what we want to host it in as we seem to get some missing
+# dependencies using the buildenv which didn't happen with Ubuntu.
+#
+# .rpm will be in execution-engine/target/release/rpmbuild/RPMS/x86_64
+# .deb will be in execution-engine/target/debian
+#
+# Need to use the same user ID as outside if we want to continue working with
+# these files, otherwise the user running in docker will own them.
+.make/cargo-docker-packager/execution-engine/engine-grpc-server: $(RUST_SRC)
 	$(eval USERID = $(shell id -u))
 	docker pull $(DOCKER_USERNAME)/buildenv:latest
 	docker run --rm --entrypoint sh \
@@ -317,10 +285,11 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 		chown -R builder /home/builder ; \
 		sudo -u builder bash -c '\
 			export HOME=/home/builder ; \
-			export PATH=/home/builder/.cargo/bin:$$PATH ; \
-			cd /CasperLabs/$* ; \
-			([ -d .rpm ] || cargo rpm init) && cargo rpm build ; \
-			cargo deb \
+			cd /CasperLabs/execution-engine ; \
+			make setup ; \
+			make setup-cargo-packagers ; \
+			make rpm ; \
+			make deb \
 		'"
 	mkdir -p $(dir $@) && touch $@
 
@@ -329,13 +298,18 @@ cargo/clean: $(shell find . -type f -name "Cargo.toml" | grep -v target | awk '{
 package-system-contracts: execution-engine/target/system-contracts.tar.gz
 
 execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
-	cd execution-engine && make package-system-contracts
+	$(MAKE) -C execution-engine package-system-contracts
+
 
 # Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/contracts/%: $(RUST_SRC) .make/rustup-update
+.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$(subst _,-,$*))
-	cd execution-engine/contracts/$(CONTRACT) && \
-	cargo +$(RUST_TOOLCHAIN) build --release --target wasm32-unknown-unknown
+	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
+	mkdir -p $(dir $@) && touch $@
+
+.make/contracts/explorer/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$(subst _,-,$*))
+	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
@@ -358,13 +332,6 @@ build-explorer-contracts: \
 	explorer/contracts/client/transfer_to_account.wasm \
 	explorer/contracts/client/standard_payment.wasm \
 	explorer/contracts/explorer/faucet.wasm
-
-# Build the execution engine executable. NOTE: This is not portable.
-execution-engine/target/release/casperlabs-engine-grpc-server: \
-		$(RUST_SRC) \
-		.make/install/protoc
-	cd execution-engine/engine-grpc-server && \
-	cargo --locked build --release
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
@@ -406,13 +373,6 @@ protobuf/google:
 	"
 	mkdir -p $(dir $@) && touch $@
 
-
-.make/install/cargo-native-packager:
-	@# Installs fail if they already exist.
-	cargo install cargo-rpm || exit 0
-	cargo install cargo-deb || exit 0
-	mkdir -p $(dir $@) && touch $@
-
 .make/install/rpm:
 	if [ -z "$$(which rpmbuild)" ]; then
 		# You'll need to isntall `rpmbuild` for `cargo rpm` to work. I'm putting this here for reference:
@@ -420,9 +380,10 @@ protobuf/google:
 	fi
 	mkdir -p $(dir $@) && touch $@
 
+.make/install/cargo-native-packager:
+	$(MAKE) -C execution-engine setup-cargo-packagers
+	mkdir -p $(dir $@) && touch $@
 
 .make/rustup-update: execution-engine/rust-toolchain
-	rustup update $(RUST_TOOLCHAIN)
-	rustup toolchain install $(RUST_TOOLCHAIN)
-	rustup target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
+	$(MAKE) -C execution-engine setup
 	mkdir -p $(dir $@) && touch $@

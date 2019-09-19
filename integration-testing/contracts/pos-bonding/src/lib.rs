@@ -7,7 +7,7 @@ extern crate contract_ffi;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, UPointer};
+use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{
     call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
     transfer_from_purse_to_account, transfer_from_purse_to_purse, PurseTransferResult,
@@ -31,11 +31,11 @@ fn purse_to_key(p: PurseId) -> Key {
 }
 
 fn get_pos_contract() -> ContractPointer {
-    let outer: UPointer<Key> = get_uref("pos")
-        .and_then(Key::to_u_ptr)
+    let outer: TURef<Key> = get_uref("pos")
+        .and_then(Key::to_turef)
         .unwrap_or_else(|| revert(Error::GetPosInnerURef as u32));
     if let Some(ContractPointer::URef(inner)) = read::<Key>(outer).to_c_ptr() {
-        ContractPointer::URef(UPointer::new(inner.0, AccessRights::READ))
+        ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
     } else {
         revert(Error::GetPosOuterURef as u32)
     }

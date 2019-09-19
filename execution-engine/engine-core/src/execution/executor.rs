@@ -4,12 +4,12 @@ use std::rc::Rc;
 
 use parity_wasm::elements::Module;
 
-use contract_ffi::bytesrepr::deserialize;
+use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{Account, Value};
+use contract_ffi::value::{Account, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
@@ -17,10 +17,12 @@ use engine_storage::global_state::StateReader;
 use crate::engine_state::execution_result::ExecutionResult;
 
 use super::Error;
-use super::{create_rng, extract_access_rights_from_keys, instance_and_memory, Runtime};
+use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
+use crate::execution::address_generator::AddressGenerator;
+use crate::execution::FN_STORE_ID_INITIAL;
 use crate::runtime_context::RuntimeContext;
 use crate::tracking_copy::TrackingCopy;
-use crate::URefAddr;
+use crate::Address;
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
@@ -34,7 +36,7 @@ pub trait Executor<A> {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -54,13 +56,35 @@ pub trait Executor<A> {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
+
+    #[allow(clippy::too_many_arguments)]
+    fn better_exec<R: StateReader<Key, Value>, T>(
+        &self,
+        module: A,
+        args: &[u8],
+        keys: &mut BTreeMap<String, Key>,
+        base_key: Key,
+        account: &Account,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
+        address_generator: Rc<RefCell<AddressGenerator>>,
+        protocol_version: ProtocolVersion,
+        correlation_id: CorrelationId,
+        state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
+    ) -> Result<T, Error>
+    where
+        R::Error: Into<Error>,
+        T: FromBytes;
 }
 
 pub struct WasmiExecutor;
@@ -114,7 +138,7 @@ impl Executor<Module> for WasmiExecutor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -126,11 +150,10 @@ impl Executor<Module> for WasmiExecutor {
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
         let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup_local.values().cloned());
-        let rng = create_rng(deploy_hash, phase);
+        let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
-        let fn_store_id = 0u32;
 
         // Snapshot of effects before execution, so in case of error
         // only nonce update can be returned.
@@ -142,7 +165,7 @@ impl Executor<Module> for WasmiExecutor {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(
-                deserialize(args),
+                bytesrepr::deserialize(args),
                 Gas::from_u64(args.len() as u64),
                 effects_snapshot
             )
@@ -160,8 +183,8 @@ impl Executor<Module> for WasmiExecutor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            Rc::new(RefCell::new(rng)),
+            FN_STORE_ID_INITIAL,
+            Rc::new(RefCell::new(address_generator)),
             protocol_version,
             correlation_id,
             phase,
@@ -191,7 +214,7 @@ impl Executor<Module> for WasmiExecutor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        protocol_version: u64,
+        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
@@ -200,15 +223,14 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let mut uref_lookup = keys.clone();
-        let known_urefs: HashMap<URefAddr, HashSet<AccessRights>> =
+        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
             extract_access_rights_from_keys(uref_lookup.values().cloned());
 
-        let rng = {
-            let rng = create_rng(deploy_hash, phase);
-            Rc::new(RefCell::new(rng))
+        let address_generator = {
+            let address_generator = AddressGenerator::new(deploy_hash, phase);
+            Rc::new(RefCell::new(address_generator))
         };
         let gas_counter = Gas::default(); // maybe const?
-        let fn_store_id = 0u32; // maybe const?
 
         // Snapshot of effects before execution, so in case of error only nonce update
         // can be returned.
@@ -218,7 +240,7 @@ impl Executor<Module> for WasmiExecutor {
             Vec::new()
         } else {
             on_fail_charge!(
-                deserialize(args),
+                bytesrepr::deserialize(args),
                 Gas::from_u64(args.len() as u64),
                 effects_snapshot
             )
@@ -236,8 +258,8 @@ impl Executor<Module> for WasmiExecutor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            rng,
+            FN_STORE_ID_INITIAL,
+            address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -290,5 +312,81 @@ impl Executor<Module> for WasmiExecutor {
                 }
             }
         }
+    }
+
+    fn better_exec<R: StateReader<Key, Value>, T>(
+        &self,
+        module: Module,
+        args: &[u8],
+        keys: &mut BTreeMap<String, Key>,
+        base_key: Key,
+        account: &Account,
+        authorization_keys: BTreeSet<PublicKey>,
+        blocktime: BlockTime,
+        deploy_hash: [u8; 32],
+        gas_limit: Gas,
+        address_generator: Rc<RefCell<AddressGenerator>>,
+        protocol_version: ProtocolVersion,
+        correlation_id: CorrelationId,
+        state: Rc<RefCell<TrackingCopy<R>>>,
+        phase: Phase,
+    ) -> Result<T, Error>
+    where
+        R::Error: Into<Error>,
+        T: FromBytes,
+    {
+        let known_keys = extract_access_rights_from_keys(keys.values().cloned());
+
+        let args: Vec<Vec<u8>> = if args.is_empty() {
+            Vec::new()
+        } else {
+            bytesrepr::deserialize(args)?
+        };
+
+        let gas_counter = Gas::default();
+
+        let runtime_context = RuntimeContext::new(
+            state,
+            keys,
+            known_keys.clone(),
+            args,
+            authorization_keys.clone(),
+            account,
+            base_key,
+            blocktime,
+            deploy_hash,
+            gas_limit,
+            gas_counter,
+            FN_STORE_ID_INITIAL,
+            address_generator,
+            protocol_version,
+            correlation_id,
+            phase,
+        );
+
+        let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
+
+        let mut runtime = Runtime::new(memory, module, runtime_context);
+
+        let return_error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {
+            Err(error) => error,
+            Ok(_) => {
+                // This duplicates the behavior of sub_call, but is admittedly rather questionable.
+                let ret = bytesrepr::deserialize(runtime.result())?;
+                return Ok(ret);
+            }
+        };
+
+        let return_value_bytes: &[u8] = match return_error
+            .as_host_error()
+            .and_then(|host_error| host_error.downcast_ref::<Error>())
+        {
+            Some(Error::Ret(_)) => runtime.result(),
+            Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
+            _ => return Err(Error::Interpreter(return_error)),
+        };
+
+        let ret = bytesrepr::deserialize(return_value_bytes)?;
+        Ok(ret)
     }
 }

@@ -58,21 +58,22 @@ import scala.concurrent.duration._
 
 class NodeRuntime private[node] (
     conf: Configuration,
-    id: NodeIdentifier
+    id: NodeIdentifier,
+    mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = uncaughtExceptionHandler)
+    Scheduler.fixedPool("loop", 2, reporter = uncaughtExceptionHandler)
 
   // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
   private[this] val ingressScheduler =
-    Scheduler.cached("ingress-io", 4, 64, reporter = uncaughtExceptionHandler)
+    Scheduler.cached("ingress-io", 2, 64, reporter = uncaughtExceptionHandler)
   // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
   private[this] val egressScheduler =
-    Scheduler.cached("egress-io", 4, Int.MaxValue, reporter = uncaughtExceptionHandler)
+    Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
   private[this] val dbConnScheduler =
     Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
@@ -81,7 +82,7 @@ class NodeRuntime private[node] (
 
   private implicit val concurrentEffectForEffect: ConcurrentEffect[Effect] =
     catsConcurrentEffectForEffect(
-      egressScheduler
+      mainScheduler
     )
 
   implicit val raiseIOError: RaiseIOError[Effect] = IOError.raiseIOErrorThroughSync[Effect]
@@ -102,9 +103,9 @@ class NodeRuntime private[node] (
 
   val main: Effect[Unit] = {
     val rpConfState = (for {
-      local     <- localPeerNode[Task]
-      bootstrap <- initPeer[Task]
-      conf      <- rpConf[Task](local, bootstrap)
+      local      <- localPeerNode[Task]
+      bootstraps <- initPeers[Task]
+      conf       <- rpConf[Task](local, bootstraps)
     } yield conf).toEffect
 
     implicit val logEff: Log[Effect] = Log.eitherTLog(Monad[Task], log)
@@ -115,10 +116,10 @@ class NodeRuntime private[node] (
     implicit val filesApiEff            = FilesAPI.create[Effect](Sync[Effect], logEff)
 
     // SSL context to use for the public facing API.
-    val maybeApiSslContext = Option(conf.tls.readCertAndKey).filter(_ => conf.grpc.useTls).map {
-      case (cert, key) =>
-        SslContexts.forServer(cert, key, ClientAuth.NONE)
-    }
+    val maybeApiSslContext = if (conf.grpc.useTls) {
+      val (cert, key) = conf.tls.readPublicApiCertAndKey
+      Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
+    } else None
 
     rpConfState >>= (_.runState { implicit state =>
       implicit val metrics     = diagnostics.effects.metrics[Task]
@@ -147,7 +148,7 @@ class NodeRuntime private[node] (
                                                             DeployBufferImpl
                                                               .create[Effect](deployBufferChunkSize)
                                                           )
-        maybeBootstrap <- Resource.liftF(initPeer[Effect])
+        bootstraps <- Resource.liftF(initPeers[Effect])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Effect]) <- Resource.liftF(
                                                                             FinalizedBlocksStream
@@ -164,7 +165,7 @@ class NodeRuntime private[node] (
                                                           ingressScheduler,
                                                           egressScheduler
                                                         )(
-                                                          maybeBootstrap
+                                                          bootstraps
                                                         )(
                                                           effects.peerNodeAsk,
                                                           log,
@@ -324,10 +325,11 @@ class NodeRuntime private[node] (
     val time        = effects.time
 
     val info: Effect[Unit] =
-      if (conf.casper.standalone) Log[Effect].info(s"Starting stand-alone node.")
+      if (conf.casper.standalone)
+        Log[Effect].info(s"Starting stand-alone node.")
       else
         Log[Effect].info(
-          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).getOrElse("n/a")}"
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
         )
 
     val fetchLoop: Effect[Unit] =
@@ -400,11 +402,11 @@ class NodeRuntime private[node] (
         } *> Task.delay(System.exit(1)).as(Right(()))
     )
 
-  private def rpConf[F[_]: Sync](local: Node, maybeBootstrap: Option[Node]) =
+  private def rpConf[F[_]: Sync](local: Node, bootstraps: List[Node]) =
     Ref.of[F, RPConf](
       RPConf(
         local,
-        maybeBootstrap,
+        bootstraps,
         conf.server.defaultTimeout,
         ClearConnectionsConf(
           conf.server.maxNumOfConnections,
@@ -424,16 +426,16 @@ class NodeRuntime private[node] (
         id
       )
 
-  private def initPeer[F[_]: MonadThrowable]: F[Option[Node]] =
+  private def initPeers[F[_]: MonadThrowable]: F[List[Node]] =
     conf.server.bootstrap match {
-      case None if !conf.casper.standalone =>
+      case Nil if !conf.casper.standalone =>
         MonadThrowable[F].raiseError(
           new java.lang.IllegalStateException(
             "Not in standalone mode but there's no bootstrap configured!"
           )
         )
-      case other =>
-        other.pure[F]
+      case nodes =>
+        nodes.pure[F]
     }
 
 }
@@ -443,11 +445,12 @@ object NodeRuntime {
       conf: Configuration
   )(
       implicit
+      scheduler: Scheduler,
       log: Log[Task],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Effect[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id)).toEffect
+      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler)).toEffect
     } yield runtime
 }

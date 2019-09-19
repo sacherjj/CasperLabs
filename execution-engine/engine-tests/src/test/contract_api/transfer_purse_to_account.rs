@@ -3,12 +3,16 @@ use std::collections::HashMap;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
+};
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
+const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 
 #[ignore]
 #[test]
@@ -16,23 +20,27 @@ fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let genesis_public_key = PublicKey::new(GENESIS_ADDR);
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            (account_1_public_key, U512::from(42)),
         )
         .expect_success()
         .commit()
         .exec_with_args(
             account_1_public_key.value(),
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (genesis_public_key, U512::from(1)),
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
-            (genesis_public_key, U512::from(1)),
         )
         .expect_success()
         .commit()
@@ -62,7 +70,10 @@ fn should_run_purse_to_account_transfer() {
             final_balance
         );
     };
-    assert_eq!(final_balance, &U512::from(99_999_999_958i64));
+    assert_eq!(
+        final_balance,
+        &U512::from(GENESIS_INITIAL_BALANCE - (MAX_PAYMENT * 2) - 42)
+    );
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
@@ -119,7 +130,7 @@ fn should_run_purse_to_account_transfer() {
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
-    assert_eq!(purse_secondary_balance, &U512::from(42));
+    assert_eq!(purse_secondary_balance, &U512::from(MAX_PAYMENT + 42));
 
     //
     // Exec 2 - Transfer from new account back to genesis to verify
@@ -190,14 +201,16 @@ fn should_run_purse_to_account_transfer() {
 fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let transfer_result = WasmTestBuilder::default()
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(GENESIS_ADDR, HashMap::default())
         .exec_with_args(
             GENESIS_ADDR,
+            STANDARD_PAYMENT_CONTRACT,
+            (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
+            (account_1_key, U512::max_value()),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
-            (account_1_key, U512::max_value()),
         )
         .expect_success()
         .commit()
@@ -226,7 +239,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     // When trying to send too much coins the balance is left unchanged
     assert_eq!(
         final_balance,
-        &U512::from(100_000_000_000i64),
+        &U512::from(100_000_000_000u64 - MAX_PAYMENT),
         "final balance incorrect"
     );
 

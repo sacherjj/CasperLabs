@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::value::{ProtocolVersion, Value};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
 
@@ -12,7 +12,6 @@ use crate::global_state::StateReader;
 use crate::global_state::{commit, CommitResult, StateProvider};
 use crate::protocol_data::ProtocolData;
 use crate::protocol_data_store::in_memory::InMemoryProtocolDataStore;
-use crate::protocol_data_store::ProtocolVersion;
 use crate::store::Store;
 use crate::transaction_source::in_memory::{InMemoryEnvironment, InMemoryReadTransaction};
 use crate::transaction_source::{Transaction, TransactionSource};
