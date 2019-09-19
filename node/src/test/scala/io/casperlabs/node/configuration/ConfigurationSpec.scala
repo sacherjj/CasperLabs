@@ -115,6 +115,7 @@ class ConfigurationSpec
       initialMotes = BigInt(1),
       mintCodePath = Paths.get("/tmp/test").some,
       posCodePath = Paths.get("/tmp/test").some,
+      chainSpecDir = Paths.get("/tmp/test").some,
       shardId = "test",
       standalone = false,
       approveGenesis = false,

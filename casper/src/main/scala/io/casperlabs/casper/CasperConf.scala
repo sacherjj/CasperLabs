@@ -35,6 +35,7 @@ final case class CasperConf(
     initialMotes: BigInt,
     mintCodePath: Option[Path],
     posCodePath: Option[Path],
+    chainSpecDir: Option[Path],
     shardId: String,
     standalone: Boolean,
     approveGenesis: Boolean,

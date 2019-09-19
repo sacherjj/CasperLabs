@@ -235,8 +235,11 @@ initial-motes = 0
 # Path to the Wasm file which contains the Mint contract.
 # mint-code-path =
 
-# Path to the Wasm file which contains the Proof-of-Stake contract
+# Path to the Wasm file which contains the Proof-of-Stake contract.
 # pos-code-path =
+
+# Path to the directory which contains the Chain Spec.
+# chain-spec-dir =
 
 # Identifier of the shard this node is connected to.
 shard-id = "casperlabs"

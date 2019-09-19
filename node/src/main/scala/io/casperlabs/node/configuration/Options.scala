@@ -299,7 +299,11 @@ private[configuration] final case class Options private (
 
     @scallop
     val casperPosCodePath =
-      gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
+      gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract.")
+
+    @scallop
+    val casperChainSpecDir =
+      gen[Path]("Path to the directory which contains the Chain Spec.")
 
     @scallop
     val casperAutoProposeEnabled =

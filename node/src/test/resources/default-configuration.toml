@@ -75,6 +75,7 @@ genesis-account-public-key-path = "/tmp/test"
 initial-motes = 1
 mint-code-path = "/tmp/test"
 pos-code-path = "/tmp/test"
+chain-spec-dir = "/tmp/test"
 shard-id = "test"
 standalone = false
 approve-genesis = false
