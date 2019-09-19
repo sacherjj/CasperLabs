@@ -48,6 +48,7 @@ casperlabs-client \
     deploy \
     --private-key <path-to-private-key> \
     --session $COUNTER_DEFINE
+    --payment-amount 1
 ```
 
 You should see the following output:
@@ -67,6 +68,7 @@ casperlabs-client \
     deploy \
     --private-key <path-to-private-key> \
     --session $COUNTER_CALL
+    --payment-amount 1
 ```
 
 You should see the following output:
