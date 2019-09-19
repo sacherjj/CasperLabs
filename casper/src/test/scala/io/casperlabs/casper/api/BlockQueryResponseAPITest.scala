@@ -7,7 +7,9 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -17,6 +19,9 @@ import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.Keys
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
@@ -26,17 +31,15 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 
+//TODO: Remove
 @silent("deprecated")
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
-  val secondBlockQuery = "1234"
   val badTestHashQuery = "No such a hash"
 
-  val genesisHashString = "0" * 64
-  val version           = 1L
+  val version = 1L
 
-  def genesisBlock(genesisHashString: String, version: Long): Block = {
-    val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
+  def genesisBlock(version: Long): Block = {
     val ps = Block
       .GlobalState()
       .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
@@ -49,44 +52,49 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       rank = 0,
       protocolVersion = version,
       timestamp = 1527191663,
-      chainId = "casperlabs"
+      chainId = "casperlabs",
+      creator = Keys.PublicKey(Array.emptyByteArray),
+      validatorSeqNum = 0
     )
-    ProtoUtil.unsignedBlockProto(body, header).withBlockHash(genesisHash)
+    ProtoUtil.unsignedBlockProto(body, header)
   }
-  val genesisBlock: Block = genesisBlock(genesisHashString, version)
+  val genesisBlock: Block = genesisBlock(version)
+  val genesisHashString   = Base16.encode(genesisBlock.blockHash.toByteArray)
 
-  val secondHashString     = "1234567891011121314151617181921234567891011121314151617181928192"
-  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber          = 1L
-  val timestamp            = 1527191665L
-  val ps                   = Block.GlobalState()
-  val deployCount          = 10L
+  val blockNumber = 1L
+  val timestamp   = 1527191665L
+  val ps          = Block.GlobalState()
+  val deployCount = 10L
   val randomDeploys =
     (0L until deployCount).toList
       .traverse(_ => ProtoUtil.basicProcessedDeploy[Task]())
       .unsafeRunSync(scheduler)
-  val body                             = Block.Body().withDeploys(randomDeploys)
-  val parentsString                    = List(genesisHashString, "0000000001")
-  val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
-  val header = ProtoUtil.blockHeader(
-    body,
-    parentsHashList,
-    Nil,
-    ps,
-    blockNumber,
-    version,
-    timestamp,
-    "casperlabs"
-  )
+  val body            = Block.Body().withDeploys(randomDeploys)
+  val parentsString   = List(genesisHashString)
+  val justifications  = Seq(Justification().withLatestBlockHash(genesisBlock.blockHash))
+  val chainId: String = "abcdefgh"
   val secondBlockSenderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192"
   val secondBlockSender: ByteString = ProtoUtil.stringToByteString(secondBlockSenderString)
-  val chainId: String               = "abcdefgh"
-  val secondBlock: Block =
-    Block()
-      .withBlockHash(blockHash)
-      .withHeader(header.withValidatorPublicKey(secondBlockSender).withChainId(chainId))
-      .withBody(body)
+  val secondBlock = ProtoUtil.block(
+    justifications,
+    genesisBlock.getHeader.getState.postStateHash,
+    ByteString.EMPTY,
+    Seq.empty,
+    randomDeploys,
+    ProtocolVersion(1),
+    Seq(genesisBlock.blockHash),
+    None,
+    chainId,
+    timestamp,
+    1,
+    Keys.PublicKey(secondBlockSender.toByteArray),
+    Keys.PrivateKey(secondBlockSender.toByteArray),
+    Ed25519
+  )
+  val secondHashString     = Base16.encode(secondBlock.blockHash.toByteArray)
+  val blockHash: BlockHash = secondBlock.blockHash
+  val secondBlockQuery     = secondHashString.take(5)
 
   val faultTolerance = 0
 

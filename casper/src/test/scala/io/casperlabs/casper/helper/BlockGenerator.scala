@@ -13,6 +13,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -133,18 +134,21 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
+      validatorLatestMsg <- dag.latestMessage(creator)
+      validatorSeqNum    = validatorLatestMsg.fold(0)(_.validatorMsgSeqNum + 1)
       header = ProtoUtil
         .blockHeader(
           body,
+          Keys.PublicKey(creator.toByteArray),
           parentsHashList,
           serializedJustifications,
           postState,
-          rank = 0L,
-          protocolVersion = 1,
-          timestamp = now,
-          chainId = chainId
+          0L,
+          validatorSeqNum,
+          1,
+          now,
+          chainId
         )
-        .withValidatorPublicKey(creator)
         .withRoleType(roleType)
       block                = ProtoUtil.unsignedBlockProto(body, header)
       unsignedIndexedBlock <- IndexedDagStorage[F].index(block)

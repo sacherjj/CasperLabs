@@ -126,14 +126,8 @@ class ValidationTest
 
   def signedBlock(
       i: Int
-  )(implicit sk: PrivateKey, dagStorage: IndexedDagStorage[Task]): Task[Block] = {
-    val pk = Ed25519.tryToPublic(sk).get
-    for {
-      block  <- dagStorage.lookupByIdUnsafe(i)
-      dag    <- dagStorage.getRepresentation
-      result <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519)
-    } yield result
-  }
+  )(implicit sk: PrivateKey, dagStorage: IndexedDagStorage[Task]): Task[Block] =
+    dagStorage.lookupByIdUnsafe(i).map(block => ProtoUtil.signBlock(block, sk, Ed25519))
 
   implicit class ChangeBlockOps(b: Block) {
     def changeBlockNumber(n: Long): Block = {
@@ -210,21 +204,25 @@ class ValidationTest
       } yield result
   }
 
-  it should "return true on valid ed25519 signatures" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      val n                = 6
-      implicit val (sk, _) = Ed25519.newKeyPair
-      for {
-        _ <- createChain[Task](n)
-        condition <- (0 until n).toList.forallM[Task] { i =>
-                      for {
-                        block  <- signedBlock(i)
-                        result <- Validation[Task].blockSignature(block)
-                      } yield result
-                    }
-        _      = condition should be(true)
-        result = log.warns should be(Nil)
-      } yield result
+  it should "return true on valid ed25519 signatures" in withStorage { _ => _ => _ =>
+    implicit val (sk, pk) = Ed25519.newKeyPair
+    val block = ProtoUtil.block(
+      Seq.empty,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      Seq.empty,
+      Seq.empty,
+      ProtocolVersion(1),
+      Seq.empty,
+      None,
+      "casperlabs",
+      1,
+      0,
+      pk,
+      sk,
+      Ed25519
+    )
+    Validation[Task].blockSignature(block) shouldBeF true
   }
 
   "Deploy signature validation" should "return true for valid signatures" in withoutStorage {
@@ -546,13 +544,11 @@ class ValidationTest
         block    <- dagStorage.lookupByIdUnsafe(1)
         dag      <- dagStorage.getRepresentation
         (sk, pk) = Ed25519.newKeyPair
-        signedBlock <- ProtoUtil.signBlock[Task](
-                        block.changeBlockNumber(17).changeSeqNum(1),
-                        dag,
-                        pk,
-                        sk,
-                        Ed25519
-                      )
+        signedBlock = ProtoUtil.signBlock(
+          block.changeBlockNumber(17).changeSeqNum(1),
+          sk,
+          Ed25519
+        )
         result <- Validation[Task]
                    .blockFull(
                      signedBlock,
@@ -597,17 +593,17 @@ class ValidationTest
   }
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
-    _ => implicit dagStorage => _ =>
+    _ => _ => _ =>
       implicit val log                          = new LogStub[Task]()
       val (sk, pk)                              = Ed25519.newKeyPair
       val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val genesis                               = ProtoUtil.signBlock(block, sk, Ed25519)
+
       for {
-        dag     <- dagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519)
-        _       <- Validation[Task].formatOfFields(genesis) shouldBeF true
-        _       <- Validation[Task].formatOfFields(genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
-        _       <- Validation[Task].formatOfFields(genesis.clearHeader) shouldBeF false
-        _       <- Validation[Task].formatOfFields(genesis.clearBody) shouldBeF true // Body is only checked in `Validate.blockFull`
+        _ <- Validation[Task].formatOfFields(genesis) shouldBeF true
+        _ <- Validation[Task].formatOfFields(genesis.withBlockHash(ByteString.EMPTY)) shouldBeF false
+        _ <- Validation[Task].formatOfFields(genesis.clearHeader) shouldBeF false
+        _ <- Validation[Task].formatOfFields(genesis.clearBody) shouldBeF true // Body is only checked in `Validate.blockFull`
         _ <- Validation[Task].formatOfFields(
               genesis.withSignature(genesis.getSignature.withSig(ByteString.EMPTY))
             ) shouldBeF false
@@ -708,56 +704,53 @@ class ValidationTest
     } yield ()
   }
 
-  "Block hash format validation" should "fail on invalid hash" in withStorage {
-    _ => implicit dagStorage => _ =>
-      val (sk, pk) = Ed25519.newKeyPair
-      val BlockMsgWithTransform(Some(block), _) =
-        HashSetCasperTest.createGenesis(Map(pk -> 1))
-      for {
-        dag     <- dagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519)
-        _       <- ValidationImpl[Task].blockHash(genesis) shouldBeF Unit
-        result <- ValidationImpl[Task]
-                   .blockHash(
-                     genesis.withBlockHash(ByteString.copyFromUtf8("123"))
-                   )
-                   .attempt shouldBeF Left(InvalidBlockHash)
-      } yield result
+  "Block hash format validation" should "fail on invalid hash" in withStorage { _ => _ => _ =>
+    val (sk, pk) = Ed25519.newKeyPair
+    val BlockMsgWithTransform(Some(block), _) =
+      HashSetCasperTest.createGenesis(Map(pk -> 1))
+    val signedBlock = ProtoUtil.signBlock(block, sk, Ed25519)
+    for {
+      _ <- ValidationImpl[Task].blockHash(signedBlock) shouldBeF Unit
+      result <- ValidationImpl[Task]
+                 .blockHash(
+                   signedBlock.withBlockHash(ByteString.copyFromUtf8("123"))
+                 )
+                 .attempt shouldBeF Left(InvalidBlockHash)
+    } yield result
   }
 
   "Block deploy count validation" should "fail on invalid number of deploys" in withStorage {
-    _ => implicit dagStorage => _ =>
+    _ => _ => _ =>
       val (sk, pk) = Ed25519.newKeyPair
       val BlockMsgWithTransform(Some(block), _) =
         HashSetCasperTest.createGenesis(Map(pk -> 1))
+      val signedBlock = ProtoUtil.signBlock(block, sk, Ed25519)
       for {
-        dag     <- dagStorage.getRepresentation
-        genesis <- ProtoUtil.signBlock[Task](block, dag, pk, sk, Ed25519)
-        _       <- ValidationImpl[Task].deployCount(genesis) shouldBeF Unit
+        _ <- ValidationImpl[Task].deployCount(signedBlock) shouldBeF Unit
         result <- ValidationImpl[Task]
                    .deployCount(
-                     genesis.withHeader(genesis.header.get.withDeployCount(100))
+                     signedBlock.withHeader(signedBlock.header.get.withDeployCount(100))
                    )
                    .attempt shouldBeF Left(InvalidDeployCount)
       } yield result
   }
 
-  "Block version validation" should "work" in withStorage { _ => implicit dagStorage => _ =>
+  "Block version validation" should "work" in withStorage { _ => _ => _ =>
     val (sk, pk)                              = Ed25519.newKeyPair
     val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
     // while `protocolVersionForGenesisBlock` returns proper one (version=1)
     val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
     val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
+    val signedBlock                                             = ProtoUtil.signBlock(block, sk, Ed25519)
+
     for {
-      dag     <- dagStorage.getRepresentation
-      genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519)
       _ <- Validation[Task].version(
-            genesis,
+            signedBlock,
             missingProtocolVersionForBlock
           ) shouldBeF false
       result <- Validation[Task].version(
-                 genesis,
+                 signedBlock,
                  protocolVersionForGenesisBlock
                ) shouldBeF true
     } yield result

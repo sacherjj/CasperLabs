@@ -3,13 +3,15 @@ package io.casperlabs.casper.util
 import java.util.NoSuchElementException
 
 import cats.implicits._
-import cats.{Applicative, Monad}
+import cats.{Applicative, Functor, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -345,12 +347,62 @@ object ProtoUtil {
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
+  /* Creates a signed block */
+  def block(
+      justifications: Seq[Justification],
+      preStateHash: ByteString,
+      postStateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      deploys: Seq[Block.ProcessedDeploy],
+      protocolVersion: ProtocolVersion,
+      parents: Seq[ByteString],
+      validatorPrevMsg: Option[Message],
+      chainId: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): Block = {
+    val body = Block.Body().withDeploys(deploys)
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(preStateHash)
+      .withPostStateHash(postStateHash)
+      .withBonds(bondedValidators)
+
+    // Start numbering from 1 (validator's first block seqNum = 1)
+    val seqNum = validatorPrevMsg.fold(0)(_.validatorMsgSeqNum) + 1
+
+    val header = blockHeader(
+      body,
+      parentHashes = parents,
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion.value,
+      timestamp = now,
+      chainId = chainId,
+      creator = publicKey,
+      validatorSeqNum = seqNum
+    )
+
+    val unsigned = unsignedBlockProto(body, header)
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
   def blockHeader(
       body: Block.Body,
+      creator: Keys.PublicKey,
       parentHashes: Seq[ByteString],
       justifications: Seq[Justification],
       state: Block.GlobalState,
       rank: Long,
+      validatorSeqNum: Int,
       protocolVersion: Long,
       timestamp: Long,
       chainId: String
@@ -362,6 +414,8 @@ object ProtoUtil {
       .withDeployCount(body.deploys.size)
       .withState(state)
       .withRank(rank)
+      .withValidatorPublicKey(ByteString.copyFrom(creator))
+      .withValidatorBlockSeqNum(validatorSeqNum)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
       .withChainId(chainId)
@@ -382,35 +436,20 @@ object ProtoUtil {
       .withBody(body)
   }
 
-  def signBlock[F[_]: Applicative](
+  def signBlock(
       block: Block,
-      dag: DagRepresentation[F],
-      pk: PublicKey,
       sk: PrivateKey,
       sigAlgorithm: SignatureAlgorithm
-  ): F[Block] = {
-    val validator = ByteString.copyFrom(pk)
-    for {
-      latestMessageOpt <- dag.latestMessage(validator)
-      // Start numbering from 1 (validator's first block seqNum = 1)
-      seqNum = latestMessageOpt.fold(0)(_.validatorMsgSeqNum) + 1
-      header = {
-        assert(block.header.isDefined, "A block without a header doesn't make sense")
-        block.getHeader
-          .withValidatorPublicKey(validator)
-          .withValidatorBlockSeqNum(seqNum)
-      }
-      blockHash = protoHash(header)
-      sig       = ByteString.copyFrom(sigAlgorithm.sign(blockHash.toByteArray, sk))
-      signedBlock = block
-        .withBlockHash(blockHash)
-        .withHeader(header)
-        .withSignature(
-          Signature()
-            .withSigAlgorithm(sigAlgorithm.name)
-            .withSig(sig)
-        )
-    } yield signedBlock
+  ): Block = {
+    val blockHash = protoHash(block.getHeader)
+    val sig       = ByteString.copyFrom(sigAlgorithm.sign(blockHash.toByteArray, sk))
+    block
+      .withBlockHash(blockHash)
+      .withSignature(
+        Signature()
+          .withSigAlgorithm(sigAlgorithm.name)
+          .withSig(sig)
+      )
   }
 
   def stringToByteString(string: String): ByteString =

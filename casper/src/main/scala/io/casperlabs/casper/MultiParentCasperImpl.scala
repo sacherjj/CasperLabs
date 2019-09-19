@@ -384,36 +384,47 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
-          remainingHashes  <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
-          bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
-          //We ensure that only the justifications given in the block are those
-          //which are bonded validators in the chosen parent. This is safe because
-          //any latest message not from a bonded validator will not change the
-          //final fork-choice.
-          latestMessages   <- dag.latestMessages
-          bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
-          justifications   = toJustification(bondedLatestMsgs.values.toSeq)
-          rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
-          protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
-          proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
-                       createProposal(
-                         parents,
-                         merged,
-                         remainingHashes,
-                         justifications,
-                         protocolVersion,
+          remainingHashes <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
+          result <- if (remainingHashes.nonEmpty || parents.length > 1) {
+                     for {
+                       latestMessages <- dag.latestMessages
+                       rank           = ProtoUtil.calculateRank(latestMessages.values.toSeq)
+                       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
                          rank
                        )
-                     } else {
-                       CreateBlockStatus.noNewDeploys.pure[F]
+                       // TODO: Remove redundant justifications.
+                       justifications = toJustification(latestMessages.values.toSeq)
+                       now            <- Time[F].currentMillis
+                       checkpoint <- executeDeploys(
+                                      now,
+                                      merged,
+                                      remainingHashes,
+                                      protocolVersion
+                                    )
+                       validatorPrevMsgOpt <- dag.latestMessage(ByteString.copyFrom(publicKey))
+                     } yield {
+                       val block = ProtoUtil.block(
+                         justifications,
+                         checkpoint.preStateHash,
+                         checkpoint.postStateHash,
+                         checkpoint.bondedValidators,
+                         checkpoint.deploysForBlock,
+                         protocolVersion,
+                         parents.map(_.blockHash),
+                         validatorPrevMsgOpt,
+                         chainId,
+                         now,
+                         rank,
+                         publicKey,
+                         privateKey,
+                         sigAlgorithm
+                       )
+                       CreateBlockStatus.created(block)
                      }
-          signedBlock <- proposal match {
-                          case Created(block) =>
-                            signBlock[F](block, dag, publicKey, privateKey, sigAlgorithm)
-                              .map(Created.apply(_): CreateBlockStatus)
-                          case _ => proposal.pure[F]
-                        }
-        } yield signedBlock
+                   } else {
+                     CreateBlockStatus.noNewDeploys.pure[F]
+                   }
+        } yield result
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
@@ -513,68 +524,19 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
-  private def createProposal(
-      parents: Seq[Block], // TODO: We only need their hashes
+  private def executeDeploys(
+      now: Long,
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       deploys: Set[DeployHash],
-      justifications: Seq[Justification],
-      protocolVersion: ProtocolVersion,
-      rank: Long
-  ): F[CreateBlockStatus] = Metrics[F].timer("createProposal") {
-    (for {
-      now <- Time[F].currentMillis
-      DeploysCheckpoint(
-        preStateHash,
-        postStateHash,
-        bondedValidators,
-        deploysForBlock,
+      protocolVersion: ProtocolVersion
+  ): F[DeploysCheckpoint] = Metrics[F].timer("executeDeploys") {
+    ExecEngineUtil
+      .computeDeploysCheckpoint[F](
+        merged,
+        deploys,
+        now,
         protocolVersion
-      ) <- ExecEngineUtil
-            .computeDeploysCheckpoint[F](
-              merged,
-              deploys,
-              now,
-              protocolVersion
-            )
-      status = if (deploysForBlock.isEmpty) {
-        CreateBlockStatus.noNewDeploys
-      } else {
-
-        val postState = Block
-          .GlobalState()
-          .withPreStateHash(preStateHash)
-          .withPostStateHash(postStateHash)
-          .withBonds(bondedValidators)
-
-        val body = Block
-          .Body()
-          .withDeploys(deploysForBlock)
-
-        val header = blockHeader(
-          body,
-          parentHashes = parents.map(_.blockHash),
-          justifications = justifications,
-          state = postState,
-          rank = rank,
-          protocolVersion = protocolVersion.value,
-          timestamp = now,
-          chainId = chainId
-        )
-        val block = unsignedBlockProto(body, header)
-
-        CreateBlockStatus.created(block)
-      }
-    } yield status)
-      .handleErrorWith {
-        case ex @ SmartContractEngineError(error_msg) =>
-          Log[F]
-            .error(s"Execution Engine returned an error while processing deploys: $error_msg")
-            .as(CreateBlockStatus.internalDeployError(ex))
-        case NonFatal(ex) =>
-          Log[F]
-            .error(s"Critical error encountered while processing deploys: ${ex.getMessage}", ex)
-            .as(CreateBlockStatus.internalDeployError(ex))
-      }
+      )
   }
 
   // MultiParentCasper Exposes the block DAG to those who need it.
