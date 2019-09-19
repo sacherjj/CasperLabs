@@ -19,12 +19,16 @@ import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 import scala.util.{Either, Try}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.ipc.ChainSpec.GenesisConfig
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
   def runGenesis(
       deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, GenesisResult]]
+  def runGenesis(
+      genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
@@ -151,6 +155,22 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
           )
         )
     }
+
+  override def runGenesis(
+      genesisConfig: GenesisConfig
+  ): F[Either[Throwable, GenesisResult]] =
+    for {
+      response <- sendMessage(genesisConfig, _.runGenesisWithChainspec) {
+                   _.result match {
+                     case GenesisResponse.Result.Success(result) =>
+                       Right(result)
+                     case GenesisResponse.Result.FailedDeploy(error) =>
+                       Left(new SmartContractEngineError(error.message))
+                     case GenesisResponse.Result.Empty =>
+                       Left(new SmartContractEngineError("empty response"))
+                   }
+                 }
+    } yield response
 
   override def commit(
       prestate: ByteString,

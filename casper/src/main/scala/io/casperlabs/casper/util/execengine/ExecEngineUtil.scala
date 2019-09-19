@@ -109,7 +109,7 @@ object ExecEngineUtil {
                   .rethrow
     } yield results
 
-  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
+  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
       deploys: Seq[Deploy],
       protocolVersion: state.ProtocolVersion
   ): F[GenesisResult] =
@@ -184,7 +184,7 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: BlockStorage: ExecutionEngineService](
+  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
@@ -192,11 +192,25 @@ object ExecEngineUtil {
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
     val blocktime       = block.getHeader.timestamp
 
-    if (isGenesisLike(block)) {
+    if (isGenesisLike(block) && deploys.nonEmpty) {
+      // This was the case when Genesis had blessed terms.
       for {
         genesisResult <- processGenesisDeploys[F](deploys, protocolVersion)
         transformMap  = genesisResult.getEffect.transformMap
       } yield transformMap
+    } else if (isGenesisLike(block)) {
+      // The new Genesis definition is that there's a chain spec that everyone's supposed to
+      // execute on their own and they aren't passed around to be executed.
+      BlockStorage[F].get(block.blockHash).flatMap {
+        case None =>
+          MonadThrowable[F].raiseError(
+            new IllegalStateException(
+              s"Block ${PrettyPrinter.buildString(block.blockHash)} looks like a Genesis based on a ChainSpec but it cannot be found in storage."
+            )
+          )
+        case Some(genesis) =>
+          genesis.transformEntry.pure[F]
+      }
     } else {
       for {
         processedDeploys <- processDeploys[F](

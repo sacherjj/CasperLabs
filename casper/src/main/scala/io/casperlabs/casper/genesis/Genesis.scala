@@ -33,7 +33,7 @@ object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  val protocolVersion = 1L
+  val defaultProtocolVersion = 1L
 
   /** Construct deploys that will set up the system contracts. */
   @silent("is never used")
@@ -95,7 +95,7 @@ object Genesis {
         )
         .withMintCode(mintCode)
         .withProofOfStakeCode(posCode)
-        .withProtocolVersion(state.ProtocolVersion(protocolVersion))
+        .withProtocolVersion(state.ProtocolVersion(defaultProtocolVersion))
         .withGenesisValidators(genesisValidators)
 
       deploy = ProtoUtil.basicDeploy(
@@ -160,7 +160,8 @@ object Genesis {
   def withoutContracts(
       bonds: Map[PublicKey, Long],
       timestamp: Long,
-      chainId: String
+      chainId: String,
+      protocolVersion: Long
   ): Block = {
     import Sorting.byteArrayOrdering
     import io.casperlabs.crypto.Keys.convertTypeclasses
@@ -225,7 +226,8 @@ object Genesis {
       initial = withoutContracts(
         bonds = bondsMap,
         timestamp = timestamp,
-        chainId = chainId
+        chainId = chainId,
+        protocolVersion = defaultProtocolVersion
       )
       validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq.sortBy(_.id)
       blessedContracts <- defaultBlessedTerms[F](
@@ -242,6 +244,68 @@ object Genesis {
                     blessedContracts
                   )
     } yield withContr
+
+  // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/135528449/Genesis+Process+Specification
+  def fromChainSpec[F[_]: Sync: Log: ExecutionEngineService](
+      genesisConfig: ipc.ChainSpec.GenesisConfig
+  ): F[BlockMsgWithTransform] =
+    for {
+      bondsMap <- Sync[F].delay {
+                   genesisConfig.accounts.collect {
+                     case account
+                         if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
+                       PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
+                   }.toMap
+                 }
+
+      initial = withoutContracts(
+        bonds = bondsMap,
+        timestamp = genesisConfig.timestamp,
+        chainId = genesisConfig.name,
+        protocolVersion = genesisConfig.getProtocolVersion.value
+      )
+
+      // The genesis will have no deploys, everyone is supposed to have the chainspec.
+      withContr <- withContracts(
+                    initial,
+                    blessedTerms = Nil
+                  )
+
+      // We need to add the post state hash to Genesis.
+      genesis = withContr.getBlockMessage
+
+      // Execute the EE genesis setup based on the chain spec.
+      genesisResult <- MonadError[F, Throwable].rethrow(
+                        ExecutionEngineService[F]
+                          .runGenesis(
+                            genesisConfig
+                          )
+                      )
+      transforms    = genesisResult.getEffect.transformMap
+      postStateHash = genesisResult.poststateHash
+
+      // Since we are not passing the deploys in the body,
+      // we must commit the effects here.
+      _ <- MonadError[F, Throwable].rethrow(
+            ExecutionEngineService[F]
+              .commit(
+                genesis.getHeader.getState.preStateHash,
+                transforms
+              )
+          )
+
+      withEffects = withContr
+        .withBlockMessage(
+          genesis.withHeader(
+            genesis.getHeader.withState(
+              genesis.getHeader.getState
+                .withPostStateHash(postStateHash)
+            )
+          )
+        )
+        .withTransformEntry(transforms)
+
+    } yield withEffects
 
   private def toFile[F[_]: Applicative: Log](
       path: Path
