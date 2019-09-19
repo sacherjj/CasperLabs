@@ -227,8 +227,8 @@ class ForkchoiceTest
     implicit blockStorage => implicit dagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
-      val v1Bond = Bond(v1, 3)
-      val v2Bond = Bond(v2, 5)
+      val v1Bond = Bond(v1, 5)
+      val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
 
       for {
@@ -249,9 +249,9 @@ class ForkchoiceTest
         _      = equivocatingValidators shouldBe Set(v1)
         scores <- Estimator.lmdScoring(dag, genesis.blockHash, latestBlocks, equivocatingValidators)
         _ = scores shouldBe Map(
-          genesis.blockHash -> 5L,
-          a2.blockHash      -> 5L,
-          b.blockHash       -> 5L,
+          genesis.blockHash -> 3L,
+          a2.blockHash      -> 3L,
+          b.blockHash       -> 3L,
           c.blockHash       -> 0L
         )
 
@@ -268,10 +268,10 @@ class ForkchoiceTest
     * Property-based test for lmdScoring when having equivocation.
     *
     * Randomly chooses a subset of bonded validators to equivocate
-    * and then validates that lcmScoring returns correct results.
+    * and then validates that lmdScoring returns correct results.
     *
     * @param dag The block dag
-    * @param bonds Bonded validators and its stake
+    * @param bonds Bonded validators and their stakes
     * @param supporterForBlocks Supported validators for each block when traversal in lmdScoring
     * @param latestMessageHashes The latest messages from currently bonded validators
     */
