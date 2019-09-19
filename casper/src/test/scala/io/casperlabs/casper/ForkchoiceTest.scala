@@ -265,35 +265,36 @@ class ForkchoiceTest
   }
 
   /**
-    * Property-based test for lcmScoring when having equivocation.
+    * Property-based test for lmdScoring when having equivocation.
     *
-    * It chooses randomly the set of validators from bonded validators to be equivocated,
-    * and check lcmScoring return correct scores.
+    * Randomly chooses a subset of bonded validators to equivocate
+    * and then validates that lcmScoring returns correct results.
     *
     * @param dag The block dag
     * @param bonds Bonded validators and its stake
-    * @param supporterForBlocks Supported validators for each block when traversal in lcmScoring
-    * @param stopHash Block at which we stop computing scores. Should be latest common ancestor of `latestMessagesHashes`.
+    * @param supporterForBlocks Supported validators for each block when traversal in lmdScoring
     * @param latestMessageHashes The latest messages from currently bonded validators
     */
-  def testLcmScoringWithEquivocation(
+  def testLmdScoringWithEquivocation(
       dag: DagRepresentation[Task],
       bonds: Seq[Bond],
       supporterForBlocks: Map[BlockHash, Seq[Validator]],
-      stopHash: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash]
   ): Unit = {
-    val indexOfEquivocatorsGen: Gen[Seq[Int]] =
+    val equivocatorsGen: Gen[Set[Validator]] =
       for {
         n   <- Gen.choose(0, bonds.size)
-        idx <- Gen.pick(n, Seq.range(0, bonds.size))
-      } yield idx
+        idx <- Gen.pick(n, bonds)
+      } yield idx.map(_.validatorPublicKey).toSet
 
-    forAll(indexOfEquivocatorsGen) { idxs: Seq[Int] =>
-      val equivocators = idxs.map(bonds).map(_.validatorPublicKey).toSet
-      val weightMap = bonds.zipWithIndex.map {
-        case (Bond(validator, stake), i) =>
-          if (idxs.contains(i))
+    val lca = DagOperations
+      .latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      .runSyncUnsafe(1.second)
+
+    forAll(equivocatorsGen) { equivocators: Set[Validator] =>
+      val weightMap = bonds.map {
+        case Bond(validator, stake) =>
+          if (equivocators.contains(validator))
             (validator, 0L)
           else {
             (validator, stake)
@@ -301,7 +302,7 @@ class ForkchoiceTest
       }.toMap
       val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
       val scores = Estimator
-        .lmdScoring(dag, stopHash, latestMessageHashes, equivocators)
+        .lmdScoring(dag, lca, latestMessageHashes, equivocators)
         .runSyncUnsafe(5.seconds)
 
       scores shouldBe expectScores
@@ -339,7 +340,6 @@ class ForkchoiceTest
           f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
           supportersWithoutEquivocating = Map(
             genesis.blockHash -> Seq(v1, v2, v3),
             a.blockHash       -> Seq(v1, v3),
@@ -348,11 +348,10 @@ class ForkchoiceTest
             e.blockHash       -> Seq(v3),
             f.blockHash       -> Seq(v2)
           )
-          _ = testLcmScoringWithEquivocation(
+          _ = testLmdScoringWithEquivocation(
             dag,
             bonds,
             supportersWithoutEquivocating,
-            lca,
             latestBlocks
           )
         } yield ()
@@ -395,7 +394,6 @@ class ForkchoiceTest
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
 
           supportersWithoutEquivocating = Map(
             genesis.blockHash -> Seq(v1, v2, v3),
@@ -407,11 +405,10 @@ class ForkchoiceTest
             h.blockHash       -> Seq(v2),
             i.blockHash       -> Seq(v3)
           )
-          _ = testLcmScoringWithEquivocation(
+          _ = testLmdScoringWithEquivocation(
             dag,
             bonds,
             supportersWithoutEquivocating,
-            lca,
             latestBlocks
           )
         } yield ()
@@ -468,7 +465,6 @@ class ForkchoiceTest
           m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
           dag          <- blockDagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
           supportersWithoutEquivocating = Map(
             f.blockHash -> Seq(v1, v2, v3),
             g.blockHash -> Seq(v1, v2),
@@ -477,11 +473,10 @@ class ForkchoiceTest
             l.blockHash -> Seq(v3),
             m.blockHash -> Seq(v2)
           )
-          _ = testLcmScoringWithEquivocation(
+          _ = testLmdScoringWithEquivocation(
             dag,
             bonds,
             supportersWithoutEquivocating,
-            lca,
             latestBlocks
           )
         } yield ()
