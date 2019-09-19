@@ -46,15 +46,17 @@ class CachingDagStorage[F[_]: Sync](
     Sync[F].delay {
       val parents        = block.parentHashes
       val justifications = block.justifications.map(_.latestBlockHash)
-      parents.foreach { parent =>
-        val newChildren = Option(childrenCache.getIfPresent(parent))
-          .getOrElse(Set.empty[BlockHash]) + block.blockHash
-        childrenCache.put(parent, newChildren)
-      }
-      justifications.foreach { justification =>
-        val newBlockHashes = Option(justificationCache.getIfPresent(justification))
-          .getOrElse(Set.empty[BlockHash]) + block.blockHash
-        justificationCache.put(justification, newBlockHashes)
+      synchronized {
+        parents.foreach { parent =>
+          val newChildren = Option(childrenCache.getIfPresent(parent))
+            .getOrElse(Set.empty[BlockHash]) + block.blockHash
+          childrenCache.put(parent, newChildren)
+        }
+        justifications.foreach { justification =>
+          val newBlockHashes = Option(justificationCache.getIfPresent(justification))
+            .getOrElse(Set.empty[BlockHash]) + block.blockHash
+          justificationCache.put(justification, newBlockHashes)
+        }
       }
     } >> underlying.insert(block)
 
