@@ -26,8 +26,6 @@ The open-source CasperLabs project is building a decentralized, economic, censor
 
 ## Known Issues
 
-Currently there is a known issue with building and running the execution-engine binaries on a Mac. We recommend using docker for now until a fix is made.
-
 ## Issues
 
 If you find any issues, please [file an issue](https://github.com/CasperLabs/CasperLabs/issues/new).
