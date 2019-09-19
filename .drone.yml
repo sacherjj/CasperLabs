@@ -124,7 +124,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-pr
@@ -146,7 +146,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-pr
@@ -248,7 +248,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
@@ -272,7 +272,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
@@ -294,7 +294,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
@@ -317,7 +317,7 @@ steps:
       - "**/**.proto"
       - "**/Cargo.lock"
       - "**/Cargo.toml"
-      - "**/**.spec"
+      - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
