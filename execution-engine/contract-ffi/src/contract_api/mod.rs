@@ -21,6 +21,7 @@ use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
 
 const MINT_NAME: &str = "mint";
+const POS_NAME: &str = "pos";
 
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> T
@@ -557,15 +558,23 @@ pub fn transfer_from_purse_to_purse(
     .expect("Should parse result")
 }
 
-pub fn get_mint() -> Option<ContractPointer> {
-    let mint_public_uref = get_uref(MINT_NAME)?;
+fn get_system_contract(name: &str) -> Option<ContractPointer> {
+    let public_uref = get_uref(name)?;
 
-    if let Some(Value::Key(Key::URef(mint_private_uref))) = read_untyped(&mint_public_uref) {
-        let pointer = pointers::TURef::new(mint_private_uref.addr(), AccessRights::READ);
+    if let Some(Value::Key(Key::URef(private_uref))) = read_untyped(&public_uref) {
+        let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
         Some(ContractPointer::URef(pointer))
     } else {
         None
     }
+}
+
+pub fn get_mint() -> Option<ContractPointer> {
+    get_system_contract(MINT_NAME)
+}
+
+pub fn get_pos() -> Option<ContractPointer> {
+    get_system_contract(POS_NAME)
 }
 
 pub fn get_phase() -> Phase {
