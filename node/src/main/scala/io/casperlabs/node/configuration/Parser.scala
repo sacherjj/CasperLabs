@@ -6,6 +6,7 @@ import scala.util.Try
 import cats._
 import cats.implicits._
 import cats.syntax._
+import com.google.protobuf.ByteString
 import io.casperlabs.comm.CommError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._

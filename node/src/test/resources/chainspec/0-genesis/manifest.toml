@@ -13,6 +13,7 @@ name = "test-chain"
 # generator used in execution engine for computing genesis post-state.
 timestamp = 1568805354071
 
+# Later will be replaced by semver.
 protocol-version = 1
 
 # Relative path to the file containing wasm bytecode for installing the mint system contract

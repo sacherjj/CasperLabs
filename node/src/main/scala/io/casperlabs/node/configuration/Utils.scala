@@ -1,5 +1,5 @@
 package io.casperlabs.node.configuration
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import scala.io.Source
 import cats.syntax.either._
@@ -10,6 +10,7 @@ import shapeless.tag.@@
 
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
+import scala.util.Try
 
 private[configuration] object Utils {
   type NotPath[A]      = A <:!< Path
@@ -39,6 +40,13 @@ private[configuration] object Utils {
       src.close()
     }
   }
+
+  def readFile(path: Path): Either[String, String] =
+    readFile(Source.fromFile(path.toFile)).leftMap(err => s"Could not read '$path': $err")
+
+  def readBytes(path: Path): Either[String, Array[Byte]] =
+    Try(Files.readAllBytes(path)).toEither
+      .leftMap(ex => s"Could not read '$path': ${ex.getMessage}")
 
   def dashToCamel(s: String): CamelCase =
     CamelCase(
