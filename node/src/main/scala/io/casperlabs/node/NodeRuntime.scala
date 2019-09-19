@@ -156,7 +156,7 @@ class NodeRuntime private[node] (
                         maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
                       ).map(
                         cache =>
-                          // Compiler fails to inference the proper type without this
+                          // Compiler fails to infer the proper type without this
                           cache: DagStorage[Effect] with DagRepresentation[Effect]
                       )
                 )
