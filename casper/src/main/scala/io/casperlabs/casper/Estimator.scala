@@ -113,15 +113,14 @@ object Estimator {
           .takeUntil(_ == stopHash)
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
-              weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
-                val realWeight = if (equivocatingValidators.contains(validator)) {
-                  0L
-                } else {
-                  weight
-                }
+              (if (equivocatingValidators.contains(validator)) {
+                 0L.pure[F]
+               } else {
+                 weightFromValidatorByDag(dag, blockHash, validator)
+               }).map { realWeight =>
                 val oldValue = acc2.getOrElse(blockHash, 0L)
                 acc2.updated(blockHash, realWeight + oldValue)
-              })
+              }
           }
     }
 
