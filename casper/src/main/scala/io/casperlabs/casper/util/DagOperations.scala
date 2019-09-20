@@ -6,6 +6,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentatio
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
 import simulacrum.typeclass
@@ -352,11 +353,6 @@ object DagOperations {
         latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
       )
       .map(_.blockHash)
-  }
-
-  private implicit val blockMetadataEq = new cats.kernel.Eq[BlockMetadata] {
-    override def eqv(x: BlockMetadata, y: BlockMetadata): Boolean =
-      x.blockHash == y.blockHash
   }
 
   /** Check if there's a (possibly empty) path leading from any of the starting points to any of the targets. */
