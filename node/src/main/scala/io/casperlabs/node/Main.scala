@@ -97,13 +97,9 @@ object Main {
     def raise(msg: String) =
       Task.raiseError(new Exception(msg) with NoStackTrace)
 
-    node.value >>= {
+    node.attempt >>= {
       case Right(_) =>
         Task.unit
-      case Left(CouldNotConnectToBootstrap) =>
-        raise("Node could not connect to bootstrap node.")
-      case Left(InitializationError(msg)) =>
-        raise(msg)
       case Left(error) =>
         raise(s"Failed! Reason: '$error")
     }
