@@ -159,7 +159,7 @@ object DeployRuntime {
                        )
                      )
         localKeyValue = {
-          val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
+          val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mintPublic` is of `URef` type.
           val purseAddrHex = {
             val purseAddr    = account.getPurseId.uref.toByteArray
             val purseAddrSer = serializeArray(purseAddr)
