@@ -81,27 +81,25 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       deploy <- ProtoUtil.basicDeploy[Effect]()
       _      <- casper.deploy(deploy)
       block  <- casper.createBlock.map { case Created(block) => block }
-      result <- EitherT(
-                 Task
-                   .racePair(
-                     casper.addBlock(block).value,
-                     casper.addBlock(block).value
-                   )
-                   .flatMap {
-                     case Left((statusA, running)) =>
-                       running.join.map((statusA, _).tupled)
+      result <- Task
+                 .racePair(
+                   casper.addBlock(block),
+                   casper.addBlock(block)
+                 )
+                 .flatMap {
+                   case Left((statusA, running)) =>
+                     running.join.map((statusA, _))
 
-                     case Right((running, statusB)) =>
-                       running.join.map((_, statusB).tupled)
-                   }
-               )
+                   case Right((running, statusB)) =>
+                     running.join.map((_, statusB))
+                 }
     } yield result
 
     val threadStatuses: (BlockStatus, BlockStatus) =
-      testProgram.value.unsafeRunSync(scheduler).right.get
+      testProgram.unsafeRunSync(scheduler)
 
     threadStatuses should matchPattern { case (Processed, Valid) | (Valid, Processed) => }
-    node.tearDown().value.unsafeRunSync
+    node.tearDown().unsafeRunSync
   }
 
   it should "create blocks based on deploys" in effectTest {

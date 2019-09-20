@@ -118,7 +118,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit
-      errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F]
@@ -177,7 +176,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
-      implicit errorHandler: ErrorHandler[F],
+      implicit
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F]

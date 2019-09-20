@@ -16,7 +16,7 @@ object scalatestcontrib extends Matchers with Assertions {
   }
 
   def effectTest[T](f: Effect[T])(implicit scheduler: Scheduler): T =
-    f.value.unsafeRunSync(scheduler).right.get
+    f.unsafeRunSync(scheduler)
 
   /** If a feature is missing we can do `Log[F].debug("FIXME: Implement feature X!")`
     * and add an assumption to the test that this has been done, otherwise cancel the test.

@@ -14,7 +14,6 @@ import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetectorBySingleSweepImpl
 }
 import io.casperlabs.casper.helper.{DagStorageFixture, NoOpsCasperEffect}
-import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -95,26 +94,23 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
-        q                                           = BlockQuery(hash = secondBlockQuery)
-        blockQueryResponse <- BlockAPI.showBlock[Task](q)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               finalityDetectorEffect,
-                               blockStorage
-                             )
-        blockInfo = blockQueryResponse.blockInfo.get
-        _         = blockQueryResponse.status should be("Success")
-        _         = blockInfo.blockHash should be(secondHashString)
-        _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-        _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.protocolVersion should be(version)
-        _         = blockInfo.deployCount should be(deployCount)
-        _         = blockInfo.faultTolerance should be(faultTolerance)
-        _         = blockInfo.mainParentHash should be(genesisHashString)
-        _         = blockInfo.parentsHashList should be(parentsString)
-        _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(chainId)
+        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery)(
+                      Sync[Task],
+                      logEff,
+                      casperRef,
+                      finalityDetectorEffect,
+                      blockStorage
+                    )
+        _      = blockInfo.getSummary.blockHash should be(blockHash)
+        _      = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
+        _      = blockInfo.getSummary.getHeader.rank should be(blockNumber)
+        _      = blockInfo.getSummary.getHeader.protocolVersion should be(version)
+        _      = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
+        _      = blockInfo.getStatus.faultTolerance should be(faultTolerance)
+        _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHashString)
+        _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsString)
+        _      = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
+        result = blockInfo.getSummary.getHeader.chainId should be(chainId)
       } yield result
   }
 
@@ -123,65 +119,19 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       for {
         effects                                     <- emptyEffects(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
-        q                                           = BlockQuery(hash = badTestHashQuery)
-        blockQueryResponse <- BlockAPI.showBlock[Task](q)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               finalityDetectorEffect,
-                               blockStorage
-                             )
-      } yield blockQueryResponse.status should be(
-        s"Error: Failure to find block with hash ${badTestHashQuery}"
-      )
-  }
-
-  "findBlockWithDeploy" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      for {
-        effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
-        (logEff, casperRef, finalityDetectorEffect) = effects
-        user                                        = ByteString.EMPTY
-        timestamp                                   = 1L
-        blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               finalityDetectorEffect,
-                               blockStorage
-                             )
-        blockInfo = blockQueryResponse.blockInfo.get
-        _         = blockQueryResponse.status should be("Success")
-        _         = blockInfo.blockHash should be(secondHashString)
-        _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
-        _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.protocolVersion should be(version)
-        _         = blockInfo.deployCount should be(deployCount)
-        _         = blockInfo.faultTolerance should be(faultTolerance)
-        _         = blockInfo.mainParentHash should be(genesisHashString)
-        _         = blockInfo.parentsHashList should be(parentsString)
-        _         = blockInfo.sender should be(secondBlockSenderString)
-        result    = blockInfo.shardId should be(chainId)
-      } yield result
-  }
-
-  it should "return error when no block matching query exists" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      for {
-        effects                                     <- emptyEffects(blockStorage, dagStorage)
-        (logEff, casperRef, finalityDetectorEffect) = effects
-        user                                        = ByteString.EMPTY
-        timestamp                                   = 0L
-        blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               finalityDetectorEffect,
-                               blockStorage
-                             )
-      } yield blockQueryResponse.status should be(
-        s"Error: Failure to find block containing deploy signed by  with timestamp ${timestamp.toString}"
-      )
+        blockQueryResponse <- BlockAPI
+                               .getBlockInfo[Task](badTestHashQuery)(
+                                 Sync[Task],
+                                 logEff,
+                                 casperRef,
+                                 finalityDetectorEffect,
+                                 blockStorage
+                               )
+                               .attempt
+      } yield {
+        blockQueryResponse.isLeft shouldBe true
+        blockQueryResponse.left.get.getMessage should contain("NOT_FOUND")
+      }
   }
 
   private def effectsForSimpleCasperSetup(

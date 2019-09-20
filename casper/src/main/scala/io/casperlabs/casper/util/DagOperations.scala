@@ -290,9 +290,6 @@ object DagOperations {
       } yield gca.get
     }
 
-  private def missingDependencyError[A: Show](a: A): Throwable =
-    new IllegalStateException(s"Missing ${Show[A].show(a)} dependency.")
-
   /** Computes Latest Common Ancestor of two elements.
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
@@ -338,12 +335,16 @@ object DagOperations {
       starters: List[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    import io.casperlabs.casper.util.implicits.{eqBlockMetadata, showBlockHash}
     def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
       el =>
         dag
           .lookup(f(el))
-          .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(f(el))))
+          .flatMap(
+            MonadThrowable[F].fromOption(
+              _,
+              new IllegalStateException(s"Missing ${PrettyPrinter.buildString(f(el))} dependency.")
+            )
+          )
 
     starters
       .traverse(lookup(identity))
@@ -351,6 +352,11 @@ object DagOperations {
         latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
       )
       .map(_.blockHash)
+  }
+
+  private implicit val blockMetadataEq = new cats.kernel.Eq[BlockMetadata] {
+    override def eqv(x: BlockMetadata, y: BlockMetadata): Boolean =
+      x.blockHash == y.blockHash
   }
 
   /** Check if there's a (possibly empty) path leading from any of the starting points to any of the targets. */

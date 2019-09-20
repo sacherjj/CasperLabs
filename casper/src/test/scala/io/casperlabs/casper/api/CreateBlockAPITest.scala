@@ -13,7 +13,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.protocol.DeployServiceResponse
 import io.casperlabs.casper.util._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -71,17 +70,16 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
 
     def testProgram(blockApiLock: Semaphore[Effect])(
         implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[(DeployServiceResponse, DeployServiceResponse)] = EitherT.liftF(
+    ): Effect[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
         t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
-               .createBlock[Effect](blockApiLock)).value.start
+               .propose[Effect](blockApiLock)).start
         _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
-               .createBlock[Effect](blockApiLock)).value.start //should fail because other not done
-        r1 <- t1.join
-        r2 <- t2.join
-      } yield (r1.right.get, r2.right.get)
-    )
+               .propose[Effect](blockApiLock)).start //should fail because other not done
+        r1 <- t1.join.attempt
+        r2 <- t2.join.attempt
+      } yield (r1, r2)
 
     try {
       val (response1, response2) = (for {
@@ -89,11 +87,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         _            <- casperRef.set(casper)
         blockApiLock <- Semaphore[Effect](1)
         result       <- testProgram(blockApiLock)(casperRef)
-      } yield result).value.unsafeRunSync.right.get
+      } yield result).unsafeRunSync
 
-      response1.success shouldBe true
-      response2.success shouldBe false
-      response2.message shouldBe "Error: There is another propose in progress."
+      response1.isRight shouldBe true
+      response2.isRight shouldBe false
+      response2.left.get.getMessage should include("ABORTED")
     } finally {
       node.tearDown()
     }
@@ -114,7 +112,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       for {
         d <- ProtoUtil.basicDeploy[Effect]()
         _ <- BlockAPI.deploy[Effect](d)
-        _ <- BlockAPI.createBlock[Effect](blockApiLock)
+        _ <- BlockAPI.propose[Effect](blockApiLock)
         _ <- BlockAPI.deploy[Effect](d)
       } yield ()
 
@@ -124,7 +122,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         _            <- casperRef.set(node.casperEff)
         blockApiLock <- Semaphore[Effect](1)
         result       <- testProgram(blockApiLock)(casperRef)
-      } yield result).value.unsafeRunSync
+      } yield result).unsafeRunSync
     } catch {
       case ex: io.grpc.StatusRuntimeException =>
         ex.getMessage should include("already contains")

@@ -16,9 +16,8 @@ import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.BlockApproverProtocol
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{LegacyConversions, _}
+import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -26,6 +25,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
@@ -382,54 +382,19 @@ package object gossiping {
         validatorId.map { id =>
           val sig = id.signature(block.blockHash.toByteArray)
           Approval()
-            .withApproverPublicKey(sig.publicKey)
-            .withSignature(
-              Signature()
-                .withSigAlgorithm(sig.algorithm)
-                .withSig(sig.sig)
-            )
+            .withApproverPublicKey(ByteString.copyFrom(id.publicKey))
+            .withSignature(sig)
         }
-
-      // Function to read and set the bonds.txt in modes which generate the Genesis locally.
-      readBondsFile = {
-        for {
-          _     <- Log[F].info("Taking bonds from file.")
-          bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
-        } yield bonds
-      }
 
       candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
                              if (conf.casper.approveGenesis) {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
-                               // Based on `CasperPacketHandler.of`.
-                               for {
-                                 _       <- Log[F].info("Starting in approve genesis mode")
-                                 wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
-                                 bonds   <- readBondsFile
-                                 bondsMap = bonds.map {
-                                   case (k, v) => ByteString.copyFrom(k) -> v
-                                 }
-                               } yield { (block: Block) =>
-                                 {
-                                   val candidate = protocol
-                                     .ApprovedBlockCandidate()
-                                     .withBlock(LegacyConversions.fromBlock(block))
-                                     .withRequiredSigs(conf.casper.requiredSigs)
-
-                                   BlockApproverProtocol.validateCandidate[F](
-                                     candidate,
-                                     wallets,
-                                     bondsMap,
-                                     BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)
-                                   ) map {
-                                     case Left(msg) =>
-                                       Left(InvalidArgument(msg))
-
-                                     case Right(()) =>
-                                       Right(maybeApproveBlock(block))
-                                   }
-                                 }
-                               }
+                               MonadThrowable[F].raiseError(
+                                 new IllegalStateException(
+                                   "Genesis validation is temporarily disabled. It won't be needed in the new Genesis specification."
+                                 )
+                               )
+                               // TODO: Read the genesis we made based on the chain spec from the store and just compare the hashes.
                              } else if (conf.casper.standalone) {
                                // This is the case of the bootstrap node. It will not pull candidates.
                                Log[F].info("Starting in create genesis mode") *>
@@ -461,11 +426,8 @@ package object gossiping {
         ): Boolean =
           Validation[F].signature(
             blockHash.toByteArray,
-            protocol
-              .Signature()
-              .withPublicKey(publicKey)
-              .withAlgorithm(signature.sigAlgorithm)
-              .withSig(signature.sig)
+            signature,
+            PublicKey(publicKey.toByteArray)
           )
 
         override def getBlock(blockHash: ByteString): F[Option[Block]] =

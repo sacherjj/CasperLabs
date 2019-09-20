@@ -39,72 +39,6 @@ class BlocksResponseAPITest
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
-  "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b3 <- createBlock[Task](
-               Seq(genesis.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b4 <- createBlock[Task](
-               Seq(b2.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
-             )
-        b5 <- createBlock[Task](
-               Seq(b3.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
-             )
-        b6 <- createBlock[Task](
-               Seq(b4.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
-             )
-        _ <- createBlock[Task](
-              Seq(b5.blockHash),
-              v3,
-              bonds,
-              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
-        _ <- createBlock[Task](
-              Seq(b6.blockHash),
-              v2,
-              bonds,
-              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
-        dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
-        casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap.empty[BlockHash, BlockMsgWithTransform],
-                         tips
-                       )
-        logEff                 = new LogStub[Task]
-        casperRef              <- MultiParentCasperRef.of[Task]
-        _                      <- casperRef.set(casperEffect)
-        finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
-        blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)(
-                           Sync[Task],
-                           casperRef,
-                           logEff,
-                           finalityDetectorEffect,
-                           blockStorage
-                         )
-      } yield blocksResponse.length should be(5)
-  }
-
   "showBlocks" should "return all blocks" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
@@ -161,10 +95,10 @@ class BlocksResponseAPITest
         casperRef              <- MultiParentCasperRef.of[Task]
         _                      <- casperRef.set(casperEffect)
         finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
-        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)(
+        blocksResponse <- BlockAPI.getBlockInfos[Task](Int.MaxValue)(
                            Sync[Task],
-                           casperRef,
                            logEff,
+                           casperRef,
                            finalityDetectorEffect,
                            blockStorage
                          )
@@ -243,15 +177,15 @@ class BlocksResponseAPITest
       implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
         Task
       ]()
-      blocksWithRankBelow1 <- BlockAPI.showBlocks[Task](1)
+      blocksWithRankBelow1 <- BlockAPI.getBlockInfos[Task](1)
       _                    = blocksWithRankBelow1.length shouldBe 1
-      blocksWithRankBelow2 <- BlockAPI.showBlocks[Task](2)
+      blocksWithRankBelow2 <- BlockAPI.getBlockInfos[Task](2)
       _                    = blocksWithRankBelow2.length shouldBe 3
-      blocksWithRankBelow3 <- BlockAPI.showBlocks[Task](3)
+      blocksWithRankBelow3 <- BlockAPI.getBlockInfos[Task](3)
       _                    = blocksWithRankBelow3.length shouldBe 5
-      blocksWithRankBelow4 <- BlockAPI.showBlocks[Task](4)
+      blocksWithRankBelow4 <- BlockAPI.getBlockInfos[Task](4)
       _                    = blocksWithRankBelow4.length shouldBe 7
-      blocksWithRankBelow5 <- BlockAPI.showBlocks[Task](5)
+      blocksWithRankBelow5 <- BlockAPI.getBlockInfos[Task](5)
       result               = blocksWithRankBelow5.length shouldBe 8
     } yield result
   }
