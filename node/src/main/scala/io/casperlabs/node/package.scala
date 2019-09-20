@@ -29,14 +29,6 @@ package object node {
 
     }
 
-  implicit def eitherTApplicativeAsk[A](
-      implicit ev: ApplicativeAsk[Task, A]
-  ): ApplicativeAsk[Task, A] =
-    new DefaultApplicativeAsk[Task, A] {
-      val applicative: Applicative[Task] = Applicative[Task]
-      def ask: Task[A]                   = ev.ask
-    }
-
   implicit class ResourceTaskEffectOps[A](r: Resource[Task, A]) {
     def toEffect: Resource[Task, A] = Resource {
       r.allocated.map {

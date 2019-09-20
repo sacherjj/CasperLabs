@@ -122,7 +122,7 @@ class NodeRuntime private[node] (
       implicit val metrics     = diagnostics.effects.metrics[Task]
       implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
       implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
-      implicit val nodeAsk     = eitherTApplicativeAsk(effects.peerNodeAsk(state))
+      implicit val nodeAsk     = effects.peerNodeAsk(state)
 
       val resources = for {
         implicit0(executionEngineService: ExecutionEngineService[Task]) <- GrpcExecutionEngineService[
