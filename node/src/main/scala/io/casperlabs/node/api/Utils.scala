@@ -64,9 +64,7 @@ object Utils {
                             )
           _ <- appErr
                 .raiseError(
-                  new IllegalArgumentException(
-                    s"Seed of Local key has to be exactly 32 bytes long. Offending seed: ${seed.toList}"
-                  )
+                  new IllegalArgumentException("Seed of Local key has to be exactly 32 bytes long.")
                 )
                 .whenA(seed.length != 32)
         } yield {
