@@ -1,4 +1,5 @@
 package io.casperlabs.casper.util
+
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.BlockSummary

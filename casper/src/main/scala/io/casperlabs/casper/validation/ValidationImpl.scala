@@ -392,7 +392,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           }
     } yield ()
 
-  override def ballot(b: BlockSummary): F[Unit] =
+  // Validates that a message that is supposed to be a ballot adheres to ballot's specification.
+  private def ballot(b: BlockSummary): F[Unit] =
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
