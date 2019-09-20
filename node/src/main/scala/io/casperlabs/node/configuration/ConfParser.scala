@@ -36,8 +36,9 @@ private[configuration] trait ConfParserImplicits {
       pathToField: List[String],
       P: Parser[A]
   ): ValidationResult[Option[A]] = {
-    val key = snakify(("cl" :: pathToField.reverse).mkString("_"))
-    envVars.get(key).map(P.parse).toValidatedNel
+    val key      = snakify(("cl" :: pathToField.reverse).mkString("_"))
+    val maybeVal = envVars.get(key)
+    maybeVal.map(P.parse).toValidatedNel
   }
 
   def parseFromConfigFile[A](
@@ -51,10 +52,12 @@ private[configuration] trait ConfParserImplicits {
       cliByName: CamelCase => Option[String],
       pathToField: List[String],
       P: Parser[A]
-  ): ValidationResult[Option[A]] =
-    cliByName(constructCamelCase(pathToField))
+  ): ValidationResult[Option[A]] = {
+    val maybeVal = cliByName(constructCamelCase(pathToField))
+    maybeVal
       .map(P.parse)
       .toValidatedNel
+  }
 
   implicit def optionableSubConfigs[A: IsSubConfig](
       implicit

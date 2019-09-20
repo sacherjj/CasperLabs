@@ -5,7 +5,7 @@ import io.casperlabs.comm.discovery.Node
 
 final case class RPConf(
     local: Node,
-    bootstrap: Option[Node],
+    bootstraps: List[Node],
     defaultTimeout: FiniteDuration,
     clearConnections: ClearConnectionsConf
 )

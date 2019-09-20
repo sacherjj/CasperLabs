@@ -1,7 +1,7 @@
 import pytest
 
-from test.cl_node.casperlabs_accounts import Account
-from test.cl_node.common import HELLO_NAME_CONTRACT, PAYMENT_CONTRACT, MAX_PAYMENT_ABI
+from casperlabs_local_net.casperlabs_accounts import Account
+from casperlabs_local_net.common import Contract
 
 
 def test_non_account_precondition_failure(trillion_payment_node_network):
@@ -15,9 +15,7 @@ def test_non_account_precondition_failure(trillion_payment_node_network):
         from_address=non_existent_account.public_key_hex,
         public_key=non_existent_account.public_key_path,
         private_key=non_existent_account.private_key_path,
-        session_contract=HELLO_NAME_CONTRACT,
-        payment_contract=PAYMENT_CONTRACT,
-        payment_args=MAX_PAYMENT_ABI,
+        session_contract=Contract.HELLONAME,
     )
 
     # Will have InternalError as no deploys to propose

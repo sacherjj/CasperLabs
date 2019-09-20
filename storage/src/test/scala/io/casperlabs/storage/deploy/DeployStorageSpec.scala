@@ -349,26 +349,6 @@ trait DeployStorageSpec
       }
     }
 
-    "readAccountPendingOldest" should {
-      val existMultipleDeploysPerAccount: List[Deploy] => Boolean =
-        deploys => deploys.groupBy(_.getHeader.accountPublicKey).exists(_._2.size > 1)
-      "return PENDING deploys, one per account, with the lowest creation_time_second" in forAll(
-        deploysGen().suchThat(existMultipleDeploysPerAccount)
-      ) { deploys =>
-        testFixture { (reader, writer) =>
-          for {
-            _ <- writer.addAsPending(deploys)
-            expected = deploys
-              .groupBy(_.getHeader.accountPublicKey)
-              .mapValues(_.minBy(_.getHeader.timestamp))
-              .values
-              .map(_.deployHash)
-            got <- reader.readAccountPendingOldest().compile.toList
-          } yield got should contain theSameElementsAs expected
-        }
-      }
-    }
-
     "(addAsPending | addAsProcessed) + getPendingOrProcessed" should {
       "be able to properly (de)serialize data" in forAll(deploysGen(), arbBool.arbitrary) {
         (deploys, b) =>

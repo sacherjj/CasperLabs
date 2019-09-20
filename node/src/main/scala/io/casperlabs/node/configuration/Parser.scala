@@ -3,7 +3,9 @@ package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
 import scala.util.Try
-import cats.syntax.either._
+import cats._
+import cats.implicits._
+import cats.syntax._
 import io.casperlabs.comm.CommError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -40,8 +42,10 @@ private[configuration] trait ParserImplicits {
   implicit val pathParser: Parser[Path] = s =>
     Try(Paths.get(s.replace("$HOME", sys.props("user.home")))).toEither
       .leftMap(_.getMessage)
-  implicit val peerNodeParser: Parser[Node] = s =>
+
+  implicit val peerNodeParser: Parser[Node] = s => {
     Node.fromAddress(s).leftMap(CommError.errorMessage)
+  }
 
   implicit val positiveIntParser: Parser[Refined[Int, Positive]] =
     s =>
@@ -70,6 +74,11 @@ private[configuration] trait ParserImplicits {
         d <- Try(s.toDouble).toEither.leftMap(_.getMessage)
         w <- refineV[GreaterEqual[W.`0.0`.T]](d)
       } yield w
+
+  implicit def listParser[T: Parser] = new Parser[List[T]] {
+    override def parse(s: String) =
+      s.split(' ').filterNot(_.isEmpty).map(Parser[T].parse).toList.sequence
+  }
 }
 
 private[configuration] object Parser {

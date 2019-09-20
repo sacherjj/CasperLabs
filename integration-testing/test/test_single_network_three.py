@@ -5,17 +5,12 @@ from functools import reduce
 from itertools import count
 from operator import add
 
-from test.cl_node.common import extract_block_hash_from_propose_output
-from test.cl_node.client_parser import parse_show_blocks
-from test.cl_node.docker_node import DockerNode
-from test.cl_node.errors import NonZeroExitCodeError
-from test.cl_node.common import (
-    COMBINED_CONTRACT,
-    COUNTER_CALL,
-    HELLO_WORLD,
-    MAILING_LIST_CALL,
-)
-from test.cl_node.wait import (
+from casperlabs_local_net.common import extract_block_hash_from_propose_output
+from casperlabs_local_net.client_parser import parse_show_blocks
+from casperlabs_local_net.docker_node import DockerNode
+from casperlabs_local_net.errors import NonZeroExitCodeError
+from casperlabs_local_net.common import Contract
+from casperlabs_local_net.wait import (
     wait_for_block_hash_propagated_to_all_nodes,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
@@ -33,9 +28,8 @@ def three_node_network_with_combined_contract(three_node_network):
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
     node = bootstrap
-    block_hash = bootstrap.deploy_and_propose(
-        session_contract=COMBINED_CONTRACT,
-        payment_contract=COMBINED_CONTRACT,
+    block_hash = bootstrap.p_client.deploy_and_propose(
+        session_contract=Contract.COMBINEDCONTRACTSDEFINE,
         from_address=node.genesis_account.public_key_hex,
         public_key=node.genesis_account.public_key_path,
         private_key=node.genesis_account.private_key_path,
@@ -45,14 +39,13 @@ def three_node_network_with_combined_contract(three_node_network):
 
 
 def deploy_and_propose(node, contract):
-    block_hash = node.deploy_and_propose(
+    block_hash = node.p_client.deploy_and_propose(
         session_contract=contract,
-        payment_contract=contract,
         from_address=node.genesis_account.public_key_hex,
         public_key=node.genesis_account.public_key_path,
         private_key=node.genesis_account.private_key_path,
     )
-    deploys = node.client.show_deploys(block_hash)
+    deploys = node.p_client.show_deploys(block_hash)
     for deploy in deploys:
         assert deploy.is_error is False
     return block_hash
@@ -67,18 +60,18 @@ expected_counter_result = count(1)
 
 test_parameters = [
     (
-        MAILING_LIST_CALL,
+        Contract.MAILINGLISTCALL,
         2,
         "mailing/list",
-        lambda r: r.string_list.values == "CasperLabs",
+        lambda r: "CasperLabs" in r.string_list.values,
     ),
     (
-        COUNTER_CALL,
+        Contract.COUNTERCALL,
         1,
         "counter/count",
         lambda r: r.int_value == next(expected_counter_result),
     ),
-    (HELLO_WORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
+    (Contract.HELLOWORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
 ]
 
 
@@ -101,14 +94,15 @@ def test_call_stored_contract(
     from_address = nodes[0].genesis_account.public_key_hex
 
     def state(node, path, block_hash):
-        return node.d_client.query_state(
+        return node.p_client.query_state(
             block_hash=block_hash, key=from_address, key_type="address", path=path
         )
 
     for node in nodes:
         block_hash = deploy_and_propose(node, contract)
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
-        assert expected(state(node, path, block_hash))
+        cur_state = state(node, path, block_hash)
+        assert expected(cur_state)
 
 
 CONTRACT_1 = "old_wasm/helloname_invalid_just_1.wasm"
@@ -172,19 +166,13 @@ def test_neglected_invalid_block(three_node_network):
         start_time = time() + 1
 
         boot_deploy = DeployTimedTread(
-            bootstrap,
-            {"session_contract": CONTRACT_1, "payment_contract": CONTRACT_1},
-            start_time,
+            bootstrap, {"session_contract": CONTRACT_1}, start_time
         )
         node1_deploy = DeployTimedTread(
-            node1,
-            {"session_contract": CONTRACT_2, "payment_contract": CONTRACT_2},
-            start_time,
+            node1, {"session_contract": CONTRACT_2}, start_time
         )
         node2_deploy = DeployTimedTread(
-            node2,
-            {"session_contract": CONTRACT_2, "payment_contract": CONTRACT_2},
-            start_time,
+            node2, {"session_contract": CONTRACT_2}, start_time
         )
 
         # Simultaneous Deploy
@@ -273,7 +261,6 @@ class DeployThread(threading.Thread):
             for contract in batch:
                 assert "Success" in self.node.client.deploy(
                     session_contract=contract,
-                    payment_contract=contract,
                     from_address=self.node.genesis_account.public_key_hex,
                     public_key=self.node.genesis_account.public_key_path,
                     private_key=self.node.genesis_account.private_key_path,
@@ -287,7 +274,7 @@ class DeployThread(threading.Thread):
 
 @pytest.mark.parametrize(
     "contract_paths,expected_deploy_counts_in_blocks",
-    [([["test_helloname.wasm"]], [1, 1, 1, 1])],
+    [([[Contract.HELLONAME]], [1, 1, 1, 1])],
 )
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(

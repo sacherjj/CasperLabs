@@ -248,8 +248,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       signedBlock <- (node0.casperEff.deploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
 
-      // NOTE: It won't actually include `data1` in the block because it still has `data0`.
-      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0)
+      // NOTE: It can include both data0 and data1 because they don't conflict.
+      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
       _ <- node1.receive() //receives block1; should not ask for block0
@@ -1136,104 +1136,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       Created(block) <- node.casperEff.deploy(deploy) *> MultiParentCasper[Effect].createBlock
       _              <- MultiParentCasper[Effect].addBlock(block)
       _              <- MultiParentCasper[Effect].createBlock shouldBeF io.casperlabs.casper.NoNewDeploys
-    } yield ()
-  }
-
-  it should "only execute the next deploy per account in one proposal" in effectTest {
-    val node             = standaloneEff(genesis, transforms, validatorKeys.head)
-    implicit val timeEff = new LogicalTime[Effect]
-
-    def propose() =
-      for {
-        create         <- node.casperEff.createBlock
-        Created(block) = create
-        _              <- node.casperEff.addBlock(block)
-      } yield block
-
-    for {
-      deploy1 <- ProtoUtil.basicDeploy[Effect]()
-      deploy2 <- ProtoUtil.basicDeploy[Effect]()
-      _       <- node.casperEff.deploy(deploy1)
-      _       <- node.casperEff.deploy(deploy2)
-
-      block1           <- propose()
-      _                = block1.getBody.deploys.map(_.getDeploy) should contain only (deploy1)
-      processedDeploys <- node.deployStorage.readProcessed
-      pendingDeploys   <- node.deployStorage.readPending
-      _                = processedDeploys should contain only (deploy1)
-      _                = pendingDeploys should contain only (deploy2)
-
-      block2           <- propose()
-      _                = block2.getBody.deploys.map(_.getDeploy) should contain only (deploy2)
-      processedDeploys <- node.deployStorage.readProcessed
-      pendingDeploys   <- node.deployStorage.readPending
-      _ = processedDeploys should contain theSameElementsAs List(
-        deploy1,
-        deploy2
-      )
-      _ = pendingDeploys shouldBe empty
-
-    } yield ()
-  }
-
-  it should "store deploys processing result when create or receive new valid block" in effectTest {
-    for {
-      nodes <- networkEff(
-                validatorKeys.take(2),
-                genesis,
-                transforms,
-                maybeMakeEE =
-                  Some(HashSetCasperTestNode.simpleEEApi[Effect](_, generateConflict = false))
-              )
-
-      deployA         <- ProtoUtil.basicDeploy[Effect]()
-      _               <- nodes(0).casperEff.deploy(deployA)
-      Created(blockA) <- nodes(0).casperEff.createBlock
-      _               <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
-      _               <- nodes(1).receive()
-
-      processingResults <- nodes(0).deployStorage.getProcessingResults(deployA.deployHash)
-      _ = processingResults.map {
-        case (blockHash, pd) => (blockHash, pd.getDeploy)
-      } shouldBe List((blockA.blockHash, deployA))
-
-      processingResults <- nodes(1).deployStorage.getProcessingResults(deployA.deployHash)
-      _ = processingResults.map {
-        case (blockHash, pd) => (blockHash, pd.getDeploy)
-      } shouldBe List((blockA.blockHash, deployA))
-      _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield ()
-  }
-
-  it should "not store deploys processing result when create or receive new invalid block" in effectTest {
-    for {
-      nodes <- networkEff(
-                validatorKeys.take(2),
-                genesis,
-                transforms,
-                maybeMakeEE =
-                  Some(HashSetCasperTestNode.simpleEEApi[Effect](_, generateConflict = false))
-              )
-
-      deployA         <- ProtoUtil.basicDeploy[Effect]()
-      _               <- nodes(0).casperEff.deploy(deployA)
-      Created(blockA) <- nodes(0).casperEff.createBlock
-      invalidBlockA = BlockUtil.resignBlock(
-        blockA.withHeader(blockA.getHeader.withTimestamp(Long.MaxValue)),
-        nodes(0).validatorId.privateKey
-      )
-      blockStatus <- nodes(0).casperEff.addBlock(invalidBlockA)
-      _           = blockStatus shouldBe an[InvalidBlock]
-      // nodes(0) won't relay invalid block
-      _ <- nodes(1).receive()
-      _ <- nodes(1).casperEff.contains(invalidBlockA) shouldBeF (false)
-      // adding manually
-      blockStatus <- nodes(1).casperEff.addBlock(invalidBlockA)
-      _           = blockStatus shouldBe an[InvalidBlock]
-      _ <- nodes(0).deployStorage
-            .getProcessingResults(deployA.deployHash) shouldBeF (Nil)
-      _ <- nodes(1).deployStorage.getProcessingResults(deployA.deployHash) shouldBeF (Nil)
-      _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 

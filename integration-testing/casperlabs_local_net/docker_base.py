@@ -8,8 +8,8 @@ from typing import Tuple, Union
 from docker import DockerClient
 from docker.models.containers import Container
 
-from test.cl_node.errors import CommandTimeoutError, NonZeroExitCodeError
-from test.cl_node.docker_config import DockerConfig
+from casperlabs_local_net.errors import CommandTimeoutError, NonZeroExitCodeError
+from casperlabs_local_net.docker_config import DockerConfig
 
 
 def humanify(line):

@@ -2,9 +2,9 @@ package io.casperlabs.node.configuration
 
 import java.nio.file.Path
 
-import cats.Show
-import cats.syntax.either._
-import cats.syntax.option._
+import cats._
+import cats.syntax._
+import cats.implicits._
 import com.github.ghik.silencer.silent
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.configuration.cli.scallop
@@ -20,17 +20,15 @@ import scala.language.implicitConversions
 private[configuration] object Converter extends ParserImplicits {
   import Options._
 
-  implicit val bootstrapAddressConverter: ValueConverter[Node] = new ValueConverter[Node] {
-    def parse(s: List[(String, List[String])]): Either[String, Option[Node]] =
-      s match {
-        case (_, uri :: Nil) :: Nil =>
-          Parser[Node].parse(uri).map(_.some)
-        case Nil => Right(None)
-        case _   => Left("provide the casperlabs node bootstrap address")
+  implicit val bootstrapAddressConverter: ValueConverter[List[Node]] =
+    new ValueConverter[List[Node]] {
+      def parse(s: List[(String, List[String])]): Either[String, Option[List[Node]]] = {
+        val all = s.unzip._2.flatten.mkString(" ")
+        Parser[List[Node]].parse(all).map(Option(_).filterNot(_.isEmpty))
       }
 
-    val argType: ArgType.V = ArgType.SINGLE
-  }
+      val argType: ArgType.V = ArgType.LIST
+    }
 
   implicit val optionsFlagConverter: ValueConverter[Flag] = new ValueConverter[Flag] {
     def parse(s: List[(String, List[String])]): Either[String, Option[Flag]] =
@@ -79,6 +77,10 @@ private[configuration] final case class Options private (
   import io.casperlabs.comm.discovery.NodeUtils
   import Options.Flag
 
+  //Used in @scallop macro when it puts things into `field`
+  private implicit def showList[T: Show]: Show[List[T]] = xs => xs.map(_.show).mkString(" ")
+  @silent("is never used")
+  private implicit val showNodeList = showList[Node]
   //Used in @scallop macro
   @silent("is never used")
   private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
@@ -97,7 +99,9 @@ private[configuration] final case class Options private (
 
   def fieldByName(fieldName: CamelCase): Option[String] =
     subcommand
-      .flatMap(command => fields.get((command, fieldName)).flatMap(_.apply().toOption))
+      .flatMap(
+        command => fields.get((command, fieldName)).flatMap { _.apply().toOption }
+      )
 
   def parseCommand: Either[String, Configuration.Command] =
     subcommand.fold(s"Command was not provided".asLeft[Configuration.Command]) {
@@ -319,8 +323,8 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverBootstrap =
-      gen[Node](
-        "Bootstrap casperlabs node address for initial seed.",
+      gen[List[Node]](
+        "Bootstrap casperlabs node address for initial seed. Accepts multiple instances for redundancy.",
         'b'
       )
 

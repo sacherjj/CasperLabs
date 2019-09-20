@@ -481,6 +481,31 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         }
       }
     }
+    "banTemp" should {
+      "prevent nodes from being returned as alive until the expiry period ends" in {
+        val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
+        val target                       = chooseRandom(peers)
+        TextFixture.prefilledTable(
+          connections = peers,
+          k = totalN(peers),
+          alivePeersCacheSize = totalN(peers),
+          alivePeersCacheExpirationPeriod = 250.millis
+        ) { (_, nd, _) =>
+          for {
+            _         <- nd.updateRecentlyAlivePeers
+            response0 <- nd.recentlyAlivePeersAscendingDistance
+            _         <- nd.banTemp(target)
+            response1 <- nd.recentlyAlivePeersAscendingDistance
+            _         <- Task.sleep(500.millis)
+            response2 <- nd.recentlyAlivePeersAscendingDistance
+          } yield {
+            response0 should contain(target)
+            response1 should not contain (target)
+            response2 should contain(target)
+          }
+        }
+      }
+    }
   }
 }
 
@@ -547,6 +572,7 @@ object NodeDiscoverySpec {
       val effect = for {
         table                 <- PeerTable[Task](id, k)
         recentlyAlivePeersRef <- Ref.of[Task, (Set[Node], Millis)]((Set.empty[Node], 0L))
+        temporaryBans         <- NodeDiscoveryImpl.NodeCache[Task](alivePeersCacheExpirationPeriod)
         implicit0(kademliaMock: KademliaMock) = new KademliaMock(
           connections,
           pings.getOrElse(_ => true)
@@ -556,6 +582,7 @@ object NodeDiscoverySpec {
           id,
           table,
           recentlyAlivePeersRef,
+          temporaryBans,
           alpha,
           k,
           true,

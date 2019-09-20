@@ -1,6 +1,6 @@
 """Tests for the testing code itself."""
 
-from .cl_node.common import (
+from casperlabs_local_net.common import (
     extract_block_hash_from_propose_output,
     extract_block_count_from_show_blocks,
 )

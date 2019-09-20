@@ -480,10 +480,7 @@ class CasperLabsClient:
         # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
         body = consensus.Deploy.Body(
             session=_encode_contract(session_options, session_args),
-            payment=_encode_contract(
-                payment_options,
-                payment_options == session_options and session_args or payment_args,
-            ),
+            payment=_encode_contract(payment_options, payment_args),
         )
 
         approval_public_key = public_key and read_pem_key(public_key)

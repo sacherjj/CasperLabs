@@ -45,6 +45,7 @@ object EffectsTestInstances {
     def discover: F[Unit]                                          = ???
     def lookup(id: NodeIdentifier): F[Option[Node]]                = ???
     def handleCommunications: Protocol => F[CommunicationResponse] = ???
+    def banTemp(node: Node): F[Unit]                               = ???
   }
 
   def createRPConfAsk[F[_]: Applicative](
@@ -53,7 +54,7 @@ object EffectsTestInstances {
       clearConnections: ClearConnectionsConf = ClearConnectionsConf(1, 1)
   ) =
     new ConstApplicativeAsk[F, RPConf](
-      RPConf(local, Some(local), defaultTimeout, clearConnections)
+      RPConf(local, List(local), defaultTimeout, clearConnections)
     )
 
   class TransportLayerStub[F[_]: Sync] extends TransportLayer[F] {
