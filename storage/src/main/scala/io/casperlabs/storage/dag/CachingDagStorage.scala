@@ -84,11 +84,8 @@ class CachingDagStorage[F[_]: Sync](
   // We don't use 'contains' directly because it's overriden by BlockStorage#contains
   // at SQLiteStorage.scala
   override def contains(blockHash: BlockHash): F[Boolean] =
-    Sync[F]
-      .delay {
-        val allChildren = childrenCache.asMap().values().asScala.toSet.flatten
-        allChildren(blockHash)
-      }
+    lookup(blockHash)
+      .map(_.isDefined)
       .ifM(true.pure[F], underlying.contains(blockHash))
 
   /** Return the ranks of blocks in the DAG between start and end, inclusive. */
