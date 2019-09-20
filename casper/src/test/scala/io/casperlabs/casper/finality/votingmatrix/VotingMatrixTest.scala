@@ -100,7 +100,11 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
-                                                          .create[Task](dag, genesis.blockHash)
+                                                          .create[Task](
+                                                            dag,
+                                                            genesis.blockHash,
+                                                            EquivocationsTracker.empty
+                                                          )
           _            <- checkMatrix(Map.empty)
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
           _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
@@ -223,7 +227,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
           newVotingMatrix <- VotingMatrix
                               .create[Task](
                                 updatedDag,
-                                b1.blockHash
+                                b1.blockHash,
+                                EquivocationsTracker.empty
                               )
           _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
           _ <- checkMatrix(
