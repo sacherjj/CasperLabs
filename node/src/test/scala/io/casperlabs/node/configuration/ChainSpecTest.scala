@@ -9,7 +9,7 @@ import java.io.File
 import org.scalatest._
 import scala.io.Source
 
-class ChainSpecTest extends WordSpecLike with Matchers with ChainSpecReader {
+class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with ChainSpecReader {
 
   "GenesisConf" should {
     "parse a manifest file" in {
@@ -23,6 +23,19 @@ class ChainSpecTest extends WordSpecLike with Matchers with ChainSpecReader {
         conf.wasmCosts.regular.value shouldBe 1
         conf.wasmCosts.memInitialPages.value shouldBe 5
         conf.wasmCosts.opcodesDivisor.value shouldBe 10
+      }
+    }
+
+    "not parse a manifest with missing costs" in {
+      val manifest = Source.fromResource("chainspec-invalids/genesis-with-missing-fields.toml")
+
+      checkInvalid(ChainSpec.GenesisConf.parseManifest(manifest)) { errors =>
+        forExactly(1, errors) {
+          _ should (include("regular") and include("must be defined"))
+        }
+        forExactly(1, errors) {
+          _ should (include("timestamp") and include("must be defined"))
+        }
       }
     }
   }
@@ -142,5 +155,13 @@ class ChainSpecTest extends WordSpecLike with Matchers with ChainSpecReader {
         fail(errors.toList.mkString(" "))
       case Valid(x) =>
         test(x)
+    }
+
+  def checkInvalid[A](value: ValidatedNel[String, _])(test: List[String] => Unit) =
+    value match {
+      case Invalid(errors) =>
+        test(errors.toList)
+      case Valid(_) =>
+        fail("Expected the value to be invalid.")
     }
 }
