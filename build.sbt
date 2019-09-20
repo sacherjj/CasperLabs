@@ -13,12 +13,11 @@ Global / dependencyOverrides := Dependencies.overrides
 val protobufDirectory = file("protobuf")
 // Protos can import any other using the full path within `protobuf`. This filter reduces the list
 // for which we actually generate .scala source, so we don't get duplicates between projects.
-def protobufPathFilter(paths: String*) = {
-  (f: File) =>
-    f.getName.endsWith(".proto") && // Not directories or other artifacts.
-      paths.map(protobufDirectory.toPath.resolve).exists { path =>
-        f.toPath == path || f.toPath.startsWith(path)
-      }
+def protobufPathFilter(paths: String*) = { (f: File) =>
+  f.getName.endsWith(".proto") && // Not directories or other artifacts.
+  paths.map(protobufDirectory.toPath.resolve).exists { path =>
+    f.toPath == path || f.toPath.startsWith(path)
+  }
 }
 
 lazy val projectSettings = Seq(
@@ -158,8 +157,7 @@ lazy val comm = (project in file("comm"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufPathFilter(
         "io/casperlabs/comm/discovery",
-        "io/casperlabs/comm/gossiping",
-        "io/casperlabs/comm/protocol/routing" // TODO: Eventually remove.
+        "io/casperlabs/comm/gossiping"
       )
     ),
     PB.targets in Compile := Seq(
@@ -208,7 +206,6 @@ lazy val models = (project in file("models"))
       protobufPathFilter(
         "google/api",
         "io/casperlabs/casper/consensus",
-        "io/casperlabs/casper/protocol", // TODO: Eventually remove.
         "io/casperlabs/ipc/transforms.proto"
       )
     ),
