@@ -6,6 +6,7 @@ CasperLabs Client API library and command line tool.
 # Hack to fix the relative imports problems #
 import sys
 from pathlib import Path
+from typing import Union
 
 file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
@@ -149,11 +150,13 @@ class ABI:
         # TODO: should be signed 32 bits
         return ABI.u32(a)
 
+    @staticmethod
     def long_value(a: int) -> bytes:
         # TODO: should be signed 64 bits
         return ABI.u64(a)
 
-    def big_int(a) -> bytes:
+    @staticmethod
+    def big_int(a: Union[int, dict]) -> bytes:
         try:
             return ABI.u512(int(a["value"]))
         except TypeError:
