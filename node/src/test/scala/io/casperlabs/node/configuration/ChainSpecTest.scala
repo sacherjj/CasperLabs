@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base64
 import io.casperlabs.ipc
 import java.io.File
+import java.nio.file.Paths
 import org.scalatest._
 import scala.io.Source
 
@@ -159,6 +160,22 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
           upgrade.newCosts shouldBe empty
         }
       }
+    }
+  }
+
+  "resolvePath" should {
+    "handle relative paths" in {
+      ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("c.wasm")) shouldBe Paths.get("a/b/c.wasm")
+    }
+    "handle absolute paths" in {
+      ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("/d/c.wasm")) shouldBe Paths.get(
+        "/d/c.wasm"
+      )
+    }
+    "handle paths based on home directory" in {
+      val path = ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("~/d/c.wasm")).toString
+      path should startWith("/home")
+      path should endWith("/d/c.wasm")
     }
   }
 

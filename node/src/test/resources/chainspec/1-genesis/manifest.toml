@@ -12,13 +12,13 @@ timestamp = 1568805354071
 # Later will be replaced by semver.
 protocol-version = 1
 
-# Relative path to the file containing wasm bytecode for installing the mint system contract
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 mint-code-path = "mint.wasm"
 
-# Relative path to the file containing wasm bytecode for installing the mint system contract
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 pos-code-path = "pos.wasm"
 
-# Relative path to the CSV file containing initial account balances and bonds.
+# Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 initial-accounts-path = "accounts.csv"
 
 [wasm-costs]

@@ -123,10 +123,18 @@ object ChainSpec extends ParserImplicits {
         i => i.asRight[String]
       )
   }
+
+  /** Normally we expect files to be relative to the directory where the update is,
+    * but it's possible someone would locally want to re-point it to an absolute path.
+    */
+  def resolvePath(dir: Path, file: Path): Path =
+    if (file.startsWith(Paths.get("~/")))
+      Paths.get(sys.props("user.home")).resolve(file.toString.drop(2))
+    else dir.resolve(file)
 }
 
 trait ChainSpecReader {
-  import ChainSpec.{Accounts, GenesisConf, UpgradeConf}
+  import ChainSpec.{resolvePath, Accounts, GenesisConf, UpgradeConf}
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
       read: A => Either[String, B]
@@ -181,9 +189,9 @@ trait ChainSpecReader {
       withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
         case GenesisConf(genesis, wasmCosts) =>
           for {
-            mintCodeBytes <- Utils.readBytes(path.resolve(genesis.mintCodePath))
-            posCodeBytes  <- Utils.readBytes(path.resolve(genesis.posCodePath))
-            accountsCsv   <- Utils.readFile(path.resolve(genesis.initialAccountsPath))
+            mintCodeBytes <- Utils.readBytes(resolvePath(path, genesis.mintCodePath))
+            posCodeBytes  <- Utils.readBytes(resolvePath(path, genesis.posCodePath))
+            accountsCsv   <- Utils.readFile(resolvePath(path, genesis.initialAccountsPath))
             accounts      <- Accounts.parseCsv(accountsCsv, skipHeader = false)
           } yield {
             ipc.ChainSpec
@@ -213,8 +221,8 @@ trait ChainSpecReader {
         case UpgradeConf(upgrade, maybeWasmCosts) =>
           upgrade.installerCodePath.fold(
             none[Array[Byte]].asRight[String]
-          ) { x =>
-            Utils.readBytes(path.resolve(x)).map(_.some)
+          ) { file =>
+            Utils.readBytes(resolvePath(path, file)).map(_.some)
           } map { maybeInstallerCodeBytes =>
             ipc.ChainSpec
               .UpgradePoint(
