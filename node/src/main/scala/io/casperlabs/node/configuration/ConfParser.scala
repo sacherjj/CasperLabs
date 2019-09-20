@@ -71,8 +71,10 @@ private[configuration] trait ConfParserImplicits {
         pathToField: List[String]
     ) =>
       C.parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
-        case Invalid(e) if e.toList.exists(_.contains("must be defined")) => Valid(none[A])
-        case x                                                            => x.map(_.some)
+        case Invalid(e) if e.toList.exists(_.contains("All fields are missing")) =>
+          Valid(none[A])
+        case x =>
+          x.map(_.some)
       }
 
   implicit def strict[A: NotSubConfig](
@@ -155,8 +157,15 @@ private[configuration] trait GenericConfParser extends ConfParserImplicits {
       }
 
       errors match {
-        case x :: xs => Invalid(NonEmptyList(x, xs))
-        case _       => Valid(caseClass.rawConstruct(fields.reverse))
+        case xs
+            if xs.nonEmpty && xs.size == caseClass.parameters.length && xs.forall(
+              _ contains "must be defined"
+            ) =>
+          Invalid(NonEmptyList(s"All fields are missing for ${caseClass.typeName.full}", xs))
+        case x :: xs =>
+          Invalid(NonEmptyList(x, xs))
+        case _ =>
+          Valid(caseClass.rawConstruct(fields.reverse))
       }
   }
 

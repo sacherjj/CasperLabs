@@ -26,7 +26,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
       }
     }
 
-    "not parse a manifest with missing costs" in {
+    "not parse a manifest with missing fields" in {
       val manifest = Source.fromResource("chainspec-invalids/genesis-with-missing-fields.toml")
 
       checkInvalid(ChainSpec.GenesisConf.parseManifest(manifest)) { errors =>
@@ -63,6 +63,19 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
         conf.upgrade.protocolVersion shouldBe 3L
         conf.upgrade.installerCodePath shouldBe empty
         conf.wasmCosts shouldBe empty
+      }
+    }
+
+    "not parse a manifest with missing or partial costs" in {
+      val manifest = Source.fromResource("chainspec-invalids/upgrade-with-missing-fields.toml")
+
+      checkInvalid(ChainSpec.UpgradeConf.parseManifest(manifest)) { errors =>
+        forExactly(1, errors) {
+          _ should (include("activationPointRank") and include("must be defined"))
+        }
+        forExactly(1, errors) {
+          _ should (include("maxStackHeight") and include("must be defined"))
+        }
       }
     }
   }
