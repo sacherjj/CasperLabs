@@ -82,7 +82,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::NewFuncIndex.into(),
             ),
             "load_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::LoadArgFuncIndex.into(),
             ),
             "get_arg" => FuncInstance::alloc_host(

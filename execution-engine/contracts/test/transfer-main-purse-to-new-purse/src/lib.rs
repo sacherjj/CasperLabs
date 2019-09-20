@@ -11,12 +11,20 @@ use contract_ffi::value::U512;
 
 enum Error {
     PurseToPurseTransfer = 1002,
+    MissingArg = 100,
+    InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::get_arg(1);
-    let destination_name: String = contract_api::get_arg(0);
+    let amount: U512 = contract_api::get_arg(1)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+
+    let destination_name: String = contract_api::get_arg(0)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+
     let source: PurseId = contract_api::main_purse();
     let destination = contract_api::create_purse();
     if contract_api::transfer_from_purse_to_purse(source, destination, amount)

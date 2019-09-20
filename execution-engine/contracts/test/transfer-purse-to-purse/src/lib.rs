@@ -14,13 +14,20 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
+enum Error {
+    MissingArg = 100,
+    InvalidArgument = 101,
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let main_purse = main_purse();
     // add or update `main_purse` if it doesn't exist already
     add_uref("purse:main", &Key::from(main_purse.value()));
 
-    let src_purse_name: String = get_arg(0);
+    let src_purse_name: String = get_arg(0)
+        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let src_purse_key = get_uref(&src_purse_name).unwrap_or_else(|| revert(103));
 
@@ -28,7 +35,9 @@ pub extern "C" fn call() {
         Some(uref) => PurseId::new(*uref),
         None => revert(104),
     };
-    let dst_purse_name: String = get_arg(1);
+    let dst_purse_name: String = get_arg(1)
+        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let dst_purse = if !has_uref(&dst_purse_name) {
         // If `dst_purse_name` is not in known urefs list then create a new purse
@@ -43,7 +52,9 @@ pub extern "C" fn call() {
             None => revert(106),
         }
     };
-    let amount: U512 = get_arg(2);
+    let amount: U512 = get_arg(2)
+        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);
 

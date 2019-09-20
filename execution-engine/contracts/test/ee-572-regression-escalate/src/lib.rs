@@ -14,22 +14,28 @@ use contract_ffi::uref::{AccessRights, URef};
 
 const CONTRACT_POINTER: u32 = 0;
 
-const GET_ARG_ERROR: u32 = 100;
-const CREATE_TUREF_ERROR: u32 = 200;
+enum Error {
+    GetArg = 100,
+    MissingArg = 101,
+    InvalidArgument = 102,
+    CreateTURef = 200,
+}
 
 const REPLACEMENT_DATA: &str = "bawitdaba";
 
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_pointer: ContractPointer = contract_api::get_arg::<Key>(CONTRACT_POINTER)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32))
         .to_c_ptr()
-        .unwrap_or_else(|| contract_api::revert(GET_ARG_ERROR));
+        .unwrap_or_else(|| contract_api::revert(Error::GetArg as u32));
 
     let reference: URef = contract_api::call_contract(contract_pointer, &(), &Vec::new());
 
     let forged_reference: TURef<String> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
-        TURef::from_uref(ret).unwrap_or_else(|_| contract_api::revert(CREATE_TUREF_ERROR))
+        TURef::from_uref(ret).unwrap_or_else(|_| contract_api::revert(Error::CreateTURef as u32))
     };
 
     contract_api::write(forged_reference, REPLACEMENT_DATA.to_string())

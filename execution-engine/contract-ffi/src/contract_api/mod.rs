@@ -4,7 +4,7 @@ pub mod pointers;
 
 use self::alloc_util::*;
 use self::pointers::*;
-use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
@@ -19,6 +19,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
+use core::mem::MaybeUninit;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
@@ -212,18 +213,35 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: T
     write(uref, contract);
 }
 
+fn load_arg(index: u32) -> Option<usize> {
+    // This is a memory placeholder that will be overwritten on the host side
+    let mut ok_mem = MaybeUninit::uninit();
+    // load_arg FFI function will overwrite a byte passed as 2nd argument with a value that
+    // indicates there is argument present (1) or there is no argument at this index passed (0).
+    let arg_size = unsafe { ext_ffi::load_arg(index, ok_mem.as_mut_ptr()) };
+    // Regardless of the result the byte is *always* set so the following call is safe
+    let ok = unsafe { ok_mem.assume_init() } != 0;
+    // Convert the function call result into an optional
+    if ok {
+        Some(arg_size)
+    } else {
+        None
+    }
+}
+
 /// Return the i-th argument passed to the host for the current module
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
-pub fn get_arg<T: FromBytes>(i: u32) -> T {
-    let arg_size = unsafe { ext_ffi::load_arg(i) };
-    let dest_ptr = alloc_bytes(arg_size);
-    let arg_bytes = unsafe {
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
+    let arg_size = load_arg(i)?;
+    let arg_bytes = {
+        let dest_ptr = alloc_bytes(arg_size);
+        unsafe {
+            ext_ffi::get_arg(dest_ptr);
+            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+        }
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&arg_bytes).unwrap()
+    Some(deserialize(&arg_bytes))
 }
 
 /// Return the unforgable reference known by the current module under the given

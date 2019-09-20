@@ -22,11 +22,16 @@ enum Error {
     GetPosInnerURef = 1,
     GetPosOuterURef = 2,
     Transfer = 3,
+    MissingArg = 100,
+    InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+
     let main_purse: PurseId = contract_api::main_purse();
 
     let pos_pointer: ContractPointer = {

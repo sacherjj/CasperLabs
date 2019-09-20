@@ -10,6 +10,11 @@ use contract_ffi::value::uint::U512;
 
 const BOND_METHOD_NAME: &str = "bond";
 
+enum Error {
+    MissingArg = 100,
+    InvalidArgument = 101,
+}
+
 // Bonding contract.
 //
 // Accepts bonding amount (of type `u64`) as first argument.
@@ -20,7 +25,11 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let bonding_purse = contract_api::create_purse();
-    let bond_amount: U512 = U512::from(contract_api::get_arg::<u64>(0));
+    let bond_amount: U512 = U512::from(
+        contract_api::get_arg::<u64>(0)
+            .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+            .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32)),
+    );
 
     match contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => contract_api::call_contract(

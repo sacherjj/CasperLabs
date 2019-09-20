@@ -17,6 +17,8 @@ enum Error {
     GetPosOuterURef = 1,
     GetPosInnerURef = 2,
     SubmitPayment = 99,
+    MissingArg = 100,
+    InvalidArgument = 101,
 }
 
 fn purse_to_key(p: &PurseId) -> Key {
@@ -66,10 +68,18 @@ pub extern "C" fn call() {
         }
     };
 
-    let payment_amount: U512 = contract_api::get_arg(0);
-    let refund_purse_flag: u8 = contract_api::get_arg(1);
-    let maybe_amount_spent: Option<U512> = contract_api::get_arg(2);
-    let maybe_account: Option<PublicKey> = contract_api::get_arg(3);
+    let payment_amount: U512 = contract_api::get_arg(0)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let refund_purse_flag: u8 = contract_api::get_arg(1)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let maybe_amount_spent: Option<U512> = contract_api::get_arg(2)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let maybe_account: Option<PublicKey> = contract_api::get_arg(3)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {

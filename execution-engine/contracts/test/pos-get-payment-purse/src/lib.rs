@@ -19,6 +19,8 @@ enum Error {
     TransferFromPaymentToSource = 4,
     GetBalance = 5,
     CheckBalance = 6,
+    MissingArg = 100,
+    InvalidArgument = 101,
 }
 
 #[no_mangle]
@@ -37,7 +39,9 @@ pub extern "C" fn call() {
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
     // amount passed to payment contract
-    let payment_fund: U512 = contract_api::get_arg(0);
+    let payment_fund: U512 = contract_api::get_arg(0)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 

@@ -19,6 +19,8 @@ enum Error {
     GetPosOuterURef = 1,
     GetPosInnerURef = 2,
     TransferFromSourceToPayment = 3,
+    MissingArg = 100,
+    InvalidArgument = 101,
 }
 
 fn standard_payment(amount: U512) {
@@ -44,7 +46,9 @@ fn standard_payment(amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_phase: Phase = contract_api::get_arg(0);
+    let known_phase: Phase = contract_api::get_arg(0)
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
     let get_phase = contract_api::get_phase();
     assert_eq!(
         get_phase, known_phase,

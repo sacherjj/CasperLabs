@@ -298,13 +298,21 @@ where
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.context.args().len() {
-            self.host_buf = self.context.args()[i].clone();
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::ArgIndexOutOfBounds(i).into())
-        }
+    pub fn load_arg(&mut self, i: usize, ok_ptr: u32) -> Result<usize, Trap> {
+        let ok = match self.context.args().get(i) {
+            Some(arg) => {
+                self.host_buf = arg.clone();
+                1u8
+            }
+            None => {
+                self.host_buf.clear();
+                0u8
+            }
+        };
+        // Always overwrite value inside passed pointer so the caller can expect passed (and
+        // possibly uninitialized) chunk of memory will be always overwritten
+        self.memory.set(ok_ptr, &[ok]).map_err(Error::Interpreter)?;
+        Ok(self.host_buf.len())
     }
 
     /// Load the uref known by the given name into the Wasm memory
