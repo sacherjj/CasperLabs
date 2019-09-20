@@ -38,7 +38,7 @@ fn get_pos_contract() -> ContractPointer {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32).unwrap().unwrap();
     let main_purse: PurseId = contract_api::main_purse();
 
     let pos_pointer: ContractPointer = get_pos_contract();

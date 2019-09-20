@@ -52,10 +52,10 @@ pub extern "C" fn call() {
         contract_api::read(contract_api::get_uref("pos").unwrap().to_turef().unwrap());
     let pos_pointer = pos_contract.to_c_ptr().unwrap();
 
-    let payment_amount: U512 = contract_api::get_arg(0);
-    let refund_purse_flag: u8 = contract_api::get_arg(1);
-    let amount_spent: U512 = contract_api::get_arg(2);
-    let account: PublicKey = contract_api::get_arg(3);
+    let payment_amount: U512 = contract_api::get_arg(0).unwrap().unwrap();
+    let refund_purse_flag: u8 = contract_api::get_arg(1).unwrap().unwrap();
+    let amount_spent: U512 = contract_api::get_arg(2).unwrap().unwrap();
+    let account: PublicKey = contract_api::get_arg(3).unwrap().unwrap();
 
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {

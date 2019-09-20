@@ -65,11 +65,11 @@ const TEST_UNBOND: &str = "unbond";
 pub extern "C" fn call() {
     let pos_pointer = get_pos_contract();
 
-    let command: String = get_arg(0);
+    let command: String = get_arg(0).unwrap().unwrap();
     if command == TEST_BOND {
         // Creates new purse with desired amount based on main purse and sends funds
 
-        let amount: U512 = get_arg(1);
+        let amount: U512 = get_arg(1).unwrap().unwrap();
         let p1 = create_purse();
 
         if transfer_from_purse_to_purse(main_purse(), p1, amount)
@@ -80,19 +80,19 @@ pub extern "C" fn call() {
 
         bond(&pos_pointer, &amount, p1);
     } else if command == TEST_BOND_FROM_MAIN_PURSE {
-        let amount = get_arg(1);
+        let amount = get_arg(1).unwrap().unwrap();
 
         bond(&pos_pointer, &amount, main_purse());
     } else if command == TEST_SEED_NEW_ACCOUNT {
-        let account: PublicKey = get_arg(1);
-        let amount: U512 = get_arg(2);
+        let account: PublicKey = get_arg(1).unwrap().unwrap();
+        let amount: U512 = get_arg(2).unwrap().unwrap();
         if transfer_from_purse_to_account(main_purse(), account, amount)
             == TransferResult::TransferError
         {
             revert(Error::UnableToSeedAccount as u32);
         }
     } else if command == TEST_UNBOND {
-        let maybe_amount: Option<U512> = get_arg(1);
+        let maybe_amount: Option<U512> = get_arg(1).unwrap().unwrap();
         unbond(&pos_pointer, maybe_amount);
     } else {
         revert(Error::UnknownCommand as u32);

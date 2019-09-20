@@ -16,7 +16,7 @@ pub extern "C" fn call() {
     let pos_pointer = pos_contract.to_c_ptr().unwrap();
 
     let source_purse = contract_api::main_purse();
-    let payment_amount: U512 = U512::from(contract_api::get_arg::<u32>(1));
+    let payment_amount: U512 = U512::from(contract_api::get_arg::<u32>(1).unwrap().unwrap());
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
