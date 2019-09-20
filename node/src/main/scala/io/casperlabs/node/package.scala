@@ -14,10 +14,6 @@ import monix.eval.instances.CatsParallelForTask
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 
-package node {
-  case class CommErrorException(error: CommError) extends Exception(error.toString)
-}
-
 package object node {
 
   /** Final Effect + helper methods */
