@@ -14,7 +14,6 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
@@ -61,24 +60,6 @@ package object effects {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-
-  def tcpTransportLayer(
-      port: Int,
-      certPath: Path,
-      keyPath: Path,
-      maxMessageSize: Int,
-      chunkSize: Int,
-      folder: Path
-  )(
-      implicit scheduler: Scheduler,
-      log: Log[Task],
-      metrics: Metrics[Task],
-      cache: ConnectionsCache[Task, TcpConnTag]
-  ): TcpTransportLayer = {
-    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(port, cert, key, maxMessageSize, chunkSize, folder, 100)
-  }
 
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Task, Connections](Connections.empty)

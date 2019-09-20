@@ -9,7 +9,6 @@ import cats.temp.par.Par
 import cats.{~>, Applicative, Monad, Parallel}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.eitherT._
-import io.casperlabs.comm.CommError
 import monix.eval.instances.CatsParallelForTask
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
