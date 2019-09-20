@@ -30,6 +30,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   val badTestHashQuery = "No such a hash"
 
   val genesisHashString = "0" * 64
+  val genesisHash       = ProtoUtil.stringToByteString(genesisHashString)
   val version           = 1L
 
   def genesisBlock(genesisHashString: String, version: Long): Block = {
@@ -94,7 +95,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
-        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery)(
+        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, full = true)(
                       Sync[Task],
                       logEff,
                       casperRef,
@@ -107,8 +108,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
         _      = blockInfo.getSummary.getHeader.protocolVersion should be(version)
         _      = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
         _      = blockInfo.getStatus.faultTolerance should be(faultTolerance)
-        _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHashString)
-        _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsString)
+        _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
+        _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
         _      = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
         result = blockInfo.getSummary.getHeader.chainId should be(chainId)
       } yield result
@@ -130,7 +131,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
                                .attempt
       } yield {
         blockQueryResponse.isLeft shouldBe true
-        blockQueryResponse.left.get.getMessage should contain("NOT_FOUND")
+        blockQueryResponse.left.get.getMessage should include("NOT_FOUND")
       }
   }
 
