@@ -158,22 +158,14 @@ object DeployRuntime {
                          "Account's known_urefs map did not contain Mint contract address."
                        )
                      )
-        mintPrivate <- DeployService[F]
-                        .queryState(
-                          blockHash,
-                          "uref",
-                          Base16.encode(mintPublic.getUref.uref.toByteArray), // I am assuming that "mint" points to URef type key.
-                          ""
-                        )
-                        .rethrow
         localKeyValue = {
-          val mintPrivateHex = Base16.encode(mintPrivate.getKey.getUref.uref.toByteArray) // Assuming that `mint_private` is of `URef` type.
+          val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mintPublic` is of `URef` type.
           val purseAddrHex = {
             val purseAddr    = account.getPurseId.uref.toByteArray
             val purseAddrSer = serializeArray(purseAddr)
             Base16.encode(purseAddrSer)
           }
-          s"$mintPrivateHex:$purseAddrHex"
+          s"$mintPublicHex:$purseAddrHex"
         }
         balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
         balance <- DeployService[F]

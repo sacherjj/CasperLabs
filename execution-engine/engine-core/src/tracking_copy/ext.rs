@@ -11,18 +11,13 @@ use crate::execution;
 use crate::tracking_copy::{QueryResult, TrackingCopy};
 
 pub struct SystemContractInfo {
-    outer_key: Key,
-    inner_key: Key,
+    key: Key,
     contract: Contract,
 }
 
 impl SystemContractInfo {
-    pub fn outer_key(&self) -> Key {
-        self.outer_key
-    }
-
-    pub fn inner_key(&self) -> Key {
-        self.inner_key
+    pub fn key(&self) -> Key {
+        self.key
     }
 
     pub fn contract(&self) -> &Contract {
@@ -35,12 +30,8 @@ impl SystemContractInfo {
 }
 
 impl SystemContractInfo {
-    fn new(outer_key: Key, inner_key: Key, contract: Contract) -> SystemContractInfo {
-        SystemContractInfo {
-            outer_key,
-            inner_key,
-            contract,
-        }
+    fn new(key: Key, contract: Contract) -> SystemContractInfo {
+        SystemContractInfo { key, contract }
     }
 }
 
@@ -153,21 +144,10 @@ where
     fn get_system_contract_info(
         &mut self,
         correlation_id: CorrelationId,
-        outer_key: Key,
+        key: Key,
     ) -> Result<SystemContractInfo, Self::Error> {
-        let inner_uref_key = match self.get(correlation_id, &outer_key).map_err(Into::into)? {
-            Some(Value::Key(key @ Key::URef(_))) => key.normalize(),
-            // This match needs to be improved
-            Some(other) => {
-                return Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                    "Value::Key".to_string(),
-                    other.type_string(),
-                )))
-            }
-            None => return Err(execution::Error::KeyNotFound(outer_key)),
-        };
-        let contract = self.get_contract(correlation_id, inner_uref_key)?;
-        Ok(SystemContractInfo::new(outer_key, inner_uref_key, contract))
+        let contract = self.get_contract(correlation_id, key)?;
+        Ok(SystemContractInfo::new(key, contract))
     }
 
     fn get_contract(

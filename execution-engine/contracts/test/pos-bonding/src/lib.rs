@@ -6,23 +6,20 @@ extern crate contract_ffi;
 
 use alloc::prelude::v1::{String, Vec};
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
+use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{
-    call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
-    transfer_from_purse_to_account, transfer_from_purse_to_purse, PurseTransferResult,
-    TransferResult,
+    self, call_contract, create_purse, get_arg, main_purse, revert, transfer_from_purse_to_account,
+    transfer_from_purse_to_purse, PurseTransferResult, TransferResult,
 };
 use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 
 enum Error {
-    GetPosOuterURef = 1000,
-    GetPosInnerURef = 1001,
-    PurseToPurseTransfer = 1002,
-    UnableToSeedAccount = 1003,
-    UnknownCommand = 1004,
+    GetPosURef = 1000,
+    PurseToPurseTransfer = 1001,
+    UnableToSeedAccount = 1002,
+    UnknownCommand = 1003,
 }
 
 fn purse_to_key(p: PurseId) -> Key {
@@ -30,14 +27,7 @@ fn purse_to_key(p: PurseId) -> Key {
 }
 
 fn get_pos_contract() -> ContractPointer {
-    let outer: TURef<Key> = get_uref("pos")
-        .and_then(Key::to_turef)
-        .unwrap_or_else(|| revert(Error::GetPosInnerURef as u32));
-    if let Some(ContractPointer::URef(inner)) = read::<Key>(outer).to_c_ptr() {
-        ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
-    } else {
-        revert(Error::GetPosOuterURef as u32)
-    }
+    contract_api::get_pos().unwrap_or_else(|| contract_api::revert(Error::GetPosURef as u32))
 }
 
 fn bond(pos: &ContractPointer, amount: &U512, source: PurseId) {
