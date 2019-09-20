@@ -632,13 +632,10 @@ class CasperLabsClient:
             )
 
         mintPublic = urefs[0]
-        mintPrivate = self.queryState(
-            block_hash, mintPublic.key.uref.uref.hex(), "", "uref"
-        )
 
-        mintPrivateHex = mintPrivate.key.uref.uref.hex()
+        mintPublicHex = mintPublic.key.uref.uref.hex()
         purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
-        localKeyValue = f"{mintPrivateHex}:{purseAddrHex}"
+        localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
         balance = self.queryState(
