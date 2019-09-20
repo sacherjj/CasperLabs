@@ -5,7 +5,7 @@ import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
-import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.catscontrib.MonadStateOps._
 
 import scala.annotation.tailrec
@@ -47,7 +47,7 @@ package object votingmatrix {
     */
   def checkForCommittee[F[_]: Monad](
       rFTT: Double,
-      equivocationTrack: EquivocationTracker
+      equivocationTrack: EquivocationsTracker
   )(
       implicit matrix: VotingMatrix[F]
   ): F[Option[CommitteeWithConsensusValue]] =
@@ -133,7 +133,7 @@ package object votingmatrix {
     */
   private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
       quorum: Long,
-      equivocationTrack: EquivocationTracker
+      equivocationTrack: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap           <- (matrix >> 'weightMap).get

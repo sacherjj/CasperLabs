@@ -7,6 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.equivocations
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -273,7 +275,7 @@ class FinalityDetectorByVotingMatrixTest
                             dag,
                             block,
                             lastFinalizedBlockHash,
-                            Map.empty[Validator, Long]
+                            EquivocationsTracker.empty
                           )
     } yield block -> finalizedBlockOpt
 }

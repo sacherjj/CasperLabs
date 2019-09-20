@@ -9,7 +9,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.equivocations.EquivocationDetector.EquivocationTracker
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
@@ -31,7 +31,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       dag: DagRepresentation[F],
       block: Block,
       latestFinalizedBlock: BlockHash,
-      equivocationTrack: EquivocationTracker
+      equivocationTrack: EquivocationsTracker
   ): F[Option[CommitteeWithConsensusValue]] =
     matrix.withPermit(for {
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)

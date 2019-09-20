@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -25,8 +26,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
 
   behavior of "Voting Matrix"
 
-  implicit val logEff          = new LogStub[Task]
-  val emptyEquivocationTracker = Map.empty[Validator, Long]
+  implicit val logEff = new LogStub[Task]
 
   def checkWeightMap(
       expect: Map[Validator, Long]
@@ -124,7 +124,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
                   v2 -> None
                 )
               )
-          committee <- checkForCommittee[Task](0.1, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
           _         = committee shouldBe None
           b2 <- createAndUpdateVotingMatrix[Task](
                  Seq(genesis.blockHash),
@@ -144,7 +144,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
                   v2 -> Some((b2.blockHash, b2.getHeader.rank))
                 )
               )
-          committee <- checkForCommittee[Task](0.1, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
           _         = committee shouldBe None
           b3 <- createAndUpdateVotingMatrix[Task](
                  Seq(b1.blockHash),
@@ -165,7 +165,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
                   v2 -> Some((b2.blockHash, b2.getHeader.rank))
                 )
               )
-          committee <- checkForCommittee[Task](0.1, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
           _         = committee shouldBe None
           b4 <- createAndUpdateVotingMatrix[Task](
                  Seq(b3.blockHash),
@@ -187,7 +187,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
                 )
               )
 
-          committee <- checkForCommittee[Task](0.01, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.01, EquivocationsTracker.empty)
           _         = committee shouldBe None
 
           b5 <- createAndUpdateVotingMatrix[Task](
@@ -210,10 +210,10 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
                 )
               )
 
-          committee <- checkForCommittee[Task](0.1, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
           _         = committee shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash))
 
-          committee <- checkForCommittee[Task](0.4, emptyEquivocationTracker)
+          committee <- checkForCommittee[Task](0.4, EquivocationsTracker.empty)
           _ = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
