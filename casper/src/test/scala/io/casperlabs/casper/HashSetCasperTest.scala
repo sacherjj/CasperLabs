@@ -30,9 +30,6 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable
 
-/** Run tests using the TransportLayer. */
-class TransportLayerCasperTest extends HashSetCasperTest with TransportLayerCasperTestNodeFactory
-
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
 
@@ -828,8 +825,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
           }
 
       // We simulate a network failure here by not allowing block #10 to get passed to nodes(1)
-      // And then we assume fetchDependencies eventually gets called
-      _ <- nodes(1).casperEff.fetchDependencies
       _ <- nodes(0).receive()
 
       reqCnt = nodes(1).logEff.infos.count(_ startsWith "Requested missing block")

@@ -11,7 +11,7 @@ import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{HashSetCasperTestNode, TransportLayerCasperTestNodeFactory}
+import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.protocol.DeployServiceResponse
 import io.casperlabs.casper.util._
@@ -28,7 +28,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 @silent("deprecated")
-class CreateBlockAPITest extends FlatSpec with Matchers with TransportLayerCasperTestNodeFactory {
+class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
   import HashSetCasperTestNode.Effect
 
@@ -145,7 +145,6 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
-  def fetchDependencies: F[Unit]   = underlying.fetchDependencies
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
   override def createBlock: F[CreateBlockStatus] =
