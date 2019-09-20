@@ -1,10 +1,5 @@
 # Running the CasperLabs Node
 ---
-## Known Issues
-
-Currently there is a known issue with building and running the execution-engine binaries on a Mac. We recommend using docker for now until a fix is made.
----
-
 The CasperLabs node consists of two components:
 * `casperlabs-engine-grpc-server`, which executes smart contracts and persists the effects of these executions.
 * `casperlabs-node`, which handles peer-to-peer communication, consensus, and block storage.

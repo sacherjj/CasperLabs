@@ -32,6 +32,7 @@ NODE_ID=$(cat $DIR/.casperlabs/$NODE/node-id)
 function run_default() {
     docker run --rm \
         --network casperlabs \
+        --volume $PWD/keys:/keys \
         casperlabs/client:$VERSION \
         --host $NODE --node-id $NODE_ID $CMD $@
 }
