@@ -51,11 +51,4 @@ object BlockImplicits {
   implicit class BlockSummaryObjectOps(val blockSummary: BlockSummary.type) extends AnyVal {
     def fromBlock(b: Block): BlockSummary = BlockSummary(b.blockHash, b.header, b.signature)
   }
-
-  implicit class MessageSummaryOps[M <: Message](msg: M) {
-    def isGenesisLike: Boolean =
-      msg.parents.isEmpty &&
-        msg.validatorId.isEmpty &&
-        msg.signature.sig.isEmpty
-  }
 }

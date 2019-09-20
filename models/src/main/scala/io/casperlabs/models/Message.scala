@@ -29,6 +29,11 @@ abstract class Message {
 
   val parents: Seq[Id]
   val blockSummary: BlockSummary
+
+  def isGenesisLike: Boolean =
+    this.parents.isEmpty &&
+      this.validatorId.isEmpty &&
+      this.signature.sig.isEmpty
 }
 
 object Message {
