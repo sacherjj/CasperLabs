@@ -694,6 +694,7 @@ where
 
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
         let key = self.get_mint_contract_uref_key()?;
+        // unwrap is safe here because get_mint_contract_uref_key checks that the key is a URef
         let reference = *key.as_uref().unwrap();
         Ok(reference)
     }

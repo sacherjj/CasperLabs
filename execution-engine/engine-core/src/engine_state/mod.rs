@@ -1077,7 +1077,10 @@ where
     }
 
     /// Calculates bonded validators at `root_hash` state.
-    pub fn get_bonded_validators(
+    ///
+    /// Should only be called with a valid root hash after a successful call to
+    /// [`StateProvider::commit`]. Will panic if called with an invalid root hash.
+    fn get_bonded_validators(
         &self,
         correlation_id: CorrelationId,
         protocol_version: ProtocolVersion,
