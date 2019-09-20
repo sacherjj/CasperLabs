@@ -15,13 +15,6 @@ import monix.execution.Scheduler
 
 package object node {
 
-  /** Final Effect + helper methods */
-  type Effect[A] = Task[A]
-
-  implicit class TaskEffectOps[A](t: Task[A]) {
-    def toEffect: Effect[A] = t
-  }
-
   implicit def eitherTTaskable[F[_]: Monad: TaskLike, E]: TaskLike[EitherT[F, E, ?]] =
     new TaskLike[EitherT[F, E, ?]] {
       case class ToTaskException(e: E) extends RuntimeException
@@ -38,17 +31,17 @@ package object node {
 
   implicit def eitherTApplicativeAsk[A](
       implicit ev: ApplicativeAsk[Task, A]
-  ): ApplicativeAsk[Effect, A] =
-    new DefaultApplicativeAsk[Effect, A] {
-      val applicative: Applicative[Effect] = Applicative[Effect]
-      def ask: Effect[A]                   = ev.ask.toEffect
+  ): ApplicativeAsk[Task, A] =
+    new DefaultApplicativeAsk[Task, A] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[A]                   = ev.ask
     }
 
   implicit class ResourceTaskEffectOps[A](r: Resource[Task, A]) {
-    def toEffect: Resource[Effect, A] = Resource {
+    def toEffect: Resource[Task, A] = Resource {
       r.allocated.map {
-        case (x, releaseTask) => (x, releaseTask.toEffect)
-      }.toEffect
+        case (x, releaseTask) => (x, releaseTask)
+      }
     }
   }
 }

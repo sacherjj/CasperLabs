@@ -41,7 +41,7 @@ package object effects {
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
       metrics: Metrics[Task]
-  ): Resource[Effect, NodeDiscovery[Task]] =
+  ): Resource[Task, NodeDiscovery[Task]] =
     NodeDiscoveryImpl
       .create[Task](
         id,
@@ -52,7 +52,6 @@ package object effects {
         ingressScheduler,
         egressScheduler
       )(init)
-      .toEffect
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -81,7 +80,7 @@ package object effects {
       connectEC: ExecutionContext,  // for waiting on connections, should be bounded
       transactEC: ExecutionContext, // for JDBC, can be unbounded
       serverDataDir: Path
-  ): Resource[Effect, Transactor[Effect]] = {
+  ): Resource[Task, Transactor[Task]] = {
     val config = new HikariConfig()
     config.setDriverClassName("org.sqlite.JDBC")
     config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
@@ -96,7 +95,7 @@ package object effects {
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
     HikariTransactor
-      .fromHikariConfig[Effect](
+      .fromHikariConfig[Task](
         config,
         connectEC,
         transactEC

@@ -29,15 +29,14 @@ import scala.concurrent.duration._
 @silent("deprecated")
 class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
-  import HashSetCasperTestNode.Effect
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
-    casper.validation.raiseValidateErrorThroughApplicativeError[Effect]
-  implicit val logEff = new LogStub[Effect]
+    casper.validation.raiseValidateErrorThroughApplicativeError[Task]
+  implicit val logEff = new LogStub[Task]
 
-  implicit val validation = HashSetCasperTestNode.makeValidation[Effect]
+  implicit val validation = HashSetCasperTestNode.makeValidation[Task]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -52,7 +51,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
     val node   = standaloneEff(genesis, transforms, validatorKeys.head)
-    val casper = new SleepingMultiParentCasperImpl[Effect](node.casperEff)
+    val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
     val deploys = List(
       "@0!(0) | for(_ <- @0){ @1!(1) }",
       "for(_ <- @1){ @2!(2) }"
@@ -64,28 +63,28 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         )
     }
 
-    implicit val logEff       = new LogStub[Effect]
+    implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
-    def testProgram(blockApiLock: Semaphore[Effect])(
-        implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
-        t1 <- (BlockAPI.deploy[Effect](deploys.head) *> BlockAPI
-               .propose[Effect](blockApiLock)).start
+        t1 <- (BlockAPI.deploy[Task](deploys.head) *> BlockAPI
+               .propose[Task](blockApiLock)).start
         _ <- Time[Task].sleep(2.second)
-        t2 <- (BlockAPI.deploy[Effect](deploys.last) *> BlockAPI
-               .propose[Effect](blockApiLock)).start //should fail because other not done
+        t2 <- (BlockAPI.deploy[Task](deploys.last) *> BlockAPI
+               .propose[Task](blockApiLock)).start //should fail because other not done
         r1 <- t1.join.attempt
         r2 <- t2.join.attempt
       } yield (r1, r2)
 
     try {
       val (response1, response2) = (for {
-        casperRef    <- MultiParentCasperRef.of[Effect]
+        casperRef    <- MultiParentCasperRef.of[Task]
         _            <- casperRef.set(casper)
-        blockApiLock <- Semaphore[Effect](1)
+        blockApiLock <- Semaphore[Task](1)
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
 
@@ -102,25 +101,25 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
 
-    implicit val logEff       = new LogStub[Effect]
+    implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
     implicit val safetyOracle = node.safetyOracleEff
 
-    def testProgram(blockApiLock: Semaphore[Effect])(
-        implicit casperRef: MultiParentCasperRef[Effect]
-    ): Effect[Unit] =
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
       for {
-        d <- ProtoUtil.basicDeploy[Effect]()
-        _ <- BlockAPI.deploy[Effect](d)
-        _ <- BlockAPI.propose[Effect](blockApiLock)
-        _ <- BlockAPI.deploy[Effect](d)
+        d <- ProtoUtil.basicDeploy[Task]()
+        _ <- BlockAPI.deploy[Task](d)
+        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.deploy[Task](d)
       } yield ()
 
     try {
       (for {
-        casperRef    <- MultiParentCasperRef.of[Effect]
+        casperRef    <- MultiParentCasperRef.of[Task]
         _            <- casperRef.set(node.casperEff)
-        blockApiLock <- Semaphore[Effect](1)
+        blockApiLock <- Semaphore[Task](1)
         result       <- testProgram(blockApiLock)(casperRef)
       } yield result).unsafeRunSync
     } catch {

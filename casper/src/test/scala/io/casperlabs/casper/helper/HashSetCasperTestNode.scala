@@ -137,11 +137,11 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
-  ): TestNode[Effect] =
-    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect]
+  ): TestNode[Task] =
+    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+      Concurrent[Task],
+      Par[Task],
+      Timer[Task]
     ).unsafeRunSync
 
   def networkF[F[_]](
@@ -164,9 +164,9 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
-  ): Effect[IndexedSeq[TestNode[Effect]]] =
-    networkF[Effect](
+      maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
+  ): Task[IndexedSeq[TestNode[Task]]] =
+    networkF[Task](
       sks,
       genesis,
       transforms,
@@ -174,9 +174,9 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold,
       maybeMakeEE
     )(
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect]
+      Concurrent[Task],
+      Par[Task],
+      Timer[Task]
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
@@ -194,7 +194,6 @@ trait HashSetCasperTestNodeFactory {
 }
 
 object HashSetCasperTestNode {
-  type Effect[A]                        = Task[A]
   type Bonds                            = Map[Keys.PublicKey, Long]
   type MakeExecutionEngineService[F[_]] = Bonds => ExecutionEngineService[F]
 

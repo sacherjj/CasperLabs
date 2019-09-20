@@ -46,29 +46,29 @@ object Servers {
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
-      blockApiLock: Semaphore[Effect],
+      blockApiLock: Semaphore[Task],
       maybeSslContext: Option[SslContext]
   )(
       implicit
-      log: Log[Effect],
+      log: Log[Task],
       logId: Log[Id],
-      metrics: Metrics[Effect],
+      metrics: Metrics[Task],
       metricsId: Metrics[Id],
       nodeDiscovery: NodeDiscovery[Task],
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      multiParentCasperRef: MultiParentCasperRef[Effect]
-  ): Resource[Effect, Unit] = {
+      multiParentCasperRef: MultiParentCasperRef[Task]
+  ): Resource[Task, Unit] = {
     implicit val s = ingressScheduler
-    GrpcServer[Effect](
+    GrpcServer[Task](
       port = port,
       maxMessageSize = Some(maxMessageSize),
       services = List(
         (_: Scheduler) =>
           Task.delay {
             DiagnosticsGrpcMonix.bindService(diagnosticsService, ingressScheduler)
-          }.toEffect,
+          },
         (_: Scheduler) =>
           GrpcControlService(blockApiLock) map {
             ControlGrpcMonix.bindService(_, ingressScheduler)
@@ -80,7 +80,7 @@ object Servers {
       ),
       sslContext = maybeSslContext
     ) *> Resource.liftF(
-      logStarted[Effect]("Internal", port, maybeSslContext.isDefined)
+      logStarted[Task]("Internal", port, maybeSslContext.isDefined)
     )
   }
 
