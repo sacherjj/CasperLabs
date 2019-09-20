@@ -43,7 +43,7 @@ private[configuration] trait ParserImplicits {
       .leftMap(_.getMessage)
 
   implicit val peerNodeParser: Parser[Node] = s => {
-    Node.fromAddress(s).leftMap(_.getMessage)
+    Node.fromAddress(s)
   }
 
   implicit val positiveIntParser: Parser[Refined[Int, Positive]] =
