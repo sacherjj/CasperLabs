@@ -36,7 +36,6 @@ class DockerConfig:
     is_validator: bool = True
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
-    use_new_gossiping: bool = True
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
     socket_volume: Optional[str] = None
     node_account: Account = None
@@ -92,6 +91,4 @@ class DockerConfig:
             options["--casper-initial-motes"] = self.initial_motes
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
-        if self.use_new_gossiping:
-            options["--server-use-gossiping"] = ""
         return options
