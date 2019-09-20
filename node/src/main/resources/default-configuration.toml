@@ -131,7 +131,7 @@ use-tls = false
 # io.casperlabs.blockstorage.FileDagStorage.Config
 [blockstorage]
 
-# Maximum size of the in-memory block cache in bytes.
+# Maximum size of each of in-memory block/dag/justifications caches in bytes.
 cache-max-size-bytes = 262144000
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer

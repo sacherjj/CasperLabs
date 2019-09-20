@@ -112,10 +112,19 @@ trait ArbitraryConsensus {
     } yield block
   }
 
+  implicit val arbJustification: Arbitrary[Block.Justification] = Arbitrary {
+    for {
+      blockHash <- genHash
+      validator <- Gen.oneOf(randomValidators)
+    } yield Block.Justification(validator, blockHash)
+  }
+
   implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
     for {
       parentCount        <- Gen.choose(1, 5)
       parentHashes       <- Gen.listOfN(parentCount, genHash)
+      justificationCount <- Gen.choose(1, 5)
+      justifications     <- Gen.listOfN(justificationCount, arbJustification.arbitrary)
       deployCount        <- Gen.choose(1, 10)
       bodyHash           <- genHash
       preStateHash       <- genHash
@@ -129,6 +138,7 @@ trait ArbitraryConsensus {
         .withDeployCount(deployCount)
         .withValidatorPublicKey(validatorPublicKey)
         .withBodyHash(bodyHash)
+        .withJustifications(justifications)
     }
   }
 

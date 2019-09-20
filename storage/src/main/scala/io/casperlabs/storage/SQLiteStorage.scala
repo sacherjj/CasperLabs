@@ -4,28 +4,41 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
+import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
-import fs2._
 
 import scala.concurrent.duration.FiniteDuration
 
 object SQLiteStorage {
   def create[F[_]: Sync: Transactor: Metrics: Time](
-      deployStorageChunkSize: Int = 100,
-      wrap: BlockStorage[F] => F[BlockStorage[F]]
-  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F]] =
+      deployStorageChunkSize: Int = 100
+  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F]] =
+    create[F](
+      deployStorageChunkSize = deployStorageChunkSize,
+      wrapBlockStorage = (_: BlockStorage[F]).pure[F],
+      wrapDagStorage = (_: DagStorage[F] with DagRepresentation[F]).pure[F]
+    )
+
+  def create[F[_]: Sync: Transactor: Metrics: Time](
+      deployStorageChunkSize: Int,
+      wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
+      wrapDagStorage: DagStorage[F] with DagRepresentation[F] => F[
+        DagStorage[F] with DagRepresentation[F]
+      ]
+  ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F]] =
     for {
-      blockStorage  <- SQLiteBlockStorage.create[F] >>= wrap
-      dagStorage    <- SQLiteDagStorage.create[F]
+      blockStorage  <- SQLiteBlockStorage.create[F] >>= wrapBlockStorage
+      dagStorage    <- SQLiteDagStorage.create[F] >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize)
-    } yield new BlockStorage[F] with DagStorage[F] with DeployStorage[F] {
+    } yield new BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] {
 
       override def addAsExecuted(block: Block): F[Unit] =
         deployStorage.addAsExecuted(block)
@@ -129,5 +142,45 @@ object SQLiteStorage {
 
       override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
         blockStorage.findBlockHashesWithDeployhash(deployHash)
+
+      override def children(blockHash: BlockHash): F[Set[BlockHash]] =
+        dagStorage.children(blockHash)
+
+      override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
+        dagStorage.justificationToBlocks(blockHash)
+
+      // TODO: Remove DagRepresentation#lookup because
+      // we already have BlockStorage#getBlockSummary with the same semantics
+      // and which also cached in CachingBlockStorage.
+      override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
+        blockStorage.getBlockSummary(blockHash)
+
+      // TODO: Remove DagRepresentation#contains because
+      // we already have BlockStorage#contains with the same semantics
+      // and which also cached in CachingBlockStorage.
+      override def contains(blockHash: BlockHash): F[Boolean] = blockStorage.contains(blockHash)
+
+      override def topoSort(
+          startBlockNumber: Long,
+          endBlockNumber: Long
+      ): Stream[F, Vector[BlockHash]] = dagStorage.topoSort(startBlockNumber, endBlockNumber)
+
+      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockHash]] =
+        dagStorage.topoSort(startBlockNumber)
+
+      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockHash]] =
+        dagStorage.topoSortTail(tailLength)
+
+      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+        dagStorage.latestMessageHash(validator)
+
+      override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+        dagStorage.latestMessage(validator)
+
+      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+        dagStorage.latestMessageHashes
+
+      override def latestMessages: F[Map[Validator, BlockSummary]] =
+        dagStorage.latestMessages
     }
 }
