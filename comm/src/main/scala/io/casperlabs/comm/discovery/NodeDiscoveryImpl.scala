@@ -28,7 +28,6 @@ object NodeDiscoveryImpl {
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
-      gossipingEnabled: Boolean,
       gossipingRelayFactor: Int,
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
@@ -93,7 +92,6 @@ object NodeDiscoveryImpl {
                             table = table,
                             recentlyAlivePeersRef = recentlyAlivePeers,
                             temporaryBans = temporaryBans,
-                            gossipingEnabled = gossipingEnabled,
                             alivePeersCacheSize = alivePeersCacheSize,
                             alivePeersCacheMinThreshold = alivePeersCacheMinThreshold,
                             alivePeersCacheExpirationPeriod = alivePeersCacheExpirationPeriod,
@@ -164,7 +162,6 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
     temporaryBans: NodeDiscoveryImpl.NodeCache[F],
     alpha: Int = 3,
     k: Int = PeerTable.Redundancy,
-    gossipingEnabled: Boolean,
     /** Actual size can be greater due to batched parallel pings, but not less.
       * Stops early without pinging all peers if reached required size. */
     alivePeersCacheSize: Int,
@@ -280,24 +277,14 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
   override def recentlyAlivePeersAscendingDistance: F[List[Node]] =
     recentlyAlivePeersAscendingDistance(id)
 
-  private def recentlyAlivePeersAscendingDistance(anchorId: NodeIdentifier): F[List[Node]] = {
-    val peersF =
-      if (gossipingEnabled)
-        recentlyAlivePeersRef.get.map {
-          case (recentlyAlivePeers, _) => PeerTable.sort(recentlyAlivePeers.toList, anchorId)(_.id)
-        } else
-        // TODO: this is misleading because returned peers won't necessarily be alive.
-        // Though, this is fine because it's only used by
-        // the old legacy communication layer code which should go away eventually
-        // io.casperlabs.comm.rp.Connect#findAndConnect
-        // The old code maintains its own list of alive connections
-        table.peersAscendingDistance
-
+  private def recentlyAlivePeersAscendingDistance(anchorId: NodeIdentifier): F[List[Node]] =
     for {
-      peers     <- peersF
+      peers <- recentlyAlivePeersRef.get.map {
+                case (recentlyAlivePeers, _) =>
+                  PeerTable.sort(recentlyAlivePeers.toList, anchorId)(_.id)
+              }
       notBanned <- peers.filterA(temporaryBans.contains(_).map(!_))
     } yield notBanned
-  }
 
   private[discovery] def schedulePeriodicRecentlyAlivePeersCacheUpdate: F[Unit] =
     updateRecentlyAlivePeers >>

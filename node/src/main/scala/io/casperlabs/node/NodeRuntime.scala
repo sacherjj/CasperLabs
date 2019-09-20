@@ -154,7 +154,6 @@ class NodeRuntime private[node] (
                                                           id,
                                                           kademliaPort,
                                                           conf.server.defaultTimeout,
-                                                          conf.server.useGossiping,
                                                           conf.server.relayFactor,
                                                           conf.server.relaySaturation,
                                                           ingressScheduler,
@@ -267,22 +266,18 @@ class NodeRuntime private[node] (
               ingressScheduler
             )
 
-        _ <- if (conf.server.useGossiping) {
-              casper.gossiping.apply[Effect](
-                port,
-                conf,
-                ingressScheduler,
-                egressScheduler
-              )
-            } else {
-              sys.error("The transport layer can no longer be used!")
-            }
-      } yield (nodeDiscovery, multiParentCasperRef, deployBuffer)
+        _ <- casper.gossiping.apply[Effect](
+              port,
+              conf,
+              ingressScheduler,
+              egressScheduler
+            )
+      } yield (nodeDiscovery, deployBuffer)
 
       resources.allocated flatMap {
-        case ((nodeDiscovery, multiParentCasperRef, deployBuffer), release) =>
+        case ((nodeDiscovery, deployBuffer), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, multiParentCasperRef, deployBuffer, release)
+            nodeProgram(state, nodeDiscovery, deployBuffer, release)
           }
       }
     })
@@ -306,7 +301,6 @@ class NodeRuntime private[node] (
       implicit
       rpConfState: RPConfState[Task],
       nodeDiscovery: NodeDiscovery[Task],
-      multiParentCasperRef: MultiParentCasperRef[Effect],
       deployBuffer: DeployBuffer[Effect],
       release: Effect[Unit]
   ): Effect[Unit] = {
@@ -322,13 +316,6 @@ class NodeRuntime private[node] (
           s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
         )
 
-    val fetchLoop: Effect[Unit] =
-      for {
-        casper <- multiParentCasperRef.get
-        _      <- casper.fold(().pure[Effect])(_.fetchDependencies)
-        _      <- time.sleep(30.seconds).toEffect
-      } yield ()
-
     val cleanupDiscardedDeploysLoop: Effect[Unit] = for {
       _ <- deployBuffer.cleanupDiscarded(1.hour)
       _ <- time.sleep(1.minute).toEffect
@@ -342,7 +329,6 @@ class NodeRuntime private[node] (
     for {
       _ <- addShutdownHook(release).toEffect
       _ <- info
-      _ <- Task.defer(fetchLoop.forever).executeOn(loopScheduler).start.toEffect
       _ <- Task
             .defer(cleanupDiscardedDeploysLoop.forever)
             .executeOn(loopScheduler)

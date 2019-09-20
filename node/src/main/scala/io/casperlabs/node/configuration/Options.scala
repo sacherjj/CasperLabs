@@ -333,10 +333,6 @@ private[configuration] final case class Options private (
       gen[Flag]("Use this flag to clear the blockStorage and dagStorage")
 
     @scallop
-    val serverUseGossiping =
-      gen[Flag]("Use the gossiping, not the old transport layer.")
-
-    @scallop
     val serverRelayFactor =
       gen[Int]("Number of new nodes to which try to gossip a new block.")
 

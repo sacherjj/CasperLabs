@@ -64,7 +64,6 @@ object Configuration extends ParserImplicits {
       maxNumOfConnections: Int,
       maxMessageSize: Int,
       chunkSize: Int,
-      useGossiping: Boolean,
       relayFactor: Int,
       relaySaturation: Int,
       approvalRelayFactor: Int,
