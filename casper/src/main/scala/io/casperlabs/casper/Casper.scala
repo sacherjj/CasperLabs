@@ -14,10 +14,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService

@@ -19,7 +19,6 @@ import io.casperlabs.casper.finality.singlesweep.{
 }
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.crypto.Keys.PrivateKey
