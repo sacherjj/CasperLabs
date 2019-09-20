@@ -80,7 +80,7 @@ object ChainSpec extends ParserImplicits {
       memCopyPerByte: Int Refined NonNegative,
       maxStackHeight: Int Refined NonNegative,
       opcodesMultiplier: Int Refined NonNegative,
-      opcodesDivisor: Int Refined NonNegative
+      opcodesDivisor: Int Refined Positive
   ) extends SubConfig
 
   final case class Account(
