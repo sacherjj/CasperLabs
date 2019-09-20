@@ -201,25 +201,25 @@ object UPnP {
       port: Int,
       protocol: String,
       description: String
-  ): Either[CommError, Boolean] =
+  ): Either[Throwable, Boolean] =
     try {
       Right(
         device
           .addPortMapping(port, port, device.getLocalAddress.getHostAddress, protocol, description)
       )
     } catch {
-      case NonFatal(ex: Exception) => Left(UnknownCommError(ex.toString))
+      case NonFatal(ex: Exception) => Left(ex)
     }
 
   private def removePort(
       device: GatewayDevice,
       portMapping: PortMappingEntry
-  ): Either[CommError, Unit] =
+  ): Either[Throwable, Unit] =
     try {
       device.deletePortMapping(portMapping.getExternalPort, portMapping.getProtocol)
       Right(())
     } catch {
-      case NonFatal(ex: Exception) => Left(UnknownCommError(ex.toString))
+      case NonFatal(ex: Exception) => Left(ex)
     }
 }
 

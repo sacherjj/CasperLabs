@@ -7,8 +7,8 @@ import io.casperlabs.comm.discovery.NodeUtils._
 import org.scalatest._
 
 class URIParseSpec extends FlatSpec with Matchers {
-  def badAddressError(s: String): Either[ParseError, Node] =
-    Left(ParseError(s"bad address: $s"))
+  def badAddressError(s: String) =
+    Left(new IllegalArgumentException(s"bad address: $s"))
 
   "A well formed casperlabs URI" should "parse into a PeerNode" in {
     val uri = "casperlabs://abcdef@localhost?protocol=12345&discovery=12346"
