@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block.{Justification, Role}
+import io.casperlabs.casper.consensus.Block.{Justification, MessageType}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -892,11 +892,11 @@ class ValidationTest
     _ => implicit dagStorage => _ =>
       import io.casperlabs.models.BlockImplicits._
       for {
-        blockA <- createBlock[Task](parentsHashList = Seq.empty, roleType = Role.BALLOT)
+        blockA <- createBlock[Task](parentsHashList = Seq.empty, messageType = MessageType.BALLOT)
         blockB <- createBlock[Task](
                    parentsHashList =
                      Seq(ByteString.EMPTY, ByteString.copyFrom(Array.ofDim[Byte](32))),
-                   roleType = Role.BALLOT
+                   messageType = MessageType.BALLOT
                  )
         _ <- ValidationImpl[Task].ballot(BlockSummary.fromBlock(blockA)).attempt shouldBeF Left(
               ValidateErrorWrapper(InvalidTargetHash)

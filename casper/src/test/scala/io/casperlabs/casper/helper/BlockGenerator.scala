@@ -104,7 +104,7 @@ trait BlockGenerator {
       postStateHash: ByteString = ByteString.EMPTY,
       chainId: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
-      roleType: Block.Role = Block.Role.BLOCK
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
     for {
       now <- Time[F].currentMillis
@@ -149,7 +149,7 @@ trait BlockGenerator {
           now,
           chainId
         )
-        .withRoleType(roleType)
+        .withMessageType(messageType)
       block                = ProtoUtil.unsignedBlockProto(body, header)
       unsignedIndexedBlock <- IndexedDagStorage[F].index(block)
       signedIndexedBlock = ProtoUtil.unsignedBlockProto(

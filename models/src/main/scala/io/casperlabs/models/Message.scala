@@ -2,7 +2,7 @@ package io.casperlabs.models
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus
-import io.casperlabs.casper.consensus.Block.Role.{BALLOT, BLOCK, Unrecognized}
+import io.casperlabs.casper.consensus.Block.MessageType.{BALLOT, BLOCK, Unrecognized}
 import io.casperlabs.casper.consensus.{BlockSummary, Bond}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
@@ -17,7 +17,7 @@ import scala.util.{Failure, Success, Try}
   * This way we can do necessary validation of protobuf fields (like existence of required fields)
   * and represent different messages in type-safe way.
   */
-abstract class Message {
+trait Message {
   type Id = ByteString
   val messageHash: Id
   val validatorId: ByteString
@@ -78,11 +78,11 @@ object Message {
       val messageHash        = b.blockHash
       val header             = b.getHeader
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
-      val creator            = header.validatorPublicKey
+      val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
       val rank               = header.rank
       val validatorMsgSeqNum = header.validatorBlockSeqNum
-      val role               = header.roleType
+      val role               = header.messageType
       val signature          = b.getSignature
 
       role match {
@@ -90,7 +90,7 @@ object Message {
           Success(
             Ballot(
               messageHash,
-              creator,
+              validatorId,
               parentBlock,
               justifications,
               rank,
@@ -103,7 +103,7 @@ object Message {
           Success(
             Block(
               messageHash,
-              creator,
+              validatorId,
               parentBlock,
               justifications,
               rank,

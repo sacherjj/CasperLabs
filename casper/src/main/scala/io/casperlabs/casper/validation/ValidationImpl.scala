@@ -395,7 +395,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   override def ballot(b: BlockSummary): F[Unit] =
     FunctorRaise[F, InvalidBlock]
       .raise[Unit](InvalidTargetHash)
-      .whenA(b.getHeader.roleType.isBallot && b.getHeader.parentHashes.size != 1)
+      .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
 
   /**
     * Works with either efficient justifications or full explicit justifications.
