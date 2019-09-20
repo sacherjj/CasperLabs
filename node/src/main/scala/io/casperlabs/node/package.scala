@@ -28,12 +28,4 @@ package object node {
           }
 
     }
-
-  implicit class ResourceTaskEffectOps[A](r: Resource[Task, A]) {
-    def toEffect: Resource[Task, A] = Resource {
-      r.allocated.map {
-        case (x, releaseTask) => (x, releaseTask)
-      }
-    }
-  }
 }
