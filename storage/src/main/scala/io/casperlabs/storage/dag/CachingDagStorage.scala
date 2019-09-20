@@ -2,6 +2,7 @@ package io.casperlabs.storage.dag
 
 import cats._
 import cats.effect._
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -17,7 +18,8 @@ import scala.collection.JavaConverters._
 class CachingDagStorage[F[_]: Sync](
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
-    private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]]
+    private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
+    semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
@@ -43,22 +45,21 @@ class CachingDagStorage[F[_]: Sync](
     (this: DagRepresentation[F]).pure[F]
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
-    Sync[F].delay {
+    semaphore.withPermit(Sync[F].delay {
       val parents        = block.parentHashes
       val justifications = block.justifications.map(_.latestBlockHash)
-      synchronized {
-        parents.foreach { parent =>
-          val newChildren = Option(childrenCache.getIfPresent(parent))
-            .getOrElse(Set.empty[BlockHash]) + block.blockHash
-          childrenCache.put(parent, newChildren)
-        }
-        justifications.foreach { justification =>
-          val newBlockHashes = Option(justificationCache.getIfPresent(justification))
-            .getOrElse(Set.empty[BlockHash]) + block.blockHash
-          justificationCache.put(justification, newBlockHashes)
-        }
+
+      parents.foreach { parent =>
+        val newChildren = Option(childrenCache.getIfPresent(parent))
+          .getOrElse(Set.empty[BlockHash]) + block.blockHash
+        childrenCache.put(parent, newChildren)
       }
-    } >> underlying.insert(block)
+      justifications.foreach { justification =>
+        val newBlockHashes = Option(justificationCache.getIfPresent(justification))
+          .getOrElse(Set.empty[BlockHash]) + block.blockHash
+        justificationCache.put(justification, newBlockHashes)
+      }
+    }) >> underlying.insert(block)
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
 
@@ -115,7 +116,7 @@ class CachingDagStorage[F[_]: Sync](
 }
 
 object CachingDagStorage {
-  def apply[F[_]: Sync: Metrics](
+  def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
       name: String = "cache"
@@ -133,10 +134,12 @@ object CachingDagStorage {
     for {
       childrenCache      <- createCache
       justificationCache <- createCache
+      semaphore          <- Semaphore[F](1)
       store = new CachingDagStorage[F](
         underlying,
         childrenCache,
-        justificationCache
+        justificationCache,
+        semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
         override implicit val m: Metrics[F] = metricsF
         override implicit val ms: Metrics.Source =
