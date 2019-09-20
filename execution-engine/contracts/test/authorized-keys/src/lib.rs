@@ -7,7 +7,7 @@ use contract_ffi::contract_api::{add_associated_key, get_arg, revert, set_action
 use contract_ffi::value::account::{ActionType, AddKeyFailure, PublicKey, Weight};
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
@@ -20,10 +20,10 @@ pub extern "C" fn call() {
     };
 
     let key_management_threshold: Weight = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
     let deploy_threshold: Weight = get_arg(1)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     if key_management_threshold != Weight::new(0) {

@@ -241,7 +241,7 @@ fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
 
 pub fn delegate() {
     let method_name: String = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
     let timestamp = contract_api::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
@@ -251,13 +251,13 @@ pub fn delegate() {
         "bond" => {
             let validator = contract_api::get_caller();
             let amount: U512 = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             if amount.is_zero() {
                 contract_api::revert(Error::BondTooSmall.into());
             }
             let source_uref: URef = contract_api::get_arg(2)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
@@ -285,7 +285,7 @@ pub fn delegate() {
         "unbond" => {
             let validator = contract_api::get_caller();
             let maybe_amount = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
@@ -336,7 +336,7 @@ pub fn delegate() {
         }
         "set_refund_purse" => {
             let purse_id: PurseId = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             set_refund(purse_id.value());
         }
@@ -353,10 +353,10 @@ pub fn delegate() {
         }
         "finalize_payment" => {
             let amount_spent: U512 = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             let account: PublicKey = contract_api::get_arg(2)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             finalize_payment(amount_spent, account);
         }

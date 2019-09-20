@@ -27,14 +27,14 @@ enum Error {
     Transfer = 3,
     InvalidPurseName = 4,
     InvalidPurse = 5,
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let purse_name: String = contract_api::get_arg(Arg::PurseName as u32)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
     let purse_key = contract_api::get_uref(&purse_name)
@@ -45,7 +45,7 @@ pub extern "C" fn call() {
     };
 
     let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
     let pos_pointer: ContractPointer = {

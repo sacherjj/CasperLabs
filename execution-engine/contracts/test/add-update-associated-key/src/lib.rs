@@ -14,14 +14,14 @@ const ADD_FAILURE: u32 = 1;
 const UPDATE_FAILURE: u32 = 2;
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let account: PublicKey = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
     let weight1 = Weight::new(INIT_WEIGHT);

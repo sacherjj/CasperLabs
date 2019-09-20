@@ -9,7 +9,7 @@ use contract_ffi::contract_api::{add_associated_key, get_arg, revert, set_action
 use contract_ffi::value::account::{ActionType, PublicKey, Weight};
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
@@ -17,10 +17,10 @@ enum Error {
 pub extern "C" fn call() {
     add_associated_key(PublicKey::new([123; 32]), Weight::new(254)).unwrap_or_else(|_| revert(50));
     let key_management_threshold: Weight = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
     let deployment_threshold: Weight = get_arg(1)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     set_action_threshold(ActionType::KeyManagement, key_management_threshold)

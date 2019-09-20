@@ -10,7 +10,7 @@ use contract_ffi::value::uint::U512;
 const UNBOND_METHOD_NAME: &str = "unbond";
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
@@ -24,7 +24,7 @@ pub extern "C" fn call() {
     let pos_pointer = unwrap_or_revert(contract_api::get_pos(), 77);
 
     let unbond_amount: Option<U512> = contract_api::get_arg::<Option<u64>>(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32))
         .map(U512::from);
 

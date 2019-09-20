@@ -16,7 +16,7 @@ use contract_ffi::uref::URef;
 use contract_ffi::value::U512;
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
@@ -38,7 +38,7 @@ pub extern "C" fn do_something() {
 #[no_mangle]
 pub extern "C" fn call() {
     let flag: String = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
     let do_nothing: ContractPointer = contract_api::store_function("do_nothing", BTreeMap::new());
     let do_something: ContractPointer =

@@ -12,7 +12,7 @@ use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
     GetPosOuterURef = 1000,
     GetPosInnerURef = 1001,
@@ -52,7 +52,7 @@ fn unbond(pos: ContractPointer, amount: Option<U512>) {
 pub extern "C" fn call() {
     let pos_pointer = get_pos_contract();
     let amount: U512 = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
     bond(pos_pointer.clone(), amount, contract_api::main_purse());
     unbond(pos_pointer, Some(amount + 1));

@@ -15,7 +15,7 @@ use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
@@ -26,7 +26,7 @@ pub extern "C" fn call() {
     add_uref("purse:main", &Key::from(main_purse.value()));
 
     let src_purse_name: String = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let src_purse_key = get_uref(&src_purse_name).unwrap_or_else(|| revert(103));
@@ -36,7 +36,7 @@ pub extern "C" fn call() {
         None => revert(104),
     };
     let dst_purse_name: String = get_arg(1)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let dst_purse = if !has_uref(&dst_purse_name) {
@@ -53,7 +53,7 @@ pub extern "C" fn call() {
         }
     };
     let amount: U512 = get_arg(2)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
 
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);

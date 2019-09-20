@@ -16,7 +16,7 @@ const CONTRACT_POINTER: u32 = 0;
 
 enum Error {
     GetArg = 100,
-    MissingArg = 101,
+    MissingArgument = 101,
     InvalidArgument = 102,
     CreateTURef = 200,
 }
@@ -26,7 +26,7 @@ const REPLACEMENT_DATA: &str = "bawitdaba";
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_pointer: ContractPointer = contract_api::get_arg::<Key>(CONTRACT_POINTER)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32))
         .to_c_ptr()
         .unwrap_or_else(|| contract_api::revert(Error::GetArg as u32));

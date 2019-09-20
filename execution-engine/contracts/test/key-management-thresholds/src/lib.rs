@@ -16,14 +16,14 @@ use contract_ffi::value::account::{
 };
 
 enum Error {
-    MissingArg = 100,
+    MissingArgument = 100,
     InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let stage: String = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
     if stage == "init" {
         // executed with weight >= 1

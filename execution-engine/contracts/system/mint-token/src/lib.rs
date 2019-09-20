@@ -79,7 +79,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
 pub fn delegate() {
     let mint = CLMint;
     let method_name: String = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
         .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
     match method_name.as_str() {
@@ -87,7 +87,7 @@ pub fn delegate() {
         // return: Result<URef, mint::error::Error>
         "mint" => {
             let amount: U512 = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
             let maybe_purse_key = mint
@@ -109,7 +109,7 @@ pub fn delegate() {
 
         "balance" => {
             let key: URef = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
@@ -119,13 +119,13 @@ pub fn delegate() {
 
         "transfer" => {
             let source: URef = contract_api::get_arg(1)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             let target: URef = contract_api::get_arg(2)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
             let amount: U512 = contract_api::get_arg(3)
-                .unwrap_or_else(|| contract_api::revert(Error::MissingArg as u32))
+                .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
                 .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {
