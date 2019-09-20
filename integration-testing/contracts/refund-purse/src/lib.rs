@@ -3,8 +3,6 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api;
@@ -30,7 +28,7 @@ fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = contract_api::get_pos();
 
     let p1 = contract_api::create_purse();
     let p2 = contract_api::create_purse();

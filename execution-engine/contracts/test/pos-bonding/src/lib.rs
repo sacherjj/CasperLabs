@@ -3,20 +3,17 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use alloc::prelude::v1::{String, Vec};
 
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{self, PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, PurseTransferResult, TransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
-use contracts_common::{Error as CommonError, RESERVED_ERROR_MAX};
 
 enum Error {
-    UnableToSeedAccount = RESERVED_ERROR_MAX as isize + 1,
-    UnknownCommand = RESERVED_ERROR_MAX as isize + 2,
+    UnableToSeedAccount = ApiError::unreserved_min_plus(0),
+    UnknownCommand = ApiError::unreserved_min_plus(1),
 }
 
 fn purse_to_key(p: PurseId) -> Key {
@@ -45,7 +42,7 @@ const TEST_UNBOND: &str = "unbond";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = contract_api::get_pos();
 
     let command: String = contract_api::get_arg(0);
     if command == TEST_BOND {
@@ -57,7 +54,7 @@ pub extern "C" fn call() {
         if contract_api::transfer_from_purse_to_purse(contract_api::main_purse(), p1, amount)
             == PurseTransferResult::TransferError
         {
-            contract_api::revert(CommonError::Transfer as u32);
+            contract_api::revert(ApiError::Transfer.into());
         }
 
         bond(&pos_pointer, &amount, p1);

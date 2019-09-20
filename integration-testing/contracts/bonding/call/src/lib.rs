@@ -3,18 +3,16 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use contract_ffi::contract_api::{
-    call_contract, create_purse, get_arg, main_purse, revert, transfer_from_purse_to_purse,
-    PurseTransferResult,
+    call_contract, create_purse, get_arg, get_pos, main_purse, revert,
+    transfer_from_purse_to_purse, PurseTransferResult,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::uint::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = get_pos();
     let source_purse = main_purse();
     let bonding_purse = create_purse();
     let bond_amount: U512 = U512::from(get_arg::<u32>(0));

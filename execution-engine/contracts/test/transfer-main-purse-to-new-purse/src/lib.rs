@@ -5,13 +5,9 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::string::String;
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
-
-enum Error {
-    PurseToPurseTransfer = 1002,
-}
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -22,7 +18,7 @@ pub extern "C" fn call() {
     if contract_api::transfer_from_purse_to_purse(source, destination, amount)
         == contract_api::PurseTransferResult::TransferError
     {
-        contract_api::revert(Error::PurseToPurseTransfer as u32);
+        contract_api::revert(Error::Transfer.into());
     }
     contract_api::add_uref(&destination_name, &destination.value().into());
 }

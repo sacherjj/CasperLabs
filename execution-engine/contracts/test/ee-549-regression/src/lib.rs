@@ -4,15 +4,13 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use contract_ffi::contract_api;
 
 const SET_REFUND_PURSE: &str = "set_refund_purse";
 
 fn malicious_revenue_stealing_contract() {
     let purse = contract_api::create_purse();
-    let pos_pointer = contracts_common::get_pos_contract();
+    let pos_pointer = contract_api::get_pos();
 
     contract_api::call_contract::<_, ()>(
         pos_pointer,

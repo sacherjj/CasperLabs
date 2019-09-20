@@ -2,25 +2,22 @@
 
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, PurseTransferResult};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::uint::U512;
-use contracts_common::RESERVED_ERROR_MAX;
 
 enum Error {
-    TransferFromSourceToPayment = RESERVED_ERROR_MAX as isize + 1,
-    TransferFromPaymentToSource = RESERVED_ERROR_MAX as isize + 2,
-    GetBalance = RESERVED_ERROR_MAX as isize + 3,
-    CheckBalance = RESERVED_ERROR_MAX as isize + 4,
+    TransferFromSourceToPayment = ApiError::unreserved_min_plus(0),
+    TransferFromPaymentToSource = ApiError::unreserved_min_plus(1),
+    GetBalance = ApiError::unreserved_min_plus(2),
+    CheckBalance = ApiError::unreserved_min_plus(3),
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = contract_api::get_pos();
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
     // amount passed to payment contract

@@ -18,10 +18,65 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
-use core::convert::{TryFrom, TryInto};
+use core::convert::{From, TryFrom, TryInto};
+use core::u8;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
+
+/// All `Error` variants defined in this library will be less than `UNRESERVED_ERROR_MIN`.
+pub const UNRESERVED_ERROR_MIN: u32 = u8::MAX as u32 + 1;
+
+/// Variants to be passed to `contract_api::revert()`.  All values will be less than
+/// `UNRESERVED_ERROR_MIN`.
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Error {
+    /// A call to `get_uref()` returned a failure.
+    GetURef = 1,
+    /// Failed to deserialize a value.
+    Deserialize = 2,
+    /// Failed to find a specified contract.
+    ContractNotFound = 3,
+    /// The `Key` variant was not as expected.
+    UnexpectedKeyVariant = 4,
+    /// The `Value` variant was not as expected.
+    UnexpectedValueVariant = 5,
+    /// `read` returned an error.
+    Read = 6,
+    /// The given key returned a `None` value.
+    ValueNotFound = 7,
+    /// Failed to initialize a mint purse.
+    MintFailure = 8,
+    /// Invalid purse name given.
+    InvalidPurseName = 9,
+    /// Invalid purse retrieved.
+    InvalidPurse = 10,
+    /// Failed to transfer motes.
+    Transfer = 11,
+}
+
+impl Error {
+    /// Can be used to set values for external Enum variants to avoid conflicting with reserved
+    /// variants.  E.g.
+    /// ```
+    /// use casperlabs_contract_ffi::contract_api::Error;
+    ///
+    /// enum MyError {
+    ///     A = Error::unreserved_min_plus(0),  // 256
+    ///     B = Error::unreserved_min_plus(1),  // 257
+    /// }
+    /// ```
+    pub const fn unreserved_min_plus(value: u16) -> isize {
+        UNRESERVED_ERROR_MIN as isize + value as isize
+    }
+}
+
+impl From<Error> for u32 {
+    fn from(error: Error) -> Self {
+        error as u32
+    }
+}
 
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
@@ -564,22 +619,30 @@ pub fn transfer_from_purse_to_purse(
     .expect("Should parse result")
 }
 
-fn get_system_contract(name: &str) -> Option<ContractPointer> {
-    let public_uref = get_uref(name)?;
+fn get_system_contract(name: &str) -> ContractPointer {
+    let public_uref = get_uref(name).unwrap_or_else(|| revert(Error::GetURef.into()));
 
-    if let Ok(Some(Value::Key(Key::URef(private_uref)))) = read_untyped(&public_uref) {
-        let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
-        Some(ContractPointer::URef(pointer))
+    let value = read_untyped(&public_uref)
+        .unwrap_or_else(|_| revert(Error::Deserialize.into()))
+        .unwrap_or_else(|| revert(Error::ContractNotFound.into()));
+
+    if let Value::Key(Key::URef(private_uref)) = value {
+        let pointer = TURef::new(private_uref.addr(), AccessRights::READ);
+        ContractPointer::URef(pointer)
     } else {
-        None
+        revert(Error::UnexpectedValueVariant.into())
     }
 }
 
-pub fn get_mint() -> Option<ContractPointer> {
+/// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
+/// `contract_api::Error`.
+pub fn get_mint() -> ContractPointer {
     get_system_contract(MINT_NAME)
 }
 
-pub fn get_pos() -> Option<ContractPointer> {
+/// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
+/// with a `contract_api::Error`.
+pub fn get_pos() -> ContractPointer {
     get_system_contract(POS_NAME)
 }
 

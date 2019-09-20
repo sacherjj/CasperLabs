@@ -14,11 +14,6 @@ use contract_ffi::contract_api::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 
-enum Error {
-    GetURef = 1001,
-    FindURef = 1002,
-}
-
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
     get_uref(name).unwrap().to_turef().unwrap()
 }
@@ -26,8 +21,8 @@ fn get_list_key(name: &str) -> TURef<Vec<String>> {
 fn update_list(name: String) {
     let list_key = get_list_key("list");
     let mut list = read(list_key.clone())
-        .unwrap_or_else(|_| revert(Error::GetURef as u32))
-        .unwrap_or_else(|| revert(Error::FindURef as u32));
+        .unwrap_or_else(|_| revert(Error::Read.into()))
+        .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
     list.push(name);
     write(list_key, list);
 }
@@ -48,13 +43,13 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 
 fn publish(msg: String) {
     let curr_list = read(get_list_key("list"))
-        .unwrap_or_else(|_| revert(Error::GetURef as u32))
-        .unwrap_or_else(|| revert(Error::FindURef as u32));
+        .unwrap_or_else(|_| revert(Error::Read.into()))
+        .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
     for name in curr_list.iter() {
         let uref = get_list_key(name);
         let mut messages = read(uref.clone())
-            .unwrap_or_else(|_| revert(Error::GetURef as u32))
-            .unwrap_or_else(|| revert(Error::FindURef as u32));
+            .unwrap_or_else(|_| revert(Error::Read.into()))
+            .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
         messages.push(msg.clone());
         write(uref, messages);
     }

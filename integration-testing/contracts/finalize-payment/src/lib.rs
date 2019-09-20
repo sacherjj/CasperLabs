@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
 
 use alloc::vec::Vec;
 
@@ -49,7 +48,7 @@ fn finalize_payment(pos: &ContractPointer, amount_spent: U512, account: PublicKe
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract();
+    let pos_pointer = contract_api::get_pos();
 
     let payment_amount: U512 = contract_api::get_arg(0);
     let refund_purse_flag: u8 = contract_api::get_arg(1);

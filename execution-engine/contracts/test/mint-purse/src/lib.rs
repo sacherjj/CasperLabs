@@ -4,23 +4,21 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
-#[repr(u32)]
 enum Error {
-    PurseNotCreated = 1,
-    MintNotFound = 2,
-    BalanceNotFound = 3,
-    BalanceMismatch = 4,
+    PurseNotCreated = ApiError::unreserved_min_plus(0),
+    BalanceNotFound = ApiError::unreserved_min_plus(1),
+    BalanceMismatch = ApiError::unreserved_min_plus(2),
 }
 
 fn mint_purse(amount: U512) -> Result<PurseId, mint::error::Error> {
-    let mint = contract_api::get_mint().expect("mint contract should exist");
+    let mint = contract_api::get_mint();
 
     let result: Result<URef, mint::error::Error> =
         contract_api::call_contract(mint, &("mint", amount), &vec![]);
@@ -34,8 +32,7 @@ pub extern "C" fn call() {
     let new_purse =
         mint_purse(amount).unwrap_or_else(|_| contract_api::revert(Error::PurseNotCreated as u32));
 
-    let mint = contract_api::get_mint()
-        .unwrap_or_else(|| contract_api::revert(Error::MintNotFound as u32));
+    let mint = contract_api::get_mint();
 
     let balance: Option<U512> = contract_api::call_contract(
         mint,

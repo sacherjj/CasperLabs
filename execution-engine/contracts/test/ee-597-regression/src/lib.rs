@@ -3,8 +3,6 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::key::Key;
@@ -28,7 +26,7 @@ fn bond(pos: ContractPointer, amount: &U512, source: PurseId) {
 #[no_mangle]
 pub extern "C" fn call() {
     bond(
-        contracts_common::get_pos_contract_read_only(),
+        contract_api::get_pos(),
         &U512::from(0),
         contract_api::main_purse(),
     );

@@ -3,8 +3,6 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::key::Key;
@@ -32,7 +30,7 @@ fn unbond(pos: ContractPointer, amount: Option<U512>) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = contract_api::get_pos();
     let amount: U512 = contract_api::get_arg(0);
     bond(pos_pointer.clone(), amount, contract_api::main_purse());
     unbond(pos_pointer, Some(amount + 1));

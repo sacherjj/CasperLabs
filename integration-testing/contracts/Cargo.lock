@@ -59,13 +59,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "casperlabs-contracts-common"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.15.0",
-]
-
-[[package]]
 name = "cfg-if"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -152,7 +145,6 @@ name = "finalize-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -243,7 +235,6 @@ name = "payment-purse"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -251,7 +242,6 @@ name = "pos-bonding"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -400,7 +390,6 @@ name = "refund-purse"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -432,7 +421,6 @@ name = "standard-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -466,7 +454,6 @@ name = "test-bonding-call"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]
@@ -544,7 +531,6 @@ name = "test-unbonding-call"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.15.0",
- "casperlabs-contracts-common 0.1.0",
 ]
 
 [[package]]

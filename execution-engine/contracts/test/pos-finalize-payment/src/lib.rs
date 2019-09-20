@@ -3,16 +3,13 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-extern crate contracts_common;
-
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error, PurseTransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
-use contracts_common::Error;
 
 fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
@@ -36,7 +33,7 @@ fn submit_payment(pos: &ContractPointer, amount: U512) {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
     {
-        contract_api::revert(Error::Transfer as u32);
+        contract_api::revert(Error::Transfer.into());
     }
 }
 
@@ -50,7 +47,7 @@ fn finalize_payment(pos: &ContractPointer, amount_spent: U512, account: PublicKe
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contracts_common::get_pos_contract_read_only();
+    let pos_pointer = contract_api::get_pos();
 
     let payment_amount: U512 = contract_api::get_arg(0);
     let refund_purse_flag: u8 = contract_api::get_arg(1);

@@ -7,8 +7,8 @@ extern crate pos;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
-use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::{AccessRights, URef};
@@ -21,11 +21,6 @@ const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 const MINT_NAME: &str = "mint";
-
-#[repr(u32)]
-enum Error {
-    MintFailure = 0,
-}
 
 #[repr(u32)]
 enum Args {
@@ -98,5 +93,5 @@ fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
 
     result
         .map(PurseId::new)
-        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure.into()))
 }

@@ -2,7 +2,7 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, TransferResult};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -12,8 +12,7 @@ enum Arg {
 }
 
 enum Error {
-    NonExistentAccount = 1,
-    TransferError = 2,
+    NonExistentAccount = ApiError::unreserved_min_plus(0),
 }
 
 #[no_mangle]
@@ -25,6 +24,6 @@ pub extern "C" fn call() {
             contract_api::revert(Error::NonExistentAccount as u32)
         }
         TransferResult::TransferredToExistingAccount => (),
-        TransferResult::TransferError => contract_api::revert(Error::TransferError as u32),
+        TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
     }
 }
