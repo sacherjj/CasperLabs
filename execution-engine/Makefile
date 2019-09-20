@@ -81,11 +81,11 @@ clean:
 deb: $(SYSTEM_CONTRACTS)
 	cd engine-grpc-server && $(CARGO) deb
 
-engine-grpc-server/.rpm: $(SYSTEM_CONTRACTS)
+engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
-rpm: engine-grpc-server/.rpm
+rpm: engine-grpc-server/.rpm $(SYSTEM_CONTRACTS)
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
