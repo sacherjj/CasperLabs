@@ -178,7 +178,6 @@ class CachingDagStorageTest
                 otherBlocks.flatMap(_.justifications.map(_.latestBlockHash).toList)
               for {
                 _ <- Task.traverse(otherBlocks)(cache.insert)
-                _ = println("Cache size: " + cache.childrenCache.size())
                 _ <- Task
                       .traverse(allParents)(cache.children)
                 _ <- Task

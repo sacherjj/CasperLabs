@@ -41,7 +41,7 @@ object DagStorage {
     abstract override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
       incAndMeasure("justificationToBlocks", super.justificationToBlocks(blockHash))
 
-    abstract override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
+    abstract override def lookup(blockHash: BlockHash): F[Option[Message]] =
       incAndMeasure("lookup", super.lookup(blockHash))
 
     abstract override def contains(blockHash: BlockHash): F[Boolean] =
@@ -50,13 +50,13 @@ object DagStorage {
     abstract override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
 
-    abstract override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+    abstract override def latestMessage(validator: Validator): F[Option[Message]] =
       incAndMeasure("latestMessage", super.latestMessage(validator))
 
     abstract override def latestMessageHashes: F[Map[Validator, BlockHash]] =
       incAndMeasure("latestMessageHashes", super.latestMessageHashes)
 
-    abstract override def latestMessages: F[Map[Validator, BlockSummary]] =
+    abstract override def latestMessages: F[Map[Validator, Message]] =
       incAndMeasure("latestMessages", super.latestMessages)
 
     abstract override def topoSort(
