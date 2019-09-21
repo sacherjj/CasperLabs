@@ -33,36 +33,42 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       latestFinalizedBlock: BlockHash,
       equivocationTrack: EquivocationsTracker
   ): F[Option[CommitteeWithConsensusValue]] =
-    matrix.withPermit(for {
-      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
-      result <- votedBranch match {
-                 case Some(branch) =>
-                   val blockMetadata = BlockMetadata.fromBlock(block)
-                   for {
-                     _ <- updateVoterPerspective[F](dag, blockMetadata, branch)
-                           .whenA(!equivocationTrack.contains(blockMetadata.validatorPublicKey))
-                     result <- checkForCommittee[F](rFTT, equivocationTrack)
-                     _ <- result match {
-                           case Some(newLFB) =>
-                             // On new LFB we rebuild VotingMatrix and start the new game.
-                             VotingMatrix
-                               .create[F](dag, newLFB.consensusValue)
-                               .flatMap(_.get.flatMap(matrix.set))
-                           case None =>
-                             ().pure[F]
-                         }
-                   } yield result
+    if (equivocationTrack.contains(block.getHeader.validatorPublicKey)) {
+      none[CommitteeWithConsensusValue].pure[F]
+    } else {
+      matrix
+        .withPermit(
+          for {
+            votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
+            result <- votedBranch match {
+                       case Some(branch) =>
+                         val blockMetadata = BlockMetadata.fromBlock(block)
+                         for {
+                           _      <- updateVoterPerspective[F](dag, blockMetadata, branch)
+                           result <- checkForCommittee[F](rFTT, equivocationTrack)
+                           _ <- result match {
+                                 case Some(newLFB) =>
+                                   // On new LFB we rebuild VotingMatrix and start the new game.
+                                   VotingMatrix
+                                     .create[F](dag, newLFB.consensusValue)
+                                     .flatMap(_.get.flatMap(matrix.set))
+                                 case None =>
+                                   ().pure[F]
+                               }
+                         } yield result
 
-                 // If block doesn't vote on any of main children of latestFinalizedBlock,
-                 // then don't update voting matrix
-                 case None =>
-                   Log[F]
-                     .info(
-                       s"The block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
-                     )
-                     .as(none[CommitteeWithConsensusValue])
-               }
-    } yield result)
+                       // If block doesn't vote on any of main children of latestFinalizedBlock,
+                       // then don't update voting matrix
+                       case None =>
+                         Log[F]
+                           .info(
+                             s"The block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
+                           )
+                           .as(none[CommitteeWithConsensusValue])
+                     }
+          } yield result
+        )
+    }
 }
 
 object FinalityDetectorVotingMatrix {
