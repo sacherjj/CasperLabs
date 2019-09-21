@@ -46,7 +46,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                            case Some(newLFB) =>
                              // On new LFB we rebuild VotingMatrix and start the new game.
                              VotingMatrix
-                               .create[F](dag, newLFB.consensusValue, equivocationTrack)
+                               .create[F](dag, newLFB.consensusValue)
                                .flatMap(_.get.flatMap(matrix.set(_)))
                            case None =>
                              ().pure[F]
@@ -100,8 +100,7 @@ object FinalityDetectorVotingMatrix {
   def of[F[_]: Concurrent: Log](
       dag: DagRepresentation[F],
       finalizedBlock: BlockHash,
-      rFTT: Double,
-      equivocationsTracker: EquivocationsTracker
+      rFTT: Double
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
       _ <- MonadThrowable[F]
@@ -112,7 +111,7 @@ object FinalityDetectorVotingMatrix {
             )
             .whenA(rFTT < 0 || rFTT > 0.5)
       lock                 <- Semaphore[F](1)
-      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock, equivocationsTracker)
+      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock)
       votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
     } yield new FinalityDetectorVotingMatrix[F](rFTT)(Concurrent[F], Log[F], votingMatrixWithLock)
 }

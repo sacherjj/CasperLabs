@@ -142,7 +142,7 @@ package object votingmatrix {
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
       consensusValueToHonestValidators = firstLevelZeroVotes.zipWithIndex
         .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-        .filterNot { case (_, validator) => equivocationTrack.contains(validator) }
+        .filter { case (_, validator) => !equivocationTrack.contains(validator) }
         .groupBy(_._1)
         .mapValues(_.map(_._2))
       // Get most support voteBranch and its support weight
