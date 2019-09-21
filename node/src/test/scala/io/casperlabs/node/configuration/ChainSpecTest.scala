@@ -174,7 +174,8 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
     }
     "handle paths based on home directory" in {
       val path = ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("~/d/c.wasm")).toString
-      path should startWith("/home")
+      path should not startWith ("~")
+      path should not startWith ("a/b")
       path should endWith("/d/c.wasm")
     }
   }
