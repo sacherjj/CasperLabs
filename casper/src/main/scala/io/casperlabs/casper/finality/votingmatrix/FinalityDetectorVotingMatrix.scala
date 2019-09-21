@@ -47,7 +47,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                              // On new LFB we rebuild VotingMatrix and start the new game.
                              VotingMatrix
                                .create[F](dag, newLFB.consensusValue)
-                               .flatMap(_.get.flatMap(matrix.set(_)))
+                               .flatMap(_.get.flatMap(matrix.set))
                            case None =>
                              ().pure[F]
                          }
