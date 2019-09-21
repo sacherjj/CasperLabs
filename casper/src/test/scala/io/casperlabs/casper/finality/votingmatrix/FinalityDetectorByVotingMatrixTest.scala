@@ -1,21 +1,23 @@
 package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
+import cats.effect.Sync
 import cats.implicits._
+import cats.mtl.FunctorRaise
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.equivocations
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.casper.{equivocations, validation, CasperState, InvalidBlock}
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Time
+import io.casperlabs.shared.{Cell, Log, Time}
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -31,6 +33,8 @@ class FinalityDetectorByVotingMatrixTest
   behavior of "Finality Detector of Voting Matrix"
 
   implicit val logEff = new LogStub[Task]
+  implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
+    validation.raiseValidateErrorThroughApplicativeError[Task]
 
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore =>
@@ -55,6 +59,9 @@ class FinalityDetectorByVotingMatrixTest
         val bonds  = Seq(v1Bond, v2Bond)
 
         for {
+          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                              CasperState()
+                                                            )
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
@@ -117,6 +124,9 @@ class FinalityDetectorByVotingMatrixTest
         val v1Bond = Bond(v1, 10)
         val bonds  = Seq(v1Bond)
         for {
+          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                              CasperState()
+                                                            )
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
@@ -190,6 +200,9 @@ class FinalityDetectorByVotingMatrixTest
         val v3Bond = Bond(v3, 10)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
+          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                              CasperState()
+                                                            )
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
           implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
@@ -256,26 +269,109 @@ class FinalityDetectorByVotingMatrixTest
         } yield result
   }
 
-  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix](
+  // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
+  it should "excluding weight of validator who have been detected equivocated when finding committee" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 10)
+      val v2Bond = Bond(v2, 10)
+      val v3Bond = Bond(v3, 10)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                            CasperState()
+                                                          )
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                    .of[Task](
+                                                                      dag,
+                                                                      genesis.blockHash,
+                                                                      rFTT = 0.1
+                                                                    )
+        (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> genesis.blockHash)
+                   )
+        _ = c1 shouldBe None
+        (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash)
+                   )
+        _ = c2 shouldBe None
+        (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b2.blockHash),
+                     genesis.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v2 -> b2.blockHash, v3 -> genesis.blockHash)
+                   )
+        // b4 and b2 are both created by v2 but don't cite each other
+        (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash, genesis.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds
+                   )
+        _ = c4 shouldBe None
+        // so v2 can be detected equivocated
+        _ <- casperState.read.map(
+              _.equivocationsTracker.keySet shouldBe Set(v2)
+            )
+        (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b3.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v3 -> b3.blockHash)
+                   )
+        // Though v2 also votes b1, v2 has been detect equivocated, so the committee doesn't include v2 and count its weight
+        result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v3), 20, b1.blockHash))
+      } yield result
+  }
+
+  def createBlockAndUpdateFinalityDetector[F[_]: Monad: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
+    ?[_],
+    InvalidBlock
+  ]](
       parentsHashList: Seq[BlockHash],
       lastFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash]
+  )(
+      implicit casperState: Cell[F, CasperState]
   ): F[(Block, Option[CommitteeWithConsensusValue])] =
     for {
+      dagBeforeAddingBlock <- IndexedDagStorage[F].getRepresentation
       block <- createBlock[F](
                 parentsHashList,
                 creator,
                 bonds,
                 justifications
               )
-      dag <- IndexedDagStorage[F].getRepresentation
+      // EquivocationDetector works before adding block to DAG
+      _ <- Sync[F]
+            .attempt(
+              EquivocationDetector
+                .checkEquivocationWithUpdate(dagBeforeAddingBlock, block)
+            )
+      dagAfterAddingBlock <- IndexedDagStorage[F].getRepresentation
+      // FinalityDetector works after adding block to DAG
+      equivocationsTracker <- casperState.read.map(_.equivocationsTracker)
       finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
-                            dag,
+                            dagAfterAddingBlock,
                             block,
                             lastFinalizedBlockHash,
-                            EquivocationsTracker.empty
+                            equivocationsTracker
                           )
     } yield block -> finalizedBlockOpt
 }

@@ -14,8 +14,9 @@ import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetec
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.CasperState
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Time
+import io.casperlabs.shared.{Cell, Time}
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
