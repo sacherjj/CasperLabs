@@ -585,7 +585,6 @@ object NodeDiscoverySpec {
           temporaryBans,
           alpha,
           k,
-          true,
           alivePeersCacheSize,
           alivePeersCacheMinThreshold,
           alivePeersCacheExpirationPeriod,

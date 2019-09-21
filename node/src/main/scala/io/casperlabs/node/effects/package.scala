@@ -14,7 +14,6 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp._
-import io.casperlabs.comm.transport._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
@@ -33,7 +32,6 @@ package object effects {
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
-      gossipingEnabled: Boolean,
       gossipingRelayFactor: Int,
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
@@ -43,19 +41,17 @@ package object effects {
       peerNodeAsk: NodeAsk[Task],
       log: Log[Task],
       metrics: Metrics[Task]
-  ): Resource[Effect, NodeDiscovery[Task]] =
+  ): Resource[Task, NodeDiscovery[Task]] =
     NodeDiscoveryImpl
       .create[Task](
         id,
         port,
         timeout,
-        gossipingEnabled,
         gossipingRelayFactor,
         gossipingRelaySaturation,
         ingressScheduler,
         egressScheduler
       )(init)
-      .toEffect
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -63,24 +59,6 @@ package object effects {
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-
-  def tcpTransportLayer(
-      port: Int,
-      certPath: Path,
-      keyPath: Path,
-      maxMessageSize: Int,
-      chunkSize: Int,
-      folder: Path
-  )(
-      implicit scheduler: Scheduler,
-      log: Log[Task],
-      metrics: Metrics[Task],
-      cache: ConnectionsCache[Task, TcpConnTag]
-  ): TcpTransportLayer = {
-    val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
-    val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-    new TcpTransportLayer(port, cert, key, maxMessageSize, chunkSize, folder, 100)
-  }
 
   def rpConnections: Task[ConnectionsCell[Task]] =
     Cell.mvarCell[Task, Connections](Connections.empty)
@@ -102,7 +80,7 @@ package object effects {
       connectEC: ExecutionContext,  // for waiting on connections, should be bounded
       transactEC: ExecutionContext, // for JDBC, can be unbounded
       serverDataDir: Path
-  ): Resource[Effect, Transactor[Effect]] = {
+  ): Resource[Task, Transactor[Task]] = {
     val config = new HikariConfig()
     config.setDriverClassName("org.sqlite.JDBC")
     config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
@@ -117,7 +95,7 @@ package object effects {
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
     HikariTransactor
-      .fromHikariConfig[Effect](
+      .fromHikariConfig[Task](
         config,
         connectEC,
         transactEC

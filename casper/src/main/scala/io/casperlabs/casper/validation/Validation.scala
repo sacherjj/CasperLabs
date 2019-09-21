@@ -2,12 +2,11 @@ package io.casperlabs.casper.validation
 
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.{consensus, protocol}
-import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
@@ -31,13 +30,11 @@ trait Validation[F[_]] {
 
   def blockSignature(b: BlockSummary): F[Boolean]
 
-  def approvedBlock(a: ApprovedBlock, requiredValidators: Set[PublicKeyBS]): F[Boolean]
-
   def deployHash(d: consensus.Deploy): F[Boolean]
 
   def deploySignature(d: consensus.Deploy): F[Boolean]
 
-  def signature(d: Array[Byte], sig: protocol.Signature): Boolean
+  def signature(d: Array[Byte], sig: consensus.Signature, key: PublicKey): Boolean
 
   def formatOfFields(b: BlockSummary, treatAsGenesis: Boolean = false): F[Boolean]
 
