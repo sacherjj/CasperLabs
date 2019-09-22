@@ -25,7 +25,9 @@ import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import io.casperlabs.comm.transport.TransportLayer
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
@@ -395,41 +397,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
               )
           remainingHashes <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
           result <- if (remainingHashes.nonEmpty || parents.length > 1) {
-                     for {
-                       latestMessages <- dag.latestMessages
-                       rank           = ProtoUtil.calculateRank(latestMessages.values.toSeq)
-                       protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
-                         rank
-                       )
-                       // TODO: Remove redundant justifications.
-                       justifications = toJustification(latestMessages.values.toSeq)
-                       now            <- Time[F].currentMillis
-                       checkpoint <- executeDeploys(
-                                      now,
-                                      merged,
-                                      remainingHashes,
-                                      protocolVersion
-                                    )
-                       validatorPrevMsgOpt <- dag.latestMessage(ByteString.copyFrom(publicKey))
-                     } yield {
-                       val block = ProtoUtil.block(
-                         justifications,
-                         checkpoint.preStateHash,
-                         checkpoint.postStateHash,
-                         checkpoint.bondedValidators,
-                         checkpoint.deploysForBlock,
-                         protocolVersion,
-                         parents.map(_.blockHash),
-                         validatorPrevMsgOpt,
-                         chainId,
-                         now,
-                         rank,
-                         publicKey,
-                         privateKey,
-                         sigAlgorithm
-                       )
-                       CreateBlockStatus.created(block)
-                     }
+                     createProposal(
+                       dag,
+                       merged,
+                       remainingHashes,
+                       publicKey,
+                       privateKey,
+                       sigAlgorithm
+                     )
                    } else {
                      CreateBlockStatus.noNewDeploys.pure[F]
                    }
@@ -524,20 +499,65 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
-  private def executeDeploys(
-      now: Long,
+  private def createProposal(
+      dag: DagRepresentation[F],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
-      deploys: Set[DeployHash],
-      protocolVersion: ProtocolVersion
-  ): F[DeploysCheckpoint] = Metrics[F].timer("executeDeploys") {
-    ExecEngineUtil
-      .computeDeploysCheckpoint[F](
-        merged,
-        deploys,
-        now,
-        protocolVersion
-      )
-  }
+      remainingHashes: Set[BlockHash],
+      validatorId: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): F[CreateBlockStatus] =
+    Metrics[F].timer("createProposal") {
+      (for {
+        latestMessages <- dag.latestMessages
+        rank           = ProtoUtil.calculateRank(latestMessages.values.toSeq)
+        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
+          rank
+        )
+        // TODO: Remove redundant justifications.
+        justifications = toJustification(latestMessages.values.toSeq)
+        now            <- Time[F].currentMillis
+        checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
+                       merged,
+                       remainingHashes,
+                       now,
+                       protocolVersion
+                     )
+        validatorPrevMsgOpt <- dag.latestMessage(ByteString.copyFrom(validatorId))
+      } yield {
+        val block = ProtoUtil.block(
+          justifications,
+          checkpoint.preStateHash,
+          checkpoint.postStateHash,
+          checkpoint.bondedValidators,
+          checkpoint.deploysForBlock,
+          protocolVersion,
+          merged.parents.map(_.blockHash),
+          validatorPrevMsgOpt,
+          chainId,
+          now,
+          rank,
+          validatorId,
+          privateKey,
+          sigAlgorithm
+        )
+        CreateBlockStatus.created(block)
+      }).handleErrorWith {
+        case ex @ SmartContractEngineError(error_msg) =>
+          Log[F]
+            .error(
+              s"Execution Engine returned an error while processing deploys: $error_msg"
+            )
+            .as(CreateBlockStatus.internalDeployError(ex))
+        case NonFatal(ex) =>
+          Log[F]
+            .error(
+              s"Critical error encountered while processing deploys: ${ex.getMessage}",
+              ex
+            )
+            .as(CreateBlockStatus.internalDeployError(ex))
+      }
+    }
 
   // MultiParentCasper Exposes the block DAG to those who need it.
   def dag: F[DagRepresentation[F]] =
