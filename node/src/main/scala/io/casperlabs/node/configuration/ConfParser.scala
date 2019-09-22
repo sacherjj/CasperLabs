@@ -71,7 +71,9 @@ private[configuration] trait ConfParserImplicits {
         pathToField: List[String]
     ) =>
       C.parse(cliByName, envVars, configFile, defaultConfigFile, pathToField) match {
-        case Invalid(e) if e.toList.exists(_.contains("All fields are missing")) =>
+        case Invalid(e) if e.head.contains("All fields are missing") =>
+          // If _some_ fields are given we should treat it as an error, so typos are catched,
+          // but if everything is missing then it's fine for the whole optional section to be None.
           Valid(none[A])
         case x =>
           x.map(_.some)
@@ -158,9 +160,11 @@ private[configuration] trait GenericConfParser extends ConfParserImplicits {
 
       errors match {
         case xs
-            if xs.nonEmpty && xs.size == caseClass.parameters.length && xs.forall(
-              _ contains "must be defined"
-            ) =>
+            if xs.nonEmpty
+              && xs.forall(_ contains "must be defined")
+              && (xs.size == caseClass.parameters.length || fields.forall(_ == None)) =>
+          // The only fields where we didn't get "missing" errors are undefined optional fields,
+          // so basically the whole record is undefined.
           Invalid(NonEmptyList(s"All fields are missing for ${caseClass.typeName.full}", xs))
         case x :: xs =>
           Invalid(NonEmptyList(x, xs))
