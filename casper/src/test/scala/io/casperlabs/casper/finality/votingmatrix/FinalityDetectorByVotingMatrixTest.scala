@@ -317,6 +317,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds,
                      HashMap(v2 -> b2.blockHash, v3 -> genesis.blockHash)
                    )
+        _ = c3 shouldBe None
         // b4 and b2 are both created by v2 but don't cite each other
         (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b1.blockHash, genesis.blockHash),
@@ -336,7 +337,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds,
                      HashMap(v3 -> b3.blockHash)
                    )
-        // Though v2 also votes b1, v2 has been detect equivocated, so the committee doesn't include v2 and count its weight
+        // Though v2 also votes for b1, v2 has been detected equivocated, so the committee doesn't include v2 and count its weight
         result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v3), 20, b1.blockHash))
       } yield result
   }
