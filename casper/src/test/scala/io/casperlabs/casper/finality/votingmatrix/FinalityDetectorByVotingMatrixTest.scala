@@ -272,7 +272,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
-  it should "excluding weight of validator who have been detected equivocated when finding committee" in withStorage {
+  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
@@ -326,7 +326,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds
                    )
         _ = c4 shouldBe None
-        // so v2 can be detected equivocated
+        // so v2 can be detected equivocating
         _ <- casperState.read.map(
               _.equivocationsTracker.keySet shouldBe Set(v2)
             )
@@ -337,7 +337,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds,
                      HashMap(v3 -> b3.blockHash)
                    )
-        // Though v2 also votes for b1, v2 has been detected equivocated, so the committee doesn't include v2 and count its weight
+        // Though v2 also votes for b1, it has been detected equivocating, so the committee doesn't include v2 or count its weight
         result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v3), 20, b1.blockHash))
       } yield result
   }
@@ -389,7 +389,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds
                    )
         _ = c3 shouldBe None
-        // so v1 can be detected equivocated
+        // so v1 can be detected equivocating
         _ <- casperState.read.map(
               _.equivocationsTracker.keySet shouldBe Set(v1)
             )
@@ -462,7 +462,7 @@ class FinalityDetectorByVotingMatrixTest
                      bonds
                    )
         _ = c3 shouldBe None
-        // so v1 can be detected equivocated
+        // so v1 can be detected equivocating
         _ <- casperState.read.map(
               _.equivocationsTracker.keySet shouldBe Set(v1)
             )
@@ -483,7 +483,7 @@ class FinalityDetectorByVotingMatrixTest
                      HashMap(v2 -> b2.blockHash)
                    )
         _ = c5 shouldBe None
-        // so v3 can be detected equivocated
+        // so v3 can be detected equivocating
         _ <- casperState.read.map(
               _.equivocationsTracker.keySet shouldBe Set(v1, v3)
             )
