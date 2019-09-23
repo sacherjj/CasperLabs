@@ -73,6 +73,7 @@ object Genesis {
   ): F[BlockMsgWithTransform] =
     for {
       // Execute the EE genesis setup based on the chain spec.
+      // The results are already going to be committed.
       genesisResult <- MonadError[F, Throwable].rethrow(
                         ExecutionEngineService[F]
                           .runGenesis(
@@ -114,16 +115,6 @@ object Genesis {
       unsignedBlock = unsignedBlockProto(body, header)
 
       genesis = BlockMsgWithTransform(Some(unsignedBlock), transforms)
-
-      // Since we are not passing the deploys in the body,
-      // we must commit the effects here.
-      _ <- MonadError[F, Throwable].rethrow(
-            ExecutionEngineService[F]
-              .commit(
-                genesis.getBlockMessage.getHeader.getState.preStateHash,
-                transforms
-              )
-          )
 
       // And store the block as well since we won't have any other means of retrieving its effects.
       _ <- BlockStorage[F].put(genesis)
