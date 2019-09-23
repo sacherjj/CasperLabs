@@ -342,6 +342,171 @@ class FinalityDetectorByVotingMatrixTest
       } yield result
   }
 
+  // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
+  it should "finalized equivocator's block when enough honest validators votes for it" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 10)
+      val v2Bond = Bond(v2, 10)
+      val v3Bond = Bond(v3, 10)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                            CasperState()
+                                                          )
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                    .of[Task](
+                                                                      dag,
+                                                                      genesis.blockHash,
+                                                                      rFTT = 0.1,
+                                                                      EquivocationsTracker.empty
+                                                                    )
+        (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> genesis.blockHash)
+                   )
+        _ = c1 shouldBe None
+        (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash)
+                   )
+        _ = c2 shouldBe None
+        // b1 and b3 are both created by v1 but don't cite each other
+        (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds
+                   )
+        _ = c3 shouldBe None
+        // so v1 can be detected equivocated
+        _ <- casperState.read.map(
+              _.equivocationsTracker.keySet shouldBe Set(v1)
+            )
+        (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b2.blockHash),
+                     genesis.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v2 -> b2.blockHash, v3 -> genesis.blockHash)
+                   )
+        _ = c4 shouldBe None
+        (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b4.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v3 -> b4.blockHash)
+                   )
+        // After creating b5, v2 knows v3 and himself vote for b1, and v3 knows v2 and
+        // himself vote for b1, so v2 and v3 construct a committee.
+        // So even b1 was created by v1 who equivocated, it gets finalized as having enough supporters
+        result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v2, v3), 20, b1.blockHash))
+      } yield result
+  }
+
+  // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
+  it should "not finalized equivocator's block no matter how many votes equivocating validators cast" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 10)
+      val v2Bond = Bond(v2, 10)
+      val v3Bond = Bond(v3, 10)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
+                                                            CasperState()
+                                                          )
+        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- blockDagStorage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- FinalityDetectorVotingMatrix
+                                                                    .of[Task](
+                                                                      dag,
+                                                                      genesis.blockHash,
+                                                                      rFTT = 0.1,
+                                                                      EquivocationsTracker.empty
+                                                                    )
+        (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v1 -> genesis.blockHash)
+                   )
+        _ = c1 shouldBe None
+        (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b1.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v1 -> b1.blockHash)
+                   )
+        _ = c2 shouldBe None
+        // b1 and b3 are both created by v1 but don't cite each other
+        (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds
+                   )
+        _ = c3 shouldBe None
+        // so v1 can be detected equivocated
+        _ <- casperState.read.map(
+              _.equivocationsTracker.keySet shouldBe Set(v1)
+            )
+        (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(genesis.blockHash),
+                     genesis.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v3 -> genesis.blockHash)
+                   )
+        _ = c4 shouldBe None
+        // b4 and b5 are both created by v3 but don't cite each other
+        (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b2.blockHash),
+                     genesis.blockHash,
+                     v3,
+                     bonds,
+                     HashMap(v2 -> b2.blockHash)
+                   )
+        _ = c5 shouldBe None
+        // so v3 can be detected equivocated
+        _ <- casperState.read.map(
+              _.equivocationsTracker.keySet shouldBe Set(v1, v3)
+            )
+        (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b5.blockHash),
+                     genesis.blockHash,
+                     v2,
+                     bonds,
+                     HashMap(v3 -> b5.blockHash)
+                   )
+        _ = c6 shouldBe None
+        (b7, c7) <- createBlockAndUpdateFinalityDetector[Task](
+                     Seq(b5.blockHash),
+                     genesis.blockHash,
+                     v1,
+                     bonds,
+                     HashMap(v2 -> b6.blockHash)
+                   )
+        // After creating b7, all validators know they all vote for v1, but b1 still can not get finalized, because v1 and v3 equivocated
+        result = c7 shouldBe None
+      } yield result
+  }
+
   def createBlockAndUpdateFinalityDetector[F[_]: Monad: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
     ?[_],
     InvalidBlock

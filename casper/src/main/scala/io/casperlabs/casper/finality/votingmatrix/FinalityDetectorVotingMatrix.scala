@@ -31,9 +31,9 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       dag: DagRepresentation[F],
       block: Block,
       latestFinalizedBlock: BlockHash,
-      equivocationTrack: EquivocationsTracker
+      equivocationTracker: EquivocationsTracker
   ): F[Option[CommitteeWithConsensusValue]] =
-    if (equivocationTrack.contains(block.getHeader.validatorPublicKey)) {
+    if (equivocationTracker.contains(block.getHeader.validatorPublicKey)) {
       none[CommitteeWithConsensusValue].pure[F]
     } else {
       matrix
@@ -48,14 +48,14 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                                  dag,
                                  blockMetadata,
                                  branch,
-                                 equivocationTrack
+                                 equivocationTracker
                                )
-                           result <- checkForCommittee[F](rFTT, equivocationTrack)
+                           result <- checkForCommittee[F](rFTT, equivocationTracker)
                            _ <- result match {
                                  case Some(newLFB) =>
                                    // On new LFB we rebuild VotingMatrix and start the new game.
                                    VotingMatrix
-                                     .create[F](dag, newLFB.consensusValue, equivocationTrack)
+                                     .create[F](dag, newLFB.consensusValue, equivocationTracker)
                                      .flatMap(_.get.flatMap(matrix.set))
                                  case None =>
                                    ().pure[F]
