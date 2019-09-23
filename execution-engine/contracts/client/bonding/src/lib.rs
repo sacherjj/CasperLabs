@@ -25,11 +25,11 @@ pub extern "C" fn call() {
 
     let source_purse = contract_api::main_purse();
     let bonding_purse = contract_api::create_purse();
-    let bond_amount: U512 = U512::from(
-        contract_api::get_arg::<u64>(0)
-            .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-            .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32)),
-    );
+    let bond_amount: U512 = match contract_api::get_arg::<u64>(0) {
+        Some(Ok(data)) => U512::from(data),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     match contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => contract_api::call_contract(

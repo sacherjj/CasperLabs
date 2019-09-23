@@ -23,10 +23,12 @@ enum Error {
 pub extern "C" fn call() {
     let pos_pointer = unwrap_or_revert(contract_api::get_pos(), 77);
 
-    let unbond_amount: Option<U512> = contract_api::get_arg::<Option<u64>>(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32))
-        .map(U512::from);
+    let unbond_amount: Option<U512> = match contract_api::get_arg::<Option<u64>>(0) {
+        Some(Ok(Some(data))) => Some(U512::from(data)),
+        Some(Ok(None)) => None,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     contract_api::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
 }

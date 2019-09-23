@@ -22,9 +22,11 @@ pub extern "C" fn check_caller_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_public_key: PublicKey = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let known_public_key: PublicKey = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
     let caller_public_key: PublicKey = contract_api::get_caller();
     assert_eq!(
         caller_public_key, known_public_key,

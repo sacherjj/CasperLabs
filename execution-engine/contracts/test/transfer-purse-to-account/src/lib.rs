@@ -21,12 +21,16 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     let source: PurseId = contract_api::main_purse();
-    let destination: PublicKey = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
-    let amount: U512 = contract_api::get_arg(1)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let destination: PublicKey = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
+    let amount: U512 = match contract_api::get_arg(1) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     let transfer_result = contract_api::transfer_from_purse_to_account(source, destination, amount);
 

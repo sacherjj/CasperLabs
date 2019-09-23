@@ -16,9 +16,11 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = contract_api::get_arg(0)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let account: PublicKey = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
     contract_api::remove_associated_key(account)
         .unwrap_or_else(|_| contract_api::revert(REMOVE_FAIL));
 }

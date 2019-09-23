@@ -25,11 +25,13 @@ const REPLACEMENT_DATA: &str = "bawitdaba";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_pointer: ContractPointer = contract_api::get_arg::<Key>(CONTRACT_POINTER)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32))
-        .to_c_ptr()
-        .unwrap_or_else(|| contract_api::revert(Error::GetArg as u32));
+    let contract_pointer: ContractPointer = match contract_api::get_arg::<Key>(CONTRACT_POINTER) {
+        Some(Ok(data)) => data
+            .to_c_ptr()
+            .unwrap_or_else(|| contract_api::revert(Error::GetArg as u32)),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     let reference: URef = contract_api::call_contract(contract_pointer, &(), &Vec::new());
 

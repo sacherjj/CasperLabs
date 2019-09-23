@@ -28,9 +28,11 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     let main_purse: PurseId = contract_api::main_purse();
 
