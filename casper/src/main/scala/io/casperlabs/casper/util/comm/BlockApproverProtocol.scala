@@ -35,12 +35,10 @@ import scala.math.BigInt
   */
 class BlockApproverProtocol(
     validatorId: ValidatorIdentity,
-    bonds: Map[PublicKey, Long],
     wallets: Seq[PreWallet],
     conf: BlockApproverProtocol.GenesisConf
 ) {
   private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1) -> e._2)
 
   def unapprovedBlockPacketHandler[F[_]: MonadThrowable: TransportLayer: Log: Time: ErrorHandler: RPConfAsk: ExecutionEngineService: FilesAPI](
       peer: Node,
@@ -56,7 +54,6 @@ class BlockApproverProtocol(
         .validateCandidate[F](
           candidate,
           wallets,
-          _bonds,
           conf
         )
         .flatMap {
@@ -81,8 +78,6 @@ class BlockApproverProtocol(
 
 object BlockApproverProtocol {
   case class GenesisConf(
-      minimumBond: Long,
-      maximumBond: Long,
       requiredSigs: Int,
       genesisAccountPublicKeyPath: Option[Path],
       initialMotes: BigInt,
@@ -93,8 +88,6 @@ object BlockApproverProtocol {
   object GenesisConf {
     def fromCasperConf(conf: CasperConf) =
       GenesisConf(
-        conf.minimumBond,
-        conf.maximumBond,
         conf.requiredSigs,
         conf.genesisAccountPublicKeyPath,
         conf.initialMotes,
@@ -122,7 +115,6 @@ object BlockApproverProtocol {
   def validateCandidate[F[_]: MonadThrowable: Log: ExecutionEngineService: FilesAPI](
       candidate: ApprovedBlockCandidate,
       wallets: Seq[PreWallet],
-      bonds: Map[ByteString, Long],
       conf: GenesisConf
   ): F[Either[String, Unit]] = {
 
@@ -133,23 +125,14 @@ object BlockApproverProtocol {
                 .either(())
                 .or("Candidate didn't have required signatures number.")
             )
-        block      <- EitherT.fromOption[F](candidate.block, "Candidate block is empty.")
-        body       <- EitherT.fromOption[F](block.body, "Body is empty")
-        postState  <- EitherT.fromOption[F](body.state, "Post state is empty")
-        blockBonds = postState.bonds.map { case Bond(validator, stake) => validator -> stake }.toMap
-        _ <- EitherT.fromEither[F](
-              (blockBonds == bonds)
-                .either(())
-                .or("Block bonds don't match expected.")
-            )
-        validators = blockBonds.toSeq.map(b => ProofOfStakeValidator(b._1.toByteArray, b._2))
-        posParams  = ProofOfStakeParams(conf.minimumBond, conf.maximumBond, validators)
+        block     <- EitherT.fromOption[F](candidate.block, "Candidate block is empty.")
+        body      <- EitherT.fromOption[F](block.body, "Body is empty")
+        postState <- EitherT.fromOption[F](body.state, "Post state is empty")
         genesisBlessedContracts <- EitherT.liftF(
                                     Genesis
                                       .defaultBlessedTerms[F](
                                         conf.genesisAccountPublicKeyPath,
                                         conf.initialMotes,
-                                        posParams,
                                         wallets,
                                         conf.bondsPath,
                                         conf.mintCodePath,

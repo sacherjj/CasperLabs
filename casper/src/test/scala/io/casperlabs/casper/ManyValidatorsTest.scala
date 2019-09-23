@@ -6,6 +6,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -35,7 +36,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
               case Bond(validator, _) => validator -> genesis.blockHash
             }.toMap)
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips.toIndexedSeq

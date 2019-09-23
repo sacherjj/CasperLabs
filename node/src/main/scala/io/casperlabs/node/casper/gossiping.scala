@@ -8,6 +8,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
+import eu.timepit.refined.auto._
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
@@ -37,7 +38,7 @@ import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
-import eu.timepit.refined.auto._
+
 import scala.concurrent.duration._
 import scala.util.Random
 import scala.util.control.NoStackTrace
@@ -391,14 +392,6 @@ package object gossiping {
             )
         }
 
-      // Function to read and set the bonds.txt in modes which generate the Genesis locally.
-      readBondsFile = {
-        for {
-          _     <- Log[F].info("Taking bonds from file.")
-          bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
-        } yield bonds
-      }
-
       candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
                              if (conf.casper.approveGenesis) {
                                // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
@@ -406,10 +399,6 @@ package object gossiping {
                                for {
                                  _       <- Log[F].info("Starting in approve genesis mode")
                                  wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
-                                 bonds   <- readBondsFile
-                                 bondsMap = bonds.map {
-                                   case (k, v) => ByteString.copyFrom(k) -> v
-                                 }
                                } yield { (block: Block) =>
                                  {
                                    val candidate = protocol
@@ -420,7 +409,6 @@ package object gossiping {
                                    BlockApproverProtocol.validateCandidate[F](
                                      candidate,
                                      wallets,
-                                     bondsMap,
                                      BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)
                                    ) map {
                                      case Left(msg) =>

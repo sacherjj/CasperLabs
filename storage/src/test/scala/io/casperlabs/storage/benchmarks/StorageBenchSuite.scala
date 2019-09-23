@@ -13,7 +13,7 @@ import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.ipc.Transform.TransformInstance
-import io.casperlabs.ipc.{DeployCode => _, _}
+import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform

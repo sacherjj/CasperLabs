@@ -3,6 +3,7 @@ package io.casperlabs.casper.finality
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
@@ -128,10 +129,19 @@ object FinalityDetectorUtil {
     }
   }
 
+  /**
+    * Find the panorama of M and represent this panorama as an array
+    * panoramaM, putting (for j=0,1,2,..., n-1)
+    * panoramaM(j) := daglevel(latest message of V(j) seen from block M)
+    * When V(j)-swimlane is empty or V(j) happens to be an equivocator - so in cases
+    * where latest message of V(i) is not well defined concept - in these cases
+    * put 0 (zero) in the corresponding cell.
+    */
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockSummary: Message
+      blockSummary: Message,
+      equivocationsTracker: EquivocationsTracker
   ): F[MutableSeq[Long]] =
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(
@@ -141,10 +151,17 @@ object FinalityDetectorUtil {
       )
       .map(
         latestBlockDagLevelsAsMap =>
-          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
           fromMapToArray(
             validatorsToIndex,
-            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+            validator => {
+              // When V(j) happens to be an equivocator, put 0L in the corresponding cell
+              if (equivocationsTracker.contains(validator)) {
+                0L
+              } else {
+                // When V(j)-swimlane is empty, put 0L in the corresponding cell
+                latestBlockDagLevelsAsMap.getOrElse(validator, 0L)
+              }
+            }
           )
       )
 

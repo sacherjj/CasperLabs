@@ -79,7 +79,7 @@ fn should_run_purse_to_purse_transfer() {
     let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
     // Obtain transforms for a mint account
     let mint_transforms = transform
-        .get(&mint_contract_uref.into())
+        .get(&Key::from(mint_contract_uref).normalize())
         .expect("Unable to find transforms for a mint");
 
     // Inspect AddKeys for that account
@@ -171,7 +171,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Obtain transforms for a mint account
     let mint_transforms = transform
-        .get(&mint_contract_uref.into())
+        .get(&Key::from(mint_contract_uref).normalize())
         .expect("Unable to find transforms for a mint");
 
     // Inspect AddKeys for that account

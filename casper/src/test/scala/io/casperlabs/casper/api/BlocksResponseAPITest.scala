@@ -6,6 +6,7 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -78,7 +79,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -139,7 +140,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
         dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash)
+        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -216,7 +217,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                 HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
               )
           dag  <- dagStorage.getRepresentation
-          tips <- Estimator.tips[Task](dag, genesis.blockHash)
+          tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],
                            tips

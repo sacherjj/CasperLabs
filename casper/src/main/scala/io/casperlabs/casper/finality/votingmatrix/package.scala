@@ -3,6 +3,7 @@ package io.casperlabs.casper.finality
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.models.Message
@@ -23,7 +24,8 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
-      currentVoteValue: BlockHash
+      currentVoteValue: BlockHash,
+      equivocationsTracker: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
@@ -34,7 +36,7 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, equivocationsTracker)
               _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.rank)
             } yield ()
           }
@@ -46,13 +48,16 @@ package object votingmatrix {
     * @return
     */
   def checkForCommittee[F[_]: Monad](
-      rFTT: Double
-  )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
+      rFTT: Double,
+      equivocationTrack: EquivocationsTracker
+  )(
+      implicit matrix: VotingMatrix[F]
+  ): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
       quorum                    = math.ceil(totalWeight * (rFTT + 0.5)).toLong
-      committeeApproximationOpt <- findCommitteeApproximation[F](quorum)
+      committeeApproximationOpt <- findCommitteeApproximation[F](quorum, equivocationTrack)
       result <- committeeApproximationOpt match {
                  case Some(
                      CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
@@ -86,11 +91,13 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: Message
+      msg: Message,
+      equivocationsTracker: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
-      panoramaM        <- FinalityDetectorUtil.panoramaM[F](dag, validatorToIndex, msg)
+      panoramaM <- FinalityDetectorUtil
+                    .panoramaM[F](dag, validatorToIndex, msg, equivocationsTracker)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(msg.validatorId), panoramaM)
@@ -129,24 +136,26 @@ package object votingmatrix {
     * @return
     */
   private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
-      quorum: Long
+      quorum: Long,
+      equivocationTrack: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
       firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
-      consensusValueToValidators = firstLevelZeroVotes.zipWithIndex
+      consensusValueToHonestValidators = firstLevelZeroVotes.zipWithIndex
         .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
+        .filterNot { case (_, validator) => equivocationTrack.contains(validator) }
         .groupBy(_._1)
         .mapValues(_.map(_._2))
       // Get most support voteBranch and its support weight
-      mostSupport = consensusValueToValidators
+      mostSupport = consensusValueToHonestValidators
         .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
         .maxBy(_._2)
       (voteValue, supportingWeight) = mostSupport
       // Get the voteBranch's supporters
-      supporters = consensusValueToValidators(voteValue)
+      supporters = consensusValueToHonestValidators(voteValue)
     } yield
       if (supportingWeight > quorum) {
         Some(CommitteeWithConsensusValue(supporters.toSet, supportingWeight, voteValue))

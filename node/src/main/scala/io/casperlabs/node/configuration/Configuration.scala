@@ -2,7 +2,7 @@ package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.ValidatedNel
 import cats.syntax.either._
 import cats.syntax.validated._
 import com.github.ghik.silencer.silent
@@ -202,31 +202,4 @@ object Configuration extends ParserImplicits {
                     s => Parser[Path].parse(s)
                   )
     } yield dataDir
-
-  private[configuration] def parseToml(content: String): Map[CamelCase, String] = {
-    val tableRegex = """\[(.+)\]""".r
-    val valueRegex = """([a-z\-]+)\s*=\s*\"?([^\"]*)\"?""".r
-
-    val lines = content
-      .split('\n')
-    val withoutCommentsAndEmptyLines = lines
-      .filterNot(s => s.startsWith("#") || s.trim.isEmpty)
-      .map(_.trim)
-
-    val dashifiedMap: Map[String, String] = withoutCommentsAndEmptyLines
-      .foldLeft((Map.empty[String, String], Option.empty[String])) {
-        case ((acc, _), tableRegex(table)) =>
-          (acc, Some(table))
-        case ((acc, t @ Some(currentTable)), valueRegex(key, value)) =>
-          (acc + (currentTable + "-" + key -> value), t)
-        case (x, _) => x
-      }
-      ._1
-
-    val camelCasedMap: Map[CamelCase, String] = dashifiedMap.map {
-      case (k, v) => (dashToCamel(k), v)
-    }
-
-    camelCasedMap
-  }
 }

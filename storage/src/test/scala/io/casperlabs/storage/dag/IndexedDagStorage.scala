@@ -29,33 +29,13 @@ final class IndexedDagStorage[F[_]: Monad](
       updatedDag <- getRepresentation
     } yield updatedDag
 
-  def index(block: Block): F[Block] =
-    for {
-      _         <- lock.acquire
-      header    = block.header.get
-      currentId <- currentIdRef.get
-      nextId    = currentId + 1L
-      dag       <- underlying.getRepresentation
-      dependenciesMsg <- (header.parentHashes ++ header.justifications.map(_.latestBlockHash)).toList.distinct
-                          .traverse(dag.lookup)
-                          .map(_.flatten)
-      maxRank = dependenciesMsg.foldLeft(-1L) {
-        case (acc, b) => math.max(b.rank, acc)
-      }
-      rank = maxRank + 1
-      nextCreatorSeqNum <- dag
-                            .latestMessage(block.getHeader.validatorPublicKey)
-                            .map(_.fold(0)(_.validatorMsgSeqNum) + 1)
-      modifiedBlock = block
-        .withHeader(
-          header
-            .withValidatorBlockSeqNum(nextCreatorSeqNum)
-            .withRank(rank)
-        )
-      _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
-      _ <- currentIdRef.set(nextId)
-      _ <- lock.release
-    } yield modifiedBlock
+  def index(block: Block): F[Unit] =
+    lock.withPermit {
+      for {
+        nextId <- currentIdRef.modify(s => (s + 1, s + 1))
+        _      <- idToBlocksRef.update(_.updated(nextId, block))
+      } yield ()
+    }
 
   def inject(index: Int, block: Block): F[Unit] =
     for {

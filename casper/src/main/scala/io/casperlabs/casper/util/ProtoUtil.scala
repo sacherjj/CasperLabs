@@ -2,17 +2,17 @@ package io.casperlabs.casper.util
 
 import java.util.NoSuchElementException
 
+import cats.Monad
 import cats.implicits._
-import cats.{Applicative, Functor, Monad}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
+import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
@@ -166,10 +166,36 @@ object ProtoUtil {
               }
     } yield block
 
-  def calculateRank(justificationMsgs: Seq[Message]): Long =
+  def nextRank(justificationMsgs: Seq[Message]): Long =
     1L + justificationMsgs.foldLeft(-1L) {
       case (acc, msgSummary) => math.max(acc, msgSummary.rank)
     }
+
+  def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
+      justifications: Seq[Justification],
+      creator: Validator
+  ): F[Int] =
+    justifications
+      .find {
+        case Justification(validator: Validator, _) =>
+          validator == creator
+      }
+      .foldM(0) {
+        case (_, Justification(_, latestBlockHash)) =>
+          dag.lookup(latestBlockHash).flatMap {
+            case Some(meta) =>
+              meta.validatorMsgSeqNum.pure[F]
+
+            case None =>
+              MonadThrowable[F].raiseError[Int](
+                new NoSuchElementException(
+                  s"DagStorage is missing hash ${PrettyPrinter.buildString(latestBlockHash)}"
+                )
+              )
+          }
+      }
+      .map(_ + 1)
 
   def creatorJustification(header: Block.Header): Option[Justification] =
     header.justifications
@@ -320,7 +346,7 @@ object ProtoUtil {
         .withLatestBlockHash(messageSummary.messageHash)
     }
 
-  def toLatestMessageHashes(
+  def getJustificationMsgHashes(
       justifications: Seq[Justification]
   ): immutable.Map[Validator, BlockHash] =
     justifications.foldLeft(Map.empty[Validator, BlockHash]) {
@@ -328,14 +354,23 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: MonadThrowable: BlockStorage](
+  def getJustificationMsgs[F[_]: MonadThrowable](
+      dag: DagRepresentation[F],
       justifications: Seq[Justification]
-  ): F[immutable.Map[Validator, BlockSummary]] =
-    justifications.toList.foldM(Map.empty[Validator, BlockSummary]) {
+  ): F[Map[Validator, Message]] =
+    justifications.toList.foldM(Map.empty[Validator, Message]) {
       case (acc, Justification(validator, hash)) =>
-        for {
-          block <- ProtoUtil.unsafeGetBlock[F](hash)
-        } yield acc.updated(validator, BlockSummary.fromBlock(block))
+        dag.lookup(hash).flatMap {
+          case Some(meta) =>
+            acc.updated(validator, meta).pure[F]
+
+          case None =>
+            MonadThrowable[F].raiseError[Map[Validator, Message]](
+              new NoSuchElementException(
+                s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
+              )
+            )
+        }
     }
 
   def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
@@ -346,6 +381,31 @@ object ProtoUtil {
 
   def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
+
+  /* Creates a Genesis block. Genesis is not signed */
+  def genesis(
+      preStateHash: ByteString,
+      postStateHash: ByteString,
+      bonds: Seq[Bond],
+      chainId: String,
+      protocolVersion: Long,
+      now: Long
+  ): Block = {
+    val header = Block
+      .Header()
+      .withMessageType(MessageType.BLOCK)
+      .withProtocolVersion(protocolVersion)
+      .withTimestamp(now)
+      .withChainId(chainId)
+      .withState(
+        GlobalState()
+          .withPreStateHash(preStateHash)
+          .withPostStateHash(postStateHash)
+          .withBonds(bonds)
+      )
+
+    unsignedBlockProto(Block.Body(), header)
+  }
 
   /* Creates a signed block */
   def block(

@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -8,6 +7,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.{Justification, MessageType}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
@@ -21,6 +21,7 @@ import io.casperlabs.casper.util.execengine.{
 }
 import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
@@ -70,7 +71,7 @@ class ValidationTest
     t.runSyncUnsafe(5.seconds)
   }
 
-  def createChain[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createChain[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       length: Int,
       bonds: Seq[Bond] = Seq.empty[Bond],
       creator: Validator = ByteString.EMPTY
@@ -91,7 +92,7 @@ class ValidationTest
         } yield bnext
     }
 
-  def createChainWithRoundRobinValidators[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createChainWithRoundRobinValidators[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
       length: Int,
       validatorLength: Int
   ): F[Block] = {
@@ -470,10 +471,12 @@ class ValidationTest
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
       }
 
+      val emptyEquivocationsTracker = EquivocationsTracker.empty
+
       def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
         messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
 
-      def createValidatorBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+      def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
           parents: Seq[Block],
           justifications: Seq[Block],
           validator: Int
@@ -507,17 +510,53 @@ class ValidationTest
                    genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validation[Task].parents(b1, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b2, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
+                   _ <- Validation[Task].parents(
+                         b1,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b2,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b3,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b4,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b5,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b6,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
 
                    // Not valid
-                   _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
+                   _ <- Validation[Task]
+                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
@@ -529,7 +568,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag)
+                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result

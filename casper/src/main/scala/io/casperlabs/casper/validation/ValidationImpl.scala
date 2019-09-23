@@ -6,8 +6,8 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
@@ -374,7 +374,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                               )
                             }
                           }
-      calculatedRank = ProtoUtil.calculateRank(justificationMsgs)
+      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
@@ -414,25 +414,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .whenA(b.validatorBlockSeqNum != 0)
     else
       for {
-        // We start with `0`, so that in the case when its the first block by this validator its seqNum is 1.
-        creatorJustificationSeqNumber <- ProtoUtil
-                                          .creatorJustification(b.getHeader)
-                                          .foldM(0) {
-                                            case (_, Justification(_, latestBlockHash)) =>
-                                              dag.lookup(latestBlockHash).flatMap {
-                                                case Some(meta) =>
-                                                  meta.validatorMsgSeqNum.pure[F]
-
-                                                case None =>
-                                                  MonadThrowable[F].raiseError[Int](
-                                                    new Exception(
-                                                      s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                                    )
-                                                  )
-                                              }
-                                          }
+        creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
+                                          dag,
+                                          b.getHeader.justifications,
+                                          b.getHeader.validatorPublicKey
+                                        )
         number = b.validatorBlockSeqNum
-        ok     = creatorJustificationSeqNumber + 1 == number
+        ok     = creatorJustificationSeqNumber == number
         _ <- if (ok) {
               Applicative[F].unit
             } else {
@@ -580,16 +568,19 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       genesisHash: BlockHash,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      equivocationsTracker: EquivocationsTracker
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     def printHashes(hashes: Iterable[ByteString]) =
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
+    val latestMessagesHashes = ProtoUtil
+      .getJustificationMsgHashes(b.getHeader.justifications)
+
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

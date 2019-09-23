@@ -1,13 +1,14 @@
 package io.casperlabs.casper.finality.votingmatrix
 
-import cats.Monad
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.MonadState
+import cats.{Applicative, Monad}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
@@ -30,37 +31,50 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
   def onNewBlockAddedToTheBlockDag(
       dag: DagRepresentation[F],
       block: Block,
-      latestFinalizedBlock: BlockHash
+      latestFinalizedBlock: BlockHash,
+      equivocationTracker: EquivocationsTracker
   ): F[Option[CommitteeWithConsensusValue]] =
-    matrix.withPermit(for {
-      votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
-      result <- votedBranch match {
-                 case Some(branch) =>
-                   for {
-                     msgSummary <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                     _          <- updateVoterPerspective[F](dag, msgSummary, branch)
-                     result     <- checkForCommittee[F](rFTT)
-                     _ <- result match {
-                           case Some(newLFB) =>
-                             // On new LFB we rebuild VotingMatrix and start the new game.
-                             VotingMatrix
-                               .create[F](dag, newLFB.consensusValue)
-                               .flatMap(_.get.flatMap(matrix.set))
-                           case None =>
-                             ().pure[F]
-                         }
-                   } yield result
+    if (equivocationTracker.contains(block.getHeader.validatorPublicKey)) {
+      none[CommitteeWithConsensusValue].pure[F]
+    } else {
+      matrix
+        .withPermit(
+          for {
+            votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
+            result <- votedBranch match {
+                       case Some(branch) =>
+                         for {
+                           msgSummary <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                           _ <- updateVoterPerspective[F](
+                                 dag,
+                                 msgSummary,
+                                 branch,
+                                 equivocationTracker
+                               )
+                           result <- checkForCommittee[F](rFTT, equivocationTracker)
+                           _ <- result match {
+                                 case Some(newLFB) =>
+                                   // On new LFB we rebuild VotingMatrix and start the new game.
+                                   VotingMatrix
+                                     .create[F](dag, newLFB.consensusValue, equivocationTracker)
+                                     .flatMap(_.get.flatMap(matrix.set))
+                                 case None =>
+                                   Applicative[F].unit
+                               }
+                         } yield result
 
-                 // If block doesn't vote on any of main children of latestFinalizedBlock,
-                 // then don't update voting matrix
-                 case None =>
-                   Log[F]
-                     .info(
-                       s"The block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
-                     )
-                     .as(none[CommitteeWithConsensusValue])
-               }
-    } yield result)
+                       // If block doesn't vote on any of main children of latestFinalizedBlock,
+                       // then don't update voting matrix
+                       case None =>
+                         Log[F]
+                           .info(
+                             s"The block ${PrettyPrinter.buildString(block)} don't vote any main child of latestFinalizedBlock"
+                           )
+                           .as(none[CommitteeWithConsensusValue])
+                     }
+          } yield result
+        )
+    }
 }
 
 object FinalityDetectorVotingMatrix {
@@ -98,7 +112,8 @@ object FinalityDetectorVotingMatrix {
   def of[F[_]: Concurrent: Log](
       dag: DagRepresentation[F],
       finalizedBlock: BlockHash,
-      rFTT: Double
+      rFTT: Double,
+      equivocationsTracker: EquivocationsTracker
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
       _ <- MonadThrowable[F]
@@ -109,7 +124,7 @@ object FinalityDetectorVotingMatrix {
             )
             .whenA(rFTT < 0 || rFTT > 0.5)
       lock                 <- Semaphore[F](1)
-      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock)
+      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock, equivocationsTracker)
       votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
     } yield new FinalityDetectorVotingMatrix[F](rFTT)(Concurrent[F], Log[F], votingMatrixWithLock)
 }

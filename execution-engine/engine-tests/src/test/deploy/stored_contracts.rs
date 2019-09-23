@@ -590,20 +590,13 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             let account = builder_by_uref
                 .get_account(genesis_account_key)
                 .expect("genesis account should exist");
-            let pos_public_key = account
+            account
                 .urefs_lookup()
                 .get("pos")
-                .expect("there should be a pos entry");
-            let pos_private_key: Value = builder_by_uref
-                .query(None, *pos_public_key, &[])
-                .expect("pos private key should exist");
-
-            match pos_private_key {
-                Value::Key(Key::URef(uref)) => Some(uref.remove_access_rights()),
-                _ => None,
-            }
-        }
-        .expect("should have pos uref");
+                .and_then(Key::as_uref)
+                .expect("should have pos uref")
+                .to_owned()
+        };
 
         // find the contract write transform, then get the uref from its key
         // the pos contract gets re-written when the refund purse uref is removed from

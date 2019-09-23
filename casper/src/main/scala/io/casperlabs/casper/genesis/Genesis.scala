@@ -5,30 +5,27 @@ import java.nio.file.Path
 import java.util.Base64
 
 import cats.data.EitherT
-import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Monad, MonadError}
+import cats.{Applicative, MonadError}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
-import io.casperlabs.shared.Sorting
-import io.casperlabs.shared.Sorting._
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.shared.{FilesAPI, Log, LogSource}
+import io.casperlabs.shared.Sorting._
+import io.casperlabs.shared.{FilesAPI, Log, LogSource, Sorting}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
-import scala.io.Source
-import scala.util.control.NoStackTrace
 import scala.util._
+import scala.util.control.NoStackTrace
 
 object Genesis {
 
@@ -41,7 +38,6 @@ object Genesis {
   def defaultBlessedTerms[F[_]: MonadThrowable: FilesAPI: Log](
       accountPublicKeyPath: Option[Path],
       initialMotes: BigInt,
-      posParams: ProofOfStakeParams,
       wallets: Seq[PreWallet],
       bondsFile: Option[Path],
       mintCodePath: Option[Path],
@@ -201,8 +197,6 @@ object Genesis {
   ): F[BlockMsgWithTransform] = apply[F](
     conf.walletsFile,
     conf.bondsFile,
-    conf.minimumBond,
-    conf.maximumBond,
     conf.chainId,
     conf.deployTimestamp,
     conf.genesisAccountPublicKeyPath,
@@ -214,8 +208,6 @@ object Genesis {
   def apply[F[_]: MonadThrowable: Log: FilesAPI: ExecutionEngineService](
       walletsPath: Path,
       bondsPath: Path,
-      minimumBond: Long,
-      maximumBond: Long,
       chainId: String,
       deployTimestamp: Option[Long],
       accountPublicKeyPath: Option[Path],
@@ -232,11 +224,9 @@ object Genesis {
         timestamp = timestamp,
         chainId = chainId
       )
-      validators = bondsMap.map(bond => ProofOfStakeValidator(bond._1, bond._2)).toSeq.sortBy(_.id)
       blessedContracts <- defaultBlessedTerms[F](
                            accountPublicKeyPath = accountPublicKeyPath,
                            initialMotes = initialMotes,
-                           posParams = ProofOfStakeParams(minimumBond, maximumBond, validators),
                            wallets = wallets,
                            mintCodePath = mintCodePath,
                            posCodePath = posCodePath,

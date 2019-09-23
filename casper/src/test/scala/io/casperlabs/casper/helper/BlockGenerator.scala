@@ -13,6 +13,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
@@ -95,7 +96,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: IndexedDagStorage](
+  def createBlock[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -134,8 +135,14 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
-      validatorLatestMsg <- dag.latestMessage(creator)
-      validatorSeqNum    = validatorLatestMsg.fold(0)(_.validatorMsgSeqNum + 1)
+      validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
+                        else
+                          ProtoUtil.nextValidatorBlockSeqNum(dag, serializedJustifications, creator)
+      rank <- if (parentsHashList.isEmpty) 0L.pure[F]
+             else
+               updatedJustifications.values.toList
+                 .traverse(hash => dag.lookup(hash).map(_.get))
+                 .map(ProtoUtil.nextRank(_))
       header = ProtoUtil
         .blockHeader(
           body,
@@ -143,22 +150,18 @@ trait BlockGenerator {
           parentsHashList,
           serializedJustifications,
           postState,
-          0L,
+          rank,
           validatorSeqNum,
-          1,
+          protocolVersion = 1,
           now,
           chainId
         )
         .withMessageType(messageType)
-      block                = ProtoUtil.unsignedBlockProto(body, header)
-      unsignedIndexedBlock <- IndexedDagStorage[F].index(block)
-      signedIndexedBlock = ProtoUtil.unsignedBlockProto(
-        unsignedIndexedBlock.getBody,
-        unsignedIndexedBlock.getHeader
-      )
-    } yield signedIndexedBlock
+      block = ProtoUtil.unsignedBlockProto(body, header)
+      _     <- IndexedDagStorage[F].index(block)
+    } yield block
 
-  def createAndStoreBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createAndStoreBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],

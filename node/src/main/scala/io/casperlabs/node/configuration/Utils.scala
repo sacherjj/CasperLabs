@@ -1,5 +1,5 @@
 package io.casperlabs.node.configuration
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import scala.io.Source
 import cats.syntax.either._
@@ -10,6 +10,7 @@ import shapeless.tag.@@
 
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
+import scala.util.Try
 
 private[configuration] object Utils {
   type NotPath[A]      = A <:!< Path
@@ -27,12 +28,25 @@ private[configuration] object Utils {
   def isSnakeCase(s: String): Boolean = s.matches("[A-Z_]+")
   def SnakeCase(s: String): SnakeCase = s.asInstanceOf[SnakeCase]
 
-  def readFile(source: => Source): Either[String, String] =
+  def readFile(source: => Source): Either[String, String] = {
+    val src = source
     try {
-      source.mkString.asRight[String]
-    } catch {
-      case NonFatal(e) => e.getMessage.asLeft[String]
+      try {
+        src.mkString.asRight[String]
+      } catch {
+        case NonFatal(e) => e.getMessage.asLeft[String]
+      }
+    } finally {
+      src.close()
     }
+  }
+
+  def readFile(path: Path): Either[String, String] =
+    readFile(Source.fromFile(path.toFile)).leftMap(err => s"Could not read '$path': $err")
+
+  def readBytes(path: Path): Either[String, Array[Byte]] =
+    Try(Files.readAllBytes(path)).toEither
+      .leftMap(ex => s"Could not read '$path': ${ex.getMessage}")
 
   def dashToCamel(s: String): CamelCase =
     CamelCase(
@@ -64,4 +78,31 @@ private[configuration] object Utils {
 
   def stripPrefix(path: Path, prefix: Path): String =
     path.toAbsolutePath.toString.stripPrefix(prefix.toAbsolutePath.toString)
+
+  def parseToml(content: String): Map[CamelCase, String] = {
+    val tableRegex = """\[(.+)\]""".r
+    val valueRegex = """([a-z\-]+)\s*=\s*\"?([^\"]*)\"?""".r
+
+    val lines = content
+      .split('\n')
+    val withoutCommentsAndEmptyLines = lines
+      .filterNot(s => s.startsWith("#") || s.trim.isEmpty)
+      .map(_.trim)
+
+    val dashifiedMap: Map[String, String] = withoutCommentsAndEmptyLines
+      .foldLeft((Map.empty[String, String], Option.empty[String])) {
+        case ((acc, _), tableRegex(table)) =>
+          (acc, Some(table))
+        case ((acc, t @ Some(currentTable)), valueRegex(key, value)) =>
+          (acc + (currentTable + "-" + key -> value), t)
+        case (x, _) => x
+      }
+      ._1
+
+    val camelCasedMap: Map[CamelCase, String] = dashifiedMap.map {
+      case (k, v) => (dashToCamel(k), v)
+    }
+
+    camelCasedMap
+  }
 }

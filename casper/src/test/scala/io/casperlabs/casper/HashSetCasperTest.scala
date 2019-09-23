@@ -46,11 +46,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   //private val (ethPivKeys, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
   //private val ethAddresses = ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.drop(1)).takeRight(20)))
   //private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val wallets     = validators.map(key => PreWallet(key, BigInt(10001)))
-  private val bonds       = createBonds(validators)
-  private val minimumBond = 100L
+  private val wallets = validators.map(key => PreWallet(key, BigInt(10001)))
+  private val bonds   = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) =
-    buildGenesis(wallets, bonds, minimumBond, Long.MaxValue, 0L)
+    buildGenesis(wallets, bonds, 0L)
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -366,7 +365,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val localBonds =
       localValidators.map(Ed25519.tryToPublic(_).get).zip(List(10L, 30L, 5000L)).toMap
     val BlockMsgWithTransform(Some(localGenesis), localTransforms) =
-      buildGenesis(Nil, localBonds, 1L, Long.MaxValue, 0L)
+      buildGenesis(Nil, localBonds, 0L)
     for {
       nodes <- networkEff(
                 localValidators,
@@ -887,7 +886,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val stake      = 10L
     val equalBonds = validators.map(_ -> stake).toMap
     val BlockMsgWithTransform(Some(genesisWithEqualBonds), transformsWithEqualBonds) =
-      buildGenesis(Seq.empty, equalBonds, 1L, Long.MaxValue, 0L)
+      buildGenesis(Seq.empty, equalBonds, 0L)
 
     def checkLastFinalizedBlock(
         node: HashSetCasperTestNode[Effect],
@@ -1176,28 +1175,22 @@ object HashSetCasperTest {
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
   def createGenesis(bonds: Map[PublicKey, Long]): BlockMsgWithTransform =
-    buildGenesis(Seq.empty, bonds, 1L, Long.MaxValue, 0L)
+    buildGenesis(Seq.empty, bonds, 0L)
 
   def buildGenesis(
       wallets: Seq[PreWallet],
       bonds: Map[PublicKey, Long],
-      minimumBond: Long,
-      maximumBond: Long,
       timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val logEff                  = new LogStub[Task]()
     val initial                          = Genesis.withoutContracts(bonds, timestamp, "casperlabs")
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     implicit val filesApi                = FilesAPI.create[Task]
-    val validators = bonds.map {
-      case (id, stake) => ProofOfStakeValidator(id, stake)
-    }.toSeq
 
     (for {
       blessed <- Genesis.defaultBlessedTerms[Task](
                   accountPublicKeyPath = None,
                   initialMotes = BigInt(0),
-                  ProofOfStakeParams(minimumBond, maximumBond, validators),
                   wallets,
                   mintCodePath = None,
                   posCodePath = None,
