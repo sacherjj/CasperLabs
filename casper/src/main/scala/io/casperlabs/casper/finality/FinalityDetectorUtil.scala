@@ -138,28 +138,28 @@ object FinalityDetectorUtil {
       validatorsToIndex: Map[Validator, Int],
       blockMetadata: BlockMetadata,
       equivocationsTracker: EquivocationsTracker
-  ): F[MutableSeq[Long]] = {
-    val honestValidatorsToIndex =
-      validatorsToIndex.filterNot {
-        case (validator, _) =>
-          equivocationsTracker.contains(validator)
-      }
-
+  ): F[MutableSeq[Long]] =
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(
         dag,
         blockMetadata,
-        honestValidatorsToIndex.keySet
+        validatorsToIndex.keySet
       )
       .map(
         latestBlockDagLevelsAsMap =>
-          // When V(j)-swimlane is empty or V(j) happens to be an equivocator, put 0L in the corresponding cell
           fromMapToArray(
             validatorsToIndex,
-            latestBlockDagLevelsAsMap.getOrElse(_, 0L)
+            validator => {
+              // When V(j) happens to be an equivocator, put 0L in the corresponding cell
+              if (equivocationsTracker.contains(validator)) {
+                0L
+              } else {
+                // When V(j)-swimlane is empty, put 0L in the corresponding cell
+                latestBlockDagLevelsAsMap.getOrElse(validator, 0L)
+              }
+            }
           )
       )
-  }
 
   // Returns an MutableSeq, whose size equals the size of validatorsToIndex and
   // For v in validatorsToIndex.key
