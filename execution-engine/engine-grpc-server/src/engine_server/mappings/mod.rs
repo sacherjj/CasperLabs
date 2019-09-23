@@ -19,16 +19,12 @@ use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
-use engine_shared::logging;
-use engine_shared::logging::log_level;
 use engine_shared::motes::Motes;
-use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
-use engine_storage::global_state::{CommitResult, StateProvider};
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::engine_server::ipc::{ChainSpec_CostTable, ChainSpec_GenesisAccount};
 use crate::engine_server::{ipc, state, transforms};
-use engine_wasm_prep::wasm_costs::WasmCosts;
 
 mod uint;
 
@@ -225,13 +221,13 @@ impl From<contract_ffi::value::Value> for super::state::Value {
                 let named_key = {
                     let mut nk = super::state::NamedKey::new();
                     nk.set_name(name.to_string());
-                    nk.set_key((&key).into());
+                    nk.set_key(key.into());
                     nk
                 };
                 tv.set_named_key(named_key);
             }
             contract_ffi::value::Value::Key(key) => {
-                tv.set_key((&key).into());
+                tv.set_key(key.into());
             }
             contract_ffi::value::Value::Account(account) => tv.set_account(account.into()),
             contract_ffi::value::Value::Contract(contract) => {
@@ -502,7 +498,7 @@ impl From<URefMap> for Vec<super::state::NamedKey> {
             .map(|(n, k)| {
                 let mut nk = super::state::NamedKey::new();
                 nk.set_name(n);
-                nk.set_key((&k).into());
+                nk.set_key(k.into());
                 nk
             })
             .collect()
@@ -531,8 +527,8 @@ impl TryFrom<&state::Account_AssociatedKey> for (PublicKey, Weight) {
     }
 }
 
-impl From<&contract_ffi::key::Key> for super::state::Key {
-    fn from(key: &contract_ffi::key::Key) -> super::state::Key {
+impl From<contract_ffi::key::Key> for super::state::Key {
+    fn from(key: contract_ffi::key::Key) -> super::state::Key {
         let mut k = super::state::Key::new();
         match key {
             contract_ffi::key::Key::Account(acc) => {
@@ -546,7 +542,7 @@ impl From<&contract_ffi::key::Key> for super::state::Key {
                 k.set_hash(key_hash);
             }
             contract_ffi::key::Key::URef(uref) => {
-                let uref: super::state::Key_URef = (*uref).into();
+                let uref: super::state::Key_URef = uref.into();
                 k.set_uref(uref);
             }
             contract_ffi::key::Key::Local(hash) => {
@@ -672,7 +668,7 @@ impl TryFrom<&super::transforms::TransformEntry>
 impl From<(contract_ffi::key::Key, transform::Transform)> for super::transforms::TransformEntry {
     fn from((k, t): (contract_ffi::key::Key, transform::Transform)) -> Self {
         let mut tr_entry = super::transforms::TransformEntry::new();
-        tr_entry.set_key((&k).into());
+        tr_entry.set_key(k.into());
         tr_entry.set_transform(t.into());
         tr_entry
     }
@@ -683,7 +679,7 @@ impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
         let ipc_ops: Vec<super::ipc::OpEntry> = ee
             .ops
-            .iter()
+            .into_iter()
             .map(|(k, o)| {
                 let mut op_entry = super::ipc::OpEntry::new();
                 let ipc_key = k.into();
@@ -745,6 +741,10 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
+                    error @ EngineError::InvalidProtocolVersion => {
+                        let msg = error.to_string();
+                        execution_error(msg, cost.as_u64(), effect)
+                    }
                     error @ EngineError::InvalidHashLength { .. } => {
                         precondition_failure(error.to_string())
                     }
@@ -860,70 +860,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     },
                 }
             }
-        }
-    }
-}
-
-pub fn grpc_response_from_commit_result<S>(
-    prestate_hash: Blake2bHash,
-    input: Result<CommitResult, S::Error>,
-) -> ipc::CommitResponse
-where
-    S: StateProvider,
-    S::Error: Into<EngineError> + std::fmt::Debug,
-{
-    match input {
-        Ok(CommitResult::RootNotFound) => {
-            logging::log_warning("RootNotFound");
-            let mut root = ipc::RootNotFound::new();
-            root.set_hash(prestate_hash.to_vec());
-            let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_missing_prestate(root);
-            tmp_res
-        }
-        Ok(CommitResult::Success(post_state_hash)) => {
-            let mut properties: BTreeMap<String, String> = BTreeMap::new();
-
-            properties.insert(
-                "post-state-hash".to_string(),
-                format!("{:?}", post_state_hash),
-            );
-
-            properties.insert("success".to_string(), true.to_string());
-
-            logging::log_details(
-                log_level::LogLevel::Info,
-                "effects applied; new state hash is: {post-state-hash}".to_owned(),
-                properties,
-            );
-
-            let mut commit_result = ipc::CommitResult::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            commit_result.set_poststate_hash(post_state_hash.to_vec());
-            tmp_res.set_success(commit_result);
-            tmp_res
-        }
-        Ok(CommitResult::KeyNotFound(key)) => {
-            logging::log_warning("KeyNotFound");
-            let mut commit_response = ipc::CommitResponse::new();
-            commit_response.set_key_not_found((&key).into());
-            commit_response
-        }
-        Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-            logging::log_warning("TypeMismatch");
-            let mut commit_response = ipc::CommitResponse::new();
-            commit_response.set_type_mismatch(type_mismatch.into());
-            commit_response
-        }
-        // TODO(mateusz.gorski): We should be more specific about errors here.
-        Err(storage_error) => {
-            let log_message = format!("storage error {:?} when applying effects", storage_error);
-            logging::log_error(&log_message);
-            let mut err = ipc::PostEffectsError::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            err.set_message(format!("{:?}", storage_error));
-            tmp_res.set_failed_transform(err);
-            tmp_res
         }
     }
 }
@@ -1145,15 +1081,30 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
     deploy_result
 }
 
-pub fn to_domain_validators(bond: &ipc::Bond) -> Result<(PublicKey, U512), String> {
-    let pk = PublicKey::try_from(bond.get_validator_public_key())
-        .map_err(|_| "Public key has to be exactly 32 bytes long.")?;
-    match bond.get_stake().try_into() {
-        Ok(bond) => Ok((pk, bond)),
-        Err(err) => {
-            let err_msg = format!("{:?}", err);
-            Err(err_msg)
-        }
+impl From<(PublicKey, U512)> for ipc::Bond {
+    fn from(tuple: (PublicKey, U512)) -> Self {
+        let (key, amount) = tuple;
+        let mut ret = ipc::Bond::new();
+        ret.set_validator_public_key(key.to_vec());
+        ret.set_stake(amount.into());
+        ret
+    }
+}
+
+impl TryFrom<&ipc::Bond> for (PublicKey, U512) {
+    type Error = MappingError;
+
+    fn try_from(bond: &ipc::Bond) -> Result<Self, Self::Error> {
+        let public_key = {
+            let tmp = bond.get_validator_public_key();
+            // TODO: our TryFromSliceForPublicKeyError should convey length info
+            match tmp.try_into() {
+                Ok(public_key) => public_key,
+                Err(_) => return Err(MappingError::invalid_public_key_length(tmp.len())),
+            }
+        };
+        let stake = bond.get_stake().try_into()?;
+        Ok((public_key, stake))
     }
 }
 
@@ -1292,13 +1243,13 @@ mod tests {
         let setup: Vec<transforms::TransformEntry> = {
             let transform_entry_first = {
                 let mut tmp = transforms::TransformEntry::new();
-                tmp.set_key((&key).into());
+                tmp.set_key(key.into());
                 tmp.set_transform(Transform::Write(contract_ffi::value::Value::Int32(12)).into());
                 tmp
             };
             let transform_entry_second = {
                 let mut tmp = transforms::TransformEntry::new();
-                tmp.set_key((&key).into());
+                tmp.set_key(key.into());
                 tmp.set_transform(Transform::AddInt32(10).into());
                 tmp
             };
@@ -1335,7 +1286,7 @@ mod tests {
     proptest! {
         #[test]
         fn key_roundtrip(key in key_arb()) {
-            let ipc_key: super::state::Key = (&key).into();
+            let ipc_key: super::state::Key = key.into();
             let key_back: Key = (&ipc_key).try_into().expect("Transforming state::Key into domain Key should succeed.");
             assert_eq!(key_back, key)
         }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -6,13 +6,15 @@ use std::io::ErrorKind;
 use std::marker::{Send, Sync};
 use std::time::Instant;
 
+use grpc::SingleResponse;
+
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{ProtocolVersion, U512};
 use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
-use engine_core::engine_state::genesis::{GenesisConfig, GenesisURefsSource};
-use engine_core::engine_state::{genesis::GenesisResult, EngineState, GetBondedValidatorsError};
+use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
+use engine_core::engine_state::EngineState;
 use engine_core::execution::{Executor, WasmiExecutor};
 use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
@@ -24,7 +26,7 @@ use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
-use crate::engine_server::ipc::CommitResponse;
+use engine_shared::logging::log_level::LogLevel;
 
 pub mod ipc;
 pub mod ipc_grpc;
@@ -45,6 +47,8 @@ const TAG_RESPONSE_EXEC: &str = "exec_response";
 const TAG_RESPONSE_QUERY: &str = "query_response";
 const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
+
+const PROTOCOL_VERSION: u64 = 1;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -277,42 +281,113 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        // TODO: don't unwrap
-        let prestate_hash: Blake2bHash = commit_request.get_prestate_hash().try_into().unwrap();
+        // TODO
+        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
 
-        let effects_result: Result<CommitTransforms, ParsingError> =
-            commit_request.get_effects().try_into();
+        // Acquire pre-state hash
+        let pre_state_hash: Blake2bHash = match commit_request.get_prestate_hash().try_into() {
+            Err(_) => {
+                let error_message = "Could not parse pre-state hash".to_string();
+                logging::log_error(&error_message);
 
-        let commit_response = match effects_result {
+                let err = {
+                    let mut tmp = ipc::PostEffectsError::new();
+                    tmp.set_message(error_message);
+                    tmp
+                };
+                let mut commit_response = ipc::CommitResponse::new();
+                commit_response.set_failed_transform(err);
+                return SingleResponse::completed(commit_response);
+            }
+            Ok(hash) => hash,
+        };
+
+        // Acquire commit transforms
+        let transforms: CommitTransforms = match commit_request.get_effects().try_into() {
             Err(ParsingError(error_message)) => {
                 logging::log_error(&error_message);
-                let mut commit_response = ipc::CommitResponse::new();
-                let mut err = ipc::PostEffectsError::new();
-                err.set_message(error_message);
-                commit_response.set_failed_transform(err);
-                commit_response
-            }
 
-            Ok(effects) => {
-                let commit_result =
-                    self.apply_effect(correlation_id, prestate_hash, effects.value());
-                if let Ok(engine_storage::global_state::CommitResult::Success(poststate_hash)) =
-                    commit_result
-                {
-                    let pos_key = Key::URef(GenesisURefsSource::default().get_pos_address());
-                    let bonded_validators_res =
-                        self.get_bonded_validators(poststate_hash, &pos_key, correlation_id);
-                    bonded_validators_and_commit_result::<S>(
-                        prestate_hash,
-                        poststate_hash,
-                        commit_result,
-                        bonded_validators_res,
-                    )
-                } else {
-                    // Commit unsuccessful.
-                    grpc_response_from_commit_result::<S>(prestate_hash, commit_result)
+                let err = {
+                    let mut tmp = ipc::PostEffectsError::new();
+                    tmp.set_message(error_message);
+                    tmp
+                };
+                let mut commit_response = ipc::CommitResponse::new();
+                commit_response.set_failed_transform(err);
+                return SingleResponse::completed(commit_response);
+            }
+            Ok(transforms) => transforms,
+        };
+
+        // "Apply" effects to global state
+        let commit_response = {
+            let mut ret = ipc::CommitResponse::new();
+
+            match self.apply_effect(
+                correlation_id,
+                protocol_version,
+                pre_state_hash,
+                transforms.value(),
+            ) {
+                Ok(CommitResult::Success {
+                    state_root,
+                    bonded_validators,
+                }) => {
+                    let properties = {
+                        let mut tmp = BTreeMap::new();
+                        tmp.insert("post-state-hash".to_string(), format!("{:?}", state_root));
+                        tmp.insert("success".to_string(), true.to_string());
+                        tmp
+                    };
+                    logging::log_details(
+                        LogLevel::Info,
+                        "effects applied; new state hash is: {post-state-hash}".to_owned(),
+                        properties,
+                    );
+
+                    let bonds = bonded_validators.into_iter().map(Into::into).collect();
+                    let commit_result = {
+                        let mut tmp = ipc::CommitResult::new();
+                        tmp.set_poststate_hash(state_root.to_vec());
+                        tmp.set_bonded_validators(bonds);
+                        tmp
+                    };
+                    ret.set_success(commit_result);
+                }
+                Ok(CommitResult::RootNotFound) => {
+                    logging::log_warning("RootNotFound");
+
+                    let root_not_found = {
+                        let mut tmp = ipc::RootNotFound::new();
+                        tmp.set_hash(pre_state_hash.to_vec());
+                        tmp
+                    };
+                    ret.set_missing_prestate(root_not_found);
+                }
+                Ok(CommitResult::KeyNotFound(key)) => {
+                    logging::log_warning("KeyNotFound");
+
+                    ret.set_key_not_found(key.into());
+                }
+                Ok(CommitResult::TypeMismatch(type_mismatch)) => {
+                    logging::log_warning("TypeMismatch");
+
+                    ret.set_type_mismatch(type_mismatch.into());
+                }
+                Err(error) => {
+                    let log_message = format!("State error {:?} when applying transforms", error);
+                    logging::log_error(&log_message);
+
+                    let err = {
+                        let mut tmp = ipc::PostEffectsError::new();
+                        tmp.set_message(format!("{:?}", error));
+                        tmp
+                    };
+                    ret.set_failed_transform(err);
                 }
             }
+
+            ret
         };
 
         log_duration(
@@ -434,24 +509,25 @@ where
 
         let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
 
-        let genesis_validators_result = genesis_request
-            .get_genesis_validators()
-            .iter()
-            .map(|bond| {
-                to_domain_validators(bond).map_err(|err_msg| {
-                    logging::log_error(&err_msg);
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_deploy_error
-                })
-            })
-            .collect();
+        let genesis_validators_result: Result<Vec<(PublicKey, U512)>, MappingError> =
+            genesis_request
+                .get_genesis_validators()
+                .iter()
+                .map(TryInto::try_into)
+                .collect();
 
         let genesis_validators = match genesis_validators_result {
             Ok(validators) => validators,
-            Err(genesis_error) => {
+            Err(error) => {
+                logging::log_error(&error.to_string());
+
+                let genesis_deploy_error = {
+                    let mut tmp = ipc::GenesisDeployError::new();
+                    tmp.set_message(error.to_string());
+                    tmp
+                };
                 let mut genesis_response = ipc::GenesisResponse::new();
-                genesis_response.set_failed_deploy(genesis_error);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
 
                 log_duration(
                     correlation_id,
@@ -466,49 +542,49 @@ where
 
         let protocol_version = genesis_request.get_protocol_version().into();
 
-        let genesis_response = match self.commit_genesis(
-            correlation_id,
-            genesis_account_addr,
-            initial_motes,
-            mint_code_bytes,
-            proof_of_stake_code_bytes,
-            genesis_validators,
-            protocol_version,
-        ) {
-            Ok(GenesisResult::Success {
-                post_state_hash,
-                effect,
-            }) => {
-                let success_message = format!("run_genesis successful: {}", post_state_hash);
-                log_info(&success_message);
+        let genesis_response = {
+            let mut genesis_response = ipc::GenesisResponse::new();
 
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_result = ipc::GenesisResult::new();
-                genesis_result.set_poststate_hash(post_state_hash.to_vec());
-                genesis_result.set_effect(effect.into());
-                genesis_response.set_success(genesis_result);
-                genesis_response
-            }
-            Ok(genesis_result) => {
-                let err_msg = genesis_result.to_string();
-                logging::log_error(&err_msg);
+            match self.commit_genesis(
+                correlation_id,
+                genesis_account_addr,
+                initial_motes,
+                mint_code_bytes,
+                proof_of_stake_code_bytes,
+                genesis_validators,
+                protocol_version,
+            ) {
+                Ok(GenesisResult::Success {
+                    post_state_hash,
+                    effect,
+                }) => {
+                    let success_message = format!("run_genesis successful: {}", post_state_hash);
+                    log_info(&success_message);
 
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-                genesis_response
-            }
-            Err(err) => {
-                let err_msg = err.to_string();
-                logging::log_error(&err_msg);
+                    let mut genesis_result = ipc::GenesisResult::new();
+                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                    genesis_result.set_effect(effect.into());
+                    genesis_response.set_success(genesis_result);
+                }
+                Ok(genesis_result) => {
+                    let err_msg = genesis_result.to_string();
+                    logging::log_error(&err_msg);
 
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-                genesis_response
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+                    genesis_response.set_failed_deploy(genesis_deploy_error);
+                }
+                Err(err) => {
+                    let err_msg = err.to_string();
+                    logging::log_error(&err_msg);
+
+                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                    genesis_deploy_error.set_message(err_msg);
+                    genesis_response.set_failed_deploy(genesis_deploy_error);
+                }
             }
+
+            genesis_response
         };
 
         log_duration(
@@ -801,66 +877,6 @@ where
                 .map_err(Into::into)
         })
         .collect()
-}
-
-// TODO: Refactor.
-#[allow(clippy::implicit_hasher)]
-pub fn bonded_validators_and_commit_result<S>(
-    prestate_hash: Blake2bHash,
-    poststate_hash: Blake2bHash,
-    commit_result: Result<CommitResult, S::Error>,
-    bonded_validators: Result<HashMap<PublicKey, U512>, GetBondedValidatorsError<S::Error>>,
-) -> CommitResponse
-where
-    S: StateProvider,
-    S::Error: Into<EngineError> + std::fmt::Debug,
-{
-    match bonded_validators {
-        Ok(bonded_validators) => {
-            let mut grpc_response =
-                grpc_response_from_commit_result::<S>(prestate_hash, commit_result);
-            let grpc_bonded_validators = bonded_validators
-                .iter()
-                .map(|(pk, bond)| {
-                    let mut ipc_bond = ipc::Bond::new();
-                    ipc_bond.set_stake((*bond).into());
-                    ipc_bond.set_validator_public_key(pk.value().to_vec());
-                    ipc_bond
-                })
-                .collect::<Vec<ipc::Bond>>()
-                .into();
-            grpc_response
-                .mut_success() // We know it's a success because of the check few lines earlier.
-                .set_bonded_validators(grpc_bonded_validators);
-            grpc_response
-        }
-        Err(GetBondedValidatorsError::StateError(error)) => {
-            grpc_response_from_commit_result::<S>(poststate_hash, Err(error))
-        }
-        Err(GetBondedValidatorsError::PostStateHashNotFound(root_hash)) => {
-            // I am not sure how to parse this error. It would mean that most probably
-            // we have screwed up something in the trie store because `root_hash` was
-            // calculated by us just a moment ago. It [root_hash] is a `poststate_hash` we
-            // return to the node. There is no proper error variant in the
-            // `engine_storage::error::Error` for it though.
-            let error_message = format!(
-                "Post state hash not found {} when calculating bonded validators set.",
-                root_hash
-            );
-            logging::log_error(&error_message);
-            let mut commit_response = ipc::CommitResponse::new();
-            let mut err = ipc::PostEffectsError::new();
-            err.set_message(error_message);
-            commit_response.set_failed_transform(err);
-            commit_response
-        }
-        Err(GetBondedValidatorsError::ProofOfStakeNotFound(key)) => {
-            grpc_response_from_commit_result::<S>(
-                poststate_hash,
-                Ok(CommitResult::KeyNotFound(key)),
-            )
-        }
-    }
 }
 
 // Helper method which returns single DeployResult that is set to be a

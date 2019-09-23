@@ -107,6 +107,7 @@ message RootNotFound {
 message CommitRequest {
     bytes prestate_hash = 1;
     repeated TransformEntry effects = 2;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
 }
 
 message CommitResult {
@@ -222,6 +223,7 @@ message QueryRequest {
     bytes state_hash = 1;
     io.casperlabs.casper.consensus.state.Key base_key = 2;
     repeated string path = 3;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
 }
 
 message QueryResponse {
@@ -243,6 +245,7 @@ message ValidateResponse {
 
 message ValidateRequest {
     bytes wasm_code = 1;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
 }
 
 message GenesisRequest {
@@ -349,6 +352,7 @@ message ChainSpec {
 message UpgradeRequest{
     bytes parent_state_hash = 1;
     ChainSpec.UpgradePoint upgrade_point =2;
+    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
 }
 
 message UpgradeResult {
