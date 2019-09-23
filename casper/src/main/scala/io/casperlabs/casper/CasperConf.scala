@@ -26,7 +26,7 @@ final case class CasperConf(
     @relativeToDataDir("genesis")
     genesisPath: Path = Paths.get("nonreachable"),
     requiredSigs: Int,
-    chainSpecDir: Path,
+    chainSpecPath: Path,
     chainId: String,
     standalone: Boolean,
     deployTimestamp: Option[Long],

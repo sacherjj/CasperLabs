@@ -254,7 +254,7 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val casperChainSpecDir =
+    val casperChainSpecPath =
       gen[Path]("Path to the directory which contains the Chain Spec.")
 
     @scallop

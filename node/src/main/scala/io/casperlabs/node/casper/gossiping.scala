@@ -380,7 +380,7 @@ package object gossiping extends ChainSpecReader {
                   for {
                     _ <- Log[F].info("Constructing Genesis candidate...")
                     genesis <- ipc.ChainSpec
-                                .fromDirectory(conf.casper.chainSpecDir)
+                                .fromDirectory(conf.casper.chainSpecPath)
                                 .fold(
                                   errors =>
                                     MonadThrowable[F].raiseError(

@@ -106,7 +106,7 @@ class ConfigurationSpec
       validatorSigAlgorithm = "test",
       knownValidatorsFile = Paths.get("/tmp/test").some,
       requiredSigs = 1,
-      chainSpecDir = Paths.get("/tmp/test").some,
+      chainSpecPath = Paths.get("/tmp/test"),
       chainId = "test",
       standalone = false,
       deployTimestamp = 1L.some,

@@ -203,7 +203,7 @@ validator-sig-algorithm = "ed25519"
 required-sigs = 0
 
 # Path to the directory which contains the Chain Spec.
-chain-spec-dir = "$HOME/.casperlabs/chainspec"
+chain-spec-path = "$HOME/.casperlabs/chainspec"
 
 # Identifier of the chain this node is connected to.
 chain-id = "casperlabs"
