@@ -17,6 +17,10 @@ enum GetArgContractError {
     InvalidArgument1 = 201,
 }
 
+const ARG0_VALUE: &str = "Hello, world!";
+const ARG1_VALUE: u64 = 42;
+
+
 /// Calls get_arg contract and returns Ok(()) in case no error, or String which is the error message
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
@@ -55,7 +59,7 @@ fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
 #[ignore]
 #[test]
 fn should_use_passed_argument() {
-    call_get_arg((String::from("Hello, world!"), U512::from(42)))
+    call_get_arg((String::from(ARG0_VALUE), U512::from(ARG1_VALUE)))
         .expect("Should successfuly call get_arg with 2 valid args");
 }
 
@@ -70,7 +74,7 @@ fn should_revert_with_missing_arg() {
         )
     );
     assert_eq!(
-        call_get_arg((String::from("Hello, world!"),)).expect_err("should fail"),
+        call_get_arg((String::from(ARG0_VALUE),)).expect_err("should fail"),
         format!(
             "Exit code: {}",
             GetArgContractError::MissingArgument1 as u32
@@ -90,7 +94,7 @@ fn should_revert_with_invalid_argument() {
     );
     assert_eq!(
         call_get_arg((
-            String::from("Hello, world!"),
+            String::from(ARG0_VALUE),
             String::from("this is expected to be U512")
         ))
         .expect_err("should fail"),
