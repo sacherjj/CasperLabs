@@ -158,9 +158,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v0 = generateValidator("V0")
-      val v1 = generateValidator("V1")
-
+      val v0         = generateValidator("V0")
+      val v1         = generateValidator("V1")
       val v2         = generateValidator("V2")
       val v3         = generateValidator("V3")
       val v4         = generateValidator("V4")
@@ -194,7 +193,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                bonds,
                Map(v0 -> b1.blockHash)
              )
-        // b5 vote for b2 instead of b1
+        // b5 votes for b2 instead of b1
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
                v3,
@@ -279,11 +278,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
-  "panoramaM" should "properly return the panorama of message B, and when V(j)-swimlane is empty or V(j) happens to be an equivocato, put 0 in the corresponding cell." in withStorage {
+  "panoramaM" should "properly return the panorama of message B, and when V(j)-swimlane is empty or V(j) happens to be an equivocator, puts 0 in the corresponding cell." in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val v0 = generateValidator("V0")
-      val v1 = generateValidator("V1")
-
+      val v0                = generateValidator("V0")
+      val v1                = generateValidator("V1")
       val v2                = generateValidator("V2")
       val v3                = generateValidator("V3")
       val v4                = generateValidator("V4")
@@ -318,7 +316,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                bonds,
                Map(v0 -> b1.blockHash)
              )
-        // b5 vote for b2 instead of b1
+        // b5 votes for b2 instead of b1
         b5 <- createBlock[Task](
                Seq(b2.blockHash),
                v3,
@@ -337,27 +335,22 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        dag                 <- blockDagStorage.getRepresentation
-        equivocationTracker = EquivocationsTracker.empty
+        dag <- blockDagStorage.getRepresentation
         // Assume we know that v1 equivocated
-        updatedEquivocationTracker = equivocationTracker.updated(v1, 0)
+        equivocationsTracker = EquivocationsTracker.empty.updated(v1, 0)
         panoramaM <- FinalityDetectorUtil.panoramaM(
                       dag,
                       validatorsToIndex,
                       BlockMetadata.fromBlock(b7),
-                      updatedEquivocationTracker
+                      equivocationsTracker
                     )
         _ = panoramaM.size shouldBe (validatorsToIndex.size)
-        // V(1) happens to be an equivocator
-        _ = panoramaM(1) shouldBe 0
-        // V(4)-swimlane is empty
-        _ = panoramaM(4) shouldBe 0
         _ = panoramaM shouldBe IndexedSeq(
           b4.getHeader.rank,
-          0,
+          0, // V(1) happens to be an equivocator
           b7.getHeader.rank,
           b5.getHeader.rank,
-          0
+          0 // V(4)-swimlane is empty
         )
       } yield ()
   }

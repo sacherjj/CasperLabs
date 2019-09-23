@@ -410,13 +410,13 @@ class FinalityDetectorByVotingMatrixTest
                    )
         // After creating b5, v2 knows v3 and himself vote for b1, and v3 knows v2 and
         // himself vote for b1, so v2 and v3 construct a committee.
-        // So even b1 was created by v1 who equivocated, it gets finalized as having enough supporters
+        // So even b1 was created by v1 who equivocated, it gets finalized as having enough honest supporters
         result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v2, v3), 20, b1.blockHash))
       } yield result
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
-  it should "not finalized equivocator's block no matter how many votes equivocating validators cast" in withStorage {
+  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
