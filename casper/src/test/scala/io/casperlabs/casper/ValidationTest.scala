@@ -214,7 +214,7 @@ class ValidationTest
       Seq.empty,
       ProtocolVersion(1),
       Seq.empty,
-      None,
+      1,
       "casperlabs",
       1,
       0,

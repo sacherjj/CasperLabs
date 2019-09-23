@@ -356,7 +356,7 @@ object ProtoUtil {
       deploys: Seq[Block.ProcessedDeploy],
       protocolVersion: ProtocolVersion,
       parents: Seq[ByteString],
-      validatorPrevMsg: Option[Message],
+      validatorSeqNum: Int,
       chainId: String,
       now: Long,
       rank: Long,
@@ -371,9 +371,6 @@ object ProtoUtil {
       .withPostStateHash(postStateHash)
       .withBonds(bondedValidators)
 
-    // Start numbering from 1 (validator's first block seqNum = 1)
-    val seqNum = validatorPrevMsg.fold(0)(_.validatorMsgSeqNum) + 1
-
     val header = blockHeader(
       body,
       parentHashes = parents,
@@ -384,7 +381,7 @@ object ProtoUtil {
       timestamp = now,
       chainId = chainId,
       creator = publicKey,
-      validatorSeqNum = seqNum
+      validatorSeqNum = validatorSeqNum
     )
 
     val unsigned = unsignedBlockProto(body, header)

@@ -84,7 +84,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     randomDeploys,
     ProtocolVersion(1),
     Seq(genesisBlock.blockHash),
-    None,
+    1,
     chainId,
     timestamp,
     1,
