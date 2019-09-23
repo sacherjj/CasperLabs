@@ -110,9 +110,9 @@ object GenesisApproverImpl {
                      }
 
         // Gossip, trigger as usual.
-        _ <- (maybeGenesis, maybeApproval).mapN {
-              case (g, a) => approver.addApprovals(g.blockHash, List(a))
-            } getOrElse ().pure[F]
+        _ <- maybeGenesis.fold(().pure[F]) { g =>
+              approver.addApprovals(g.blockHash, maybeApproval.toList).void
+            }
       } yield (approver, cancelPoll)
     } {
       _._2
