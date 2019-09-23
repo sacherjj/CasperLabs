@@ -109,17 +109,6 @@ object ExecEngineUtil {
                   .rethrow
     } yield results
 
-  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
-      deploys: Seq[Deploy],
-      protocolVersion: state.ProtocolVersion
-  ): F[GenesisResult] =
-    for {
-      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
-      results <- ExecutionEngineService[F]
-                  .runGenesis(eeDeploys, protocolVersion)
-                  .rethrow
-    } yield results
-
   /** Chooses a set of commuting effects.
     *
     * Set is a FIFO one - the very first commuting effect will be chosen,
@@ -192,13 +181,7 @@ object ExecEngineUtil {
     val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
     val blocktime       = block.getHeader.timestamp
 
-    if (isGenesisLike(block) && deploys.nonEmpty) {
-      // This was the case when Genesis had blessed terms.
-      for {
-        genesisResult <- processGenesisDeploys[F](deploys, protocolVersion)
-        transformMap  = genesisResult.getEffect.transformMap
-      } yield transformMap
-    } else if (isGenesisLike(block)) {
+    if (isGenesisLike(block)) {
       // The new Genesis definition is that there's a chain spec that everyone's supposed to
       // execute on their own and they aren't passed around to be executed.
       BlockStorage[F].get(block.blockHash).flatMap {

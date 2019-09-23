@@ -46,10 +46,6 @@ object ExecutionEngineServiceStub {
   }
 
   def mock[F[_]](
-      runGenesisFunc: (
-          Seq[DeployItem],
-          ProtocolVersion
-      ) => F[Either[Throwable, GenesisResult]],
       runGenesisWithChainSpecFunc: (
           ChainSpec.GenesisConfig
       ) => F[Either[Throwable, GenesisResult]],
@@ -67,11 +63,6 @@ object ExecutionEngineServiceStub {
       verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
-    override def runGenesis(
-        deploys: Seq[DeployItem],
-        protocolVersion: ProtocolVersion
-    ): F[Either[Throwable, GenesisResult]] =
-      runGenesisFunc(deploys, protocolVersion)
     override def runGenesis(
         genesisConfig: ChainSpec.GenesisConfig
     ): F[Either[Throwable, GenesisResult]] =
@@ -99,7 +90,6 @@ object ExecutionEngineServiceStub {
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     mock[F](
-      (_, _) => GenesisResult().asRight[Throwable].pure[F],
       (_) => GenesisResult().asRight[Throwable].pure[F],
       (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
       (_, _) =>
