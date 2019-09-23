@@ -159,13 +159,17 @@ object GenesisApproverImpl {
       relayFactor,
       bootstraps = Nil,
       pollInterval = Duration.Zero,
-      // No bootstraps so nothing to download.
       downloadManager = new DownloadManager[F] {
         override def scheduleDownload(
             summary: BlockSummary,
             source: Node,
             relay: Boolean
         ): F[WaitHandle[F]] =
+          // The `fromGenesis` constructor has no bootstrap nodes,
+          // so we won't be downloading anything and this method
+          // will never be called. `fromGenesis` is currently
+          // only used in tests, since every node is supposed to
+          // create their own Genesis block.
           ???
       },
       maybeGenesis = Some(genesis),
