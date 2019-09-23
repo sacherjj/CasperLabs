@@ -452,6 +452,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make setup -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
@@ -563,6 +564,7 @@ steps:
 - name: package-ee
   commands:
   - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make setup -C ./execution-engine"
   - "make cargo-package-all"
   - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
   - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
