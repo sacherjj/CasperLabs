@@ -9,6 +9,14 @@ use engine_core::engine_state::MAX_PAYMENT;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 
+#[derive(Debug)]
+enum GetArgContractError {
+    MissingArgument0 = 100,
+    MissingArgument1 = 101,
+    InvalidArgument0 = 200,
+    InvalidArgument1 = 201,
+}
+
 /// Calls get_arg contract and returns Ok(()) in case no error, or String which is the error message
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
@@ -54,30 +62,41 @@ fn should_use_passed_argument() {
 #[ignore]
 #[test]
 fn should_revert_with_missing_arg() {
-    // Error::MissingArg0 = 100,
-    assert_eq!(call_get_arg(()).expect_err("should fail"), "Exit code: 100");
-    // Error::MissingArg1 = 101,
+    assert_eq!(
+        call_get_arg(()).expect_err("should fail"),
+        format!(
+            "Exit code: {}",
+            GetArgContractError::MissingArgument0 as u32,
+        )
+    );
     assert_eq!(
         call_get_arg((String::from("Hello, world!"),)).expect_err("should fail"),
-        "Exit code: 101"
+        format!(
+            "Exit code: {}",
+            GetArgContractError::MissingArgument1 as u32
+        )
     );
 }
 
 #[ignore]
 #[test]
 fn should_revert_with_invalid_argument() {
-    // InvalidArgument0 = 200,
     assert_eq!(
         call_get_arg((U512::from(123),)).expect_err("should fail"),
-        "Exit code: 200"
+        format!(
+            "Exit code: {}",
+            GetArgContractError::InvalidArgument0 as u32
+        )
     );
-    // InvalidArgument1 = 201,
     assert_eq!(
         call_get_arg((
             String::from("Hello, world!"),
             String::from("this is expected to be U512")
         ))
         .expect_err("should fail"),
-        "Exit code: 201"
+        format!(
+            "Exit code: {}",
+            GetArgContractError::InvalidArgument1 as u32
+        )
     );
 }
