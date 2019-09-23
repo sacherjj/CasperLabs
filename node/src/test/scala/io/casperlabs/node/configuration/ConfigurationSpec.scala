@@ -109,7 +109,6 @@ class ConfigurationSpec
       chainSpecPath = Paths.get("/tmp/test"),
       chainId = "test",
       standalone = false,
-      deployTimestamp = 1L.some,
       genesisPath = Paths.get("/tmp/genesis"),
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),

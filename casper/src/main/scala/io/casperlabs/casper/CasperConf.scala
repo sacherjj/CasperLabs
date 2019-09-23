@@ -29,7 +29,6 @@ final case class CasperConf(
     chainSpecPath: Path,
     chainId: String,
     standalone: Boolean,
-    deployTimestamp: Option[Long],
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
     autoProposeMaxInterval: FiniteDuration,
