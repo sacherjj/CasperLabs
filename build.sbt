@@ -13,11 +13,12 @@ Global / dependencyOverrides := Dependencies.overrides
 val protobufDirectory = file("protobuf")
 // Protos can import any other using the full path within `protobuf`. This filter reduces the list
 // for which we actually generate .scala source, so we don't get duplicates between projects.
-def protobufSubDirectoryFilter(subdirs: String*) = {
-  import java.nio.file.Paths // Handle backslash on Windows.
+def protobufPathFilter(paths: String*) = {
   (f: File) =>
     f.getName.endsWith(".proto") && // Not directories or other artifacts.
-      subdirs.map(Paths.get(_)).exists(p => f.toPath.getParent.endsWith(p))
+      paths.map(protobufDirectory.toPath.resolve).exists { path =>
+        f.toPath == path || f.toPath.startsWith(path)
+      }
 }
 
 lazy val projectSettings = Seq(
@@ -155,7 +156,7 @@ lazy val comm = (project in file("comm"))
     ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "io/casperlabs/comm/discovery",
         "io/casperlabs/comm/gossiping",
         "io/casperlabs/comm/protocol/routing" // TODO: Eventually remove.
@@ -204,11 +205,11 @@ lazy val models = (project in file("models"))
       protobufDirectory
     ),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "google/api",
         "io/casperlabs/casper/consensus",
         "io/casperlabs/casper/protocol", // TODO: Eventually remove.
-        "io/casperlabs/ipc"
+        "io/casperlabs/ipc/transforms.proto"
       )
     ),
     PB.targets in Compile := Seq(
@@ -247,7 +248,7 @@ lazy val node = (project in file("node"))
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "google/api",
         "io/casperlabs/node/api"
       )
@@ -375,7 +376,7 @@ lazy val storage = (project in file("storage"))
     ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "io/casperlabs/storage"
       )
     ),
@@ -401,8 +402,8 @@ lazy val smartContracts = (project in file("smart-contracts"))
     ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
-        "io/casperlabs/ipc"
+      protobufPathFilter(
+        "io/casperlabs/ipc/ipc.proto"
       )
     ),
     PB.targets in Compile := Seq(
@@ -510,7 +511,7 @@ lazy val client = (project in file("client"))
     // Generate client stubs for the node API.
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "google/api",
         "io/casperlabs/node/api"
       )
@@ -575,7 +576,7 @@ lazy val gatling = (project in file("gatling"))
     dependencyOverrides ++= gatlingOverrides,
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
-      protobufSubDirectoryFilter(
+      protobufPathFilter(
         "io/casperlabs/comm/discovery"
       )
     ),

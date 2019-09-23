@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
@@ -466,6 +467,8 @@ class ValidationTest
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
       }
 
+      val emptyEquivocationsTracker = EquivocationsTracker.empty
+
       def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
         messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
 
@@ -503,17 +506,53 @@ class ValidationTest
                    genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validation[Task].parents(b1, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b2, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
+                   _ <- Validation[Task].parents(
+                         b1,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b2,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b3,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b4,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b5,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b6,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
 
                    // Not valid
-                   _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
+                   _ <- Validation[Task]
+                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
@@ -525,7 +564,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag)
+                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result

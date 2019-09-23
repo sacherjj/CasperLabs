@@ -4,29 +4,20 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
+use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{
-    call_contract, create_purse, get_arg, get_uref, main_purse, read, revert,
-    transfer_from_purse_to_purse, PurseTransferResult,
+    self, call_contract, create_purse, get_arg, main_purse, revert, transfer_from_purse_to_purse,
+    PurseTransferResult,
 };
 use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::uint::U512;
 
 enum Error {
-    GetPosOuterURef = 1000,
-    GetPosInnerURef = 1001,
+    GetPosURef = 1000,
 }
 
 fn get_pos_contract() -> ContractPointer {
-    let outer: TURef<Key> = get_uref("pos")
-        .and_then(Key::to_turef)
-        .unwrap_or_else(|| revert(Error::GetPosInnerURef as u32));
-    if let Some(ContractPointer::URef(inner)) = read::<Key>(outer).to_c_ptr() {
-        ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
-    } else {
-        revert(Error::GetPosOuterURef as u32)
-    }
+    contract_api::get_pos().unwrap_or_else(|| contract_api::revert(Error::GetPosURef as u32))
 }
 
 #[no_mangle]

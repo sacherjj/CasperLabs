@@ -5,36 +5,24 @@ extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, PurseTransferResult};
-use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::uint::U512;
 
 enum Error {
-    GetPosOuterURef = 1,
-    GetPosInnerURef = 2,
-    TransferFromSourceToPayment = 3,
-    TransferFromPaymentToSource = 4,
-    GetBalance = 5,
-    CheckBalance = 6,
+    GetPosURef = 1,
+    TransferFromSourceToPayment = 2,
+    TransferFromPaymentToSource = 3,
+    GetBalance = 4,
+    CheckBalance = 5,
     MissingArgument = 100,
     InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = {
-        let outer: TURef<Key> = contract_api::get_uref("pos")
-            .and_then(Key::to_turef)
-            .unwrap_or_else(|| contract_api::revert(Error::GetPosInnerURef as u32));
-        if let Some(ContractPointer::URef(inner)) = contract_api::read::<Key>(outer).to_c_ptr() {
-            ContractPointer::URef(TURef::new(inner.addr(), AccessRights::READ))
-        } else {
-            contract_api::revert(Error::GetPosOuterURef as u32);
-        }
-    };
+    let pos_pointer =
+        contract_api::get_pos().unwrap_or_else(|| contract_api::revert(Error::GetPosURef as u32));
 
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();

@@ -1,0 +1,6 @@
+[upgrade]
+
+activation-point-rank = 30
+
+# Later will be replaced by semver.
+protocol-version = 3

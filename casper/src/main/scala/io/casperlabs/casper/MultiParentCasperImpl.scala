@@ -14,7 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.equivocations.EquivocationDetector
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
@@ -44,13 +44,15 @@ import scala.util.control.NonFatal
   *
   * @param blockBuffer
   * @param invalidBlockTracker
-  * @param equivocationsTracker : Used to keep track of when other validators detect the equivocation consisting of the base block at the sequence number identified by the (validator, base equivocation sequence number) pair of each EquivocationRecord.
+  * @param equivocationsTracker Stores the lowest rank of any base block, that is, a block from the
+  *                            equivocating validator which precedes the two or more blocks which
+  *                            equivocated by sharing the same sequence number.
   */
 final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
     dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: Set[Validator] = Set.empty[Validator]
+    equivocationsTracker: EquivocationsTracker = EquivocationsTracker.empty
 )
 
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
@@ -362,7 +364,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Return the list of tips. */
   def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Metrics[F].timer("estimator") {
-      Estimator.tips[F](dag, genesis.blockHash)
+      Cell[F, CasperState].read
+        .flatMap(
+          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationsTracker)
+        )
     }
 
   /*
@@ -399,7 +404,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           latestMessages   <- dag.latestMessages
           bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
           justifications   = toJustification(bondedLatestMsgs)
-          rank             = ProtoUtil.calculateRank(bondedLatestMsgs.values.toSeq)
+          rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
@@ -533,7 +538,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       )                 = result
       dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
-      rank              = ProtoUtil.calculateRank(justificationMsgs.flatten)
+      rank              = ProtoUtil.nextRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {
         CreateBlockStatus.noNewDeploys
       } else {
@@ -583,7 +588,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
-    } yield tracker
+    } yield tracker.keySet
       .flatMap(weights.get)
       .sum
       .toFloat / weightMapTotal(weights)
@@ -734,7 +739,7 @@ object MultiParentCasperImpl {
                        .pure[F]
                    ) { ctx =>
                      Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag)
+                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
           preStateHash <- ExecEngineUtil.computePrestate[F](merged)

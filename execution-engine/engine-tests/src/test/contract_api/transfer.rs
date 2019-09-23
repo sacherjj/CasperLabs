@@ -2,15 +2,18 @@ use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
-use crate::support::test_support::{self, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT};
+use crate::support::test_support::{
+    self, get_account, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::engine_state::{CONV_RATE, SYSTEM_ACCOUNT_ADDR};
+use engine_core::execution::MINT_NAME;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
@@ -83,8 +86,7 @@ fn should_transfer_to_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
+    let genesis_request = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -96,9 +98,16 @@ fn should_transfer_to_account() {
     let genesis_transforms =
         crate::support::test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref =
-        crate::support::test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-            .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
@@ -193,8 +202,7 @@ fn should_transfer_from_account_to_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
+    let genesis_request = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -205,8 +213,16 @@ fn should_transfer_from_account_to_account() {
 
     let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref = test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-        .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
@@ -359,8 +375,7 @@ fn should_transfer_to_existing_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
+    let genesis_request = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state
         .run_genesis(RequestOptions::new(), genesis_request)
@@ -371,8 +386,16 @@ fn should_transfer_to_existing_account() {
 
     let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref = test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-        .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
@@ -531,7 +554,7 @@ fn should_fail_when_insufficient_funds() {
 
     // Run genesis
 
-    let (genesis_request, _) =
+    let genesis_request =
         crate::support::test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
 
     let genesis_response = engine_state

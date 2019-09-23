@@ -8,6 +8,8 @@ import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.util.{implicits, DagOperations}
 import implicits.{eqBlockHash, showBlockHash}
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
+import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 
 import scala.collection.immutable.{Map, Set}
 
@@ -19,18 +21,20 @@ object Estimator {
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      genesis: BlockHash
+      genesis: BlockHash,
+      equivocationsTracker: EquivocationsTracker
   ): F[IndexedSeq[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
-                 .tips[F](dag, genesis, latestMessageHashes)
+                 .tips[F](dag, genesis, latestMessageHashes, equivocationsTracker)
     } yield result.toIndexedSeq
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash]
+      latestMessageHashes: Map[Validator, BlockHash],
+      equivocationsTracker: EquivocationsTracker
   ): F[List[BlockHash]] = {
 
     /** Finds children of the block b that have been scored by the LMD algorithm.
@@ -67,12 +71,17 @@ object Estimator {
       } yield result
 
     for {
-      lca <- if (latestMessagesHashes.isEmpty) genesis.pure[F]
+      lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
             else
-              DagOperations.latestCommonAncestorsMainParent(dag, latestMessagesHashes.values.toList)
-      scores           <- lmdScoring(dag, lca, latestMessagesHashes)
+              DagOperations.latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
+                                 dag,
+                                 latestMessageHashes,
+                                 equivocationsTracker
+                               )
+      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessagesHashes.values.toList, scores)
+      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, scores)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
@@ -92,9 +101,10 @@ object Estimator {
   def lmdScoring[F[_]: Monad](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
-      latestMessagesHashes: Map[Validator, BlockHash]
+      latestMessageHashes: Map[Validator, BlockHash],
+      equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Long]] =
-    latestMessagesHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
+    latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
@@ -103,10 +113,14 @@ object Estimator {
           .takeUntil(_ == stopHash)
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
-              weightFromValidatorByDag(dag, blockHash, validator).map(weight => {
+              (if (equivocatingValidators.contains(validator)) {
+                 0L.pure[F]
+               } else {
+                 weightFromValidatorByDag(dag, blockHash, validator)
+               }).map { realWeight =>
                 val oldValue = acc2.getOrElse(blockHash, 0L)
-                acc2.updated(blockHash, weight + oldValue)
-              })
+                acc2.updated(blockHash, realWeight + oldValue)
+              }
           }
     }
 

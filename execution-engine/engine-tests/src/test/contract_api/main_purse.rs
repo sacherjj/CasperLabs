@@ -4,8 +4,8 @@ use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::key::Key;
-use contract_ffi::value::Account;
 use contract_ffi::value::U512;
+use contract_ffi::value::{Account, Value};
 use engine_core::engine_state::MAX_PAYMENT;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
@@ -19,9 +19,12 @@ fn should_run_main_purse_contract_genesis_account() {
 
     let builder = builder.run_genesis(GENESIS_ADDR, HashMap::new());
 
-    let genesis_account: Account = {
-        let tmp = builder.clone();
-        tmp.get_genesis_account().to_owned()
+    let genesis_account = if let Some(Value::Account(account)) =
+        builder.query(None, Key::Account(GENESIS_ADDR), &[])
+    {
+        account
+    } else {
+        panic!("could not get account")
     };
 
     builder
@@ -30,10 +33,7 @@ fn should_run_main_purse_contract_genesis_account() {
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "main_purse.wasm",
-            (
-                genesis_account.purse_id(),
-                U512::from(ACCOUNT_1_INITIAL_BALANCE),
-            ),
+            (genesis_account.purse_id(), ()),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
         )

@@ -7,7 +7,7 @@ use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 
-const GENESIS_ADDR: [u8; 32] = [0u8; 32];
+const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 
 #[ignore]
 #[test]

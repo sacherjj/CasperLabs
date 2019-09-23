@@ -5,15 +5,13 @@ extern crate contract_ffi;
 
 use alloc::vec::Vec;
 use contract_ffi::contract_api::{self, PurseTransferResult};
-use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::uint::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_contract: Key =
-        contract_api::read(contract_api::get_uref("pos").unwrap().to_turef().unwrap());
-    let pos_pointer = pos_contract.to_c_ptr().unwrap();
+    let pos_pointer =
+        contract_api::get_pos().unwrap_or_else(|| contract_api::revert(1));
 
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = U512::from(contract_api::get_arg::<u32>(1).unwrap().unwrap());
@@ -24,22 +22,22 @@ pub extern "C" fn call() {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)
     {
-        contract_api::revert(1);
+        contract_api::revert(2);
     }
 
     let payment_balance = match contract_api::get_balance(payment_purse) {
         Some(amount) => amount,
-        None => contract_api::revert(2),
+        None => contract_api::revert(3),
     };
 
     if payment_balance != payment_amount {
-        contract_api::revert(3)
+        contract_api::revert(4)
     }
 
     // cannot withdraw
     if let PurseTransferResult::TransferSuccessful =
         contract_api::transfer_from_purse_to_purse(payment_purse, source_purse, payment_amount)
     {
-        contract_api::revert(4);
+        contract_api::revert(5);
     }
 }

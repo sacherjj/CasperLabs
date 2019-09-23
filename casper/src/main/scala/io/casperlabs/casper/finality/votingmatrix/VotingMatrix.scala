@@ -1,12 +1,13 @@
 package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.{DefaultMonadState, MonadState}
 import io.casperlabs.blockstorage.DagRepresentation
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
 
@@ -35,7 +36,8 @@ object VotingMatrix {
     */
   private[votingmatrix] def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash
+      newFinalizedBlock: BlockHash,
+      equivocationsTracker: EquivocationsTracker
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
@@ -93,7 +95,7 @@ object VotingMatrix {
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock[F](dag, b)
+            updateVotingMatrixOnNewBlock[F](dag, b, equivocationsTracker)
           }
     } yield votingMatrix
 }

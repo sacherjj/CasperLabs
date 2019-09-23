@@ -577,11 +577,9 @@ pub fn transfer_from_purse_to_purse(
 }
 
 fn get_system_contract(name: &str) -> Option<ContractPointer> {
-    let public_uref = get_uref(name)?;
-
-    if let Some(Value::Key(Key::URef(private_uref))) = read_untyped(&public_uref) {
-        let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
-        Some(ContractPointer::URef(pointer))
+    if let Key::URef(uref) = get_uref(name)? {
+        let reference = TURef::new(uref.addr(), AccessRights::READ);
+        Some(ContractPointer::URef(reference))
     } else {
         None
     }

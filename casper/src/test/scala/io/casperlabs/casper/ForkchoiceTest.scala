@@ -2,18 +2,33 @@ package io.casperlabs.casper
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
-import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalacheck.Gen
 
-import scala.collection.immutable.HashMap
+import scala.concurrent.duration._
+import monix.execution.Scheduler.Implicits.global
+
+import scala.collection.immutable.{HashMap, Map}
+import scala.util.Random
 
 @silent("is never used")
-class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class ForkchoiceTest
+    extends FlatSpec
+    with Matchers
+    with GeneratorDrivenPropertyChecks
+    with BlockGenerator
+    with DagStorageFixture {
+
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       val v1     = generateValidator("V1")
@@ -69,7 +84,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       Map.empty[Estimator.Validator, Estimator.BlockHash]
+                       Map.empty[Estimator.Validator, Estimator.BlockHash],
+                       EquivocationsTracker.empty
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -131,7 +147,8 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       EquivocationsTracker.empty
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -197,11 +214,99 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       EquivocationsTracker.empty
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
       } yield result
+  }
+
+  // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
+  "Estimator on DAG having validators equivocated" should "return the appropriate score map and main parent" in withStorage {
+    implicit blockStorage => implicit dagStorage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v1Bond = Bond(v1, 5)
+      val v2Bond = Bond(v2, 3)
+      val bonds  = Seq(v1Bond, v2Bond)
+
+      for {
+        genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        a1           <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        a2           <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        b            <- createBlock[Task](Seq(a2.blockHash, genesis.blockHash), v2, bonds)
+        c            <- createBlock[Task](Seq(b.blockHash, a1.blockHash), v1, bonds)
+        dag          <- dagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        // Set the equivocationsTracker manually
+        equivocationsTracker = new EquivocationsTracker(Map(v2 -> genesis.getHeader.rank))
+        equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
+                                   dag,
+                                   latestBlocks,
+                                   equivocationsTracker
+                                 )
+        _      = equivocatingValidators shouldBe Set(v1)
+        scores <- Estimator.lmdScoring(dag, genesis.blockHash, latestBlocks, equivocatingValidators)
+        _ = scores shouldBe Map(
+          genesis.blockHash -> 3L,
+          a2.blockHash      -> 3L,
+          b.blockHash       -> 3L,
+          c.blockHash       -> 0L
+        )
+
+        tips <- Estimator.tips(
+                 dag,
+                 genesis.blockHash,
+                 equivocationsTracker
+               )
+        _ = tips.head shouldBe c.blockHash
+      } yield ()
+  }
+
+  /**
+    * Property-based test for lmdScoring when having equivocation.
+    *
+    * Randomly chooses a subset of bonded validators to equivocate
+    * and then validates that lmdScoring returns correct results.
+    *
+    * @param dag The block dag
+    * @param bonds Bonded validators and their stakes
+    * @param supporterForBlocks Supported validators for each block when traversal in lmdScoring
+    * @param latestMessageHashes The latest messages from currently bonded validators
+    */
+  def testLmdScoringWithEquivocation(
+      dag: DagRepresentation[Task],
+      bonds: Seq[Bond],
+      supporterForBlocks: Map[BlockHash, Seq[Validator]],
+      latestMessageHashes: Map[Validator, BlockHash]
+  ): Unit = {
+    val equivocatorsGen: Gen[Set[Validator]] =
+      for {
+        n   <- Gen.choose(0, bonds.size)
+        idx <- Gen.pick(n, bonds)
+      } yield idx.map(_.validatorPublicKey).toSet
+
+    val lca = DagOperations
+      .latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      .runSyncUnsafe(1.second)
+
+    forAll(equivocatorsGen) { equivocators: Set[Validator] =>
+      val weightMap = bonds.map {
+        case Bond(validator, stake) =>
+          if (equivocators.contains(validator))
+            (validator, 0L)
+          else {
+            (validator, stake)
+          }
+      }.toMap
+      val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
+      val scores = Estimator
+        .lmdScoring(dag, lca, latestMessageHashes, equivocators)
+        .runSyncUnsafe(5.seconds)
+
+      scores shouldBe expectScores
+    }
   }
 
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
@@ -235,15 +340,19 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
-          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
-          _ = scores shouldEqual Map(
-            genesis.blockHash -> (3 + 5 + 7),
-            a.blockHash       -> (3 + 7),
-            b.blockHash       -> 5,
-            d.blockHash       -> 7,
-            e.blockHash       -> 3,
-            f.blockHash       -> 5
+          supportersWithoutEquivocating = Map(
+            genesis.blockHash -> Seq(v1, v2, v3),
+            a.blockHash       -> Seq(v1, v3),
+            b.blockHash       -> Seq(v2),
+            d.blockHash       -> Seq(v1),
+            e.blockHash       -> Seq(v3),
+            f.blockHash       -> Seq(v2)
+          )
+          _ = testLmdScoringWithEquivocation(
+            dag,
+            bonds,
+            supportersWithoutEquivocating,
+            latestBlocks
           )
         } yield ()
   }
@@ -285,17 +394,22 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
-          scores       <- Estimator.lmdScoring(dag, lca, latestBlocks)
-          _ = scores shouldEqual Map(
-            genesis.blockHash -> (3 + 5 + 7),
-            a.blockHash       -> (3 + 7),
-            b.blockHash       -> 5,
-            d.blockHash       -> (3 + 7),
-            e.blockHash       -> 5,
-            g.blockHash       -> (3 + 7),
-            h.blockHash       -> 5,
-            i.blockHash       -> 3
+
+          supportersWithoutEquivocating = Map(
+            genesis.blockHash -> Seq(v1, v2, v3),
+            a.blockHash       -> Seq(v1, v3),
+            b.blockHash       -> Seq(v2),
+            d.blockHash       -> Seq(v1, v3),
+            e.blockHash       -> Seq(v2),
+            g.blockHash       -> Seq(v1, v3),
+            h.blockHash       -> Seq(v2),
+            i.blockHash       -> Seq(v3)
+          )
+          _ = testLmdScoringWithEquivocation(
+            dag,
+            bonds,
+            supportersWithoutEquivocating,
+            latestBlocks
           )
         } yield ()
   }
@@ -351,19 +465,21 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
           dag          <- blockDagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
-          scores <- Estimator
-                     .lmdScoring(dag, lca, latestBlocks)
-          _ = scores shouldEqual Map(
-            f.blockHash -> (7 + 5 + 3),
-            g.blockHash -> (7 + 5),
-            i.blockHash -> 3,
-            j.blockHash -> (7 + 5),
-            l.blockHash -> 3,
-            m.blockHash -> 5
+          supportersWithoutEquivocating = Map(
+            f.blockHash -> Seq(v1, v2, v3),
+            g.blockHash -> Seq(v1, v2),
+            i.blockHash -> Seq(v3),
+            j.blockHash -> Seq(v1, v2),
+            l.blockHash -> Seq(v3),
+            m.blockHash -> Seq(v2)
+          )
+          _ = testLmdScoringWithEquivocation(
+            dag,
+            bonds,
+            supportersWithoutEquivocating,
+            latestBlocks
           )
         } yield ()
-
   }
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
@@ -403,7 +519,7 @@ class ForkchoiceTest extends FlatSpec with Matchers with BlockGenerator with Dag
           i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, EquivocationsTracker.empty)
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }

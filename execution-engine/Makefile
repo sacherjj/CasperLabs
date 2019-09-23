@@ -28,7 +28,7 @@ PACKAGED_SYSTEM_CONTRACTS = mint_token.wasm pos.wasm
 all: build build-contracts
 
 .PHONY: build
-build:
+build: $(SYSTEM_CONTRACTS)
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract/%:
@@ -45,7 +45,7 @@ build-contracts: \
 	$(TEST_CONTRACTS)
 
 .PHONY: test
-test:
+test: $(SYSTEM_CONTRACTS)
 	$(CARGO) test $(CARGO_FLAGS) -- --nocapture
 
 .PHONY: test-contracts
@@ -78,14 +78,14 @@ clean:
 	$(CARGO) clean
 
 .PHONY: deb
-deb:
+deb: $(SYSTEM_CONTRACTS)
 	cd engine-grpc-server && $(CARGO) deb
 
 engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
-rpm: engine-grpc-server/.rpm
+rpm: engine-grpc-server/.rpm $(SYSTEM_CONTRACTS)
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
