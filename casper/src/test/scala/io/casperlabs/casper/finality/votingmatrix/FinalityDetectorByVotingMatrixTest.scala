@@ -7,15 +7,14 @@ import cats.mtl.FunctorRaise
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.casper.{validation, CasperState, InvalidBlock}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.{equivocations, validation, CasperState, InvalidBlock}
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
+import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Cell, Log, Time}
 import monix.eval.Task
@@ -68,7 +67,8 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1
+                                                                        rFTT = 0.1,
+                                                                        EquivocationsTracker.empty
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -133,7 +133,8 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1
+                                                                        rFTT = 0.1,
+                                                                        EquivocationsTracker.empty
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -209,7 +210,8 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1
+                                                                        rFTT = 0.1,
+                                                                        EquivocationsTracker.empty
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -289,7 +291,8 @@ class FinalityDetectorByVotingMatrixTest
                                                                     .of[Task](
                                                                       dag,
                                                                       genesis.blockHash,
-                                                                      rFTT = 0.1
+                                                                      rFTT = 0.1,
+                                                                      EquivocationsTracker.empty
                                                                     )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),

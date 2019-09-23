@@ -1,22 +1,21 @@
 package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
+import cats.implicits._
 import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
-import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
-import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.CasperState
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.{Cell, Time}
+import io.casperlabs.shared.Time
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
@@ -101,7 +100,11 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
           genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
           dag     <- blockDagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
-                                                          .create[Task](dag, genesis.blockHash)
+                                                          .create[Task](
+                                                            dag,
+                                                            genesis.blockHash,
+                                                            EquivocationsTracker.empty
+                                                          )
           _            <- checkMatrix(Map.empty)
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
           _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
@@ -224,7 +227,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
           newVotingMatrix <- VotingMatrix
                               .create[Task](
                                 updatedDag,
-                                b1.blockHash
+                                b1.blockHash,
+                                EquivocationsTracker.empty
                               )
           _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
           _ <- checkMatrix(
@@ -258,7 +262,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
       _ <- updateVoterPerspective(
             dag,
             BlockMetadata.fromBlock(b),
-            votedBranch.get
+            votedBranch.get,
+            EquivocationsTracker.empty
           )
     } yield b
 }

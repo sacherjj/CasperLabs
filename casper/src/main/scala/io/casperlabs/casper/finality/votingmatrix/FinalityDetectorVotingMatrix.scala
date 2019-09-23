@@ -44,13 +44,18 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                        case Some(branch) =>
                          val blockMetadata = BlockMetadata.fromBlock(block)
                          for {
-                           _      <- updateVoterPerspective[F](dag, blockMetadata, branch)
+                           _ <- updateVoterPerspective[F](
+                                 dag,
+                                 blockMetadata,
+                                 branch,
+                                 equivocationTrack
+                               )
                            result <- checkForCommittee[F](rFTT, equivocationTrack)
                            _ <- result match {
                                  case Some(newLFB) =>
                                    // On new LFB we rebuild VotingMatrix and start the new game.
                                    VotingMatrix
-                                     .create[F](dag, newLFB.consensusValue)
+                                     .create[F](dag, newLFB.consensusValue, equivocationTrack)
                                      .flatMap(_.get.flatMap(matrix.set))
                                  case None =>
                                    ().pure[F]
@@ -106,7 +111,8 @@ object FinalityDetectorVotingMatrix {
   def of[F[_]: Concurrent: Log](
       dag: DagRepresentation[F],
       finalizedBlock: BlockHash,
-      rFTT: Double
+      rFTT: Double,
+      equivocationsTracker: EquivocationsTracker
   ): F[FinalityDetectorVotingMatrix[F]] =
     for {
       _ <- MonadThrowable[F]
@@ -117,7 +123,7 @@ object FinalityDetectorVotingMatrix {
             )
             .whenA(rFTT < 0 || rFTT > 0.5)
       lock                 <- Semaphore[F](1)
-      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock)
+      votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock, equivocationsTracker)
       votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
     } yield new FinalityDetectorVotingMatrix[F](rFTT)(Concurrent[F], Log[F], votingMatrixWithLock)
 }

@@ -23,7 +23,8 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       blockMetadata: BlockMetadata,
-      currentVoteValue: BlockHash
+      currentVoteValue: BlockHash,
+      equivocationsTracker: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
@@ -34,7 +35,7 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, blockMetadata)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, blockMetadata, equivocationsTracker)
               _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, blockMetadata.rank)
             } yield ()
           }
@@ -89,11 +90,13 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      blockMetadata: BlockMetadata
+      blockMetadata: BlockMetadata,
+      equivocationsTracker: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
-      panoramaM        <- FinalityDetectorUtil.panoramaM[F](dag, validatorToIndex, blockMetadata)
+      panoramaM <- FinalityDetectorUtil
+                    .panoramaM[F](dag, validatorToIndex, blockMetadata, equivocationsTracker)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(blockMetadata.validatorPublicKey), panoramaM)

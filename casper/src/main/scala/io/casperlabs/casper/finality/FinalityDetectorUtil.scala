@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
@@ -124,25 +125,41 @@ object FinalityDetectorUtil {
     }
   }
 
+  /**
+    * Find the panorama of M and represent this panorama as an array
+    * panoramaM, putting (for j=0,1,2,..., n-1)
+    * panoramaM(j) := daglevel(latest message of V(j) seen from block M)
+	  * When V(j)-swimlane is empty or V(j) happens to be an equivocator - so in cases
+    * where latest message of V(i) is not well defined concept - in these cases
+    * put 0 (zero) in the corresponding cell.
+    */
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockMetadata: BlockMetadata
-  ): F[MutableSeq[Long]] =
+      blockMetadata: BlockMetadata,
+      equivocationsTracker: EquivocationsTracker
+  ): F[MutableSeq[Long]] = {
+    val honestValidatorsToIndex =
+      validatorsToIndex.filterNot {
+        case (validator, _) =>
+          equivocationsTracker.contains(validator)
+      }
+
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(
         dag,
         blockMetadata,
-        validatorsToIndex.keySet
+        honestValidatorsToIndex.keySet
       )
       .map(
         latestBlockDagLevelsAsMap =>
-          // In cases where latest message of V(i) is not well defined, put 0L in the corresponding cell
+          // When V(j)-swimlane is empty or V(j) happens to be an equivocator, put 0L in the corresponding cell
           fromMapToArray(
             validatorsToIndex,
             latestBlockDagLevelsAsMap.getOrElse(_, 0L)
           )
       )
+  }
 
   // Returns an MutableSeq, whose size equals the size of validatorsToIndex and
   // For v in validatorsToIndex.key
