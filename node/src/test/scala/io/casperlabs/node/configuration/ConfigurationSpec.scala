@@ -107,7 +107,6 @@ class ConfigurationSpec
       knownValidatorsFile = Paths.get("/tmp/test").some,
       requiredSigs = 1,
       chainSpecPath = Paths.get("/tmp/test"),
-      chainId = "test",
       standalone = false,
       genesisPath = Paths.get("/tmp/genesis"),
       autoProposeEnabled = false,

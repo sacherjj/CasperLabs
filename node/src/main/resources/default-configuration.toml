@@ -205,9 +205,6 @@ required-sigs = 0
 # Path to the directory which contains the Chain Spec.
 chain-spec-path = "$HOME/.casperlabs/chainspec"
 
-# Identifier of the chain this node is connected to.
-chain-id = "casperlabs"
-
 # Start a stand-alone node (no bootstrapping).
 standalone = false
 

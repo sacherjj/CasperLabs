@@ -472,10 +472,6 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val casperChainId =
-      gen[String](s"Identifier of the chain this node is connected to.")
-
-    @scallop
     val metricsPrometheus =
       gen[Flag]("Enable the Prometheus metrics reporter.")
 

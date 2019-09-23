@@ -27,7 +27,6 @@ final case class CasperConf(
     genesisPath: Path = Paths.get("nonreachable"),
     requiredSigs: Int,
     chainSpecPath: Path,
-    chainId: String,
     standalone: Boolean,
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,

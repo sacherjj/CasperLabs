@@ -68,6 +68,8 @@ package object gossiping extends ChainSpecReader {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
+      genesis <- makeGenesis[F](conf)
+
       cachedConnections <- makeConnectionsCache(
                             conf,
                             clientSslContext,
@@ -94,9 +96,15 @@ package object gossiping extends ChainSpecReader {
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
 
-      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
+      downloadManager <- makeDownloadManager(
+                          conf,
+                          connectToGossip,
+                          relaying,
+                          validatorId,
+                          genesis.getHeader.chainId
+                        )
 
-      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
+      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis)
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
@@ -124,7 +132,7 @@ package object gossiping extends ChainSpecReader {
                                        genesis,
                                        prestate,
                                        transforms,
-                                       conf.casper.chainId,
+                                       genesis.getHeader.chainId,
                                        relaying
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
@@ -136,7 +144,13 @@ package object gossiping extends ChainSpecReader {
       isInitialRef <- Resource.liftF(
                        Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
                      )
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
+      synchronizer <- makeSynchronizer(
+                       conf,
+                       connectToGossip,
+                       awaitApproval.join,
+                       isInitialRef,
+                       genesis.getHeader.chainId
+                     )
 
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
@@ -180,6 +194,27 @@ package object gossiping extends ChainSpecReader {
 
     } yield ()
   }
+
+  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
+      conf: Configuration
+  ): Resource[F, Block] =
+    Resource.liftF[F, Block] {
+      for {
+        _ <- Log[F].info("Constructing Genesis block...")
+        genesis <- ipc.ChainSpec
+                    .fromDirectory(conf.casper.chainSpecPath)
+                    .fold(
+                      errors =>
+                        MonadThrowable[F].raiseError(
+                          new IllegalArgumentException(
+                            errors.toList.mkString(", ")
+                          )
+                        ),
+                      spec => Genesis.fromChainSpec[F](spec.getGenesis)
+                    )
+                    .map(_.getBlockMessage)
+      } yield genesis
+    }
 
   /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
@@ -312,7 +347,8 @@ package object gossiping extends ChainSpecReader {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
-      validatorId: Option[ValidatorIdentity]
+      validatorId: Option[ValidatorIdentity],
+      chainId: String
   ): Resource[F, DownloadManager[F]] =
     for {
       _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
@@ -335,7 +371,7 @@ package object gossiping extends ChainSpecReader {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.chainId, block)
+                                validateAndAddBlock(chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -356,10 +392,14 @@ package object gossiping extends ChainSpecReader {
                         )
     } yield downloadManager
 
+  // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
+  // which could be based on the presence of other known validators, signaled by their approvals.
+  // That just gives us the assurance that we are using the right chain spec because other are as well.
   private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F]
+      downloadManager: DownloadManager[F],
+      genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
       validatorId <- Resource.liftF {
@@ -376,31 +416,18 @@ package object gossiping extends ChainSpecReader {
                       } yield id
                     }
 
-      genesis <- Resource.liftF {
-                  for {
-                    _ <- Log[F].info("Constructing Genesis candidate...")
-                    genesis <- ipc.ChainSpec
-                                .fromDirectory(conf.casper.chainSpecPath)
-                                .fold(
-                                  errors =>
-                                    MonadThrowable[F].raiseError(
-                                      new IllegalArgumentException(
-                                        errors.toList.mkString(", ")
-                                      )
-                                    ),
-                                  spec => Genesis.fromChainSpec[F](spec.getGenesis)
-                                )
-                                .map(_.getBlockMessage)
-                    // Store it so others can pull it from the bootstrap node.
-                    _ <- Log[F].info(
-                          s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
-                        )
-                    _ <- validateAndAddBlock(
-                          conf.casper.chainId,
-                          genesis
-                        )
-                  } yield genesis
-                }
+      _ <- Resource.liftF {
+            for {
+              // Validate it to make sure that code path is exercised.
+              _ <- Log[F].info(
+                    s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
+                  )
+              _ <- validateAndAddBlock(
+                    genesis.getHeader.chainId,
+                    genesis
+                  )
+            } yield ()
+          }
 
       knownValidators <- Resource.liftF {
                           // Based on `CasperPacketHandler.of` in default mode.
@@ -477,7 +504,8 @@ package object gossiping extends ChainSpecReader {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
-      isInitialRef: Ref[F, Boolean]
+      isInitialRef: Ref[F, Boolean],
+      chainId: String
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _         <- SynchronizerImpl.establishMetrics[F]
@@ -501,7 +529,7 @@ package object gossiping extends ChainSpecReader {
                          } yield latest.values.toList
 
                        override def validate(blockSummary: BlockSummary): F[Unit] =
-                         Validation[F].blockSummary(blockSummary, conf.casper.chainId)
+                         Validation[F].blockSummary(blockSummary, chainId)
 
                        override def notInDag(blockHash: ByteString): F[Boolean] =
                          isInDag(blockHash).map(!_)

@@ -68,7 +68,6 @@ known-validators-file = "/tmp/test"
 required-sigs = 1
 genesis-account-public-key-path = "/tmp/test"
 chain-spec-path = "/tmp/test"
-chain-id = "test"
 standalone = false
 auto-propose-enabled = false
 auto-propose-check-interval = "1second"
