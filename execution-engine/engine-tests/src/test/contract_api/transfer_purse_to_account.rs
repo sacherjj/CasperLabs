@@ -109,8 +109,9 @@ fn should_run_purse_to_account_transfer() {
 
     // Obtain transforms for a mint account
     let mint_contract_uref = transfer_result.builder().get_mint_contract_uref();
+
     let mint_transforms = transform
-        .get(&mint_contract_uref.into())
+        .get(&Key::from(mint_contract_uref).normalize())
         .expect("Unable to find transforms for a mint");
 
     // Inspect AddKeyse entry for that new account inside mint transforms

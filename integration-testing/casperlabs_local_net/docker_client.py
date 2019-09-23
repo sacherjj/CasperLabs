@@ -10,7 +10,7 @@ from casperlabs_local_net.common import (
     extract_block_hash_from_propose_output,
     random_string,
     Contract,
-    MAX_PAYMENT_COST,
+    DEFAULT_PAYMENT_COST,
     resources_path,
 )
 from casperlabs_local_net.client_base import CasperLabsClient
@@ -23,11 +23,13 @@ def resource(file_name):
     return resources_path() / file_name
 
 
-_MAX_PAYMENT_JSON = json.dumps(
+_STANDARD_PAYMENT_JSON = json.dumps(
     [
         {
             "name": "amount",
-            "value": {"big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}},
+            "value": {
+                "big_int": {"value": f"{DEFAULT_PAYMENT_COST}", "bit_width": 512}
+            },
         }
     ]
 )
@@ -143,7 +145,7 @@ class DockerClient(CasperLabsClient, LoggingMixin):
         session_contract: Optional[Union[str, Path]] = None,
         session_args: Optional[str] = None,
         payment_contract: Optional[Union[str, Path]] = Contract.STANDARD_PAYMENT,
-        payment_args: Optional[str] = _MAX_PAYMENT_JSON,
+        payment_args: Optional[str] = _STANDARD_PAYMENT_JSON,
         public_key: Optional[Union[str, Path]] = None,
         private_key: Optional[Union[str, Path]] = None,
     ) -> str:

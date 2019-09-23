@@ -15,10 +15,9 @@ use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let initi_uref_num = 4; // TODO: this is very brittle as it breaks whenever we add another default uref
+    let initi_uref_num = 2; // TODO: this is very brittle as it breaks whenever we add another default uref
 
-    // Account starts with FOUR known urefs: genesis_acct, mint public uref, mint
-    // private uref, pos public uref & pos private uref.
+    // Account starts with two known urefs: mint uref & pos uref
     if list_known_urefs().len() != initi_uref_num {
         revert(201);
     }

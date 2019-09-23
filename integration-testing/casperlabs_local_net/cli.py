@@ -11,7 +11,7 @@ from casperlabs_local_net.client_parser import (
     parse_show_deploys,
     parse,
 )
-from casperlabs_local_net.common import MAX_PAYMENT_COST, resources_path
+from casperlabs_local_net.common import DEFAULT_PAYMENT_COST, resources_path
 
 
 class CLIErrorExit(Exception):
@@ -25,8 +25,8 @@ class CLIErrorExit(Exception):
 
 class CLI:
 
-    _MAX_PAYMENT_JSON = json.dumps(
-        [{"name": "amount", "value": {"u512": MAX_PAYMENT_COST}}]
+    _DEFAULT_PAYMENT_JSON = json.dumps(
+        [{"name": "amount", "value": {"u512": DEFAULT_PAYMENT_COST}}]
     )
 
     def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):
@@ -118,17 +118,17 @@ class CLI:
 
     @property
     def payment_json(self) -> str:
-        return self.format_json_str(self._MAX_PAYMENT_JSON)
+        return self.format_json_str(self._DEFAULT_PAYMENT_JSON)
 
 
 class DockerCLI(CLI):
 
-    _MAX_PAYMENT_JSON = json.dumps(
+    _DEFAULT_PAYMENT_JSON = json.dumps(
         [
             {
                 "name": "amount",
                 "value": {
-                    "big_int": {"value": f"{MAX_PAYMENT_COST}", "bit_width": 512}
+                    "big_int": {"value": f"{DEFAULT_PAYMENT_COST}", "bit_width": 512}
                 },
             }
         ]

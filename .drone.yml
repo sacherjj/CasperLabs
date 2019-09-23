@@ -90,8 +90,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "make setup"
   - "make test test-contracts"
   image: "casperlabs/buildenv:latest"
   when:
@@ -219,6 +218,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
+  - "make setup"
   - "make test"
   image: "casperlabs/buildenv:latest"
   when:
