@@ -8,6 +8,7 @@ import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
@@ -152,8 +153,8 @@ object SQLiteStorage {
       // TODO: Remove DagRepresentation#lookup because
       // we already have BlockStorage#getBlockSummary with the same semantics
       // and which also cached in CachingBlockStorage.
-      override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] =
-        blockStorage.getBlockSummary(blockHash)
+      override def lookup(blockHash: BlockHash): F[Option[Message]] =
+        blockStorage.getBlockSummary(blockHash).flatMap(Message.fromOptionalSummary[F](_))
 
       // TODO: Remove DagRepresentation#contains because
       // we already have BlockStorage#contains with the same semantics
@@ -174,13 +175,13 @@ object SQLiteStorage {
       override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
         dagStorage.latestMessageHash(validator)
 
-      override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+      override def latestMessage(validator: Validator): F[Option[Message]] =
         dagStorage.latestMessage(validator)
 
       override def latestMessageHashes: F[Map[Validator, BlockHash]] =
         dagStorage.latestMessageHashes
 
-      override def latestMessages: F[Map[Validator, BlockSummary]] =
+      override def latestMessages: F[Map[Validator, Message]] =
         dagStorage.latestMessages
     }
 }

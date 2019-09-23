@@ -5,7 +5,6 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.models.BlockImplicits._
 
 final class IndexedDagStorage[F[_]: Monad](
     lock: Semaphore[F],
@@ -46,7 +45,7 @@ final class IndexedDagStorage[F[_]: Monad](
       rank = maxRank + 1
       nextCreatorSeqNum <- dag
                             .latestMessage(block.getHeader.validatorPublicKey)
-                            .map(_.fold(-1)(_.validatorBlockSeqNum) + 1)
+                            .map(_.fold(0)(_.validatorMsgSeqNum) + 1)
       modifiedBlock = block
         .withHeader(
           header

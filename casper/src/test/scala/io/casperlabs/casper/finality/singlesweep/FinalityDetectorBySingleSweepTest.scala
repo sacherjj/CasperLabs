@@ -103,7 +103,7 @@ class FinalityDetectorBySingleSweepTest
           dag           <- dagStorage.getRepresentation
           levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
-            case (_, msgs) => msgs.lastOption.map(_.blockHash)
+            case (_, msgs) => msgs.lastOption.map(_.messageHash)
           }.toSet
           _ = lowestLevelZeroMsgs shouldBe Set(b1.blockHash, b3.blockHash)
           _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Set(b4.blockHash)
@@ -243,7 +243,7 @@ class FinalityDetectorBySingleSweepTest
                         )
         lowestLevelZeroMsgs = committeeApproximation
           .flatMap(v => levelZeroMsgs(v).lastOption)
-        _ = lowestLevelZeroMsgs.map(_.blockHash) shouldBe Seq(
+        _ = lowestLevelZeroMsgs.map(_.messageHash) shouldBe Seq(
           b1.blockHash,
           b3.blockHash,
           b6.blockHash

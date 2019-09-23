@@ -761,11 +761,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       ) // Invalid seq num
 
       // This is going to be signed by node(1)
-      blockWithInvalidJustification <- buildBlockWithInvalidJustification(
-                                        nodes,
-                                        deploysWithCost,
-                                        signedInvalidBlock
-                                      )
+      blockWithInvalidJustification = buildBlockWithInvalidJustification(
+        deploysWithCost,
+        signedInvalidBlock
+      )
 
       // Adding the block that only refers to an invalid node as justification; it will not send notifications.
       _ <- nodes(1).casperEff
@@ -1141,10 +1140,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[HashSetCasperTestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: Block
-  ): Effect[Block] = {
+  ): Block = {
     val postState =
       Block.GlobalState().withBonds(ProtoUtil.bonds(genesis))
     val serializedJustifications =
@@ -1165,15 +1163,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         .withBlockHash(blockHash)
         .withHeader(header)
         .withBody(body)
-    nodes(1).casperEff.dag.flatMap { dag =>
-      ProtoUtil.signBlock[Effect](
-        blockThatPointsToInvalidBlock,
-        dag,
-        validators(1),
-        validatorKeys(1),
-        Ed25519
-      )
-    }
+    ProtoUtil.signBlock(
+      blockThatPointsToInvalidBlock,
+      validatorKeys(1),
+      Ed25519
+    )
   }
 }
 

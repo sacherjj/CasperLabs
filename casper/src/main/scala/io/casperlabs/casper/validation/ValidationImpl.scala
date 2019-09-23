@@ -6,14 +6,13 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
@@ -28,7 +27,6 @@ import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
-import io.casperlabs.casper.util.DagOperations
 
 object ValidationImpl {
   type Data        = Array[Byte]
@@ -124,6 +122,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           )
       _ <- summaryHash(summary)
       _ <- chainIdentifier(summary, chainId)
+      _ <- ballot(summary)
     } yield ()
   }
 
@@ -393,6 +392,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           }
     } yield ()
 
+  // Validates that a message that is supposed to be a ballot adheres to ballot's specification.
+  private def ballot(b: BlockSummary): F[Unit] =
+    FunctorRaise[F, InvalidBlock]
+      .raise[Unit](InvalidTargetHash)
+      .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+
   /**
     * Works with either efficient justifications or full explicit justifications.
     * Specifically, with efficient justifications, if a block B doesn't update its
@@ -403,37 +408,45 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
-    for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
-                                        case (_, Justification(_, latestBlockHash)) =>
-                                          dag.lookup(latestBlockHash).flatMap {
-                                            case Some(meta) =>
-                                              meta.validatorBlockSeqNum.pure[F]
+    if (b.isGenesisLike)
+      FunctorRaise[F, InvalidBlock]
+        .raise[Unit](InvalidSequenceNumber)
+        .whenA(b.validatorBlockSeqNum != 0)
+    else
+      for {
+        // We start with `0`, so that in the case when its the first block by this validator its seqNum is 1.
+        creatorJustificationSeqNumber <- ProtoUtil
+                                          .creatorJustification(b.getHeader)
+                                          .foldM(0) {
+                                            case (_, Justification(_, latestBlockHash)) =>
+                                              dag.lookup(latestBlockHash).flatMap {
+                                                case Some(meta) =>
+                                                  meta.validatorMsgSeqNum.pure[F]
 
-                                            case None =>
-                                              MonadThrowable[F].raiseError[Int](
-                                                new Exception(
-                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                                )
-                                              )
+                                                case None =>
+                                                  MonadThrowable[F].raiseError[Int](
+                                                    new Exception(
+                                                      s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
+                                                    )
+                                                  )
+                                              }
                                           }
-                                      }
-      number = b.validatorBlockSeqNum
-      ok     = creatorJustificationSeqNumber + 1 == number
-      _ <- if (ok) {
-            Applicative[F].unit
-          } else {
-            for {
-              _ <- Log[F].warn(
-                    ignore(
-                      b,
-                      s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+        number = b.validatorBlockSeqNum
+        ok     = creatorJustificationSeqNumber + 1 == number
+        _ <- if (ok) {
+              Applicative[F].unit
+            } else {
+              for {
+                _ <- Log[F].warn(
+                      ignore(
+                        b,
+                        s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                      )
                     )
-                  )
-              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
-            } yield ()
-          }
-    } yield ()
+                _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
+              } yield ()
+            }
+      } yield ()
 
   // Agnostic of justifications
   def chainIdentifier(

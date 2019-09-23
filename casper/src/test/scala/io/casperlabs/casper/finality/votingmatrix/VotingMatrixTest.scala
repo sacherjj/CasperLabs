@@ -6,13 +6,13 @@ import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond}
+import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
@@ -258,7 +258,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(
             dag,
-            BlockSummary.fromBlock(b),
+            Message.fromBlock(b).get,
             votedBranch.get
           )
     } yield b

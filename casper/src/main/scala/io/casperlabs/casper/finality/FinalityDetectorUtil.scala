@@ -4,8 +4,7 @@ import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
@@ -31,10 +30,10 @@ object FinalityDetectorUtil {
     */
   private[casper] def panoramaOfBlockByValidators[F[_]: Monad](
       dag: DagRepresentation[F],
-      block: BlockSummary,
+      block: Message,
       validators: Set[Validator]
-  ): F[Map[Validator, BlockSummary]] = {
-    implicit val blockTopoOrdering: Ordering[BlockSummary] =
+  ): F[Map[Validator, Message]] = {
+    implicit val blockTopoOrdering: Ordering[Message] =
       DagOperations.blockTopoOrderingDesc
 
     val stream = DagOperations.bfToposortTraverseF(List(block)) { b =>
@@ -46,16 +45,16 @@ object FinalityDetectorUtil {
     }
 
     stream
-      .foldWhileLeft((validators, Map.empty[Validator, BlockSummary])) {
+      .foldWhileLeft((validators, Map.empty[Validator, Message])) {
         case ((remainingValidators, acc), b) =>
           if (remainingValidators.isEmpty) {
             // Stop traversal if all validators find its latest block
             Right((remainingValidators, acc))
-          } else if (remainingValidators.contains(b.validatorPublicKey)) {
+          } else if (remainingValidators.contains(b.validatorId)) {
             Left(
               (
-                remainingValidators - b.validatorPublicKey,
-                acc + (b.validatorPublicKey -> b)
+                remainingValidators - b.validatorId,
+                acc + (b.validatorId -> b)
               )
             )
           } else {
@@ -67,7 +66,7 @@ object FinalityDetectorUtil {
 
   private[casper] def panoramaDagLevelsOfBlock[F[_]: Monad](
       blockDag: DagRepresentation[F],
-      block: BlockSummary,
+      block: Message,
       validators: Set[Validator]
   ): F[Map[Validator, Long]] =
     panoramaOfBlockByValidators(blockDag, block, validators)
@@ -80,11 +79,11 @@ object FinalityDetectorUtil {
       dag: DagRepresentation[F],
       validator: Validator,
       candidateBlockHash: BlockHash
-  ): F[List[BlockSummary]] =
+  ): F[List[Message]] =
     dag.latestMessage(validator).flatMap {
       case Some(latestMsgByValidator) =>
         DagOperations
-          .bfTraverseF[F, BlockSummary](List(latestMsgByValidator))(
+          .bfTraverseF[F, Message](List(latestMsgByValidator))(
             previousAgreedBlockFromTheSameValidator(
               dag,
               _,
@@ -93,7 +92,7 @@ object FinalityDetectorUtil {
             )
           )
           .toList
-      case None => List.empty[BlockSummary].pure[F]
+      case None => List.empty[Message].pure[F]
     }
 
   /*
@@ -102,10 +101,10 @@ object FinalityDetectorUtil {
    */
   private[casper] def previousAgreedBlockFromTheSameValidator[F[_]: Monad](
       dag: DagRepresentation[F],
-      block: BlockSummary,
+      block: Message,
       candidateBlockHash: BlockHash,
       validator: Validator
-  ): F[List[BlockSummary]] = {
+  ): F[List[Message]] = {
     // Assumes that validator always includes his last message as justification.
     val previousHashO = block.justifications
       .find(
@@ -117,22 +116,22 @@ object FinalityDetectorUtil {
       case Some(previousHash) =>
         ProtoUtil
           .isInMainChain[F](dag, candidateBlockHash, previousHash)
-          .flatMap[List[BlockSummary]](
+          .flatMap[List[Message]](
             isActiveVote =>
               // If parent block of `block` is not in the main chain of `candidateBlockHash`
               // we don't include it in the set of level-0 messages.
               if (isActiveVote) dag.lookup(previousHash).map(_.toList)
-              else List.empty[BlockSummary].pure[F]
+              else List.empty[Message].pure[F]
           )
       case None =>
-        List.empty[BlockSummary].pure[F]
+        List.empty[Message].pure[F]
     }
   }
 
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockSummary: BlockSummary
+      blockSummary: Message
   ): F[MutableSeq[Long]] =
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(

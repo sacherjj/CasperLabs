@@ -152,7 +152,9 @@ object Genesis {
         rank = initial.getHeader.rank,
         protocolVersion = initial.getHeader.protocolVersion,
         timestamp = initial.getHeader.timestamp,
-        chainId = initial.getHeader.chainId
+        chainId = initial.getHeader.chainId,
+        validatorSeqNum = 0,
+        creator = Keys.PublicKey(Array.emptyByteArray) // Genesis has no creator
       )
       unsignedBlock = unsignedBlockProto(body, header)
     } yield BlockMsgWithTransform(Some(unsignedBlock), transforms)
@@ -186,7 +188,9 @@ object Genesis {
       rank = 0,
       protocolVersion = protocolVersion,
       timestamp = timestamp,
-      chainId = chainId
+      chainId = chainId,
+      validatorSeqNum = 0,
+      creator = Keys.PublicKey(Array.emptyByteArray) // Genesis has no creator
     )
 
     unsignedBlockProto(body, header)

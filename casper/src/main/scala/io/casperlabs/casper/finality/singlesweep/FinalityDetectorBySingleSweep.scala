@@ -1,13 +1,12 @@
 package io.casperlabs.casper.finality.singlesweep
 
-import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
-import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.dag.DagRepresentation
 
 /*
@@ -15,7 +14,7 @@ import io.casperlabs.storage.dag.DagRepresentation
  *
  * https://hackingresear.ch/cbc-inspector/
  */
-class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetector[F] {
+class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends FinalityDetector[F] {
 
   def normalizedFaultTolerance(
       dag: DagRepresentation[F],
@@ -32,8 +31,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
       validators: List[Validator]
-  ): F[Map[Validator, List[BlockSummary]]] =
-    validators.foldLeftM(Map.empty[Validator, List[BlockSummary]]) {
+  ): F[Map[Validator, List[Message]]] =
+    validators.foldLeftM(Map.empty[Validator, List[Message]]) {
       case (acc, v) =>
         FinalityDetectorUtil
           .levelZeroMsgsOfValidator[F](dag, v, candidateBlockHash)
@@ -46,7 +45,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
   def pruningLoop(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[BlockSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       weightMap: Map[Validator, Long],
       q: Long,
       k: Int = 1
@@ -71,7 +70,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
                     } else {
                       val quorum = blockLevelTags.values.flatMap { blockScoreAccumulator =>
                         if (blockScoreAccumulator.blockLevel >= 1 && prunedCommittee.contains(
-                              blockScoreAccumulator.block.validatorPublicKey
+                              blockScoreAccumulator.msg.validatorId
                             )) {
                           blockScoreAccumulator.estimateQ.some
                         } else {
@@ -88,7 +87,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
   def findBestQLoop(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[BlockSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       weightMap: Map[Validator, Long],
       q: Long,
       k: Int = 1,
@@ -122,7 +121,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
   def sweep(
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
-      levelZeroMsgs: Map[Validator, List[BlockSummary]],
+      levelZeroMsgs: Map[Validator, List[Message]],
       q: Long,
       k: Int,
       weightMap: Map[Validator, Long]
@@ -131,13 +130,13 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
       .flatMap(v => levelZeroMsgs(v).lastOption)
       .toList
 
-    implicit val blockTopoOrdering: Ordering[BlockSummary] =
+    implicit val blockTopoOrdering: Ordering[Message] =
       DagOperations.blockTopoOrderingAsc
 
     val stream = DagOperations.bfToposortTraverseF(lowestLevelZeroMsgs)(
       b =>
         for {
-          bsOpt <- dag.justificationToBlocks(b.blockHash)
+          bsOpt <- dag.justificationToBlocks(b.messageHash)
           filterBs <- bsOpt.toList
                        .traverse(
                          dag.lookup
@@ -147,7 +146,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
     )
 
     val blockLevelTags =
-      lowestLevelZeroMsgs.map(b => b.blockHash -> BlockScoreAccumulator.empty(b)).toMap
+      lowestLevelZeroMsgs.map(b => b.messageHash -> BlockScoreAccumulator.empty(b)).toMap
 
     val effectiveWeight: Validator => Long = (vid: Validator) =>
       if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
@@ -155,18 +154,18 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
     stream
       .foldLeftF((blockLevelTags, Map.empty[Validator, Int])) {
         case ((blockLevelTags, validatorLevel), b) =>
-          val currentBlockScore = blockLevelTags(b.blockHash)
+          val currentBlockScore = blockLevelTags(b.messageHash)
           val updatedBlockScore = BlockScoreAccumulator.updateOwnLevel(
             currentBlockScore,
             q,
             k,
             effectiveWeight
           )
-          val updatedBlockLevelTags = blockLevelTags.updated(b.blockHash, updatedBlockScore)
+          val updatedBlockLevelTags = blockLevelTags.updated(b.messageHash, updatedBlockScore)
           for {
             // After updating current block's tag information,
             // update its children seen blocks's level information as well
-            blockWithSpecifiedJustification <- dag.justificationToBlocks(b.blockHash)
+            blockWithSpecifiedJustification <- dag.justificationToBlocks(b.messageHash)
             updatedBlockLevelTags <- blockWithSpecifiedJustification.toList
                                       .foldLeftM(updatedBlockLevelTags) {
                                         case (acc, child) =>
@@ -184,7 +183,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
                                               )
                                           } yield acc.updated(child, updatedChildBlockStorage)
                                       }
-            vid = b.validatorPublicKey
+            vid = b.validatorId
             updatedValidatorLevel = if (committeeApproximation.contains(vid)) {
               val maxLevel = math.max(
                 validatorLevel.getOrElse(vid, 0),
@@ -296,7 +295,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: Monad: Log] extends FinalityDetect
   * Here "level" is what Inspector Finality Detector calls a level.
   */
 case class BlockScoreAccumulator(
-    block: BlockSummary,
+    msg: Message,
     highestLevelBySeenBlocks: Map[Validator, Int],
     estimateQ: Long,
     blockLevel: Int,
@@ -304,8 +303,8 @@ case class BlockScoreAccumulator(
 )
 
 object BlockScoreAccumulator {
-  def empty(block: BlockSummary): BlockScoreAccumulator =
-    BlockScoreAccumulator(block, Map.empty, 0, 0)
+  def empty(msg: Message): BlockScoreAccumulator =
+    BlockScoreAccumulator(msg, Map.empty, 0, 0)
 
   // Children will inherit seen blocks from the parent
   def inheritFromParent(
@@ -325,15 +324,15 @@ object BlockScoreAccumulator {
             math.max(highestLevel, level) -> newAcc
         }
     val addParentSelf =
-      if (highestLevelBySeenBlocks.getOrElse(parent.block.validatorPublicKey, -1) < parent.blockLevel)
+      if (highestLevelBySeenBlocks.getOrElse(parent.msg.validatorId, -1) < parent.blockLevel)
         highestLevelBySeenBlocks.updated(
-          parent.block.validatorPublicKey,
+          parent.msg.validatorId,
           parent.blockLevel
         )
       else
         highestLevelBySeenBlocks
     BlockScoreAccumulator(
-      self.block,
+      self.msg,
       addParentSelf,
       self.estimateQ,
       self.blockLevel,
@@ -352,7 +351,7 @@ object BlockScoreAccumulator {
         case (level, estimateQ) =>
           val newMaxLevel = math.max(self.highestLevelSoFar, level)
           BlockScoreAccumulator(
-            self.block,
+            self.msg,
             self.highestLevelBySeenBlocks,
             estimateQ,
             level,

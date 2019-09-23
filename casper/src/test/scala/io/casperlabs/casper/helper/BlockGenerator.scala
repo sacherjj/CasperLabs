@@ -13,7 +13,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
-import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.crypto.Keys
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -35,27 +35,18 @@ object BlockGenerator {
     for {
       b   <- IndexedDagStorage[F].lookupByIdUnsafe(id)
       dag <- IndexedDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
-                                       b,
-                                       genesis,
-                                       dag
-                                     )
-      (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
+      blockCheckpoint <- computeBlockCheckpointFromDeploys[F](
+                          b,
+                          genesis,
+                          dag
+                        )
+      _ <- injectPostStateHash[F](
+            id,
+            b,
+            blockCheckpoint.postStateHash,
+            blockCheckpoint.deploysForBlock
+          )
     } yield b
-
-  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: DeployStorage: ExecutionEngineService: Log](
-      b: Block,
-      genesis: Block,
-      dag: DagRepresentation[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
-    for {
-      result <- computeBlockCheckpointFromDeploys[F](
-                 b,
-                 genesis,
-                 dag
-               )
-    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStorage: IndexedDagStorage](
       id: Int,
@@ -112,7 +103,8 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       chainId: String = "casperlabs",
-      preStateHash: ByteString = ByteString.EMPTY
+      preStateHash: ByteString = ByteString.EMPTY,
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
     for {
       now <- Time[F].currentMillis
@@ -130,10 +122,10 @@ trait BlockGenerator {
                                     .lookup(b)
                                     .map(
                                       _.fold(acc) { block =>
-                                        if (acc.contains(block.validatorPublicKey)) {
+                                        if (acc.contains(block.validatorId)) {
                                           acc
                                         } else {
-                                          acc + (block.validatorPublicKey -> block.blockHash)
+                                          acc + (block.validatorId -> block.messageHash)
                                         }
                                       }
                                     )
@@ -142,18 +134,22 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
+      validatorLatestMsg <- dag.latestMessage(creator)
+      validatorSeqNum    = validatorLatestMsg.fold(0)(_.validatorMsgSeqNum + 1)
       header = ProtoUtil
         .blockHeader(
           body,
+          Keys.PublicKey(creator.toByteArray),
           parentsHashList,
           serializedJustifications,
           postState,
-          rank = 0L,
-          protocolVersion = 1,
-          timestamp = now,
-          chainId = chainId
+          0L,
+          validatorSeqNum,
+          1,
+          now,
+          chainId
         )
-        .withValidatorPublicKey(creator)
+        .withMessageType(messageType)
       block                = ProtoUtil.unsignedBlockProto(body, header)
       unsignedIndexedBlock <- IndexedDagStorage[F].index(block)
       signedIndexedBlock = ProtoUtil.unsignedBlockProto(

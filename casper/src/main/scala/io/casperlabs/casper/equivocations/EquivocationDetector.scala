@@ -4,12 +4,13 @@ import cats.Monad
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.Estimator.BlockHash
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
-import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.catscontrib.MonadThrowable
 
 object EquivocationDetector {
 
@@ -22,7 +23,7 @@ object EquivocationDetector {
     * a validator has been detected as equivocating, then for every message M1 he creates later,
     * we can find least one message M2 that M1 and M2 don't cite each other.
     */
-  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
+  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
       block: Block
   )(
@@ -70,7 +71,7 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  private[casper] def checkEquivocations[F[_]: Monad: Log](
+  private[casper] def checkEquivocations[F[_]: MonadThrowable: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
@@ -90,9 +91,10 @@ object EquivocationDetector {
                             latestMessageOfCreator <- dag
                                                        .lookup(latestMessageHashOfCreator)
                                                        .map(_.get)
-                            implicit0(blockTopoOrdering: Ordering[BlockSummary]) = DagOperations.blockTopoOrderingDesc
+                            message                                         <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                            implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
                             stream = DagOperations.bfToposortTraverseF(
-                              List(BlockSummary.fromBlock(block))
+                              List(message)
                             )(
                               b =>
                                 b.justifications.toList

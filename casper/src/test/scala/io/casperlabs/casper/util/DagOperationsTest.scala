@@ -4,13 +4,13 @@ import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.shared.Sorting.blockSummaryOrdering
+import io.casperlabs.models.Message
+import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -59,17 +59,16 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
           dag                <- dagStorage.getRepresentation
           dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
-          stream = DagOperations.bfToposortTraverseF[Task](List(BlockSummary.fromBlock(genesis))) {
-            b =>
-              dag
-                .children(b.blockHash)
-                .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
+          stream = DagOperations.bfToposortTraverseF[Task](Message.fromBlock(genesis).toList) { b =>
+            dag
+              .children(b.messageHash)
+              .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }(Monad[Task], dagTopoOrderingAsc)
           _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
-              List(BlockSummary.fromBlock(b6), BlockSummary.fromBlock(b7))
+              Message.fromBlock(b6).toList ++ Message.fromBlock(b7).toList
             ) { b =>
               b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
@@ -286,7 +285,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
          *              |  /
          *  0         genesis
          */
-        implicit def toBlockSummary: Block => BlockSummary = BlockSummary.fromBlock(_)
+        implicit def toMessageSummary: Block => Message = Message.fromBlock(_).get
         for {
           genesis <- createAndStoreBlock[Task](Seq.empty)
           b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
@@ -300,28 +299,28 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
           dag <- dagStorage.getRepresentation
 
           _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b7), dag) shouldBeF Map(
-                toBlockSummary(b6) -> BitSet(0),
-                toBlockSummary(b4) -> BitSet(0),
-                toBlockSummary(b7) -> BitSet(1),
-                toBlockSummary(b2) -> BitSet(1)
+                toMessageSummary(b6) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(0),
+                toMessageSummary(b7) -> BitSet(1),
+                toMessageSummary(b2) -> BitSet(1)
               )
 
           _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b3), dag) shouldBeF Map(
-                toBlockSummary(b6) -> BitSet(0),
-                toBlockSummary(b4) -> BitSet(0),
-                toBlockSummary(b5) -> BitSet(0)
+                toMessageSummary(b6) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(0),
+                toMessageSummary(b5) -> BitSet(0)
               )
 
           _ <- DagOperations.uncommonAncestors[Task](Vector(b2, b4, b5), dag) shouldBeF Map(
-                toBlockSummary(b2) -> BitSet(0),
-                toBlockSummary(b4) -> BitSet(1),
-                toBlockSummary(b5) -> BitSet(2),
-                toBlockSummary(b3) -> BitSet(1, 2),
-                toBlockSummary(b1) -> BitSet(1, 2)
+                toMessageSummary(b2) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(1),
+                toMessageSummary(b5) -> BitSet(2),
+                toMessageSummary(b3) -> BitSet(1, 2),
+                toMessageSummary(b1) -> BitSet(1, 2)
               )
 
           result <- DagOperations.uncommonAncestors[Task](Vector(b1), dag) shouldBeF Map
-                     .empty[BlockSummary, BitSet]
+                     .empty[Message, BitSet]
         } yield result
   }
 

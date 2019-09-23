@@ -8,6 +8,7 @@ import com.google.common.cache.{Cache, CacheBuilder}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
@@ -76,7 +77,7 @@ class CachingDagStorage[F[_]: Sync](
   // and which also cached in CachingBlockStorage.
   // We don't use 'lookup' directly because it's overriden by BlockStorage#getBlockSummary
   // at SQLiteStorage.scala
-  override def lookup(blockHash: BlockHash): F[Option[BlockSummary]] = underlying.lookup(blockHash)
+  override def lookup(blockHash: BlockHash): F[Option[Message]] = underlying.lookup(blockHash)
 
   // TODO: Remove DagRepresentation#contains because
   // we already have BlockStorage#contains with the same semantics
@@ -104,12 +105,12 @@ class CachingDagStorage[F[_]: Sync](
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
     underlying.latestMessageHash(validator)
 
-  override def latestMessage(validator: Validator): F[Option[BlockSummary]] =
+  override def latestMessage(validator: Validator): F[Option[Message]] =
     underlying.latestMessage(validator)
 
   override def latestMessageHashes: F[Map[Validator, BlockHash]] = underlying.latestMessageHashes
 
-  override def latestMessages: F[Map[Validator, BlockSummary]] = underlying.latestMessages
+  override def latestMessages: F[Map[Validator, Message]] = underlying.latestMessages
 }
 
 object CachingDagStorage {
