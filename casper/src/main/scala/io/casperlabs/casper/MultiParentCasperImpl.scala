@@ -523,25 +523,31 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                        now,
                        protocolVersion
                      )
-        validatorPrevMsgOpt <- dag.latestMessage(ByteString.copyFrom(validatorId))
       } yield {
-        val block = ProtoUtil.block(
-          justifications,
-          checkpoint.preStateHash,
-          checkpoint.postStateHash,
-          checkpoint.bondedValidators,
-          checkpoint.deploysForBlock,
-          protocolVersion,
-          merged.parents.map(_.blockHash),
-          validatorPrevMsgOpt,
-          chainId,
-          now,
-          rank,
-          validatorId,
-          privateKey,
-          sigAlgorithm
-        )
-        CreateBlockStatus.created(block)
+        if (checkpoint.deploysForBlock.isEmpty) {
+          CreateBlockStatus.noNewDeploys
+        } else {
+          // Start numbering from 1 (validator's first block seqNum = 1)
+          val validatorSeqNum =
+            latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+          val block = ProtoUtil.block(
+            justifications,
+            checkpoint.preStateHash,
+            checkpoint.postStateHash,
+            checkpoint.bondedValidators,
+            checkpoint.deploysForBlock,
+            protocolVersion,
+            merged.parents.map(_.blockHash),
+            validatorSeqNum,
+            chainId,
+            now,
+            rank,
+            validatorId,
+            privateKey,
+            sigAlgorithm
+          )
+          CreateBlockStatus.created(block)
+        }
       }).handleErrorWith {
         case ex @ SmartContractEngineError(error_msg) =>
           Log[F]
