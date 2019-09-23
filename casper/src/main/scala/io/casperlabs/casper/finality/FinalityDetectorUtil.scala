@@ -129,7 +129,7 @@ object FinalityDetectorUtil {
     * Find the panorama of M and represent this panorama as an array
     * panoramaM, putting (for j=0,1,2,..., n-1)
     * panoramaM(j) := daglevel(latest message of V(j) seen from block M)
-	  * When V(j)-swimlane is empty or V(j) happens to be an equivocator - so in cases
+    * When V(j)-swimlane is empty or V(j) happens to be an equivocator - so in cases
     * where latest message of V(i) is not well defined concept - in these cases
     * put 0 (zero) in the corresponding cell.
     */

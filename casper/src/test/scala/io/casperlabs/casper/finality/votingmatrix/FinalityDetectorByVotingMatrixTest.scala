@@ -343,7 +343,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
-  it should "finalized equivocator's block when enough honest validators votes for it" in withStorage {
+  it should "finalize equivocator's block when enough honest validators votes for it" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")

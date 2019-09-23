@@ -155,7 +155,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
       } yield result
   }
 
-  // See [[casper/src/test/resources/casper/paranomaM.png]]
+  // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v0 = generateValidator("V0")
@@ -278,7 +278,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
       } yield ()
   }
 
-  // See [[casper/src/test/resources/casper/paranomaM.png]]
+  // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaM" should "properly return the panorama of message B, and when V(j)-swimlane is empty or V(j) happens to be an equivocato, put 0 in the corresponding cell." in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v0 = generateValidator("V0")
