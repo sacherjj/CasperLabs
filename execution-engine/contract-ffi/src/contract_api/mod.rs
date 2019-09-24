@@ -19,7 +19,6 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{TryFrom, TryInto};
-use core::mem::MaybeUninit;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
@@ -214,16 +213,9 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: T
 }
 
 fn load_arg(index: u32) -> Option<usize> {
-    // This is a memory placeholder that will be overwritten on the host side
-    let mut ok_mem = MaybeUninit::uninit();
-    // load_arg FFI function will overwrite a byte passed as 2nd argument with a value that
-    // indicates there is argument present (1) or there is no argument at this index passed (0).
-    let arg_size = unsafe { ext_ffi::load_arg(index, ok_mem.as_mut_ptr()) };
-    // Regardless of the result the byte is *always* set so the following call is safe
-    let ok = unsafe { ok_mem.assume_init() } != 0;
-    // Convert the function call result into an optional
-    if ok {
-        Some(arg_size)
+    let arg_size = unsafe { ext_ffi::load_arg(index) };
+    if arg_size >= 0 {
+        Some(arg_size as usize)
     } else {
         None
     }
