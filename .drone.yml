@@ -438,6 +438,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
+  - "make setup"
   - "make build"
   image: "casperlabs/buildenv:latest"
   when:
@@ -451,6 +452,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make setup -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
@@ -562,6 +564,7 @@ steps:
 - name: package-ee
   commands:
   - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make setup -C ./execution-engine"
   - "make cargo-package-all"
   - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
   - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
@@ -908,24 +911,6 @@ steps:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - /usr/local/bin/sbt client/universal:stage
 
-- name: rust-toolchain
-  image: appleboy/drone-ssh:latest
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - cd execution-engine
-    - make setup
-
 - name: build-ee
   image: appleboy/drone-ssh:latest
   environment:
@@ -943,6 +928,7 @@ steps:
     - export PATH=$PATH:/usr/local/bin/
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
+    - make setup
     - ~/.cargo/bin/cargo build --release
 
 - name: build-system-contracts
@@ -961,6 +947,7 @@ steps:
     script:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
+    - make setup
     - ~/.cargo/bin/cargo build -p pos --release --target wasm32-unknown-unknown
     - ~/.cargo/bin/cargo build -p mint-token --release --target wasm32-unknown-unknown
 
