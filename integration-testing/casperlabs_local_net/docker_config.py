@@ -4,14 +4,13 @@ from typing import Any, Optional
 from docker import DockerClient
 
 
-from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.common import random_string, BOOTSTRAP_PATH, testing_root_path
 
 
 DEFAULT_NODE_ENV = {
     "RUST_BACKTRACE": "full",
     "CL_LOG_LEVEL": os.environ.get("CL_LOG_LEVEL", "INFO"),
-    "CL_CASPER_IGNORE_DEPLOY_SIGNATURE": "false",
     "CL_SERVER_NO_UPNP": "true",
     "CL_VERSION": "test",
 }
@@ -76,6 +75,7 @@ class DockerConfig:
             "--tls-key": self.tls_key_path(),
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
+            "--casper-chain-spec-path": self.chain_spec_path(),
         }
         if not self.is_read_only:
             options["--casper-validator-private-key"] = self.node_private_key
@@ -83,12 +83,6 @@ class DockerConfig:
             options["--grpc-use-tls"] = ""
         if self.bootstrap_address:
             options["--server-bootstrap"] = self.bootstrap_address
-        if self.is_bootstrap:
-            gen_acct_key_file = GENESIS_ACCOUNT.public_key_filename
-            options[
-                "--casper-genesis-account-public-key-path"
-            ] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
-            options["--casper-initial-motes"] = self.initial_motes
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
         return options
