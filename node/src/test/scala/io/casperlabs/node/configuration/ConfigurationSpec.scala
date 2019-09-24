@@ -108,7 +108,6 @@ class ConfigurationSpec
       requiredSigs = 1,
       chainSpecPath = Paths.get("/tmp/test"),
       standalone = false,
-      genesisPath = Paths.get("/tmp/genesis"),
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),

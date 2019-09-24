@@ -22,9 +22,6 @@ final case class CasperConf(
     validatorPrivateKeyPath: Option[Path],
     validatorSigAlgorithm: String,
     knownValidatorsFile: Option[Path],
-    @ignore
-    @relativeToDataDir("genesis")
-    genesisPath: Path = Paths.get("nonreachable"),
     requiredSigs: Int,
     chainSpecPath: Path,
     standalone: Boolean,
