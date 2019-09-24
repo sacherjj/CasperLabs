@@ -33,9 +33,11 @@ fn get_list_key(name: &str) -> TURef<Vec<String>> {
 
 fn update_list(name: String) {
     let list_key = get_list_key("list");
-    let mut list = read(list_key.clone())
-        .unwrap_or_else(|_| revert(Error::Read.into()))
-        .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
+    let mut list = match read(list_key.clone()) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     list.push(name);
     write(list_key, list);
 }
@@ -54,14 +56,18 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 }
 
 fn publish(msg: String) {
-    let curr_list = read(get_list_key("list"))
-        .unwrap_or_else(|_| revert(Error::Read.into()))
-        .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
+    let curr_list = match read(get_list_key("list")) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     for name in curr_list.iter() {
         let uref = get_list_key(name);
-        let mut messages = read(uref.clone())
-            .unwrap_or_else(|_| revert(Error::Read.into()))
-            .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
+        let mut messages = match read(uref.clone()) {
+            Ok(Some(messages)) => messages,
+            Ok(None) => revert(Error::ValueNotFound.into()),
+            Err(_) => revert(Error::Read.into()),
+        };
         messages.push(msg.clone());
         write(uref, messages);
     }
@@ -97,9 +103,11 @@ pub extern "C" fn counter_ext() {
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef)
-                .unwrap_or_else(|_| revert(Error::Read.into()))
-                .unwrap_or_else(|| revert(Error::ValueNotFound.into()));
+            let result = match read(turef) {
+                Ok(Some(result)) => result,
+                Ok(None) => revert(Error::ValueNotFound.into()),
+                Err(_) => revert(Error::Read.into()),
+            };
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),
