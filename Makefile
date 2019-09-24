@@ -14,7 +14,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
-TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
+TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/grpc -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -198,7 +198,7 @@ cargo-native-packager/%:
 		.make/install/protoc-ts \
 		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
-	$(eval DIR_OUT = ./explorer/grpc/generated)
+	$(eval DIR_OUT = ./explorer/grpc/grpc)
 	rm -rf $(DIR_OUT)
 	mkdir -p $(DIR_OUT)
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
