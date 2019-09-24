@@ -93,33 +93,32 @@ slow:
 # Generate keys and bonds.
 .casperlabs:
 	mkdir -p .casperlabs/bootstrap
-	mkdir -p .casperlabs/genesis/system-account
-	mkdir -p .casperlabs/genesis/system-contracts
-	mkdir -p .casperlabs/node-0
-	mkdir -p keys/account-0
+	mkdir -p .casperlabs/chainspec/0-genesis
 
-	mkdir -p .casperlabs/explorer
-	echo 1 > .casperlabs/explorer/nonce.txt
+	@# Download or build system contract, unzip them to the chainspec dir.
+	./get-system-contracts.sh .casperlabs/chainspec/0-genesis/system-contracts.tar.gz
+	cp ./genesis-manifest.toml .casperlabs/chainspec/0-genesis/manifest.toml
 
-	./get-system-contracts.sh .casperlabs/genesis/system-contracts/system-contracts.tar.gz
+	@# Create an account named `system-account` to hold some initial tokens to distribute.
+	mkdir -p keys/system-account
+	../key-management/docker-gen-account-keys.sh keys/system-account
+	(cat keys/system-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/0-genesis/accounts.csv
 
-	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account
-	../key-management/docker-gen-account-keys.sh keys/account-0
-	../key-management/docker-gen-keys.sh .casperlabs/node-0
-
-	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
-	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt
-
-	bash -c 'i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+	@# Create bonded validators with 0 balance.
+	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
+		echo Generating validator $$i / $(CL_CASPER_NUM_VALIDATORS) ; \
 		mkdir -p .casperlabs/node-$$i ; \
 		mkdir -p keys/account-$$i ; \
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
 		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
-		(cat .casperlabs/node-$$i/validator-id; echo " $$BOND") >> .casperlabs/genesis/bonds.txt ; \
+		(cat .casperlabs/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/0-genesis/accounts.csv ; \
 		((i = i + 1)) ; \
 	done'
 
+	@# Copy the bootstrap node to a place where every node can read it from.
+	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
+
 	@# Check that the files we wanted exist and aren't empty.
-	[ -s .casperlabs/genesis/bonds.txt ]
+	[ -s .casperlabs/chainspec/0-genesis/accounts.csv ]
 	[ -s .casperlabs/bootstrap/node-id ]
