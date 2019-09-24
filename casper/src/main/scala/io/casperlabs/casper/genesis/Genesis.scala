@@ -39,12 +39,11 @@ object Genesis {
     for {
       // Execute the EE genesis setup based on the chain spec.
       // The results are already going to be committed.
-      genesisResult <- MonadError[F, Throwable].rethrow(
-                        ExecutionEngineService[F]
-                          .runGenesis(
-                            genesisConfig
-                          )
-                      )
+      genesisResult <- ExecutionEngineService[F]
+                        .runGenesis(
+                          genesisConfig
+                        )
+                        .rethrow
       transforms    = genesisResult.getEffect.transformMap
       postStateHash = genesisResult.poststateHash
 
