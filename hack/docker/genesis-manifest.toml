@@ -25,19 +25,19 @@ initial-accounts-path = "accounts.csv"
 # Default opcode cost
 regular = 1
 # Div operations multiplier.
-div-multiplier = 2
+div-multiplier = 1
 # Mul operations multiplier.
-mul-multiplier = 3
+mul-multiplier = 1
 # Memory (load/store) operations multiplier.
-mem-multiplier = 4
+mem-multiplier = 1
 # Amount of free memory (in 64kb pages) each contract can use for stack.
-mem-initial-pages = 5
+mem-initial-pages = 1
 # Grow memory cost, per page (64kb)
-mem-grow-per-page = 6
+mem-grow-per-page = 1
 # Memory copy cost, per byte
-mem-copy-per-byte = 7
+mem-copy-per-byte = 1
 # Max stack height (native WebAssembly stack limiter)
-max-stack-height = 8
+max-stack-height = 1
 # Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
-opcodes-multiplier = 9
-opcodes-divisor = 10
+opcodes-multiplier = 1
+opcodes-divisor = 1
