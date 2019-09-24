@@ -492,9 +492,14 @@ package object gossiping extends ChainSpecReader {
                    NodeDiscovery[F],
                    connectToGossip,
                    relayFactor = conf.server.approvalRelayFactor,
-                   pollInterval = conf.server.approvalPollInterval,
-                   bootstraps = conf.server.bootstrap,
-                   downloadManager = downloadManager,
+                   maybeBootstrapParams = NonEmptyList.fromList(conf.server.bootstrap) map {
+                     bootstraps =>
+                       GenesisApproverImpl.BootstrapParams(
+                         bootstraps,
+                         conf.server.approvalPollInterval,
+                         downloadManager
+                       )
+                   },
                    maybeGenesis = Some(genesis),
                    maybeApproval = maybeApproveBlock(genesis)
                  )

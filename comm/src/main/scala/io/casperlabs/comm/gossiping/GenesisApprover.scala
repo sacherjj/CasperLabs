@@ -63,14 +63,20 @@ object GenesisApproverImpl {
 
   case class Status(candidate: GenesisCandidate, block: Block)
 
+  /** Parameters we only need if we want to compare our Genesis to a set of bootstrap nodes,
+    * or to download the genesis from there in the first place. */
+  case class BootstrapParams[F[_]](
+      bootstraps: NonEmptyList[Node],
+      pollInterval: FiniteDuration,
+      downloadManager: DownloadManager[F]
+  )
+
   def apply[F[_]: Concurrent: Log: Timer](
       backend: GenesisApproverImpl.Backend[F],
       nodeDiscovery: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
-      bootstraps: List[Node],
-      pollInterval: FiniteDuration,
-      downloadManager: DownloadManager[F],
+      maybeBootstrapParams: Option[BootstrapParams[F]],
       maybeGenesis: Option[Block],
       maybeApproval: Option[Approval]
   ): Resource[F, GenesisApprover[F]] =
@@ -95,14 +101,12 @@ object GenesisApproverImpl {
         )
         // Pull the Genesis from bootstrap nodes if given, so we get a list of approvals
         // that we can compare agains the known validators for transitioning.
-        cancelPoll <- if (bootstraps.isEmpty) {
-                       ().pure[F].pure[F]
-                     } else {
+        cancelPoll <- maybeBootstrapParams.fold(().pure[F].pure[F]) { params =>
                        Concurrent[F].start {
                          approver.pollBootstraps(
-                           bootstraps.toList,
-                           pollInterval,
-                           downloadManager
+                           params.bootstraps.toList,
+                           params.pollInterval,
+                           params.downloadManager
                          )
                        } map { fiber =>
                          fiber.cancel.attempt.void
@@ -136,9 +140,7 @@ object GenesisApproverImpl {
       nodeDiscovery,
       connectToGossip,
       relayFactor,
-      bootstraps.toList,
-      pollInterval,
-      downloadManager,
+      Some(BootstrapParams(bootstraps, pollInterval, downloadManager)),
       maybeGenesis = None,
       maybeApproval = None
     )
@@ -157,21 +159,7 @@ object GenesisApproverImpl {
       nodeDiscovery,
       connectToGossip,
       relayFactor,
-      bootstraps = Nil,
-      pollInterval = Duration.Zero,
-      downloadManager = new DownloadManager[F] {
-        override def scheduleDownload(
-            summary: BlockSummary,
-            source: Node,
-            relay: Boolean
-        ): F[WaitHandle[F]] =
-          // The `fromGenesis` constructor has no bootstrap nodes,
-          // so we won't be downloading anything and this method
-          // will never be called. `fromGenesis` is currently
-          // only used in tests, since every node is supposed to
-          // create their own Genesis block.
-          ???
-      },
+      maybeBootstrapParams = None,
       maybeGenesis = Some(genesis),
       maybeApproval = maybeApproval
     )
