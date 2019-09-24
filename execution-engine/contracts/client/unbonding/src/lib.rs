@@ -9,6 +9,11 @@ use contract_ffi::value::uint::U512;
 
 const UNBOND_METHOD_NAME: &str = "unbond";
 
+enum Error {
+    MissingArgument = 100,
+    InvalidArgument = 101,
+}
+
 // Unbonding contract.
 //
 // Accepts unbonding amount (of type `Option<u64>`) as first argument.
@@ -18,7 +23,12 @@ const UNBOND_METHOD_NAME: &str = "unbond";
 pub extern "C" fn call() {
     let pos_pointer = unwrap_or_revert(contract_api::get_pos(), 77);
 
-    let unbond_amount: Option<U512> = contract_api::get_arg::<Option<u64>>(0).map(U512::from);
+    let unbond_amount: Option<U512> = match contract_api::get_arg::<Option<u64>>(0) {
+        Some(Ok(Some(data))) => Some(U512::from(data)),
+        Some(Ok(None)) => None,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     contract_api::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
 }

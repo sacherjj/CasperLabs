@@ -13,18 +13,28 @@ enum Arg {
 
 enum Error {
     NonExistentAccount = 1,
-    TransferError = 2,
+    Transfer = 2,
+    MissingArgument = 100,
+    InvalidArgument = 101,
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = contract_api::get_arg(Arg::PublicKey as u32);
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
+    let public_key: PublicKey = match contract_api::get_arg(Arg::PublicKey as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
+    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
     match contract_api::transfer_to_account(public_key, amount) {
         TransferResult::TransferredToNewAccount => {
             contract_api::revert(Error::NonExistentAccount as u32)
         }
         TransferResult::TransferredToExistingAccount => (),
-        TransferResult::TransferError => contract_api::revert(Error::TransferError as u32),
+        TransferResult::TransferError => contract_api::revert(Error::Transfer as u32),
     }
 }

@@ -10,7 +10,7 @@ use contract_ffi::value::{U512};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let number: U512 = get_arg(0);
+    let number: U512 = get_arg(0).unwrap().unwrap();
 
     // I do this silly looping because I don't know how to convert U512 to a native Rust int.
     for i in 0..1025 {

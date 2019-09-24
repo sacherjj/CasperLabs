@@ -18,6 +18,8 @@ enum Error {
     RefundPurseNotFound = 3,
     RefundPurseInvalid = 4,
     RefundPurseIncorrectAccessRights = 5,
+    MissingArgument = 100,
+    InvalidArgument = 101,
 }
 
 fn purse_to_key(p: &PurseId) -> Key {
@@ -85,6 +87,11 @@ pub extern "C" fn call() {
         Some(_) => contract_api::revert(Error::RefundPurseInvalid as u32),
     }
 
-    let payment_amount: U512 = contract_api::get_arg(0);
+    let payment_amount: U512 = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
+
     submit_payment(&pos_pointer, payment_amount);
 }

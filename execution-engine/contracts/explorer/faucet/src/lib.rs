@@ -12,6 +12,11 @@ use contract_ffi::value::U512;
 
 const TRANSFER_AMOUNT: u32 = 10_000_000;
 
+enum Error {
+    MissingArgument = 100,
+    InvalidArgument = 101,
+}
+
 /// Executes token transfer to supplied public key.
 /// Transfers 10_000_000 motes every time.
 ///
@@ -20,7 +25,11 @@ const TRANSFER_AMOUNT: u32 = 10_000_000;
 /// 2 - transfer error.
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = get_arg(0);
+    let public_key: PublicKey = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
     // Maybe we will decide to allow multiple funds up until some maximum value.
     let already_funded = read_local::<PublicKey, U512>(public_key).is_some();
     if already_funded {

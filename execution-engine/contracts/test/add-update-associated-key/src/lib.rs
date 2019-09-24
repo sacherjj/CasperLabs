@@ -13,9 +13,18 @@ const MOD_WEIGHT: u8 = 2;
 const ADD_FAILURE: u32 = 1;
 const UPDATE_FAILURE: u32 = 2;
 
+enum Error {
+    MissingArgument = 100,
+    InvalidArgument = 101,
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = contract_api::get_arg(0);
+    let account: PublicKey = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
 
     let weight1 = Weight::new(INIT_WEIGHT);
     contract_api::add_associated_key(account, weight1)

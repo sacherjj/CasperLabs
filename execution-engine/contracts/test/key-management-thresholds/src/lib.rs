@@ -15,9 +15,18 @@ use contract_ffi::value::account::{
     Weight,
 };
 
+enum Error {
+    MissingArgument = 100,
+    InvalidArgument = 101,
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let stage: String = get_arg(0);
+    let stage: String = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
     if stage == "init" {
         // executed with weight >= 1
         add_associated_key(PublicKey::new([42; 32]), Weight::new(100))

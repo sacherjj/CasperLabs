@@ -298,12 +298,16 @@ where
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.context.args().len() {
-            self.host_buf = self.context.args()[i].clone();
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::ArgIndexOutOfBounds(i).into())
+    pub fn load_arg(&mut self, i: usize) -> isize {
+        match self.context.args().get(i) {
+            Some(arg) => {
+                self.host_buf = arg.clone();
+                self.host_buf.len() as isize
+            }
+            None => {
+                self.host_buf.clear();
+                -1
+            }
         }
     }
 
