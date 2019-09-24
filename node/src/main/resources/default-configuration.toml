@@ -194,67 +194,19 @@ api-key = "$HOME/.casperlabs/api.key.pem"
 # Currently supported values: ed25519.
 validator-sig-algorithm = "ed25519"
 
-# Path to plain text file consisting of lines of the form `<pk> <stake>`
-# which defines the bond amounts for each validator at genesis.
-# <pk> is the public key (in base-64 encoding) identifying the validator and
-# <stake> is the amount of CSPR they have bonded (an integer).
-# Note: this overrides the --num-validators option.
-bonds-file = "$HOME/.casperlabs/genesis/bonds.txt"
-
 # Path to plain text file listing the public keys of validators known to the user (one per line).
 # Signatures from these validators are required in order to accept a block which starts the local
 # node's view of the DAG.
 # known-validators-file =
 
-# Amount of random validator keys to generate at genesis if no `bonds.txt` file is present.
-num-validators = 5
-
-# Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`
-# which defines the CSPR wallets that exist at genesis.
-# <algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519),
-# <pk> is the public key (in base-64 encoding) identifying the wallet and
-# <revBalance> is the amount of CSPR in the wallet.
-wallets-file = "$HOME/.casperlabs/genesis/wallets.txt"
-
-# Minimum bond accepted by the PoS contract in the genesis block.
-minimum-bond = 1
-
-# Maximum bond accepted by the PoS contract in the genesis block.
-maximum-bond = 9223372036854775807
-
 # Number of signatures from trusted validators required to creating an approved genesis block.
 required-sigs = 0
 
-# Path to the PEM encoded public key to use for the system account.
-# genesis-account-public-key-path =
-
-# Initial amount of motes to pass to the Mint contract.
-# Note: a "mote" is the smallest, indivisible unit of a token.
-initial-motes = 0
-
-# Path to the Wasm file which contains the Mint contract.
-# mint-code-path =
-
-# Path to the Wasm file which contains the Proof-of-Stake contract
-# pos-code-path =
-
-# Identifier of the shard this node is connected to.
-shard-id = "casperlabs"
+# Path to the directory which contains the Chain Spec.
+chain-spec-path = "$HOME/.casperlabs/chainspec"
 
 # Start a stand-alone node (no bootstrapping).
 standalone = false
-
-# Start a node as a genesis validator.
-approve-genesis = false
-
-# Interval at which condition for creating ApprovedBlock will be checked.
-approve-genesis-interval = "5seconds"
-
-# Time window in which BlockApproval messages will be accumulated before checking conditions.
-approve-genesis-duration = "5minutes"
-
-# Timestamp for the deploys.
-# deploy-timestamp =
 
 # Enable auto-proposal of blocks.
 auto-propose-enabled = false

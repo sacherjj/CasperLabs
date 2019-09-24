@@ -133,6 +133,7 @@ object ChainSpec extends ParserImplicits {
     else dir.resolve(file)
 }
 
+/** Adds extension methods to ipc.ChainSpec so it can be read from various sources. */
 trait ChainSpecReader {
   import ChainSpec.{resolvePath, Accounts, GenesisConf, UpgradeConf}
 
@@ -263,3 +264,5 @@ trait ChainSpecReader {
         )
   }
 }
+
+object ChainSpecReader extends ChainSpecReader

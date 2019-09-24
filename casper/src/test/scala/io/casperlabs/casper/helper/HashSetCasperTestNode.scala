@@ -266,8 +266,7 @@ object HashSetCasperTestNode {
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[ipc.DeployItem],
-          protocolVersion: ProtocolVersion
+          genesisConfig: ipc.ChainSpec.GenesisConfig
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))

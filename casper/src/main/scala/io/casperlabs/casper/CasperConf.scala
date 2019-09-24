@@ -21,34 +21,16 @@ final case class CasperConf(
     validatorPrivateKey: Option[String],
     validatorPrivateKeyPath: Option[Path],
     validatorSigAlgorithm: String,
-    bondsFile: Path,
     knownValidatorsFile: Option[Path],
-    numValidators: Int,
-    @ignore
-    @relativeToDataDir("genesis")
-    genesisPath: Path = Paths.get("nonreachable"),
-    walletsFile: Path,
-    minimumBond: Long,
-    maximumBond: Long,
     requiredSigs: Int,
-    genesisAccountPublicKeyPath: Option[Path],
-    initialMotes: BigInt,
-    mintCodePath: Option[Path],
-    posCodePath: Option[Path],
-    shardId: String,
+    chainSpecPath: Path,
     standalone: Boolean,
-    approveGenesis: Boolean,
-    approveGenesisInterval: FiniteDuration,
-    approveGenesisDuration: FiniteDuration,
-    deployTimestamp: Option[Long],
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
     autoProposeMaxInterval: FiniteDuration,
     autoProposeMaxCount: Int,
     maxBlockSizeBytes: Int
-) extends SubConfig {
-  def chainId = shardId
-}
+) extends SubConfig
 
 object CasperConf {
   private implicit val logSource: LogSource = LogSource(this.getClass)

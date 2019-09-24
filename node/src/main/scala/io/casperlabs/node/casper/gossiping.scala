@@ -3,6 +3,7 @@ package io.casperlabs.node.casper
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
@@ -27,8 +28,9 @@ import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.configuration.{ChainSpecReader, Configuration}
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
@@ -43,7 +45,8 @@ import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
-  import cats.data.NonEmptyList
+  import protocbridge.gens
+
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
@@ -65,6 +68,8 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
+      genesis <- makeGenesis[F](conf)
+
       cachedConnections <- makeConnectionsCache(
                             conf,
                             clientSslContext,
@@ -91,9 +96,15 @@ package object gossiping {
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
 
-      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
+      downloadManager <- makeDownloadManager(
+                          conf,
+                          connectToGossip,
+                          relaying,
+                          validatorId,
+                          genesis.getHeader.chainId
+                        )
 
-      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
+      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis)
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
@@ -121,7 +132,7 @@ package object gossiping {
                                        genesis,
                                        prestate,
                                        transforms,
-                                       conf.casper.chainId,
+                                       genesis.getHeader.chainId,
                                        relaying
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
@@ -133,7 +144,13 @@ package object gossiping {
       isInitialRef <- Resource.liftF(
                        Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
                      )
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
+      synchronizer <- makeSynchronizer(
+                       conf,
+                       connectToGossip,
+                       awaitApproval.join,
+                       isInitialRef,
+                       genesis.getHeader.chainId
+                     )
 
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
@@ -176,6 +193,29 @@ package object gossiping {
       _ <- makePeerCountPrinter
 
     } yield ()
+  }
+
+  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
+      conf: Configuration
+  ): Resource[F, Block] = {
+    import ChainSpecReader._
+    Resource.liftF[F, Block] {
+      for {
+        _ <- Log[F].info("Constructing Genesis block...")
+        genesis <- ipc.ChainSpec
+                    .fromDirectory(conf.casper.chainSpecPath)
+                    .fold(
+                      errors =>
+                        MonadThrowable[F].raiseError(
+                          new IllegalArgumentException(
+                            errors.toList.mkString(", ")
+                          )
+                        ),
+                      spec => Genesis.fromChainSpec[F](spec.getGenesis)
+                    )
+                    .map(_.getBlockMessage)
+      } yield genesis
+    }
   }
 
   /** Check if we have a block yet. */
@@ -309,7 +349,8 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
-      validatorId: Option[ValidatorIdentity]
+      validatorId: Option[ValidatorIdentity],
+      chainId: String
   ): Resource[F, DownloadManager[F]] =
     for {
       _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
@@ -332,7 +373,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.chainId, block)
+                                validateAndAddBlock(chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -353,17 +394,16 @@ package object gossiping {
                         )
     } yield downloadManager
 
+  // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
+  // which could be based on the presence of other known validators, signaled by their approvals.
+  // That just gives us the assurance that we are using the right chain spec because other are as well.
   private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F]
+      downloadManager: DownloadManager[F],
+      genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
-      knownValidators <- Resource.liftF {
-                          // Based on `CasperPacketHandler.of` in default mode.
-                          CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
-                        }
-
       validatorId <- Resource.liftF {
                       for {
                         id <- ValidatorIdentity.fromConfig[F](conf.casper)
@@ -378,39 +418,52 @@ package object gossiping {
                       } yield id
                     }
 
-      maybeApproveBlock = (block: Block) =>
-        validatorId.map { id =>
-          val sig = id.signature(block.blockHash.toByteArray)
-          Approval()
-            .withApproverPublicKey(ByteString.copyFrom(id.publicKey))
-            .withSignature(sig)
-        }
+      _ <- Resource.liftF {
+            for {
+              // Validate it to make sure that code path is exercised.
+              _ <- Log[F].info(
+                    s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
+                  )
+              _ <- validateAndAddBlock(
+                    genesis.getHeader.chainId,
+                    genesis
+                  )
+            } yield ()
+          }
 
-      candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
-                             if (conf.casper.approveGenesis) {
-                               // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
-                               MonadThrowable[F].raiseError(
-                                 new IllegalStateException(
-                                   "Genesis validation is temporarily disabled. It won't be needed in the new Genesis specification."
-                                 )
-                               )
-                               // TODO: Read the genesis we made based on the chain spec from the store and just compare the hashes.
-                             } else if (conf.casper.standalone) {
-                               // This is the case of the bootstrap node. It will not pull candidates.
-                               Log[F].info("Starting in create genesis mode") *>
-                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
-                             } else {
-                               // Non-validating nodes. They are okay with everything,
-                               Log[F].info("Starting in default mode") *>
-                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
-                             }
-                           }
+      knownValidators <- Resource.liftF {
+                          // Based on `CasperPacketHandler.of` in default mode.
+                          CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
+                        }
+
+      // Produce an approval for a valid candiate if this node is a Genesis validator.
+      maybeApproveBlock = (block: Block) =>
+        validatorId
+          .filter { id =>
+            val publicKey = ByteString.copyFrom(id.publicKey)
+            block.getHeader.getState.bonds.exists { bond =>
+              bond.validatorPublicKey == publicKey
+            }
+          }
+          .map { id =>
+            val sig = id.signature(block.blockHash.toByteArray)
+            Approval()
+              .withApproverPublicKey(ByteString.copyFrom(id.publicKey))
+              .withSignature(sig)
+          }
 
       backend = new GenesisApproverImpl.Backend[F] {
+        // Everyone has to have the same chain spec, so approval is just a matter of checking the candidate hash.
         override def validateCandidate(
             block: Block
         ): F[Either[Throwable, Option[Approval]]] =
-          candidateValidator(block)
+          if (block.blockHash == genesis.blockHash) {
+            maybeApproveBlock(block).asRight.pure[F]
+          } else {
+            InvalidArgument(
+              s"Block hash ${show(block.blockHash)} did not equal the expected Genesis hash ${show(genesis.blockHash)}"
+            ).asLeft.pure[F].widen
+          }
 
         override def canTransition(
             block: Block,
@@ -436,53 +489,30 @@ package object gossiping {
             .map(_.map(_.getBlockMessage))
       }
 
-      approver <- if (conf.casper.standalone) {
-                   for {
-                     genesis <- Resource.liftF {
-                                 for {
-                                   _       <- Log[F].info("Constructing Genesis candidate...")
-                                   genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
-                                   // Store it so others can pull it from the bootstrap node.
-                                   _ <- Log[F].info(
-                                         s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
-                                       )
-                                   _ <- validateAndAddBlock(
-                                         conf.casper.chainId,
-                                         genesis
-                                       )
-                                 } yield genesis
-                               }
-
-                     approver <- GenesisApproverImpl.fromGenesis(
-                                  backend,
-                                  NodeDiscovery[F],
-                                  connectToGossip,
-                                  relayFactor = conf.server.approvalRelayFactor,
-                                  genesis = genesis,
-                                  maybeApproval = maybeApproveBlock(genesis)
-                                )
-                   } yield approver
-                 } else {
-                   for {
-                     bootstraps <- unsafeGetBootstraps[F](conf)
-                     approver <- GenesisApproverImpl.fromBootstraps(
-                                  backend,
-                                  NodeDiscovery[F],
-                                  connectToGossip,
-                                  bootstraps = bootstraps,
-                                  relayFactor = conf.server.approvalRelayFactor,
-                                  pollInterval = conf.server.approvalPollInterval,
-                                  downloadManager = downloadManager
-                                )
-                   } yield approver
-                 }
+      approver <- GenesisApproverImpl[F](
+                   backend,
+                   NodeDiscovery[F],
+                   connectToGossip,
+                   relayFactor = conf.server.approvalRelayFactor,
+                   maybeBootstrapParams = NonEmptyList.fromList(conf.server.bootstrap) map {
+                     bootstraps =>
+                       GenesisApproverImpl.BootstrapParams(
+                         bootstraps,
+                         conf.server.approvalPollInterval,
+                         downloadManager
+                       )
+                   },
+                   maybeGenesis = Some(genesis),
+                   maybeApproval = maybeApproveBlock(genesis)
+                 )
     } yield approver
 
   def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
-      isInitialRef: Ref[F, Boolean]
+      isInitialRef: Ref[F, Boolean],
+      chainId: String
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _         <- SynchronizerImpl.establishMetrics[F]
@@ -506,7 +536,7 @@ package object gossiping {
                          } yield latest.values.toList
 
                        override def validate(blockSummary: BlockSummary): F[Unit] =
-                         Validation[F].blockSummary(blockSummary, conf.casper.chainId)
+                         Validation[F].blockSummary(blockSummary, chainId)
 
                        override def notInDag(blockHash: ByteString): F[Boolean] =
                          isInDag(blockHash).map(!_)
@@ -698,18 +728,6 @@ package object gossiping {
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
-
-  // Should only be called in non-stand alone mode.
-  private def unsafeGetBootstraps[F[_]: MonadThrowable](
-      conf: Configuration
-  ): Resource[F, NonEmptyList[Node]] =
-    Resource.liftF(
-      MonadThrowable[F]
-        .fromOption(
-          NonEmptyList.fromList(conf.server.bootstrap),
-          new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
-        )
-    )
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],

@@ -109,17 +109,6 @@ object ExecEngineUtil {
                   .rethrow
     } yield results
 
-  private def processGenesisDeploys[F[_]: MonadError[?[_], Throwable]: BlockStorage: ExecutionEngineService](
-      deploys: Seq[Deploy],
-      protocolVersion: state.ProtocolVersion
-  ): F[GenesisResult] =
-    for {
-      eeDeploys <- deploys.toList.traverse(ProtoUtil.deployDataToEEDeploy[F](_))
-      results <- ExecutionEngineService[F]
-                  .runGenesis(eeDeploys, protocolVersion)
-                  .rethrow
-    } yield results
-
   /** Chooses a set of commuting effects.
     *
     * Set is a FIFO one - the very first commuting effect will be chosen,
@@ -184,7 +173,7 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: BlockStorage: ExecutionEngineService](
+  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
@@ -193,10 +182,18 @@ object ExecEngineUtil {
     val blocktime       = block.getHeader.timestamp
 
     if (isGenesisLike(block)) {
-      for {
-        genesisResult <- processGenesisDeploys[F](deploys, protocolVersion)
-        transformMap  = genesisResult.getEffect.transformMap
-      } yield transformMap
+      // The new Genesis definition is that there's a chain spec that everyone's supposed to
+      // execute on their own and they aren't passed around to be executed.
+      BlockStorage[F].get(block.blockHash).flatMap {
+        case None =>
+          MonadThrowable[F].raiseError(
+            new IllegalStateException(
+              s"Block ${PrettyPrinter.buildString(block.blockHash)} looks like a Genesis based on a ChainSpec but it cannot be found in storage."
+            )
+          )
+        case Some(genesis) =>
+          genesis.transformEntry.pure[F]
+      }
     } else {
       for {
         processedDeploys <- processDeploys[F](

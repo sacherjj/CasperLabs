@@ -246,60 +246,16 @@ private[configuration] final case class Options private (
       )
 
     @scallop
-    val casperNumValidators =
-      gen[Int](
-        "Amount of random validator keys to generate at genesis if no `bonds.txt` file is present."
-      )
-
-    @scallop
-    val casperBondsFile =
-      gen[Path](
-        "Path to plain text file consisting of lines of the form `<pk> <stake>`, " +
-          "which defines the bond amounts for each validator at genesis. " +
-          "<pk> is the public key (in base-64 encoding) identifying the validator and <stake>" +
-          s"is the amount of CSPR they have bonded (an integer). Note: this overrides the --num-validators option."
-      )
-    @scallop
     val casperKnownValidatorsFile =
       gen[Path](
         "Path to plain text file listing the public keys of validators known to the user (one per line). " +
           "Signatures from these validators are required in order to accept a block which starts the local" +
           s"node's view of the DAG."
       )
-    @scallop
-    val casperWalletsFile =
-      gen[Path](
-        "Path to plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
-          "which defines the CSPR wallets that exist at genesis. " +
-          "<algorithm> is the algorithm used to verify signatures when using the wallet (currently supported value is only ed25519)," +
-          "<pk> is the public key (in base-64 encoding) identifying the wallet and <revBalance>" +
-          s"is the amount of CSPR in the wallet."
-      )
-    @scallop
-    val casperMinimumBond =
-      gen[Long]("Minimum bond accepted by the PoS contract in the genesis block.")
 
     @scallop
-    val casperMaximumBond =
-      gen[Long]("Maximum bond accepted by the PoS contract in the genesis block.")
-
-    @scallop
-    val casperGenesisAccountPublicKeyPath =
-      gen[Path]("Path to the PEM encoded public key to use for the system account.")
-
-    @scallop
-    val casperInitialMotes =
-      gen[BigInt](
-        "Initial number of motes to pass to the Mint contract. Note: a mote is the smallest, indivisible unit of a token."
-      )
-
-    @scallop
-    val casperMintCodePath =
-      gen[Path]("Path to the Wasm file which contains the Mint contract.")
-
-    @scallop
-    val casperPosCodePath =
-      gen[Path]("Path to the Wasm file which contains the Proof-of-Stake contract")
+    val casperChainSpecPath =
+      gen[Path]("Path to the directory which contains the Chain Spec.")
 
     @scallop
     val casperAutoProposeEnabled =
@@ -430,6 +386,7 @@ private[configuration] final case class Options private (
     @scallop
     val serverRelayBlockChunkConsumerTimeout =
       gen[FiniteDuration]("Maximum time to allow a peer downloading a block to consume each chunk.")
+
     @scallop
     val casperStandalone =
       gen[Flag](
@@ -442,28 +399,6 @@ private[configuration] final case class Options private (
       gen[Int](
         "Number of signatures from trusted validators required to creating an approved genesis block."
       )
-
-    @scallop
-    val casperDeployTimestamp =
-      gen[Long]("Timestamp for the deploys.")
-
-    @scallop
-    val casperApproveGenesisDuration =
-      gen[FiniteDuration](
-        "Time window in which BlockApproval messages will be accumulated before checking conditions.",
-        'd'
-      )
-
-    @scallop
-    val casperApproveGenesisInterval =
-      gen[FiniteDuration](
-        "Interval at which condition for creating ApprovedBlock will be checked.",
-        'i'
-      )
-
-    @scallop
-    val casperApproveGenesis =
-      gen[Flag]("Start a node as a genesis validator.")
 
     @scallop
     val serverHost =
@@ -535,10 +470,6 @@ private[configuration] final case class Options private (
         "Name of the algorithm to use for signing proposed blocks. " +
           s"Currently supported values: ed25519."
       )
-
-    @scallop
-    val casperShardId =
-      gen[String](s"Identifier of the shard this node is connected to.")
 
     @scallop
     val metricsPrometheus =
