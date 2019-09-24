@@ -77,10 +77,7 @@ To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#
 Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
 
 ```console
-ACCOUNT_ID="$(cat .casperlabs/genesis/system-account/account-id-hex)"
-mkdir keys/system-account
-cp .casperlabs/genesis/system-account/account-private.pem keys/system-account/
-cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
+ACCOUNT_ID="$(cat keys/system-account/account-id-hex)"
 ./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
      --from "$ACCOUNT_ID" \
@@ -90,7 +87,7 @@ cp .casperlabs/genesis/system-account/account-public.pem keys/system-account/
      --private-key /keys/system-account/account-private.pem
 ```
 
-As you may notice we make use of the `system-account` for deploys signing. This is temporary until we the add ability to create new custom accounts as part of Genesis.
+As you may notice we make use of the `system-account` for deploys signing. This is just an account that has some initial balance to play with and fund other accounts, it has no other role.
 
 After a successful deploy, you should see the following response:
 
