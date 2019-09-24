@@ -14,15 +14,16 @@ enum Arg {
     Account2PublicKey = 2,
 }
 
+#[repr(u16)]
 enum Error {
-    AccountAlreadyExists = ApiError::unreserved_min_plus(0),
+    AccountAlreadyExists = 0,
 }
 
 fn create_account_with_amount(account: PublicKey, amount: U512) {
     match contract_api::transfer_to_account(account, amount) {
         TransferResult::TransferredToNewAccount => (),
         TransferResult::TransferredToExistingAccount => {
-            contract_api::revert(Error::AccountAlreadyExists as u32)
+            contract_api::revert(ApiError::User(Error::AccountAlreadyExists as u16).into())
         }
         TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
     }

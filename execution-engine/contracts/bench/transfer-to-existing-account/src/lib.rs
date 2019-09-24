@@ -12,8 +12,9 @@ enum Arg {
     Amount = 1,
 }
 
+#[repr(u16)]
 enum Error {
-    TransferredToNewAccount = ApiError::unreserved_min_plus(0),
+    TransferredToNewAccount = 0,
 }
 
 #[no_mangle]
@@ -26,7 +27,7 @@ pub extern "C" fn call() {
             // This is the expected result, as all accounts have to be initialized beforehand
         }
         TransferResult::TransferredToNewAccount => {
-            contract_api::revert(Error::TransferredToNewAccount as u32)
+            contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16).into())
         }
         TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
     }

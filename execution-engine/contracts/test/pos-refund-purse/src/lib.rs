@@ -11,11 +11,12 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
+#[repr(u16)]
 enum Error {
-    ShouldNotExist = ApiError::unreserved_min_plus(0),
-    NotFound = ApiError::unreserved_min_plus(1),
-    Invalid = ApiError::unreserved_min_plus(2),
-    IncorrectAccessRights = ApiError::unreserved_min_plus(3),
+    ShouldNotExist = 0,
+    NotFound,
+    Invalid,
+    IncorrectAccessRights,
 }
 
 fn purse_to_key(p: &PurseId) -> Key {
@@ -44,7 +45,7 @@ fn submit_payment(pos: &ContractPointer, amount: U512) {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
     {
-        contract_api::revert(99);
+        contract_api::revert(ApiError::Transfer.into());
     }
 }
 
@@ -58,28 +59,28 @@ pub extern "C" fn call() {
     // get_refund_purse should return None before setting it
     let refund_result = get_refund_purse(&pos_pointer);
     if refund_result.is_some() {
-        contract_api::revert(Error::ShouldNotExist as u32);
+        contract_api::revert(ApiError::User(Error::ShouldNotExist as u16).into());
     }
 
     // it should return Some(x) after calling set_refund_purse(x)
     set_refund_purse(&pos_pointer, &p1);
     let refund_purse = match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(Error::NotFound as u32),
+        None => contract_api::revert(ApiError::User(Error::NotFound as u16).into()),
         Some(x) if x.value().addr() == p1.value().addr() => x.value(),
-        Some(_) => contract_api::revert(Error::Invalid as u32),
+        Some(_) => contract_api::revert(ApiError::User(Error::Invalid as u16).into()),
     };
 
     // the returned purse should not have any access rights
     if refund_purse.is_addable() || refund_purse.is_writeable() || refund_purse.is_readable() {
-        contract_api::revert(Error::IncorrectAccessRights as u32)
+        contract_api::revert(ApiError::User(Error::IncorrectAccessRights as u16).into())
     }
 
     // get_refund_purse should return correct value after setting a second time
     set_refund_purse(&pos_pointer, &p2);
     match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(Error::NotFound as u32),
+        None => contract_api::revert(ApiError::User(Error::NotFound as u16).into()),
         Some(x) if x.value().addr() == p2.value().addr() => (),
-        Some(_) => contract_api::revert(Error::Invalid as u32),
+        Some(_) => contract_api::revert(ApiError::User(Error::Invalid as u16).into()),
     }
 
     let payment_amount: U512 = contract_api::get_arg(0);

@@ -1,34 +1,42 @@
 #![no_std]
 
 extern crate alloc;
+extern crate contract_ffi;
 
 use alloc::string::String;
 use alloc::vec::Vec;
-
-extern crate contract_ffi;
+use core::convert::From;
 
 use contract_ffi::contract_api::pointers::*;
 use contract_ffi::contract_api::*;
+use contract_ffi::contract_api::Error as ApiError;
 use contract_ffi::key::Key;
 
+#[repr(u16)]
 enum Error {
-    GetMailingURef = 1001,
-    WrongURefType = 1002,
-    GetKeyNameURef = 1003,
-    BadSubKey = 1004,
-    GetMessagesURef = 1005,
-    FindMessagesURef = 1006,
-    NoMessages = 1007,
-    NoSubKey = 1008,
+    GetMailingURef = 0,
+    WrongURefType,
+    GetKeyNameURef,
+    BadSubKey,
+    GetMessagesURef,
+    FindMessagesURef,
+    NoMessages,
+    NoSubKey,
+}
+
+impl From<Error> for ApiError {
+    fn from(error: Error) -> Self {
+        ApiError::User(error as u16)
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mailing_uref = get_uref("mailing").unwrap_or_else(|| revert(Error::GetMailingURef as u32));
+    let mailing_uref = get_uref("mailing").unwrap_or_else(|| revert(ApiError::from(Error::GetMailingURef).into()));
     let pointer = if let Key::Hash(hash) = mailing_uref {
         ContractPointer::Hash(hash)
     } else {
-        revert(Error::WrongURefType as u32); // exit code is currently arbitrary
+        revert(ApiError::from(Error::WrongURefType).into()); // exit code is currently arbitrary
     };
 
     let method = "sub";
@@ -40,9 +48,9 @@ pub extern "C" fn call() {
             add_uref(key_name, &sub_key);
 
             let key_name_uref =
-                get_uref(key_name).unwrap_or_else(|| revert(Error::GetKeyNameURef as u32));
+                get_uref(key_name).unwrap_or_else(|| revert(ApiError::from(Error::GetKeyNameURef).into()));
             if sub_key != key_name_uref {
-                revert(Error::BadSubKey as u32);
+                revert(ApiError::from(Error::BadSubKey).into());
             }
 
             let method = "pub";
@@ -52,15 +60,15 @@ pub extern "C" fn call() {
 
             let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
             let messages = read(turef)
-                .unwrap_or_else(|_| revert(Error::GetMessagesURef as u32))
-                .unwrap_or_else(|| revert(Error::FindMessagesURef as u32));
+                .unwrap_or_else(|_| revert(ApiError::from(Error::GetMessagesURef).into()))
+                .unwrap_or_else(|| revert(ApiError::from(Error::FindMessagesURef).into()));
 
             if messages.is_empty() {
-                revert(Error::NoMessages as u32);
+                revert(ApiError::from(Error::NoMessages).into());
             }
         }
         None => {
-            revert(Error::NoSubKey as u32);
+            revert(ApiError::from(Error::NoSubKey).into());
         }
     }
 }

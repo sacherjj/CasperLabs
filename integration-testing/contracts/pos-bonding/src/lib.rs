@@ -16,9 +16,10 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 
+#[repr(u16)]
 enum Error {
-    UnableToSeedAccount = ApiError::unreserved_min_plus(0),
-    UnknownCommand = ApiError::unreserved_min_plus(1),
+    UnableToSeedAccount = 0,
+    UnknownCommand,
 }
 
 fn purse_to_key(p: PurseId) -> Key {
@@ -73,12 +74,12 @@ pub extern "C" fn call() {
         if transfer_from_purse_to_account(main_purse(), account, amount)
             == TransferResult::TransferError
         {
-            revert(Error::UnableToSeedAccount as u32);
+            revert(ApiError::User(Error::UnableToSeedAccount as u16).into());
         }
     } else if command == TEST_UNBOND {
         let maybe_amount: Option<U512> = get_arg(1);
         unbond(&pos_pointer, maybe_amount);
     } else {
-        revert(Error::UnknownCommand as u32);
+        revert(ApiError::User(Error::UnknownCommand as u16).into());
     }
 }

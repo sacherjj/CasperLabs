@@ -15,8 +15,9 @@ enum Arg {
     Amount = 0,
 }
 
+#[repr(u16)]
 enum Error {
-    InvalidPhase = ApiError::unreserved_min_plus(0),
+    InvalidPhase = 0,
 }
 
 #[no_mangle]
@@ -45,7 +46,8 @@ pub extern "C" fn call() {
             _ => None,
         }
     };
-    let value = value.unwrap_or_else(|| contract_api::revert(Error::InvalidPhase as u32));
+    let value = value
+        .unwrap_or_else(|| contract_api::revert(ApiError::User(Error::InvalidPhase as u16).into()));
     let result_key = contract_api::new_turef(value.to_string()).into();
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");

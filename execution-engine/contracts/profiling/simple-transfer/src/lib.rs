@@ -11,8 +11,9 @@ enum Arg {
     Amount = 1,
 }
 
+#[repr(u16)]
 enum Error {
-    NonExistentAccount = ApiError::unreserved_min_plus(0),
+    NonExistentAccount = 0,
 }
 
 #[no_mangle]
@@ -21,7 +22,7 @@ pub extern "C" fn call() {
     let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
     match contract_api::transfer_to_account(public_key, amount) {
         TransferResult::TransferredToNewAccount => {
-            contract_api::revert(Error::NonExistentAccount as u32)
+            contract_api::revert(ApiError::User(Error::NonExistentAccount as u16).into())
         }
         TransferResult::TransferredToExistingAccount => (),
         TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),

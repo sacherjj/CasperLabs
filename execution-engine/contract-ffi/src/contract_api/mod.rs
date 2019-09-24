@@ -19,62 +19,108 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
 use core::convert::{From, TryFrom, TryInto};
-use core::u8;
+use core::fmt::{self, Debug, Formatter};
+use core::u16;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
-/// All `Error` variants defined in this library will be less than `UNRESERVED_ERROR_MIN`.
-pub const UNRESERVED_ERROR_MIN: u32 = u8::MAX as u32 + 1;
+/// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
+/// value less than or equal to `RESERVED_ERROR_MAX`.
+const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
 
-/// Variants to be passed to `contract_api::revert()`.  All values will be less than
-/// `UNRESERVED_ERROR_MIN`.
-#[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+/// Variants to be passed to `contract_api::revert()`.
+///
+/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
+/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
+///
+/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
+/// e.g.
+/// ```
+/// use casperlabs_contract_ffi::contract_api::Error;
+///
+/// #[repr(u16)]
+/// enum FailureCode {
+///     Zero = 0,  // 65,536 as an Error::User
+///     One,       // 65,537 as an Error::User
+///     Two        // 65,538 as an Error::User
+/// }
+///
+/// impl From<FailureCode> for Error {
+///     fn from(code: FailureCode) -> Self {
+///         Error::User(code as u16)
+///     }
+/// }
+///
+/// assert_eq!(Error::User(1), FailureCode::One.into());
+/// assert_eq!(65_536, u32::from(Error::from(FailureCode::Zero)));
+/// assert_eq!(65_538, u32::from(Error::from(FailureCode::Two)));
+/// ```
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Error {
     /// A call to `get_uref()` returned a failure.
-    GetURef = 1,
+    GetURef,
     /// Failed to deserialize a value.
-    Deserialize = 2,
+    Deserialize,
     /// Failed to find a specified contract.
-    ContractNotFound = 3,
+    ContractNotFound,
     /// The `Key` variant was not as expected.
-    UnexpectedKeyVariant = 4,
+    UnexpectedKeyVariant,
     /// The `Value` variant was not as expected.
-    UnexpectedValueVariant = 5,
+    UnexpectedValueVariant,
     /// `read` returned an error.
-    Read = 6,
+    Read,
     /// The given key returned a `None` value.
-    ValueNotFound = 7,
+    ValueNotFound,
     /// Failed to initialize a mint purse.
-    MintFailure = 8,
+    MintFailure,
     /// Invalid purse name given.
-    InvalidPurseName = 9,
+    InvalidPurseName,
     /// Invalid purse retrieved.
-    InvalidPurse = 10,
+    InvalidPurse,
     /// Failed to transfer motes.
-    Transfer = 11,
-}
-
-impl Error {
-    /// Can be used to set values for external Enum variants to avoid conflicting with reserved
-    /// variants.  E.g.
-    /// ```
-    /// use casperlabs_contract_ffi::contract_api::Error;
-    ///
-    /// enum MyError {
-    ///     A = Error::unreserved_min_plus(0),  // 256
-    ///     B = Error::unreserved_min_plus(1),  // 257
-    /// }
-    /// ```
-    pub const fn unreserved_min_plus(value: u16) -> isize {
-        UNRESERVED_ERROR_MIN as isize + value as isize
-    }
+    Transfer,
+    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
+    /// `Error::User` is converted to a `u32`.
+    User(u16),
 }
 
 impl From<Error> for u32 {
     fn from(error: Error) -> Self {
-        error as u32
+        match error {
+            Error::GetURef => 1,
+            Error::Deserialize => 2,
+            Error::ContractNotFound => 3,
+            Error::UnexpectedKeyVariant => 4,
+            Error::UnexpectedValueVariant => 5,
+            Error::Read => 6,
+            Error::ValueNotFound => 7,
+            Error::MintFailure => 8,
+            Error::InvalidPurseName => 9,
+            Error::InvalidPurse => 10,
+            Error::Transfer => 11,
+            Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
+        }
+    }
+}
+
+impl Debug for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Error::GetURef => write!(f, "Error::GetURef")?,
+            Error::Deserialize => write!(f, "Error::Deserialize")?,
+            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
+            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
+            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
+            Error::Read => write!(f, "Error::Read")?,
+            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
+            Error::MintFailure => write!(f, "Error::MintFailure")?,
+            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
+            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
+            Error::Transfer => write!(f, "Error::Transfer")?,
+            Error::User(value) => write!(f, "Error::User({})", value)?,
+        }
+        write!(f, " [{}]", u32::from(*self))
     }
 }
 
@@ -486,7 +532,8 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(100));
+    let balance: U512 =
+        deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize.into()));
 
     Some(balance)
 }
@@ -651,4 +698,23 @@ pub fn get_phase() -> Phase {
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
     deserialize(&bytes).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use core::u16;
+
+    #[test]
+    fn error() {
+        assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
+        assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
+
+        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!("Error::User(0) [65536]", &format!("{:?}", Error::User(0)));
+        assert_eq!(
+            "Error::User(65535) [131071]",
+            &format!("{:?}", Error::User(u16::MAX))
+        );
+    }
 }
