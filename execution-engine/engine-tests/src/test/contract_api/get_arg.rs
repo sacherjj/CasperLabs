@@ -4,17 +4,19 @@ use crate::support::test_support::{
     self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::contract_api::argsparser::ArgsParser;
+use contract_ffi::contract_api::Error;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 
 const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 
 #[derive(Debug)]
+#[repr(u16)]
 enum GetArgContractError {
-    MissingArgument0 = 100,
-    MissingArgument1 = 101,
-    InvalidArgument0 = 200,
-    InvalidArgument1 = 201,
+    MissingArgument0 = 0,
+    MissingArgument1,
+    InvalidArgument0,
+    InvalidArgument1,
 }
 
 const ARG0_VALUE: &str = "Hello, world!";
@@ -69,14 +71,14 @@ fn should_revert_with_missing_arg() {
         call_get_arg(()).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            GetArgContractError::MissingArgument0 as u32,
+            u32::from(Error::User(GetArgContractError::MissingArgument0 as u16))
         )
     );
     assert_eq!(
         call_get_arg((String::from(ARG0_VALUE),)).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            GetArgContractError::MissingArgument1 as u32
+            u32::from(Error::User(GetArgContractError::MissingArgument1 as u16))
         )
     );
 }
@@ -88,7 +90,7 @@ fn should_revert_with_invalid_argument() {
         call_get_arg((U512::from(123),)).expect_err("should fail"),
         format!(
             "Exit code: {}",
-            GetArgContractError::InvalidArgument0 as u32
+            u32::from(Error::User(GetArgContractError::InvalidArgument0 as u16))
         )
     );
     assert_eq!(
@@ -99,7 +101,7 @@ fn should_revert_with_invalid_argument() {
         .expect_err("should fail"),
         format!(
             "Exit code: {}",
-            GetArgContractError::InvalidArgument1 as u32
+            u32::from(Error::User(GetArgContractError::InvalidArgument1 as u16))
         )
     );
 }

@@ -8,16 +8,11 @@ extern crate contract_ffi;
 use alloc::string::String;
 use contract_ffi::contract_api::{
     add_uref, create_purse, get_arg, get_balance, get_uref, has_uref, main_purse, new_turef,
-    revert, transfer_from_purse_to_purse,
+    revert, transfer_from_purse_to_purse, Error,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
-
-enum Error {
-    MissingArgument = 100,
-    InvalidArgument = 101,
-}
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -27,8 +22,8 @@ pub extern "C" fn call() {
 
     let src_purse_name: String = match get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument as u32),
-        None => revert(Error::MissingArgument as u32),
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
     };
 
     let src_purse_key = get_uref(&src_purse_name).unwrap_or_else(|| revert(103));
@@ -39,8 +34,8 @@ pub extern "C" fn call() {
     };
     let dst_purse_name: String = match get_arg(1) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument as u32),
-        None => revert(Error::MissingArgument as u32),
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
     };
 
     let dst_purse = if !has_uref(&dst_purse_name) {
@@ -58,8 +53,8 @@ pub extern "C" fn call() {
     };
     let amount: U512 = match get_arg(2) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument as u32),
-        None => revert(Error::MissingArgument as u32),
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
     };
 
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);

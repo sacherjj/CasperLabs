@@ -18,26 +18,131 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 use argsparser::ArgsParser;
-use core::convert::{TryFrom, TryInto};
+use core::convert::{From, TryFrom, TryInto};
+use core::fmt::{self, Debug, Formatter};
+use core::u16;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
+/// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
+/// value less than or equal to `RESERVED_ERROR_MAX`.
+const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
+
+/// Variants to be passed to `contract_api::revert()`.
+///
+/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
+/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
+///
+/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
+/// e.g.
+/// ```
+/// use casperlabs_contract_ffi::contract_api::Error;
+///
+/// #[repr(u16)]
+/// enum FailureCode {
+///     Zero = 0,  // 65,536 as an Error::User
+///     One,       // 65,537 as an Error::User
+///     Two        // 65,538 as an Error::User
+/// }
+///
+/// impl From<FailureCode> for Error {
+///     fn from(code: FailureCode) -> Self {
+///         Error::User(code as u16)
+///     }
+/// }
+///
+/// assert_eq!(Error::User(1), FailureCode::One.into());
+/// assert_eq!(65_536, u32::from(Error::from(FailureCode::Zero)));
+/// assert_eq!(65_538, u32::from(Error::from(FailureCode::Two)));
+/// ```
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Error {
+    /// A call to `get_uref()` returned a failure.
+    GetURef,
+    /// Failed to deserialize a value.
+    Deserialize,
+    /// Failed to find a specified contract.
+    ContractNotFound,
+    /// The `Key` variant was not as expected.
+    UnexpectedKeyVariant,
+    /// The `Value` variant was not as expected.
+    UnexpectedValueVariant,
+    /// `read` returned an error.
+    Read,
+    /// The given key returned a `None` value.
+    ValueNotFound,
+    /// Failed to initialize a mint purse.
+    MintFailure,
+    /// Invalid purse name given.
+    InvalidPurseName,
+    /// Invalid purse retrieved.
+    InvalidPurse,
+    /// Specified argument not provided.
+    MissingArgument,
+    /// Argument not of correct type.
+    InvalidArgument,
+    /// Failed to transfer motes.
+    Transfer,
+    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
+    /// `Error::User` is converted to a `u32`.
+    User(u16),
+}
+
+impl From<Error> for u32 {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::GetURef => 1,
+            Error::Deserialize => 2,
+            Error::ContractNotFound => 3,
+            Error::UnexpectedKeyVariant => 4,
+            Error::UnexpectedValueVariant => 5,
+            Error::Read => 6,
+            Error::ValueNotFound => 7,
+            Error::MintFailure => 8,
+            Error::InvalidPurseName => 9,
+            Error::InvalidPurse => 10,
+            Error::MissingArgument => 11,
+            Error::InvalidArgument => 12,
+            Error::Transfer => 13,
+            Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
+        }
+    }
+}
+
+impl Debug for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Error::GetURef => write!(f, "Error::GetURef")?,
+            Error::Deserialize => write!(f, "Error::Deserialize")?,
+            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
+            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
+            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
+            Error::Read => write!(f, "Error::Read")?,
+            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
+            Error::MintFailure => write!(f, "Error::MintFailure")?,
+            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
+            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
+            Error::MissingArgument => write!(f, "Error::MissingArgument")?,
+            Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
+            Error::Transfer => write!(f, "Error::Transfer")?,
+            Error::User(value) => write!(f, "Error::User({})", value)?,
+        }
+        write!(f, " [{}]", u32::from(*self))
+    }
+}
+
 /// Read value under the key in the global state
-pub fn read<T>(turef: TURef<T>) -> T
+pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
 where
     T: TryFrom<Value>,
 {
     let key: Key = turef.into();
-    let value = read_untyped(&key);
-    value
-        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
-        .try_into()
-        .map_err(|_| "T could not be derived from Value")
-        .unwrap()
+    let maybe_value = read_untyped(&key)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped(key: &Key) -> Option<Value> {
+fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
@@ -48,25 +153,22 @@ fn read_untyped(key: &Key) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
 }
 
 /// Reads the value at the given key in the context-local partition of global
 /// state
-pub fn read_local<K, V>(key: K) -> Option<V>
+pub fn read_local<K, V>(key: K) -> Result<Option<V>, bytesrepr::Error>
 where
     K: ToBytes,
     V: TryFrom<Value>,
 {
-    let key_bytes = key.to_bytes().unwrap();
-    read_untyped_local(&key_bytes).map(|v| {
-        v.try_into()
-            .map_err(|_| "T could not be derived from Value")
-            .unwrap()
-    })
+    let key_bytes = key.to_bytes()?;
+    let maybe_value = read_untyped_local(&key_bytes)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
+fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
     let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
@@ -75,7 +177,20 @@ fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
+}
+
+fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
+where
+    T: TryFrom<Value>,
+{
+    match maybe_value {
+        None => Ok(None),
+        Some(value) => value
+            .try_into()
+            .map(Some)
+            .map_err(|_| bytesrepr::Error::custom("T could not be derived from Value")),
+    }
 }
 
 /// Write the value under the key in the global state
@@ -435,7 +550,8 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(100));
+    let balance: U512 =
+        deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize.into()));
 
     Some(balance)
 }
@@ -449,7 +565,7 @@ pub fn main_purse() -> PurseId {
     // https://casperlabs.atlassian.net/browse/EE-439
     let account_pk = get_caller();
     let key = Key::Account(account_pk.value());
-    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    let account: Account = read_untyped(&key).unwrap().unwrap().try_into().unwrap();
     account.purse_id()
 }
 
@@ -568,20 +684,26 @@ pub fn transfer_from_purse_to_purse(
     .expect("Should parse result")
 }
 
-fn get_system_contract(name: &str) -> Option<ContractPointer> {
-    if let Key::URef(uref) = get_uref(name)? {
+fn get_system_contract(name: &str) -> ContractPointer {
+    let key = get_uref(name).unwrap_or_else(|| revert(Error::GetURef.into()));
+
+    if let Key::URef(uref) = key {
         let reference = TURef::new(uref.addr(), AccessRights::READ);
-        Some(ContractPointer::URef(reference))
+        ContractPointer::URef(reference)
     } else {
-        None
+        revert(Error::UnexpectedKeyVariant.into())
     }
 }
 
-pub fn get_mint() -> Option<ContractPointer> {
+/// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
+/// `contract_api::Error`.
+pub fn get_mint() -> ContractPointer {
     get_system_contract(MINT_NAME)
 }
 
-pub fn get_pos() -> Option<ContractPointer> {
+/// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
+/// with a `contract_api::Error`.
+pub fn get_pos() -> ContractPointer {
     get_system_contract(POS_NAME)
 }
 
@@ -590,4 +712,23 @@ pub fn get_phase() -> Phase {
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
     deserialize(&bytes).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use core::u16;
+
+    #[test]
+    fn error() {
+        assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
+        assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
+
+        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!("Error::User(0) [65536]", &format!("{:?}", Error::User(0)));
+        assert_eq!(
+            "Error::User(65535) [131071]",
+            &format!("{:?}", Error::User(u16::MAX))
+        );
+    }
 }

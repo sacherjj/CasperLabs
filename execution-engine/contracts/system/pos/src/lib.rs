@@ -242,8 +242,8 @@ fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
 pub fn delegate() {
     let method_name: String = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-        None => contract_api::revert(Error::MissingArgument as u32),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
     };
     let timestamp = contract_api::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
@@ -254,16 +254,16 @@ pub fn delegate() {
             let validator = contract_api::get_caller();
             let amount: U512 = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             if amount.is_zero() {
                 contract_api::revert(Error::BondTooSmall.into());
             }
             let source_uref: URef = match contract_api::get_arg(2) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
@@ -292,8 +292,8 @@ pub fn delegate() {
             let validator = contract_api::get_caller();
             let maybe_amount = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
@@ -345,8 +345,8 @@ pub fn delegate() {
         "set_refund_purse" => {
             let purse_id: PurseId = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             set_refund(purse_id.value());
         }
@@ -364,13 +364,13 @@ pub fn delegate() {
         "finalize_payment" => {
             let amount_spent: U512 = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             let account: PublicKey = match contract_api::get_arg(2) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
-                None => contract_api::revert(Error::MissingArgument as u32),
+                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+                None => contract_api::revert(Error::MissingArgument.into()),
             };
             finalize_payment(amount_spent, account);
         }

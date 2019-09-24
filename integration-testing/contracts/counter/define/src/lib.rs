@@ -19,7 +19,11 @@ pub extern "C" fn counter_ext() {
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef);
+            let result = match read(turef) {
+                Ok(Some(result)) => result,
+                Ok(None) => revert(Error::ValueNotFound.into()),
+                Err(_) => revert(Error::Read.into()),
+            };
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),

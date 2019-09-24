@@ -3,13 +3,10 @@
 
 extern crate alloc;
 extern crate contract_ffi;
-use contract_ffi::contract_api::{add_associated_key, get_arg, revert, set_action_threshold};
+use contract_ffi::contract_api::{
+    add_associated_key, get_arg, revert, set_action_threshold, Error,
+};
 use contract_ffi::value::account::{ActionType, AddKeyFailure, PublicKey, Weight};
-
-enum Error {
-    MissingArgument = 100,
-    InvalidArgument = 101,
-}
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -21,13 +18,13 @@ pub extern "C" fn call() {
 
     let key_management_threshold: Weight = match get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument as u32),
-        None => revert(Error::MissingArgument as u32),
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
     };
     let deploy_threshold: Weight = match get_arg(1) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument as u32),
-        None => revert(Error::MissingArgument as u32),
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
     };
 
     if key_management_threshold != Weight::new(0) {
