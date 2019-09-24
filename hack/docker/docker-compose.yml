@@ -83,9 +83,9 @@ services:
       - casperlabs
     # Ports are not exposed, access it through nginx instead.
     volumes:
-      # NOTE: This is using the system account, so no need for giving funds to the faucet.
-      - ${PWD}/keys/system-account/account-public.pem:/app/keys/public.key
-      - ${PWD}/keys/system-account/account-private.pem:/app/keys/private.key
+      # NOTE: This is using the faucet account already, so no need for giving funds to any account explicitly..
+      - ${PWD}/keys/faucet-account/account-public.pem:/app/keys/public.key
+      - ${PWD}/keys/faucet-account/account-private.pem:/app/keys/private.key
     environment:
       FAUCET_ACCOUNT_PUBLIC_KEY_PATH: /app/keys/public.key
       FAUCET_ACCOUNT_PRIVATE_KEY_PATH: /app/keys/private.key

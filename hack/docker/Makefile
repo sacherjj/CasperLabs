@@ -99,10 +99,10 @@ slow:
 	./get-system-contracts.sh .casperlabs/chainspec/0-genesis/system-contracts.tar.gz
 	cp ./genesis-manifest.toml .casperlabs/chainspec/0-genesis/manifest.toml
 
-	@# Create an account named `system-account` to hold some initial tokens to distribute.
-	mkdir -p keys/system-account
-	../key-management/docker-gen-account-keys.sh keys/system-account
-	(cat keys/system-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/0-genesis/accounts.csv
+	@# Create a `facet-account` to hold some initial tokens to distribute.
+	mkdir -p keys/faucet-account
+	../key-management/docker-gen-account-keys.sh keys/faucet-account
+	(cat keys/faucet-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/0-genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \

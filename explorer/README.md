@@ -29,7 +29,8 @@ cd -
 
 ### Fund the Faucet
 
-If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to establish the latter by transfering some tokens to it that it can later pass on.
+If we were not using the `faucet-account` that's created in the `hack/docker` setup as the Faucet account,
+we'd have to establish the an account by transfering some tokens to it that it can later pass on. Here's how to do it:
 
 Generate the necessary contracts first:
 
@@ -51,10 +52,10 @@ node ./server/dist/transfer.js \
   --transfer-contract-path contracts/client/transfer_to_account.wasm \
   --payment-contract-path contracts/client/standard_payment.wasm \
   --payment-amount 100000 \
-  --from-private-key-path ../hack/docker/.casperlabs/genesis/system-account/account-private.pem \
-  --from-public-key-path ../hack/docker/.casperlabs/genesis/system-account/account-public.pem \
+  --from-private-key-path ../hack/docker/keys/faucet-account/account-private.pem \
+  --from-public-key-path ../hack/docker/keys/faucet-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
-  --amount 100000000
+  --amount 10000000
 ```
 
 NOTE: If you are connecting to a HTTPS endpoint which uses a self-signed certificate, which is the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
