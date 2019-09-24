@@ -55,6 +55,9 @@ impl TryFrom<u32> for Error {
             d if d == Error::DestNotFound as u32 => Ok(Error::DestNotFound),
             d if d == Error::InvalidURef as u32 => Ok(Error::InvalidURef),
             d if d == Error::InvalidAccessRights as u32 => Ok(Error::InvalidAccessRights),
+            d if d == Error::InvalidNonEmptyPurseCreation as u32 => {
+                Ok(Error::InvalidNonEmptyPurseCreation)
+            }
             _ => Err(TryFromDeserializedU32Error(())),
         }
     }
