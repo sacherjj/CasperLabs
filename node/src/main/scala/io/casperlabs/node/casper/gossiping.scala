@@ -44,7 +44,7 @@ import scala.util.Random
 import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
-package object gossiping extends ChainSpecReader {
+package object gossiping {
   import protocbridge.gens
 
   private implicit val metricsSource: Metrics.Source =
@@ -197,7 +197,8 @@ package object gossiping extends ChainSpecReader {
 
   private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
       conf: Configuration
-  ): Resource[F, Block] =
+  ): Resource[F, Block] = {
+    import ChainSpecReader._
     Resource.liftF[F, Block] {
       for {
         _ <- Log[F].info("Constructing Genesis block...")
@@ -215,6 +216,7 @@ package object gossiping extends ChainSpecReader {
                     .map(_.getBlockMessage)
       } yield genesis
     }
+  }
 
   /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
