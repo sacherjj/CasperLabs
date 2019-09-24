@@ -15,7 +15,7 @@ protocol-version = 1
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 mint-code-path = "mint.wasm"
 
-# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
 pos-code-path = "pos.wasm"
 
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.

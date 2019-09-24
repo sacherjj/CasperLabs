@@ -18,7 +18,7 @@ protocol-version = 1
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 mint-code-path = "/opt/docker/system-contracts/mint_install.wasm"
 
-# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
+# Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
 pos-code-path = "/opt/docker/system-contracts/pos_install.wasm"
 
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
@@ -28,19 +28,19 @@ initial-accounts-path = "accounts.csv"
 # Default opcode cost
 regular = 1
 # Div operations multiplier.
-div-multiplier = 1
+div-multiplier = 16
 # Mul operations multiplier.
-mul-multiplier = 1
+mul-multiplier = 4
 # Memory (load/store) operations multiplier.
-mem-multiplier = 1
+mem-multiplier = 2
 # Amount of free memory (in 64kb pages) each contract can use for stack.
-mem-initial-pages = 1
+mem-initial-pages = 4096
 # Grow memory cost, per page (64kb)
-mem-grow-per-page = 1
+mem-grow-per-page = 8192
 # Memory copy cost, per byte
 mem-copy-per-byte = 1
 # Max stack height (native WebAssembly stack limiter)
-max-stack-height = 1
+max-stack-height = 65536
 # Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` / `opcodes_div`
-opcodes-multiplier = 1
-opcodes-divisor = 1
+opcodes-multiplier = 3
+opcodes-divisor = 8
