@@ -60,6 +60,6 @@ cargo build -p mint-token --release --target wasm32-unknown-unknown
 
 The compiled contracts will be found here:
 ```
-./target/wasm32-unknown-unknown/release/pos.wasm
-./target/wasm32-unknown-unknown/release/mint_token.wasm
+./target/wasm32-unknown-unknown/release/pos_install.wasm
+./target/wasm32-unknown-unknown/release/mint_install.wasm
 ```

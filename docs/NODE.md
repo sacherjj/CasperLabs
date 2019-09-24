@@ -51,13 +51,19 @@ Note: `--payment-amount` is used in the standard payment code to pay for the exe
 For now, the value is not used, but payment code will be enabled on the DEVNET
 in an upcoming release.
 
-##### Step 4: Start the Execution Engine
+##### Step 4: Download the ChainSpec
+
+Download the CasperLabs ChainSpec from <TODO-CHAINSPEC-URL>. Create a directory at `~/.casperlabs/chainspec` and unzip the contents of the downloaded archive into it.
+
+The ChainSpec contains the system contracts, but if you downloaded or built them separately you need to copy them to the first directory (genesis) under `~/.casperlabs/chainspec`.
+
+##### Step 5: Start the Execution Engine
 
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 5: Start the Node
+##### Step 6: Start the Node
 
 In a separate terminal, run:
 ```
@@ -94,11 +100,13 @@ pkill casperlabs-engine-grpc-server
 
 You can run a single Node in standalone mode for testing purposes.
 
-##### Step 1: Create a `bonds.txt` file
+##### Step 1: Create an `accounts.csv` file
+
+Add your validator key as the single bonded validator to the accounts in the ChainSpec.
 
 ```
-mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
+mkdir -p ~/.casperlabs/chainspec/0-genesis
+(cat keys/validator-id; echo ",0,100") > ~/.casperlabs/chainspec/0-genesis/accounts.csv
 ```
 
 ##### Step 2: Start the Execution Engine
