@@ -6,7 +6,7 @@ import { CleanableFormData } from './FormData';
 import {
   BlockInfo,
   DeployInfo
-} from '../grpc/io/casperlabs/casper/consensus/info_pb';
+} from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
 import { decodeBase16 } from '../lib/Conversions';
 import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';

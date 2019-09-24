@@ -17,6 +17,7 @@
     "@types/react-router-dom": "^4.3.4",
     "bootstrap": "^4.3.1",
     "bootstrap-components": "^1.1.287",
+    "casperlabsjs": "0.0.2",
     "d3": "^5.9.7",
     "file-saver": "^2.0.2",
     "google-protobuf": "^3.9.0",

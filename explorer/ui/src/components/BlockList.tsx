@@ -8,7 +8,7 @@ import {
   shortHash
 } from './Utils';
 import DataTable from './DataTable';
-import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';

@@ -2,7 +2,7 @@ import blake from "blakejs";
 import fs from "fs";
 import { Message } from "google-protobuf";
 import * as nacl from "tweetnacl-ts";
-import { Approval, Deploy, Signature } from "../grpc/io/casperlabs/casper/consensus/consensus_pb";
+import { Approval, Deploy, Signature } from "casperlabsjs/grpc/io/casperlabs/casper/consensus/consensus_pb";
 import { Args, BigIntValue, BytesValue, LongValue } from "./Args";
 
 // https://www.npmjs.com/package/tweetnacl-ts

@@ -4,7 +4,7 @@ import { observer } from 'mobx-react';
 import { DeployContainer } from '../containers/DeployContainer';
 import { decodeBase16, encodeBase16 } from '../lib/Conversions';
 import DataTable from './DataTable';
-import { DeployInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { DeployInfo } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';

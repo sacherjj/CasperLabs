@@ -38,6 +38,7 @@
     "@types/express-jwt": "0.0.42",
     "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
+    "casperlabsjs": "0.0.2",
     "command-line-args": "^5.1.1",
     "dotenv": "^8.0.0",
     "express": "^4.17.1",

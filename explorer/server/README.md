@@ -20,13 +20,6 @@ Runs the server and the UI in development mode. The UI will proxy to the server 
 
 Build artifacts into the `dist` directory.
 
-The `grpc` directory contains auto-generated files, they were addes as follows:
-
-```console
-cd src
-ln -s ../../grpc/generated grpc
-```
-
 ### `npm run test`
 
 Run unit tests, for example to check the contract ABI serialization format.

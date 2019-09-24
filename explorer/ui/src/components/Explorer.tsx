@@ -10,7 +10,7 @@ import {
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { encodeBase16 } from '../lib/Conversions';
-import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
 import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
