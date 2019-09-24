@@ -25,9 +25,11 @@ pub extern "C" fn call() {
     // add or update `main_purse` if it doesn't exist already
     add_uref("purse:main", &Key::from(main_purse.value()));
 
-    let src_purse_name: String = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
+    let src_purse_name: String = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
 
     let src_purse_key = get_uref(&src_purse_name).unwrap_or_else(|| revert(103));
 
@@ -35,9 +37,11 @@ pub extern "C" fn call() {
         Some(uref) => PurseId::new(*uref),
         None => revert(104),
     };
-    let dst_purse_name: String = get_arg(1)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
+    let dst_purse_name: String = match get_arg(1) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
 
     let dst_purse = if !has_uref(&dst_purse_name) {
         // If `dst_purse_name` is not in known urefs list then create a new purse
@@ -52,9 +56,11 @@ pub extern "C" fn call() {
             None => revert(106),
         }
     };
-    let amount: U512 = get_arg(2)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
+    let amount: U512 = match get_arg(2) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
 
     let transfer_result = transfer_from_purse_to_purse(src_purse, dst_purse, amount);
 

@@ -16,12 +16,16 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     add_associated_key(PublicKey::new([123; 32]), Weight::new(254)).unwrap_or_else(|_| revert(50));
-    let key_management_threshold: Weight = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
-    let deployment_threshold: Weight = get_arg(1)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
+    let key_management_threshold: Weight = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
+    let deployment_threshold: Weight = match get_arg(1) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument as u32),
+        None => revert(Error::MissingArgument as u32),
+    };
 
     set_action_threshold(ActionType::KeyManagement, key_management_threshold)
         .unwrap_or_else(|_| revert(100));

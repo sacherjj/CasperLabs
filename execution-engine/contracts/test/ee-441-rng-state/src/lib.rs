@@ -10,7 +10,7 @@ use alloc::string::String;
 
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{add_uref, get_arg, new_turef, revert};
+use contract_ffi::contract_api::{add_uref, new_turef};
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::U512;
@@ -37,9 +37,11 @@ pub extern "C" fn do_something() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let flag: String = get_arg(0)
-        .unwrap_or_else(|| revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| revert(Error::InvalidArgument as u32));
+    let flag: String = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
     let do_nothing: ContractPointer = contract_api::store_function("do_nothing", BTreeMap::new());
     let do_something: ContractPointer =
         contract_api::store_function("do_something", BTreeMap::new());

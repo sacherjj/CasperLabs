@@ -19,10 +19,11 @@ enum Error {
 #[no_mangle]
 pub extern "C" fn call() {
     let accounts: Vec<PublicKey> = {
-        let data: Vec<Vec<u8>> = contract_api::get_arg(0)
-            .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-            .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
-
+        let data: Vec<Vec<u8>> = match contract_api::get_arg(0) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+            None => contract_api::revert(Error::MissingArgument as u32),
+        };
         data.into_iter()
             .map(|bytes| {
                 PublicKey::try_from(bytes.as_slice())
@@ -30,9 +31,11 @@ pub extern "C" fn call() {
             })
             .collect()
     };
-    let seed_amount: U512 = contract_api::get_arg(1)
-        .unwrap_or_else(|| contract_api::revert(Error::MissingArgument as u32))
-        .unwrap_or_else(|_| contract_api::revert(Error::InvalidArgument as u32));
+    let seed_amount: U512 = match contract_api::get_arg(1) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument as u32),
+        None => contract_api::revert(Error::MissingArgument as u32),
+    };
     for public_key in accounts {
         let result = contract_ffi::contract_api::transfer_to_account(public_key, seed_amount);
         if result == TransferResult::TransferError {

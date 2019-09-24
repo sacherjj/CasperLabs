@@ -20,7 +20,6 @@ enum GetArgContractError {
 const ARG0_VALUE: &str = "Hello, world!";
 const ARG1_VALUE: u64 = 42;
 
-
 /// Calls get_arg contract and returns Ok(()) in case no error, or String which is the error message
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
