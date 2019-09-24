@@ -30,42 +30,7 @@ import scala.util.control.NoStackTrace
 import scala.util._
 
 object Genesis {
-
-  /** Fill out the basic fields in the block. */
-  private def withoutContracts(
-      bonds: Map[PublicKey, Long],
-      timestamp: Long,
-      chainId: String,
-      protocolVersion: Long
-  ): Block = {
-    import Sorting.byteArrayOrdering
-    import io.casperlabs.crypto.Keys.convertTypeclasses
-    //sort to have deterministic order (to get reproducible hash)
-    val bondsSorted = bonds.toIndexedSeq.sorted.map {
-      case (pk, stake) =>
-        val validator = ByteString.copyFrom(pk)
-        Bond(validator, stake)
-    }
-
-    val state = Block
-      .GlobalState()
-      .withBonds(bondsSorted)
-
-    val body = Block.Body()
-
-    val header = blockHeader(
-      body,
-      parentHashes = Nil,
-      justifications = Nil,
-      state = state,
-      rank = 0,
-      protocolVersion = protocolVersion,
-      timestamp = timestamp,
-      chainId = chainId
-    )
-
-    unsignedBlockProto(body, header)
-  }
+  import Sorting.byteArrayOrdering
 
   // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/135528449/Genesis+Process+Specification
   def fromChainSpec[F[_]: MonadThrowable: Log: ExecutionEngineService: BlockStorage](
@@ -80,21 +45,26 @@ object Genesis {
                             genesisConfig
                           )
                       )
-      bondsMap = genesisConfig.accounts.collect {
-        case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-          PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
-      }.toMap
-
-      initial = withoutContracts(
-        bonds = bondsMap,
-        timestamp = genesisConfig.timestamp,
-        chainId = genesisConfig.name,
-        protocolVersion = genesisConfig.getProtocolVersion.value
-      )
       transforms    = genesisResult.getEffect.transformMap
       postStateHash = genesisResult.poststateHash
 
-      stateWithContracts = initial.getHeader.getState
+      // Sorted list of bonded validators.
+      bonds = genesisConfig.accounts
+        .collect {
+          case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
+            PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
+        }
+        .toSeq
+        .sorted
+        .map {
+          case (pk, stake) =>
+            val validator = ByteString.copyFrom(pk)
+            Bond(validator, stake)
+        }
+
+      state = Block
+        .GlobalState()
+        .withBonds(bonds)
         .withPreStateHash(ExecutionEngineService[F].emptyStateHash)
         .withPostStateHash(postStateHash)
 
@@ -106,12 +76,13 @@ object Genesis {
         body,
         parentHashes = Nil,
         justifications = Nil,
-        state = stateWithContracts,
-        rank = initial.getHeader.rank,
-        protocolVersion = initial.getHeader.protocolVersion,
-        timestamp = initial.getHeader.timestamp,
-        chainId = initial.getHeader.chainId
+        state = state,
+        rank = 0,
+        protocolVersion = genesisConfig.getProtocolVersion.value,
+        timestamp = genesisConfig.timestamp,
+        chainId = genesisConfig.name
       )
+
       unsignedBlock = unsignedBlockProto(body, header)
 
       genesis = BlockMsgWithTransform(Some(unsignedBlock), transforms)
