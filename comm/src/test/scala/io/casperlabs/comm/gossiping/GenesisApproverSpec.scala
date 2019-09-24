@@ -192,7 +192,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
         }
       ) { approver =>
         for {
-          _ <- Task.sleep(50.millis)
+          _ <- Task.sleep(250.millis)
           r <- approver.getCandidate
         } yield {
           r.right.get.approvals should have size 1

@@ -20,22 +20,22 @@ pub extern "C" fn call() {
     if let PurseTransferResult::TransferError =
         contract_api::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)
     {
-        contract_api::revert(1);
+        contract_api::revert(2);
     }
 
     let payment_balance = match contract_api::get_balance(payment_purse) {
         Some(amount) => amount,
-        None => contract_api::revert(2),
+        None => contract_api::revert(3),
     };
 
     if payment_balance != payment_amount {
-        contract_api::revert(3)
+        contract_api::revert(4)
     }
 
     // cannot withdraw
     if let PurseTransferResult::TransferSuccessful =
         contract_api::transfer_from_purse_to_purse(payment_purse, source_purse, payment_amount)
     {
-        contract_api::revert(4);
+        contract_api::revert(5);
     }
 }

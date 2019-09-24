@@ -15,6 +15,7 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{
     self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::DEFAULT_PAYMENT;
 
 const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -39,7 +40,7 @@ fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
 }
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
-const ACCOUNT_1_SEED_AMOUNT: u64 = MAX_PAYMENT * 2;
+const ACCOUNT_1_SEED_AMOUNT: u64 = 100_000_000 * 2;
 
 const GENESIS_ACCOUNT_STAKE: u64 = 100_000;
 const ACCOUNT_1_STAKE: u64 = 42_000;
@@ -81,7 +82,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
             DEFAULT_BLOCK_TIME,
@@ -99,7 +100,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let transforms = &result.builder().get_transforms()[0];
 
-    let pos_transform = &transforms[&pos.into()];
+    let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
     let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
@@ -130,7 +131,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (
                 String::from(TEST_SEED_NEW_ACCOUNT),
@@ -145,7 +146,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (
                 String::from(TEST_BOND_FROM_MAIN_PURSE),
@@ -175,7 +176,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let transforms = &result.builder().get_transforms()[1];
 
-    let pos_transform = &transforms[&pos.into()];
+    let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
     let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
@@ -212,7 +213,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -272,7 +273,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -321,7 +322,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             ACCOUNT_1_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (
                 String::from(TEST_UNBOND),
@@ -373,7 +374,7 @@ fn should_run_successful_bond_and_unbond() {
         .exec_with_args(
             GENESIS_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             "pos_bonding.wasm",
             (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
             DEFAULT_BLOCK_TIME,

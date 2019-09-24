@@ -667,17 +667,13 @@ pub fn transfer_from_purse_to_purse(
 }
 
 fn get_system_contract(name: &str) -> ContractPointer {
-    let public_uref = get_uref(name).unwrap_or_else(|| revert(Error::GetURef.into()));
+    let key = get_uref(name).unwrap_or_else(|| revert(Error::GetURef.into()));
 
-    let value = read_untyped(&public_uref)
-        .unwrap_or_else(|_| revert(Error::Deserialize.into()))
-        .unwrap_or_else(|| revert(Error::ContractNotFound.into()));
-
-    if let Value::Key(Key::URef(private_uref)) = value {
-        let pointer = TURef::new(private_uref.addr(), AccessRights::READ);
-        ContractPointer::URef(pointer)
+    if let Key::URef(uref) = key {
+        let reference = TURef::new(uref.addr(), AccessRights::READ);
+        ContractPointer::URef(reference)
     } else {
-        revert(Error::UnexpectedValueVariant.into())
+        revert(Error::UnexpectedKeyVariant.into())
     }
 }
 

@@ -5,7 +5,9 @@ import cats.Monad
 import cats.implicits._
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
+import io.casperlabs.blockstorage.DagRepresentation.Validator
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.crypto.hash.Blake2b256
 
 final class IndexedDagStorage[F[_]: Monad](
@@ -44,15 +46,16 @@ final class IndexedDagStorage[F[_]: Monad](
         case (acc, b) => math.max(b.rank, acc)
       }
       rank = maxRank + 1
-      nextCreatorSeqNum <- dag
-                            .latestMessage(block.getHeader.validatorPublicKey)
-                            .map(_.fold(-1)(_.validatorBlockSeqNum) + 1)
-      modifiedBlock = block
-        .withHeader(
-          header
-            .withValidatorBlockSeqNum(nextCreatorSeqNum)
-            .withRank(rank)
-        )
+      nextCreatorSeqNum = justificationMsgs
+        .find {
+          _.validatorPublicKey == header.validatorPublicKey
+        }
+        .fold(-1)(_.validatorBlockSeqNum) + 1
+      modifiedBlock = block.withHeader(
+        header
+          .withValidatorBlockSeqNum(nextCreatorSeqNum)
+          .withRank(rank)
+      )
       _ <- underlying.insert(modifiedBlock)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)

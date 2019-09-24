@@ -5,7 +5,7 @@ import time
 from pathlib import Path  # noqa: F401
 
 from casperlabs_local_net import LoggingMixin
-from casperlabs_local_net.common import Contract, MAX_PAYMENT_ABI
+from casperlabs_local_net.common import Contract, DEFAULT_PAYMENT_ABI
 from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
@@ -51,7 +51,7 @@ class PythonClient(CasperLabsClient, LoggingMixin):
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
         session_args: list = None,
-        payment_args: bytes = MAX_PAYMENT_ABI,
+        payment_args: bytes = DEFAULT_PAYMENT_ABI,
         alt_session_path: Optional[Path] = None,
         alt_payment_path: Optional[Path] = None,
     ) -> str:

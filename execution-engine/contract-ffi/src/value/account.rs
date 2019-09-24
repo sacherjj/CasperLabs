@@ -313,6 +313,11 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
+
+    /// Converts the underlying public key to a `Vec`
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {

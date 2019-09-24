@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
+
 use contract_ffi::contract_api;
 use contract_ffi::value::uint::U512;
 

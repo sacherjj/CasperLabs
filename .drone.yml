@@ -37,7 +37,6 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
-
 # - name: markdown-link-check
 #   commands:
 #   - "ci/markdown-link-check.sh"
@@ -45,6 +44,10 @@ steps:
 #   when:
 #     event:
 #     - pull_request
+#    changeset:
+#      includes:
+#      - "**/.drone.yml"
+#      - "**/**.md"
 
 - name: sbt-compile-test-pr
   commands:
@@ -55,6 +58,13 @@ steps:
   when:
     event:
     - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.scala"
+      - "**/**.sbt"
+      - "**/**.proto"
+      - "**/casperlabs-node.service"
 
 - name: git-status-post-scala-compile-pr
   commands:
@@ -64,6 +74,13 @@ steps:
   when:
     event:
     - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.scala"
+      - "**/**.sbt"
+      - "**/**.proto"
+      - "**/casperlabs-node.service"
   depends_on:
   - sbt-compile-test-pr
 
@@ -73,15 +90,21 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
-  - "~/.cargo/bin/rustup toolchain install $(cat rust-toolchain)"
-  - "rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown"
+  - "make setup"
   - "make test test-contracts"
   image: "casperlabs/buildenv:latest"
   when:
     event:
     - pull_request
-  depends_on:
-  - sbt-compile-test-pr
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
 
 - name: run-cargo-fmt-pr
   commands:
@@ -93,6 +116,15 @@ steps:
   when:
     event:
     - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-pr
 
@@ -106,6 +138,15 @@ steps:
   when:
     event:
     - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-pr
 
@@ -118,11 +159,12 @@ steps:
   when:
     event:
     - pull_request
-  depends_on:
-  - rust-compile-test-pr
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "integration-testing/**"
 
 # This section is for bors' branches only
-
 # - name: markdown-link-check-bors
 #   commands:
 #   - "ci/markdown-link-check.sh"
@@ -131,6 +173,10 @@ steps:
 #     branch:
 #     - staging
 #     - trying
+#    changeset:
+#      includes:
+#      - "**/.drone.yml"
+#      - "**/**.md"
 
 - name: sbt-test-docker-bors
   commands:
@@ -156,6 +202,13 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.scala"
+      - "**/**.sbt"
+      - "**/**.proto"
+      - "**/casperlabs-node.service"
   depends_on:
   - sbt-test-docker-bors
 
@@ -165,6 +218,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
+  - "make setup"
   - "make test"
   image: "casperlabs/buildenv:latest"
   when:
@@ -187,6 +241,15 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -202,6 +265,15 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -215,6 +287,15 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -229,6 +310,15 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/casperlabs-engine-grpc-server.spec"
+      - "**/rustfmt.toml"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -239,7 +329,47 @@ steps:
   - "./integration-testing/contracts/build_contracts.sh"
   - "make docker-build/execution-engine"
   - "make docker-build/integration-testing"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
+- name: docker-build-key-bors
+  commands:
+  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
   - "make docker-build/key-generator"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "hack/key-management/**"
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
+- name: docker-build-explorer-bors
+  commands:
+  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
+  - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
   - "make docker-build/explorer"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
@@ -251,6 +381,10 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "explorer/**"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -270,8 +404,12 @@ steps:
     branch:
     - staging
     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "hack/key-management/**"
   depends_on:
-  - docker-build-ee-int-bors
+  - docker-build-key-bors
 
 - name: run-integration-tests
   commands:
@@ -300,6 +438,7 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine"
+  - "make setup"
   - "make build"
   image: "casperlabs/buildenv:latest"
   when:
@@ -313,6 +452,7 @@ steps:
 - name: docker-build-ee-merge
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make setup -C ./execution-engine"
   - "make docker-build/execution-engine"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
@@ -424,6 +564,7 @@ steps:
 - name: package-ee
   commands:
   - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make setup -C ./execution-engine"
   - "make cargo-package-all"
   - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
   - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
@@ -770,24 +911,6 @@ steps:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - /usr/local/bin/sbt client/universal:stage
 
-- name: rust-toolchain
-  image: appleboy/drone-ssh:latest
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - cd execution-engine
-    - make setup
-
 - name: build-ee
   image: appleboy/drone-ssh:latest
   environment:
@@ -805,6 +928,7 @@ steps:
     - export PATH=$PATH:/usr/local/bin/
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
+    - make setup
     - ~/.cargo/bin/cargo build --release
 
 - name: build-system-contracts
@@ -823,6 +947,7 @@ steps:
     script:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
+    - make setup
     - ~/.cargo/bin/cargo build -p pos --release --target wasm32-unknown-unknown
     - ~/.cargo/bin/cargo build -p mint-token --release --target wasm32-unknown-unknown
 
