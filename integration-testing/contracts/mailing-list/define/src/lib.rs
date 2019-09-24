@@ -57,9 +57,9 @@ fn publish(msg: String) {
 
 #[no_mangle]
 pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
+    let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
-        "sub" => match sub(get_arg(1)) {
+        "sub" => match sub(get_arg(1).unwrap().unwrap()) {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
@@ -72,7 +72,7 @@ pub extern "C" fn mailing_list_ext() {
         //unforgable reference because otherwise anyone could
         //spam the mailing list.
         "pub" => {
-            publish(get_arg(1));
+            publish(get_arg(1).unwrap().unwrap());
         }
         _ => panic!("Unknown method name!"),
     }

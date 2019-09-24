@@ -22,7 +22,11 @@ pub extern "C" fn call() {
     let source_purse = contract_api::main_purse();
     let payment_amount: U512 = 100.into();
     // amount passed to payment contract
-    let payment_fund: U512 = contract_api::get_arg(0);
+    let payment_fund: U512 = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 

@@ -21,7 +21,11 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn pay() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
+    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
     let main_purse: PurseId = contract_api::main_purse();
 
     let pos_pointer = contract_api::get_pos();

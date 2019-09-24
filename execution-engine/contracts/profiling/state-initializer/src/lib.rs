@@ -31,10 +31,22 @@ fn create_account_with_amount(account: PublicKey, amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key1: PublicKey = contract_api::get_arg(Arg::Account1PublicKey as u32);
-    let amount: U512 = contract_api::get_arg(Arg::Account1Amount as u32);
+    let public_key1: PublicKey = match contract_api::get_arg(Arg::Account1PublicKey as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
+    let amount: U512 = match contract_api::get_arg(Arg::Account1Amount as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
     create_account_with_amount(public_key1, amount);
 
-    let public_key2: PublicKey = contract_api::get_arg(Arg::Account2PublicKey as u32);
+    let public_key2: PublicKey = match contract_api::get_arg(Arg::Account2PublicKey as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
     create_account_with_amount(public_key2, U512::zero());
 }

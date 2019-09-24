@@ -19,7 +19,12 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let purse_name: String = contract_api::get_arg(Arg::PurseName as u32);
+    let purse_name: String = match contract_api::get_arg(Arg::PurseName as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
+
     let purse_key = contract_api::get_uref(&purse_name)
         .unwrap_or_else(|| contract_api::revert(Error::InvalidPurseName.into()));
     let purse = match purse_key.as_uref() {
@@ -27,7 +32,11 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::InvalidPurse.into()),
     };
 
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
+    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
 
     let pos_pointer = contract_api::get_pos();
 

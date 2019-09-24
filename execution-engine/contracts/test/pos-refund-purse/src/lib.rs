@@ -83,6 +83,11 @@ pub extern "C" fn call() {
         Some(_) => contract_api::revert(ApiError::User(Error::Invalid as u16).into()),
     }
 
-    let payment_amount: U512 = contract_api::get_arg(0);
+    let payment_amount: U512 = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
+
     submit_payment(&pos_pointer, payment_amount);
 }

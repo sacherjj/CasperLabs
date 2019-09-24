@@ -28,7 +28,11 @@ fn standard_payment(amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_phase: Phase = contract_api::get_arg(0);
+    let known_phase: Phase = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
     let get_phase = contract_api::get_phase();
     assert_eq!(
         get_phase, known_phase,

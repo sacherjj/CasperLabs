@@ -110,8 +110,8 @@ where
 
             FunctionIndex::LoadArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
-                let i = Args::parse(args)?;
-                let size = self.load_arg(i)?;
+                let i: u32 = Args::parse(args)?;
+                let size = self.load_arg(i as usize);
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 

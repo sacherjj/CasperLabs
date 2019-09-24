@@ -773,6 +773,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "get-arg"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.15.0",
+]
+
+[[package]]
 name = "get-blocktime"
 version = "0.1.0"
 dependencies = [

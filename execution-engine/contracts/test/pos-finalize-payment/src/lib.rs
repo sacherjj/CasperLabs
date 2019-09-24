@@ -49,10 +49,26 @@ fn finalize_payment(pos: &ContractPointer, amount_spent: U512, account: PublicKe
 pub extern "C" fn call() {
     let pos_pointer = contract_api::get_pos();
 
-    let payment_amount: U512 = contract_api::get_arg(0);
-    let refund_purse_flag: u8 = contract_api::get_arg(1);
-    let maybe_amount_spent: Option<U512> = contract_api::get_arg(2);
-    let maybe_account: Option<PublicKey> = contract_api::get_arg(3);
+    let payment_amount: U512 = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
+    let refund_purse_flag: u8 = match contract_api::get_arg(1) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
+    let maybe_amount_spent: Option<U512> = match contract_api::get_arg(2) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
+    let maybe_account: Option<PublicKey> = match contract_api::get_arg(3) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
 
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {

@@ -13,7 +13,7 @@ use contract_ffi::value::U512;
 
 #[repr(u16)]
 enum Error {
-    UnableToSeedAccount = 0,
+    UnableToSeedAccount,
     UnknownCommand,
 }
 
@@ -45,11 +45,19 @@ const TEST_UNBOND: &str = "unbond";
 pub extern "C" fn call() {
     let pos_pointer = contract_api::get_pos();
 
-    let command: String = contract_api::get_arg(0);
+    let command: String = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+        None => contract_api::revert(ApiError::MissingArgument.into()),
+    };
     if command == TEST_BOND {
         // Creates new purse with desired amount based on main purse and sends funds
 
-        let amount = contract_api::get_arg(1);
+        let amount = match contract_api::get_arg(1) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+            None => contract_api::revert(ApiError::MissingArgument.into()),
+        };
         let p1 = contract_api::create_purse();
 
         if contract_api::transfer_from_purse_to_purse(contract_api::main_purse(), p1, amount)
@@ -60,19 +68,35 @@ pub extern "C" fn call() {
 
         bond(&pos_pointer, &amount, p1);
     } else if command == TEST_BOND_FROM_MAIN_PURSE {
-        let amount = contract_api::get_arg(1);
+        let amount = match contract_api::get_arg(1) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+            None => contract_api::revert(ApiError::MissingArgument.into()),
+        };
 
         bond(&pos_pointer, &amount, contract_api::main_purse());
     } else if command == TEST_SEED_NEW_ACCOUNT {
-        let account: PublicKey = contract_api::get_arg(1);
-        let amount: U512 = contract_api::get_arg(2);
+        let account: PublicKey = match contract_api::get_arg(1) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+            None => contract_api::revert(ApiError::MissingArgument.into()),
+        };
+        let amount: U512 = match contract_api::get_arg(2) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+            None => contract_api::revert(ApiError::MissingArgument.into()),
+        };
         if contract_api::transfer_from_purse_to_account(contract_api::main_purse(), account, amount)
             == TransferResult::TransferError
         {
             contract_api::revert(ApiError::User(Error::UnableToSeedAccount as u16).into());
         }
     } else if command == TEST_UNBOND {
-        let maybe_amount: Option<U512> = contract_api::get_arg(1);
+        let maybe_amount: Option<U512> = match contract_api::get_arg(1) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
+            None => contract_api::revert(ApiError::MissingArgument.into()),
+        };
         unbond(&pos_pointer, maybe_amount);
     } else {
         contract_api::revert(ApiError::User(Error::UnknownCommand as u16).into());

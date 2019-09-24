@@ -78,6 +78,10 @@ pub enum Error {
     InvalidPurseName,
     /// Invalid purse retrieved.
     InvalidPurse,
+    /// Specified argument not provided.
+    MissingArgument,
+    /// Argument not of correct type.
+    InvalidArgument,
     /// Failed to transfer motes.
     Transfer,
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
@@ -98,7 +102,9 @@ impl From<Error> for u32 {
             Error::MintFailure => 8,
             Error::InvalidPurseName => 9,
             Error::InvalidPurse => 10,
-            Error::Transfer => 11,
+            Error::MissingArgument => 11,
+            Error::InvalidArgument => 12,
+            Error::Transfer => 13,
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
     }
@@ -117,6 +123,8 @@ impl Debug for Error {
             Error::MintFailure => write!(f, "Error::MintFailure")?,
             Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
             Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
+            Error::MissingArgument => write!(f, "Error::MissingArgument")?,
+            Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
@@ -319,18 +327,28 @@ pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: T
     write(uref, contract);
 }
 
+fn load_arg(index: u32) -> Option<usize> {
+    let arg_size = unsafe { ext_ffi::load_arg(index) };
+    if arg_size >= 0 {
+        Some(arg_size as usize)
+    } else {
+        None
+    }
+}
+
 /// Return the i-th argument passed to the host for the current module
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
-pub fn get_arg<T: FromBytes>(i: u32) -> T {
-    let arg_size = unsafe { ext_ffi::load_arg(i) };
-    let dest_ptr = alloc_bytes(arg_size);
-    let arg_bytes = unsafe {
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
+    let arg_size = load_arg(i)?;
+    let arg_bytes = {
+        let dest_ptr = alloc_bytes(arg_size);
+        unsafe {
+            ext_ffi::get_arg(dest_ptr);
+            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+        }
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&arg_bytes).unwrap()
+    Some(deserialize(&arg_bytes))
 }
 
 /// Return the unforgable reference known by the current module under the given
