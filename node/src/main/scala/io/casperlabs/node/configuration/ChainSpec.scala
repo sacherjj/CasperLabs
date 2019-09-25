@@ -17,6 +17,7 @@ import io.casperlabs.ipc
 import java.io.{ByteArrayOutputStream, File}
 import java.nio.file.{Files, Path, Paths}
 import java.util.stream.Collectors
+import java.util.jar.JarFile
 import org.apache.commons.io.IOUtils
 import scala.io.Source
 import scala.util.Try
@@ -199,15 +200,33 @@ class ResourceResolver(dataDir: Path) extends Resolver {
   }
 }
 object ResourceResolver {
+
+  /** List files in a directory which is packaged in the JAR, or is in the resources directory. */
   def listFilesInResources(path: Path): List[Path] = {
     val root = Paths.get(Resources.getResource(path.toString).getPath)
-    Files
-      .list(root)
-      .map[Path](root.getParent.relativize(_))
-      .collect(Collectors.toList[Path]())
-      .asScala
-      .sorted
-      .toList
+    if (root.startsWith("file:") && root.toString.contains(".jar!")) {
+      // This happens when we packaged the app.
+      val jarFile = new File(getClass.getProtectionDomain.getCodeSource.getLocation.getPath)
+      val jar     = new JarFile(jarFile)
+
+      try {
+        jar.entries.asScala
+          .map(entry => Paths.get(entry.getName))
+          .filter(_.getParent == path)
+          .toList
+      } finally {
+        jar.close()
+      }
+    } else {
+      // This works in tests.
+      Files
+        .list(root)
+        .map[Path](root.getParent.relativize(_))
+        .collect(Collectors.toList[Path]())
+        .asScala
+        .sorted
+        .toList
+    }
   }
 }
 
