@@ -714,6 +714,43 @@ pub fn get_phase() -> Phase {
     deserialize(&bytes).unwrap()
 }
 
+// TODO: replace w/ new revert specific Error
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum UpgradeResult {
+    Success,
+    UpgradeError,
+}
+
+impl TryFrom<i32> for UpgradeResult {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(UpgradeResult::Success),
+            1 => Ok(UpgradeResult::UpgradeError),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<UpgradeResult> for i32 {
+    fn from(result: UpgradeResult) -> Self {
+        match result {
+            UpgradeResult::Success => 0,
+            UpgradeResult::UpgradeError => 1,
+        }
+    }
+}
+
+pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) -> UpgradeResult {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let key: Key = uref.into();
+    let (key_ptr, key_size, _bytes) = to_ptr(&key);
+    unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) }
+        .try_into()
+        .expect("should parse result")
+}
+
 #[cfg(test)]
 mod tests {
     use super::Error;

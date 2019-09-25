@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{PurseTransferResult, TransferResult, UpgradeResult};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -915,5 +915,40 @@ where
         };
 
         Ok(ret)
+    }
+
+    /// If key is in known_uref with AccessRights::Write, processes bytes from calling contract
+    /// and writes them at the provided uref, overwriting existing value if any
+    pub fn upgrade_contract_at_uref(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        key_ptr: u32,
+        key_size: u32,
+    ) -> Result<UpgradeResult, Trap> {
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let known_urefs = {
+            match self.context.read_gs(&key)? {
+                None => Err(Error::KeyNotFound(key)),
+                Some(value) => {
+                    if let Value::Contract(contract) = value {
+                        Ok(contract.urefs_lookup().clone())
+                    } else {
+                        Err(Error::FunctionNotFound(format!(
+                            "Value at {:?} is not a contract",
+                            key
+                        )))
+                    }
+                }
+            }
+        }?;
+        let bytes = self.get_function_by_name(name_ptr, name_size)?;
+        match self
+            .context
+            .upgrade_contract_at_uref(key, bytes, known_urefs)
+        {
+            Ok(_) => Ok(UpgradeResult::Success),
+            Err(_) => Ok(UpgradeResult::UpgradeError),
+        }
     }
 }

@@ -1,11 +1,11 @@
 [package]
-name = "local-state"
+name = "purse-holder-stored"
 version = "0.1.0"
-authors = ["Michał Papierski <michal@casperlabs.io>"]
+authors = ["Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "local_state"
+name = "purse_holder_stored"
 crate-type = ["cdylib", "lib"]
 
 [features]

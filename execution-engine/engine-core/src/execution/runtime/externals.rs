@@ -417,6 +417,16 @@ where
                 self.get_phase(dest_ptr)?;
                 Ok(None)
             }
+
+            FunctionIndex::UpgradeContractAtURef => {
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key
+                // args(2) = pointer to name in Wasm memory
+                // args(3) = size of name in Wasm memory
+                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
+                let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
+                Ok(Some(RuntimeValue::I32(ret.into())))
+            }
         }
     }
 }
