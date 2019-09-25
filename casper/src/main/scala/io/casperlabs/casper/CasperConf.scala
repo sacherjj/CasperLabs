@@ -23,7 +23,7 @@ final case class CasperConf(
     validatorSigAlgorithm: String,
     knownValidatorsFile: Option[Path],
     requiredSigs: Int,
-    chainSpecPath: Path,
+    chainSpecPath: Option[Path],
     standalone: Boolean,
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,

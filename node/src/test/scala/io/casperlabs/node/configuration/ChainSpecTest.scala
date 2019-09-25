@@ -14,7 +14,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
   "GenesisConf" should {
     "parse a manifest file" in {
-      val manifest = Source.fromResource("chainspec/1-genesis/manifest.toml")
+      val manifest = Source.fromResource("test-chainspec/genesis/manifest.toml")
 
       check(ChainSpec.GenesisConf.parseManifest(manifest)) { conf =>
         conf.genesis.protocolVersion shouldBe 1L
@@ -28,7 +28,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
     }
 
     "not parse a manifest with missing fields" in {
-      val manifest = Source.fromResource("chainspec-invalids/genesis-with-missing-fields.toml")
+      val manifest = Source.fromResource("test-chainspec-invalids/genesis-with-missing-fields.toml")
 
       checkInvalid(ChainSpec.GenesisConf.parseManifest(manifest)) { errors =>
         forExactly(1, errors) {
@@ -43,7 +43,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
   "UpgradeConf" should {
     "parse a manifest file with costs" in {
-      val manifest = Source.fromResource("chainspec/2-upgrade/manifest.toml")
+      val manifest = Source.fromResource("test-chainspec/upgrade-1/manifest.toml")
 
       check(ChainSpec.UpgradeConf.parseManifest(manifest)) { conf =>
         conf.upgrade.protocolVersion shouldBe 2L
@@ -57,7 +57,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
     }
 
     "parse a manifest file without costs" in {
-      val manifest = Source.fromResource("chainspec/3-upgrade/manifest.toml")
+      val manifest = Source.fromResource("test-chainspec/upgrade-2/manifest.toml")
 
       check(ChainSpec.UpgradeConf.parseManifest(manifest)) { conf =>
         conf.upgrade.activationPointRank shouldBe 30L
@@ -68,7 +68,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
     }
 
     "not parse a manifest with missing or partial costs" in {
-      val manifest = Source.fromResource("chainspec-invalids/upgrade-with-missing-fields.toml")
+      val manifest = Source.fromResource("test-chainspec-invalids/upgrade-with-missing-fields.toml")
 
       checkInvalid(ChainSpec.UpgradeConf.parseManifest(manifest)) { errors =>
         forExactly(1, errors) {
@@ -83,7 +83,8 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
   "ChainSpec" when {
     "reading a valid directory" should {
-      val readSpec = ipc.ChainSpec.fromDirectory(new File("src/test/resources/chainspec").toPath)
+      val readSpec =
+        ipc.ChainSpec.fromDirectory(new File("src/test/resources/test-chainspec").toPath)
 
       "read Genesis" in {
         check(readSpec) { spec =>
@@ -177,6 +178,17 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
       path should not startWith ("~")
       path should not startWith ("a/b")
       path should endWith("/d/c.wasm")
+    }
+  }
+
+  "listFilesInResources" should {
+    "list changesets in resources" in {
+      val changesets = ChainSpec.listFilesInResources(Paths.get("test-chainspec"))
+      changesets.map(_.toString) should contain theSameElementsInOrderAs Seq(
+        "test-chainspec/genesis",
+        "test-chainspec/upgrade-1",
+        "test-chainspec/upgrade-2"
+      )
     }
   }
 

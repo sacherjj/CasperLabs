@@ -106,7 +106,7 @@ class ConfigurationSpec
       validatorSigAlgorithm = "test",
       knownValidatorsFile = Paths.get("/tmp/test").some,
       requiredSigs = 1,
-      chainSpecPath = Paths.get("/tmp/test"),
+      chainSpecPath = Paths.get("/tmp/test").some,
       standalone = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),

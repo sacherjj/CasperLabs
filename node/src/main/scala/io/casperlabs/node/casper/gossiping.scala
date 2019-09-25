@@ -203,7 +203,7 @@ package object gossiping {
       for {
         _ <- Log[F].info("Constructing Genesis block...")
         genesis <- ipc.ChainSpec
-                    .fromDirectory(conf.casper.chainSpecPath)
+                    .fromDirectory(conf.casper.chainSpecPath.get) // TODO: Optional, get from resources.
                     .fold(
                       errors =>
                         MonadThrowable[F].raiseError(
