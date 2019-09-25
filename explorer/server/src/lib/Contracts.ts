@@ -1,8 +1,8 @@
 import blake from "blakejs";
+import { Approval, Deploy, Signature } from "casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb";
 import fs from "fs";
 import { Message } from "google-protobuf";
 import * as nacl from "tweetnacl-ts";
-import { Approval, Deploy, Signature } from "casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb";
 import { Args, BigIntValue, BytesValue, LongValue } from "./Args";
 
 // https://www.npmjs.com/package/tweetnacl-ts
