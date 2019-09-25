@@ -5,12 +5,7 @@ from docker import DockerClient
 
 
 from casperlabs_local_net.casperlabs_accounts import Account
-from casperlabs_local_net.common import (
-    random_string,
-    BOOTSTRAP_PATH,
-    CHAINSPEC_PATH,
-    testing_root_path,
-)
+from casperlabs_local_net.common import random_string, BOOTSTRAP_PATH, testing_root_path
 
 
 DEFAULT_NODE_ENV = {
@@ -80,7 +75,6 @@ class DockerConfig:
             "--tls-key": self.tls_key_path(),
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
-            "--casper-chain-spec-path": CHAINSPEC_PATH,
         }
         if not self.is_read_only:
             options["--casper-validator-private-key"] = self.node_private_key

@@ -35,7 +35,6 @@ class DockerNode(LoggingDockerBase):
     CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
-    CL_ACCOUNTS_FILE = f"{CL_CHAINSPEC_DIR}/genesis/accounts.csv"
     CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
 
     NUMBER_OF_BONDS = 10
@@ -190,7 +189,8 @@ class DockerNode(LoggingDockerBase):
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self) -> None:
         N = self.NUMBER_OF_BONDS
-        path = f"{self.host_chainspec_dir}/0-genesis/accounts.csv"
+        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
+        path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
         with open(path, "a") as f:
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
