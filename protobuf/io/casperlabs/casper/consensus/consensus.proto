@@ -43,6 +43,11 @@ message Deploy {
         uint64 gas_price = 4;
         // Hash of the body structure as a whole.
         bytes body_hash = 5;
+        // time_to_live is optional, so we wrap in `oneof` to benefit from the Empty variant
+        oneof maybe_time_to_live {
+            uint32 time_to_live = 6;
+        }
+        repeated bytes dependencies = 7;
     }
 
     message Body {
