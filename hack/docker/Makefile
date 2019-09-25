@@ -93,16 +93,12 @@ slow:
 # Generate keys and bonds.
 .casperlabs:
 	mkdir -p .casperlabs/bootstrap
-	mkdir -p .casperlabs/chainspec/0-genesis
-
-	@# Download or build system contract, unzip them to the chainspec dir.
-	./get-system-contracts.sh .casperlabs/chainspec/0-genesis/system-contracts.tar.gz
-	cp ./genesis-manifest.toml .casperlabs/chainspec/0-genesis/manifest.toml
+	mkdir -p .casperlabs/chainspec/genesis
 
 	@# Create a `facet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
-	(cat keys/faucet-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/0-genesis/accounts.csv
+	(cat keys/faucet-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
 	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
@@ -112,7 +108,7 @@ slow:
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
 		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
 		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
-		(cat .casperlabs/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/0-genesis/accounts.csv ; \
+		(cat .casperlabs/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/genesis/accounts.csv ; \
 		((i = i + 1)) ; \
 	done'
 
@@ -120,5 +116,5 @@ slow:
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 
 	@# Check that the files we wanted exist and aren't empty.
-	[ -s .casperlabs/chainspec/0-genesis/accounts.csv ]
+	[ -s .casperlabs/chainspec/genesis/accounts.csv ]
 	[ -s .casperlabs/bootstrap/node-id ]
