@@ -11,12 +11,14 @@ pub extern "C" fn call() {
     // Appends " Hello, world!" to a [66; 32] local key with spaces trimmed.
     // Two runs should yield value "Hello, world! Hello, world!"
 
-    let mut res: String = read_local([66; 32]).unwrap_or_default();
+    let mut res: String = read_local([66; 32]).unwrap_or_default().unwrap_or_default();
     res.push_str(" Hello, ");
     // Write "Hello, "
     write_local([66u8; 32], res);
     // Read (this should exercise cache)
-    let mut res: String = read_local([66u8; 32]).expect("Should have local key after write");
+    let mut res: String = read_local([66u8; 32])
+        .expect("Should have local key after write")
+        .expect("Should have local key after write");
     // Append
     res.push_str("world!");
     // Write

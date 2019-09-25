@@ -9,8 +9,8 @@ use contract_ffi::value::account::{PublicKey, Weight};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = get_arg(0);
-    let weight_val: u32 = get_arg(1);
+    let account: PublicKey = get_arg(0).unwrap().unwrap();
+    let weight_val: u32 = get_arg(1).unwrap().unwrap();
     let weight = Weight::new(weight_val as u8);
 
     add_associated_key(account, weight)

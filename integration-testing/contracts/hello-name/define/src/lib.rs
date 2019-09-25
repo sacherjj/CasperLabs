@@ -18,7 +18,7 @@ fn hello_name(name: &str) -> String {
 
 #[no_mangle]
 pub extern "C" fn hello_name_ext() {
-    let name: String = get_arg(0);
+    let name: String = get_arg(0).unwrap().unwrap();
     let y = hello_name(&name);
     ret(&y, &Vec::new());
 }
