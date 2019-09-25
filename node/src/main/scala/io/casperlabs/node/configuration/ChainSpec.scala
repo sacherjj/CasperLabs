@@ -21,6 +21,7 @@ import org.apache.commons.io.IOUtils
 import scala.io.Source
 import scala.util.Try
 import scala.collection.JavaConverters._
+import simulacrum.typeclass
 
 /**
   * ChainSpec is the definition of the chain which we use for the Genesis process.
@@ -126,41 +127,6 @@ object ChainSpec extends ParserImplicits {
         i => i.asRight[String]
       )
   }
-
-  /** Normally we expect files to be relative to the directory where the update is,
-    * but it's possible someone would locally want to re-point it to an absolute path.
-    */
-  def resolvePath(dir: Path, file: Path): Path =
-    if (file.startsWith(Paths.get("~/")))
-      Paths.get(sys.props("user.home")).resolve(file.toString.drop(2))
-    else dir.resolve(file)
-
-  def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
-      read: A => Either[String, B]
-  ): ValidatedNel[String, B] = {
-    val manifest = new File(dir.toFile, "manifest.toml")
-    if (!manifest.exists)
-      Validated.invalidNel(s"Manifest file '$manifest' is missing!")
-    else {
-      parseManifest(Source.fromFile(manifest)) andThen { conf =>
-        read(conf)
-          .leftMap(err => s"Could not read chainspec sub-directory $dir: $err")
-          .toValidatedNel
-      }
-    }
-  }
-
-  /** List the files contained in the resources directory packaged in the JAR. */
-  def listFilesInResources(dir: Path): List[Path] = {
-    val chainspecRoot = Paths.get(Resources.getResource(dir.toString).getPath)
-    Files
-      .list(chainspecRoot)
-      .map[Path](chainspecRoot.getParent.relativize(_))
-      .collect(Collectors.toList[Path]())
-      .asScala
-      .sorted
-      .toList
-  }
 }
 
 /** Resolve a path to its contents. */
@@ -168,6 +134,7 @@ trait Resolver {
   def asBytes(path: Path): Either[String, Array[Byte]]
   def asSource(path: Path): Either[String, Source]
   def asString(path: Path): Either[String, String]
+  def listFiles(path: Path): List[Path]
 }
 
 /** Resolve to normal files. */
@@ -183,6 +150,9 @@ object FileResolver extends Resolver {
 
   override def asString(path: Path) =
     Utils.readFile(path)
+
+  override def listFiles(path: Path) =
+    path.toFile.listFiles.sortBy(_.getName).map(_.toPath).toList
 }
 
 /** Resolve paths in resources, unless an override in the data directory exists. */
@@ -195,6 +165,9 @@ class ResourceResolver(dataDir: Path) extends Resolver {
 
   override def asString(path: Path) =
     asSource(path).flatMap(src => Utils.readFile(src))
+
+  override def listFiles(path: Path) =
+    ResourceResolver.listFilesInResources(path)
 
   private def read[T](
       path: Path,
@@ -214,7 +187,7 @@ class ResourceResolver(dataDir: Path) extends Resolver {
     }
 
   private def readResourceBytes(path: Path) = {
-    val in  = this.getClass.getResourceAsStream(path.toString)
+    val in  = getClass.getClassLoader.getResourceAsStream(path.toString)
     val out = new ByteArrayOutputStream()
     try {
       IOUtils.copy(in, out)
@@ -225,62 +198,37 @@ class ResourceResolver(dataDir: Path) extends Resolver {
     }
   }
 }
+object ResourceResolver {
+  def listFilesInResources(path: Path): List[Path] = {
+    val root = Paths.get(Resources.getResource(path.toString).getPath)
+    Files
+      .list(root)
+      .map[Path](root.getParent.relativize(_))
+      .collect(Collectors.toList[Path]())
+      .asScala
+      .sorted
+      .toList
+  }
+}
 
-/** Adds extension methods to ipc.ChainSpec so it can be read from various sources. */
-trait ChainSpecReader {
+@typeclass
+trait ChainSpecReader[T] {
+  def fromDirectory(path: Path)(implicit resolver: Resolver): ValidatedNel[String, T]
+}
+
+object ChainSpecReader {
   import ChainSpec._
 
-  implicit class ChainSpecOps(typ: ipc.ChainSpec.type) {
+  /** Normally we expect files to be relative to the directory where the update is,
+    * but it's possible someone would locally want to re-point it to an absolute path.
+    */
+  def resolvePath(dir: Path, file: Path): Path =
+    if (file.startsWith(Paths.get("~/")))
+      Paths.get(sys.props("user.home")).resolve(file.toString.drop(2))
+    else dir.resolve(file)
 
-    /** If there's no explicit ChainSpec location defined we can use the default one
-      * packaged with the node. Every file can be overridden by placing one with the
-      * same path under the ~/.casperlabs data directory.
-      */
-    def fromResources(resourcePath: Path, dataDir: Path): ValidatedNel[String, ipc.ChainSpec] = {
-      val changesets = listFilesInResources(resourcePath)
-      fromChangesets(resourcePath, changesets)(new ResourceResolver(dataDir))
-    }
-
-    /** Parse and read the contents of a chainspec directory into the IPC DTOs. */
-    def fromDirectory(path: Path): ValidatedNel[String, ipc.ChainSpec] = {
-      val dir = path.toFile
-      if (!dir.exists)
-        Validated.invalidNel(s"Chain spec directory '$path' does not exist!")
-      else if (!dir.isDirectory)
-        Validated.invalidNel(s"Chain spec path '$path' is not a directory!")
-      else {
-        // Consider each subdirectory an upgrade, starting with Genesis.
-        val changesets = dir.listFiles.sortBy(_.getName).map(_.toPath).toList
-        fromChangesets(path, changesets)(FileResolver)
-      }
-    }
-
-    private def fromChangesets(
-        path: Path,
-        changesets: List[Path]
-    )(implicit resolver: Resolver): ValidatedNel[String, ipc.ChainSpec] =
-      changesets match {
-        case Nil =>
-          Validated.invalidNel(s"Chain spec directory '$path' is empty!")
-
-        case genesisDir :: upgradeDirs =>
-          val genesis = ipc.ChainSpec.GenesisConfig.fromChangeset(genesisDir)
-          val upgrades = upgradeDirs.map { dir =>
-            ipc.ChainSpec.UpgradePoint.fromChangeset(dir)
-          }
-
-          genesis andThen { g =>
-            upgrades.sequence map { us =>
-              ipc.ChainSpec().withGenesis(g).withUpgrades(us)
-            }
-          }
-      }
-  }
-
-  implicit class GenesisConfigOps(typ: ipc.ChainSpec.GenesisConfig.type) {
-    def fromChangeset(
-        path: Path
-    )(implicit resolver: Resolver): ValidatedNel[String, ipc.ChainSpec.GenesisConfig] =
+  implicit val `ChainSpecReader[GenesisConfig]` = new ChainSpecReader[ipc.ChainSpec.GenesisConfig] {
+    override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
         case GenesisConf(genesis, wasmCosts) =>
           for {
@@ -305,15 +253,13 @@ trait ChainSpecReader {
                     state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)
                   )
               })
-              .withCosts(ipc.ChainSpec.CostTable.fromConfig(wasmCosts))
+              .withCosts(toCostTable(wasmCosts))
           }
       }
   }
 
-  implicit class UpgradePointOps(typ: ipc.ChainSpec.UpgradePoint.type) {
-    def fromChangeset(
-        path: Path
-    )(implicit resolver: Resolver): ValidatedNel[String, ipc.ChainSpec.UpgradePoint] =
+  implicit val `ChainSpecReader[UpgradePoint]` = new ChainSpecReader[ipc.ChainSpec.UpgradePoint] {
+    override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[UpgradeConf, ipc.ChainSpec.UpgradePoint](path, UpgradeConf.parseManifest) {
         case UpgradeConf(upgrade, maybeWasmCosts) =>
           upgrade.installerCodePath.fold(
@@ -328,9 +274,7 @@ trait ChainSpecReader {
                     code = ByteString.copyFrom(bytes)
                   )
                 },
-                newCosts = maybeWasmCosts.map { wasmCosts =>
-                  ipc.ChainSpec.CostTable.fromConfig(wasmCosts)
-                }
+                newCosts = maybeWasmCosts.map(toCostTable)
               )
               .withActivationPoint(
                 ipc.ChainSpec.ActivationPoint(upgrade.activationPointRank)
@@ -340,25 +284,81 @@ trait ChainSpecReader {
       }
   }
 
-  implicit class CostTableOps(typ: ipc.ChainSpec.CostTable.type) {
-    def fromConfig(wasmCosts: WasmCosts): ipc.ChainSpec.CostTable =
-      ipc.ChainSpec
-        .CostTable()
-        .withWasm(
-          ipc.ChainSpec.CostTable
-            .WasmCosts()
-            .withRegular(wasmCosts.regular.value)
-            .withDiv(wasmCosts.divMultiplier.value)
-            .withMul(wasmCosts.mulMultiplier.value)
-            .withMem(wasmCosts.memMultiplier.value)
-            .withInitialMem(wasmCosts.memInitialPages.value)
-            .withGrowMem(wasmCosts.memGrowPerPage.value)
-            .withMemcpy(wasmCosts.memCopyPerByte.value)
-            .withMaxStackHeight(wasmCosts.maxStackHeight.value)
-            .withOpcodesMul(wasmCosts.opcodesMultiplier.value)
-            .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
-        )
-  }
-}
+  implicit val `ChainSpecReader[ChainSpec]` = new ChainSpecReader[ipc.ChainSpec] {
+    override def fromDirectory(path: Path)(implicit resolver: Resolver) = {
+      val changesets = resolver.listFiles(path)
 
-object ChainSpecReader extends ChainSpecReader
+      changesets match {
+        case Nil =>
+          Validated.invalidNel(s"Chain spec directory '$path' is empty!")
+
+        case genesisDir :: upgradeDirs =>
+          val genesis = ChainSpecReader[ipc.ChainSpec.GenesisConfig].fromDirectory(genesisDir)
+          val upgrades = upgradeDirs.map { dir =>
+            ChainSpecReader[ipc.ChainSpec.UpgradePoint].fromDirectory(dir)
+          }
+
+          genesis andThen { g =>
+            upgrades.sequence map { us =>
+              ipc.ChainSpec().withGenesis(g).withUpgrades(us)
+            }
+          }
+      }
+    }
+  }
+
+  private def toCostTable(wasmCosts: WasmCosts): ipc.ChainSpec.CostTable =
+    ipc.ChainSpec
+      .CostTable()
+      .withWasm(
+        ipc.ChainSpec.CostTable
+          .WasmCosts()
+          .withRegular(wasmCosts.regular.value)
+          .withDiv(wasmCosts.divMultiplier.value)
+          .withMul(wasmCosts.mulMultiplier.value)
+          .withMem(wasmCosts.memMultiplier.value)
+          .withInitialMem(wasmCosts.memInitialPages.value)
+          .withGrowMem(wasmCosts.memGrowPerPage.value)
+          .withMemcpy(wasmCosts.memCopyPerByte.value)
+          .withMaxStackHeight(wasmCosts.maxStackHeight.value)
+          .withOpcodesMul(wasmCosts.opcodesMultiplier.value)
+          .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
+      )
+
+  private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
+      read: A => Either[String, B]
+  )(implicit resolver: Resolver): ValidatedNel[String, B] = {
+    val path = resolvePath(dir, Paths.get("manifest.toml"))
+    resolver.asSource(path).toValidatedNel andThen { src =>
+      parseManifest(src) andThen { conf =>
+        read(conf)
+          .leftMap(err => s"Could not read chainspec sub-directory $dir: $err")
+          .toValidatedNel
+      }
+    }
+  }
+
+  /** If there's no explicit ChainSpec location defined we can use the default one
+    * packaged with the node. Every file can be overridden by placing one with the
+    * same path under the ~/.casperlabs data directory.
+    */
+  def fromConf(
+      conf: Configuration
+  ): ValidatedNel[String, ipc.ChainSpec] =
+    conf.casper.chainSpecPath match {
+      case None =>
+        implicit val resolver = new ResourceResolver(conf.server.dataDir)
+        ChainSpecReader[ipc.ChainSpec].fromDirectory(Paths.get("chainspec"))
+      case Some(path) =>
+        val dir = path.toFile
+        if (!dir.exists)
+          Validated.invalidNel(s"Chain spec directory '$path' does not exist!")
+        else if (!dir.isDirectory)
+          Validated.invalidNel(s"Chain spec path '$path' is not a directory!")
+        else {
+          implicit val resolver = FileResolver
+          ChainSpecReader[ipc.ChainSpec].fromDirectory(path)
+        }
+    }
+
+}

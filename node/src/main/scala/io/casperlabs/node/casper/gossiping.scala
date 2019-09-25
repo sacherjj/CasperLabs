@@ -197,13 +197,12 @@ package object gossiping {
 
   private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
       conf: Configuration
-  ): Resource[F, Block] = {
-    import ChainSpecReader._
+  ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
         _ <- Log[F].info("Constructing Genesis block...")
-        genesis <- ipc.ChainSpec
-                    .fromDirectory(conf.casper.chainSpecPath.get) // TODO: Optional, get from resources.
+        genesis <- ChainSpecReader
+                    .fromConf(conf)
                     .fold(
                       errors =>
                         MonadThrowable[F].raiseError(
@@ -216,7 +215,6 @@ package object gossiping {
                     .map(_.getBlockMessage)
       } yield genesis
     }
-  }
 
   /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =

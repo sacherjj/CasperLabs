@@ -10,7 +10,7 @@ import java.nio.file.Paths
 import org.scalatest._
 import scala.io.Source
 
-class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with ChainSpecReader {
+class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
 
   "GenesisConf" should {
     "parse a manifest file" in {
@@ -81,10 +81,12 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
     }
   }
 
-  "ChainSpec" when {
+  "ChainSpecReader" when {
     "reading a valid directory" should {
+      implicit val resolver = FileResolver
       val readSpec =
-        ipc.ChainSpec.fromDirectory(new File("src/test/resources/test-chainspec").toPath)
+        ChainSpecReader[ipc.ChainSpec]
+          .fromDirectory(Paths.get("src/test/resources/test-chainspec"))
 
       "read Genesis" in {
         check(readSpec) { spec =>
@@ -162,19 +164,46 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
         }
       }
     }
+
+    "reading from resources" should {
+      implicit val resolver =
+        new ResourceResolver(dataDir = Paths.get("src/test/resources/test-chainspec-overrides"))
+
+      val readSpec =
+        ChainSpecReader[ipc.ChainSpec]
+          .fromDirectory(Paths.get("test-chainspec"))
+
+      "read the full chainspec" in {
+        check(readSpec) { spec =>
+          spec.genesis should not be empty
+          spec.upgrades should have size 2
+        }
+      }
+
+      "apply file overrides" in {
+        check(readSpec) { spec =>
+          val accounts = spec.getGenesis.accounts
+          accounts should have size 1
+          accounts(0).getBalance.value shouldBe "1000"
+          accounts(0).getBondedAmount.value shouldBe "100"
+        }
+      }
+    }
   }
 
   "resolvePath" should {
     "handle relative paths" in {
-      ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("c.wasm")) shouldBe Paths.get("a/b/c.wasm")
+      ChainSpecReader.resolvePath(Paths.get("a/b"), Paths.get("c.wasm")) shouldBe Paths.get(
+        "a/b/c.wasm"
+      )
     }
     "handle absolute paths" in {
-      ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("/d/c.wasm")) shouldBe Paths.get(
+      ChainSpecReader.resolvePath(Paths.get("a/b"), Paths.get("/d/c.wasm")) shouldBe Paths.get(
         "/d/c.wasm"
       )
     }
     "handle paths based on home directory" in {
-      val path = ChainSpec.resolvePath(Paths.get("a/b"), Paths.get("~/d/c.wasm")).toString
+      val path = ChainSpecReader.resolvePath(Paths.get("a/b"), Paths.get("~/d/c.wasm")).toString
       path should not startWith ("~")
       path should not startWith ("a/b")
       path should endWith("/d/c.wasm")
@@ -183,7 +212,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
   "listFilesInResources" should {
     "list changesets in resources" in {
-      val changesets = ChainSpec.listFilesInResources(Paths.get("test-chainspec"))
+      val changesets = ResourceResolver.listFilesInResources(Paths.get("test-chainspec"))
       changesets.map(_.toString) should contain theSameElementsInOrderAs Seq(
         "test-chainspec/genesis",
         "test-chainspec/upgrade-1",
