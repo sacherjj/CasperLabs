@@ -238,14 +238,8 @@ cargo-native-packager/%:
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-.make/client/contracts: build-client-contracts
-	mkdir -p $(dir $@) && touch $@
-
-.make/node/contracts:
-	mkdir -p $(dir $@) && touch $@
-
 # Refresh Scala build artifacts if source was changed.
-.make/sbt-stage/%: $(SCALA_SRC) .make/%/contracts
+.make/sbt-stage/%: $(SCALA_SRC) build-%-contracts
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
@@ -302,13 +296,8 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 
 
 # Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
-	$(eval CONTRACT=$(subst _,-,$*))
-	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
-	mkdir -p $(dir $@) && touch $@
-
-.make/contracts/explorer/%: $(RUST_SRC) .make/rustup-update
-	$(eval CONTRACT=$(subst _,-,$*))
+.make/contracts/%: $(RUST_SRC) .make/rustup-update
+	$(eval CONTRACT=$(subst _,-,$(shell echo $* | awk -F'/' '{print $$2}')))
 	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
@@ -317,16 +306,26 @@ client/src/main/resources/%.wasm: .make/contracts/client/%
 	$(eval CONTRACT=$*)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
+# Compile a contract and put it in the node resources so they get packaged with the JAR.
+node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/node/%
+	$(eval CONTRACT=$*)
+	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+
+# Copy a client or explorer contract to the explorer.
+explorer/contracts/%.wasm: .make/contracts/%
+	$(eval CONTRACT=$(shell echo $* | awk -F'/' '{print $$2}'))
+	mkdir -p $(dir $@)
+	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
 	client/src/main/resources/transfer_to_account.wasm \
 	client/src/main/resources/standard_payment.wasm
 
-explorer/contracts/%.wasm: .make/contracts/%
-	$(eval CONTRACT=$(shell echo $* | awk -F'/' '{print $$2}'))
-	mkdir -p $(dir $@)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+build-node-contracts: \
+	node/src/main/resources/chainspec/genesis/mint_install.wasm \
+	node/src/main/resources/chainspec/genesis/pos_install.wasm
 
 build-explorer-contracts: \
 	explorer/contracts/client/transfer_to_account.wasm \
