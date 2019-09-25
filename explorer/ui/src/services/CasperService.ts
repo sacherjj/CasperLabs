@@ -1,9 +1,9 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { CasperService as GrpcCasperService } from 'casperlabsjs/grpc/io/casperlabs/node/api/casper_pb_service';
+import { CasperService as GrpcCasperService } from 'casperlabsjs/grpc/src/io/casperlabs/node/api/casper_pb_service';
 import {
   DeployInfo,
   BlockInfo
-} from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
+} from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import {
   GetDeployInfoRequest,
   StreamBlockInfosRequest,
@@ -11,15 +11,15 @@ import {
   GetBlockStateRequest,
   GetBlockInfoRequest,
   StreamBlockDeploysRequest
-} from 'casperlabsjs/grpc/io/casperlabs/node/api/casper_pb';
+} from 'casperlabsjs/grpc/src/io/casperlabs/node/api/casper_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import { GrpcError } from './Errors';
 import {
   Value as StateValue,
   Key
-} from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/state_pb';
+} from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/state_pb';
 import { ByteArrayArg } from '../lib/Serialization';
-import { Block } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { Block } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb';
 
 export default class CasperService {
   constructor(

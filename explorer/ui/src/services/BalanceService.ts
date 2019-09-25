@@ -1,4 +1,4 @@
-import { Key } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/state_pb';
+import { Key } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/state_pb';
 import { encodeBase16 } from '../lib/Conversions';
 import CasperService from './CasperService';
 

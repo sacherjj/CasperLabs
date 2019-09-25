@@ -12,7 +12,7 @@ import {
 } from './Utils';
 import DataTable from './DataTable';
 import { base64to16, encodeBase16, decodeBase64 } from '../lib/Conversions';
-import { DeployInfo } from 'casperlabsjs/grpc/io/casperlabs/casper/consensus/info_pb';
+import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 
 interface Props {
   auth: AuthContainer;
