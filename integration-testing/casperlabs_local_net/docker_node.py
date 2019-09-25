@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, INITIAL_MOTES_AMOUNT
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -50,9 +50,9 @@ class DockerNode(LoggingDockerBase):
     PYTHON_CLIENT = "p"
 
     def __init__(self, cl_network, config: DockerConfig):
+        self.cl_network = cl_network
         super().__init__(config)
         self.graphql = GraphQL(self)
-        self.cl_network = cl_network
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
@@ -195,7 +195,7 @@ class DockerNode(LoggingDockerBase):
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
             # created this way, without having to do a transfer.
-            f.write(f"{GENESIS_ACCOUNT.public_key},{INITIAL_MOTES_AMOUNT},0\n")
+            f.write(f"{GENESIS_ACCOUNT.public_key},{self.cl_network.initial_motes},0\n")
             for i, pair in enumerate(
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
