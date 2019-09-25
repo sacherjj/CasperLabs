@@ -35,6 +35,7 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
@@ -270,6 +271,50 @@ class ValidationTest
 
     val deploy = sample(genDeploy)
     Validation[Task].deploySignature(deploy) shouldBeF false
+  }
+
+  "Deploy header validation" should "accept valid headers" in withoutStorage {
+    val deploy = sample(arbitrary[consensus.Deploy])
+    Validation[Task].deployHeader(deploy) shouldBeF true
+  }
+
+  it should "not accept invalid time to live" in withoutStorage {
+    val maxTTL = 24 * 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.oneOf(Gen.const(0), Gen.choose(maxTTL + 1, Int.MaxValue))
+    } yield d.withHeader(
+      d.getHeader.withMaybeTimeToLive(consensus.Deploy.Header.MaybeTimeToLive.TimeToLive(ttl))
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF false
+  }
+
+  it should "not accept too many dependencies" in withoutStorage {
+    val genDeploy = for {
+      d               <- arbitrary[consensus.Deploy]
+      numDependencies <- Gen.chooseNum(11, 50)
+      dependencies    <- Gen.listOfN(numDependencies, genHash)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(dependencies)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF false
+  }
+
+  it should "not accept invalid dependencies" in withoutStorage {
+    val genDeploy = for {
+      d          <- arbitrary[consensus.Deploy]
+      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
+      dependency <- genBytes(nBytes)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(List(dependency))
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF false
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {

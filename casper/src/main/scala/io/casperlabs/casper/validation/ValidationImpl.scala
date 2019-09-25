@@ -226,6 +226,56 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .map(_.forall(identity))
     }
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  private val MAX_DEPENDENCIES: Int = 10
+
+  private def validateTimeToLive(ttl: Int, deployHash: ByteString): F[Boolean] =
+    if (ttl > 0 && ttl <= MAX_TTL) true.pure[F]
+    else
+      Log[F]
+        .warn(
+          s"Time to live, $ttl, of deploy ${PrettyPrinter.buildString(deployHash)} is invalid."
+        )
+        .map(_ => false)
+
+  private def validateDependencies(
+      dependencies: Seq[ByteString],
+      deployHash: ByteString
+  ): F[Boolean] =
+    if (dependencies.length > MAX_DEPENDENCIES)
+      Log[F]
+        .warn(
+          s"Too many dependencies for deploy ${PrettyPrinter.buildString(deployHash)}."
+        )
+        .map(_ => false)
+    else
+      dependencies.find(_.size != 32) match {
+        case None => true.pure[F]
+        case Some(dep) =>
+          Log[F]
+            .warn(
+              s"Invalid dependency, ${PrettyPrinter.buildString(dep)}, in deploy ${PrettyPrinter.buildString(deployHash)}. Expected 32 byte identifier."
+            )
+            .map(_ => false)
+      }
+
+  def deployHeader(d: consensus.Deploy): F[Boolean] =
+    d.header match {
+      case Some(header) =>
+        for {
+          validTTL          <- validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash)
+          validDependencies <- validateDependencies(header.dependencies, d.deployHash)
+        } yield validTTL && validDependencies
+
+      case None =>
+        Log[F]
+          .warn(
+            s"Header of deploy ${PrettyPrinter.buildString(d.deployHash)} is missing."
+          )
+          .map(_ => false)
+    }
+
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)

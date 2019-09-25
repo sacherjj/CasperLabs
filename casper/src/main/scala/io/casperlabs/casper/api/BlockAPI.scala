@@ -94,6 +94,7 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("deploys")
       _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
       _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
+      _ <- check("Invalid deploy header.")(Validation[F].deployHeader(d))
 
       t = casper.faultToleranceThreshold
       _ <- ensureNotInDag[F](d, t)
