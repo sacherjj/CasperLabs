@@ -12,11 +12,14 @@ timestamp = 0
 # Later will be replaced by semver.
 protocol-version = 1
 
+# NOTE: The system contracts are copied by test-node.Dockerfile into the test image.
+# In the future they may be packaged as part of the JAR itself together with the chainspec.
+
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
-mint-code-path = "mint_install.wasm"
+mint-code-path = "/opt/docker/system-contracts/mint_install.wasm"
 
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the PoS system contract.
-pos-code-path = "pos_install.wasm"
+pos-code-path = "/opt/docker/system-contracts/pos_install.wasm"
 
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 initial-accounts-path = "accounts.csv"
