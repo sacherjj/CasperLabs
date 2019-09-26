@@ -20,6 +20,7 @@ class CachingDagStorage[F[_]: Sync](
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
+    private[dag] val blockSummariesCache: Cache[BlockHash, BlockSummary],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
@@ -27,6 +28,12 @@ class CachingDagStorage[F[_]: Sync](
     Sync[F].delay(fromCache) flatMap {
       case None    => fromUnderlying
       case Some(a) => a.pure[F]
+    }
+
+  private def cacheOrUnderlyingOpt[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
+    Sync[F].delay(fromCache) flatMap {
+      case None        => fromUnderlying
+      case s @ Some(_) => (s: Option[A]).pure[F]
     }
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
@@ -72,18 +79,13 @@ class CachingDagStorage[F[_]: Sync](
 
   override def close(): F[Unit] = underlying.close()
 
-  // TODO: Remove DagRepresentation#lookup because
-  // we already have BlockStorage#getBlockSummary with the same semantics
-  // and which also cached in CachingBlockStorage.
-  // We don't use 'lookup' directly because it's overriden by BlockStorage#getBlockSummary
-  // at SQLiteStorage.scala
-  override def lookup(blockHash: BlockHash): F[Option[Message]] = underlying.lookup(blockHash)
+  override def lookup(blockHash: BlockHash): F[Option[Message]] =
+    cacheOrUnderlyingOpt(
+      Option(blockSummariesCache.getIfPresent(blockHash))
+        .flatMap(Message.fromBlockSummary(_).toOption),
+      underlying.lookup(blockHash)
+    )
 
-  // TODO: Remove DagRepresentation#contains because
-  // we already have BlockStorage#contains with the same semantics
-  // and which also cached in CachingBlockStorage.
-  // We don't use 'contains' directly because it's overriden by BlockStorage#contains
-  // at SQLiteStorage.scala
   override def contains(blockHash: BlockHash): F[Boolean] =
     lookup(blockHash)
       .map(_.isDefined)
@@ -120,7 +122,7 @@ object CachingDagStorage {
       name: String = "cache"
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
-    val createCache = Sync[F].delay {
+    val createBlockHashesSetCache = Sync[F].delay {
       CacheBuilder
         .newBuilder()
         .maximumWeight(maxSizeBytes)
@@ -129,14 +131,24 @@ object CachingDagStorage {
         .build[BlockHash, Set[BlockHash]]()
     }
 
+    val createBlockSummariesCache = Sync[F].delay {
+      CacheBuilder
+        .newBuilder()
+        .maximumWeight(maxSizeBytes)
+        .weigher((_: BlockHash, summary: BlockSummary) => summary.serializedSize)
+        .build[BlockHash, BlockSummary]()
+    }
+
     for {
-      childrenCache      <- createCache
-      justificationCache <- createCache
-      semaphore          <- Semaphore[F](1)
+      childrenCache       <- createBlockHashesSetCache
+      justificationCache  <- createBlockHashesSetCache
+      blockSummariesCache <- createBlockSummariesCache
+      semaphore           <- Semaphore[F](1)
       store = new CachingDagStorage[F](
         underlying,
         childrenCache,
         justificationCache,
+        blockSummariesCache,
         semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
         override implicit val m: Metrics[F] = metricsF

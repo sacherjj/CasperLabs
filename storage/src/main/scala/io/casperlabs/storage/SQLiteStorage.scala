@@ -150,16 +150,11 @@ object SQLiteStorage {
       override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.justificationToBlocks(blockHash)
 
-      // TODO: Remove DagRepresentation#lookup because
-      // we already have BlockStorage#getBlockSummary with the same semantics
-      // and which also cached in CachingBlockStorage.
       override def lookup(blockHash: BlockHash): F[Option[Message]] =
-        blockStorage.getBlockSummary(blockHash).flatMap(Message.fromOptionalSummary[F](_))
+        dagStorage.lookup(blockHash)
 
-      // TODO: Remove DagRepresentation#contains because
-      // we already have BlockStorage#contains with the same semantics
-      // and which also cached in CachingBlockStorage.
-      override def contains(blockHash: BlockHash): F[Boolean] = blockStorage.contains(blockHash)
+      override def contains(blockHash: BlockHash): F[Boolean] =
+        dagStorage.contains(blockHash)
 
       override def topoSort(
           startBlockNumber: Long,
