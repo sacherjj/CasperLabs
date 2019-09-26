@@ -231,51 +231,50 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
   private val MAX_DEPENDENCIES: Int = 10
 
-  private def validateTimeToLive(ttl: Int, deployHash: ByteString): F[Boolean] =
-    if (ttl > MIN_TTL && ttl <= MAX_TTL) true.pure[F]
+  private def validateTimeToLive(
+      ttl: Int,
+      deployHash: ByteString
+  ): F[List[Errors.DeployHeaderError]] =
+    if (ttl < MIN_TTL)
+      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(List(_))
+    else if (ttl > MAX_TTL)
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(List(_))
     else
-      Log[F]
-        .warn(
-          s"Time to live, $ttl, of deploy ${PrettyPrinter.buildString(deployHash)} is invalid."
-        )
-        .as(false)
+      List.empty[Errors.DeployHeaderError].pure[F]
 
   private def validateDependencies(
       dependencies: Seq[ByteString],
       deployHash: ByteString
-  ): F[Boolean] =
-    if (dependencies.length > MAX_DEPENDENCIES)
-      Log[F]
-        .warn(
-          s"Too many dependencies for deploy ${PrettyPrinter.buildString(deployHash)}."
-        )
-        .as(false)
-    else
-      dependencies.filter(_.size != 32).foldLeft(true.pure[F]) {
-        case (f, dep) =>
-          f *> Log[F]
-            .warn(
-              s"Invalid dependency, ${PrettyPrinter.buildString(dep)}, in deploy ${PrettyPrinter.buildString(deployHash)}. Expected 32 byte identifier."
-            )
-            .as(false)
-      }
+  ): F[List[Errors.DeployHeaderError]] = {
+    val numDependencies = dependencies.length
+    val tooMany =
+      if (numDependencies > MAX_DEPENDENCIES)
+        Errors.DeployHeaderError
+          .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
+          .logged[F]
+          .map(List(_))
+      else
+        List.empty[Errors.DeployHeaderError].pure[F]
 
-  def deployHeader(d: consensus.Deploy): F[Boolean] =
+    val invalid = dependencies.toList
+      .filter(_.size != 32)
+      .traverse(dep => Errors.DeployHeaderError.invalidDependency(deployHash, dep).logged[F])
+
+    Applicative[F].map2(tooMany, invalid)(_ ::: _)
+  }
+
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
         Applicative[F].map2(
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
           validateDependencies(header.dependencies, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL && validDependencies
+          case (validTTL, validDependencies) => validTTL ::: validDependencies
         }
 
       case None =>
-        Log[F]
-          .warn(
-            s"Header of deploy ${PrettyPrinter.buildString(d.deployHash)} is missing."
-          )
-          .as(false)
+        Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
     }
 
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =

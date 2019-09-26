@@ -22,7 +22,11 @@ import io.casperlabs.casper.util.execengine.{
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
-import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.validation.Errors.{
+  DeployHeaderError,
+  DropErrorWrapper,
+  ValidateErrorWrapper
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
@@ -275,34 +279,59 @@ class ValidationTest
 
   "Deploy header validation" should "accept valid headers" in withoutStorage {
     val deploy = sample(arbitrary[consensus.Deploy])
-    Validation[Task].deployHeader(deploy) shouldBeF true
+    Validation[Task].deployHeader(deploy) shouldBeF Nil
   }
 
-  it should "not accept invalid time to live" in withoutStorage {
-    val maxTTL = 24 * 60 * 60 * 1000
+  it should "not accept too short time to live" in withoutStorage {
     val minTTL = 60 * 60 * 1000
     val genDeploy = for {
       d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.oneOf(Gen.choose(1, minTTL - 1), Gen.choose(maxTTL + 1, Int.MaxValue))
+      ttl <- Gen.choose(1, minTTL - 1)
     } yield d.withHeader(
       d.getHeader.withTtlMillis(ttl)
     )
 
     val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF false
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+    )
+  }
+
+  it should "not accept too long time to live" in withoutStorage {
+    val maxTTL = 24 * 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
+    } yield d.withHeader(
+      d.getHeader.withTtlMillis(ttl)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+    )
   }
 
   it should "not accept too many dependencies" in withoutStorage {
+    val maxDependencies = 10
     val genDeploy = for {
       d               <- arbitrary[consensus.Deploy]
-      numDependencies <- Gen.chooseNum(11, 50)
+      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
       dependencies    <- Gen.listOfN(numDependencies, genHash)
     } yield d.withHeader(
       d.getHeader.withDependencies(dependencies)
     )
 
     val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF false
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError.tooManyDependencies(
+        deploy.deployHash,
+        deploy.getHeader.dependencies.size,
+        maxDependencies
+      )
+    )
   }
 
   it should "not accept invalid dependencies" in withoutStorage {
@@ -315,7 +344,10 @@ class ValidationTest
     )
 
     val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF false
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
+    )
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
