@@ -143,6 +143,10 @@ impl ExecRequestBuilder {
         Default::default()
     }
 
+    pub fn from_deploy(deploy: Deploy) -> Self {
+        ExecRequestBuilder::new().push_deploy(deploy)
+    }
+
     pub fn push_deploy(mut self, deploy: Deploy) -> Self {
         self.deploys.push(deploy);
         self
@@ -1024,5 +1028,23 @@ where
         } else {
             None
         }
+    }
+
+    pub fn get_exec_costs(&self, index: usize) -> Vec<Gas> {
+        let exec_response = self
+            .get_exec_response(index)
+            .expect("should have exec response");
+        let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+        deploy_results
+            .iter()
+            .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+            .collect()
+    }
+
+    pub fn get_exec_error_message(&self, index: usize) -> Option<String> {
+        let response = self.get_exec_response(index)?;
+        let execution_result = get_success_result(&response);
+        Some(get_error_message(execution_result))
     }
 }
