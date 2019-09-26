@@ -4,7 +4,7 @@
   "description": "SDK to interact with the CasperLabs blockchain using gRPC",
   "main": "dist/index.js",
   "scripts": {
-    "prepublish": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build",
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
     "clean": "rm -rf ./dist",
