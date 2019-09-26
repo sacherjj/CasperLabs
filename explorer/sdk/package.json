@@ -1,6 +1,6 @@
 {
   "name": "casperlabsjs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK to interact with the CasperLabs blockchain using gRPC",
   "main": "dist/index.js",
   "scripts": {
