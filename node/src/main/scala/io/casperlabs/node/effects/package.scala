@@ -105,7 +105,12 @@ package object effects {
       log: Log[Task]
   ): Resource[Effect, Transactor[Effect]] = {
     val connectionResource = Resource.make(
-      Task(DriverManager.getConnection(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}"))
+      Task {
+        val connection =
+          DriverManager.getConnection(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
+        connection.setAutoCommit(false)
+        connection
+      }
     )(
       connection =>
         Task(connection.close())
