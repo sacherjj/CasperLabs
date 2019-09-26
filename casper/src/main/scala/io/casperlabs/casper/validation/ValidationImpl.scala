@@ -238,7 +238,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .warn(
           s"Time to live, $ttl, of deploy ${PrettyPrinter.buildString(deployHash)} is invalid."
         )
-        .map(_ => false)
+        .as(false)
 
   private def validateDependencies(
       dependencies: Seq[ByteString],
@@ -249,7 +249,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .warn(
           s"Too many dependencies for deploy ${PrettyPrinter.buildString(deployHash)}."
         )
-        .map(_ => false)
+        .as(false)
     else
       dependencies.find(_.size != 32) match {
         case None => true.pure[F]
@@ -258,7 +258,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             .warn(
               s"Invalid dependency, ${PrettyPrinter.buildString(dep)}, in deploy ${PrettyPrinter.buildString(deployHash)}. Expected 32 byte identifier."
             )
-            .map(_ => false)
+            .as(false)
       }
 
   def deployHeader(d: consensus.Deploy): F[Boolean] =
@@ -274,7 +274,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           .warn(
             s"Header of deploy ${PrettyPrinter.buildString(d.deployHash)} is missing."
           )
-          .map(_ => false)
+          .as(false)
     }
 
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
