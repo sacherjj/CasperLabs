@@ -280,9 +280,10 @@ class ValidationTest
 
   it should "not accept invalid time to live" in withoutStorage {
     val maxTTL = 24 * 60 * 60 * 1000
+    val minTTL = 60 * 60 * 1000
     val genDeploy = for {
       d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.oneOf(Gen.const(0), Gen.choose(maxTTL + 1, Int.MaxValue))
+      ttl <- Gen.oneOf(Gen.choose(1, minTTL - 1), Gen.choose(maxTTL + 1, Int.MaxValue))
     } yield d.withHeader(
       d.getHeader.withTtlMillis(ttl)
     )

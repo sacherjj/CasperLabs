@@ -228,10 +228,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
   // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
   private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
   private val MAX_DEPENDENCIES: Int = 10
 
   private def validateTimeToLive(ttl: Int, deployHash: ByteString): F[Boolean] =
-    if (ttl > 0 && ttl <= MAX_TTL) true.pure[F]
+    if (ttl > MIN_TTL && ttl <= MAX_TTL) true.pure[F]
     else
       Log[F]
         .warn(
