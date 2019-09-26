@@ -338,12 +338,6 @@ object DeployRuntime {
     gracefulExit(program.attempt)
   }
 
-  private def maybeTimeToLive(maybeTTL: Option[Int]): consensus.Deploy.Header.MaybeTimeToLive =
-    maybeTTL match {
-      case Some(ttl) => consensus.Deploy.Header.MaybeTimeToLive.TimeToLive(ttl)
-      case None      => consensus.Deploy.Header.MaybeTimeToLive.Empty
-    }
-
   /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
     */
   def makeDeploy[F[_]: Sync](
@@ -367,7 +361,7 @@ object DeployRuntime {
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
           .withGasPrice(deployConfig.gasPrice)
-          .withMaybeTimeToLive(maybeTimeToLive(deployConfig.timeToLive))
+          .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
       )
       .withBody(

@@ -284,7 +284,7 @@ class ValidationTest
       d   <- arbitrary[consensus.Deploy]
       ttl <- Gen.oneOf(Gen.const(0), Gen.choose(maxTTL + 1, Int.MaxValue))
     } yield d.withHeader(
-      d.getHeader.withMaybeTimeToLive(consensus.Deploy.Header.MaybeTimeToLive.TimeToLive(ttl))
+      d.getHeader.withTtlMillis(ttl)
     )
 
     val deploy = sample(genDeploy)

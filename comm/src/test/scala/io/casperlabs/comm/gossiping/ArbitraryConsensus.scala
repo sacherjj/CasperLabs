@@ -178,12 +178,7 @@ trait ArbitraryConsensus {
         .withGasPrice(gasPrice)
         .withBodyHash(bodyHash)
         .withDependencies(dependencies)
-        .withMaybeTimeToLive(
-          timeToLive
-            .fold[Deploy.Header.MaybeTimeToLive](Deploy.Header.MaybeTimeToLive.Empty)(
-              Deploy.Header.MaybeTimeToLive.TimeToLive(_)
-            )
-        )
+        .withTtlMillis(timeToLive.getOrElse(0))
       deployHash = protoHash(header)
       signature  = accountKeys.sign(deployHash)
       deploy = Deploy()

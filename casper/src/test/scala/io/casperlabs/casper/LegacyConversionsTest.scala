@@ -24,7 +24,7 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
               val header = deploy.getHeader
               val newHeader = header
                 .withDependencies(List.empty)
-                .withMaybeTimeToLive(consensus.Deploy.Header.MaybeTimeToLive.Empty)
+                .withTtlMillis(0)
               pd.withErrorMessage("")
                 .withDeploy(
                   deploy

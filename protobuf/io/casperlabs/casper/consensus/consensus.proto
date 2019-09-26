@@ -43,10 +43,13 @@ message Deploy {
         uint64 gas_price = 4;
         // Hash of the body structure as a whole.
         bytes body_hash = 5;
-        // time_to_live is optional, so we wrap in `oneof` to benefit from the Empty variant
-        oneof maybe_time_to_live {
-            uint32 time_to_live = 6;
-        }
+        // Time to live of the deploy, in milliseconds. A deploy can only be
+        // included in a block between Header.timestamp and
+        // Header.timestamp + Header.ttl_millis. A value of 0 is interpreted as
+        // 'not present' and a default value will be assigned instead.
+        uint32 ttl_millis = 6;
+        // List of `Deploy.deploy_hash`s  that must be executed in past blocks
+        // before this deploy can be executed.
         repeated bytes dependencies = 7;
     }
 
