@@ -57,14 +57,13 @@ lazy_static! {
     pub static ref DEFAULT_GENESIS_CONFIG: GenesisConfig = {
         let mint_installer_bytes = test_support::read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
         let pos_installer_bytes = test_support::read_wasm_file_bytes(CONTRACT_POS_INSTALL);
-
         GenesisConfig::new(
             DEFAULT_CHAIN_NAME.to_string(),
             DEFAULT_GENESIS_TIMESTAMP,
             *DEFAULT_PROTOCOL_VERSION,
             mint_installer_bytes,
             pos_installer_bytes,
-            (*DEFAULT_ACCOUNTS).clone(),
+            DEFAULT_ACCOUNTS.clone(),
             *DEFAULT_WASM_COSTS,
         )
     };
