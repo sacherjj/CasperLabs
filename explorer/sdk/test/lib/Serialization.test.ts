@@ -1,10 +1,10 @@
-import { expect } from "chai";
-import "mocha";
-import * as nacl from "tweetnacl-ts";
-import { Args, PublicKeyArg, UInt64Arg } from "../../src/lib/Serialization";
+import { expect } from 'chai';
+import 'mocha';
+import * as nacl from 'tweetnacl-ts';
+import { Args, PublicKeyArg, UInt64Arg } from '../../src/lib/Serialization';
 
-describe("PublicKeyArg", () => {
-  it("should serialize as 32 bytes with size ++ content using little endiannes", () => {
+describe('PublicKeyArg', () => {
+  it('should serialize as 32 bytes with size ++ content using little endiannes', () => {
     const key = nacl.sign_keyPair().publicKey;
     const result = PublicKeyArg(key);
     expect(result.length).to.equal(4 + 32);
@@ -15,8 +15,8 @@ describe("PublicKeyArg", () => {
   });
 });
 
-describe("UInt64Arg", () => {
-  it("should serialize as 64 bits using little endiannes", () => {
+describe('UInt64Arg', () => {
+  it('should serialize as 64 bits using little endiannes', () => {
     const input = BigInt(1234567890);
     const result = UInt64Arg(input);
     expect(result.length).to.equal(64 / 8);
@@ -25,8 +25,8 @@ describe("UInt64Arg", () => {
   });
 });
 
-describe("Args", () => {
-  it("should serialize with size ++ concatenation of parts", () => {
+describe('Args', () => {
+  it('should serialize with size ++ concatenation of parts', () => {
     const a = nacl.sign_keyPair().publicKey;
     const b = BigInt(500000);
     const result = Args(PublicKeyArg(a), UInt64Arg(b));
@@ -41,10 +41,11 @@ describe("Args", () => {
     expect(buffer.readBigInt64LE(48)).to.equal(b);
   });
 
-  it("should work with the hardcoded example", () => {
+  it('should work with the hardcoded example', () => {
     const a = Buffer.alloc(32, 1);
     const b = BigInt(67305985);
     const result = Args(PublicKeyArg(a), UInt64Arg(b));
+    // prettier-ignore
     const expected = Buffer.from([
       2, 0, 0, 0,
       36, 0, 0, 0,

@@ -1,4 +1,4 @@
-import { grpc } from "@improbable-eng/grpc-web";
+import { grpc } from '@improbable-eng/grpc-web';
 
 export class GrpcError extends Error {
   constructor(

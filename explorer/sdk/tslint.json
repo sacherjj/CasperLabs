@@ -1,8 +1,6 @@
 {
   "defaultSeverity": "error",
-  "extends": [
-    "tslint:recommended"
-  ],
+  "extends": ["tslint:recommended", "tslint-config-prettier"],
   "jsRules": {},
   "rules": {
     "trailing-comma": false,
@@ -12,8 +10,6 @@
   },
   "rulesDirectory": [],
   "linterOptions": {
-    "exclude": [
-      "src/grpc/**/*.js"
-    ]
+    "exclude": ["src/grpc/**/*.js"]
   }
 }

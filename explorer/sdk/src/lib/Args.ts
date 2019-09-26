@@ -1,6 +1,6 @@
-import { ByteArray } from "..";
-import { Deploy } from "../../grpc/src/io/casperlabs/casper/consensus/consensus_pb";
-import { BigInt } from "../../grpc/src/io/casperlabs/casper/consensus/state_pb";
+import { Deploy } from '../../grpc/src/io/casperlabs/casper/consensus/consensus_pb';
+import { BigInt } from '../../grpc/src/io/casperlabs/casper/consensus/state_pb';
+import { ByteArray } from '../index';
 
 // Functions to convert data to protobuf Deploy.Arg
 
@@ -14,8 +14,12 @@ function toValue<T>(set: (value: Deploy.Arg.Value, x: T) => void): ToValue<T> {
   };
 }
 
-export const BytesValue = toValue<ByteArray>((value, x) => value.setBytesValue(x));
-export const LongValue = toValue<bigint>((value, x) => value.setLongValue(Number(x)));
+export const BytesValue = toValue<ByteArray>((value, x) =>
+  value.setBytesValue(x)
+);
+export const LongValue = toValue<bigint>((value, x) =>
+  value.setLongValue(Number(x))
+);
 export const BigIntValue = toValue<bigint>((value, x) => {
   const bi = new BigInt();
   bi.setBitWidth(512);
@@ -25,7 +29,7 @@ export const BigIntValue = toValue<bigint>((value, x) => {
 });
 
 export function Args(...args: Array<[string, Deploy.Arg.Value]>): Deploy.Arg[] {
-  return args.map((x) => {
+  return args.map(x => {
     const [name, value] = x;
     const arg = new Deploy.Arg();
     arg.setName(name);

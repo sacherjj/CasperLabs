@@ -1,11 +1,14 @@
-import * as fs from "fs";
-import * as nacl from "tweetnacl-ts";
-import { decodeBase64 } from "tweetnacl-util";
-import { ByteArray } from "..";
+import * as fs from 'fs';
+import * as nacl from 'tweetnacl-ts';
+import { decodeBase64 } from 'tweetnacl-util';
+import { ByteArray } from '../index';
 
 // Based on SignatureAlgorithm.scala
 export class Ed25519 {
-  public static parseKeyFiles(publicKeyPath: string, privateKeyPath: string): nacl.SignKeyPair {
+  public static parseKeyFiles(
+    publicKeyPath: string,
+    privateKeyPath: string
+  ): nacl.SignKeyPair {
     const publicKey = Ed25519.parsePublicKeyFile(publicKeyPath);
     const privateKey = Ed25519.parsePrivateKeyFile(privateKeyPath);
     // nacl expects that the private key will contain both.
@@ -15,7 +18,10 @@ export class Ed25519 {
     };
   }
 
-  public static parseKeyPair(publicKey: ByteArray, privateKey: ByteArray): nacl.SignKeyPair {
+  public static parseKeyPair(
+    publicKey: ByteArray,
+    privateKey: ByteArray
+  ): nacl.SignKeyPair {
     const publ = Ed25519.parsePublicKey(publicKey);
     const priv = Ed25519.parsePrivateKey(privateKey);
     // nacl expects that the private key will contain both.
@@ -43,6 +49,7 @@ export class Ed25519 {
 
   private static parseKey(bytes: ByteArray, from: number, to: number) {
     const len = bytes.length;
+    // prettier-ignore
     const key =
       (len === 32) ? bytes :
         (len === 64) ? Buffer.from(bytes).slice(from, to) :
@@ -58,7 +65,10 @@ export class Ed25519 {
 /** Read the Base64 content of a file, get rid of PEM frames. */
 function readBase64File(path: string): ByteArray {
   const content = fs.readFileSync(path).toString();
-  const base64 = content.split("\n").filter((x) => !x.startsWith("---")).join("");
+  const base64 = content
+    .split('\n')
+    .filter(x => !x.startsWith('---'))
+    .join('');
   const bytes = decodeBase64(base64);
   return bytes;
 }
