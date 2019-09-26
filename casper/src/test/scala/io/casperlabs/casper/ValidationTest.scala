@@ -41,6 +41,7 @@ import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
@@ -277,9 +278,13 @@ class ValidationTest
     Validation[Task].deploySignature(deploy) shouldBeF false
   }
 
-  "Deploy header validation" should "accept valid headers" in withoutStorage {
-    val deploy = sample(arbitrary[consensus.Deploy])
-    Validation[Task].deployHeader(deploy) shouldBeF Nil
+  "Deploy header validation" should "accept valid headers" in {
+    implicit val consensusConfig =
+      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
+
+    forAll { (deploy: consensus.Deploy) =>
+      withoutStorage { Validation[Task].deployHeader(deploy) } shouldBe Nil
+    }
   }
 
   it should "not accept too short time to live" in withoutStorage {
