@@ -8,7 +8,6 @@ The CasperLabs node consists of two components:
 
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/system-contracts.tar.gz).
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
 #### Building from source:
@@ -53,9 +52,12 @@ in an upcoming release.
 
 ##### Step 4: Download the ChainSpec
 
-Download the CasperLabs ChainSpec from <TODO-CHAINSPEC-URL>. Create a directory at `~/.casperlabs/chainspec` and unzip the contents of the downloaded archive into it.
+The node comes with a ChainSpec that should allow you to connect to DevNet. To connect elsewhere,
+you need to obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
+option pointed to the directory.
 
-The ChainSpec contains the system contracts, but if you downloaded or built them separately you need to copy them to the first directory (genesis) under `~/.casperlabs/chainspec`.
+The ChainSpec contains the system contracts, but if you downloaded or built them separately you need to copy them. You can override the defaults packaged in the node by copying the system contracts to
+`~/.casperlabs/chainspec/genesis/`, or wherever the `--server-data-dir` is pointing, which by default is `~/.casperlabs`.
 
 ##### Step 5: Start the Execution Engine
 
@@ -103,10 +105,14 @@ You can run a single Node in standalone mode for testing purposes.
 ##### Step 1: Create an `accounts.csv` file
 
 Add your validator key as the single bonded validator to the accounts in the ChainSpec.
+You can override the default accounts that come with the node by shadowing the file
+under your `--server-data-dir` directory, by default `~/.casperlabs`. For example the
+following code would cause your validator to have an initial balance of 50 million and
+a 1 million in bonds.
 
 ```
-mkdir -p ~/.casperlabs/chainspec/0-genesis
-(cat keys/validator-id; echo ",0,100") > ~/.casperlabs/chainspec/0-genesis/accounts.csv
+mkdir -p ~/.casperlabs/chainspec/genesis
+(cat keys/validator-id; echo ",50000000,1000000") > ~/.casperlabs/chainspec/genesis/accounts.csv
 ```
 
 ##### Step 2: Start the Execution Engine
