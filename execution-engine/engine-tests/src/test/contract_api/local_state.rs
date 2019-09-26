@@ -1,13 +1,10 @@
-use std::collections::HashMap;
-
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
-
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
 #[test]
@@ -15,9 +12,9 @@ fn should_run_local_state_contract() {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "local_state.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
@@ -25,7 +22,7 @@ fn should_run_local_state_contract() {
         .expect_success()
         .commit()
         .exec(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "local_state.wasm",
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
@@ -36,7 +33,7 @@ fn should_run_local_state_contract() {
 
     let transforms = result.builder().get_transforms();
 
-    let expected_local_key = Key::local(GENESIS_ADDR, &[66u8; 32].to_bytes().unwrap());
+    let expected_local_key = Key::local(DEFAULT_ACCOUNT_ADDR, &[66u8; 32].to_bytes().unwrap());
 
     assert_eq!(transforms.len(), 2);
     assert_eq!(

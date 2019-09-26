@@ -1,7 +1,5 @@
-use crate::support::exec_with_return;
-use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
+use std::collections::BTreeMap;
+
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -9,9 +7,13 @@ use contract_ffi::value::Value;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
-use std::collections::{BTreeMap, HashMap};
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+use crate::support::exec_with_return;
+use crate::support::test_support::{
+    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
@@ -30,9 +32,9 @@ fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
 
     builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_to_account_01.wasm",

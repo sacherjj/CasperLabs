@@ -5,18 +5,18 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
+use engine_grpc_server::engine_server::ipc::ExecuteRequest;
 use engine_shared::transform::Transform;
 
 use crate::support::test_stored_contract_support::{
     DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
     GENESIS_INITIAL_BALANCE,
 };
-use engine_grpc_server::engine_server::ipc::ExecuteRequest;
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 use crate::support::test_stored_contract_support;
 use crate::support::test_support;
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account";
@@ -35,7 +35,7 @@ fn should_exec_non_stored_code() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
@@ -98,7 +98,7 @@ fn should_exec_non_stored_code() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_hash() {
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 10_000_000;
@@ -222,7 +222,7 @@ fn should_exec_stored_code_by_hash() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_named_hash() {
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 10_000_000;
@@ -326,7 +326,7 @@ fn should_exec_stored_code_by_named_hash() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_named_uref() {
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
@@ -427,7 +427,7 @@ fn should_exec_stored_code_by_named_uref() {
 #[ignore]
 #[test]
 fn should_exec_payment_and_session_stored_code() {
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
@@ -550,7 +550,7 @@ fn should_exec_payment_and_session_stored_code() {
 fn should_produce_same_transforms_by_uref_or_named_uref() {
     // get transforms for direct uref and named uref and compare them
 
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let genesis_account_key = Key::Account(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
@@ -682,7 +682,7 @@ fn should_produce_same_transforms_as_exec() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 1_000_000_000;
@@ -743,7 +743,7 @@ fn should_produce_same_transforms_as_exec() {
         };
 
         test_support::InMemoryWasmTestBuilder::new(config)
-            .run_genesis(genesis_addr, HashMap::default())
+            .run_genesis(&DEFAULT_GENESIS_CONFIG)
             .exec_with_exec_request(request)
             .expect_success()
             .get_transforms()[0]
@@ -756,7 +756,7 @@ fn should_produce_same_transforms_as_exec() {
 #[ignore]
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
-    let genesis_addr = GENESIS_ADDR;
+    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let genesis_public_key = PublicKey::new(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 1_000_000_000;

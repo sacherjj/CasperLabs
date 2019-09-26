@@ -4,7 +4,6 @@ extern crate contract_ffi;
 extern crate engine_core;
 extern crate engine_shared;
 extern crate engine_storage;
-use std::collections::HashMap;
 
 use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
@@ -13,6 +12,7 @@ use casperlabs_engine_tests::support::test_support::{
     DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
+use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
@@ -38,9 +38,9 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 
     let data_dir = TempDir::new().expect("should create temp dir");
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "create_accounts.wasm",
