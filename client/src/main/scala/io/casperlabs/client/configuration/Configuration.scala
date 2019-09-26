@@ -74,7 +74,7 @@ object DeployConfig {
       ),
       gasPrice = args.gasPrice(),
       paymentAmount = args.paymentAmount.toOption,
-      timeToLive = args.timeToLive.toOption,
+      timeToLive = args.ttl.toOption,
       dependencies = args.dependencies.toOption
         .getOrElse(List.empty)
         .map(d => ByteString.copyFrom(Base16.decode(d)))

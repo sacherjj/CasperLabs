@@ -106,8 +106,8 @@ object Options {
       required = false
     )
 
-    val timeToLive = opt[Int](
-      descr = "Time (in milliseconds) that the deploy will remain valid for.",
+    val ttl = opt[Int](
+      descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false
     )
