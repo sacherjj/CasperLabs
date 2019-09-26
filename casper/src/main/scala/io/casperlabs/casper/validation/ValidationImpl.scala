@@ -264,10 +264,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def deployHeader(d: consensus.Deploy): F[Boolean] =
     d.header match {
       case Some(header) =>
-        for {
-          validTTL          <- validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash)
-          validDependencies <- validateDependencies(header.dependencies, d.deployHash)
-        } yield validTTL && validDependencies
+        Applicative[F].map2(
+          validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
+          validateDependencies(header.dependencies, d.deployHash)
+        ) {
+          case (validTTL, validDependencies) => validTTL && validDependencies
+        }
 
       case None =>
         Log[F]
