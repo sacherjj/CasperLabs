@@ -1,14 +1,12 @@
 import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import CasperService from '../services/CasperService';
+import { CasperService, GrpcError, Conversions } from 'casperlabsjs';
 import { CleanableFormData } from './FormData';
 import {
   BlockInfo,
   DeployInfo
 } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { decodeBase16 } from '../lib/Conversions';
-import { GrpcError } from '../services/Errors';
 import { grpc } from '@improbable-eng/grpc-web';
 
 export enum Target {
@@ -28,7 +26,7 @@ class SearchFormData extends CleanableFormData {
         return 'Deploy hash has to be 64 characters long.';
 
       try {
-        decodeBase16(this.hashBase16);
+        Conversions.decodeBase16(this.hashBase16);
       } catch (e) {
         return 'Could not decode as Base16 hash.';
       }
@@ -82,7 +80,9 @@ export class SearchContainer {
   async searchDeploy(deployHashBase16: string) {
     await this.trySearch(
       `Deploy ${deployHashBase16}`,
-      this.casperService.getDeployInfo(decodeBase16(deployHashBase16))
+      this.casperService.getDeployInfo(
+        Conversions.decodeBase16(deployHashBase16)
+      )
     );
   }
 

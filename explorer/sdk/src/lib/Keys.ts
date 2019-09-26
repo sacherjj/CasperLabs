@@ -1,6 +1,7 @@
-import fs from "fs";
+import * as fs from "fs";
 import * as nacl from "tweetnacl-ts";
 import { decodeBase64 } from "tweetnacl-util";
+import { ByteArray } from "..";
 
 // Based on SignatureAlgorithm.scala
 export class Ed25519 {

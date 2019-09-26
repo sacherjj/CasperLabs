@@ -4,6 +4,7 @@
     "alwaysStrict": true,
     "experimentalDecorators": true,
     "sourceMap": true,
+    "declaration": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
     "noImplicitReturns": true,
@@ -14,13 +15,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "module": "commonjs",
-    "target": "es6",
-    "allowJs": true,
-    "typeRoots": [
-      "@types",
-      "./@types",
-      "./node_modules/@types"
-    ]
+    "target": "es6"
   },
   "include": [
     "./src/**/*"

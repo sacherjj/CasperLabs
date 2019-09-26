@@ -1,6 +1,5 @@
+import { ByteArray, Contracts, Keys } from "casperlabsjs";
 import commandLineArgs from "command-line-args";
-import { Contract, Transfer } from "./lib/Contracts";
-import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService";
 
 // https://www.npmjs.com/package/command-line-args
@@ -26,20 +25,20 @@ for (const opt of optionDefinitions) {
 }
 
 const contractKeys =
-  Ed25519.parseKeyFiles(
+  Keys.Ed25519.parseKeyFiles(
     options["from-public-key-path"],
     options["from-private-key-path"]);
 
 const hex = (x: ByteArray) => Buffer.from(x).toString("hex");
 
-const accountPublicKey = Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
+const accountPublicKey =  Keys.Ed25519.parsePublicKeyFile(options["to-public-key-path"]);
 const accountPublicKeyBase16 = hex(accountPublicKey);
 
-const transfer = new Contract(
+const transfer = new Contracts.Contract(
   options["transfer-contract-path"],
   options["payment-contract-path"]);
 
-const args = Transfer.args(accountPublicKey, options.amount);
+const args = Contracts.Transfer.args(accountPublicKey, options.amount);
 
 const deploy = transfer.deploy(
   args,

@@ -1,42 +1,43 @@
-import { grpc } from '@improbable-eng/grpc-web';
-import { CasperService as GrpcCasperService } from 'casperlabsjs/grpc/src/io/casperlabs/node/api/casper_pb_service';
+import { grpc } from "@improbable-eng/grpc-web";
+import { BlockHash, ByteArray } from "..";
+import { Block } from "../../grpc/src/io/casperlabs/casper/consensus/consensus_pb";
 import {
-  DeployInfo,
-  BlockInfo
-} from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
+  BlockInfo,
+  DeployInfo
+} from "../../grpc/src/io/casperlabs/casper/consensus/info_pb";
 import {
-  GetDeployInfoRequest,
-  StreamBlockInfosRequest,
-  StateQuery,
-  GetBlockStateRequest,
+  Key,
+  Value as StateValue
+} from "../../grpc/src/io/casperlabs/casper/consensus/state_pb";
+import {
   GetBlockInfoRequest,
-  StreamBlockDeploysRequest
-} from 'casperlabsjs/grpc/src/io/casperlabs/node/api/casper_pb';
-import { encodeBase16 } from '../lib/Conversions';
-import { GrpcError } from './Errors';
-import {
-  Value as StateValue,
-  Key
-} from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/state_pb';
-import { ByteArrayArg } from '../lib/Serialization';
-import { Block } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb';
+  GetBlockStateRequest,
+  GetDeployInfoRequest,
+  StateQuery,
+  StreamBlockDeploysRequest,
+  StreamBlockInfosRequest
+} from "../../grpc/src/io/casperlabs/node/api/casper_pb";
+import { CasperService as GrpcCasperService } from "../../grpc/src/io/casperlabs/node/api/casper_pb_service";
+import { encodeBase16 } from "../lib/Conversions";
+import { ByteArrayArg } from "../lib/Serialization";
+import {GrpcError} from "./Errors";
 
-export default class CasperService {
+export class CasperService {
   constructor(
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
   ) {}
 
-  getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
+  public getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
       const request = new GetDeployInfoRequest();
       request.setDeployHashBase16(encodeBase16(deployHash));
 
       grpc.unary(GrpcCasperService.GetDeployInfo, {
         host: this.url,
-        request: request,
-        onEnd: res => {
+        request,
+        onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as DeployInfo);
           } else {
@@ -48,22 +49,22 @@ export default class CasperService {
   }
 
   /** Return the block info including statistics. */
-  getBlockInfo(
+  public getBlockInfo(
     blockHash: ByteArray | string,
     view?: 0 | 1
   ): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       // The API supports prefixes, which may not have even number of characters.
       const hashBase16 =
-        typeof blockHash === 'string' ? blockHash : encodeBase16(blockHash);
+        typeof blockHash === "string" ? blockHash : encodeBase16(blockHash);
       const request = new GetBlockInfoRequest();
       request.setBlockHashBase16(hashBase16);
       request.setView(view === undefined ? BlockInfo.View.FULL : view);
 
       grpc.unary(GrpcCasperService.GetBlockInfo, {
         host: this.url,
-        request: request,
-        onEnd: res => {
+        request,
+        onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as BlockInfo);
           } else {
@@ -74,18 +75,18 @@ export default class CasperService {
     });
   }
 
-  getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
+  public getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
     return new Promise<BlockInfo[]>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
       request.setDepth(depth);
       request.setMaxRank(maxRank || 0);
 
-      let blocks: BlockInfo[] = [];
+      const blocks: BlockInfo[] = [];
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
-        request: request,
-        onMessage: msg => {
+        request,
+        onMessage: (msg) => {
           blocks.push(msg as BlockInfo);
         },
         onEnd: (code, message) => {
@@ -99,17 +100,17 @@ export default class CasperService {
     });
   }
 
-  getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
+  public getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
     return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
       const request = new StreamBlockDeploysRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
 
-      let deploys: Block.ProcessedDeploy[] = [];
+      const deploys: Block.ProcessedDeploy[] = [];
 
       grpc.invoke(GrpcCasperService.StreamBlockDeploys, {
         host: this.url,
-        request: request,
-        onMessage: msg => {
+        request,
+        onMessage: (msg) => {
           deploys.push(msg as Block.ProcessedDeploy);
         },
         onEnd: (code, message) => {
@@ -124,7 +125,7 @@ export default class CasperService {
   }
 
   /** Get one of the blocks from the last rank. */
-  getLatestBlockInfo(): Promise<BlockInfo> {
+  public getLatestBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
       request.setDepth(1);
@@ -134,8 +135,8 @@ export default class CasperService {
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
-        request: request,
-        onMessage: msg => {
+        request,
+        onMessage: (msg) => {
           if (!resolved) {
             resolved = true;
             resolve(msg as BlockInfo);
@@ -150,7 +151,7 @@ export default class CasperService {
     });
   }
 
-  getBlockState(blockHash: BlockHash, query: StateQuery): Promise<StateValue> {
+  public getBlockState(blockHash: BlockHash, query: StateQuery): Promise<StateValue> {
     return new Promise<StateValue>((resolve, reject) => {
       const request = new GetBlockStateRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
@@ -158,8 +159,8 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetBlockState, {
         host: this.url,
-        request: request,
-        onEnd: res => {
+        request,
+        onEnd: (res) => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as StateValue);
           } else {
@@ -173,7 +174,7 @@ export default class CasperService {
   /** Get the reference to the balance so we can cache it.
    *  Returns `undefined` if the account doesn't exist yet.
    */
-  async getAccountBalanceUref(
+  public async getAccountBalanceUref(
     blockHash: BlockHash,
     accountPublicKey: ByteArray
   ): Promise<Key.URef | undefined> {
@@ -181,17 +182,17 @@ export default class CasperService {
       const accountQuery = QueryAccount(accountPublicKey);
 
       const account = await this.getBlockState(blockHash, accountQuery).then(
-        res => res.getAccount()!
+        (res) => res.getAccount()!
       );
 
       const mintPublic = account
         .getKnownUrefsList()
-        .find(x => x.getName() === 'mint')!;
+        .find((x) => x.getName() === "mint")!;
 
       const mintQuery = QueryUref(mintPublic.getKey()!.getUref()!);
 
       const mintPrivate = await this.getBlockState(blockHash, mintQuery).then(
-        res => res.getKey()!.getUref()!
+        (res) => res.getKey()!.getUref()!
       );
 
       const localKeyQuery = QueryLocalKey(
@@ -202,14 +203,14 @@ export default class CasperService {
       const balanceUref = await this.getBlockState(
         blockHash,
         localKeyQuery
-      ).then(res => res.getKey()!.getUref()!);
+      ).then((res) => res.getKey()!.getUref()!);
 
       return balanceUref;
     } catch (err) {
       if (err instanceof GrpcError) {
         if (
           err.code === grpc.Code.InvalidArgument &&
-          err.message.indexOf('Key') > -1
+          err.message.indexOf("Key") > -1
         ) {
           // The account doesn't exist yet.
           return undefined;
@@ -219,13 +220,13 @@ export default class CasperService {
     }
   }
 
-  async getAccountBalance(
+  public async getAccountBalance(
     blockHash: BlockHash,
     balanceUref: Key.URef
   ): Promise<number> {
     const balanceQuery = QueryUref(balanceUref);
     const balance = await this.getBlockState(blockHash, balanceQuery).then(
-      res => res.getBigInt()!
+      (res) => res.getBigInt()!
     );
     return Number(balance.getValue());
   }
@@ -248,6 +249,6 @@ const QueryUref = (uref: Key.URef) => {
 const QueryLocalKey = (seed: ByteArray, bytes: ByteArray) => {
   const query = new StateQuery();
   query.setKeyVariant(StateQuery.KeyVariant.LOCAL);
-  query.setKeyBase16(encodeBase16(seed) + ':' + encodeBase16(bytes));
+  query.setKeyBase16(encodeBase16(seed) + ":" + encodeBase16(bytes));
   return query;
 };

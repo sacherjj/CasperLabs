@@ -9,12 +9,12 @@ import {
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
-import { encodeBase16 } from '../lib/Conversions';
 import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
 import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
+import { Conversions } from 'casperlabsjs';
 
 interface Props {
   dag: DagContainer;
@@ -79,8 +79,9 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 onSelect={blockHashBase16 => {
                   dag.selectedBlock = dag.blocks!.find(
                     x =>
-                      encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-                      blockHashBase16
+                      Conversions.encodeBase16(
+                        x.getSummary()!.getBlockHash_asU8()
+                      ) === blockHashBase16
                   );
                 }}
               />
@@ -103,9 +104,11 @@ class BlockDetails extends React.Component<{
     let { block } = this.props;
     let summary = block.getSummary()!;
     let header = summary.getHeader()!;
-    let id = encodeBase16(summary.getBlockHash_asU8());
+    let id = Conversions.encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
-    let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+    let validatorId = Conversions.encodeBase16(
+      header.getValidatorPublicKey_asU8()
+    );
     // Grouped attributes so we could display 2 sets of fields next to each other.
     let attrs: Array<Array<[string, any]>> = [
       [
@@ -163,7 +166,8 @@ class BlockDetails extends React.Component<{
               .getBondsList()
               .find(
                 x =>
-                  encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+                  Conversions.encodeBase16(x.getValidatorPublicKey_asU8()) ===
+                  validatorId
               );
             // Genesis doesn't have a validator.
             return (
@@ -237,6 +241,6 @@ const BlockLink = (props: {
   blockHash: ByteArray;
   onClick: (blockHashBase16: string) => void;
 }) => {
-  let id = encodeBase16(props.blockHash);
+  let id = Conversions.encodeBase16(props.blockHash);
   return <LinkButton title={shortHash(id)} onClick={() => props.onClick(id)} />;
 };

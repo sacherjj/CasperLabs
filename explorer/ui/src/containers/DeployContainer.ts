@@ -1,10 +1,8 @@
 import { observable, action, computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import CasperService from '../services/CasperService';
+import { CasperService, BalanceService, Conversions } from 'casperlabsjs';
 import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { encodeBase16 } from '../lib/Conversions';
-import BalanceService from '../services/BalanceService';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
 export class DeployContainer {
@@ -30,7 +28,7 @@ export class DeployContainer {
   }
 
   @computed get deployHashBase16() {
-    return this.deployHash && encodeBase16(this.deployHash);
+    return this.deployHash && Conversions.encodeBase16(this.deployHash);
   }
 
   async loadDeploy() {
@@ -60,7 +58,7 @@ export class DeployContainer {
           .getAccountPublicKey_asU8()
       );
       if (balance !== undefined) {
-        this.balances.set(encodeBase16(blockHash), balance);
+        this.balances.set(Conversions.encodeBase16(blockHash), balance);
       }
     }
   }

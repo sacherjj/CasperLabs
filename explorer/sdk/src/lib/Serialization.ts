@@ -1,3 +1,4 @@
+import { ByteArray } from "..";
 
 // Functions to convert data to the FFI
 

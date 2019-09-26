@@ -18,11 +18,10 @@ import FaucetContainer from './containers/FaucetContainer';
 import AuthContainer from './containers/AuthContainer';
 import ErrorContainer from './containers/ErrorContainer';
 import FaucetService from './services/FaucetService';
-import CasperService from './services/CasperService';
+import { CasperService, BalanceService } from 'casperlabsjs';
 import { Auth0Service, MockAuthService } from './services/AuthService';
 import DagContainer from './containers/DagContainer';
 import BlockContainer from './containers/BlockContainer';
-import BalanceService from './services/BalanceService';
 import DeployContainer from './containers/DeployContainer';
 import SearchContainer from './containers/SearchContainer';
 

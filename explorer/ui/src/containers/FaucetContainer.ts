@@ -3,9 +3,8 @@ import { computed } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
 import FaucetService from '../services/FaucetService';
-import CasperService from '../services/CasperService';
 import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { GrpcError } from '../services/Errors';
+import { GrpcError, CasperService } from 'casperlabsjs';
 import { grpc } from '@improbable-eng/grpc-web';
 
 export class FaucetContainer {

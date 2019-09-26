@@ -3,8 +3,8 @@ import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/
 import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';
-import { encodeBase16 } from '../lib/Conversions';
 import { shortHash } from './Utils';
+import { Conversions } from 'casperlabsjs';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -314,7 +314,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getSummary()!
       .getHeader()!
       .getParentHashesList_asU8()
-      .map(h => encodeBase16(h));
+      .map(h => Conversions.encodeBase16(h));
 
     let parentSet = new Set(parents);
 
@@ -322,7 +322,7 @@ const toGraph = (blocks: BlockInfo[]) => {
       .getSummary()!
       .getHeader()!
       .getJustificationsList()
-      .map(x => encodeBase16(x.getLatestBlockHash_asU8()));
+      .map(x => Conversions.encodeBase16(x.getLatestBlockHash_asU8()));
 
     let parentLinks = parents
       .filter(p => nodeMap.has(p))
@@ -370,10 +370,10 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
 };
 
 const blockHash = (block: BlockInfo) =>
-  encodeBase16(block.getSummary()!.getBlockHash_asU8());
+  Conversions.encodeBase16(block.getSummary()!.getBlockHash_asU8());
 
 const validatorHash = (block: BlockInfo) =>
-  encodeBase16(
+  Conversions.encodeBase16(
     block
       .getSummary()!
       .getHeader()!

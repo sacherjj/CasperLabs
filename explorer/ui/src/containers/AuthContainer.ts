@@ -4,10 +4,8 @@ import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
-import CasperService from '../services/CasperService';
-import { encodeBase64, decodeBase64 } from '../lib/Conversions';
+import { CasperService, BalanceService, Conversions } from 'casperlabsjs';
 import ObservableValueMap from '../lib/ObservableValueMap';
-import BalanceService from '../services/BalanceService';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
 // https://tweetnacl.js.org/#/sign
@@ -102,7 +100,7 @@ export class AuthContainer {
 
         const latestAccountBalance = await this.balanceService.getAccountBalance(
           latestBlockHash,
-          decodeBase64(account.publicKeyBase64)
+          Conversions.decodeBase64(account.publicKeyBase64)
         );
 
         this.balances.set(account.publicKeyBase64, {
@@ -169,8 +167,8 @@ class NewAccountFormData extends CleanableFormData {
     super();
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = encodeBase64(keys.publicKey);
-    this.privateKeyBase64 = encodeBase64(keys.secretKey);
+    this.publicKeyBase64 = Conversions.encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = Conversions.encodeBase64(keys.secretKey);
   }
 
   @observable name: string = '';
@@ -178,11 +176,10 @@ class NewAccountFormData extends CleanableFormData {
   @observable privateKeyBase64: string = '';
 
   protected check() {
-    if (this.name === '')
-      return 'Name cannot be empty!';
+    if (this.name === '') return 'Name cannot be empty!';
 
     if (this.name.indexOf(' ') > -1)
-      return "The account name should not include spaces.";
+      return 'The account name should not include spaces.';
 
     if (this.accounts.some(x => x.name === this.name))
       return `An account with name '${this.name}' already exists.`;

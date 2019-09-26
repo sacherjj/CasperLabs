@@ -1,6 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import SearchContainer, { Target } from '../containers/SearchContainer';
+import { Conversions } from 'casperlabsjs';
 import { Card, Button } from './Utils';
 import { Form, TextField, ErrorMessage, RadioField } from './Forms';
 import {
@@ -9,7 +10,6 @@ import {
 } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import { Redirect } from 'react-router';
 import Pages from './Pages';
-import { encodeBase16 } from '../lib/Conversions';
 
 interface Props {
   search: SearchContainer;
@@ -67,12 +67,16 @@ const Results = observer((props: { container: SearchContainer }) => {
   if (typeof result === 'string') return <ErrorMessage error={result} />;
 
   if (result instanceof BlockInfo) {
-    const hash = encodeBase16(result.getSummary()!.getBlockHash_asU8());
+    const hash = Conversions.encodeBase16(
+      result.getSummary()!.getBlockHash_asU8()
+    );
     return <Redirect to={Pages.block(hash)} />;
   }
 
   if (result instanceof DeployInfo) {
-    const hash = encodeBase16(result.getDeploy()!.getDeployHash_asU8());
+    const hash = Conversions.encodeBase16(
+      result.getDeploy()!.getDeployHash_asU8()
+    );
     return <Redirect to={Pages.deploy(hash)} />;
   }
 

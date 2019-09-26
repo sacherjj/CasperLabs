@@ -1,3 +1,4 @@
+import { Contracts, Keys } from "casperlabsjs";
 import dotenv from "dotenv";
 import express from "express";
 import jwt from "express-jwt";
@@ -8,8 +9,6 @@ import path from "path";
 import { decodeBase64 } from "tweetnacl-util";
 // TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
-import { BoundContract, Contract, Faucet } from "./lib/Contracts";
-import { Ed25519 } from "./lib/Keys";
 import DeployService from "./services/DeployService";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
@@ -23,13 +22,13 @@ dotenv.config();
 const port = process.env.SERVER_PORT!;
 
 const contractKeys =
-  Ed25519.parseKeyFiles(
+  Keys.Ed25519.parseKeyFiles(
     process.env.FAUCET_ACCOUNT_PUBLIC_KEY_PATH!,
     process.env.FAUCET_ACCOUNT_PRIVATE_KEY_PATH!);
 
 // Faucet contract and deploy factory.
-const faucet = new BoundContract(
-  new Contract(
+const faucet = new Contracts.BoundContract(
+  new Contracts.Contract(
     process.env.FAUCET_CONTRACT_PATH!,
     process.env.PAYMENT_CONTRACT_PATH!
   ),
@@ -115,7 +114,7 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
   // Prepare the signed deploy.
   const accountPublicKey = decodeBase64(accountPublicKeyBase64);
-  const deploy = faucet.deploy(Faucet.args(accountPublicKey), paymentAmount);
+  const deploy = faucet.deploy(Contracts.Faucet.args(accountPublicKey), paymentAmount);
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService

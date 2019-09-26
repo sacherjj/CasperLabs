@@ -1,5 +1,5 @@
-import { decodeBase16 } from '../lib/Conversions';
 import AuthService from './AuthService';
+import { Conversions } from 'casperlabsjs';
 
 /** Call the API on the server backend. */
 export default class FaucetService {
@@ -21,6 +21,6 @@ export default class FaucetService {
       throw new Error(json.error);
     }
 
-    return decodeBase16(json.deployHashBase16);
+    return Conversions.decodeBase16(json.deployHashBase16);
   }
 }

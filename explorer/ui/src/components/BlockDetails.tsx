@@ -2,7 +2,6 @@ import React from 'react';
 import { RouteComponentProps, withRouter, Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import { BlockContainer } from '../containers/BlockContainer';
-import { decodeBase16, encodeBase16 } from '../lib/Conversions';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
@@ -11,6 +10,7 @@ import { BlockDAG } from './BlockDAG';
 import { Block } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb';
 import { shortHash } from './Utils';
 import ObservableValueMap, { ObservableValue } from '../lib/ObservableValueMap';
+import { Conversions } from 'casperlabsjs';
 
 // https://www.pluralsight.com/guides/react-router-typescript
 
@@ -27,7 +27,7 @@ interface Props extends RouteComponentProps<Params> {
 class _BlockDetails extends RefreshableComponent<Props, {}> {
   constructor(props: Props) {
     super(props);
-    this.props.block.init(decodeBase16(this.blockHashBase16));
+    this.props.block.init(Conversions.decodeBase16(this.blockHashBase16));
   }
 
   get blockHashBase16() {
@@ -48,7 +48,7 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
   componentDidUpdate() {
     // Container and component stays the same during naviagation.
     if (this.blockHashBase16 !== this.container.blockHashBase16) {
-      this.container.init(decodeBase16(this.blockHashBase16));
+      this.container.init(Conversions.decodeBase16(this.blockHashBase16));
       this.refresh();
     }
   }
@@ -75,7 +75,9 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
           selected={this.container.block!}
           depth={this.container.depth}
           onSelected={block => {
-            let target = encodeBase16(block.getSummary()!.getBlockHash_asU8());
+            let target = Conversions.encodeBase16(
+              block.getSummary()!.getBlockHash_asU8()
+            );
             if (target !== this.blockHashBase16) {
               this.props.history.push(Pages.block(target));
             }
@@ -136,8 +138,10 @@ const DeploysTable = observer(
         ]}
         rows={props.deploys}
         renderRow={(deploy, i) => {
-          const id = encodeBase16(deploy.getDeploy()!.getDeployHash_asU8());
-          const accountId = encodeBase16(
+          const id = Conversions.encodeBase16(
+            deploy.getDeploy()!.getDeployHash_asU8()
+          );
+          const accountId = Conversions.encodeBase16(
             deploy
               .getDeploy()!
               .getHeader()!
@@ -174,9 +178,11 @@ const DeploysTable = observer(
 const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   block: BlockInfo
 ) => {
-  const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
+  const id = Conversions.encodeBase16(block.getSummary()!.getBlockHash_asU8());
   const header = block.getSummary()!.getHeader()!;
-  const validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+  const validatorId = Conversions.encodeBase16(
+    header.getValidatorPublicKey_asU8()
+  );
   return [
     ['Block Hash', id],
     ['Rank', header.getRank()],
@@ -200,7 +206,9 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
           .getState()!
           .getBondsList()
           .find(
-            x => encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+            x =>
+              Conversions.encodeBase16(x.getValidatorPublicKey_asU8()) ===
+              validatorId
           );
         // Genesis doesn't have a validator.
         return (
@@ -235,7 +243,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
 };
 
 export const BlockLink = (props: { blockHash: ByteArray }) => {
-  let id = encodeBase16(props.blockHash);
+  let id = Conversions.encodeBase16(props.blockHash);
   return <Link to={Pages.block(id)}>{id}</Link>;
 };
 

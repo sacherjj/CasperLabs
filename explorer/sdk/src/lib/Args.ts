@@ -1,5 +1,6 @@
-import { Deploy } from "casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb";
-import { BigInt } from "casperlabsjs/grpc/src/io/casperlabs/casper/consensus/state_pb";
+import { ByteArray } from "..";
+import { Deploy } from "../../grpc/src/io/casperlabs/casper/consensus/consensus_pb";
+import { BigInt } from "../../grpc/src/io/casperlabs/casper/consensus/state_pb";
 
 // Functions to convert data to protobuf Deploy.Arg
 
