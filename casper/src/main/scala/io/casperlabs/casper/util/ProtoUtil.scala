@@ -496,7 +496,7 @@ object ProtoUtil {
         address = d.getHeader.accountPublicKey,
         session = session,
         payment = payment,
-        gasPrice = GAS_PRICE,
+        gasPrice = state.BigInt(GAS_PRICE.toString, bitWidth = 512).some,
         authorizationKeys = d.approvals.map(_.approverPublicKey),
         deployHash = d.deployHash
       )

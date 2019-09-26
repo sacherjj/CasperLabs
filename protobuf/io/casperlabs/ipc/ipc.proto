@@ -41,13 +41,13 @@ message Bond {
 }
 
 message Deploy {
-    reserved 5;
-    reserved 7;
+    reserved 5; // motes in payment
+    reserved 7; // motes in payment
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
     DeployCode session = 3;
     DeployCode payment = 4;
-    uint64 gas_price = 6; // in units of Mote / Gas
+    io.casperlabs.casper.consensus.state.BigInt gas_price = 6; // in units of Mote / Gas
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
@@ -55,13 +55,13 @@ message Deploy {
 }
 
 message DeployItem {
+    reserved 5; // motes in payment
     reserved 7; // nonce
     // Public key of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
     DeployPayload session = 3;
     DeployPayload payment = 4;
-    uint64 motes_transferred_in_payment = 5; // in units of Motes -- someday this will come from running payment code
-    uint64 gas_price = 6; // in units of Mote / Gas
+    io.casperlabs.casper.consensus.state.BigInt gas_price = 6; // in units of Mote / Gas
     // Public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
@@ -204,7 +204,7 @@ message DeployResult {
     message ExecutionResult {
         ExecutionEffect effects = 1;
         DeployError error = 2;
-        uint64 cost = 3;
+        io.casperlabs.casper.consensus.state.BigInt cost = 3;
     }
 
     oneof value {
