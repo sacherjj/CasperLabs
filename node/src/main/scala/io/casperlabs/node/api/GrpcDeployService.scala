@@ -21,6 +21,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
 import monix.reactive.Observable
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 @silent("deprecated")
 object GrpcDeployService {
@@ -51,12 +52,19 @@ object GrpcDeployService {
           val f = for {
             key <- toKey[F](keyType, keyValue)
             bq  <- BlockAPI.showBlock[F](BlockQuery(blockHash))
-            state <- Concurrent[F]
-                      .fromOption(bq.blockInfo, new Exception(s"Block $blockHash not found!"))
-                      .map(_.globalStateRootHash)
-            stateHash        = ByteString.copyFrom(Base16.decode(state))
-            possibleResponse <- ExecutionEngineService[F].query(stateHash, key, splitPath(path))
-            response         <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)
+            stateAndVersion <- Concurrent[F]
+                                .fromOption(
+                                  bq.blockInfo,
+                                  new Exception(s"Block $blockHash not found!")
+                                )
+                                .map(
+                                  info => info.globalStateRootHash -> info.protocolVersion
+                                )
+            stateHash       = ByteString.copyFrom(Base16.decode(stateAndVersion._1))
+            protocolVersion = ProtocolVersion(stateAndVersion._2)
+            possibleResponse <- ExecutionEngineService[F]
+                                 .query(stateHash, key, splitPath(path), protocolVersion)
+            response <- Concurrent[F].fromEither(possibleResponse).map(_.toProtoString)
           } yield QueryStateResponse(response)
           defer(f)
       }

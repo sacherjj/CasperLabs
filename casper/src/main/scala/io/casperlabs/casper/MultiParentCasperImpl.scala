@@ -321,8 +321,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             "payment" -> payment
           ).collect {
               case (name, code) if code.contract.isWasm =>
+                // TODO: Should deploys have a protocol version, or a contract API version?
+                // Or should we use the version of the tips? The last finalized block?
                 ExecutionEngineService[F]
-                  .verifyWasm(ValidateRequest(code.getWasm))
+                  .verifyWasm(ValidateRequest(code.getWasm, protocolVersion = None))
                   .map(name -> _)
             }
             .sequence

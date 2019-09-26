@@ -34,9 +34,15 @@ import io.casperlabs.catscontrib.MonadThrowable
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
-  def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
+  def query(
+      state: ByteString,
+      baseKey: Key,
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, Value]]
   def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
@@ -154,7 +160,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 
   override def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     sendMessage(CommitRequest(prestate, effects), _.commit) {
       _.result match {
@@ -176,7 +183,8 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def query(
       state: ByteString,
       baseKey: Key,
-      path: Seq[String]
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Value]] =
     sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
       _.result match {

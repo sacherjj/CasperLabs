@@ -21,6 +21,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 object GrpcCasperService {
 
@@ -99,19 +100,25 @@ object GrpcCasperService {
             request: BatchGetBlockStateRequest
         ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
           for {
-            info      <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
-            stateHash = info.getSummary.getHeader.getState.postStateHash
-            values    <- request.queries.toList.traverse(getState(stateHash, _))
+            info            <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
+            stateHash       = info.getSummary.getHeader.getState.postStateHash
+            protocolVersion = ProtocolVersion(info.getSummary.getHeader.protocolVersion)
+            values          <- request.queries.toList.traverse(getState(stateHash, _, protocolVersion))
           } yield BatchGetBlockStateResponse(values)
         }
 
-        private def getState(stateHash: ByteString, query: StateQuery): F[state.Value] =
+        private def getState(
+            stateHash: ByteString,
+            query: StateQuery,
+            protocolVersion: ProtocolVersion
+        ): F[state.Value] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(
                                  stateHash,
                                  key,
-                                 query.pathSegments
+                                 query.pathSegments,
+                                 protocolVersion
                                )
             value <- Concurrent[F].fromEither(possibleResponse).handleErrorWith {
                       case SmartContractEngineError(msg) =>

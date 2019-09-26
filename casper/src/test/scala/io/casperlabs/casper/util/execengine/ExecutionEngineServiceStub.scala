@@ -78,13 +78,15 @@ object ExecutionEngineServiceStub {
       execFunc(prestate, blocktime, deploys, protocolVersion)
     override def commit(
         prestate: ByteString,
-        effects: Seq[TransformEntry]
+        effects: Seq[TransformEntry],
+        protocolVersion: ProtocolVersion
     ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = commitFunc(prestate, effects)
 
     override def query(
         state: ByteString,
         baseKey: Key,
-        path: Seq[String]
+        path: Seq[String],
+        protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
     override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
       verifyWasmFunc(contracts)
