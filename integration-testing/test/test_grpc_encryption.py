@@ -1,7 +1,8 @@
 import os
 import logging
-from casperlabs_local_net.cli import DockerCLI, CLI
+from casperlabs_local_net.cli import DockerCLI, CLI, CLIErrorExit
 from casperlabs_client import CasperLabsClient, extract_common_name, grpc_proxy
+from pytest import raises
 
 
 def test_grpc_encryption_scala_cli(encrypted_two_node_network):
@@ -50,29 +51,33 @@ def test_grpc_encryption_python_cli(encrypted_two_node_network):
     logging.debug(f"{blocks}")
 
 
+def local_path(p):
+    return "resources/bootstrap_certificate/" + p.split("/")[-1]
+
+
 def test_grpc_encryption_python_cli_and_proxy(encrypted_two_node_network):
     node = encrypted_two_node_network.docker_nodes[0]
 
-    def local_path(p):
-        return "resources/bootstrap_certificate/" + p.split("/")[-1]
-
     tls_certificate_path = node.config.tls_certificate_local_path()
     tls_key_path = local_path(node.config.tls_key_path())
+    tls_parameters = {
+        "--certificate-file": tls_certificate_path,
+        "--node-id": extract_common_name(tls_certificate_path),
+    }
+
+    cli = CLI(node, tls_parameters=tls_parameters)
+    cli.port = 50401  # We will be talking to proxy on 50401, node is on 40401
 
     proxy_client = grpc_proxy.proxy_client(
         node_port=40401,
-        node_host="127.0.0.1",
+        node_host=cli.host,
         proxy_port=50401,
         certificate_file=tls_certificate_path,
         key_file=tls_key_path,
     )
 
-    tls_parameters = {
-        "--certificate-file": tls_certificate_path,
-        "--node-id": extract_common_name(tls_certificate_path),
-    }
-    cli = CLI(node, tls_parameters=tls_parameters)
-    cli.port = 50401
+    cli.host = "localhost"
+
     logging.info(
         f"""EXECUTING {' '.join(cli.expand_args(["show-blocks", "--depth", 1]))}"""
     )
@@ -83,3 +88,9 @@ def test_grpc_encryption_python_cli_and_proxy(encrypted_two_node_network):
     logging.info(f"{block_info}")
 
     proxy_client.stop()
+
+    with raises(CLIErrorExit) as excinfo:
+        block_info = cli("show-block", block_infos[0].summary.block_hash)
+    assert "StatusCode.UNAVAILABLE: failed to connect to all addresses" in str(
+        excinfo.value
+    )

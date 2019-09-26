@@ -62,16 +62,17 @@ class DockerNode(LoggingDockerBase):
             logging.info(
                 f"SETUP PROXIES: tls_certificate_path: {tls_certificate_path}, tls_key_path={tls_key_path}"
             )
+            node_address = "localhost"
             self.proxy_server = grpc_proxy.proxy_server(
                 node_port=self.GRPC_SERVER_PORT + 10000,
-                node_host=self.container_name,
+                node_host=node_address,
                 proxy_port=self.GRPC_SERVER_PORT,
                 certificate_file=tls_certificate_path,
                 key_file=tls_key_path,
             )
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
                 node_port=self.KADEMLIA_PORT + 10000,
-                node_host=self.container_name,
+                node_host=node_address,
                 proxy_port=self.KADEMLIA_PORT,
                 certificate_file=tls_certificate_path,
                 key_file=tls_key_path,
@@ -93,6 +94,13 @@ class DockerNode(LoggingDockerBase):
         n = self.GRPC_SERVER_PORT + self.docker_port_offset
         if self.config.behind_proxy:
             return n + 10000  # 50400 + self.docker_port_offset
+        return n
+
+    @property
+    def kademlia_docker_port(self) -> int:
+        n = self.KADEMLIA_PORT + self.docker_port_offset
+        if self.config.behind_proxy:
+            return n + 10000  # 50404 + self.docker_port_offset
         return n
 
     @property
@@ -166,7 +174,14 @@ class DockerNode(LoggingDockerBase):
         :return: dict for use in docker container run to open ports based on node number
         """
         ports = (
-            (self.GRPC_SERVER_PORT, self.grpc_server_docker_port),
+            (
+                self.GRPC_SERVER_PORT + (self.config.behind_proxy and 10000 or 0),
+                self.grpc_server_docker_port,
+            ),
+            (
+                self.KADEMLIA_PORT + (self.config.behind_proxy and 10000 or 0),
+                self.kademlia_docker_port,
+            ),
             (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
             (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
             (self.HTTP_PORT, self.http_port),
@@ -195,6 +210,7 @@ class DockerNode(LoggingDockerBase):
         ports = {}
         if not self.is_in_docker:
             ports = self.docker_ports
+        logging.info(f"{self.container_name} ports: {ports}")
 
         container = self.config.docker_client.containers.run(
             self.image_name,
@@ -432,7 +448,10 @@ class DockerNode(LoggingDockerBase):
                 node_id = extract_common_name(self.config.tls_certificate_path())
 
             # TODO: get actual protocol and discovery
-            return f"casperlabs://{node_id}@{self.container_name}?protocol=40400&discovery=40404"
+            host_address = "172.17.0.1"  # this works locally
+            protocol_port = 40400
+            discovery_port = 40404
+            return f"casperlabs://{node_id}@{host_address}?protocol={protocol_port}&discovery={discovery_port}"
 
         m = re.search(
             f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",

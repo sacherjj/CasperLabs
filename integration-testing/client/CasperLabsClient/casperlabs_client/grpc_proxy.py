@@ -44,6 +44,7 @@ class ProxyServicer:
         self,
         node_host: str = None,
         node_port: int = None,
+        proxy_port: int = None,  # just for better logging
         certificate_file: str = None,
         key_file: str = None,
         node_id: str = None,
@@ -54,6 +55,7 @@ class ProxyServicer:
     ):
         self.node_host = node_host
         self.node_port = node_port
+        self.proxy_port = proxy_port
         self.certificate_file = certificate_file
         self.key_file = key_file
         self.node_id = node_id or casperlabs_client.extract_common_name(
@@ -86,7 +88,7 @@ class ProxyServicer:
 
         prefix = (
             f"PROXY"
-            f" {self.node_host}:{self.node_port}"
+            f" {self.node_host}:{self.node_port} on {self.proxy_port}"
             f" {stub_name(self.service_stub)}::{name}"
         )
         callback_info = (
@@ -126,9 +128,9 @@ class ProxyThread(Thread):
         self,
         service_stub,
         add_servicer_to_server,
-        proxy_port: int,
         node_host: str,
         node_port: int,
+        proxy_port: int,
         certificate_file: str,
         key_file: str,
         node_id: str = None,
@@ -139,9 +141,9 @@ class ProxyThread(Thread):
         super().__init__()
         self.service_stub = service_stub
         self.add_servicer_to_server = add_servicer_to_server
-        self.proxy_port = proxy_port
         self.node_host = node_host
         self.node_port = node_port
+        self.proxy_port = proxy_port
         self.certificate_file = certificate_file
         self.key_file = key_file
         self.node_id = node_id or casperlabs_client.extract_common_name(
@@ -156,6 +158,7 @@ class ProxyThread(Thread):
         servicer = ProxyServicer(
             node_host=self.node_host,
             node_port=self.node_port,
+            proxy_port=self.proxy_port,
             certificate_file=self.certificate_file,
             key_file=self.key_file,
             node_id=self.node_id,
@@ -215,7 +218,7 @@ def run_proxy(
 
 def proxy_client(
     node_port=40401,
-    node_host="localhost",
+    node_host="casperlabs",
     proxy_port=50401,
     certificate_file=None,
     key_file=None,
@@ -241,7 +244,7 @@ def proxy_client(
 
 def proxy_server(
     node_port=50400,
-    node_host="localhost",
+    node_host="casperlabs",
     proxy_port=40400,
     certificate_file=None,
     key_file=None,
