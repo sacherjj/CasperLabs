@@ -14,8 +14,7 @@ use lazy_static::lazy_static;
 use num_traits::identities::Zero;
 
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::ProtocolVersion;
-use contract_ffi::value::U512;
+use contract_ffi::value::{ProtocolVersion, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_shared::motes::Motes;
 use engine_wasm_prep::wasm_costs::WasmCosts;
