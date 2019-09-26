@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::convert::TryInto;
 
 use contract_ffi::key::Key;
@@ -13,12 +12,12 @@ use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
-use crate::test::DEFAULT_PAYMENT;
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
 
@@ -26,9 +25,9 @@ fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (*DEFAULT_PAYMENT,),
             "transfer_purse_to_account.wasm",
@@ -39,7 +38,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (*DEFAULT_PAYMENT,),
             "transfer_purse_to_account.wasm",
@@ -69,7 +68,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
 
     assert!(builder
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (*DEFAULT_PAYMENT,),
             FINALIZE_PAYMENT,
@@ -103,21 +102,22 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let args: (U512, u8, Option<U512>, Option<PublicKey>) =
         (payment_amount, refund_purse_flag, None, None);
 
-    builder.run_genesis(GENESIS_ADDR, HashMap::default());
+    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     let payment_pre_balance = get_pos_payment_purse_balance(&builder);
     let rewards_pre_balance = get_pos_rewards_purse_balance(&builder);
-    let refund_pre_balance = get_named_account_balance(&builder, GENESIS_ADDR, LOCAL_REFUND_PURSE)
-        .unwrap_or_else(U512::zero);
+    let refund_pre_balance =
+        get_named_account_balance(&builder, DEFAULT_ACCOUNT_ADDR, LOCAL_REFUND_PURSE)
+            .unwrap_or_else(U512::zero);
 
     assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always starts unset
     assert!(payment_pre_balance.is_zero()); // payment purse always starts with zero balance
 
     let exec_request = {
-        let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+        let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
         let deploy = DeployBuilder::new()
-            .with_address(GENESIS_ADDR)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code(FINALIZE_PAYMENT, args)
@@ -141,8 +141,9 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
     let payment_post_balance = get_pos_payment_purse_balance(&builder);
     let rewards_post_balance = get_pos_rewards_purse_balance(&builder);
-    let refund_post_balance = get_named_account_balance(&builder, GENESIS_ADDR, LOCAL_REFUND_PURSE)
-        .expect("should have refund balance");
+    let refund_post_balance =
+        get_named_account_balance(&builder, DEFAULT_ACCOUNT_ADDR, LOCAL_REFUND_PURSE)
+            .expect("should have refund balance");
 
     assert_eq!(rewards_pre_balance + spent_amount, rewards_post_balance); // validators get paid
 

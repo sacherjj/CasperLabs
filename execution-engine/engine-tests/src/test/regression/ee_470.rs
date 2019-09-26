@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
+use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
 #[test]
@@ -11,7 +9,7 @@ fn regression_test_genesis_hash_mismatch() {
     let mut builder_base = InMemoryWasmTestBuilder::default();
 
     // Step 1.
-    let builder = builder_base.run_genesis(GENESIS_ADDR, HashMap::new());
+    let builder = builder_base.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     // This is trie's post state hash after calling run_genesis endpoint.
     // Step 1a)
@@ -35,7 +33,7 @@ fn regression_test_genesis_hash_mismatch() {
     // Step 2.
     builder
         .exec(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "local_state.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
@@ -45,7 +43,7 @@ fn regression_test_genesis_hash_mismatch() {
 
     // No step 3.
     // Step 4.
-    builder.run_genesis(GENESIS_ADDR, HashMap::new());
+    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     // Step 4a)
     let second_genesis_run_hash = builder.get_genesis_hash();

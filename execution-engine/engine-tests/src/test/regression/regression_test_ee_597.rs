@@ -15,8 +15,6 @@ use test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 #[allow(unused)]
 mod test_support;
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
-
 const GENESIS_VALIDATOR_BOND: u64 = 50_000;
 
 #[ignore]
@@ -29,9 +27,9 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
     };
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, genesis_validators)
+        .run_genesis(DEFAULT_ACCOUNT_ADDR, genesis_validators)
         .exec(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "ee_597_regression.wasm",
             DEFAULT_BLOCK_TIME,
             1,
