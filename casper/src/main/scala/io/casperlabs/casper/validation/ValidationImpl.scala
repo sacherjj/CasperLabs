@@ -251,10 +251,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         )
         .as(false)
     else
-      dependencies.find(_.size != 32) match {
-        case None => true.pure[F]
-        case Some(dep) =>
-          Log[F]
+      dependencies.filter(_.size != 32).foldLeft(true.pure[F]) {
+        case (f, dep) =>
+          f *> Log[F]
             .warn(
               s"Invalid dependency, ${PrettyPrinter.buildString(dep)}, in deploy ${PrettyPrinter.buildString(deployHash)}. Expected 32 byte identifier."
             )
