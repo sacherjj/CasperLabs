@@ -55,7 +55,6 @@ class DockerNode(LoggingDockerBase):
             return "resources/bootstrap_certificate/" + p.split("/")[-1]
 
         self.proxy_server = None
-        self.proxy_kademlia = None
         if config.behind_proxy:
 
             # Set up proxy of incoming connections: this node is server, the other one client.
@@ -71,24 +70,15 @@ class DockerNode(LoggingDockerBase):
             logging.info(
                 f"SETUP PROXIES: server_certificate_path {server_certificate_path} server_key_path {server_key_path}"
             )
-            node_address = "localhost"
+            node_host = "localhost"
             self.proxy_server = grpc_proxy.proxy_server(
                 node_port=self.GRPC_SERVER_PORT + 10000,
-                node_host=node_address,
+                node_host=node_host,
                 proxy_port=self.GRPC_SERVER_PORT,
                 server_certificate_file=server_certificate_path,
                 server_key_file=server_key_path,
-                client_certificate_file=client_certificate_path,
-                client_key_file=client_key_path,
-            )
-            self.proxy_kademlia = grpc_proxy.proxy_kademlia(
-                node_port=self.KADEMLIA_PORT + 10000,
-                node_host=node_address,
-                proxy_port=self.KADEMLIA_PORT,
-                server_certificate_file=server_certificate_path,
-                server_key_file=server_key_path,
-                client_certificate_file=client_certificate_path,
-                client_key_file=client_key_path,
+                client_certificate_file=server_certificate_path,
+                client_key_file=server_key_path,
             )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
@@ -112,8 +102,6 @@ class DockerNode(LoggingDockerBase):
     @property
     def kademlia_docker_port(self) -> int:
         n = self.KADEMLIA_PORT + self.docker_port_offset
-        if self.config.behind_proxy:
-            return n + 10000  # 50404 + self.docker_port_offset
         return n
 
     @property
@@ -191,10 +179,7 @@ class DockerNode(LoggingDockerBase):
                 self.GRPC_SERVER_PORT + (self.config.behind_proxy and 10000 or 0),
                 self.grpc_server_docker_port,
             ),
-            (
-                self.KADEMLIA_PORT + (self.config.behind_proxy and 10000 or 0),
-                self.kademlia_docker_port,
-            ),
+            (self.KADEMLIA_PORT, self.kademlia_docker_port),
             (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
             (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
             (self.HTTP_PORT, self.http_port),
@@ -264,8 +249,6 @@ class DockerNode(LoggingDockerBase):
         super().cleanup()
         if self.proxy_server:
             self.proxy_server.stop()
-        if self.proxy_kademlia:
-            self.proxy_kademlia.stop()
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):

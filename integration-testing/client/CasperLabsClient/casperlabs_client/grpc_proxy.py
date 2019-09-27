@@ -65,20 +65,10 @@ class ProxyServicer:
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
 
-        os.environ[
-            "GRPC_SSL_CIPHER_SUITES"
-        ] = "HIGH+ECDSA"  # found this when googling for the SSL error message:
-        # ssl_transport_security.cc:1238] Handshake failed with fatal error SSL_ERROR_SSL: error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER.
-        # ssl_transport_security.cc:1238] Handshake failed with fatal error SSL_ERROR_SSL: error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE.
-
         os.environ["GRPC_TRACE"] = "transport_security,tsi"
         os.environ["GRPC_VERBOSITY"] = "DEBUG"
 
-        # See also issue https://github.com/grpc/grpc/issues/9538 opened in Feb 2017, still unresolved at this point of time.
-
         self.node_address = f"{self.node_host}:{self.node_port}"
-
-        # https://grpc.github.io/grpc/python/grpc.html#create-client-credentials
 
         """
           root_certificates: The PEM-encoded root certificates as a byte string,
@@ -90,29 +80,24 @@ class ProxyServicer:
             to use or or None if no certificate chain should be used.
         """
 
-        # Channel credentials calls:
-        # https://github.com/grpc/grpc/blob/777245d507ceb09b3207533eacb03068a40bac57/src/python/grpcio/grpc/_cython/_cygrpc/credentials.pyx.pxi#L129
         self.credentials = grpc.ssl_channel_credentials(
             root_certificates=read_binary(self.certificate_file),
-            # The two lines below break the client proxy; don't seem to help server either.
-            # private_key=read_binary(self.key_file),
-            # certificate_chain=read_binary(self.certificate_file),
+            private_key=read_binary(self.key_file),
+            certificate_chain=read_binary(self.certificate_file),
         )
         self.secure_channel_options = self.node_id and [
             ("grpc.ssl_target_name_override", self.node_id),
             ("grpc.default_authority", self.node_id),
         ]
-        # self.secure_channel_options = None
 
     def secure_channel(self):
         channel = grpc.secure_channel(
             self.node_address, self.credentials, options=self.secure_channel_options
         )
-        logging.info(f"PROXY: secure_channel({self.node_address}) => {channel}")
         return channel
 
     def is_unary_stream(self, method_name):
-        return method_name.startswith("Stream")
+        return method_name.startswith("Stream") or method_name in ("GetBlockChunked",)
 
     def __getattr__(self, name):
 
@@ -133,7 +118,6 @@ class ProxyServicer:
             with self.secure_channel() as channel:
                 preprocessed_request = self.pre_callback(name, request)
                 service_method = getattr(self.service_stub(channel), name)
-                logging.info(f"{prefix}: service_method = {service_method}")
                 response = service_method(preprocessed_request)
                 return self.post_callback(name, preprocessed_request, response)
 
@@ -142,9 +126,6 @@ class ProxyServicer:
             with self.secure_channel() as channel:
                 preprocessed_request = self.pre_callback(name, request)
                 streaming_service_method = getattr(self.service_stub(channel), name)
-                logging.info(
-                    f"{prefix}: streaming_service_method = {streaming_service_method}"
-                )
                 response_stream = streaming_service_method(preprocessed_request)
                 yield from self.post_callback_stream(
                     name, preprocessed_request, response_stream
