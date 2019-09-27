@@ -7,7 +7,7 @@ extern crate contract_ffi;
 use alloc::string::String;
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, Error};
-use contract_ffi::uref::URef;
+use contract_ffi::uref::{AccessRights, URef};
 
 #[repr(u16)]
 enum Args {
@@ -29,23 +29,14 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16).into()),
     };
 
-    let do_nothing_uref: URef = match contract_api::get_arg(Args::DoNothingURef as u32) {
-        Some(Ok(uref)) => uref,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => {
-            contract_api::revert(Error::User(CustomError::MissingDoNothingURefArg as u16).into())
-        }
-    };
+    let do_nothing: ContractPointer =
+        match contract_api::get_arg::<URef>(Args::DoNothingURef as u32) {
+            Some(Ok(uref)) => ContractPointer::URef(TURef::new(uref.addr(), AccessRights::READ)),
+            Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+            None => contract_api::revert(
+                Error::User(CustomError::MissingDoNothingURefArg as u16).into(),
+            ),
+        };
 
-    let do_nothing_contract_pointer = ContractPointer::URef(TURef::new(
-        do_nothing_uref.addr(),
-        contract_ffi::uref::AccessRights::READ,
-    ));
-
-    // call do_nothing_stored
-    contract_api::call_contract::<_, ()>(
-        do_nothing_contract_pointer.clone(),
-        &(new_purse_name.clone(),),
-        &vec![],
-    );
+    contract_api::call_contract::<_, ()>(do_nothing.clone(), &(new_purse_name.clone(),), &vec![]);
 }

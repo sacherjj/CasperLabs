@@ -30,8 +30,10 @@ pub const DEFAULT_ACCOUNT_INITIAL_BALANCE: u64 = 100_000_000_000;
 
 pub const CONTRACT_MINT_INSTALL: &str = "mint_install.wasm";
 pub const CONTRACT_POS_INSTALL: &str = "pos_install.wasm";
+pub const CONTRACT_STANDARD_PAYMENT: &str = "standard_payment.wasm";
 
 lazy_static! {
+    pub static ref DEFAULT_ACCOUNT_KEY: PublicKey = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     pub static ref DEFAULT_ACCOUNTS: Vec<GenesisAccount> = {
         let mut ret = Vec::new();
         let genesis_account = GenesisAccount::new(

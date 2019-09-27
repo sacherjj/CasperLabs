@@ -13,12 +13,12 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 #[ignore]
 #[test]
-fn should_run_main_purse_contract_genesis_account() {
+fn should_run_main_purse_contract_default_account() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let genesis_account = if let Some(Value::Account(account)) =
+    let default_account = if let Some(Value::Account(account)) =
         builder.query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
     {
         account
@@ -32,7 +32,7 @@ fn should_run_main_purse_contract_genesis_account() {
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "main_purse.wasm",
-            (genesis_account.purse_id(), ()),
+            (default_account.purse_id(), ()),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
         )
