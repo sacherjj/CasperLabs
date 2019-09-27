@@ -163,7 +163,7 @@ trait ArbitraryConsensus {
       gasPrice        <- arbitrary[Long]
       sessionCode     <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
       paymentCode     <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
-      timeToLive      <- Gen.option(Gen.choose(1, 24 * 60 * 60 * 1000))
+      timeToLive      <- Gen.option(Gen.choose(1 * 60 * 60 * 1000, 24 * 60 * 60 * 1000))
       numDependencies <- Gen.chooseNum(0, 10)
       dependencies    <- Gen.listOfN(numDependencies, genHash)
       body = Deploy
