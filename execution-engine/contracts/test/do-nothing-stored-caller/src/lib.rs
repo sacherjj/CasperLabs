@@ -30,7 +30,7 @@ pub extern "C" fn call() {
     };
 
     let do_nothing_uref: URef = match contract_api::get_arg(Args::DoNothingURef as u32) {
-        Some(Ok(data)) => data,
+        Some(Ok(uref)) => uref,
         Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
         None => {
             contract_api::revert(Error::User(CustomError::MissingDoNothingURefArg as u16).into())
