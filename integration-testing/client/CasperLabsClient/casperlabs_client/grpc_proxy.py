@@ -4,9 +4,8 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
-import os
 
-from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc, kademlia_pb2_grpc
+from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc
 
 
 def read_binary(file_name):
@@ -65,20 +64,7 @@ class ProxyServicer:
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
 
-        os.environ["GRPC_TRACE"] = "transport_security,tsi"
-        os.environ["GRPC_VERBOSITY"] = "DEBUG"
-
         self.node_address = f"{self.node_host}:{self.node_port}"
-
-        """
-          root_certificates: The PEM-encoded root certificates as a byte string,
-            or None to retrieve them from a default location chosen by gRPC
-            runtime.
-          private_key: The PEM-encoded private key as a byte string, or None if no
-            private key should be used.
-          certificate_chain: The PEM-encoded certificate chain as a byte string
-            to use or or None if no certificate chain should be used.
-        """
 
         self.credentials = grpc.ssl_channel_credentials(
             root_certificates=read_binary(self.certificate_file),
@@ -289,65 +275,5 @@ def proxy_server(
         client_key_file=client_key_file,
         pre_callback=pre_callback or logging_pre_callback,
         post_callback=post_callback or logging_post_callback,
-        post_callback_stream=post_callback_stream or logging_post_callback_stream,
-    )
-
-
-def kademlia_pre_callback(name, request):
-    """
-    Patch port: 50404 (the real port of the node behind proxy)
-    to 40404 (proxy kademlia).
-    """
-
-    logging.info(f"KADEMLIA PRE CALLBACK: {name} {request}")
-    try:
-        request.sender.protocol_port = 40400
-        request.sender.discovery_port = 40404
-    except AttributeError:
-        logging.info(f"KADEMLIA PRE CALLBACK: NO PATCHING")
-    return request
-
-
-def kademlia_post_callback(name, request, response):
-    try:
-
-        def patch(node):
-            node.sender.protocol_port = 40400
-            node.sender.discovery_port = 40404
-
-        response.nodes = [patch(node) for node in response.nodes]
-        logging.info(f"KADEMLIA POST CALLBACK: {name} {request} {response}")
-    except AttributeError:
-        logging.info(
-            f"KADEMLIA POST CALLBACK: {name} {request} {response}  NO PATCHING"
-        )
-
-    return response
-
-
-def proxy_kademlia(
-    node_port=50404,
-    node_host="127.0.0.1",
-    proxy_port=40404,
-    server_certificate_file=None,
-    server_key_file=None,
-    client_certificate_file=None,
-    client_key_file=None,
-    pre_callback=None,
-    post_callback=None,
-    post_callback_stream=None,
-):
-    return run_proxy(
-        kademlia_pb2_grpc.KademliaServiceStub,
-        kademlia_pb2_grpc.add_KademliaServiceServicer_to_server,
-        proxy_port=proxy_port,
-        node_host=node_host,
-        node_port=node_port,
-        server_certificate_file=server_certificate_file,
-        server_key_file=server_key_file,
-        client_certificate_file=client_certificate_file,
-        client_key_file=client_key_file,
-        pre_callback=pre_callback or kademlia_pre_callback,
-        post_callback=post_callback or kademlia_post_callback,
         post_callback_stream=post_callback_stream or logging_post_callback_stream,
     )
