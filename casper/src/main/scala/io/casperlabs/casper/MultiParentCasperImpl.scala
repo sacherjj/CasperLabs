@@ -396,7 +396,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
-          remainingHashes  <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
+          timestamp        <- Time[F].currentMillis
+          remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp) // TODO: Should be streaming all the way down
           bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
           //We ensure that only the justifications given in the block are those
           //which are bonded validators in the chosen parent. This is safe because
@@ -413,6 +414,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                          merged,
                          remainingHashes,
                          justifications,
+                         timestamp,
                          protocolVersion
                        )
                      } else {
@@ -438,21 +440,19 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
-      parents: Seq[Block]
+      parents: Seq[Block],
+      timestamp: Long
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     for {
-      // We have re-queued orphan deploys already, so we can just look at pending ones.
-      pendingDeployHashes <- DeployBuffer[F].readPendingHashes
-
-      // Make sure pending deploys have never been processed in the past cone of the new parents.
-      candidateBlockHashes <- filterDeploysNotInPast(dag, parents, pendingDeployHashes)
-
-      // The ones which aren't candidates now can be discarded as duplicates.
-      deploysToDiscard = pendingDeployHashes.toSet -- candidateBlockHashes
+      plan <- DeployExecutionPlan.chooseDeploys[F](dag, parents, timestamp)
+      // anything with timestamp earlier than now and not included in the current plan
+      // can be discarded as a duplicate and/or expired deploy
+      earlierPendingDeploys <- DeployExecutionPlan.earlierPendingDeploys[F](timestamp)
+      deploysToDiscard      = earlierPendingDeploys diff plan
       _ <- DeployBuffer[F]
             .markAsDiscardedByHashes(deploysToDiscard.toList)
             .whenA(deploysToDiscard.nonEmpty)
-    } yield candidateBlockHashes.toSet
+    } yield plan
   }
 
   /** If another node proposed a block which orphaned something proposed by this node,
@@ -483,15 +483,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       deploys: Set[DeployHash],
       justifications: Seq[Justification],
+      timestamp: Long,
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] = Metrics[F].timer("createProposal") {
     (for {
-      now <- Time[F].currentMillis
       result <- ExecEngineUtil
                  .computeDeploysCheckpoint[F](
                    merged,
                    deploys,
-                   now,
+                   timestamp,
                    protocolVersion
                  )
       DeploysCheckpoint(
@@ -525,7 +525,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           state = postState,
           rank = rank,
           protocolVersion = protocolVersion.value,
-          timestamp = now,
+          timestamp = timestamp,
           chainId = chainId
         )
         val block = unsignedBlockProto(body, header)

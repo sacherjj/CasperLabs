@@ -446,7 +446,10 @@ object ProtoUtil {
 
   def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY)
+      // The timestamp needs to be earlier than the time the node
+      // thinks it is; in the tests we use "logical time", so 0
+      // is the only safe value.
+      basicDeploy(0, ByteString.copyFromUtf8(now.toString))
     }
 
   // This is only used for tests.

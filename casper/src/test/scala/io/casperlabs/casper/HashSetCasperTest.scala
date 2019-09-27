@@ -149,7 +149,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
   def deploysFromString(start: Long, strs: List[String]): List[Deploy] =
     strs.zipWithIndex.map(
-      s => ProtoUtil.basicDeploy(start + s._2, ByteString.copyFromUtf8(s._1))
+      s =>
+        ProtoUtil.basicDeploy(
+          0,
+          ByteString.copyFromUtf8((start + s._2).toString),
+          ByteString.copyFromUtf8(s._1)
+        )
     )
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
@@ -589,8 +594,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       private val accountPk = ProtoUtil.randomAccountAddress()
       def apply(): Deploy = synchronized {
         ProtoUtil.basicDeploy(
-          System.currentTimeMillis(),
-          ByteString.copyFromUtf8("A"),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           accountPk
         )
       }
@@ -600,8 +605,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       private val accountPk = ProtoUtil.randomAccountAddress()
       def apply(): Deploy = synchronized {
         ProtoUtil.basicDeploy(
-          System.currentTimeMillis(),
-          ByteString.copyFromUtf8("B"),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           accountPk
         )
       }
@@ -1043,7 +1048,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                   Some(HashSetCasperTestNode.simpleEEApi[Effect](_, generateConflict = true))
               )
 
-      deployA          <- ProtoUtil.basicDeploy[Effect]()
+      sessionCode = ByteString.copyFromUtf8("Do the thing")
+      deployA     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("A"))
+      deployB     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("B"))
+
       _                <- nodes(0).casperEff.deploy(deployA)
       createA          <- nodes(0).casperEff.createBlock
       Created(blockA)  = createA
@@ -1051,7 +1059,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       processedDeploys <- nodes(0).deployBufferEff.readProcessed
       _                = processedDeploys should contain(deployA)
 
-      deployB         <- ProtoUtil.basicDeploy[Effect]()
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB

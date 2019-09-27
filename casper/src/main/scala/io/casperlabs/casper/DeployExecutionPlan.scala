@@ -51,6 +51,14 @@ object DeployExecutionPlan {
       }
       .map(_.toSet)
 
+  def earlierPendingDeploys[F[_]: Fs2Compiler: DeployBuffer](timestamp: Long): F[Set[DeployHash]] =
+    DeployBuffer[F].readPendingHashesAndHeaders
+      .collect {
+        case (hash, header) if header.timestamp <= timestamp => hash
+      }
+      .compile
+      .to[Set]
+
   /** Find deploys which either haven't been processed yet or are in blocks which are
     * not in the past cone of the chosen parents.
     */

@@ -142,7 +142,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
         user                                        = ByteString.EMPTY
-        timestamp                                   = 1L
+        timestamp                                   = 0L
         blockQueryResponse <- BlockAPI.findBlockWithDeploy[Task](user, timestamp)(
                                Sync[Task],
                                casperRef,
