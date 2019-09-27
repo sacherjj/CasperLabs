@@ -927,20 +927,13 @@ where
         key_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let known_urefs = {
-            match self.context.read_gs(&key)? {
-                None => Err(Error::KeyNotFound(key)),
-                Some(value) => {
-                    if let Value::Contract(contract) = value {
-                        Ok(contract.urefs_lookup().clone())
-                    } else {
-                        Err(Error::FunctionNotFound(format!(
-                            "Value at {:?} is not a contract",
-                            key
-                        )))
-                    }
-                }
-            }
+        let known_urefs = match self.context.read_gs(&key)? {
+            None => Err(Error::KeyNotFound(key)),
+            Some(Value::Contract(contract)) => Ok(contract.urefs_lookup().clone()),
+            Some(_) => Err(Error::FunctionNotFound(format!(
+                "Value at {:?} is not a contract",
+                key
+            ))),
         }?;
         let bytes = self.get_function_by_name(name_ptr, name_size)?;
         match self
