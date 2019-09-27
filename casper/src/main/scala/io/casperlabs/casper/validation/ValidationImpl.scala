@@ -234,13 +234,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   private def validateTimeToLive(
       ttl: Int,
       deployHash: ByteString
-  ): F[List[Errors.DeployHeaderError]] =
+  ): F[Option[Errors.DeployHeaderError]] =
     if (ttl < MIN_TTL)
-      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(List(_))
+      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(_.some)
     else if (ttl > MAX_TTL)
-      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(List(_))
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(_.some)
     else
-      List.empty[Errors.DeployHeaderError].pure[F]
+      none[Errors.DeployHeaderError].pure[F]
 
   private def validateDependencies(
       dependencies: Seq[ByteString],
@@ -252,15 +252,15 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         Errors.DeployHeaderError
           .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
           .logged[F]
-          .map(List(_))
+          .map(_.some)
       else
-        List.empty[Errors.DeployHeaderError].pure[F]
+        none[Errors.DeployHeaderError].pure[F]
 
     val invalid = dependencies.toList
       .filter(_.size != 32)
       .traverse(dep => Errors.DeployHeaderError.invalidDependency(deployHash, dep).logged[F])
 
-    Applicative[F].map2(tooMany, invalid)(_ ::: _)
+    Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
   def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
@@ -270,7 +270,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
           validateDependencies(header.dependencies, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL ::: validDependencies
+          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
         }
 
       case None =>
