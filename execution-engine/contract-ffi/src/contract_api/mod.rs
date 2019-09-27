@@ -759,6 +759,9 @@ pub fn get_phase() -> Phase {
     deserialize(&bytes).unwrap()
 }
 
+/// Takes the name of a function to store and a contract URef, and overwrites the value under
+/// that URef with a new Contract instance containing the original contract's known_urefs, the
+/// current protocol version, and the newly created bytes of the stored function.
 pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let key: Key = uref.into();

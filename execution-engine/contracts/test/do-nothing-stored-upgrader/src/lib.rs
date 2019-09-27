@@ -1,16 +1,17 @@
 #![no_std]
 
 extern crate contract_ffi;
+extern crate create_purse_01;
 
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::Error;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::uref::URef;
 
-#[repr(u32)]
+#[repr(u16)]
 enum Args {
     DoNothingURef = 0,
 }
 
+#[repr(u16)]
 enum CustomError {
     MissingDoNothingURefArg = 0,
     InvalidDoNothingURefArg = 1,

@@ -8,7 +8,7 @@ use crate::support::test_support::{
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Account, Contract, Value, U512};
+use contract_ffi::value::{Contract, Value, U512};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_core::execution;
 use engine_grpc_server::engine_server::ipc::ExecResponse;
@@ -23,8 +23,8 @@ const ACCOUNT_1_BALANCE: u64 = 1_000_000_000;
 const PAYMENT_AMOUNT: u64 = 200_000_000;
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
-const DO_NOTHING_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
-const DO_NOTHING_UPGRADE_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
+const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
+const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
 const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
 const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
 const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
@@ -116,28 +116,6 @@ where
     }
 }
 
-fn query_account<S>(
-    builder: &mut WasmTestBuilder<S>,
-    account_public_key: &PublicKey,
-) -> Option<Account>
-where
-    S: StateProvider,
-    S::Error: Into<execution::Error>,
-    EngineState<S>: ExecutionEngineService,
-{
-    let account_key = Key::Account(account_public_key.value());
-
-    let account_value: Value = builder
-        .query(None, account_key, &[])
-        .expect("should have contract value");
-
-    if let Value::Account(account) = account_value {
-        Some(account)
-    } else {
-        None
-    }
-}
-
 #[ignore]
 #[test]
 fn should_upgrade_do_nothing_to_do_something() {
@@ -186,7 +164,7 @@ fn should_upgrade_do_nothing_to_do_something() {
         &mut builder,
         &account_1_public_key,
         account_deploy_counter,
-        DO_NOTHING_UPGRADE_CONTRACT_NAME,
+        DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME,
         (*do_nothing_stored_uref,),
     );
 
@@ -197,7 +175,7 @@ fn should_upgrade_do_nothing_to_do_something() {
         &mut builder,
         &account_1_public_key,
         account_deploy_counter,
-        DO_NOTHING_CALLER_CONTRACT_NAME,
+        DO_NOTHING_STORED_CALLER_CONTRACT_NAME,
         (*do_nothing_stored_uref, PURSE_1),
     );
 
@@ -215,7 +193,7 @@ fn should_upgrade_do_nothing_to_do_something() {
 
 #[ignore]
 #[test]
-fn should_observe_version_change_across_upgrade() {
+fn should_be_able_to_observe_state_transition_across_upgrade() {
     let mut builder = {
         let engine_config = EngineConfig::default().set_use_payment_code(true);
         InMemoryWasmTestBuilder::new(engine_config)
@@ -225,6 +203,7 @@ fn should_observe_version_change_across_upgrade() {
 
     let mut account_deploy_counter: u8 = 0;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
     // store do-nothing-stored
     exec_session_code(
@@ -237,7 +216,9 @@ fn should_observe_version_change_across_upgrade() {
 
     account_deploy_counter += 1;
 
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     assert!(
         account.urefs_lookup().contains_key(METHOD_VERSION),
@@ -246,13 +227,15 @@ fn should_observe_version_change_across_upgrade() {
 
     let stored_uref = account
         .urefs_lookup()
-        .get("purse_holder_stored")
+        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()
         .expect("should have uref");
 
     // verify version before upgrade
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     let original_version = builder
         .query(
@@ -281,7 +264,9 @@ fn should_observe_version_change_across_upgrade() {
     );
 
     // version should change after upgrade
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     let upgraded_version = builder
         .query(
@@ -313,6 +298,7 @@ fn should_support_extending_functionality() {
 
     let mut account_deploy_counter: u8 = 0;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
     // store do-nothing-stored
     exec_session_code(
@@ -325,11 +311,13 @@ fn should_support_extending_functionality() {
 
     account_deploy_counter += 1;
 
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     let stored_uref = account
         .urefs_lookup()
-        .get("purse_holder_stored")
+        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()
         .expect("should have uref");
@@ -409,6 +397,7 @@ fn should_maintain_known_urefs_across_upgrade() {
 
     let mut account_deploy_counter = 0;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
     // store contract
     exec_session_code(
@@ -421,7 +410,9 @@ fn should_maintain_known_urefs_across_upgrade() {
 
     account_deploy_counter += 1;
 
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     let stored_uref = account
         .urefs_lookup()
@@ -461,7 +452,7 @@ fn should_maintain_known_urefs_across_upgrade() {
         (*stored_uref,),
     );
 
-    // verify all urefs still exists in known_urefs after upgrade
+    // verify all urefs still exist in known_urefs after upgrade
     let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
 
     for index in 1..=total_purses {
@@ -488,6 +479,7 @@ fn should_maintain_local_state_across_upgrade() {
 
     let mut account_deploy_counter: u8 = 0;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
     // store local_state_stored contract
     exec_session_code(
@@ -500,7 +492,9 @@ fn should_maintain_local_state_across_upgrade() {
 
     account_deploy_counter += 1;
 
-    let account = query_account(&mut builder, &account_1_public_key).expect("should have account");
+    let account = builder
+        .get_account(account_1_key)
+        .expect("should have account");
 
     let stored_uref = account
         .urefs_lookup()
@@ -523,19 +517,13 @@ fn should_maintain_local_state_across_upgrade() {
     // confirm expected local state was written
     let transform_map = &builder.get_transforms()[1];
 
-    let (local_state_key, original_local_state_value) = {
-        let mut ret: Option<(contract_ffi::key::Key, String)> = None;
-        for (k, t) in transform_map {
-            if let Transform::Write(Value::String(s)) = t {
-                if s.contains(HELLO) {
-                    ret = Some((*k, s.clone()));
-                    break;
-                }
-            }
-        }
-        ret
-    }
-    .expect("local state Write should exist");
+    let (local_state_key, original_local_state_value) = transform_map
+        .iter()
+        .find_map(|(key, transform)| match transform {
+            Transform::Write(Value::String(s)) if s.contains(HELLO) => Some((*key, s.clone())),
+            _ => None,
+        })
+        .expect("local state Write should exist");
 
     // upgrade local_state_stored contract
     exec_session_code(

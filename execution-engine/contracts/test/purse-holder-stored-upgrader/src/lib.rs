@@ -14,13 +14,13 @@ pub const METHOD_REMOVE: &str = "remove";
 pub const METHOD_VERSION: &str = "version";
 pub const VERSION: &str = "1.0.1";
 
-#[repr(u32)]
+#[repr(u16)]
 enum ApplyArgs {
     MethodName = 0,
     PurseName = 1,
 }
 
-#[repr(u32)]
+#[repr(u16)]
 enum CallArgs {
     PurseHolderURef = 0,
 }

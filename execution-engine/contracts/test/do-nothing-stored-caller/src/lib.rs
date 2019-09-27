@@ -9,7 +9,7 @@ use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::uref::URef;
 
-#[repr(u32)]
+#[repr(u16)]
 enum Args {
     DoNothingURef = 0,
     PurseName = 1,

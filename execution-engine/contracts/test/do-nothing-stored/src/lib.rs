@@ -5,9 +5,8 @@ extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
-use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::Error;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 
 const MINT_NAME: &str = "mint";

@@ -3,15 +3,15 @@
 extern crate contract_ffi;
 extern crate local_state_stored_upgraded;
 
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::Error;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::uref::URef;
 
-#[repr(u32)]
+#[repr(u16)]
 enum Args {
     LocalStateURef = 0,
 }
 
+#[repr(u16)]
 enum CustomError {
     MissingLocalStateURefArg = 0,
     InvalidLocalStateURefArg = 1,

@@ -420,10 +420,10 @@ where
             }
 
             FunctionIndex::UpgradeContractAtURef => {
-                // args(0) = pointer to key in Wasm memory
-                // args(1) = size of key
-                // args(2) = pointer to name in Wasm memory
-                // args(3) = size of name in Wasm memory
+                // args(0) = pointer to name in Wasm memory
+                // args(1) = size of name in Wasm memory
+                // args(2) = pointer to key in Wasm memory
+                // args(3) = size of key
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))

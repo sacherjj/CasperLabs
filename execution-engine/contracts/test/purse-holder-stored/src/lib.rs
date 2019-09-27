@@ -12,18 +12,19 @@ use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 
 const MINT_NAME: &str = "mint";
-const ENTRY_FUNCTION_NAME: &str = "delegate";
+const ENTRY_FUNCTION_NAME: &str = "apply_method";
 const CONTRACT_NAME: &str = "purse_holder_stored";
 pub const METHOD_ADD: &str = "add";
 pub const METHOD_VERSION: &str = "version";
 pub const VERSION: &str = "1.0.0";
 
-#[repr(u32)]
+#[repr(u16)]
 enum Args {
     MethodName = 0,
     PurseName = 1,
 }
 
+#[repr(u16)]
 enum CustomError {
     MintHash = 0,
     MissingMethodNameArg = 1,
@@ -43,7 +44,8 @@ fn purse_name() -> String {
     }
 }
 
-pub fn apply_method() {
+#[no_mangle]
+pub extern "C" fn apply_method() {
     let method_name: String = match contract_api::get_arg(Args::MethodName as u32) {
         Some(Ok(data)) => data,
         Some(Err(_)) => {
@@ -60,11 +62,6 @@ pub fn apply_method() {
         METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
         _ => contract_api::revert(Error::User(CustomError::UnknownMethodName as u16).into()),
     }
-}
-
-#[no_mangle]
-pub extern "C" fn delegate() {
-    apply_method()
 }
 
 #[cfg(not(feature = "lib"))]

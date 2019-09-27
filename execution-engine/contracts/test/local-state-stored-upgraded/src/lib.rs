@@ -1,15 +1,11 @@
 #![no_std]
-#![allow(unused_imports)]
-//#![feature(cell_update)]
 
 extern crate alloc;
 extern crate contract_ffi;
 extern crate local_state;
 
-use alloc::collections::BTreeMap;
 use alloc::string::String;
 use contract_ffi::contract_api;
-use contract_ffi::key::Key;
 
 pub const ENTRY_FUNCTION_NAME: &str = "delegate";
 pub const CONTRACT_NAME: &str = "local_state_stored";
@@ -56,8 +52,8 @@ pub extern "C" fn delegate() {
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, known_urefs);
+    let contract =
+        contract_api::fn_by_name(ENTRY_FUNCTION_NAME, alloc::collections::BTreeMap::new());
     let key = contract_api::new_turef(contract).into();
     contract_api::add_uref(CONTRACT_NAME, &key);
 }
