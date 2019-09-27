@@ -43,6 +43,14 @@ message Deploy {
         uint64 gas_price = 4;
         // Hash of the body structure as a whole.
         bytes body_hash = 5;
+        // Time to live of the deploy, in milliseconds. A deploy can only be
+        // included in a block between Header.timestamp and
+        // Header.timestamp + Header.ttl_millis. A value of 0 is interpreted as
+        // 'not present' and a default value will be assigned instead.
+        uint32 ttl_millis = 6;
+        // List of `Deploy.deploy_hash`s  that must be executed in past blocks
+        // before this deploy can be executed.
+        repeated bytes dependencies = 7;
     }
 
     message Body {
