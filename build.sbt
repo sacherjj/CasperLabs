@@ -13,12 +13,11 @@ Global / dependencyOverrides := Dependencies.overrides
 val protobufDirectory = file("protobuf")
 // Protos can import any other using the full path within `protobuf`. This filter reduces the list
 // for which we actually generate .scala source, so we don't get duplicates between projects.
-def protobufPathFilter(paths: String*) = {
-  (f: File) =>
-    f.getName.endsWith(".proto") && // Not directories or other artifacts.
-      paths.map(protobufDirectory.toPath.resolve).exists { path =>
-        f.toPath == path || f.toPath.startsWith(path)
-      }
+def protobufPathFilter(paths: String*) = { (f: File) =>
+  f.getName.endsWith(".proto") && // Not directories or other artifacts.
+  paths.map(protobufDirectory.toPath.resolve).exists { path =>
+    f.toPath == path || f.toPath.startsWith(path)
+  }
 }
 
 lazy val projectSettings = Seq(
@@ -363,7 +362,6 @@ lazy val storage = (project in file("storage"))
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       lmdbjava,
       doobieCore,
-      doobieHikari,
       flyway,
       catsCore,
       catsEffect,

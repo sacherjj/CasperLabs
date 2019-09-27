@@ -1,15 +1,13 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 fn get_uref(key: Key) -> URef {
     match key {
@@ -22,9 +20,9 @@ fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let transforms = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "ee_441_rng_state.wasm",
@@ -37,7 +35,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
         .get_transforms();
 
     let transform = &transforms[0];
-    let account_transform = &transform[&Key::Account(GENESIS_ADDR)];
+    let account_transform = &transform[&Key::Account(DEFAULT_ACCOUNT_ADDR)];
     let keys = if let Transform::AddKeys(keys) = account_transform {
         keys
     } else {

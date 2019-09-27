@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
@@ -9,8 +7,8 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 
@@ -18,12 +16,12 @@ const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 #[test]
 fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -54,7 +52,7 @@ fn should_run_purse_to_account_transfer() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let genesis_account = transfer_result
         .builder()
         .get_account(genesis_account_key)
@@ -172,7 +170,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get transforms output for genesis
     let genesis_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
+        .get(&Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("Unable to find transforms for a genesis account");
 
     // Genesis account is unchanged
@@ -203,9 +201,9 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -221,7 +219,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let genesis_account = transfer_result
         .builder()
         .get_account(genesis_account_key)
