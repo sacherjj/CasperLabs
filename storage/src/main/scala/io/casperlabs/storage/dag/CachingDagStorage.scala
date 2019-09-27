@@ -20,7 +20,7 @@ class CachingDagStorage[F[_]: Sync](
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
-    private[dag] val blockSummariesCache: Cache[BlockHash, BlockSummary],
+    private[dag] val messagesCache: Cache[BlockHash, Message],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
@@ -53,21 +53,25 @@ class CachingDagStorage[F[_]: Sync](
     (this: DagRepresentation[F]).pure[F]
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
-    semaphore.withPermit(Sync[F].delay {
-      val parents        = block.parentHashes
-      val justifications = block.justifications.map(_.latestBlockHash)
+    semaphore.withPermit(
+      Sync[F].delay {
+        val parents        = block.parentHashes
+        val justifications = block.justifications.map(_.latestBlockHash)
 
-      parents.foreach { parent =>
-        val newChildren = Option(childrenCache.getIfPresent(parent))
-          .getOrElse(Set.empty[BlockHash]) + block.blockHash
-        childrenCache.put(parent, newChildren)
-      }
-      justifications.foreach { justification =>
-        val newBlockHashes = Option(justificationCache.getIfPresent(justification))
-          .getOrElse(Set.empty[BlockHash]) + block.blockHash
-        justificationCache.put(justification, newBlockHashes)
-      }
-    }) >> underlying.insert(block)
+        parents.foreach { parent =>
+          val newChildren = Option(childrenCache.getIfPresent(parent))
+            .getOrElse(Set.empty[BlockHash]) + block.blockHash
+          childrenCache.put(parent, newChildren)
+        }
+        justifications.foreach { justification =>
+          val newBlockHashes = Option(justificationCache.getIfPresent(justification))
+            .getOrElse(Set.empty[BlockHash]) + block.blockHash
+          justificationCache.put(justification, newBlockHashes)
+        }
+      } >> Sync[F]
+        .fromTry(Message.fromBlock(block))
+        .map(messagesCache.put(block.blockHash, _))
+    ) >> underlying.insert(block)
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
 
@@ -81,8 +85,7 @@ class CachingDagStorage[F[_]: Sync](
 
   override def lookup(blockHash: BlockHash): F[Option[Message]] =
     cacheOrUnderlyingOpt(
-      Option(blockSummariesCache.getIfPresent(blockHash))
-        .flatMap(Message.fromBlockSummary(_).toOption),
+      Option(messagesCache.getIfPresent(blockHash)),
       underlying.lookup(blockHash)
     )
 
@@ -131,24 +134,24 @@ object CachingDagStorage {
         .build[BlockHash, Set[BlockHash]]()
     }
 
-    val createBlockSummariesCache = Sync[F].delay {
+    val createMessagesCache = Sync[F].delay {
       CacheBuilder
         .newBuilder()
         .maximumWeight(maxSizeBytes)
-        .weigher((_: BlockHash, summary: BlockSummary) => summary.serializedSize)
-        .build[BlockHash, BlockSummary]()
+        .weigher((_: BlockHash, msg: Message) => msg.blockSummary.serializedSize) //TODO: Fix the size estimate of a message.
+        .build[BlockHash, Message]()
     }
 
     for {
-      childrenCache       <- createBlockHashesSetCache
-      justificationCache  <- createBlockHashesSetCache
-      blockSummariesCache <- createBlockSummariesCache
-      semaphore           <- Semaphore[F](1)
+      childrenCache      <- createBlockHashesSetCache
+      justificationCache <- createBlockHashesSetCache
+      messagesCache      <- createMessagesCache
+      semaphore          <- Semaphore[F](1)
       store = new CachingDagStorage[F](
         underlying,
         childrenCache,
         justificationCache,
-        blockSummariesCache,
+        messagesCache,
         semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
         override implicit val m: Metrics[F] = metricsF
