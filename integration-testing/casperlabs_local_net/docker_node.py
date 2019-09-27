@@ -57,25 +57,38 @@ class DockerNode(LoggingDockerBase):
         self.proxy_server = None
         self.proxy_kademlia = None
         if config.behind_proxy:
-            tls_certificate_path = local_path(self.config.tls_certificate_path())
-            tls_key_path = local_path(self.config.tls_key_path())
+
+            # Set up proxy of incoming connections: this node is server, the other one client.
+            server_certificate_path = local_path(config.tls_certificate_path())
+            server_key_path = local_path(config.tls_key_path())
+
+            client_certificate_path = server_certificate_path.replace("0", "1")
+            client_key_path = server_key_path.replace("0", "1")
+
             logging.info(
-                f"SETUP PROXIES: tls_certificate_path: {tls_certificate_path}, tls_key_path={tls_key_path}"
+                f"SETUP PROXIES: client_certificate_path {client_certificate_path} client_key_path {client_key_path}"
+            )
+            logging.info(
+                f"SETUP PROXIES: server_certificate_path {server_certificate_path} server_key_path {server_key_path}"
             )
             node_address = "localhost"
             self.proxy_server = grpc_proxy.proxy_server(
                 node_port=self.GRPC_SERVER_PORT + 10000,
                 node_host=node_address,
                 proxy_port=self.GRPC_SERVER_PORT,
-                certificate_file=tls_certificate_path,
-                key_file=tls_key_path,
+                server_certificate_file=server_certificate_path,
+                server_key_file=server_key_path,
+                client_certificate_file=client_certificate_path,
+                client_key_file=client_key_path,
             )
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
                 node_port=self.KADEMLIA_PORT + 10000,
                 node_host=node_address,
                 proxy_port=self.KADEMLIA_PORT,
-                certificate_file=tls_certificate_path,
-                key_file=tls_key_path,
+                server_certificate_file=server_certificate_path,
+                server_key_file=server_key_path,
+                client_certificate_file=client_certificate_path,
+                client_key_file=client_key_path,
             )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)

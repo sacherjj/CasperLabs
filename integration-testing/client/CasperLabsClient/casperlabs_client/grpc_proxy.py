@@ -4,6 +4,7 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
+import os
 
 from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc, kademlia_pb2_grpc
 
@@ -58,15 +59,11 @@ class ProxyServicer:
         self.proxy_port = proxy_port
         self.certificate_file = certificate_file
         self.key_file = key_file
-        self.node_id = node_id or casperlabs_client.extract_common_name(
-            certificate_file
-        )
+        self.node_id = node_id
         self.service_stub = service_stub
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
-
-        import os
 
         os.environ[
             "GRPC_SSL_CIPHER_SUITES"
@@ -104,15 +101,13 @@ class ProxyServicer:
             ("grpc.ssl_target_name_override", self.node_id),
             ("grpc.default_authority", self.node_id),
         ]
-        self.secure_channel_options = None
+        # self.secure_channel_options = None
 
     def secure_channel(self):
-        # Getting: "Fatal Python error: Aborted"
-        # *********** secure_channel: target=localhost:50400, credentials=<grpc.ChannelCredentials object at 0x7ff4c809b278>, options=[('grpc.ssl_target_name_override', '4d802045c3e4d2e031f25878517bc8e2c9710ee7'), ('grpc.default_authority', '4d802045c3e4d2e031f25878517bc8e2c9710ee7')], compression=None
         channel = grpc.secure_channel(
             self.node_address, self.credentials, options=self.secure_channel_options
         )
-        logging.info(f"PROXY: secure_channel({self.node_address} => {channel})")
+        logging.info(f"PROXY: secure_channel({self.node_address}) => {channel}")
         return channel
 
     def is_unary_stream(self, method_name):
@@ -165,9 +160,10 @@ class ProxyThread(Thread):
         node_host: str,
         node_port: int,
         proxy_port: int,
-        certificate_file: str,
-        key_file: str,
-        node_id: str = None,
+        server_certificate_file: str = None,
+        server_key_file: str = None,
+        client_certificate_file: str = None,
+        client_key_file: str = None,
         pre_callback=None,
         post_callback=None,
         post_callback_stream=None,
@@ -178,11 +174,11 @@ class ProxyThread(Thread):
         self.node_host = node_host
         self.node_port = node_port
         self.proxy_port = proxy_port
-        self.certificate_file = certificate_file
-        self.key_file = key_file
-        self.node_id = node_id or casperlabs_client.extract_common_name(
-            certificate_file
-        )
+        self.server_certificate_file = server_certificate_file
+        self.server_key_file = server_key_file
+        self.client_certificate_file = client_certificate_file
+        self.client_key_file = client_key_file
+        self.node_id = None
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
@@ -193,9 +189,9 @@ class ProxyThread(Thread):
             node_host=self.node_host,
             node_port=self.node_port,
             proxy_port=self.proxy_port,
-            certificate_file=self.certificate_file,
-            key_file=self.key_file,
-            node_id=self.node_id,
+            certificate_file=self.client_certificate_file,
+            key_file=self.client_key_file,
+            node_id=casperlabs_client.extract_common_name(self.client_certificate_file),
             service_stub=self.service_stub,
             pre_callback=self.pre_callback,
             post_callback=self.post_callback,
@@ -205,7 +201,12 @@ class ProxyThread(Thread):
         self.server.add_secure_port(
             f"[::]:{self.proxy_port}",
             grpc.ssl_server_credentials(
-                [(read_binary(self.key_file), read_binary(self.certificate_file))]
+                [
+                    (
+                        read_binary(self.server_key_file),
+                        read_binary(self.server_certificate_file),
+                    )
+                ]
             ),
         )
         logging.info(
@@ -226,9 +227,10 @@ def run_proxy(
     proxy_port: int,
     node_host: str,
     node_port: int,
-    certificate_file: str,
-    key_file: str,
-    node_id: str = None,
+    server_certificate_file: str = None,
+    server_key_file: str = None,
+    client_certificate_file: str = None,
+    client_key_file: str = None,
     pre_callback=None,
     post_callback=None,
     post_callback_stream=None,
@@ -239,9 +241,10 @@ def run_proxy(
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
-        certificate_file=certificate_file,
-        key_file=key_file,
-        node_id=node_id,
+        server_certificate_file=server_certificate_file,
+        server_key_file=server_key_file,
+        client_certificate_file=client_certificate_file,
+        client_key_file=client_key_file,
         pre_callback=pre_callback,
         post_callback=post_callback,
         post_callback_stream=post_callback_stream,
@@ -254,9 +257,10 @@ def proxy_client(
     node_port=40401,
     node_host="casperlabs",
     proxy_port=50401,
-    certificate_file=None,
-    key_file=None,
-    node_id=None,
+    server_certificate_file: str = None,
+    server_key_file: str = None,
+    client_certificate_file: str = None,
+    client_key_file: str = None,
     pre_callback=None,
     post_callback=None,
     post_callback_stream=None,
@@ -267,9 +271,10 @@ def proxy_client(
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
-        certificate_file=certificate_file,
-        key_file=key_file,
-        node_id=node_id or casperlabs_client.extract_common_name(certificate_file),
+        server_certificate_file=server_certificate_file,
+        server_key_file=server_key_file,
+        client_certificate_file=client_certificate_file,
+        client_key_file=client_key_file,
         pre_callback=pre_callback or logging_pre_callback,
         post_callback=post_callback or logging_post_callback,
         post_callback_stream=post_callback_stream or logging_post_callback_stream,
@@ -280,8 +285,10 @@ def proxy_server(
     node_port=50400,
     node_host="casperlabs",
     proxy_port=40400,
-    certificate_file=None,
-    key_file=None,
+    server_certificate_file=None,
+    server_key_file=None,
+    client_certificate_file=None,
+    client_key_file=None,
     pre_callback=None,
     post_callback=None,
     post_callback_stream=None,
@@ -292,8 +299,10 @@ def proxy_server(
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
-        certificate_file=certificate_file,
-        key_file=key_file,
+        server_certificate_file=server_certificate_file,
+        server_key_file=server_key_file,
+        client_certificate_file=client_certificate_file,
+        client_key_file=client_key_file,
         pre_callback=pre_callback or logging_pre_callback,
         post_callback=post_callback or logging_post_callback,
         post_callback_stream=post_callback_stream or logging_post_callback_stream,
@@ -336,8 +345,10 @@ def proxy_kademlia(
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    certificate_file=None,
-    key_file=None,
+    server_certificate_file=None,
+    server_key_file=None,
+    client_certificate_file=None,
+    client_key_file=None,
     pre_callback=None,
     post_callback=None,
     post_callback_stream=None,
@@ -348,8 +359,10 @@ def proxy_kademlia(
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
-        certificate_file=certificate_file,
-        key_file=key_file,
+        server_certificate_file=server_certificate_file,
+        server_key_file=server_key_file,
+        client_certificate_file=client_certificate_file,
+        client_key_file=client_key_file,
         pre_callback=pre_callback or kademlia_pre_callback,
         post_callback=post_callback or kademlia_post_callback,
         post_callback_stream=post_callback_stream or logging_post_callback_stream,
