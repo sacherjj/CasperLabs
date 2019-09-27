@@ -96,14 +96,15 @@ class ProxyServicer:
         # Channel credentials calls:
         # https://github.com/grpc/grpc/blob/777245d507ceb09b3207533eacb03068a40bac57/src/python/grpcio/grpc/_cython/_cygrpc/credentials.pyx.pxi#L129
         self.credentials = grpc.ssl_channel_credentials(
-            root_certificates=read_binary(self.certificate_file),
+            # root_certificates=read_binary(self.certificate_file),
             private_key=read_binary(self.key_file),
-            certificate_chain=None,
+            certificate_chain=read_binary(self.certificate_file),
         )
         self.secure_channel_options = self.node_id and [
             ("grpc.ssl_target_name_override", self.node_id),
             ("grpc.default_authority", self.node_id),
         ]
+        self.secure_channel_options = None
 
     def secure_channel(self):
         # Getting: "Fatal Python error: Aborted"
