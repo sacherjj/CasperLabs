@@ -82,6 +82,8 @@ pub enum Error {
     MissingArgument,
     /// Argument not of correct type.
     InvalidArgument,
+    /// Failed to upgrade contract at URef.
+    UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
@@ -104,7 +106,8 @@ impl From<Error> for u32 {
             Error::InvalidPurse => 10,
             Error::MissingArgument => 11,
             Error::InvalidArgument => 12,
-            Error::Transfer => 13,
+            Error::UpgradeContractAtURef => 13,
+            Error::Transfer => 14,
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
     }
@@ -125,10 +128,45 @@ impl Debug for Error {
             Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
             Error::MissingArgument => write!(f, "Error::MissingArgument")?,
             Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
+            Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
         write!(f, " [{}]", u32::from(*self))
+    }
+}
+
+pub fn i32_from(result: Result<(), Error>) -> i32 {
+    match result {
+        Ok(()) => 0,
+        Err(error) => u32::from(error) as i32,
+    }
+}
+
+pub fn result_from(value: i32) -> Result<(), Error> {
+    match value {
+        0 => Ok(()),
+        1 => Err(Error::GetURef),
+        2 => Err(Error::Deserialize),
+        3 => Err(Error::ContractNotFound),
+        4 => Err(Error::UnexpectedKeyVariant),
+        5 => Err(Error::UnexpectedValueVariant),
+        6 => Err(Error::Read),
+        7 => Err(Error::ValueNotFound),
+        8 => Err(Error::MintFailure),
+        9 => Err(Error::InvalidPurseName),
+        10 => Err(Error::InvalidPurse),
+        11 => Err(Error::MissingArgument),
+        12 => Err(Error::InvalidArgument),
+        13 => Err(Error::UpgradeContractAtURef),
+        14 => Err(Error::Transfer),
+        _ => {
+            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
+                Err(Error::User(value as u16))
+            } else {
+                unreachable!()
+            }
+        }
     }
 }
 
@@ -449,6 +487,13 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
     deserialize(&res_bytes).unwrap()
 }
 
+/// Stops execution of a contract and reverts execution effects with a given reason.
+pub fn revert_with_error<T: Into<Error>>(error: T) -> ! {
+    unsafe {
+        ext_ffi::revert(error.into().into());
+    }
+}
+
 /// Stops execution of a contract and reverts execution effects
 /// with a given reason.
 pub fn revert(status: u32) -> ! {
@@ -714,41 +759,16 @@ pub fn get_phase() -> Phase {
     deserialize(&bytes).unwrap()
 }
 
-// TODO: replace w/ new revert specific Error
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum UpgradeResult {
-    Success,
-    UpgradeError,
-}
-
-impl TryFrom<i32> for UpgradeResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(UpgradeResult::Success),
-            1 => Ok(UpgradeResult::UpgradeError),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<UpgradeResult> for i32 {
-    fn from(result: UpgradeResult) -> Self {
-        match result {
-            UpgradeResult::Success => 0,
-            UpgradeResult::UpgradeError => 1,
-        }
-    }
-}
-
-pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) -> UpgradeResult {
+pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let key: Key = uref.into();
     let (key_ptr, key_size, _bytes) = to_ptr(&key);
-    unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) }
-        .try_into()
-        .expect("should parse result")
+    let result_value =
+        unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
+    match result_from(result_value) {
+        Ok(()) => (),
+        Err(error) => revert_with_error(error),
+    }
 }
 
 #[cfg(test)]

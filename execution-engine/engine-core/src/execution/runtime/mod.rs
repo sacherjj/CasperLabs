@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult, UpgradeResult};
+use contract_ffi::contract_api::{Error as ApiError, PurseTransferResult, TransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -925,7 +925,7 @@ where
         name_size: u32,
         key_ptr: u32,
         key_size: u32,
-    ) -> Result<UpgradeResult, Trap> {
+    ) -> Result<Result<(), ApiError>, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         let known_urefs = {
             match self.context.read_gs(&key)? {
@@ -947,8 +947,8 @@ where
             .context
             .upgrade_contract_at_uref(key, bytes, known_urefs)
         {
-            Ok(_) => Ok(UpgradeResult::Success),
-            Err(_) => Ok(UpgradeResult::UpgradeError),
+            Ok(_) => Ok(Ok(())),
+            Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
         }
     }
 }
