@@ -180,8 +180,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_payment_code_fails() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount: U512 = U512::from(1_000_000);
     let transferred_amount = U512::from(1);
@@ -191,7 +190,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code("revert.wasm", (payment_purse_amount,))
             .with_session_code(
@@ -272,8 +271,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 #[ignore]
 #[test]
 fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -282,7 +280,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code(
@@ -318,16 +316,15 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_runs_out_of_gas() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let payment_purse_amount = 10_000_000;
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code("endless_loop.wasm", ())
@@ -383,9 +380,8 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_fails() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -394,7 +390,7 @@ fn should_correctly_charge_when_session_code_fails() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_session_code(
@@ -448,9 +444,8 @@ fn should_correctly_charge_when_session_code_fails() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_succeeds() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -459,7 +454,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -537,8 +532,7 @@ fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
 #[ignore]
 #[test]
 fn should_finalize_to_rewards_purse() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -547,7 +541,7 @@ fn should_finalize_to_rewards_purse() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -667,8 +661,7 @@ fn should_charge_non_main_purse() {
     // instead of account_1 main purse
     const TEST_PURSE_NAME: &str = "test-purse";
 
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = U512::from(10_000_000);
     let account_1_funding_amount = U512::from(100_000_000);

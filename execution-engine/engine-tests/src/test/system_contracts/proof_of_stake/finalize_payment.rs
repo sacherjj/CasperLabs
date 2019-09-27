@@ -9,8 +9,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
-    STANDARD_PAYMENT_CONTRACT,
+    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
@@ -24,28 +23,40 @@ const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
+            )
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
+            )
+            .with_deploy_hash([2; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            "transfer_purse_to_account.wasm",
-            (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec_with_exec_request(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
+        .exec_with_exec_request(exec_request_2)
         .expect_success()
         .commit();
 
@@ -66,28 +77,30 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
         Some(ACCOUNT_ADDR),
     );
 
-    assert!(builder
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            FINALIZE_PAYMENT,
-            args,
-            DEFAULT_BLOCK_TIME,
-            [3; 32],
-        )
-        .is_error());
-    assert!(builder
-        .exec_with_args(
-            ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            FINALIZE_PAYMENT,
-            args,
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
-        .is_error());
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_session_code(FINALIZE_PAYMENT, args)
+            .with_deploy_hash([3u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_session_code(FINALIZE_PAYMENT, args)
+            .with_deploy_hash([2u8; 32])
+            .with_authorization_keys(&[PublicKey::new(ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
+    assert!(builder.exec_with_exec_request(exec_request_1).is_error());
+
+    assert!(builder.exec_with_exec_request(exec_request_2).is_error());
 }
 
 #[ignore]

@@ -9,7 +9,7 @@ use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
 
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME,
+    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
     STANDARD_PAYMENT_CONTRACT,
 };
 use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -36,17 +36,21 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     let amount = U512::one();
 
     let data_dir = TempDir::new().expect("should create temp dir");
+
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code("create_accounts.wasm", (accounts_bytes, amount))
+            .with_deploy_hash([1u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "create_accounts.wasm",
-            (accounts_bytes, amount), //args
-            DEFAULT_BLOCK_TIME,       // blocktime
-            [1; 32],                  // deploy_hash
-        )
+        .exec_with_exec_request(exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -58,18 +62,21 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 /// batch determined by value of TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
     let amount = U512::one();
+
     // To see raw numbers take current time
     for i in 0..TRANSFER_BATCH_SIZE {
+        let exec_request = {
+            let deploy = DeployBuilder::new()
+                .with_address(DEFAULT_ACCOUNT_ADDR)
+                .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+                .with_session_code("transfer_to_existing_account.wasm", (account, amount))
+                .with_deploy_hash([2 + i as u8; 32])
+                .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+                .build();
+            ExecRequestBuilder::from_deploy(deploy).build()
+        };
         builder
-            .exec_with_args(
-                DEFAULT_ACCOUNT_ADDR,
-                STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT),),
-                "transfer_to_existing_account.wasm",
-                (account, amount),  //args
-                DEFAULT_BLOCK_TIME, // blocktime
-                [2 + i as u8; 32],  // deploy_hash
-            )
+            .exec_with_exec_request(exec_request)
             .expect_success()
             .commit();
     }

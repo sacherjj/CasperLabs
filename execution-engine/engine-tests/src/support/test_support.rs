@@ -13,7 +13,7 @@ use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::utils::WasmiBytes;
-use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
+use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
@@ -765,81 +765,6 @@ where
         // Cache transformations
         self.transforms.push(transforms);
         self
-    }
-
-    /// Runs a contract and after that runs actual WASM contract and expects
-    /// transformations to happen at the end of execution.
-    #[allow(clippy::too_many_arguments)]
-    pub fn exec_with_args_and_keys(
-        &mut self,
-        address: [u8; 32],
-        payment_file: &str,
-        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-        session_file: &str,
-        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-        block_time: u64,
-        deploy_hash: [u8; 32],
-        authorized_keys: Vec<contract_ffi::value::account::PublicKey>,
-    ) -> &mut Self {
-        let exec_request = create_exec_request(
-            address,
-            payment_file,
-            payment_args,
-            session_file,
-            session_args,
-            self.post_state_hash
-                .as_ref()
-                .expect("Should have post state hash"),
-            block_time,
-            deploy_hash,
-            authorized_keys,
-        );
-        self.exec_with_exec_request(exec_request)
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn exec_with_args(
-        &mut self,
-        address: [u8; 32],
-        payment_file: &str,
-        payment_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-        session_file: &str,
-        session_args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-        block_time: u64,
-        deploy_hash: [u8; 32],
-    ) -> &mut Self {
-        self.exec_with_args_and_keys(
-            address,
-            payment_file,
-            payment_args,
-            session_file,
-            session_args,
-            block_time,
-            deploy_hash,
-            // Exec with different account also implies the authorized keys should default to
-            // the calling account.
-            vec![contract_ffi::value::account::PublicKey::new(address)],
-        )
-    }
-
-    pub fn exec(
-        &mut self,
-        address: [u8; 32],
-        session_file: &str,
-        block_time: u64,
-        deploy_hash: [u8; 32],
-    ) -> &mut Self {
-        let payment_file = STANDARD_PAYMENT_CONTRACT;
-        let payment_args = (U512::from(MAX_PAYMENT),);
-        self.exec_with_args(
-            address,
-            payment_file,
-            payment_args,
-            session_file,
-            (), // no arguments passed to session contract by default
-            block_time,
-            deploy_hash,
-        )
     }
 
     /// Commit effects of previous exec call on the latest post-state hash.

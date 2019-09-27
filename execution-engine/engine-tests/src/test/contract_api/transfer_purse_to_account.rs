@@ -5,7 +5,8 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
+    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
@@ -17,29 +18,38 @@ const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
+            )
+            .with_deploy_hash([1u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(account_1_public_key.value())
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (genesis_public_key, U512::from(1)),
+            )
+            .with_deploy_hash([2u8; 32])
+            .with_authorization_keys(&[PublicKey::new(account_1_public_key.value())])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec_with_exec_request(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            account_1_public_key.value(),
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (genesis_public_key, U512::from(1)),
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec_with_exec_request(exec_request_2)
         .expect_success()
         .commit()
         .finish();
@@ -200,17 +210,22 @@ fn should_run_purse_to_account_transfer() {
 fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (account_1_key, U512::max_value()),
+            )
+            .with_deploy_hash([1u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (account_1_key, U512::max_value()),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec_with_exec_request(exec_request_1)
         .expect_success()
         .commit()
         .finish();

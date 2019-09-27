@@ -1,23 +1,33 @@
 use contract_ffi::key::Key;
+use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+use crate::support::test_support::{
+    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+};
+use engine_core::engine_state::MAX_PAYMENT;
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
 fn should_run_known_urefs_contract() {
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code("known_urefs.wasm", ())
+            .with_deploy_hash([1u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(
-            DEFAULT_ACCOUNT_ADDR,
-            "known_urefs.wasm",
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec_with_exec_request(exec_request)
         .commit()
         .expect_success()
         .finish();

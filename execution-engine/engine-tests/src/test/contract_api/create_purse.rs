@@ -1,14 +1,15 @@
+use crate::support::test_support::{
+    get_exec_costs, DeployBuilder, ExecRequestBuilder, WasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+};
+
 use contract_ffi::base16;
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PurseId;
+use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -47,29 +48,37 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 #[ignore]
 #[test]
 fn should_insert_mint_add_keys_transform() {
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
+            )
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_1_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
     let mint_transform: &Transform = {
         let result = WasmTestBuilder::default()
             .run_genesis(&DEFAULT_GENESIS_CONFIG)
-            .exec_with_args(
-                DEFAULT_ACCOUNT_ADDR,
-                STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT),),
-                "transfer_purse_to_account.wasm",
-                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-                DEFAULT_BLOCK_TIME,
-                [1; 32],
-            )
+            .exec_with_exec_request(exec_request_1)
             .expect_success()
             .commit()
-            .exec_with_args(
-                ACCOUNT_1_ADDR,
-                STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT),),
-                "create_purse_01.wasm",
-                (TEST_PURSE_NAME,),
-                DEFAULT_BLOCK_TIME,
-                [1; 32],
-            )
+            .exec_with_exec_request(exec_request_2)
             .expect_success()
             .commit()
             .finish();
@@ -84,28 +93,36 @@ fn should_insert_mint_add_keys_transform() {
 #[ignore]
 #[test]
 fn should_insert_into_account_known_urefs() {
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
+            )
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_1_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec_with_exec_request(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "create_purse_01.wasm",
-            (TEST_PURSE_NAME,),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec_with_exec_request(exec_request_2)
         .expect_success()
         .commit()
         .finish()
@@ -122,28 +139,36 @@ fn should_insert_into_account_known_urefs() {
 #[ignore]
 #[test]
 fn should_create_usable_purse_id() {
+    let exec_request_1 = {
+        let deploy = DeployBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code(
+                "transfer_purse_to_account.wasm",
+                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
+            )
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
+
+    let exec_request_2 = {
+        let deploy = DeployBuilder::new()
+            .with_address(ACCOUNT_1_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
+            .with_deploy_hash([1; 32])
+            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
+            .build();
+        ExecRequestBuilder::from_deploy(deploy).build()
+    };
     let result = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec_with_exec_request(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "create_purse_01.wasm",
-            (TEST_PURSE_NAME,),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec_with_exec_request(exec_request_2)
         .expect_success()
         .commit()
         .finish();

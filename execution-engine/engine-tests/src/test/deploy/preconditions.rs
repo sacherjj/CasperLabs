@@ -10,7 +10,6 @@ const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_account() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let nonexistent_account_addr = [99u8; 32];
     let payment_purse_amount = 10_000_000;
@@ -20,7 +19,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -56,13 +55,11 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             // empty authorization keys to force error
             .with_authorization_keys(&[])
@@ -93,7 +90,6 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let nonexistent_account_addr = [99u8; 32];
     let payment_purse_amount = 10_000_000;
@@ -103,7 +99,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
