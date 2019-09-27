@@ -3,17 +3,12 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
-
-enum Error {
-    GetPosURef = 1000,
-}
 
 fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
@@ -31,13 +26,9 @@ fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
     contract_api::call_contract(pos.clone(), &("get_refund_purse",), &Vec::new())
 }
 
-fn get_pos_contract() -> ContractPointer {
-    contract_api::get_pos().unwrap_or_else(|| contract_api::revert(Error::GetPosURef as u32))
-}
-
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = get_pos_contract();
+    let pos_pointer = contract_api::get_pos();
 
     let p1 = contract_api::create_purse();
     let p2 = contract_api::create_purse();

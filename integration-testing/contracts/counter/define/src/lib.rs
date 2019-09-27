@@ -15,11 +15,15 @@ use contract_ffi::key::Key;
 #[no_mangle]
 pub extern "C" fn counter_ext() {
     let turef: TURef<i32> = get_uref("count").unwrap().to_turef().unwrap();
-    let method_name: String = get_arg(0);
+    let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef);
+            let result = match read(turef) {
+                Ok(Some(result)) => result,
+                Ok(None) => revert(Error::ValueNotFound.into()),
+                Err(_) => revert(Error::Read.into()),
+            };
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),

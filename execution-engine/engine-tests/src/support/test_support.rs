@@ -11,19 +11,18 @@ use lmdb::DatabaseFlags;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_core::engine_state::genesis::GenesisConfig;
+use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
-    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisRequest, GenesisResponse,
-    QueryRequest,
+    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisResponse, QueryRequest,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
-use engine_grpc_server::engine_server::state::{BigInt, ProtocolVersion};
-use engine_grpc_server::engine_server::{ipc, transforms};
+use engine_grpc_server::engine_server::state::ProtocolVersion;
+use engine_grpc_server::engine_server::transforms;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::os::get_page_size;
@@ -36,10 +35,17 @@ use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
 use transforms::TransformEntry;
+
+use crate::test::{
+    CONTRACT_MINT_INSTALL, CONTRACT_POS_INSTALL, DEFAULT_CHAIN_NAME, DEFAULT_GENESIS_TIMESTAMP,
+    DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
+};
+
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const COMPILED_WASM_PATH: &str = "../target/wasm32-unknown-unknown/release";
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
+pub const GENESIS_TIMESTAMP: u64 = 0;
 
 /// LMDB initial map size is calculated based on DEFAULT_LMDB_PAGES and systems page size.
 ///
@@ -225,60 +231,22 @@ pub enum SystemContractType {
     ProofOfStakeInstall,
 }
 
-#[allow(clippy::implicit_hasher)]
-pub fn create_genesis_request(
-    address: [u8; 32],
-    genesis_validators: HashMap<contract_ffi::value::account::PublicKey, contract_ffi::value::U512>,
-) -> GenesisRequest {
-    let genesis_account_addr = address.to_vec();
-
-    let initial_motes = {
-        let mut ret = BigInt::new();
-        ret.set_bit_width(512);
-        ret.set_value(format!("{}", GENESIS_INITIAL_BALANCE));
-        ret
-    };
-
-    let mint_code = {
-        let mut ret = DeployCode::new();
-        let contract_file = "mint_token.wasm";
-        let wasm_bytes = read_wasm_file_bytes(contract_file);
-        ret.set_code(wasm_bytes);
-        ret
-    };
-
-    let proof_of_stake_code = {
-        let mut ret = DeployCode::new();
-        let contract_file = "pos.wasm";
-        let wasm_bytes = read_wasm_file_bytes(contract_file);
-        ret.set_code(wasm_bytes);
-        ret
-    };
-
-    let grpc_genesis_validators: Vec<ipc::Bond> = genesis_validators
-        .iter()
-        .map(|(pk, bond)| {
-            let mut grpc_bond = ipc::Bond::new();
-            grpc_bond.set_validator_public_key(pk.value().to_vec());
-            grpc_bond.set_stake((*bond).into());
-            grpc_bond
-        })
-        .collect();
-
-    let protocol_version = {
-        let mut ret = ProtocolVersion::new();
-        ret.set_value(1);
-        ret
-    };
-
-    let mut ret = GenesisRequest::new();
-    ret.set_address(genesis_account_addr.to_vec());
-    ret.set_initial_motes(initial_motes);
-    ret.set_mint_code(mint_code);
-    ret.set_proof_of_stake_code(proof_of_stake_code);
-    ret.set_protocol_version(protocol_version);
-    ret.set_genesis_validators(grpc_genesis_validators.into());
-    ret
+pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
+    let name = DEFAULT_CHAIN_NAME.to_string();
+    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
+    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
+    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
+    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
+    let wasm_costs = *DEFAULT_WASM_COSTS;
+    GenesisConfig::new(
+        name,
+        timestamp,
+        protocol_version,
+        mint_installer_bytes,
+        proof_of_stake_installer_bytes,
+        accounts,
+        wasm_costs,
+    )
 }
 
 pub fn create_query_request(
@@ -680,73 +648,12 @@ where
         }
     }
 
-    pub fn run_genesis(
-        &mut self,
-        genesis_addr: [u8; 32],
-        genesis_validators: HashMap<
-            contract_ffi::value::account::PublicKey,
-            contract_ffi::value::U512,
-        >,
-    ) -> &mut Self {
+    pub fn run_genesis(&mut self, genesis_config: &GenesisConfig) -> &mut Self {
         let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
-
-        let genesis_request = create_genesis_request(genesis_addr, genesis_validators.clone());
-
-        let genesis_response = self
-            .engine_state
-            .run_genesis(RequestOptions::new(), genesis_request)
-            .wait_drop_metadata()
-            .unwrap();
-
-        let state_root_hash: Blake2bHash = genesis_response
-            .get_success()
-            .get_poststate_hash()
+        let genesis_config = genesis_config
+            .to_owned()
             .try_into()
-            .unwrap();
-
-        // Cache genesis response transforms for easy access later
-        let genesis_transforms = get_genesis_transforms(&genesis_response);
-
-        let system_account = get_account(&genesis_transforms, &system_account)
-            .expect("Unable to get system account");
-
-        let known_keys = system_account.urefs_lookup();
-
-        let mint_contract_uref = known_keys
-            .get(MINT_NAME)
-            .and_then(Key::as_uref)
-            .cloned()
-            .expect("Unable to get mint contract URef");
-
-        let pos_contract_uref = known_keys
-            .get(POS_NAME)
-            .and_then(Key::as_uref)
-            .cloned()
-            .expect("Unable to get pos contract URef");
-
-        // Cache mint uref
-        self.mint_contract_uref = Some(mint_contract_uref);
-        self.pos_contract_uref = Some(pos_contract_uref);
-
-        // Cache the account
-        self.genesis_account = Some(system_account);
-
-        let genesis_hash = genesis_response.get_success().get_poststate_hash().to_vec();
-        assert_eq!(state_root_hash.to_vec(), genesis_hash);
-        self.genesis_hash = Some(genesis_hash.clone());
-        // This value will change between subsequent contract executions
-        self.post_state_hash = Some(genesis_hash);
-        self.bonded_validators.push(genesis_validators);
-        self.genesis_transforms = Some(genesis_transforms);
-        self
-    }
-
-    pub fn run_genesis_with_genesis_config(
-        &mut self,
-        genesis_config: GenesisConfig,
-    ) -> Result<&mut Self, ipc::GenesisDeployError> {
-        let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
-        let genesis_config = genesis_config.try_into().expect("could not parse");
+            .expect("could not parse");
 
         let genesis_response = self
             .engine_state
@@ -755,7 +662,10 @@ where
             .expect("Unable to get genesis response");
 
         if genesis_response.has_failed_deploy() {
-            return Err(genesis_response.get_failed_deploy().to_owned());
+            panic!(
+                "genesis failure: {:?}",
+                genesis_response.get_failed_deploy().to_owned()
+            );
         }
 
         let state_root_hash: Blake2bHash = genesis_response
@@ -789,7 +699,7 @@ where
         self.pos_contract_uref = Some(pos_contract_uref);
         self.genesis_account = Some(genesis_account);
         self.genesis_transforms = Some(transforms);
-        Ok(self)
+        self
     }
 
     pub fn query(

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
@@ -8,8 +6,8 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
 
 #[ignore]
@@ -19,9 +17,9 @@ fn should_run_purse_to_purse_transfer() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
@@ -36,7 +34,7 @@ fn should_run_purse_to_purse_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let genesis_account = transfer_result
         .builder()
         .get_account(genesis_account_key)
@@ -116,9 +114,9 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
@@ -138,7 +136,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let genesis_account = transfer_result
         .builder()
         .get_account(genesis_account_key)

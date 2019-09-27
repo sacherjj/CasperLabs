@@ -929,27 +929,7 @@ steps:
     - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
     - cd execution-engine
     - make setup
-    - ~/.cargo/bin/cargo build --release
-
-- name: build-system-contracts
-  image: appleboy/drone-ssh:latest
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - cd execution-engine
-    - make setup
-    - ~/.cargo/bin/cargo build -p pos --release --target wasm32-unknown-unknown
-    - ~/.cargo/bin/cargo build -p mint-token --release --target wasm32-unknown-unknown
+    - make build
 
 - name: cleanup-mac
   image: appleboy/drone-ssh:latest

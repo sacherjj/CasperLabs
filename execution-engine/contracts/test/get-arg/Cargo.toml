@@ -1,16 +1,16 @@
 [package]
-name = "pos-get-payment-purse"
+name = "get-arg"
 version = "0.1.0"
-authors = ["Michael Birch <birchmd@casperlabs.io>"]
+authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "pos_get_payment_purse"
+name = "get_arg"
 crate-type = ["cdylib"]
 
 [features]
 default = []
-std = ["contract-ffi/std"]
+std = ["contract-ffi/std" ]
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
