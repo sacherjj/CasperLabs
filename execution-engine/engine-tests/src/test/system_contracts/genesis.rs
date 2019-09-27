@@ -2,7 +2,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::{EngineConfig, SYSTEM_ACCOUNT_ADDR};
+use engine_core::engine_state::SYSTEM_ACCOUNT_ADDR;
 use engine_shared::motes::Motes;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
@@ -65,10 +65,7 @@ fn should_run_genesis_with_chainspec() {
         wasm_costs,
     );
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&genesis_config);
 
@@ -150,10 +147,7 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         )
     };
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&genesis_config);
 }
@@ -200,10 +194,7 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         )
     };
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&genesis_config);
 }

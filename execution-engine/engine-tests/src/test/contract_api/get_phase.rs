@@ -1,6 +1,5 @@
 use contract_ffi::execution::Phase;
 use contract_ffi::value::account::PublicKey;
-use engine_core::engine_state::EngineConfig;
 
 use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -9,8 +8,6 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 #[test]
 fn should_run_get_phase_contract() {
     let default_account = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployBuilder::new()
@@ -24,7 +21,7 @@ fn should_run_get_phase_contract() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    InMemoryWasmTestBuilder::new(engine_config)
+    InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
         .commit()

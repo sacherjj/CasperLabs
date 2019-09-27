@@ -1,6 +1,6 @@
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
@@ -10,8 +10,6 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 #[test]
 fn should_run_ee_584_no_errored_session_transforms() {
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployBuilder::new()
@@ -25,7 +23,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

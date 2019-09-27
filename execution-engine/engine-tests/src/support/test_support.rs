@@ -16,8 +16,9 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
+    CommitRequest, CommitResponse, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
     DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisResponse, QueryRequest,
+    ValidateRequest, ValidateResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -34,6 +35,7 @@ use engine_storage::global_state::StateProvider;
 use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
+
 use transforms::TransformEntry;
 
 use crate::test::{
@@ -527,8 +529,7 @@ impl<S> WasmTestResult<S> {
 }
 
 impl InMemoryWasmTestBuilder {
-    pub fn new(engine_config: EngineConfig) -> Self {
-        let global_state = InMemoryGlobalState::empty().expect("should create global state");
+    pub fn new(global_state: InMemoryGlobalState, engine_config: EngineConfig) -> Self {
         let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
@@ -650,6 +651,12 @@ where
             pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
+    }
+
+    pub fn with_genesis_hash(&mut self, genesis_hash: Vec<u8>) -> &mut Self {
+        self.genesis_hash = Some(genesis_hash);
+        self.post_state_hash = self.genesis_hash.clone();
+        self
     }
 
     pub fn run_genesis(&mut self, genesis_config: &GenesisConfig) -> &mut Self {
@@ -774,13 +781,35 @@ where
             .clone()
             .expect("Should have genesis hash");
 
-        let effects = self
-            .transforms
-            .last()
-            .cloned()
-            .expect("Should have transforms to commit.");
+        let effects = self.transforms.last().cloned().unwrap_or_default();
 
         self.commit_effects(prestate_hash, effects)
+    }
+
+    /// Sends raw commit request to the current engine response.
+    ///
+    /// Can be used where result is not necesary
+    pub fn send_commit_request(
+        &self,
+        prestate_hash: Vec<u8>,
+        effects: HashMap<contract_ffi::key::Key, Transform>,
+    ) -> CommitResponse {
+        let commit_request = create_commit_request(&prestate_hash, &effects);
+
+        self.engine_state
+            .commit(RequestOptions::new(), commit_request)
+            .wait_drop_metadata()
+            .expect("Should have commit response")
+    }
+
+    pub fn send_validate_request(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
+        let mut validate_request = ValidateRequest::new();
+        validate_request.set_wasm_code(wasm_bytes);
+
+        self.engine_state
+            .validate(RequestOptions::new(), validate_request)
+            .wait_drop_metadata()
+            .expect("Should have validate response")
     }
 
     /// Runs a commit request, expects a successful response, and
@@ -790,13 +819,7 @@ where
         prestate_hash: Vec<u8>,
         effects: HashMap<contract_ffi::key::Key, Transform>,
     ) -> &mut Self {
-        let commit_request = create_commit_request(&prestate_hash, &effects);
-
-        let commit_response = self
-            .engine_state
-            .commit(RequestOptions::new(), commit_request)
-            .wait_drop_metadata()
-            .expect("Should have commit response");
+        let commit_response = self.send_commit_request(prestate_hash, effects);
         if !commit_response.has_success() {
             panic!(
                 "Expected commit success but received a failure instead: {:?}",

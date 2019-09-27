@@ -1,6 +1,6 @@
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -23,8 +23,7 @@ fn should_run_pos_refund_purse_contract_account_1() {
 }
 
 fn initialize() -> InMemoryWasmTestBuilder {
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 

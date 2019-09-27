@@ -5,8 +5,8 @@ use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
+use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
-use engine_core::engine_state::{EngineConfig, CONV_RATE};
 
 use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
@@ -106,8 +106,7 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
 #[ignore]
 #[test]
 fn finalize_payment_should_refund_to_specified_purse() {
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     let payment_amount = U512::from(10_000_000);
     let refund_purse_flag: u8 = 1;
     // Don't need to run finalize_payment manually, it happens during

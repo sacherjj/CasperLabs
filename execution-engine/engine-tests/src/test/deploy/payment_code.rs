@@ -5,7 +5,7 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
-use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
+use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
@@ -23,8 +23,6 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -40,7 +38,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -98,8 +96,6 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -115,7 +111,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -186,8 +182,6 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     let transferred_amount = U512::from(1);
     let expected_transfers_count = 2;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -203,7 +197,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
         .commit()
@@ -276,8 +270,6 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -293,7 +285,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -320,8 +312,6 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -334,7 +324,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -386,8 +376,6 @@ fn should_correctly_charge_when_session_code_fails() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -403,7 +391,7 @@ fn should_correctly_charge_when_session_code_fails() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -450,8 +438,6 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -467,7 +453,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -537,8 +523,6 @@ fn should_finalize_to_rewards_purse() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -554,7 +538,7 @@ fn should_finalize_to_rewards_purse() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
@@ -577,9 +561,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let setup_exec_request = {
         let deploy = DeployBuilder::new()
@@ -667,8 +649,7 @@ fn should_charge_non_main_purse() {
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     // arrange
     let setup_exec_request = {

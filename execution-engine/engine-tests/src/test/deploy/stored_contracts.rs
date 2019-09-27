@@ -713,8 +713,6 @@ fn should_produce_same_transforms_as_exec() {
     };
 
     let exec_transforms = {
-        let config = config.clone();
-
         let request = {
             let deploy = crate::support::test_support::DeployBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -735,7 +733,7 @@ fn should_produce_same_transforms_as_exec() {
                 .build()
         };
 
-        test_support::InMemoryWasmTestBuilder::new(config)
+        test_support::InMemoryWasmTestBuilder::default()
             .run_genesis(&DEFAULT_GENESIS_CONFIG)
             .exec_with_exec_request(request)
             .expect_success()

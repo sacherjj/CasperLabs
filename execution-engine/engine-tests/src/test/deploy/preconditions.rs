@@ -1,6 +1,5 @@
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_core::engine_state::EngineConfig;
 
 use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -14,8 +13,6 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
     let nonexistent_account_addr = [99u8; 32];
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployBuilder::new()
@@ -33,7 +30,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
         .finish();
@@ -55,8 +52,6 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -68,7 +63,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
         .finish();
@@ -95,8 +90,6 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -113,7 +106,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
         .finish();

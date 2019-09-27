@@ -1,21 +1,17 @@
-use grpc::RequestOptions;
-use lazy_static;
-
-use engine_core::engine_state::{EngineConfig, EngineState};
+use crate::support::test_support::{
+    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+};
+use contract_ffi::key::Key;
+use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
+use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
 use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
 use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::test_utils;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
-
-use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, ExecRequest, QueryRequest, ValidateRequest,
-};
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_grpc_server::engine_server::state::{Key, Key_Address};
-
-use crate::support::test_support;
+use lazy_static;
 
 pub const PROC_NAME: &str = "ee-shared-lib-tests";
 
@@ -40,30 +36,25 @@ fn should_query_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let root_hash = root_hash.to_vec();
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let engine_state = EngineState::new(global_state, engine_config);
+    let result = InMemoryWasmTestBuilder::new(global_state, engine_config)
+        .with_genesis_hash(root_hash.to_vec())
+        .finish();
 
-    let mut query_request = QueryRequest::new();
-    {
-        let mut key = Key::new();
-        let mut key_address = Key_Address::new();
-        key_address.set_account(test_support::MOCKED_ACCOUNT_ADDRESS.to_vec());
-        key.set_address(key_address);
-
-        query_request.set_base_key(key);
-        query_request.set_path(vec![].into());
-        query_request.set_state_hash(root_hash);
-    }
-
-    let _query_response_result = engine_state
-        .query(RequestOptions::new(), query_request)
-        .wait_drop_metadata();
+    let _result = result
+        .builder()
+        .query(
+            None,
+            Key::Account(test_support::MOCKED_ACCOUNT_ADDRESS),
+            &[],
+        )
+        .expect("should query");
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
+    assert!(!log_items.is_empty());
     for log_item in log_items {
         assert!(
             log_item
@@ -94,28 +85,30 @@ fn should_exec_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let root_hash = root_hash.to_vec();
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let engine_state = EngineState::new(global_state, engine_config);
 
-    let mut exec_request = ExecRequest::new();
-    {
-        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-        deploys.push(test_support::get_mock_deploy());
+    let exec_request = {
+        let deploy = DeployBuilder::new()
+            .with_address(test_support::MOCKED_ACCOUNT_ADDRESS)
+            .with_deploy_hash([1; 32])
+            .with_session_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code("do_nothing.wasm", ())
+            .with_authorization_keys(&[PublicKey::new(test_support::MOCKED_ACCOUNT_ADDRESS)])
+            .build();
 
-        exec_request.set_deploys(deploys);
-        exec_request.set_parent_state_hash(root_hash);
-        exec_request.set_protocol_version(test_support::get_protocol_version());
-    }
+        ExecRequestBuilder::new().push_deploy(deploy).build()
+    };
 
-    let _exec_response_result = engine_state
-        .exec(RequestOptions::new(), exec_request)
-        .wait_drop_metadata();
+    let _result = InMemoryWasmTestBuilder::new(global_state, engine_config)
+        .with_genesis_hash(root_hash.to_vec())
+        .exec_with_exec_request(exec_request)
+        .finish();
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
+    assert!(!log_items.is_empty());
     for log_item in log_items {
         assert!(
             log_item
@@ -146,25 +139,22 @@ fn should_commit_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let root_hash = root_hash.to_vec();
+
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let engine_state = EngineState::new(global_state, engine_config);
 
-    let request_options = RequestOptions::new();
+    let result = InMemoryWasmTestBuilder::new(global_state, engine_config)
+        .with_genesis_hash(root_hash.to_vec())
+        .finish();
 
-    let mut commit_request = CommitRequest::new();
-
-    commit_request.set_effects(vec![].into());
-    commit_request.set_prestate_hash(root_hash);
-
-    let _commit_response_result = engine_state
-        .commit(request_options, commit_request)
-        .wait_drop_metadata();
+    let _commit_response = result
+        .builder()
+        .send_commit_request(root_hash.to_vec(), Default::default());
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
+    assert!(!log_items.is_empty());
     for log_item in log_items {
         assert!(
             log_item
@@ -196,22 +186,17 @@ fn should_validate_with_metrics() {
     let (global_state, _) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
     let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let engine_state = EngineState::new(global_state, engine_config);
-
-    let mut validate_request = ValidateRequest::new();
 
     let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
 
-    validate_request.set_wasm_code(wasm_bytes);
+    let result = InMemoryWasmTestBuilder::new(global_state, engine_config).finish();
 
-    let _validate_response_result = engine_state
-        .validate(RequestOptions::new(), validate_request)
-        .wait_drop_metadata();
+    let _validate_response = result.builder().send_validate_request(wasm_bytes);
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
-
+    assert!(!log_items.is_empty());
     for log_item in log_items {
         assert!(
             log_item
