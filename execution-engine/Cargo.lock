@@ -584,6 +584,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "do-nothing-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "do-nothing-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "do-nothing-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "create-purse-01 0.1.0",
+]
+
+[[package]]
 name = "ee-221-regression"
 version = "0.1.0"
 dependencies = [
@@ -1053,6 +1075,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "local-state-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state 0.1.0",
+]
+
+[[package]]
+name = "local-state-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "local-state-stored-upgraded"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state 0.1.0",
+]
+
+[[package]]
+name = "local-state-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state-stored-upgraded 0.1.0",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1460,6 +1513,27 @@ dependencies = [
  "protoc 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "purse-holder-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "purse-holder-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "purse-holder-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
 ]
 
 [[package]]

@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod metrics;
+#[cfg(test)]
+mod upgrade;
 
 #[cfg(test)]
 pub mod contract_api;
