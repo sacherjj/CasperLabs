@@ -74,6 +74,10 @@ import scala.concurrent.duration.FiniteDuration
 
   def readPendingHashes: F[List[ByteString]]
 
+  def readPendingHeaders: F[List[Deploy.Header]]
+
+  def readPendingHashesAndHeaders: F[List[(ByteString, Deploy.Header)]]
+
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
@@ -101,6 +105,8 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
   private implicit val readDeploy: Read[Deploy] =
     Read[Array[Byte]].map(Deploy.parseFrom)
+  private implicit val readDeployHeader: Read[Deploy.Header] =
+    Read[Array[Byte]].map(Deploy.Header.parseFrom)
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
     insertNewDeploys(deploys, PendingStatusCode)
@@ -132,9 +138,15 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         })
         .void
 
+    val writeToDeployHeadersTable = Update[(ByteString, ByteString, Long, ByteString)](
+      "INSERT OR IGNORE INTO deploy_headers (hash, account, timestamp_millis, header) VALUES (?, ?, ?, ?)"
+    ).updateMany(deploys.map { d =>
+      (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.timestamp, d.getHeader.toByteString)
+    })
+
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t) >> writeToDeployHeadersTable)
             .transact(xa)
       _ <- updateMetrics()
     } yield ()
@@ -208,6 +220,28 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def readPendingHashes: F[List[ByteString]] =
     readHashesByStatus(PendingStatusCode)
 
+  override def readPendingHeaders: F[List[Deploy.Header]] =
+    readHeadersByStatus(PendingStatusCode)
+
+  override def readPendingHashesAndHeaders: F[List[(ByteString, Deploy.Header)]] =
+    readHashesAndHeadersByStatus(PendingStatusCode)
+
+  private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
+    sql"""|SELECT header FROM deploy_headers
+          |INNER JOIN buffered_deploys bd on deploy_headers.hash = bd.hash
+          |WHERE bd.status=$status""".stripMargin
+      .query[Deploy.Header]
+      .to[List]
+      .transact(xa)
+
+  private def readHashesAndHeadersByStatus(status: Int): F[List[(ByteString, Deploy.Header)]] =
+    sql"""|SELECT hash, header FROM deploy_headers
+          |INNER JOIN buffered_deploys bd on deploy_headers.hash = bd.hash
+          |WHERE bd.status=$status""".stripMargin
+      .query[(ByteString, Deploy.Header)]
+      .to[List]
+      .transact(xa)
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     sql"""|SELECT data FROM deploys
           |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
@@ -263,7 +297,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       .fromList[ByteString](l.toList)
       .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
-        q.query.streamWithChunkSize(chunkSize).transact(xa)
+        q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
       })
 }
 
