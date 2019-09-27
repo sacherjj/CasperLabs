@@ -24,7 +24,7 @@ enum CustomError {
 #[no_mangle]
 pub extern "C" fn call() {
     let new_purse_name: String = match contract_api::get_arg(Args::PurseName as u32) {
-        Some(Ok(uref)) => uref,
+        Some(Ok(name)) => name,
         Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
         None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16).into()),
     };
