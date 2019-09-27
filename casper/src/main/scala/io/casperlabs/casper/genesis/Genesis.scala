@@ -15,7 +15,7 @@ import io.casperlabs.casper.{CasperConf, PrettyPrinter}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting._
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil, Sorting}
+import io.casperlabs.casper.util.{ProtoUtil, Sorting}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}

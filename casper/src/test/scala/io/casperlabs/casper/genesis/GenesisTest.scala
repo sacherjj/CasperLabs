@@ -9,7 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
@@ -55,7 +55,13 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
       implicit val logEff                  = new LogStub[Task]
 
       for {
-        genesisWithTransform                             <- Genesis.fromChainSpec[Task](spec)
+        genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
+        implicit0(versions: CasperLabsProtocolVersions[Task]) <- CasperLabsProtocolVersions
+                                                                  .fromChainSpec[Task](
+                                                                    ipc
+                                                                      .ChainSpec()
+                                                                      .withGenesis(spec)
+                                                                  )
         BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
 
         _ = genesis.getHeader.chainId shouldBe "casperlabs"

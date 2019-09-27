@@ -87,14 +87,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def blockSummary(
       summary: BlockSummary,
       chainId: String
-  ): F[Unit] = {
+  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable(
             formatOfFields(summary, treatAsGenesis),
             version(
               summary,
-              CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+              CasperLabsProtocolVersions[F].versionAt(_)
             ),
             if (!treatAsGenesis) blockSignature(summary) else true.pure[F]
           )
@@ -109,7 +109,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F]): F[Unit] = {
+  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -252,20 +252,21 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Validates whether block was built using correct protocol version.
   def version(
       b: BlockSummary,
-      m: BlockHeight => state.ProtocolVersion
+      m: BlockHeight => F[state.ProtocolVersion]
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).value
-    if (blockVersion == version) {
-      true.pure[F]
-    } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"Received block version $blockVersion, expected version $version."
-        )
-      ) *> false.pure[F]
+    m(blockHeight).map(_.value).flatMap { version =>
+      if (blockVersion == version) {
+        true.pure[F]
+      } else {
+        Log[F].warn(
+          ignore(
+            b,
+            s"Received block version $blockVersion, expected version $version."
+          )
+        ) *> false.pure[F]
+      }
     }
   }
 
