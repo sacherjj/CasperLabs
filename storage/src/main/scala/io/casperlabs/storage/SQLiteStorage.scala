@@ -139,7 +139,7 @@ object SQLiteStorage {
         blockStorage.putApprovedBlock(block)
 
       override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-        blockStorage.getBlockSummary(blockHash)
+        dagStorage.lookup(blockHash).map(_.map(_.blockSummary))
 
       override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
         blockStorage.findBlockHashesWithDeployhash(deployHash)
