@@ -65,21 +65,54 @@ class ProxyServicer:
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
-        with open(self.certificate_file, "rb") as f:
-            self.credentials = grpc.ssl_channel_credentials(f.read())
+
+        import os
+
+        os.environ[
+            "GRPC_SSL_CIPHER_SUITES"
+        ] = "HIGH+ECDSA"  # found this when googling for the SSL error message:
+        # ssl_transport_security.cc:1238] Handshake failed with fatal error SSL_ERROR_SSL: error:100000f7:SSL routines:OPENSSL_internal:WRONG_VERSION_NUMBER.
+        # ssl_transport_security.cc:1238] Handshake failed with fatal error SSL_ERROR_SSL: error:10000410:SSL routines:OPENSSL_internal:SSLV3_ALERT_HANDSHAKE_FAILURE.
+
+        os.environ["GRPC_TRACE"] = "transport_security,tsi"
+        os.environ["GRPC_VERBOSITY"] = "DEBUG"
+
+        # See also issue https://github.com/grpc/grpc/issues/9538 opened in Feb 2017, still unresolved at this point of time.
+
+        self.node_address = f"{self.node_host}:{self.node_port}"
+
+        # https://grpc.github.io/grpc/python/grpc.html#create-client-credentials
+
+        """
+          root_certificates: The PEM-encoded root certificates as a byte string,
+            or None to retrieve them from a default location chosen by gRPC
+            runtime.
+          private_key: The PEM-encoded private key as a byte string, or None if no
+            private key should be used.
+          certificate_chain: The PEM-encoded certificate chain as a byte string
+            to use or or None if no certificate chain should be used.
+        """
+
+        # Channel credentials calls:
+        # https://github.com/grpc/grpc/blob/777245d507ceb09b3207533eacb03068a40bac57/src/python/grpcio/grpc/_cython/_cygrpc/credentials.pyx.pxi#L129
+        self.credentials = grpc.ssl_channel_credentials(
+            root_certificates=read_binary(self.certificate_file),
+            private_key=read_binary(self.key_file),
+            certificate_chain=None,
+        )
         self.secure_channel_options = self.node_id and [
             ("grpc.ssl_target_name_override", self.node_id),
             ("grpc.default_authority", self.node_id),
         ]
 
     def secure_channel(self):
-        node_address = f"{self.node_host}:{self.node_port}"
-        logging.info(
-            f"PROXY: secure_channel({node_address}, {self.credentials}, {self.secure_channel_options})"
+        # Getting: "Fatal Python error: Aborted"
+        # *********** secure_channel: target=localhost:50400, credentials=<grpc.ChannelCredentials object at 0x7ff4c809b278>, options=[('grpc.ssl_target_name_override', '4d802045c3e4d2e031f25878517bc8e2c9710ee7'), ('grpc.default_authority', '4d802045c3e4d2e031f25878517bc8e2c9710ee7')], compression=None
+        channel = grpc.secure_channel(
+            self.node_address, self.credentials, options=self.secure_channel_options
         )
-        return grpc.secure_channel(
-            node_address, self.credentials, options=self.secure_channel_options
-        )
+        logging.info(f"PROXY: secure_channel({self.node_address} => {channel})")
+        return channel
 
     def is_unary_stream(self, method_name):
         return method_name.startswith("Stream")
