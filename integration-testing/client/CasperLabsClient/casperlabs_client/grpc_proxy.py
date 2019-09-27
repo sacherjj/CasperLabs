@@ -93,9 +93,10 @@ class ProxyServicer:
         # Channel credentials calls:
         # https://github.com/grpc/grpc/blob/777245d507ceb09b3207533eacb03068a40bac57/src/python/grpcio/grpc/_cython/_cygrpc/credentials.pyx.pxi#L129
         self.credentials = grpc.ssl_channel_credentials(
-            # root_certificates=read_binary(self.certificate_file),
-            private_key=read_binary(self.key_file),
-            certificate_chain=read_binary(self.certificate_file),
+            root_certificates=read_binary(self.certificate_file),
+            # The two lines below break the client proxy; don't seem to help server either.
+            # private_key=read_binary(self.key_file),
+            # certificate_chain=read_binary(self.certificate_file),
         )
         self.secure_channel_options = self.node_id and [
             ("grpc.ssl_target_name_override", self.node_id),
@@ -178,7 +179,9 @@ class ProxyThread(Thread):
         self.server_key_file = server_key_file
         self.client_certificate_file = client_certificate_file
         self.client_key_file = client_key_file
-        self.node_id = None
+        self.node_id = casperlabs_client.extract_common_name(
+            self.client_certificate_file
+        )
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
@@ -191,7 +194,7 @@ class ProxyThread(Thread):
             proxy_port=self.proxy_port,
             certificate_file=self.client_certificate_file,
             key_file=self.client_key_file,
-            node_id=casperlabs_client.extract_common_name(self.client_certificate_file),
+            node_id=self.node_id,
             service_stub=self.service_stub,
             pre_callback=self.pre_callback,
             post_callback=self.post_callback,

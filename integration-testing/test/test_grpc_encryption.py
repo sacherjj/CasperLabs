@@ -72,8 +72,10 @@ def test_grpc_encryption_python_cli_and_proxy(encrypted_two_node_network):
         node_port=40401,
         node_host=cli.host,
         proxy_port=50401,
-        certificate_file=tls_certificate_path,
-        key_file=tls_key_path,
+        client_certificate_file=tls_certificate_path,
+        client_key_file=tls_key_path,
+        server_certificate_file=tls_certificate_path,
+        server_key_file=tls_key_path,
     )
 
     cli.host = "localhost"
