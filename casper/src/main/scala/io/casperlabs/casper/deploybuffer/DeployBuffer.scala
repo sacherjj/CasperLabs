@@ -76,7 +76,7 @@ import scala.concurrent.duration.FiniteDuration
 
   def readPendingHeaders: F[List[Deploy.Header]]
 
-  def readPendingHashesAndHeaders: F[List[(ByteString, Deploy.Header)]]
+  def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)]
 
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
@@ -223,7 +223,7 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def readPendingHeaders: F[List[Deploy.Header]] =
     readHeadersByStatus(PendingStatusCode)
 
-  override def readPendingHashesAndHeaders: F[List[(ByteString, Deploy.Header)]] =
+  override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
     readHashesAndHeadersByStatus(PendingStatusCode)
 
   private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
@@ -234,12 +234,14 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       .to[List]
       .transact(xa)
 
-  private def readHashesAndHeadersByStatus(status: Int): F[List[(ByteString, Deploy.Header)]] =
+  private def readHashesAndHeadersByStatus(
+      status: Int
+  ): fs2.Stream[F, (ByteString, Deploy.Header)] =
     sql"""|SELECT hash, header FROM deploy_headers
           |INNER JOIN buffered_deploys bd on deploy_headers.hash = bd.hash
           |WHERE bd.status=$status""".stripMargin
       .query[(ByteString, Deploy.Header)]
-      .to[List]
+      .streamWithChunkSize(chunkSize)
       .transact(xa)
 
   private def readByStatus(status: Int): F[List[Deploy]] =

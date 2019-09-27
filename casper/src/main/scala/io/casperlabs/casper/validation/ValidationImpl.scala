@@ -35,12 +35,20 @@ object ValidationImpl {
 
   val DRIFT = 15000 // 15 seconds
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
+  val MAX_DEPENDENCIES: Int = 10
+
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
+  import ValidationImpl.MAX_TTL
+  import ValidationImpl.MIN_TTL
+  import ValidationImpl.MAX_DEPENDENCIES
 
   type Data        = Array[Byte]
   type BlockHeight = Long
@@ -225,11 +233,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         }
         .map(_.forall(identity))
     }
-
-  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
-  private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
-  private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
-  private val MAX_DEPENDENCIES: Int = 10
 
   private def validateTimeToLive(
       ttl: Int,

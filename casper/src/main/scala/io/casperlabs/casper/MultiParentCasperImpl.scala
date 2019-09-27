@@ -14,6 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.casper.DeployExecutionPlan.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
@@ -474,42 +475,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       _                <- DeployBuffer[F].markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
   }
-
-  /** Find deploys which either haven't been processed yet or are in blocks which are
-    * not in the past cone of the chosen parents.
-    */
-  private def filterDeploysNotInPast(
-      dag: DagRepresentation[F],
-      parents: Seq[Block],
-      deployHashes: List[ByteString]
-  ): F[List[ByteString]] =
-    for {
-      deployHashToBlocksMap <- deployHashes
-                                .traverse { deployHash =>
-                                  BlockStorage[F]
-                                    .findBlockHashesWithDeployhash(deployHash)
-                                    .map(deployHash -> _)
-                                }
-                                .map(_.toMap)
-
-      blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
-
-      // Find the blocks from which there's a way through the descendants to reach a tip.
-      parentSet = parents.map(_.blockHash).toSet
-      nonOrphanedBlockHashes <- DagOperations
-                                 .collectWhereDescendantPathExists[F](
-                                   dag,
-                                   blockHashes.toSet,
-                                   parentSet
-                                 )
-
-      deploysNotInPast = deployHashToBlocksMap.collect {
-        case (deployHash, blockHashes)
-            if blockHashes.isEmpty || !blockHashes.exists(nonOrphanedBlockHashes) =>
-          deployHash
-      }.toList
-
-    } yield deploysNotInPast
 
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
