@@ -191,6 +191,7 @@ class DockerNode(LoggingDockerBase):
         N = self.NUMBER_OF_BONDS
         # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
         path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
+        os.makedirs(os.path.dirname(path))
         with open(path, "a") as f:
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
