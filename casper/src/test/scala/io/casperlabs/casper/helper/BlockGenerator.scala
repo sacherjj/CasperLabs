@@ -156,7 +156,7 @@ trait BlockGenerator {
           serializedJustifications,
           postState,
           rank = 0,
-          protocolVersion = 1,
+          protocolVersion = ProtocolVersion(1),
           timestamp = now,
           chainId = chainId
         )

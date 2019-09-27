@@ -576,7 +576,7 @@ object BlockAPI {
     for {
       dag                      <- MultiParentCasper[F].dag
       header                   = block.getHeader
-      protocolVersion          = header.protocolVersion
+      protocolVersion          = header.getProtocolVersion
       deployCount              = header.deployCount
       postStateHash            = ProtoUtil.postStateHash(block)
       timestamp                = header.timestamp
@@ -586,7 +586,7 @@ object BlockAPI {
       initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
       blockInfo <- constructor(
                     block,
-                    protocolVersion,
+                    protocolVersion.major.toLong,
                     deployCount,
                     postStateHash,
                     timestamp,

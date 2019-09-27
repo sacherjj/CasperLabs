@@ -9,6 +9,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentatio
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -377,7 +378,7 @@ object ProtoUtil {
       justifications: Seq[Justification],
       state: Block.GlobalState,
       rank: Long,
-      protocolVersion: Long,
+      protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainId: String
   ): Block.Header =

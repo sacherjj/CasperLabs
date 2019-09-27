@@ -52,7 +52,9 @@ object LegacyConversions {
             }
           )
           .withTimestamp(block.getHeader.timestamp)
-          .withProtocolVersion(block.getHeader.protocolVersion)
+          .withProtocolVersion(
+            consensus.state.ProtocolVersion(block.getHeader.protocolVersion.toInt)
+          )
           .withDeployCount(block.getHeader.deployCount)
           .withChainId(block.shardId)
           .withValidatorBlockSeqNum(block.seqNum)
@@ -105,7 +107,7 @@ object LegacyConversions {
           .withPostStateHash(stateHash)
           .withDeploysHash(deploysHash)
           .withTimestamp(block.getHeader.timestamp)
-          .withProtocolVersion(block.getHeader.protocolVersion)
+          .withProtocolVersion(block.getHeader.getProtocolVersion.major.toLong)
           .withDeployCount(block.getHeader.deployCount)
           .withExtraBytes(headerExtraBytes)
       )

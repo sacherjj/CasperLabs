@@ -559,7 +559,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           justifications = justifications,
           state = postState,
           rank = rank,
-          protocolVersion = protocolVersion.value,
+          protocolVersion = protocolVersion,
           timestamp = now,
           chainId = chainId
         )

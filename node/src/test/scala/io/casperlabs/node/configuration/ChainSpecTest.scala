@@ -4,6 +4,7 @@ import cats.data.Validated.{Invalid, Valid}
 import cats.data.ValidatedNel
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base64
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.ipc
 import java.io.File
 import java.nio.file.Paths
@@ -17,7 +18,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
       val manifest = Source.fromResource("chainspec/1-genesis/manifest.toml")
 
       check(ChainSpec.GenesisConf.parseManifest(manifest)) { conf =>
-        conf.genesis.protocolVersion shouldBe 1L
+        conf.genesis.protocolVersion shouldBe ChainSpec.ProtocolVersion(0, 1, 0)
         conf.genesis.name shouldBe "test-chain"
         conf.genesis.timestamp shouldBe 1568805354071L
         conf.genesis.mintCodePath.toString shouldBe "mint.wasm"
@@ -46,7 +47,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
       val manifest = Source.fromResource("chainspec/2-upgrade/manifest.toml")
 
       check(ChainSpec.UpgradeConf.parseManifest(manifest)) { conf =>
-        conf.upgrade.protocolVersion shouldBe 2L
+        conf.upgrade.protocolVersion shouldBe ChainSpec.ProtocolVersion(1, 0, 2)
         conf.upgrade.activationPointRank shouldBe 20L
         conf.upgrade.installerCodePath.get.toString shouldBe "installer.wasm"
         conf.wasmCosts should not be empty
@@ -61,7 +62,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
       check(ChainSpec.UpgradeConf.parseManifest(manifest)) { conf =>
         conf.upgrade.activationPointRank shouldBe 30L
-        conf.upgrade.protocolVersion shouldBe 3L
+        conf.upgrade.protocolVersion shouldBe ChainSpec.ProtocolVersion(1, 1, 0)
         conf.upgrade.installerCodePath shouldBe empty
         conf.wasmCosts shouldBe empty
       }
@@ -93,7 +94,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
           val genesis = spec.getGenesis
           genesis.name shouldBe "test-chain"
           genesis.timestamp shouldBe 1568805354071L
-          genesis.getProtocolVersion.value shouldBe 1L
+          genesis.getProtocolVersion shouldBe state.ProtocolVersion(0, 1)
 
           new String(genesis.mintInstaller.toByteArray).trim shouldBe "mint contract bytes"
           new String(genesis.posInstaller.toByteArray).trim shouldBe "pos contract bytes"
@@ -129,7 +130,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
           val upgrade = spec.upgrades(0)
           upgrade.getActivationPoint.rank shouldBe 20L
-          upgrade.getProtocolVersion.value shouldBe 2L
+          upgrade.getProtocolVersion shouldBe state.ProtocolVersion(1, 0, 2)
 
           new String(upgrade.getUpgradeInstaller.code.toByteArray).trim shouldBe "installer contract bytes"
 
@@ -153,7 +154,7 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors with Chai
 
           val upgrade = spec.upgrades(1)
           upgrade.getActivationPoint.rank shouldBe 30L
-          upgrade.getProtocolVersion.value shouldBe 3L
+          upgrade.getProtocolVersion shouldBe state.ProtocolVersion(1, 1, 0)
 
           upgrade.upgradeInstaller shouldBe empty
 

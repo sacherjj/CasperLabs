@@ -39,7 +39,7 @@ class ProtocolVersionsTest extends WordSpec with Matchers {
             )
           )
         }
-        compareErrorMessages(thrown, "Protocol versions should increase monotonically by 1.")
+        compareErrorMessages(thrown, "Protocol major versions should increase monotonically by 1.")
       }
     }
 

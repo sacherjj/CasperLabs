@@ -43,7 +43,7 @@ class DeploySelectionTest
 
   val prestate        = ByteString.EMPTY
   val blocktime       = 0L
-  val protocolVersion = ProtocolVersion(1L)
+  val protocolVersion = ProtocolVersion(1)
 
   val smallBlockSizeBytes = 5 * 1024
 
