@@ -101,7 +101,7 @@ object Main {
       case Right(_) =>
         Task.unit
       case Left(error) =>
-        raise(s"Failed! Reason: '$error")
+        raise(s"Failed! Reason: $error")
     }
   }
 }

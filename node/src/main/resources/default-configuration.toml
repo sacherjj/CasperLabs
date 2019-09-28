@@ -202,8 +202,8 @@ validator-sig-algorithm = "ed25519"
 # Number of signatures from trusted validators required to creating an approved genesis block.
 required-sigs = 0
 
-# Path to the directory which contains the Chain Spec.
-chain-spec-path = "$HOME/.casperlabs/chainspec"
+# Path to the directory which contains the Chain Spec. If not specified, the default chainspec packaged with the node will be used.
+# chain-spec-path = "$HOME/.casperlabs/chainspec"
 
 # Start a stand-alone node (no bootstrapping).
 standalone = false
