@@ -70,7 +70,9 @@ class DockerNode(LoggingDockerBase):
             logging.info(
                 f"SETUP PROXIES: server_certificate_path {server_certificate_path} server_key_path {server_key_path}"
             )
-            node_host = "localhost"
+            node_host = (
+                os.environ.get("TAG_NAME") and self.container_name or "localhost"
+            )
             self.proxy_server = grpc_proxy.proxy_server(
                 node_port=self.GRPC_SERVER_PORT + 10000,
                 node_host=node_host,
@@ -437,17 +439,21 @@ class DockerNode(LoggingDockerBase):
     @property
     def address(self) -> str:
         if self.config.behind_proxy:
-            # s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
-            try:
-                node_id = extract_common_name(self.config.tls_certificate_local_path())
-            except FileNotFoundError:
-                node_id = extract_common_name(self.config.tls_certificate_path())
+            if not os.environ.get("TAG_NAME"):
+                # Local run
+                host_name = "172.17.0.1"  # this works locally
+            else:
+                # Test suite is in a docker container if in CI
+                host_name = f"test-{os.environ.get('TAG_NAME')}"
 
-            # TODO: get actual protocol and discovery
-            host_address = "172.17.0.1"  # this works locally
+            certificate_path = self.config.tls_certificate_local_path()
+            logging.info(f"certificate_path: {certificate_path}")
+            node_id = extract_common_name(certificate_path)
             protocol_port = 40400
             discovery_port = 40404
-            return f"casperlabs://{node_id}@{host_address}?protocol={protocol_port}&discovery={discovery_port}"
+            addr = f"casperlabs://{node_id}@{host_name}?protocol={protocol_port}&discovery={discovery_port}"
+            logging.info(f"Address of the proxy: {addr}")
+            return addr
 
         m = re.search(
             f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",

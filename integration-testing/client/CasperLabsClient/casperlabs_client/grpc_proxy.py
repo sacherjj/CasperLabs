@@ -191,23 +191,21 @@ class ProxyThread(Thread):
         self.server.stop(0)
 
 
-def run_proxy(
-    service_stub,
-    add_servicer_to_server,
-    proxy_port: int,
-    node_host: str,
-    node_port: int,
+def proxy_client(
+    node_port=40401,
+    node_host="casperlabs",
+    proxy_port=50401,
     server_certificate_file: str = None,
     server_key_file: str = None,
     client_certificate_file: str = None,
     client_key_file: str = None,
-    pre_callback=None,
-    post_callback=None,
-    post_callback_stream=None,
+    pre_callback=logging_pre_callback,
+    post_callback=logging_post_callback,
+    post_callback_stream=logging_post_callback_stream,
 ):
     t = ProxyThread(
-        service_stub,
-        add_servicer_to_server,
+        casper_pb2_grpc.CasperServiceStub,
+        casper_pb2_grpc.add_CasperServiceServicer_to_server,
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
@@ -223,47 +221,19 @@ def run_proxy(
     return t
 
 
-def proxy_client(
-    node_port=40401,
-    node_host="casperlabs",
-    proxy_port=50401,
-    server_certificate_file: str = None,
-    server_key_file: str = None,
-    client_certificate_file: str = None,
-    client_key_file: str = None,
-    pre_callback=None,
-    post_callback=None,
-    post_callback_stream=None,
-):
-    return run_proxy(
-        casper_pb2_grpc.CasperServiceStub,
-        casper_pb2_grpc.add_CasperServiceServicer_to_server,
-        proxy_port=proxy_port,
-        node_host=node_host,
-        node_port=node_port,
-        server_certificate_file=server_certificate_file,
-        server_key_file=server_key_file,
-        client_certificate_file=client_certificate_file,
-        client_key_file=client_key_file,
-        pre_callback=pre_callback or logging_pre_callback,
-        post_callback=post_callback or logging_post_callback,
-        post_callback_stream=post_callback_stream or logging_post_callback_stream,
-    )
-
-
 def proxy_server(
     node_port=50400,
-    node_host="casperlabs",
+    node_host="localhost",
     proxy_port=40400,
     server_certificate_file=None,
     server_key_file=None,
     client_certificate_file=None,
     client_key_file=None,
-    pre_callback=None,
-    post_callback=None,
-    post_callback_stream=None,
+    pre_callback=logging_pre_callback,
+    post_callback=logging_post_callback,
+    post_callback_stream=logging_post_callback_stream,
 ):
-    return run_proxy(
+    t = ProxyThread(
         gossiping_pb2_grpc.GossipServiceStub,
         gossiping_pb2_grpc.add_GossipServiceServicer_to_server,
         proxy_port=proxy_port,
@@ -273,7 +243,9 @@ def proxy_server(
         server_key_file=server_key_file,
         client_certificate_file=client_certificate_file,
         client_key_file=client_key_file,
-        pre_callback=pre_callback or logging_pre_callback,
-        post_callback=post_callback or logging_post_callback,
-        post_callback_stream=post_callback_stream or logging_post_callback_stream,
+        pre_callback=pre_callback,
+        post_callback=post_callback,
+        post_callback_stream=post_callback_stream,
     )
+    t.start()
+    return t
