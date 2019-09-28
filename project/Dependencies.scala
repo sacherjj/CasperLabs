@@ -92,6 +92,7 @@ object Dependencies {
   val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
   val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
   val doobieCore    = "org.tpolecat"      %% "doobie-core"   % doobieVersion
+  val doobieHikari  = "org.tpolecat"      %% "doobie-hikari" % doobieVersion
   val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
   val fs2           = "co.fs2"            %% "fs2-core"      % fs2Version
 
