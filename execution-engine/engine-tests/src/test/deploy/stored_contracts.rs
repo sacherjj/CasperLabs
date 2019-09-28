@@ -5,18 +5,18 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
+use engine_grpc_server::engine_server::ipc::ExecuteRequest;
 use engine_shared::transform::Transform;
 
 use crate::support::test_stored_contract_support::{
     DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
     GENESIS_INITIAL_BALANCE,
 };
-use engine_grpc_server::engine_server::ipc::ExecuteRequest;
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
 
 use crate::support::test_stored_contract_support;
 use crate::support::test_support;
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account";
@@ -35,9 +35,6 @@ fn should_exec_non_stored_code() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -46,7 +43,7 @@ fn should_exec_non_stored_code() {
 
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -55,7 +52,7 @@ fn should_exec_non_stored_code() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -63,14 +60,14 @@ fn should_exec_non_stored_code() {
     };
 
     let mut builder = WasmTestBuilder::new(engine_config);
-    builder.run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder, exec_request);
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -98,9 +95,6 @@ fn should_exec_non_stored_code() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_hash() {
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 10_000_000;
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -108,7 +102,7 @@ fn should_exec_stored_code_by_hash() {
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (),
@@ -117,7 +111,7 @@ fn should_exec_stored_code_by_hash() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -125,7 +119,7 @@ fn should_exec_stored_code_by_hash() {
     };
 
     let mut builder = WasmTestBuilder::new(engine_config);
-    builder.run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder, exec_request);
 
@@ -158,10 +152,10 @@ fn should_exec_stored_code_by_hash() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -169,7 +163,7 @@ fn should_exec_stored_code_by_hash() {
     // next make another deploy that USES stored payment logic
     let exec_request_stored_payment = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -180,7 +174,7 @@ fn should_exec_stored_code_by_hash() {
                     .to_vec(),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -189,7 +183,7 @@ fn should_exec_stored_code_by_hash() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_payment);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -222,9 +216,6 @@ fn should_exec_stored_code_by_hash() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_named_hash() {
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 10_000_000;
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -232,7 +223,7 @@ fn should_exec_stored_code_by_named_hash() {
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (),
@@ -241,7 +232,7 @@ fn should_exec_stored_code_by_named_hash() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -249,7 +240,7 @@ fn should_exec_stored_code_by_named_hash() {
     };
 
     let mut builder = WasmTestBuilder::new(engine_config);
-    builder.run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder, exec_request);
 
@@ -261,10 +252,10 @@ fn should_exec_stored_code_by_named_hash() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -272,7 +263,7 @@ fn should_exec_stored_code_by_named_hash() {
     // next make another deploy that USES stored payment logic
     let exec_request_stored_payment = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -281,7 +272,7 @@ fn should_exec_stored_code_by_named_hash() {
                 STANDARD_PAYMENT_CONTRACT_NAME,
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -290,10 +281,10 @@ fn should_exec_stored_code_by_named_hash() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_payment);
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -326,9 +317,6 @@ fn should_exec_stored_code_by_named_hash() {
 #[ignore]
 #[test]
 fn should_exec_stored_code_by_named_uref() {
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -336,7 +324,7 @@ fn should_exec_stored_code_by_named_uref() {
     // first, store transfer contract
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (),
@@ -345,7 +333,7 @@ fn should_exec_stored_code_by_named_uref() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -353,7 +341,7 @@ fn should_exec_stored_code_by_named_uref() {
     };
 
     let mut builder = WasmTestBuilder::new(engine_config);
-    builder.run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder, exec_request);
 
@@ -365,10 +353,10 @@ fn should_exec_stored_code_by_named_uref() {
 
     let motes_alpha = test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance_alpha: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -376,7 +364,7 @@ fn should_exec_stored_code_by_named_uref() {
     // next make another deploy that USES stored session logic
     let exec_request_stored_session = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -385,7 +373,7 @@ fn should_exec_stored_code_by_named_uref() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -394,7 +382,7 @@ fn should_exec_stored_code_by_named_uref() {
 
     let test_result = get_test_result(&mut builder, exec_request_stored_session);
 
-    let modified_balance_bravo: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance_bravo: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -427,9 +415,6 @@ fn should_exec_stored_code_by_named_uref() {
 #[ignore]
 #[test]
 fn should_exec_payment_and_session_stored_code() {
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -437,7 +422,7 @@ fn should_exec_payment_and_session_stored_code() {
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (),
@@ -446,7 +431,7 @@ fn should_exec_payment_and_session_stored_code() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
 
@@ -454,7 +439,7 @@ fn should_exec_payment_and_session_stored_code() {
     };
 
     let mut builder = WasmTestBuilder::new(engine_config);
-    builder.run_genesis(genesis_addr, HashMap::default());
+    builder.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder, exec_request);
 
@@ -469,7 +454,7 @@ fn should_exec_payment_and_session_stored_code() {
     // next store transfer contract
     let exec_request_store_transfer = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (),
@@ -478,7 +463,7 @@ fn should_exec_payment_and_session_stored_code() {
                 STANDARD_PAYMENT_CONTRACT_NAME,
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -502,7 +487,7 @@ fn should_exec_payment_and_session_stored_code() {
     // logic
     let exec_request_stored_only = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -511,7 +496,7 @@ fn should_exec_payment_and_session_stored_code() {
                 STANDARD_PAYMENT_CONTRACT_NAME,
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([3; 32])
             .build();
 
@@ -529,10 +514,10 @@ fn should_exec_payment_and_session_stored_code() {
     let motes_charlie =
         test_stored_contract_support::get_success_result(&response).cost * CONV_RATE;
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("should get genesis account");
-    let modified_balance: U512 = builder.get_purse_balance(genesis_account.purse_id());
+    let modified_balance: U512 = builder.get_purse_balance(default_account.purse_id());
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
@@ -550,9 +535,6 @@ fn should_exec_payment_and_session_stored_code() {
 fn should_produce_same_transforms_by_uref_or_named_uref() {
     // get transforms for direct uref and named uref and compare them
 
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
-    let genesis_account_key = Key::Account(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
@@ -560,7 +542,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     // first, store transfer contract
     let exec_request_genesis = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 (),
@@ -569,7 +551,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1u8; 32])
             .build();
 
@@ -578,7 +560,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
     let mut builder_by_uref = WasmTestBuilder::new(engine_config);
-    builder_by_uref.run_genesis(genesis_addr, HashMap::default());
+    builder_by_uref.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
 
     let test_result = get_test_result(&mut builder_by_uref, exec_request_genesis.clone());
     let transforms: &HashMap<Key, Transform, RandomState> =
@@ -588,7 +570,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         // get pos contract public key
         let pos_uref = {
             let account = builder_by_uref
-                .get_account(genesis_account_key)
+                .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
                 .expect("genesis account should exist");
             account
                 .urefs_lookup()
@@ -624,7 +606,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     // direct uref exec
     let exec_request_by_uref = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_uref(
                 *stored_payment_contract_uref,
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -633,7 +615,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2u8; 32])
             .build();
 
@@ -645,13 +627,13 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
     let mut builder_by_named_uref = WasmTestBuilder::new(engine_config);
-    builder_by_named_uref.run_genesis(genesis_addr, HashMap::default());
+    builder_by_named_uref.run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default());
     let _ = get_test_result(&mut builder_by_named_uref, exec_request_genesis);
 
     // named uref exec
     let exec_request_by_named_uref = {
         let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 (account_1_public_key, U512::from(transferred_amount)),
@@ -660,7 +642,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
             )
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2u8; 32])
             .build();
 
@@ -682,8 +664,6 @@ fn should_produce_same_transforms_as_exec() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 1_000_000_000;
     let transferred_amount = 1;
@@ -695,7 +675,7 @@ fn should_produce_same_transforms_as_exec() {
 
         let request = {
             let deploy = DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                     (account_1_public_key, U512::from(transferred_amount)),
@@ -704,7 +684,7 @@ fn should_produce_same_transforms_as_exec() {
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([1; 32])
                 .build();
 
@@ -712,7 +692,7 @@ fn should_produce_same_transforms_as_exec() {
         };
 
         WasmTestBuilder::new(config)
-            .run_genesis(genesis_addr, HashMap::default())
+            .run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default())
             .exec_with_exec_request(request)
             .expect_success()
             .get_transforms()[0]
@@ -724,7 +704,7 @@ fn should_produce_same_transforms_as_exec() {
 
         let request = {
             let deploy = crate::support::test_support::DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                     (account_1_public_key, U512::from(transferred_amount)),
@@ -733,7 +713,7 @@ fn should_produce_same_transforms_as_exec() {
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([1; 32])
                 .build();
 
@@ -743,7 +723,7 @@ fn should_produce_same_transforms_as_exec() {
         };
 
         test_support::InMemoryWasmTestBuilder::new(config)
-            .run_genesis(genesis_addr, HashMap::default())
+            .run_genesis(&DEFAULT_GENESIS_CONFIG)
             .exec_with_exec_request(request)
             .expect_success()
             .get_transforms()[0]
@@ -756,8 +736,6 @@ fn should_produce_same_transforms_as_exec() {
 #[ignore]
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
-    let genesis_addr = GENESIS_ADDR;
-    let genesis_public_key = PublicKey::new(genesis_addr);
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 1_000_000_000;
     let transferred_amount = 1;
@@ -769,13 +747,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let store_request = |name: &str, deploy_hash: [u8; 32]| {
             let store_transfer = DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(&format!("{}_stored.wasm", name), ())
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash(deploy_hash)
                 .build();
 
@@ -787,7 +765,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         let mut builder = WasmTestBuilder::new(config);
 
         let store_transforms = builder
-            .run_genesis(genesis_addr, HashMap::default())
+            .run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default())
             .exec_with_exec_request(store_request(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 [1; 32],
@@ -812,7 +790,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let call_stored_request = {
             let deploy = DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_stored_session_named_key(
                     TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                     (account_1_public_key, U512::from(transferred_amount)),
@@ -823,7 +801,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                         .to_vec(),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([3; 32])
                 .build();
 
@@ -843,13 +821,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code("do_nothing.wasm", ())
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash(deploy_hash)
                 .build();
 
@@ -858,7 +836,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let provided_request = {
             let deploy = DeployBuilder::new()
-                .with_address(genesis_addr)
+                .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                     (account_1_public_key, U512::from(transferred_amount)),
@@ -867,7 +845,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                     (U512::from(payment_purse_amount),),
                 )
-                .with_authorization_keys(&[genesis_public_key])
+                .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([3; 32])
                 .build();
 
@@ -875,7 +853,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         WasmTestBuilder::new(config)
-            .run_genesis(genesis_addr, HashMap::default())
+            .run_genesis(DEFAULT_ACCOUNT_ADDR, HashMap::default())
             .exec_with_exec_request(do_nothing_request([1; 32]))
             .expect_success()
             .commit()

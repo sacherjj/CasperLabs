@@ -15,7 +15,8 @@ use crate::resolvers::memory_resolver::MemoryResolver;
 pub fn create_module_resolver(
     protocol_version: ProtocolVersion,
 ) -> Result<impl ModuleImportResolver + MemoryResolver, ResolverError> {
-    if protocol_version == ProtocolVersion::new(1) {
+    // TODO: revisit how protocol_version check here is meant to combine with upgrade
+    if protocol_version >= ProtocolVersion::new(1) {
         return Ok(v1_resolver::RuntimeModuleImportResolver::default());
     }
     Err(ResolverError::UnknownProtocolVersion(protocol_version))

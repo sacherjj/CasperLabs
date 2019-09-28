@@ -1,21 +1,19 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
 fn should_run_known_urefs_contract() {
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "known_urefs.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
@@ -65,7 +63,7 @@ fn should_run_known_urefs_contract() {
 
     let account = result
         .builder()
-        .get_account(Key::Account(GENESIS_ADDR))
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("Unable to get account transformation");
     // Those named URefs are created, although removed at the end of the test
     assert!(account.urefs_lookup().get("URef1").is_none());

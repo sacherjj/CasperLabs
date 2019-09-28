@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod genesis;
+pub mod genesis;
 #[cfg(test)]
 mod mint_install;
 #[cfg(test)]

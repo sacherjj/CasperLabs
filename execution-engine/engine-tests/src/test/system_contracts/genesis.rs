@@ -1,15 +1,9 @@
-use std::collections::HashMap;
-
-use grpc::RequestOptions;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
+use engine_core::engine_state::{EngineConfig, SYSTEM_ACCOUNT_ADDR};
 use engine_shared::motes::Motes;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::support::test_support;
@@ -19,7 +13,6 @@ const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";
 const BAD_INSTALL: &str = "standard_payment.wasm";
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const CHAIN_NAME: &str = "Jeremiah";
 const TIMESTAMP: u64 = 0;
 const PROTOCOL_VERSION: u64 = 1;
@@ -29,55 +22,6 @@ const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
 const ACCOUNT_2_BONDED_AMOUNT: u64 = 2_000_000;
 const ACCOUNT_1_BALANCE: u64 = 1_000_000_000;
 const ACCOUNT_2_BALANCE: u64 = 2_000_000_000;
-
-#[ignore]
-#[test]
-fn should_run_genesis() {
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let global_state = InMemoryGlobalState::empty().expect("should create global state");
-    let engine_state = EngineState::new(global_state, engine_config);
-
-    let genesis_request = test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
-    let request_options = RequestOptions::new();
-
-    let genesis_response = engine_state
-        .run_genesis(request_options, genesis_request)
-        .wait_drop_metadata();
-
-    let response = genesis_response.unwrap();
-
-    let response_root_hash = response.get_success().get_poststate_hash();
-
-    assert!(!response_root_hash.to_vec().is_empty());
-}
-
-#[ignore]
-#[test]
-fn test_genesis_hash_match() {
-    let mut builder_base = InMemoryWasmTestBuilder::default();
-
-    let builder = builder_base.run_genesis(GENESIS_ADDR, HashMap::new());
-
-    // This is trie's post state hash after calling run_genesis endpoint.
-    let genesis_run_hash = builder.get_genesis_hash();
-    let genesis_transforms = builder.get_genesis_transforms().clone();
-
-    let empty_root_hash = {
-        let gs = InMemoryGlobalState::empty().expect("Empty GlobalState.");
-        gs.empty_root_hash
-    };
-
-    // This is trie's post state hash after committing genesis effects on top of empty trie.
-    let genesis_transforms_hash = builder
-        .commit_effects(empty_root_hash.to_vec(), genesis_transforms)
-        .get_post_state_hash();
-
-    // They should match.
-    assert_eq!(genesis_run_hash, genesis_transforms_hash);
-}
-
-/* --- NEW GENESIS STARTS HERE --- */
 
 #[ignore]
 #[test]
@@ -126,20 +70,18 @@ fn should_run_genesis_with_chainspec() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    builder
-        .run_genesis_with_genesis_config(genesis_config)
-        .expect("should run genesis");
+    builder.run_genesis(&genesis_config);
 
     let system_account = builder
-        .get_account(Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .get_account(SYSTEM_ACCOUNT_ADDR)
         .expect("system account should exist");
 
     let account_1 = builder
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("account 1 should exist");
 
     let account_2 = builder
-        .get_account(Key::Account(ACCOUNT_2_ADDR))
+        .get_account(ACCOUNT_2_ADDR)
         .expect("account 2 should exist");
 
     let system_account_balance_actual = builder.get_purse_balance(system_account.purse_id());
@@ -167,6 +109,7 @@ fn should_run_genesis_with_chainspec() {
 }
 
 #[ignore]
+#[should_panic]
 #[test]
 fn should_fail_if_bad_mint_install_contract_is_provided() {
     let genesis_config = {
@@ -212,15 +155,11 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    if builder
-        .run_genesis_with_genesis_config(genesis_config)
-        .is_ok()
-    {
-        panic!("genesis should fail with a bad install contract")
-    }
+    builder.run_genesis(&genesis_config);
 }
 
 #[ignore]
+#[should_panic]
 #[test]
 fn should_fail_if_bad_pos_install_contract_is_provided() {
     let genesis_config = {
@@ -266,10 +205,5 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    if builder
-        .run_genesis_with_genesis_config(genesis_config)
-        .is_ok()
-    {
-        panic!("genesis should fail with a bad install contract")
-    }
+    builder.run_genesis(&genesis_config);
 }

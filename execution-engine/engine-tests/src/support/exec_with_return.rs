@@ -68,9 +68,9 @@ where
     let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
-
     let base_key = Key::Account(address);
-    let account = builder.get_account(base_key).expect("should find account");
+
+    let account = builder.get_account(address).expect("should find account");
 
     let mut uref_lookup = account.urefs_lookup().clone();
     let known_urefs = {

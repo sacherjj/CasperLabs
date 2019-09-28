@@ -366,7 +366,6 @@ lazy val storage = (project in file("storage"))
       lmdbjava,
       sqlLite,
       doobieCore,
-      doobieHikari,
       flyway,
       catsCore,
       catsEffect,

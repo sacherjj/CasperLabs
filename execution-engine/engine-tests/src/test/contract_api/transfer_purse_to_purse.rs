@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
@@ -8,8 +6,8 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
 
 #[ignore]
@@ -19,9 +17,9 @@ fn should_run_purse_to_purse_transfer() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
@@ -36,15 +34,14 @@ fn should_run_purse_to_purse_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&genesis_account.urefs_lookup()["purse_transfer_result"].normalize()];
+        &transform[&default_account.urefs_lookup()["purse_transfer_result"].normalize()];
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -54,7 +51,7 @@ fn should_run_purse_to_purse_transfer() {
     assert_eq!(purse_transfer_result, "TransferSuccessful");
 
     let main_purse_balance =
-        &transform[&genesis_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&default_account.urefs_lookup()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -65,8 +62,8 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = genesis_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = genesis_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = default_account.urefs_lookup()["purse:secondary"];
+    let _purse_main_key = default_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -116,9 +113,9 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let target = "purse:secondary".to_string();
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_purse.wasm",
@@ -138,15 +135,14 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[0];
 
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&genesis_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
+        &transform[&default_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -157,7 +153,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Obtain main purse's balance
     let main_purse_balance =
-        &transform[&genesis_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&default_account.urefs_lookup()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -182,8 +178,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = genesis_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = genesis_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = default_account.urefs_lookup()["purse:secondary"];
+    let _purse_main_key = default_account.urefs_lookup()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent

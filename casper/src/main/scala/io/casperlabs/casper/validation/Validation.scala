@@ -35,6 +35,8 @@ trait Validation[F[_]] {
 
   def deployHash(d: consensus.Deploy): F[Boolean]
 
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]]
+
   def deploySignature(d: consensus.Deploy): F[Boolean]
 
   def signature(d: Array[Byte], sig: consensus.Signature, key: PublicKey): Boolean
