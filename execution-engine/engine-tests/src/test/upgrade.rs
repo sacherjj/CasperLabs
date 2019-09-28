@@ -1,27 +1,10 @@
-use engine_core::engine_state::{EngineConfig, EngineState};
-
-use crate::support::test_support::{
-    create_genesis_config, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder,
-    WasmTestBuilder,
-};
-
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Contract, Value, U512};
-use engine_core::engine_state::genesis::GenesisAccount;
-use engine_core::execution;
-use engine_grpc_server::engine_server::ipc::ExecResponse;
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_shared::motes::Motes;
+use contract_ffi::value::Value;
+use engine_core::engine_state::EngineConfig;
 use engine_shared::transform::Transform;
-use engine_storage::global_state::StateProvider;
 
-const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
-const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
-const ACCOUNT_1_BALANCE: u64 = 1_000_000_000;
-const PAYMENT_AMOUNT: u64 = 200_000_000;
-const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
+use crate::support::test_support::{ExecRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
@@ -36,85 +19,7 @@ const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
 const METHOD_VERSION: &str = "version";
 const PURSE_1: &str = "purse_1";
-
-fn initialize_builder<S>(builder: &mut WasmTestBuilder<S>)
-where
-    S: StateProvider,
-    S::Error: Into<execution::Error>,
-    EngineState<S>: ExecutionEngineService,
-{
-    let account_1 = {
-        let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-        let account_1_balance = Motes::new(ACCOUNT_1_BALANCE.into());
-        let account_1_bonded_amount = Motes::new(ACCOUNT_1_BONDED_AMOUNT.into());
-        GenesisAccount::new(
-            account_1_public_key,
-            account_1_balance,
-            account_1_bonded_amount,
-        )
-    };
-
-    builder.run_genesis(&create_genesis_config(vec![account_1]));
-}
-
-fn exec_session_code<S>(
-    builder: &mut WasmTestBuilder<S>,
-    account_public_key: &PublicKey,
-    account_deploy_counter: u8,
-    session_contract_name: &str,
-    args: impl contract_ffi::contract_api::argsparser::ArgsParser,
-) -> ExecResponse
-where
-    S: StateProvider,
-    S::Error: Into<execution::Error>,
-    EngineState<S>: ExecutionEngineService,
-{
-    let exec_request = {
-        let deploy = DeployBuilder::new()
-            .with_address(account_public_key.value())
-            .with_session_code(&format!("{}.wasm", session_contract_name), args)
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(PAYMENT_AMOUNT),),
-            )
-            .with_authorization_keys(&[*account_public_key])
-            .with_deploy_hash([account_deploy_counter + 1; 32])
-            .build();
-
-        ExecRequestBuilder::new().push_deploy(deploy).build()
-    };
-
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success() // <- assert equivalent
-        .commit();
-
-    let exec_response = builder
-        .get_exec_response(account_deploy_counter as usize)
-        .expect("there should be a response")
-        .clone();
-
-    assert!(exec_response.has_success(), "expected success");
-
-    exec_response
-}
-
-fn query_contract<S>(builder: &mut WasmTestBuilder<S>, contract_uref: &URef) -> Option<Contract>
-where
-    S: StateProvider,
-    S::Error: Into<execution::Error>,
-    EngineState<S>: ExecutionEngineService,
-{
-    let contract_value: Value = builder
-        .query(None, Key::URef(*contract_uref), &[])
-        .expect("should have contract value");
-
-    if let Value::Contract(contract) = contract_value {
-        Some(contract)
-    } else {
-        None
-    }
-}
+const TOTAL_PURSES: usize = 3;
 
 #[ignore]
 #[test]
@@ -124,33 +29,30 @@ fn should_upgrade_do_nothing_to_do_something() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    initialize_builder(&mut builder);
+    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let mut account_deploy_counter: u8 = 0;
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+        };
 
-    // store do-nothing-stored
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        DO_NOTHING_STORED_CONTRACT_NAME,
-        (),
-    );
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // call stored do nothing, passing a purse name as an arg
     // which should have no affect as do nothing does nothing
     let account_1_transformed = builder
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
-    assert_eq!(
-        account_1_transformed.urefs_lookup().get(PURSE_1),
-        None,
-        "purse should not exist"
+    assert!(
+        account_1_transformed.urefs_lookup().get(PURSE_1).is_none(),
+        "purse should not exist",
     );
-
-    account_deploy_counter += 1;
 
     let do_nothing_stored_uref = account_1_transformed
         .urefs_lookup()
@@ -160,27 +62,42 @@ fn should_upgrade_do_nothing_to_do_something() {
         .expect("should have uref");
 
     // do upgrade
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME,
-        (*do_nothing_stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (*do_nothing_stored_uref,),
+            )
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // call upgraded contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        DO_NOTHING_STORED_CALLER_CONTRACT_NAME,
-        (*do_nothing_stored_uref, PURSE_1),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (*do_nothing_stored_uref, PURSE_1),
+            )
+        };
 
-    let contract =
-        query_contract(&mut builder, do_nothing_stored_uref).expect("should have contract");
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
+
+    let contract = builder
+        .get_contract(*do_nothing_stored_uref)
+        .expect("should have contract");
 
     // currently as the system is designed the new uref for the purse is added to the
     // caller contract instead of the account...ideally the account would get the uref
@@ -199,25 +116,23 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    initialize_builder(&mut builder);
-
-    let mut account_deploy_counter: u8 = 0;
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
+    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     // store do-nothing-stored
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_CONTRACT_NAME,
-        (),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
     assert!(
@@ -234,18 +149,16 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     // verify version before upgrade
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
+    let version = *account
+        .urefs_lookup()
+        .get(METHOD_VERSION)
+        .expect("version uref should exist");
+
     let original_version = builder
-        .query(
-            None,
-            *account
-                .urefs_lookup()
-                .get(METHOD_VERSION)
-                .expect("version uref should exist"),
-            &[],
-        )
+        .query(None, version, &[])
         .expect("version should exist");
 
     assert_eq!(
@@ -255,28 +168,30 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
     );
 
     // upgrade contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // version should change after upgrade
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
+    let version = *account
+        .urefs_lookup()
+        .get(METHOD_VERSION)
+        .expect("version key should exist");
+
     let upgraded_version = builder
-        .query(
-            None,
-            *account
-                .urefs_lookup()
-                .get(METHOD_VERSION)
-                .expect("version uref should exist"),
-            &[],
-        )
+        .query(None, version, &[])
         .expect("version should exist");
 
     assert_eq!(
@@ -294,25 +209,23 @@ fn should_support_extending_functionality() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    initialize_builder(&mut builder);
-
-    let mut account_deploy_counter: u8 = 0;
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
+    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     // store do-nothing-stored
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_CONTRACT_NAME,
-        (),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
     let stored_uref = account
@@ -323,44 +236,48 @@ fn should_support_extending_functionality() {
         .expect("should have uref");
 
     // call stored contract and persist a known uref before upgrade
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME,
-        (*stored_uref, METHOD_ADD, PURSE_1),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (*stored_uref, METHOD_ADD, PURSE_1),
+            )
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // verify known uref actually exists prior to upgrade
-    let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
+    let contract = builder
+        .get_contract(*stored_uref)
+        .expect("should have contract");
     assert!(
         contract.urefs_lookup().contains_key(PURSE_1),
         "purse uref should exist in contract's known_urefs before upgrade"
     );
 
-    account_deploy_counter += 1;
-
-    // verify known uref actually exists prior to upgrade
-    let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
-
-    assert!(
-        contract.urefs_lookup().contains_key(PURSE_1),
-        "PURSE_1 uref should exist in contract's known_urefs before upgrade"
-    );
-
     // upgrade contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // verify uref still exists in known_urefs after upgrade:
-    let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
+    let contract = builder
+        .get_contract(*stored_uref)
+        .expect("should have contract");
 
     assert!(
         contract.urefs_lookup().contains_key(PURSE_1),
@@ -368,16 +285,26 @@ fn should_support_extending_functionality() {
     );
 
     // call new remove function
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME,
-        (*stored_uref, METHOD_REMOVE, PURSE_1),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (*stored_uref, METHOD_REMOVE, PURSE_1),
+            )
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // verify known urefs no longer include removed purse
-    let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
+    let contract = builder
+        .get_contract(*stored_uref)
+        .expect("should have contract");
 
     assert!(
         !contract.urefs_lookup().contains_key(PURSE_1),
@@ -393,25 +320,23 @@ fn should_maintain_known_urefs_across_upgrade() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    initialize_builder(&mut builder);
-
-    let mut account_deploy_counter = 0;
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
+    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     // store contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_CONTRACT_NAME,
-        (),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
     let stored_uref = account
@@ -422,40 +347,52 @@ fn should_maintain_known_urefs_across_upgrade() {
         .expect("should have uref");
 
     // add several purse urefs to known_urefs
-    let total_purses: u8 = 3;
-    for index in 1..=total_purses {
+    for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
-        exec_session_code(
-            &mut builder,
-            &account_1_public_key,
-            account_deploy_counter,
-            PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME,
-            (*stored_uref, METHOD_ADD, purse_name),
-        );
+
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (*stored_uref, METHOD_ADD, purse_name),
+            )
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
 
         // verify known uref actually exists prior to upgrade
-        let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
+        let contract = builder
+            .get_contract(*stored_uref)
+            .expect("should have contract");
         assert!(
             contract.urefs_lookup().contains_key(purse_name),
             "purse uref should exist in contract's known_urefs before upgrade"
         );
-
-        account_deploy_counter += 1;
     }
 
     // upgrade contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // verify all urefs still exist in known_urefs after upgrade
-    let contract = query_contract(&mut builder, stored_uref).expect("should have contract");
+    let contract = builder
+        .get_contract(*stored_uref)
+        .expect("should have contract");
 
-    for index in 1..=total_purses {
+    for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
         assert!(
             contract.urefs_lookup().contains_key(purse_name),
@@ -475,25 +412,23 @@ fn should_maintain_local_state_across_upgrade() {
         InMemoryWasmTestBuilder::new(engine_config)
     };
 
-    initialize_builder(&mut builder);
-
-    let mut account_deploy_counter: u8 = 0;
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
+    builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     // store local_state_stored contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        LOCAL_STATE_STORED_CONTRACT_NAME,
-        (),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     let account = builder
-        .get_account(account_1_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
     let stored_uref = account
@@ -504,15 +439,17 @@ fn should_maintain_local_state_across_upgrade() {
         .expect("should have uref");
 
     // call local_state_stored_contract (which will cause it to store some local state)
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        LOCAL_STATE_STORED_CALLER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // confirm expected local state was written
     let transform_map = &builder.get_transforms()[1];
@@ -526,30 +463,38 @@ fn should_maintain_local_state_across_upgrade() {
         .expect("local state Write should exist");
 
     // upgrade local_state_stored contract
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
 
-    account_deploy_counter += 1;
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // call upgraded local_state_stored_contract
     // (local state existence is checked in upgraded contract)
-    exec_session_code(
-        &mut builder,
-        &account_1_public_key,
-        account_deploy_counter,
-        LOCAL_STATE_STORED_CALLER_CONTRACT_NAME,
-        (*stored_uref,),
-    );
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
+            ExecRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+        };
+
+        builder
+            .exec_with_exec_request(exec_request)
+            .expect_success()
+            .commit();
+    }
 
     // get transformed local state value post upgrade
-    let transform_map = &builder.get_transforms()[account_deploy_counter as usize];
+    let transforms = builder.get_transforms();
 
-    let transform = transform_map
+    let transform = transforms
+        .last()
+        .expect("should have transforms")
         .get(&local_state_key)
         .expect("should have second Write transform");
 
