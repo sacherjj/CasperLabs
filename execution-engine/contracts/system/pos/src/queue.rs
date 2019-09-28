@@ -78,12 +78,16 @@ pub struct QueueLocal;
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
     fn read_bonding() -> Queue {
-        contract_api::read_local(BONDING_KEY).unwrap_or_default()
+        contract_api::read_local(BONDING_KEY)
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 
     /// Reads unbonding queue from the local state of the contract.
     fn read_unbonding() -> Queue {
-        contract_api::read_local(UNBONDING_KEY).unwrap_or_default()
+        contract_api::read_local(UNBONDING_KEY)
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 
     /// Writes bonding queue to the local state of the contract.

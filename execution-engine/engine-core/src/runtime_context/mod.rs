@@ -792,4 +792,23 @@ where
 
         Ok(())
     }
+
+    pub fn upgrade_contract_at_uref(
+        &mut self,
+        key: Key,
+        bytes: Vec<u8>,
+        known_urefs: BTreeMap<String, Key>,
+    ) -> Result<(), Error> {
+        let protocol_version = self.protocol_version();
+        let contract = Contract::new(bytes, known_urefs, protocol_version);
+        let contract = Value::Contract(contract);
+        let validated_key: Validated<Key> = Validated::new(key, |key| {
+            self.validate_writeable(&key).and(self.validate_key(&key))
+        })?;
+        let validated_value = Validated::new(contract, Validated::valid)?;
+        self.state
+            .borrow_mut()
+            .write(validated_key, validated_value);
+        Ok(())
+    }
 }

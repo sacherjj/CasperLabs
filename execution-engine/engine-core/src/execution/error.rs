@@ -26,7 +26,6 @@ pub enum Error {
         required: AccessRights,
     },
     ForgedReference(URef),
-    ArgIndexOutOfBounds(usize),
     URefNotFound(String),
     FunctionNotFound(String),
     ParityWasm(elements::Error),

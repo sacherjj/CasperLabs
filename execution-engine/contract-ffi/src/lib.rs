@@ -68,7 +68,7 @@ mod ext_ffi {
         pub fn serialize_known_urefs() -> usize;
         // Can only be called after `serialize_known_urefs`.
         pub fn list_known_urefs(dest_ptr: *mut u8);
-        pub fn load_arg(i: u32) -> usize;
+        pub fn load_arg(i: u32) -> isize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(
             value_ptr: *const u8,
@@ -125,6 +125,12 @@ mod ext_ffi {
         ) -> i32;
         pub fn get_balance(purse_id_ptr: *const u8, purse_id_size: usize) -> i32;
         pub fn get_phase(dest_ptr: *mut u8);
+        pub fn upgrade_contract_at_uref(
+            name_ptr: *const u8,
+            name_size: usize,
+            key_ptr: *const u8,
+            key_size: usize,
+        ) -> i32;
     }
 }
 

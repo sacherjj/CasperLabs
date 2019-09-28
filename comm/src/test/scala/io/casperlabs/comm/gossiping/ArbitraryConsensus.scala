@@ -158,11 +158,14 @@ trait ArbitraryConsensus {
 
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
-      accountKeys <- Gen.oneOf(randomAccounts)
-      timestamp   <- Gen.choose(0L, Long.MaxValue)
-      gasPrice    <- arbitrary[Long]
-      sessionCode <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
-      paymentCode <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
+      accountKeys     <- Gen.oneOf(randomAccounts)
+      timestamp       <- Gen.choose(0L, Long.MaxValue)
+      gasPrice        <- arbitrary[Long]
+      sessionCode     <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
+      paymentCode     <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
+      timeToLive      <- Gen.option(Gen.choose(1 * 60 * 60 * 1000, 24 * 60 * 60 * 1000))
+      numDependencies <- Gen.chooseNum(0, 10)
+      dependencies    <- Gen.listOfN(numDependencies, genHash)
       body = Deploy
         .Body()
         .withSession(Deploy.Code().withWasm(sessionCode))
@@ -174,6 +177,8 @@ trait ArbitraryConsensus {
         .withTimestamp(timestamp)
         .withGasPrice(gasPrice)
         .withBodyHash(bodyHash)
+        .withDependencies(dependencies)
+        .withTtlMillis(timeToLive.getOrElse(0))
       deployHash = protoHash(header)
       signature  = accountKeys.sign(deployHash)
       deploy = Deploy()

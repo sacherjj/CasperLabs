@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{Error as ApiError, PurseTransferResult, TransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -298,12 +298,16 @@ where
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.context.args().len() {
-            self.host_buf = self.context.args()[i].clone();
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::ArgIndexOutOfBounds(i).into())
+    pub fn load_arg(&mut self, i: usize) -> isize {
+        match self.context.args().get(i) {
+            Some(arg) => {
+                self.host_buf = arg.clone();
+                self.host_buf.len() as isize
+            }
+            None => {
+                self.host_buf.clear();
+                -1
+            }
         }
     }
 
@@ -911,5 +915,33 @@ where
         };
 
         Ok(ret)
+    }
+
+    /// If key is in known_uref with AccessRights::Write, processes bytes from calling contract
+    /// and writes them at the provided uref, overwriting existing value if any
+    pub fn upgrade_contract_at_uref(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        key_ptr: u32,
+        key_size: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let known_urefs = match self.context.read_gs(&key)? {
+            None => Err(Error::KeyNotFound(key)),
+            Some(Value::Contract(contract)) => Ok(contract.urefs_lookup().clone()),
+            Some(_) => Err(Error::FunctionNotFound(format!(
+                "Value at {:?} is not a contract",
+                key
+            ))),
+        }?;
+        let bytes = self.get_function_by_name(name_ptr, name_size)?;
+        match self
+            .context
+            .upgrade_contract_at_uref(key, bytes, known_urefs)
+        {
+            Ok(_) => Ok(Ok(())),
+            Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
+        }
     }
 }

@@ -5,7 +5,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{
-    get_arg, read_local, revert, transfer_to_account, write_local, TransferResult,
+    get_arg, read_local, revert, transfer_to_account, write_local, Error, TransferResult,
 };
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
@@ -20,9 +20,15 @@ const TRANSFER_AMOUNT: u32 = 10_000_000;
 /// 2 - transfer error.
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = get_arg(0);
+    let public_key: PublicKey = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
+    };
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = read_local::<PublicKey, U512>(public_key).is_some();
+    let already_funded = read_local::<PublicKey, U512>(public_key)
+        .unwrap_or_default()
+        .is_some();
     if already_funded {
         revert(1);
     } else {

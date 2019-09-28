@@ -361,6 +361,8 @@ object DeployRuntime {
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
           .withGasPrice(deployConfig.gasPrice)
+          .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
+          .withDependencies(deployConfig.dependencies)
       )
       .withBody(
         consensus.Deploy

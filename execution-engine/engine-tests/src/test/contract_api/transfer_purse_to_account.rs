@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
@@ -9,8 +7,8 @@ use engine_shared::transform::Transform;
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 
@@ -18,12 +16,12 @@ const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
 #[test]
 fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let genesis_public_key = PublicKey::new(GENESIS_ADDR);
+    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -54,14 +52,13 @@ fn should_run_purse_to_account_transfer() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&default_account.urefs_lookup()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -77,7 +74,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&default_account.urefs_lookup()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s
@@ -140,10 +137,9 @@ fn should_run_purse_to_account_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[1];
 
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_1 = transfer_result
         .builder()
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
     // Obtain main purse's balance
@@ -172,7 +168,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get transforms output for genesis
     let genesis_transforms = transform
-        .get(&Key::Account(GENESIS_ADDR))
+        .get(&Key::Account(DEFAULT_ACCOUNT_ADDR))
         .expect("Unable to find transforms for a genesis account");
 
     // Genesis account is unchanged
@@ -203,9 +199,9 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
     let transfer_result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::default())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -221,14 +217,13 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&default_account.urefs_lookup()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -246,7 +241,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&default_account.urefs_lookup()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s

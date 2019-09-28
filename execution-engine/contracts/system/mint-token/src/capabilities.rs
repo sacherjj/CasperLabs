@@ -24,6 +24,8 @@ macro_rules! readable_impl {
             fn read(&self) -> T {
                 let turef: TURef<T> = self.clone().into();
                 contract_api::read(turef)
+                    .expect("value should deserialize")
+                    .expect("should find value")
             }
         }
     };
