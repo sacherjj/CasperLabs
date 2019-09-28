@@ -54,8 +54,6 @@ fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
 #[ignore]
 #[test]
 fn should_run_successful_bond_and_unbond() {
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
@@ -73,9 +71,9 @@ fn should_run_successful_bond_and_unbond() {
         .run_genesis(&genesis_config)
         .finish();
 
-    let genesis_account = result
+    let default_account = result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
@@ -161,8 +159,6 @@ fn should_run_successful_bond_and_unbond() {
         .commit()
         .finish();
 
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
-
     let exec_response = result
         .builder()
         .get_exec_response(0)
@@ -171,7 +167,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let account_1 = result
         .builder()
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
@@ -297,7 +293,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -396,7 +392,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)

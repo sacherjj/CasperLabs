@@ -11,7 +11,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = 100_000_000 + 100;
 
 #[ignore]
 #[test]
-fn should_run_get_payment_purse_contract_genesis_account() {
+fn should_run_get_payment_purse_contract_default_account() {
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
