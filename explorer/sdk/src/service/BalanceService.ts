@@ -1,12 +1,12 @@
 import { Key } from '../../grpc/src/io/casperlabs/casper/consensus/state_pb';
 import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
-import { CasperService } from './CasperService';
+import CasperService from './CasperService';
 
 /** Cache balance URef values for accounts so that on subsequent queries
  *  it only takes 1 state query not 4 to get the value.
  */
-export class BalanceService {
+export default class BalanceService {
   private balanceUrefs = new Map<string, Key.URef>();
 
   constructor(private casperService: CasperService) {}
@@ -36,5 +36,3 @@ export class BalanceService {
     return await this.casperService.getAccountBalance(blockHash, balanceUref);
   }
 }
-
-export default BalanceService;

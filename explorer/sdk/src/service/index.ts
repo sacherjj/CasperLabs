@@ -1,3 +1,4 @@
-export { BalanceService } from './BalanceService';
-export { CasperService } from './CasperService';
-export { GrpcError } from './Errors';
+import BalanceService from './BalanceService';
+import CasperService from './CasperService';
+export {CasperService, BalanceService};
+export {GrpcError} from "./Errors";

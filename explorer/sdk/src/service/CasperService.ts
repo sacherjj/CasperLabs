@@ -22,7 +22,7 @@ import { encodeBase16 } from '../lib/Conversions';
 import { ByteArrayArg } from '../lib/Serialization';
 import { GrpcError } from './Errors';
 
-export class CasperService {
+export default class CasperService {
   constructor(
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
