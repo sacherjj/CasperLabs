@@ -3,6 +3,7 @@
   "version": "0.1.1",
   "description": "SDK to interact with the CasperLabs blockchain using gRPC",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "prepublishOnly": "npm run clean && npm run build",
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",

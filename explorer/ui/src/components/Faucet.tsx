@@ -12,7 +12,7 @@ import {
 } from './Utils';
 import DataTable from './DataTable';
 import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { Conversions } from 'casperlabsjs/dist';
+import { base64to16, encodeBase16, decodeBase64 } from 'casperlabsjs';
 
 interface Props {
   auth: AuthContainer;
@@ -74,7 +74,7 @@ const FaucetForm = observer(
             label="Public Key (Base16)"
             value={
               auth.selectedAccount &&
-              Conversions.base64to16(auth.selectedAccount.publicKeyBase64)
+              base64to16(auth.selectedAccount.publicKeyBase64)
             }
             readonly={true}
           />
@@ -128,7 +128,7 @@ const StatusTable = observer(
           <tr key={idx}>
             <td>{request.timestamp.toLocaleString()}</td>
             <td>{request.account.name}</td>
-            <td>{Conversions.encodeBase16(request.deployHash)}</td>
+            <td>{encodeBase16(request.deployHash)}</td>
             <StatusCell request={request} />
           </tr>
         );
@@ -147,9 +147,7 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
       const failure = attempts.find(x => x.isError);
       const blockHash = (result: DeployInfo.ProcessingResult.AsObject) => {
         const h = result.blockInfo!.summary!.blockHash;
-        return Conversions.encodeBase16(
-          typeof h === 'string' ? Conversions.decodeBase64(h) : h
-        );
+        return encodeBase16(typeof h === 'string' ? decodeBase64(h) : h);
       };
       if (success)
         return [

@@ -4,7 +4,12 @@ import { saveAs } from 'file-saver';
 import ErrorContainer from './ErrorContainer';
 import { CleanableFormData } from './FormData';
 import AuthService from '../services/AuthService';
-import { CasperService, BalanceService, Conversions } from 'casperlabsjs';
+import {
+  BalanceService,
+  CasperService,
+  decodeBase64,
+  encodeBase64
+} from 'casperlabsjs';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures
@@ -100,7 +105,7 @@ export class AuthContainer {
 
         const latestAccountBalance = await this.balanceService.getAccountBalance(
           latestBlockHash,
-          Conversions.decodeBase64(account.publicKeyBase64)
+          decodeBase64(account.publicKeyBase64)
         );
 
         this.balances.set(account.publicKeyBase64, {
@@ -167,8 +172,8 @@ class NewAccountFormData extends CleanableFormData {
     super();
     // Generate key pair and assign to public and private keys.
     const keys = nacl.sign_keyPair();
-    this.publicKeyBase64 = Conversions.encodeBase64(keys.publicKey);
-    this.privateKeyBase64 = Conversions.encodeBase64(keys.secretKey);
+    this.publicKeyBase64 = encodeBase64(keys.publicKey);
+    this.privateKeyBase64 = encodeBase64(keys.secretKey);
   }
 
   @observable name: string = '';

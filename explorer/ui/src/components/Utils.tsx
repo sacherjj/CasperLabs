@@ -2,7 +2,7 @@ import React from 'react';
 import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
-import { Conversions } from 'casperlabsjs';
+import { encodeBase16 } from 'casperlabsjs';
 
 export const Spinner = (msg: String) => (
   <div className="text-center">
@@ -146,7 +146,7 @@ export class PrivateRoute extends React.Component<PrivateRouteProps, {}> {
 }
 
 export const shortHash = (hash: string | ByteArray) => {
-  const h = typeof hash === 'string' ? hash : Conversions.encodeBase16(hash);
+  const h = typeof hash === 'string' ? hash : encodeBase16(hash);
   return h.length > 10 ? h.substr(0, 10) + '...' : h;
 };
 

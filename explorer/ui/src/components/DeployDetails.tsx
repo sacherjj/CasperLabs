@@ -2,13 +2,13 @@ import React from 'react';
 import { RouteComponentProps, withRouter, Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import { DeployContainer } from '../containers/DeployContainer';
-import { Conversions } from 'casperlabsjs';
 import DataTable from './DataTable';
 import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';
 import { Balance } from './BlockDetails';
+import { decodeBase16, encodeBase16 } from 'casperlabsjs';
 
 // URL parameter
 type Params = {
@@ -23,7 +23,7 @@ interface Props extends RouteComponentProps<Params> {
 class _DeployDetails extends RefreshableComponent<Props, {}> {
   constructor(props: Props) {
     super(props);
-    this.props.deploy.init(Conversions.decodeBase16(this.deployHashBase16));
+    this.props.deploy.init(decodeBase16(this.deployHashBase16));
   }
 
   get deployHashBase16() {
@@ -42,7 +42,7 @@ class _DeployDetails extends RefreshableComponent<Props, {}> {
   componentDidUpdate() {
     // Container and component stays the same during naviagation.
     if (this.deployHashBase16 !== this.container.deployHashBase16) {
-      this.container.init(Conversions.decodeBase16(this.deployHashBase16));
+      this.container.init(decodeBase16(this.deployHashBase16));
       this.refresh();
     }
   }
@@ -107,7 +107,7 @@ const ResultsTable = observer(
         ]}
         rows={props.deploy && props.deploy.getProcessingResultsList()}
         renderRow={(proc, i) => {
-          const id = Conversions.encodeBase16(
+          const id = encodeBase16(
             proc
               .getBlockInfo()!
               .getSummary()!
@@ -149,14 +149,11 @@ const ResultsTable = observer(
 const deployAttrs: (deploy: DeployInfo) => Array<[string, any]> = (
   deploy: DeployInfo
 ) => {
-  const id = Conversions.encodeBase16(deploy.getDeploy()!.getDeployHash_asU8());
+  const id = encodeBase16(deploy.getDeploy()!.getDeployHash_asU8());
   const header = deploy.getDeploy()!.getHeader()!;
   return [
     ['Deploy Hash', id],
-    [
-      'Account Public Key',
-      Conversions.encodeBase16(header.getAccountPublicKey_asU8())
-    ],
+    ['Account Public Key', encodeBase16(header.getAccountPublicKey_asU8())],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Gas Price', header.getGasPrice().toLocaleString()]
   ];

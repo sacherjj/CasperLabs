@@ -6,8 +6,8 @@ import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
 import { Form, TextField } from './Forms';
+import { base64to16, encodeBase16 } from 'casperlabsjs';
 import { ObservableValue } from '../lib/ObservableValueMap';
-import { Conversions } from 'casperlabsjs';
 
 interface Props {
   auth: AuthContainer;
@@ -43,7 +43,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               <tr key={account.name}>
                 <td>{account.name}</td>
                 <td>{account.publicKeyBase64}</td>
-                <td>{Conversions.base64to16(account.publicKeyBase64)}</td>
+                <td>{base64to16(account.publicKeyBase64)}</td>
                 <td>
                   <Balance balance={balance} />
                 </td>
@@ -103,7 +103,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               <TextField
                 id="id-public-key-base16"
                 label="Public Key (Base16)"
-                value={Conversions.base64to16(newAccount.publicKeyBase64!)}
+                value={base64to16(newAccount.publicKeyBase64!)}
                 readonly={true}
               />
               <TextField
@@ -115,7 +115,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               <TextField
                 id="id-private-key-base16"
                 label="Private Key (Base16)"
-                value={Conversions.base64to16(newAccount.privateKeyBase64!)}
+                value={base64to16(newAccount.privateKeyBase64!)}
                 readonly={true}
               />
             </Form>
@@ -132,7 +132,7 @@ const Balance = observer(
     const value = props.balance.value;
     if (value == null) return null;
 
-    const hash = Conversions.encodeBase16(value.blockHash);
+    const hash = encodeBase16(value.blockHash);
     const balance =
       value.balance === undefined ? 'n/a' : value.balance.toLocaleString();
     return (

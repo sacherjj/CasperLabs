@@ -9,11 +9,11 @@ import {
 } from './Utils';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { Conversions } from 'casperlabsjs';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
+import { encodeBase16 } from 'casperlabsjs';
 
 interface Props {
   dag: DagContainer;
@@ -39,9 +39,7 @@ export default class BlockList extends RefreshableComponent<Props, {}> {
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {
           const header = block.getSummary()!.getHeader()!;
-          const id = Conversions.encodeBase16(
-            block.getSummary()!.getBlockHash_asU8()
-          );
+          const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
           return (
             <tr key={id}>
               <td>

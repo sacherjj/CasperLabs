@@ -1,7 +1,7 @@
 import { observable, action, computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, BalanceService, Conversions } from 'casperlabsjs';
+import { CasperService, BalanceService, encodeBase16 } from 'casperlabsjs';
 import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
 import { Block } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb';
 import ObservableValueMap from '../lib/ObservableValueMap';
@@ -37,7 +37,7 @@ export class BlockContainer {
   }
 
   @computed get blockHashBase16() {
-    return this.blockHash && Conversions.encodeBase16(this.blockHash);
+    return this.blockHash && encodeBase16(this.blockHash);
   }
 
   async loadBlock() {
@@ -96,7 +96,7 @@ export class BlockContainer {
         .getDeploy()!
         .getHeader()!
         .getAccountPublicKey_asU8();
-      const accountB16 = Conversions.encodeBase16(accountKey);
+      const accountB16 = encodeBase16(accountKey);
       const balance = await this.balanceService.getAccountBalance(
         this.blockHash,
         accountKey
