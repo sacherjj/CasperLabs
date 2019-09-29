@@ -22,12 +22,14 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
+use crate::engine_state::system_contract_cache::SystemContractCache;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
 use crate::Address;
 
 pub struct Runtime<'a, R> {
+    system_contract_cache: SystemContractCache,
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
@@ -146,6 +148,7 @@ where
     };
 
     let mut runtime = Runtime {
+        system_contract_cache: current_runtime.system_contract_cache.clone(),
         memory,
         module: parity_module,
         result: Vec::new(),
@@ -207,8 +210,14 @@ where
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(memory: MemoryRef, module: Module, context: RuntimeContext<'a, R>) -> Self {
+    pub fn new(
+        system_contract_cache: SystemContractCache,
+        memory: MemoryRef,
+        module: Module,
+        context: RuntimeContext<'a, R>,
+    ) -> Self {
         Runtime {
+            system_contract_cache,
             memory,
             module,
             result: Vec::new(),
@@ -461,7 +470,24 @@ where
                 Some(value) => {
                     if let Value::Contract(contract) = value {
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
-                        let module = parity_wasm::deserialize_buffer(contract.bytes())?;
+
+                        let maybe_module = match key {
+                            Key::URef(uref) => self
+                                .system_contract_cache
+                                .get_clone(&uref.remove_access_rights()),
+                            _ => None,
+                        };
+
+                        let module = match maybe_module {
+                            Some(module) => {
+                                println!("GOT MODULE Runtime");
+                                module
+                            }
+                            None => {
+                                println!("DIDN'T GET MODULE Runtime");
+                                parity_wasm::deserialize_buffer(contract.bytes())?
+                            }
+                        };
 
                         Ok((
                             args,

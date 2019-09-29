@@ -6,6 +6,7 @@ pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
 
@@ -42,6 +43,7 @@ use self::execution_result::ExecutionResult;
 use self::genesis::{
     GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
 };
+use self::system_contract_cache::SystemContractCache;
 use crate::engine_state::error::Error::MissingSystemContractError;
 use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
@@ -62,6 +64,7 @@ const MINT_METHOD_NAME: &str = "mint";
 #[derive(Debug)]
 pub struct EngineState<S> {
     config: EngineConfig,
+    system_contract_cache: SystemContractCache,
     state: S,
 }
 
@@ -71,7 +74,11 @@ where
     S::Error: Into<execution::Error>,
 {
     pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
-        EngineState { config, state }
+        EngineState {
+            config,
+            system_contract_cache: Default::default(),
+            state,
+        }
     }
 
     pub fn config(&self) -> &EngineConfig {
@@ -198,6 +205,7 @@ where
                 tracking_copy,
                 phase,
                 ProtocolData::default(),
+                self.system_contract_cache.clone(),
             )?
         };
 
@@ -251,6 +259,7 @@ where
                 tracking_copy,
                 phase,
                 partial_protocol_data,
+                self.system_contract_cache.clone(),
             )?
         };
 
@@ -360,6 +369,7 @@ where
                     tracking_copy_exec,
                     phase,
                     protocol_data,
+                    self.system_contract_cache.clone(),
                 )?;
 
                 // ...and write that account to global state...
@@ -526,6 +536,7 @@ where
                 state,
                 phase,
                 new_protocol_data,
+                self.system_contract_cache.clone(),
             )?
         };
 
@@ -778,7 +789,17 @@ where
 
             // Safe to unwrap here, as `get_system_contract_info` checks that the key is
             // the proper variant.
-            *mint_info.key().as_uref().unwrap()
+            let mint_uref = *mint_info.key().as_uref().unwrap();
+
+            if !self.system_contract_cache.has(&mint_uref) {
+                let module = match preprocessor.deserialize(mint_info.contract().bytes()) {
+                    Ok(module) => module,
+                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+                };
+                let _ = self.system_contract_cache.insert(mint_uref, module);
+            }
+
+            mint_uref
         };
 
         // Get proof of stake system contract URef from account (an account on a
@@ -909,6 +930,7 @@ where
                 Rc::clone(&tracking_copy),
                 Phase::Payment,
                 protocol_data,
+                self.system_contract_cache.clone(),
             )
         };
 
@@ -990,6 +1012,7 @@ where
                 Rc::clone(&session_tc),
                 Phase::Session,
                 protocol_data,
+                self.system_contract_cache.clone(),
             )
         };
 
@@ -1011,11 +1034,29 @@ where
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
 
             // validation_spec_1: valid wasm bytes
-            let proof_of_stake_module =
-                match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
-                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-                    Ok(module) => module,
-                };
+            let proof_of_stake_module = {
+                let proof_of_stake_uref = *proof_of_stake_info.key().as_uref().unwrap();
+                match self.system_contract_cache.get_clone(&proof_of_stake_uref) {
+                    Some(module) => {
+                        println!("GOT MODULE PoS");
+                        module
+                    }
+                    None => {
+                        println!("DIDN'T GET MODULE PoS");
+                        let module =
+                            match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
+                                Err(error) => {
+                                    return Ok(ExecutionResult::precondition_failure(error.into()))
+                                }
+                                Ok(module) => module,
+                            };
+                        let _ = self
+                            .system_contract_cache
+                            .insert(proof_of_stake_uref, module.clone());
+                        module
+                    }
+                }
+            };
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
@@ -1056,6 +1097,7 @@ where
                 finalization_tc,
                 Phase::FinalizePayment,
                 protocol_data,
+                self.system_contract_cache.clone(),
             )
         };
 
