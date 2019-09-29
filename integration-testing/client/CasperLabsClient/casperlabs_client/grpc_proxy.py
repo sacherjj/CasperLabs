@@ -5,7 +5,7 @@ from threading import Thread
 import logging
 import re
 
-from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc
+from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc, kademlia_pb2_grpc
 
 
 def read_binary(file_name):
@@ -236,6 +236,36 @@ def proxy_server(
     t = ProxyThread(
         gossiping_pb2_grpc.GossipServiceStub,
         gossiping_pb2_grpc.add_GossipServiceServicer_to_server,
+        proxy_port=proxy_port,
+        node_host=node_host,
+        node_port=node_port,
+        server_certificate_file=server_certificate_file,
+        server_key_file=server_key_file,
+        client_certificate_file=client_certificate_file,
+        client_key_file=client_key_file,
+        pre_callback=pre_callback,
+        post_callback=post_callback,
+        post_callback_stream=post_callback_stream,
+    )
+    t.start()
+    return t
+
+
+def proxy_kademlia(
+    node_port=50404,
+    node_host="127.0.0.1",
+    proxy_port=40404,
+    server_certificate_file=None,
+    server_key_file=None,
+    client_certificate_file=None,
+    client_key_file=None,
+    pre_callback=logging_pre_callback,
+    post_callback=logging_post_callback,
+    post_callback_stream=logging_post_callback_stream,
+):
+    t = ProxyThread(
+        kademlia_pb2_grpc.KademliaServiceStub,
+        kademlia_pb2_grpc.add_KademliaServiceServicer_to_server,
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,

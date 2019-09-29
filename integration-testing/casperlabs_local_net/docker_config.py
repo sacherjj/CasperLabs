@@ -81,6 +81,7 @@ class DockerConfig:
         }
         if self.behind_proxy:
             options["--server-port"] = "50400"
+            options["--server-kademlia-port"] = "50404"
         if not self.is_read_only:
             options["--casper-validator-private-key"] = self.node_private_key
         if self.grpc_encryption:
