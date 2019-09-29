@@ -45,6 +45,7 @@ class ProxyServicer:
         node_host: str = None,
         node_port: int = None,
         proxy_port: int = None,  # just for better logging
+        encrypted_connection: bool = True,
         certificate_file: str = None,
         key_file: str = None,
         node_id: str = None,
@@ -63,27 +64,31 @@ class ProxyServicer:
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
-
         self.node_address = f"{self.node_host}:{self.node_port}"
 
-        self.credentials = grpc.ssl_channel_credentials(
-            root_certificates=read_binary(self.certificate_file),
-            private_key=read_binary(self.key_file),
-            certificate_chain=read_binary(self.certificate_file),
-        )
-        self.secure_channel_options = self.node_id and [
-            ("grpc.ssl_target_name_override", self.node_id),
-            ("grpc.default_authority", self.node_id),
-        ]
+        self.encrypted_connection = encrypted_connection
+        if self.encrypted_connection:
+            self.credentials = grpc.ssl_channel_credentials(
+                root_certificates=read_binary(self.certificate_file),
+                private_key=read_binary(self.key_file),
+                certificate_chain=read_binary(self.certificate_file),
+            )
+            self.secure_channel_options = self.node_id and [
+                ("grpc.ssl_target_name_override", self.node_id),
+                ("grpc.default_authority", self.node_id),
+            ]
 
-    def secure_channel(self):
-        channel = grpc.secure_channel(
-            self.node_address, self.credentials, options=self.secure_channel_options
+    def channel(self):
+        return (
+            self.encrypted_connection
+            and grpc.secure_channel(
+                self.node_address, self.credentials, options=self.secure_channel_options
+            )
+            or grpc.insecure_channel(self.node_address)
         )
-        return channel
 
     def is_unary_stream(self, method_name):
-        return method_name.startswith("Stream") or method_name in ("GetBlockChunked",)
+        return method_name.startswith("Stream") or method_name.endswith("Chunked")
 
     def __getattr__(self, name):
 
@@ -101,7 +106,7 @@ class ProxyServicer:
 
         def unary_unary(request, context):
             logging.info(f"{prefix}: ({request})")
-            with self.secure_channel() as channel:
+            with self.channel() as channel:
                 preprocessed_request = self.pre_callback(name, request)
                 service_method = getattr(self.service_stub(channel), name)
                 response = service_method(preprocessed_request)
@@ -109,7 +114,7 @@ class ProxyServicer:
 
         def unary_stream(request, context):
             logging.info(f"{prefix}: ({request})")
-            with self.secure_channel() as channel:
+            with self.channel() as channel:
                 preprocessed_request = self.pre_callback(name, request)
                 streaming_service_method = getattr(self.service_stub(channel), name)
                 response_stream = streaming_service_method(preprocessed_request)
@@ -128,6 +133,7 @@ class ProxyThread(Thread):
         node_host: str,
         node_port: int,
         proxy_port: int,
+        encrypted_connection: bool = True,
         server_certificate_file: str = None,
         server_key_file: str = None,
         client_certificate_file: str = None,
@@ -146,12 +152,15 @@ class ProxyThread(Thread):
         self.server_key_file = server_key_file
         self.client_certificate_file = client_certificate_file
         self.client_key_file = client_key_file
-        self.node_id = casperlabs_client.extract_common_name(
-            self.client_certificate_file
-        )
+        self.encrypted_connection = encrypted_connection
         self.pre_callback = pre_callback
         self.post_callback = post_callback
         self.post_callback_stream = post_callback_stream
+        self.node_id = None
+        if self.encrypted_connection:
+            self.node_id = casperlabs_client.extract_common_name(
+                self.client_certificate_file
+            )
 
     def run(self):
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
@@ -159,6 +168,7 @@ class ProxyThread(Thread):
             node_host=self.node_host,
             node_port=self.node_port,
             proxy_port=self.proxy_port,
+            encrypted_connection=self.encrypted_connection,
             certificate_file=self.client_certificate_file,
             key_file=self.client_key_file,
             node_id=self.node_id,
@@ -168,17 +178,20 @@ class ProxyThread(Thread):
             post_callback_stream=self.post_callback_stream,
         )
         self.add_servicer_to_server(servicer, self.server)
-        self.server.add_secure_port(
-            f"[::]:{self.proxy_port}",
-            grpc.ssl_server_credentials(
-                [
-                    (
-                        read_binary(self.server_key_file),
-                        read_binary(self.server_certificate_file),
-                    )
-                ]
-            ),
-        )
+        if not self.encrypted_connection:
+            self.server.add_insecure_port(f"[::]:{self.proxy_port}")
+        else:
+            self.server.add_secure_port(
+                f"[::]:{self.proxy_port}",
+                grpc.ssl_server_credentials(
+                    [
+                        (
+                            read_binary(self.server_key_file),
+                            read_binary(self.server_certificate_file),
+                        )
+                    ]
+                ),
+            )
         logging.info(
             f"STARTING PROXY: node_port={self.node_port} proxy_port={self.proxy_port}"
         )
@@ -255,10 +268,6 @@ def proxy_kademlia(
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    server_certificate_file=None,
-    server_key_file=None,
-    client_certificate_file=None,
-    client_key_file=None,
     pre_callback=logging_pre_callback,
     post_callback=logging_post_callback,
     post_callback_stream=logging_post_callback_stream,
@@ -269,10 +278,7 @@ def proxy_kademlia(
         proxy_port=proxy_port,
         node_host=node_host,
         node_port=node_port,
-        server_certificate_file=server_certificate_file,
-        server_key_file=server_key_file,
-        client_certificate_file=client_certificate_file,
-        client_key_file=client_key_file,
+        encrypted_connection=False,
         pre_callback=pre_callback,
         post_callback=post_callback,
         post_callback_stream=post_callback_stream,

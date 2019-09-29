@@ -87,10 +87,6 @@ class DockerNode(LoggingDockerBase):
                 node_port=self.KADEMLIA_PORT + 10000,
                 node_host=node_host,
                 proxy_port=self.KADEMLIA_PORT,
-                server_certificate_file=server_certificate_path,
-                server_key_file=server_key_path,
-                client_certificate_file=server_certificate_path,
-                client_key_file=server_key_path,
             )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
