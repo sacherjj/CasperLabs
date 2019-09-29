@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::{Account, U512};
 use engine_core::engine_state::MAX_PAYMENT;
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
 
@@ -20,9 +19,9 @@ fn should_manage_associated_key() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -37,7 +36,7 @@ fn should_manage_associated_key() {
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
-            (GENESIS_ADDR,),
+            (DEFAULT_ACCOUNT_ADDR,),
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
         )
@@ -45,7 +44,7 @@ fn should_manage_associated_key() {
         .commit();
 
     let account_key = Key::Account(ACCOUNT_1_ADDR);
-    let genesis_key = PublicKey::new(GENESIS_ADDR);
+    let genesis_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
     let account_1: Account = {
         let tmp = builder.clone();
@@ -67,7 +66,7 @@ fn should_manage_associated_key() {
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "remove_associated_key.wasm",
-            (GENESIS_ADDR,),
+            (DEFAULT_ACCOUNT_ADDR,),
             DEFAULT_BLOCK_TIME,
             [3u8; 32],
         )

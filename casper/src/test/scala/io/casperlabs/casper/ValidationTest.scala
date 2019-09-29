@@ -10,6 +10,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
@@ -21,7 +22,11 @@ import io.casperlabs.casper.util.execengine.{
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
-import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.validation.Errors.{
+  DeployHeaderError,
+  DropErrorWrapper,
+  ValidateErrorWrapper
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
@@ -34,7 +39,9 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
@@ -271,6 +278,83 @@ class ValidationTest
     Validation[Task].deploySignature(deploy) shouldBeF false
   }
 
+  "Deploy header validation" should "accept valid headers" in {
+    implicit val consensusConfig =
+      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
+
+    forAll { (deploy: consensus.Deploy) =>
+      withoutStorage { Validation[Task].deployHeader(deploy) } shouldBe Nil
+    }
+  }
+
+  it should "not accept too short time to live" in withoutStorage {
+    val minTTL = 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.choose(1, minTTL - 1)
+    } yield d.withHeader(
+      d.getHeader.withTtlMillis(ttl)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+    )
+  }
+
+  it should "not accept too long time to live" in withoutStorage {
+    val maxTTL = 24 * 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
+    } yield d.withHeader(
+      d.getHeader.withTtlMillis(ttl)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+    )
+  }
+
+  it should "not accept too many dependencies" in withoutStorage {
+    val maxDependencies = 10
+    val genDeploy = for {
+      d               <- arbitrary[consensus.Deploy]
+      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
+      dependencies    <- Gen.listOfN(numDependencies, genHash)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(dependencies)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError.tooManyDependencies(
+        deploy.deployHash,
+        deploy.getHeader.dependencies.size,
+        maxDependencies
+      )
+    )
+  }
+
+  it should "not accept invalid dependencies" in withoutStorage {
+    val genDeploy = for {
+      d          <- arbitrary[consensus.Deploy]
+      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
+      dependency <- genBytes(nBytes)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(List(dependency))
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
+    )
+  }
+
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       for {
@@ -466,6 +550,8 @@ class ValidationTest
         case (v, i) => Bond(v, 2L * i.toLong + 1L)
       }
 
+      val emptyEquivocationsTracker = EquivocationsTracker.empty
+
       def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
         messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
 
@@ -503,17 +589,53 @@ class ValidationTest
                    genesisBlockHash = b0.blockHash
 
                    // Valid
-                   _ <- Validation[Task].parents(b1, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b2, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b3, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b4, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b5, genesisBlockHash, dag)
-                   _ <- Validation[Task].parents(b6, genesisBlockHash, dag)
+                   _ <- Validation[Task].parents(
+                         b1,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b2,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b3,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b4,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b5,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
+                   _ <- Validation[Task].parents(
+                         b6,
+                         genesisBlockHash,
+                         dag,
+                         emptyEquivocationsTracker
+                       )
 
                    // Not valid
-                   _ <- Validation[Task].parents(b7, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b8, genesisBlockHash, dag).attempt
-                   _ <- Validation[Task].parents(b9, genesisBlockHash, dag).attempt
+                   _ <- Validation[Task]
+                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
+                   _ <- Validation[Task]
+                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .attempt
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
@@ -525,7 +647,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag)
+                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result

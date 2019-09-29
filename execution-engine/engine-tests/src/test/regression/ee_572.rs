@@ -1,20 +1,16 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CREATE: &str = "create";
 
-const GENESIS_ADDR: [u8; 32] = [0u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
-const INITIAL_AMOUNT: u32 = 100_500_000;
 
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
@@ -23,11 +19,9 @@ const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";
 #[ignore]
 #[test]
 fn should_run_ee_572_regression() {
-    let account_amount = U512::from(INITIAL_AMOUNT);
-    let account_1 = PublicKey::new(ACCOUNT_1_ADDR);
-    let account_2 = PublicKey::new(ACCOUNT_2_ADDR);
-    let account_1_creation_args = (account_1, account_amount);
-    let account_2_creation_args = (account_2, account_amount);
+    let account_amount: U512 = *DEFAULT_PAYMENT + U512::from(100);
+    let account_1_creation_args = (ACCOUNT_1_ADDR, account_amount);
+    let account_2_creation_args = (ACCOUNT_2_ADDR, account_amount);
 
     // This test runs a contract that's after every call extends the same key with
     // more data
@@ -35,11 +29,11 @@ fn should_run_ee_572_regression() {
 
     // Create Accounts
     builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             CONTRACT_TRANSFER,
             account_1_creation_args,
             DEFAULT_BLOCK_TIME,
@@ -48,9 +42,9 @@ fn should_run_ee_572_regression() {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
+            (*DEFAULT_PAYMENT,),
             CONTRACT_TRANSFER,
             account_2_creation_args,
             DEFAULT_BLOCK_TIME,

@@ -183,7 +183,7 @@ object AutoProposerTest {
         if (pending.nonEmpty) Created(Block()) else NoNewDeploys
       }
 
-    override def addBlock(block: Block): F[BlockStatus]                           = ???
+    override def addBlock(block: Block): F[BlockStatus]                           = (Valid: BlockStatus).pure[F]
     override def contains(block: Block): F[Boolean]                               = ???
     override def estimator(dag: DagRepresentation[F]): F[IndexedSeq[ByteString]]  = ???
     override def dag: F[DagRepresentation[F]]                                     = ???

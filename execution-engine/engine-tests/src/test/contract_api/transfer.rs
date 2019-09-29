@@ -2,19 +2,24 @@ use std::collections::HashMap;
 
 use grpc::RequestOptions;
 
-use crate::support::test_support::{self, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT};
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use engine_core::engine_state::{CONV_RATE, SYSTEM_ACCOUNT_ADDR};
+use engine_core::execution::MINT_NAME;
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
+
+use crate::support::test_support::{
+    self, get_account, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
@@ -24,7 +29,6 @@ const TRANSFER_2_AMOUNT: u32 = 750;
 const TRANSFER_2_AMOUNT_WITH_ADV: u64 = MAX_PAYMENT + TRANSFER_2_AMOUNT as u64;
 const TRANSFER_TOO_MUCH: u64 = u64::max_value();
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
@@ -74,7 +78,7 @@ impl TestContext {
 fn should_transfer_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -83,11 +87,8 @@ fn should_transfer_to_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
     let genesis_response = engine_state
-        .run_genesis(RequestOptions::new(), genesis_request)
+        .run_genesis_with_chainspec(RequestOptions::new(), DEFAULT_GENESIS_CONFIG.clone().into())
         .wait_drop_metadata()
         .unwrap();
 
@@ -96,24 +97,31 @@ fn should_transfer_to_account() {
     let genesis_transforms =
         crate::support::test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref =
-        crate::support::test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-            .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account =
-        crate::support::test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account =
+        crate::support::test_support::get_account(&genesis_transforms, &default_account_key)
             .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&genesis_transforms, genesis_account_purse_id)
+        .lookup(&genesis_transforms, default_account_purse_id)
         .expect("should lookup");
 
     assert_eq!(
@@ -124,7 +132,7 @@ fn should_transfer_to_account() {
     // Exec transfer contract
 
     let exec_request = crate::support::test_support::create_exec_request(
-        GENESIS_ADDR,
+        DEFAULT_ACCOUNT_ADDR,
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
@@ -132,7 +140,7 @@ fn should_transfer_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         [1u8; 32],
-        vec![PublicKey::new(GENESIS_ADDR)],
+        vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
     );
 
     let exec_response = engine_state
@@ -152,7 +160,7 @@ fn should_transfer_to_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_transforms, genesis_account_purse_id)
+        .lookup(&exec_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
@@ -183,7 +191,7 @@ fn should_transfer_from_account_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
@@ -193,11 +201,8 @@ fn should_transfer_from_account_to_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
     let genesis_response = engine_state
-        .run_genesis(RequestOptions::new(), genesis_request)
+        .run_genesis_with_chainspec(RequestOptions::new(), DEFAULT_GENESIS_CONFIG.clone().into())
         .wait_drop_metadata()
         .unwrap();
 
@@ -205,22 +210,30 @@ fn should_transfer_from_account_to_account() {
 
     let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref = test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-        .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account = test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account = test_support::get_account(&genesis_transforms, &default_account_key)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Exec transfer 1 contract
 
     let exec_request = test_support::create_exec_request(
-        GENESIS_ADDR,
+        DEFAULT_ACCOUNT_ADDR,
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
@@ -228,7 +241,7 @@ fn should_transfer_from_account_to_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         [1u8; 32],
-        vec![PublicKey::new(GENESIS_ADDR)],
+        vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
     );
 
     let exec_1_response = engine_state
@@ -248,7 +261,7 @@ fn should_transfer_from_account_to_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_1_transforms, genesis_account_purse_id)
+        .lookup(&exec_1_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
@@ -349,7 +362,7 @@ fn should_transfer_to_existing_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
@@ -359,11 +372,8 @@ fn should_transfer_to_existing_account() {
 
     // Run genesis
 
-    let (genesis_request, contracts) =
-        test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
     let genesis_response = engine_state
-        .run_genesis(RequestOptions::new(), genesis_request)
+        .run_genesis_with_chainspec(RequestOptions::new(), DEFAULT_GENESIS_CONFIG.clone().into())
         .wait_drop_metadata()
         .unwrap();
 
@@ -371,22 +381,30 @@ fn should_transfer_to_existing_account() {
 
     let genesis_transforms = test_support::get_genesis_transforms(&genesis_response);
 
-    let mint_contract_uref = test_support::get_mint_contract_uref(&genesis_transforms, &contracts)
-        .expect("should get uref");
+    let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .expect("Unable to get system account");
+
+    let known_keys = system_account.urefs_lookup();
+
+    let mint_contract_uref = known_keys
+        .get(MINT_NAME)
+        .and_then(Key::as_uref)
+        .cloned()
+        .expect("Unable to get mint contract URef");
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account = test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account = test_support::get_account(&genesis_transforms, &default_account_key)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&genesis_transforms, genesis_account_purse_id)
+        .lookup(&genesis_transforms, default_account_purse_id)
         .expect("should lookup");
 
     assert_eq!(
@@ -397,7 +415,7 @@ fn should_transfer_to_existing_account() {
     // Exec transfer contract
 
     let exec_request = test_support::create_exec_request(
-        GENESIS_ADDR,
+        DEFAULT_ACCOUNT_ADDR,
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
@@ -405,7 +423,7 @@ fn should_transfer_to_existing_account() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         [1u8; 32],
-        vec![PublicKey::new(GENESIS_ADDR)],
+        vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
     );
 
     let exec_response = engine_state
@@ -425,7 +443,7 @@ fn should_transfer_to_existing_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_1_transforms, genesis_account_purse_id)
+        .lookup(&exec_1_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
@@ -531,11 +549,8 @@ fn should_fail_when_insufficient_funds() {
 
     // Run genesis
 
-    let (genesis_request, _) =
-        crate::support::test_support::create_genesis_request(GENESIS_ADDR, HashMap::new());
-
     let genesis_response = engine_state
-        .run_genesis(RequestOptions::new(), genesis_request)
+        .run_genesis_with_chainspec(RequestOptions::new(), DEFAULT_GENESIS_CONFIG.clone().into())
         .wait_drop_metadata()
         .unwrap();
 
@@ -544,7 +559,7 @@ fn should_fail_when_insufficient_funds() {
     // Exec transfer contract
 
     let exec_request = crate::support::test_support::create_exec_request(
-        GENESIS_ADDR,
+        DEFAULT_ACCOUNT_ADDR,
         STANDARD_PAYMENT_CONTRACT,
         (U512::from(MAX_PAYMENT),),
         "transfer_to_account_01.wasm",
@@ -552,7 +567,7 @@ fn should_fail_when_insufficient_funds() {
         genesis_hash,
         DEFAULT_BLOCK_TIME,
         [1u8; 32],
-        vec![PublicKey::new(GENESIS_ADDR)],
+        vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
     );
 
     let exec_response = engine_state
@@ -652,9 +667,9 @@ fn should_transfer_total_amount() {
     let mut builder = test_support::InMemoryWasmTestBuilder::default();
 
     builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",

@@ -1,11 +1,4 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-
 use contract_ffi::base16;
-
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
@@ -13,7 +6,11 @@ use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+use crate::support::test_support::{
+    get_exec_costs, WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const TEST_PURSE_NAME: &str = "test_purse";
 const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
@@ -52,9 +49,9 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 fn should_insert_mint_add_keys_transform() {
     let mint_transform: &Transform = {
         let result = WasmTestBuilder::default()
-            .run_genesis(GENESIS_ADDR, HashMap::new())
+            .run_genesis(&DEFAULT_GENESIS_CONFIG)
             .exec_with_args(
-                GENESIS_ADDR,
+                DEFAULT_ACCOUNT_ADDR,
                 STANDARD_PAYMENT_CONTRACT,
                 (U512::from(MAX_PAYMENT),),
                 "transfer_purse_to_account.wasm",
@@ -88,9 +85,9 @@ fn should_insert_mint_add_keys_transform() {
 #[test]
 fn should_insert_into_account_known_urefs() {
     let account_1 = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -113,7 +110,7 @@ fn should_insert_into_account_known_urefs() {
         .commit()
         .finish()
         .builder()
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
     assert!(
@@ -126,9 +123,9 @@ fn should_insert_into_account_known_urefs() {
 #[test]
 fn should_create_usable_purse_id() {
     let result = WasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",
@@ -158,7 +155,7 @@ fn should_create_usable_purse_id() {
 
     let account_1 = result
         .builder()
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
     let purse_key = account_1

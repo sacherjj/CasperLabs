@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{Error as ApiError, PurseTransferResult, TransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -21,7 +21,7 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::execution::Error::{KeyNotFound, URefNotFound};
+use crate::execution::Error::URefNotFound;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -298,12 +298,16 @@ where
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.context.args().len() {
-            self.host_buf = self.context.args()[i].clone();
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::ArgIndexOutOfBounds(i).into())
+    pub fn load_arg(&mut self, i: usize) -> isize {
+        match self.context.args().get(i) {
+            Some(arg) => {
+                self.host_buf = arg.clone();
+                self.host_buf.len() as isize
+            }
+            None => {
+                self.host_buf.clear();
+                -1
+            }
         }
     }
 
@@ -678,39 +682,25 @@ where
     }
 
     /// looks up the public mint contract key in the caller's [uref_lookup] map.
-    fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+    fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(MINT_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(MINT_NAME))),
         }
     }
 
-    fn get_pos_contract_public_uref_key(&mut self) -> Result<Key, Error> {
+    fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
         match self.context.get_uref(POS_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(POS_NAME))),
         }
     }
 
-    /// looks up the public mint contract key in the caller's [uref_lookup] map
-    /// and then gets the "internal" mint contract uref stored under the
-    /// public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_mint_key = self.get_mint_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
-            Some(Value::Key(Key::URef(uref))) => URef::new(uref.addr(), AccessRights::READ),
-            _ => return Err(KeyNotFound(public_mint_key)),
-        };
-        Ok(internal_mint_uref)
-    }
-
-    fn get_pos_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_pos_key = self.get_pos_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_pos_key)? {
-            Some(Value::Key(Key::URef(uref))) => uref,
-            _ => return Err(KeyNotFound(public_pos_key)),
-        };
-        Ok(internal_mint_uref)
+        let key = self.get_mint_contract_uref_key()?;
+        // unwrap is safe here because get_mint_contract_uref_key checks that the key is a URef
+        let reference = *key.as_uref().unwrap();
+        Ok(reference)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -773,9 +763,7 @@ where
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_uref = self.get_mint_contract_uref()?;
-        let pos_contract_uref = self.get_pos_contract_uref()?;
         let mint_contract_key = Key::URef(mint_contract_uref);
-        let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -794,16 +782,8 @@ where
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
                 let known_urefs = vec![
-                    (
-                        String::from(MINT_NAME),
-                        self.get_mint_contract_public_uref_key()?,
-                    ),
-                    (
-                        String::from(POS_NAME),
-                        self.get_pos_contract_public_uref_key()?,
-                    ),
-                    (pos_contract_uref.as_string(), pos_contract_key),
-                    (mint_contract_uref.as_string(), mint_contract_key),
+                    (String::from(MINT_NAME), self.get_mint_contract_uref_key()?),
+                    (String::from(POS_NAME), self.get_pos_contract_uref_key()?),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -935,5 +915,33 @@ where
         };
 
         Ok(ret)
+    }
+
+    /// If key is in known_uref with AccessRights::Write, processes bytes from calling contract
+    /// and writes them at the provided uref, overwriting existing value if any
+    pub fn upgrade_contract_at_uref(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        key_ptr: u32,
+        key_size: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let known_urefs = match self.context.read_gs(&key)? {
+            None => Err(Error::KeyNotFound(key)),
+            Some(Value::Contract(contract)) => Ok(contract.urefs_lookup().clone()),
+            Some(_) => Err(Error::FunctionNotFound(format!(
+                "Value at {:?} is not a contract",
+                key
+            ))),
+        }?;
+        let bytes = self.get_function_by_name(name_ptr, name_size)?;
+        match self
+            .context
+            .upgrade_contract_at_uref(key, bytes, known_urefs)
+        {
+            Ok(_) => Ok(Ok(())),
+            Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
+        }
     }
 }

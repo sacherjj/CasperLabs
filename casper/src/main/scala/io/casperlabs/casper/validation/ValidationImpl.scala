@@ -5,7 +5,7 @@ import cats.mtl.FunctorRaise
 import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.protocol.ApprovedBlock
@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper._
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
@@ -225,6 +226,57 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .map(_.forall(identity))
     }
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
+  private val MAX_DEPENDENCIES: Int = 10
+
+  private def validateTimeToLive(
+      ttl: Int,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (ttl < MIN_TTL)
+      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(_.some)
+    else if (ttl > MAX_TTL)
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  private def validateDependencies(
+      dependencies: Seq[ByteString],
+      deployHash: ByteString
+  ): F[List[Errors.DeployHeaderError]] = {
+    val numDependencies = dependencies.length
+    val tooMany =
+      if (numDependencies > MAX_DEPENDENCIES)
+        Errors.DeployHeaderError
+          .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
+          .logged[F]
+          .map(_.some)
+      else
+        none[Errors.DeployHeaderError].pure[F]
+
+    val invalid = dependencies.toList
+      .filter(_.size != 32)
+      .traverse(dep => Errors.DeployHeaderError.invalidDependency(deployHash, dep).logged[F])
+
+    Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
+  }
+
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+    d.header match {
+      case Some(header) =>
+        Applicative[F].map2(
+          validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
+          validateDependencies(header.dependencies, d.deployHash)
+        ) {
+          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+        }
+
+      case None =>
+        Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
+    }
+
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
@@ -386,7 +438,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                               )
                             }
                           }
-      calculatedRank = ProtoUtil.calculateRank(justificationMsgs)
+      calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.getHeader.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
@@ -415,22 +467,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b.getHeader).foldM(-1) {
-                                        case (_, Justification(_, latestBlockHash)) =>
-                                          dag.lookup(latestBlockHash).flatMap {
-                                            case Some(meta) =>
-                                              meta.validatorBlockSeqNum.pure[F]
-
-                                            case None =>
-                                              MonadThrowable[F].raiseError[Int](
-                                                new Exception(
-                                                  s"Latest block hash ${PrettyPrinter.buildString(latestBlockHash)} is missing from block dag store."
-                                                )
-                                              )
-                                          }
-                                      }
+      creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
+                                        dag,
+                                        b.getHeader.justifications,
+                                        b.getHeader.validatorPublicKey
+                                      )
       number = b.getHeader.validatorBlockSeqNum
-      ok     = creatorJustificationSeqNumber + 1 == number
+      ok     = creatorJustificationSeqNumber == number
       _ <- if (ok) {
             Applicative[F].unit
           } else {
@@ -578,16 +621,19 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       genesisHash: BlockHash,
-      dag: DagRepresentation[F]
+      dag: DagRepresentation[F],
+      equivocationsTracker: EquivocationsTracker
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
     def printHashes(hashes: Iterable[ByteString]) =
       hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
+    val latestMessagesHashes = ProtoUtil
+      .getJustificationMsgHashes(b.getHeader.justifications)
+
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.getHeader.justifications).pure[F]
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

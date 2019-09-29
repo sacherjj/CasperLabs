@@ -4,7 +4,6 @@ extern crate contract_ffi;
 extern crate engine_core;
 extern crate engine_shared;
 extern crate engine_storage;
-use std::collections::HashMap;
 
 use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
@@ -13,6 +12,7 @@ use casperlabs_engine_tests::support::test_support::{
     DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
+use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
@@ -22,7 +22,6 @@ use engine_storage::global_state::lmdb::LmdbGlobalState;
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 
-const GENESIS_ADDR: [u8; 32] = [1; 32];
 const TARGET_ADDR: [u8; 32] = [127; 32];
 
 fn engine_with_payments() -> EngineConfig {
@@ -38,9 +37,9 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 
     let data_dir = TempDir::new().expect("should create temp dir");
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "create_accounts.wasm",
@@ -63,7 +62,7 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
     for i in 0..TRANSFER_BATCH_SIZE {
         builder
             .exec_with_args(
-                GENESIS_ADDR,
+                DEFAULT_ACCOUNT_ADDR,
                 STANDARD_PAYMENT_CONTRACT,
                 (U512::from(MAX_PAYMENT),),
                 "transfer_to_existing_account.wasm",
@@ -82,10 +81,10 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
 
     for i in 0..TRANSFER_BATCH_SIZE {
         let deploy = DeployBuilder::default()
-            .with_address(GENESIS_ADDR)
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("transfer_to_existing_account.wasm", (account, U512::one()))
-            .with_authorization_keys(&[PublicKey::new(GENESIS_ADDR)])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .with_deploy_hash([2 + i as u8; 32]) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);

@@ -7,8 +7,8 @@ extern crate pos;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
-use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::{AccessRights, URef};
@@ -23,11 +23,6 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 const MINT_NAME: &str = "mint";
 
 #[repr(u32)]
-enum Error {
-    MintFailure = 0,
-}
-
-#[repr(u32)]
 enum Args {
     MintURef = 0,
     GenesisValidators = 1,
@@ -40,11 +35,19 @@ pub extern "C" fn pos_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_uref: URef = contract_api::get_arg(Args::MintURef as u32);
+    let mint_uref: URef = match contract_api::get_arg(Args::MintURef as u32) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
     let mint = ContractPointer::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
-        contract_api::get_arg(Args::GenesisValidators as u32);
+        match contract_api::get_arg(Args::GenesisValidators as u32) {
+            Some(Ok(data)) => data,
+            Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+            None => contract_api::revert(Error::MissingArgument.into()),
+        };
 
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `known_urefs` map of the PoS contract
@@ -98,5 +101,5 @@ fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
 
     result
         .map(PurseId::new)
-        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure as u32))
+        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure.into()))
 }

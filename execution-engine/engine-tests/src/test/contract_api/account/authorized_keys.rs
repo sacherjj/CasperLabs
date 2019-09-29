@@ -1,30 +1,28 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::U512;
 use engine_core::engine_state::{self, MAX_PAYMENT};
 use engine_core::execution;
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
 #[test]
 fn should_deploy_with_authorized_identity_key() {
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
             (Weight::new(1), Weight::new(1)), //args
             1,                                // blocktime
             [1u8; 32],                        //deploy hash
-            vec![PublicKey::new(GENESIS_ADDR)],
+            vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
         )
         .commit()
         .expect_success();
@@ -36,12 +34,12 @@ fn should_raise_auth_failure_with_invalid_key() {
     // tests that authorized keys that does not belong to account raises
     // AuthorizationError
     let key_1 = [254; 32];
-    assert_ne!(GENESIS_ADDR, key_1);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -79,14 +77,14 @@ fn should_raise_auth_failure_with_invalid_keys() {
     let key_1 = [254; 32];
     let key_2 = [253; 32];
     let key_3 = [252; 32];
-    assert_ne!(GENESIS_ADDR, key_1);
-    assert_ne!(GENESIS_ADDR, key_2);
-    assert_ne!(GENESIS_ADDR, key_3);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -127,15 +125,15 @@ fn should_raise_deploy_authorization_failure() {
     let key_1 = [254; 32];
     let key_2 = [253; 32];
     let key_3 = [252; 32];
-    assert_ne!(GENESIS_ADDR, key_1);
-    assert_ne!(GENESIS_ADDR, key_2);
-    assert_ne!(GENESIS_ADDR, key_3);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -146,7 +144,7 @@ fn should_raise_deploy_authorization_failure() {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -157,7 +155,7 @@ fn should_raise_deploy_authorization_failure() {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -170,7 +168,7 @@ fn should_raise_deploy_authorization_failure() {
         // This should execute successfuly - change deploy and key management
         // thresholds.
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -182,7 +180,7 @@ fn should_raise_deploy_authorization_failure() {
             (Weight::new(4), Weight::new(3)), //args
             DEFAULT_BLOCK_TIME,
             [4u8; 32], //deploy hash
-            vec![PublicKey::new(GENESIS_ADDR)],
+            vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
         )
         .expect_success()
         .commit()
@@ -192,7 +190,7 @@ fn should_raise_deploy_authorization_failure() {
     // with weight == 2 should raise deploy authorization failure.
     let result2 = InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -226,7 +224,7 @@ fn should_raise_deploy_authorization_failure() {
     // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
     let result3 = InMemoryWasmTestBuilder::from_result(result2)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -235,7 +233,7 @@ fn should_raise_deploy_authorization_failure() {
             DEFAULT_BLOCK_TIME,
             [6u8; 32], //deploy hash
             vec![
-                PublicKey::new(GENESIS_ADDR),
+                PublicKey::new(DEFAULT_ACCOUNT_ADDR),
                 PublicKey::new(key_1),
                 PublicKey::new(key_2),
                 PublicKey::new(key_3),
@@ -249,7 +247,7 @@ fn should_raise_deploy_authorization_failure() {
     // failure: key_2 weight + key_1 weight < deployment threshold
     let result4 = InMemoryWasmTestBuilder::from_result(result3)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -283,7 +281,7 @@ fn should_raise_deploy_authorization_failure() {
     // threshold
     InMemoryWasmTestBuilder::from_result(result4)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -291,7 +289,7 @@ fn should_raise_deploy_authorization_failure() {
             DEFAULT_BLOCK_TIME,
             [8u8; 32],
             vec![
-                PublicKey::new(GENESIS_ADDR),
+                PublicKey::new(DEFAULT_ACCOUNT_ADDR),
                 PublicKey::new(key_1),
                 PublicKey::new(key_2),
                 PublicKey::new(key_3),
@@ -310,14 +308,14 @@ fn should_authorize_deploy_with_multiple_keys() {
 
     let key_1 = [254; 32];
     let key_2 = [253; 32];
-    assert_ne!(GENESIS_ADDR, key_1);
-    assert_ne!(GENESIS_ADDR, key_2);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -328,7 +326,7 @@ fn should_authorize_deploy_with_multiple_keys() {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -343,7 +341,7 @@ fn should_authorize_deploy_with_multiple_keys() {
     // key_1 (w: 2) key_2 (w: 2) each passes default threshold of 1
     InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -363,13 +361,13 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     // tests that authorized keys needs sufficient cumulative weight
     // and each of the associated keys is greater than threshold
     let key_1 = [254; 32];
-    assert_ne!(GENESIS_ADDR, key_1);
+    assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "add_update_associated_key.wasm",
@@ -380,7 +378,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .expect_success()
         .commit()
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",
@@ -388,7 +386,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             (Weight::new(4), Weight::new(3)), //args
             DEFAULT_BLOCK_TIME,
             [2u8; 32], // deploy hash
-            vec![PublicKey::new(GENESIS_ADDR)],
+            vec![PublicKey::new(DEFAULT_ACCOUNT_ADDR)],
         )
         .expect_success()
         .commit()
@@ -398,7 +396,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     // threshold
     let final_result = InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "authorized_keys.wasm",

@@ -189,6 +189,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetPhaseIndex.into(),
             ),
+            "upgrade_contract_at_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                FunctionIndex::UpgradeContractAtURef.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
