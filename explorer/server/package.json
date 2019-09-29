@@ -12,7 +12,7 @@
     "start": "node .",
     "dev": "nodemon -e ts --watch src --exec \"npm run build && npm run start\"",
     "start:both": "concurrently \"npm run dev\" \"cd ../ui && npm start\"",
-    "test": "TS_NODE_FILES=true mocha -r ts-node/register src/**/*.test.ts"
+    "test": "TS_NODE_FILES=true mocha -r ts-node/register test/**/*.test.ts"
   },
   "author": "",
   "license": "ISC",
