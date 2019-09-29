@@ -11,7 +11,7 @@ export class BalanceService {
 
   constructor(private casperService: CasperService) {}
 
-  public async getAccountBalance(
+  async getAccountBalance(
     blockHash: BlockHash,
     accountPublicKey: ByteArray
   ): Promise<number | undefined> {

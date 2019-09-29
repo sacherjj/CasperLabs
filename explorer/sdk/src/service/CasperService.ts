@@ -29,7 +29,7 @@ export class CasperService {
     private url: string
   ) {}
 
-  public getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
+  getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
       const request = new GetDeployInfoRequest();
       request.setDeployHashBase16(encodeBase16(deployHash));
@@ -49,7 +49,7 @@ export class CasperService {
   }
 
   /** Return the block info including statistics. */
-  public getBlockInfo(
+  getBlockInfo(
     blockHash: ByteArray | string,
     view?: 0 | 1
   ): Promise<BlockInfo> {
@@ -75,7 +75,7 @@ export class CasperService {
     });
   }
 
-  public getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
+  getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
     return new Promise<BlockInfo[]>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
       request.setDepth(depth);
@@ -100,7 +100,7 @@ export class CasperService {
     });
   }
 
-  public getBlockDeploys(
+  getBlockDeploys(
     blockHash: ByteArray
   ): Promise<Block.ProcessedDeploy[]> {
     return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
@@ -127,7 +127,7 @@ export class CasperService {
   }
 
   /** Get one of the blocks from the last rank. */
-  public getLatestBlockInfo(): Promise<BlockInfo> {
+  getLatestBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
       request.setDepth(1);
@@ -153,10 +153,7 @@ export class CasperService {
     });
   }
 
-  public getBlockState(
-    blockHash: BlockHash,
-    query: StateQuery
-  ): Promise<StateValue> {
+  getBlockState(blockHash: BlockHash, query: StateQuery): Promise<StateValue> {
     return new Promise<StateValue>((resolve, reject) => {
       const request = new GetBlockStateRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
@@ -179,7 +176,7 @@ export class CasperService {
   /** Get the reference to the balance so we can cache it.
    *  Returns `undefined` if the account doesn't exist yet.
    */
-  public async getAccountBalanceUref(
+  async getAccountBalanceUref(
     blockHash: BlockHash,
     accountPublicKey: ByteArray
   ): Promise<Key.URef | undefined> {
@@ -225,7 +222,7 @@ export class CasperService {
     }
   }
 
-  public async getAccountBalance(
+  async getAccountBalance(
     blockHash: BlockHash,
     balanceUref: Key.URef
   ): Promise<number> {
