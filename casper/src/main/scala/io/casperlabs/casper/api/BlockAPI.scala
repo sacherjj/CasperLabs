@@ -103,9 +103,6 @@ object BlockAPI {
               .whenA(headerErrors.nonEmpty)
           }
 
-      t = casper.faultToleranceThreshold
-      _ <- ensureNotInDag[F](d, t)
-
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
@@ -119,31 +116,6 @@ object BlockAPI {
           }
     } yield ()
   }
-
-  /** Check that we don't have this deploy already in the finalized part of the DAG. */
-  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: FinalityDetector: Log](
-      d: Deploy,
-      faultToleranceThreshold: Float
-  ): F[Unit] =
-    BlockStorage[F]
-      .findBlockHashesWithDeployhash(d.deployHash)
-      .flatMap(
-        _.toList.traverse(blockHash => getBlockInfo[F](Base16.encode(blockHash.toByteArray)))
-      )
-      .flatMap {
-        case Nil =>
-          ().pure[F]
-        case infos =>
-          infos.find(_.getStatus.faultTolerance > faultToleranceThreshold).fold(().pure[F]) {
-            finalized =>
-              MonadThrowable[F].raiseError {
-                AlreadyExists(
-                  s"Block ${PrettyPrinter.buildString(finalized.getSummary.blockHash)} with fault tolerance ${finalized.getStatus.faultTolerance} already contains ${PrettyPrinter
-                    .buildString(d)}"
-                )
-              }
-          }
-      }
 
   @deprecated("To be removed before devnet. Use `propose`.", "0.4")
   def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
@@ -351,44 +323,42 @@ object BlockAPI {
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
-      unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
-        val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
+      val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
-        BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
-          case blockHashes if blockHashes.nonEmpty =>
-            for {
-              blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-              blockInfos <- blocks.traverse { block =>
-                             val summary =
-                               BlockSummary(block.blockHash, block.header, block.signature)
-                             makeBlockInfo[F](summary, block.some)
-                           }
-              results = (blocks zip blockInfos).flatMap {
-                case (block, info) =>
-                  block.getBody.deploys
-                    .find(_.getDeploy.deployHash == deployHash)
-                    .map(_ -> info)
+      BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+        case blockHashes if blockHashes.nonEmpty =>
+          for {
+            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
+            blockInfos = blocks.map { block =>
+              val summary =
+                BlockSummary(block.blockHash, block.header, block.signature)
+              makeBlockInfo(summary, block.some)
+            }
+            results = (blocks zip blockInfos).flatMap {
+              case (block, info) =>
+                block.getBody.deploys
+                  .find(_.getDeploy.deployHash == deployHash)
+                  .map(_ -> info)
+            }
+            info = DeployInfo(
+              deploy = results.headOption.flatMap(_._1.deploy),
+              processingResults = results.map {
+                case (processedDeploy, blockInfo) =>
+                  DeployInfo
+                    .ProcessingResult(
+                      cost = processedDeploy.cost,
+                      isError = processedDeploy.isError,
+                      errorMessage = processedDeploy.errorMessage
+                    )
+                    .withBlockInfo(blockInfo)
               }
-              info = DeployInfo(
-                deploy = results.headOption.flatMap(_._1.deploy),
-                processingResults = results.map {
-                  case (processedDeploy, blockInfo) =>
-                    DeployInfo
-                      .ProcessingResult(
-                        cost = processedDeploy.cost,
-                        isError = processedDeploy.isError,
-                        errorMessage = processedDeploy.errorMessage
-                      )
-                      .withBlockInfo(blockInfo)
-                }
-              )
-            } yield info.some
+            )
+          } yield info.some
 
-          case _ =>
-            DeployStorageReader[F]
-              .getPendingOrProcessed(deployHash)
-              .map(_.map(DeployInfo().withDeploy))
-        }
+        case _ =>
+          DeployStorageReader[F]
+            .getPendingOrProcessed(deployHash)
+            .map(_.map(DeployInfo().withDeploy))
       }
     }
 
@@ -409,30 +379,23 @@ object BlockAPI {
       .getByPrefix(blockHashBase16)
       .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
 
-  def makeBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector](
+  def makeBlockInfo(
       summary: BlockSummary,
       maybeBlock: Option[Block]
-  ): F[BlockInfo] =
-    for {
-      dag            <- MultiParentCasper[F].dag
-      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, summary.blockHash)
-      initialFault   <- MultiParentCasper[F].normalizedInitialFault(summary.weightMap)
-      maybeStats = maybeBlock.map { block =>
-        BlockStatus
-          .Stats()
-          .withBlockSizeBytes(block.serializedSize)
-          .withDeployErrorCount(
-            block.getBody.deploys.count(_.isError)
-          )
-      }
-      status = BlockStatus(
-        faultTolerance = faultTolerance - initialFault,
-        stats = maybeStats
-      )
-      info = BlockInfo()
-        .withSummary(summary)
-        .withStatus(status)
-    } yield info
+  ): BlockInfo = {
+    val maybeStats = maybeBlock.map { block =>
+      BlockStatus
+        .Stats()
+        .withBlockSizeBytes(block.serializedSize)
+        .withDeployErrorCount(
+          block.getBody.deploys.count(_.isError)
+        )
+    }
+    val status = BlockStatus(stats = maybeStats)
+    BlockInfo()
+      .withSummary(summary)
+      .withStatus(status)
+  }
 
   def makeBlockInfo[F[_]: Monad: BlockStorage: MultiParentCasper: FinalityDetector](
       summary: BlockSummary,
@@ -446,7 +409,7 @@ object BlockAPI {
                    } else {
                      none[Block].pure[F]
                    }
-      info <- makeBlockInfo[F](summary, maybeBlock)
+      info = makeBlockInfo(summary, maybeBlock)
     } yield (info, maybeBlock)
 
   def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
@@ -576,22 +539,18 @@ object BlockAPI {
           BlockHash,
           Long,
           BlockHash,
-          Seq[BlockHash],
-          Float,
-          Float
+          Seq[BlockHash]
       ) => F[A]
-  ): F[A] =
+  ): F[A] = {
+    val header          = block.getHeader
+    val protocolVersion = header.protocolVersion
+    val deployCount     = header.deployCount
+    val postStateHash   = ProtoUtil.postStateHash(block)
+    val timestamp       = header.timestamp
+    val mainParent      = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
+    val parentsHashList = header.parentHashes
     for {
-      dag                      <- MultiParentCasper[F].dag
-      header                   = block.getHeader
-      protocolVersion          = header.protocolVersion
-      deployCount              = header.deployCount
-      postStateHash            = ProtoUtil.postStateHash(block)
-      timestamp                = header.timestamp
-      mainParent               = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
-      parentsHashList          = header.parentHashes
-      normalizedFaultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, block.blockHash)
-      initialFault             <- MultiParentCasper[F].normalizedInitialFault(ProtoUtil.weightMap(block))
+
       blockInfo <- constructor(
                     block,
                     protocolVersion,
@@ -599,11 +558,10 @@ object BlockAPI {
                     postStateHash,
                     timestamp,
                     mainParent,
-                    parentsHashList,
-                    normalizedFaultTolerance,
-                    initialFault
+                    parentsHashList
                   )
     } yield blockInfo
+  }
 
   private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
       block: Block
@@ -622,9 +580,7 @@ object BlockAPI {
       postStateHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash],
-      normalizedFaultTolerance: Float,
-      initialFault: Float
+      parentsHashList: Seq[BlockHash]
   ): F[BlockInfoWithTuplespace] =
     protocol
       .BlockInfo(
@@ -635,7 +591,6 @@ object BlockAPI {
         deployCount = deployCount,
         globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
         timestamp = timestamp,
-        faultTolerance = normalizedFaultTolerance - initialFault,
         mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
         parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
         sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey),
@@ -650,9 +605,7 @@ object BlockAPI {
       postStateHash: BlockHash,
       timestamp: Long,
       mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash],
-      normalizedFaultTolerance: Float,
-      initialFault: Float
+      parentsHashList: Seq[BlockHash]
   ): F[BlockInfoWithoutTuplespace] =
     BlockInfoWithoutTuplespace(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
@@ -662,7 +615,6 @@ object BlockAPI {
       deployCount = deployCount,
       globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
       timestamp = timestamp,
-      faultTolerance = normalizedFaultTolerance - initialFault,
       mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
       parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
       sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey)
