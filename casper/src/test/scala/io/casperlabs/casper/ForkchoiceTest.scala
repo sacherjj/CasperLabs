@@ -253,9 +253,12 @@ class ForkchoiceTest
           c.blockHash       -> 0L
         )
 
+        latestMessageHashes <- dag.latestMessageHashes
+
         tips <- Estimator.tips(
                  dag,
                  genesis.blockHash,
+                 latestMessageHashes,
                  equivocationsTracker
                )
         _ = tips.head shouldBe c.blockHash

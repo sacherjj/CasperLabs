@@ -35,11 +35,17 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
         _ <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds, bonds.map {
               case Bond(validator, _) => validator -> genesis.blockHash
             }.toMap)
-        dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
+        dag                 <- dagStorage.getRepresentation
+        latestMessageHashes <- dag.latestMessageHashes
+        tips <- Estimator.tips[Task](
+                 dag,
+                 genesis.blockHash,
+                 latestMessageHashes,
+                 EquivocationsTracker.empty
+               )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
-                         tips.toIndexedSeq
+                         tips
                        )
         implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
         _                                                <- casperRef.set(casperEffect)

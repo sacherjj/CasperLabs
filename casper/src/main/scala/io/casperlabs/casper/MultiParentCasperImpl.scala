@@ -28,7 +28,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.models.{Message, SmartContractEngineError}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -172,10 +172,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                         }
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _         <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
-      _         <- updateLastFinalizedBlock(updatedDag)
-      _         <- Log[F].debug(s"Estimating hashes after adding ${hashPrefix}")
-      tipHashes <- estimator(updatedDag)
+      _                    <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
+      _                    <- updateLastFinalizedBlock(updatedDag)
+      _                    <- Log[F].debug(s"Estimating hashes after adding ${hashPrefix}")
+      latestMessagesHashes <- updatedDag.latestMessageHashes
+      tipHashes            <- estimator(updatedDag, latestMessagesHashes)
       _ <- Log[F].debug(
             s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
           )
@@ -364,11 +365,20 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   }
 
   /** Return the list of tips. */
-  def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
+  def estimator(
+      dag: DagRepresentation[F],
+      latestMessagesHashes: Map[ByteString, BlockHash]
+  ): F[List[BlockHash]] =
     Metrics[F].timer("estimator") {
       Cell[F, CasperState].read
         .flatMap(
-          casperState => Estimator.tips[F](dag, genesis.blockHash, casperState.equivocationsTracker)
+          casperState =>
+            Estimator.tips[F](
+              dag,
+              genesis.blockHash,
+              latestMessagesHashes,
+              casperState.equivocationsTracker
+            )
         )
     }
 
@@ -389,18 +399,19 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       Metrics[F].timer("createBlock") {
         for {
-          dag       <- dag
-          tipHashes <- estimator(dag).map(_.toVector)
-          tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-          merged    <- ExecEngineUtil.merge[F](tips, dag)
-          parents   = merged.parents
+          dag            <- dag
+          latestMessages <- dag.latestMessages
+          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
+          tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+          merged         <- ExecEngineUtil.merge[F](tips, dag)
+          parents        = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
           remainingHashes <- remainingDeploysHashes(dag, parents) // TODO: Should be streaming all the way down
           result <- if (remainingHashes.nonEmpty || parents.length > 1) {
                      createProposal(
-                       dag,
+                       latestMessages,
                        merged,
                        remainingHashes,
                        publicKey,
@@ -447,12 +458,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     */
   private def requeueOrphanedDeploys(
       dag: DagRepresentation[F],
-      tipHashes: IndexedSeq[BlockHash]
+      tipHashes: List[BlockHash]
   ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
     for {
       // We actually need the tips which can be merged, the ones which we'd build on if we
       // attempted to create a new block.
-      tips    <- tipHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F])
+      tips    <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged  <- ExecEngineUtil.merge[F](tips, dag)
       parents = merged.parents
       // Consider deploys which this node has processed but hasn't finalized yet.
@@ -502,7 +513,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
-      dag: DagRepresentation[F],
+      latestMessages: Map[ByteString, Message],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       remainingHashes: Set[BlockHash],
       validatorId: Keys.PublicKey,
@@ -510,15 +521,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       sigAlgorithm: SignatureAlgorithm
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
+      val rank = ProtoUtil.nextRank(latestMessages.values.toSeq)
+      val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
+        rank
+      )
+      // TODO: Remove redundant justifications.
+      val justifications = toJustification(latestMessages.values.toSeq)
       (for {
-        latestMessages <- dag.latestMessages
-        rank           = ProtoUtil.nextRank(latestMessages.values.toSeq)
-        protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(
-          rank
-        )
-        // TODO: Remove redundant justifications.
-        justifications = toJustification(latestMessages.values.toSeq)
-        now            <- Time[F].currentMillis
+        now <- Time[F].currentMillis
         checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
                        merged,
                        remainingHashes,
