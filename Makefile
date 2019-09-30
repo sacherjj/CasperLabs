@@ -170,8 +170,7 @@ cargo-native-packager/%:
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
-		.make/npm/explorer \
-		build-explorer-contracts
+		build-explorer
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
@@ -179,7 +178,8 @@ cargo-native-packager/%:
 	$(TS_SRC) \
 	.make/protoc/explorer \
 	explorer/ui/package.json \
-	explorer/server/package.json
+	explorer/server/package.json \
+	build-explorer-contracts
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
 			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
@@ -313,15 +313,24 @@ explorer/contracts/%.wasm: .make/contracts/%
 	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
 
+build-client: \
+	.make/sbt-stage/client
+
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
 	client/src/main/resources/transfer_to_account.wasm \
 	client/src/main/resources/standard_payment.wasm
 
+build-node: \
+	.make/sbt-stage/node
+
 build-node-contracts: \
 	node/src/main/resources/chainspec/genesis/mint_install.wasm \
 	node/src/main/resources/chainspec/genesis/pos_install.wasm
+
+build-explorer: \
+	.make/npm/explorer
 
 build-explorer-contracts: \
 	explorer/contracts/client/transfer_to_account.wasm \
