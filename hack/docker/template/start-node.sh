@@ -5,7 +5,8 @@ set -e
 if [ "$HOSTNAME" = "$BOOTSTRAP_HOSTNAME" ]; then
     # Start the bootstrap node with a fixed key to get a deterministic ID.
     exec ./bin/casperlabs-node run -s \
-        --server-host $HOSTNAME
+        --server-host $HOSTNAME \
+        --casper-initial-motes=10000000000000000000000000
 else
     # Connect to the bootstrap node.
     BOOTSTRAP_ID=$(cat $HOME/.casperlabs/bootstrap/node-id)

@@ -227,3 +227,9 @@ You can tear everything down by running:
 ```console
 make clean
 ```
+
+## Long Running Test (LRT)
+
+You can run the similar setup as we use at SRE team to test how nodes perform over time.
+
+[The script to run LRT](/hack/docker/lrt.sh).
