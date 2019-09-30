@@ -543,7 +543,7 @@ where
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
-                let stored_contract_key = account.urefs_lookup().get(name).ok_or_else(|| {
+                let stored_contract_key = account.known_keys().get(name).ok_or_else(|| {
                     error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
                 })?;
                 if let Key::URef(uref) = stored_contract_key {
@@ -575,12 +575,12 @@ where
                         URef::new(arr, AccessRights::READ)
                     };
                     let normalized_uref = Key::URef(read_only_uref).normalize();
-                    let maybe_known_uref = account
-                        .urefs_lookup()
+                    let maybe_known_key = account
+                        .known_keys()
                         .values()
-                        .find(|&known_uref| known_uref.normalize() == normalized_uref);
-                    match maybe_known_uref {
-                        Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
+                        .find(|&known_key| known_key.normalize() == normalized_uref);
+                    match maybe_known_key {
+                        Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                         Some(Key::URef(_)) => {
                             return Err(error::Error::ExecError(
                                 execution::Error::ForgedReference(read_only_uref),
@@ -732,7 +732,7 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
+            let mint_public_uref: Key = match account.known_keys().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
                 None => {
                     return Ok(ExecutionResult::precondition_failure(
@@ -760,7 +760,7 @@ where
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
+        let proof_of_stake_public_uref: Key = match account.known_keys().get(POS_NAME) {
             Some(uref) => uref.normalize(),
             None => {
                 return Ok(ExecutionResult::precondition_failure(
@@ -788,7 +788,7 @@ where
             // payment_code_spec_6: system contract validity
             let rewards_purse_key: Key = match proof_of_stake_info
                 .contract()
-                .urefs_lookup()
+                .known_keys()
                 .get(POS_REWARDS_PURSE)
             {
                 Some(key) => *key,
@@ -904,7 +904,7 @@ where
             // payment_code_spec_6: system contract validity
             let payment_purse: Key = match proof_of_stake_info
                 .contract()
-                .urefs_lookup()
+                .known_keys()
                 .get(POS_PAYMENT_PURSE)
             {
                 Some(key) => *key,
@@ -1017,7 +1017,7 @@ where
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
                 .contract()
-                .urefs_lookup()
+                .known_keys()
                 .clone();
 
             let base_key = proof_of_stake_info.key();
@@ -1110,7 +1110,7 @@ where
         };
 
         let bonded_validators = contract
-            .urefs_lookup()
+            .known_keys()
             .keys()
             .filter_map(|entry| utils::pos_validator_to_tuple(entry))
             .collect::<HashMap<PublicKey, U512>>();

@@ -558,7 +558,7 @@ mod proptests {
         }
 
         #[test]
-        fn test_uref_map(m in uref_map_arb(20)) {
+        fn test_uref_map(m in known_keys_arb(20)) {
             assert!(test_serialization_roundtrip(&m));
         }
 

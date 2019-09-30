@@ -250,7 +250,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                     |current_value, (i, name)| -> Result<Value, Result<(usize, String), R::Error>> {
                         match current_value {
                             Value::Account(account) => {
-                                if let Some(key) = account.urefs_lookup().get(name) {
+                                if let Some(key) = account.known_keys().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
                                     self.read_key_or_stop(correlation_id, validated_key, i)
                                 } else {
@@ -259,7 +259,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                             }
 
                             Value::Contract(contract) => {
-                                if let Some(key) = contract.urefs_lookup().get(name) {
+                                if let Some(key) = contract.known_keys().get(name) {
                                     let validated_key = Validated::new(*key, Validated::valid)?;
                                     self.read_key_or_stop(correlation_id, validated_key, i)
                                 } else {

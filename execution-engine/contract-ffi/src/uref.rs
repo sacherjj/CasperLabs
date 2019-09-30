@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn uref_as_string() {
-        // Since we are putting URefs to known_urefs map keyed by the label that
+        // Since we are putting URefs to known_keys map keyed by the label that
         // `as_string()` returns, any changes to the string representation of
         // that type cannot break the format.
         let addr_array = [0u8; 32];

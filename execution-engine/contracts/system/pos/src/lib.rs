@@ -137,9 +137,9 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     Ok(unbonds)
 }
 
-/// Attempts to look up a purse from the known_urefs.
+/// Attempts to look up a purse from the known_keys
 fn get_purse_id(name: &str) -> core::result::Result<PurseId, PurseLookupError> {
-    contract_api::get_uref(name)
+    contract_api::get_key(name)
         .ok_or(PurseLookupError::KeyNotFound)
         .and_then(|key| match key {
             Key::URef(uref) => Ok(PurseId::new(uref)),
@@ -167,7 +167,7 @@ fn get_rewards_purse() -> Result<PurseId> {
 /// location is the main purse of the deployer's account.
 fn set_refund(purse_id: URef) {
     if let Phase::Payment = contract_api::get_phase() {
-        contract_api::add_uref(REFUND_PURSE_KEY, &Key::URef(purse_id));
+        contract_api::put_key(REFUND_PURSE_KEY, &Key::URef(purse_id));
     } else {
         contract_api::revert(Error::SetRefundPurseCalledOutsidePayment.into())
     }
@@ -206,7 +206,7 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
 
     let rewards_purse = get_rewards_purse().unwrap_or_revert();
     let refund_purse = get_refund_purse();
-    contract_api::remove_uref(REFUND_PURSE_KEY); //unset refund purse after reading it
+    contract_api::remove_key(REFUND_PURSE_KEY); //unset refund purse after reading it
 
     // pay validators
     if let contract_api::PurseTransferResult::TransferError =

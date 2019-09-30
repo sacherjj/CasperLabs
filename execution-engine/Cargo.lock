@@ -1027,7 +1027,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "known-urefs"
+name = "known-keys"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.16.0",

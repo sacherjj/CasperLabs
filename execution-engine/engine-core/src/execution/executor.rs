@@ -149,9 +149,8 @@ impl Executor<Module> for WasmiExecutor {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
-        let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
-            extract_access_rights_from_keys(uref_lookup_local.values().cloned());
+        let mut known_keys = account.known_keys().clone();
+        let access_rights = extract_access_rights_from_keys(known_keys.values().cloned());
         let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
@@ -173,8 +172,8 @@ impl Executor<Module> for WasmiExecutor {
 
         let context = RuntimeContext::new(
             tc,
-            &mut uref_lookup_local,
-            known_urefs,
+            &mut known_keys,
+            access_rights,
             arguments,
             authorized_keys,
             &account,
@@ -207,7 +206,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        keys: &mut BTreeMap<String, Key>,
+        known_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
@@ -222,9 +221,9 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        let mut uref_lookup = keys.clone();
-        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
-            extract_access_rights_from_keys(uref_lookup.values().cloned());
+        let mut known_keys = known_keys.clone();
+        let access_rights: HashMap<Address, HashSet<AccessRights>> =
+            extract_access_rights_from_keys(known_keys.values().cloned());
 
         let address_generator = {
             let address_generator = AddressGenerator::new(deploy_hash, phase);
@@ -248,8 +247,8 @@ impl Executor<Module> for WasmiExecutor {
 
         let context = RuntimeContext::new(
             state,
-            &mut uref_lookup,
-            known_urefs,
+            &mut known_keys,
+            access_rights,
             args,
             authorization_keys,
             &account,

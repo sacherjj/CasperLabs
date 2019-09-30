@@ -153,7 +153,7 @@ object DeployRuntime {
               .whenA(!value.value.isAccount)
         account = value.getAccount
         mintPublic <- Sync[F].fromOption(
-                       account.knownUrefs.find(_.name == "mint").flatMap(_.key),
+                       account.knownKeys.find(_.name == "mint").flatMap(_.key),
                        new IllegalStateException(
                          "Account's known_urefs map did not contain Mint contract address."
                        )

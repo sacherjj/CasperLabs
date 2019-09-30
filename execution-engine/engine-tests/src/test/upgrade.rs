@@ -50,12 +50,12 @@ fn should_upgrade_do_nothing_to_do_something() {
         .expect("should get account 1");
 
     assert!(
-        account_1_transformed.urefs_lookup().get(PURSE_1).is_none(),
+        account_1_transformed.known_keys().get(PURSE_1).is_none(),
         "purse should not exist",
     );
 
     let do_nothing_stored_uref = account_1_transformed
-        .urefs_lookup()
+        .known_keys()
         .get(DO_NOTHING_STORED_CONTRACT_NAME)
         .expect("should have do_nothing_stored uref")
         .as_uref()
@@ -103,7 +103,7 @@ fn should_upgrade_do_nothing_to_do_something() {
     // caller contract instead of the account...ideally the account would get the uref
     // but that's beyond the scope of this upgrade specific test
     assert!(
-        contract.urefs_lookup().contains_key(PURSE_1),
+        contract.known_keys().contains_key(PURSE_1),
         "should have new purse uref"
     );
 }
@@ -136,12 +136,12 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         .expect("should have account");
 
     assert!(
-        account.urefs_lookup().contains_key(METHOD_VERSION),
+        account.known_keys().contains_key(METHOD_VERSION),
         "version uref should exist on install"
     );
 
     let stored_uref = account
-        .urefs_lookup()
+        .known_keys()
         .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()
@@ -153,7 +153,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         .expect("should have account");
 
     let version = *account
-        .urefs_lookup()
+        .known_keys()
         .get(METHOD_VERSION)
         .expect("version uref should exist");
 
@@ -186,7 +186,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         .expect("should have account");
 
     let version = *account
-        .urefs_lookup()
+        .known_keys()
         .get(METHOD_VERSION)
         .expect("version key should exist");
 
@@ -229,7 +229,7 @@ fn should_support_extending_functionality() {
         .expect("should have account");
 
     let stored_uref = account
-        .urefs_lookup()
+        .known_keys()
         .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()
@@ -257,8 +257,8 @@ fn should_support_extending_functionality() {
         .get_contract(*stored_uref)
         .expect("should have contract");
     assert!(
-        contract.urefs_lookup().contains_key(PURSE_1),
-        "purse uref should exist in contract's known_urefs before upgrade"
+        contract.known_keys().contains_key(PURSE_1),
+        "purse uref should exist in contract's known_keys before upgrade"
     );
 
     // upgrade contract
@@ -274,14 +274,14 @@ fn should_support_extending_functionality() {
             .commit();
     }
 
-    // verify uref still exists in known_urefs after upgrade:
+    // verify uref still exists in known_keys after upgrade:
     let contract = builder
         .get_contract(*stored_uref)
         .expect("should have contract");
 
     assert!(
-        contract.urefs_lookup().contains_key(PURSE_1),
-        "PURSE_1 uref should still exist in contract's known_urefs after upgrade"
+        contract.known_keys().contains_key(PURSE_1),
+        "PURSE_1 uref should still exist in contract's known_keys after upgrade"
     );
 
     // call new remove function
@@ -307,14 +307,14 @@ fn should_support_extending_functionality() {
         .expect("should have contract");
 
     assert!(
-        !contract.urefs_lookup().contains_key(PURSE_1),
-        "PURSE_1 uref should no longer exist in contract's known_urefs after remove"
+        !contract.known_keys().contains_key(PURSE_1),
+        "PURSE_1 uref should no longer exist in contract's known_keys after remove"
     );
 }
 
 #[ignore]
 #[test]
-fn should_maintain_known_urefs_across_upgrade() {
+fn should_maintain_known_keys_across_upgrade() {
     let mut builder = {
         let engine_config = EngineConfig::default().set_use_payment_code(true);
         InMemoryWasmTestBuilder::new(engine_config)
@@ -340,13 +340,13 @@ fn should_maintain_known_urefs_across_upgrade() {
         .expect("should have account");
 
     let stored_uref = account
-        .urefs_lookup()
+        .known_keys()
         .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()
         .expect("should have uref");
 
-    // add several purse urefs to known_urefs
+    // add several purse urefs to known_keys
     for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
 
@@ -369,8 +369,8 @@ fn should_maintain_known_urefs_across_upgrade() {
             .get_contract(*stored_uref)
             .expect("should have contract");
         assert!(
-            contract.urefs_lookup().contains_key(purse_name),
-            "purse uref should exist in contract's known_urefs before upgrade"
+            contract.known_keys().contains_key(purse_name),
+            "purse uref should exist in contract's known_keys before upgrade"
         );
     }
 
@@ -387,7 +387,7 @@ fn should_maintain_known_urefs_across_upgrade() {
             .commit();
     }
 
-    // verify all urefs still exist in known_urefs after upgrade
+    // verify all urefs still exist in known_keys after upgrade
     let contract = builder
         .get_contract(*stored_uref)
         .expect("should have contract");
@@ -395,9 +395,9 @@ fn should_maintain_known_urefs_across_upgrade() {
     for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
         assert!(
-            contract.urefs_lookup().contains_key(purse_name),
+            contract.known_keys().contains_key(purse_name),
             format!(
-                "{} uref should still exist in contract's known_urefs after upgrade",
+                "{} uref should still exist in contract's known_keys after upgrade",
                 index
             )
         );
@@ -432,7 +432,7 @@ fn should_maintain_local_state_across_upgrade() {
         .expect("should have account");
 
     let stored_uref = account
-        .urefs_lookup()
+        .known_keys()
         .get(LOCAL_STATE_STORED_CONTRACT_NAME)
         .expect("should have stored uref")
         .as_uref()

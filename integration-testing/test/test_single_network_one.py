@@ -68,14 +68,14 @@ def test_account_state(node):
     assert not deploys[0].is_error
 
     acct_state = account_state(node, block_hash)
-    known_urefs = acct_state.account[0].known_urefs
-    names = [uref.name for uref in known_urefs]
+    known_keys = acct_state.account[0].known_keys
+    names = [uref.name for uref in known_keys]
     assert "counter" in names
 
     block_hash = deploy_and_propose_from_genesis(node, Contract.COUNTERCALL)
     acct_state = account_state(node, block_hash)
-    known_urefs = acct_state.account[0].known_urefs
-    names = [uref.name for uref in known_urefs]
+    known_keys = acct_state.account[0].known_keys
+    names = [uref.name for uref in known_keys]
     assert "counter" in names
 
 
@@ -584,7 +584,7 @@ def test_cli_deploy_propose_show_deploys_show_deploy_query_state_and_balance(cli
                  "--type", "address",
                  "--key", account.public_key_hex,
                  "--path", "", )
-    assert "hello_name" in [u.name for u in result.account.known_urefs]
+    assert "hello_name" in [u.name for u in result.account.known_keys]
 
     balance = int(
         cli("balance", "--address", account.public_key_hex, "--block-hash", block_hash)

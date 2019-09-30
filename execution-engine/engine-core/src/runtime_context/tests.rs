@@ -100,15 +100,15 @@ fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SI
 fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
-    uref_map: &'a mut BTreeMap<String, Key>,
-    known_urefs: HashMap<Address, HashSet<AccessRights>>,
+    known_keys: &'a mut BTreeMap<String, Key>,
+    access_rights: HashMap<Address, HashSet<AccessRights>>,
     address_generator: AddressGenerator,
 ) -> RuntimeContext<'a, InMemoryGlobalStateView> {
     let tc = mock_tc(base_key, account.clone());
     RuntimeContext::new(
         Rc::new(RefCell::new(tc)),
-        uref_map,
-        known_urefs,
+        known_keys,
+        access_rights,
         Vec::new(),
         BTreeSet::from_iter(vec![PublicKey::new([0; 32])]),
         &account,
@@ -144,7 +144,7 @@ fn assert_invalid_access<T: std::fmt::Debug>(result: Result<T, Error>, expecting
     }
 }
 
-fn test<T, F>(known_urefs: HashMap<Address, HashSet<AccessRights>>, query: F) -> Result<T, Error>
+fn test<T, F>(access_rights: HashMap<Address, HashSet<AccessRights>>, query: F) -> Result<T, Error>
 where
     F: Fn(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
@@ -153,8 +153,13 @@ where
     let (key, account) = mock_account(base_acc_addr);
     let mut uref_map = BTreeMap::new();
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
-    let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
+    let runtime_context = mock_runtime_context(
+        &account,
+        key,
+        &mut uref_map,
+        access_rights,
+        address_generator,
+    );
     query(runtime_context)
 }
 
@@ -163,10 +168,10 @@ fn use_uref_valid() {
     // Test fixture
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref]);
+    let access_rights = extract_access_rights_from_keys(vec![uref]);
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let query_result = test(known_urefs, |mut rc| rc.write_gs(uref, Value::Int32(43)));
+    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, Value::Int32(43)));
     query_result.expect("writing using valid uref should succeed");
 }
 
@@ -175,8 +180,8 @@ fn use_uref_forged() {
     // Test fixture
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let known_urefs = HashMap::new();
-    let query_result = test(known_urefs, |mut rc| rc.write_gs(uref, Value::Int32(43)));
+    let access_rights = HashMap::new();
+    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, Value::Int32(43)));
 
     assert_forged_reference(query_result);
 }
@@ -185,7 +190,7 @@ fn use_uref_forged() {
 fn store_contract_with_uref_valid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref]);
+    let access_rights = extract_access_rights_from_keys(vec![uref]);
 
     let contract = Value::Contract(Contract::new(
         Vec::new(),
@@ -193,7 +198,7 @@ fn store_contract_with_uref_valid() {
         ProtocolVersion::new(1),
     ));
 
-    let query_result = test(known_urefs, |mut rc| {
+    let query_result = test(access_rights, |mut rc| {
         let contract_addr = rc
             .store_contract(contract.clone())
             .expect("Storing contract with valid URefs should succeed.");
@@ -229,7 +234,7 @@ fn store_contract_under_uref_valid() {
     // works.
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
+    let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
     let contract: Value = Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
@@ -237,7 +242,7 @@ fn store_contract_under_uref_valid() {
     )
     .into();
 
-    let query_result = test(known_urefs, |mut rc| {
+    let query_result = test(access_rights, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
             .expect("Storing contract under known and writeable URef should work.");
         rc.read_gs(&contract_uref)
@@ -272,11 +277,11 @@ fn store_contract_uref_invalid_access() {
     // fails.
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ);
-    let known_urefs = extract_access_rights_from_keys(vec![contract_uref]);
+    let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
     let contract: Value =
         Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::new(1)).into();
 
-    let query_result = test(known_urefs, |mut rc| {
+    let query_result = test(access_rights, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
     });
 
@@ -329,8 +334,8 @@ fn account_key_addable_valid() {
     // execution.
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ);
-    let known_urefs = extract_access_rights_from_keys(vec![uref]);
-    let query_result = test(known_urefs, |mut rc| {
+    let access_rights = extract_access_rights_from_keys(vec![uref]);
+    let query_result = test(access_rights, |mut rc| {
         let base_key = rc.base_key();
         let uref_name = "NewURef".to_owned();
         let named_key = Value::NamedKey(uref_name.clone(), uref);
@@ -409,12 +414,12 @@ fn contract_key_addable_valid() {
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref]);
+    let access_rights = extract_access_rights_from_keys(vec![uref]);
 
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
-        known_urefs,
+        access_rights,
         Vec::new(),
         BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
         &account,
@@ -471,11 +476,11 @@ fn contract_key_addable_invalid() {
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref]);
+    let access_rights = extract_access_rights_from_keys(vec![uref]);
     let mut runtime_context = RuntimeContext::new(
         Rc::clone(&tc),
         &mut uref_map,
-        known_urefs,
+        access_rights,
         Vec::new(),
         BTreeSet::from_iter(vec![PublicKey::new(base_acc_addr)]),
         &account,
@@ -503,8 +508,8 @@ fn contract_key_addable_invalid() {
 fn uref_key_readable_valid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::READ);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| rc.read_gs(&uref_key));
     assert!(query_result.is_ok());
 }
 
@@ -512,8 +517,8 @@ fn uref_key_readable_valid() {
 fn uref_key_readable_invalid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| rc.read_gs(&uref_key));
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| rc.read_gs(&uref_key));
     assert_invalid_access(query_result, AccessRights::READ);
 }
 
@@ -521,8 +526,10 @@ fn uref_key_readable_invalid() {
 fn uref_key_writeable_valid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| {
+        rc.write_gs(uref_key, Value::Int32(1))
+    });
     assert!(query_result.is_ok());
 }
 
@@ -530,8 +537,10 @@ fn uref_key_writeable_valid() {
 fn uref_key_writeable_invalid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::READ);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| rc.write_gs(uref_key, Value::Int32(1)));
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| {
+        rc.write_gs(uref_key, Value::Int32(1))
+    });
     assert_invalid_access(query_result, AccessRights::WRITE);
 }
 
@@ -539,8 +548,8 @@ fn uref_key_writeable_invalid() {
 fn uref_key_addable_valid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::ADD_WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| {
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| {
         rc.write_gs(uref_key, Value::Int32(10))
             .expect("Writing to the GlobalState should work.");
         rc.add_gs(uref_key, Value::Int32(1))
@@ -552,86 +561,86 @@ fn uref_key_addable_valid() {
 fn uref_key_addable_invalid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
-    let known_urefs = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(known_urefs, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
+    let access_rights = extract_access_rights_from_keys(vec![uref_key]);
+    let query_result = test(access_rights, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
     assert_invalid_access(query_result, AccessRights::ADD);
 }
 
 #[test]
 fn local_key_writeable_valid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_writeable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
 #[test]
 fn local_key_writeable_invalid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_writeable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
 #[test]
 fn local_key_readable_valid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_readable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
 #[test]
 fn local_key_readable_invalid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_readable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
 #[test]
 fn local_key_addable_valid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = runtime_context.seed();
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_addable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
 #[test]
 fn local_key_addable_invalid() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
         let seed = [1u8; LOCAL_SEED_SIZE];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_addable(&key)
     };
-    let query_result = test(known_urefs, query);
+    let query_result = test(access_rights, query);
     assert!(query_result.is_err())
 }
 
@@ -639,7 +648,7 @@ fn local_key_addable_invalid() {
 fn manage_associated_keys() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let public_key = PublicKey::new([42; 32]);
         let weight = Weight::new(155);
@@ -699,14 +708,14 @@ fn manage_associated_keys() {
 
         Ok(())
     };
-    let _ = test(known_urefs, query);
+    let _ = test(access_rights, query);
 }
 
 #[test]
 fn action_thresholds_management() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         runtime_context
             .add_associated_key(PublicKey::new([42; 32]), Weight::new(254))
@@ -740,14 +749,14 @@ fn action_thresholds_management() {
 
         Ok(())
     };
-    let _ = test(known_urefs, query);
+    let _ = test(access_rights, query);
 }
 
 #[test]
 fn should_verify_ownership_before_adding_key() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         // Overwrites a `base_key` to a different one before doing any operation as
         // account `[0; 32]`
@@ -764,14 +773,14 @@ fn should_verify_ownership_before_adding_key() {
 
         Ok(())
     };
-    let _ = test(known_urefs, query);
+    let _ = test(access_rights, query);
 }
 
 #[test]
 fn should_verify_ownership_before_removing_a_key() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         // Overwrites a `base_key` to a different one before doing any operation as
         // account `[0; 32]`
@@ -788,14 +797,14 @@ fn should_verify_ownership_before_removing_a_key() {
 
         Ok(())
     };
-    let _ = test(known_urefs, query);
+    let _ = test(access_rights, query);
 }
 
 #[test]
 fn should_verify_ownership_before_setting_action_threshold() {
     // Testing a valid case only - successfuly added a key, and successfuly removed,
     // making sure `account_dirty` mutated
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         // Overwrites a `base_key` to a different one before doing any operation as
         // account `[0; 32]`
@@ -812,12 +821,12 @@ fn should_verify_ownership_before_setting_action_threshold() {
 
         Ok(())
     };
-    let _ = test(known_urefs, query);
+    let _ = test(access_rights, query);
 }
 
 #[test]
 fn can_roundtrip_key_value_pairs_into_local_state() {
-    let known_urefs = HashMap::new();
+    let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let test_key = b"test_key";
         let test_value = Value::String("test_value".to_string());
@@ -830,7 +839,7 @@ fn can_roundtrip_key_value_pairs_into_local_state() {
 
         Ok(result == Some(test_value))
     };
-    let query_result = test(known_urefs, query).expect("should be ok");
+    let query_result = test(access_rights, query).expect("should be ok");
     assert!(query_result)
 }
 
@@ -840,7 +849,7 @@ fn remove_uref_works() {
     // which is one of the current RuntimeContext, and also puts that change
     // into the `TrackingCopy` so that it's later committed to the GlobalState.
 
-    let known_urefs = HashMap::new();
+    let known_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
@@ -849,33 +858,33 @@ fn remove_uref_works() {
     let uref_key = create_uref(&mut address_generator, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
     let mut runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
+        mock_runtime_context(&account, key, &mut uref_map, known_keys, address_generator);
 
-    assert!(runtime_context.contains_uref(&uref_name));
-    assert!(runtime_context.remove_uref(&uref_name).is_ok());
+    assert!(runtime_context.known_keys_contains_key(&uref_name));
+    assert!(runtime_context.remove_key(&uref_name).is_ok());
     assert!(runtime_context.validate_key(&uref_key).is_err());
-    assert!(!runtime_context.contains_uref(&uref_name));
+    assert!(!runtime_context.known_keys_contains_key(&uref_name));
     let effects = runtime_context.effect();
     let transform = effects.transforms.get(&key).unwrap();
     let account = match transform {
         Transform::Write(Value::Account(account)) => account,
         _ => panic!("Invalid transform operation found"),
     };
-    assert!(!account.urefs_lookup().contains_key(&uref_name));
+    assert!(!account.known_keys().contains_key(&uref_name));
 }
 
 #[test]
 fn validate_valid_purse_id_of_an_account() {
     // Tests that URef which matches a purse_id of a given context gets validated
     let mock_purse_id = [42u8; 32];
-    let known_urefs = HashMap::new();
+    let known_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_urefs, address_generator);
+        mock_runtime_context(&account, key, &mut uref_map, known_keys, address_generator);
 
     // URef that has the same id as purse_id of an account gets validated
     // successfully.

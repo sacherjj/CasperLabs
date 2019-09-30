@@ -176,7 +176,7 @@ fn get_pos_refund_purse(builder: &InMemoryWasmTestBuilder) -> Option<Key> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .known_keys()
         .get(POS_REFUND_PURSE_NAME)
         .cloned()
 }
@@ -188,7 +188,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .known_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -207,7 +207,7 @@ fn get_named_account_balance(
         .expect("should find balance uref");
 
     let purse_id = account
-        .urefs_lookup()
+        .known_keys()
         .get(name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u));

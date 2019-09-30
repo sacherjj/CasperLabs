@@ -50,9 +50,9 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::SerKnownURefs => {
+            FunctionIndex::SerKnownKeysFuncIndex => {
                 // No args, returns byte size of the known URefs.
-                let size = self.serialize_known_urefs()?;
+                let size = self.serialize_known_keys()?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -170,43 +170,43 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::GetURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::GetKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.get_uref(name_ptr, name_size)?;
+                let size = self.get_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::HasURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::HasKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                let result = self.has_uref(name_ptr, name_size)?;
+                let result = self.has_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            FunctionIndex::AddURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::PutKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
 
-            FunctionIndex::ListKnownURefsIndex => {
+            FunctionIndex::ListKnownKeysFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let ptr = Args::parse(args)?;
-                self.list_known_urefs(ptr)?;
+                self.list_known_keys(ptr)?;
                 Ok(None)
             }
 
-            FunctionIndex::RemoveURef => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::RemoveKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                self.remove_uref(name_ptr, name_size)?;
+                self.remove_key(name_ptr, name_size)?;
                 Ok(None)
             }
 

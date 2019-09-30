@@ -9,12 +9,12 @@ const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
-fn should_run_known_urefs_contract() {
+fn should_run_known_keys_contract() {
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(
             DEFAULT_ACCOUNT_ADDR,
-            "known_urefs.wasm",
+            "known_keys.wasm",
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
         )
@@ -66,6 +66,6 @@ fn should_run_known_urefs_contract() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("Unable to get account transformation");
     // Those named URefs are created, although removed at the end of the test
-    assert!(account.urefs_lookup().get("URef1").is_none());
-    assert!(account.urefs_lookup().get("URef2").is_none());
+    assert!(account.known_keys().get("URef1").is_none());
+    assert!(account.known_keys().get("URef2").is_none());
 }
