@@ -1,12 +1,12 @@
 package io.casperlabs.node
 
 import java.nio.file.Path
-import java.sql.DriverManager
 
 import cats._
 import cats.effect._
 import cats.implicits._
 import cats.mtl._
+import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -24,6 +24,7 @@ import scala.concurrent.duration._
 import scala.io.Source
 
 package object effects {
+  import com.zaxxer.hikari.HikariConfig
 
   def log: Log[Task] = Log.log
 
@@ -75,39 +76,35 @@ package object effects {
     }
 
   // https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
-  // TODO: Investigate possible performance improvements if make use of recommended compile-time options
-  // https://www.sqlite.org/compile.html#recommended_compile_time_options
   def doobieTransactor(
+      connectEC: ExecutionContext,  // for waiting on connections, should be bounded
       transactEC: ExecutionContext, // for JDBC, can be unbounded
-      serverDataDir: Path,
-      log: Log[Task]
+      serverDataDir: Path
   ): Resource[Task, Transactor[Task]] = {
-    val connectionResource = Resource.make(
-      Task {
-        val connection =
-          DriverManager.getConnection(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
-        connection.setAutoCommit(false)
-        connection
-      }
-    )(
-      connection =>
-        Task(connection.close())
-          .handleErrorWith(e => log.error("Failed to close the SQLite connection", e))
-    )
-    // Using a transactor based on a single connection because with the default settings we got SQLITE_BUSY errors.
+    val config = new HikariConfig()
+    config.setDriverClassName("org.sqlite.JDBC")
+    config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
+    config.setMinimumIdle(1)
+    config.setMaximumPoolSize(1)
+    // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
+    // From doobie's docs:
+    // * - Auto-commit will be set to `false`;
+    // * - the transaction will `commit` on success and `rollback` on failure;
+    config.setAutoCommit(false)
+    // Using a connection pool with maximum size of 1 becuase with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    connectionResource
-      .map { connection =>
-        val xa = Transactor.fromConnection[Task](connection, transactEC)
+    HikariTransactor
+      .fromHikariConfig[Task](
+        config,
+        connectEC,
+        transactEC
+      )
+      .map { xa =>
         // Foreign keys support must be enabled explicitly in SQLite
-        // https://www.sqlite.org/foreignkeys.html#fk_enable,
+        // https://www.sqlite.org/foreignkeys.html#fk_enable
         Transactor.before
-          .set(
-            xa,
-            sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before
-              .get(xa)
-          )
+          .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
       }
   }
 }

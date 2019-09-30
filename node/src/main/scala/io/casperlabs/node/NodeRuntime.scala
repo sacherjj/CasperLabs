@@ -75,6 +75,8 @@ class NodeRuntime private[node] (
   private[this] val egressScheduler =
     Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
+  private[this] val dbConnScheduler =
+    Scheduler.cached("db-conn", 1, 64, reporter = uncaughtExceptionHandler)
   private[this] val dbIOScheduler =
     Scheduler.cached("db-io", 1, Int.MaxValue, reporter = uncaughtExceptionHandler)
 
@@ -131,9 +133,9 @@ class NodeRuntime private[node] (
                                                                           )
         //TODO: We may want to adjust threading model for better performance
         implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
-                                                          dbIOScheduler,
-                                                          conf.server.dataDir,
-                                                          log
+                                                          connectEC = dbConnScheduler,
+                                                          transactEC = dbIOScheduler,
+                                                          conf.server.dataDir
                                                         )
         deployBufferChunkSize = 20 //TODO: Move to config
         implicit0(deployBuffer: DeployBuffer[Task]) <- Resource
