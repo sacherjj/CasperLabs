@@ -517,7 +517,7 @@ where
     }
 
     /// Generates new unforgable reference and adds it to the context's
-    /// known_keys set.
+    /// access_rights set.
     pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let key = self.context.new_uref(value)?;
