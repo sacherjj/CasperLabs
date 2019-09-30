@@ -2,6 +2,7 @@ package io.casperlabs.node.api.graphql.schema.globalstate
 
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.node.api.graphql.schema.utils.ProtocolVersionType
 import sangria.schema._
 
 package object types {
@@ -137,7 +138,7 @@ package object types {
     fields[Unit, state.Contract](
       Field("body", StringType, resolve = c => Base16.encode(c.value.body.toByteArray)),
       Field("knownUrefs", ListType(NamedKey), resolve = _.value.knownUrefs),
-      Field("protocolVersion", LongType, resolve = _.value.protocolVersion.get.value)
+      Field("protocolVersion", ProtocolVersionType, resolve = _.value.getProtocolVersion)
     )
   )
 

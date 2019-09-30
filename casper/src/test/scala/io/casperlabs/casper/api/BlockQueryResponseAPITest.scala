@@ -23,6 +23,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 @silent("deprecated")
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFixture {
@@ -31,9 +32,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
   val badTestHashQuery = "No such a hash"
 
   val genesisHashString = "0" * 64
-  val version           = 1L
+  val version           = ProtocolVersion(1)
 
-  def genesisBlock(genesisHashString: String, version: Long): Block = {
+  def genesisBlock(genesisHashString: String, version: ProtocolVersion): Block = {
     val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
     val ps = Block
       .GlobalState()
@@ -108,7 +109,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
         _         = blockInfo.blockHash should be(secondHashString)
         _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
         _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.protocolVersion should be(version)
+        _         = blockInfo.protocolVersion should be(version.major)
         _         = blockInfo.deployCount should be(deployCount)
         _         = blockInfo.faultTolerance should be(faultTolerance)
         _         = blockInfo.mainParentHash should be(genesisHashString)
@@ -155,7 +156,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with DagStorageFi
         _         = blockInfo.blockHash should be(secondHashString)
         _         = blockInfo.blockSize should be(secondBlock.serializedSize.toString)
         _         = blockInfo.blockNumber should be(blockNumber)
-        _         = blockInfo.protocolVersion should be(version)
+        _         = blockInfo.protocolVersion should be(version.major)
         _         = blockInfo.deployCount should be(deployCount)
         _         = blockInfo.faultTolerance should be(faultTolerance)
         _         = blockInfo.mainParentHash should be(genesisHashString)

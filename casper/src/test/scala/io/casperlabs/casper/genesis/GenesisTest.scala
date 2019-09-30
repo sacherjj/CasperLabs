@@ -182,7 +182,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
             request.initialMotes.get shouldBe state.BigInt("123", 512)
             request.mintCode.get.code.toByteArray shouldBe ("mint code".getBytes)
             request.proofOfStakeCode.get.code.toByteArray shouldBe ("proof of stake code".getBytes)
-            request.protocolVersion.get.value shouldBe 1L
+            request.protocolVersion.get.major shouldBe 1
           }
       }
     )

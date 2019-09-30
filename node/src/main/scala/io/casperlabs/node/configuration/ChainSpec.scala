@@ -39,6 +39,12 @@ object ChainSpec extends ParserImplicits {
       }
   }
 
+  final case class ProtocolVersion(
+      major: Int,
+      minor: Int,
+      patch: Int
+  )
+
   /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
       genesis: Genesis,
@@ -59,15 +65,13 @@ object ChainSpec extends ParserImplicits {
       mintCodePath: Path,
       posCodePath: Path,
       initialAccountsPath: Path,
-      // TODO: Change this later to semver.
-      protocolVersion: Long
+      protocolVersion: ProtocolVersion
   ) extends SubConfig
 
   final case class Upgrade(
       activationPointRank: Long,
       installerCodePath: Option[Path],
-      // TODO: Change this later to semver.
-      protocolVersion: Long
+      protocolVersion: ProtocolVersion
   ) extends SubConfig
 
   final case class WasmCosts(
@@ -134,7 +138,7 @@ object ChainSpec extends ParserImplicits {
 }
 
 trait ChainSpecReader {
-  import ChainSpec.{resolvePath, Accounts, GenesisConf, UpgradeConf}
+  import ChainSpec.{resolvePath, Accounts, GenesisConf, ProtocolVersion, UpgradeConf}
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
       read: A => Either[String, B]
@@ -198,7 +202,11 @@ trait ChainSpecReader {
               .GenesisConfig()
               .withName(genesis.name)
               .withTimestamp(genesis.timestamp)
-              .withProtocolVersion(state.ProtocolVersion(genesis.protocolVersion))
+              .withProtocolVersion(
+                (state.ProtocolVersion.apply _).tupled(
+                  ProtocolVersion.unapply(genesis.protocolVersion).get
+                )
+              )
               .withMintInstaller(ByteString.copyFrom(mintCodeBytes))
               .withPosInstaller(ByteString.copyFrom(posCodeBytes))
               .withAccounts(accounts.map { account =>
@@ -238,7 +246,11 @@ trait ChainSpecReader {
               .withActivationPoint(
                 ipc.ChainSpec.ActivationPoint(upgrade.activationPointRank)
               )
-              .withProtocolVersion(state.ProtocolVersion(upgrade.protocolVersion))
+              .withProtocolVersion(
+                (state.ProtocolVersion.apply _).tupled(
+                  ProtocolVersion.unapply(upgrade.protocolVersion).get
+                )
+              )
           }
       }
   }

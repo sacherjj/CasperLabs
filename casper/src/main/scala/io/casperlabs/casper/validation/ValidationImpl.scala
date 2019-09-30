@@ -290,9 +290,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       m: BlockHeight => state.ProtocolVersion
   ): F[Boolean] = {
-    val blockVersion = b.getHeader.protocolVersion
+    val blockVersion = b.getHeader.getProtocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).value
+    val version      = m(blockHeight)
     if (blockVersion == version) {
       true.pure[F]
     } else {

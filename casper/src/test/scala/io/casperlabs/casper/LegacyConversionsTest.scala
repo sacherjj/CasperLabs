@@ -11,16 +11,22 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
   implicit val consensusConfig =
     ConsensusConfig(maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
 
+  // Some fields are not supported by the legacy one.
+  def compatPrune(orig: consensus.Block) =
+    orig
+      .withBody(
+        orig.getBody.withDeploys(orig.getBody.deploys.map { pd =>
+          pd.withErrorMessage("")
+        })
+      )
+      .withHeader(
+        orig.getHeader
+          .withProtocolVersion(orig.getHeader.getProtocolVersion.withMinor(0).withPatch(0))
+      )
+
   "LegacyConversions" should "convert correctly between old and new blocks" in {
     forAll { (orig: consensus.Block) =>
-      // Some fields are not supported by the legacy one.
-      val comp =
-        orig
-          .withBody(
-            orig.getBody.withDeploys(orig.getBody.deploys.map { pd =>
-              pd.withErrorMessage("")
-            })
-          )
+      val comp = compatPrune(orig)
       val conv = LegacyConversions.fromBlock(comp)
       val back = LegacyConversions.toBlock(conv)
       back.toProtoString shouldBe comp.toProtoString
@@ -30,7 +36,7 @@ class LegacyConversionsTest extends FlatSpec with ArbitraryConsensus with Matche
   it should "preserve genesis" in {
     forAll { (orig: consensus.Block) =>
       val genesis =
-        orig
+        compatPrune(orig)
           .withBody(consensus.Block.Body())
           .clearSignature
       val conv = LegacyConversions.fromBlock(genesis)

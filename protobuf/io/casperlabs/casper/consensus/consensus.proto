@@ -117,13 +117,14 @@ message Block {
     Signature signature = 4;
 
     message Header {
+        reserved 6; // old u64 protocol version.
         repeated bytes parent_hashes = 1;
         repeated Justification justifications = 2;
         GlobalState state = 3;
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
         uint64 timestamp = 5;
-        uint64 protocol_version = 6;
+        state.ProtocolVersion protocol_version = 13;
         uint32 deploy_count = 7;
         string chain_id = 8;
         uint32 validator_block_seq_num = 9;

@@ -47,6 +47,20 @@ private[configuration] trait ParserImplicits {
     Node.fromAddress(s).leftMap(CommError.errorMessage)
   }
 
+  implicit val protocolVersionParser: Parser[ChainSpec.ProtocolVersion] = {
+    // Major and minor mandatory, patch optional.
+    val SemVer = """(\d+)\.(\d+)(?:\.(\d+))?""".r
+    s =>
+      s match {
+        case SemVer(major, minor, patch) =>
+          ChainSpec
+            .ProtocolVersion(major.toInt, minor.toInt, Option(patch).fold(0)(_.toInt))
+            .asRight
+        case _ =>
+          s"Unable to parse semver: $s".asLeft
+      }
+  }
+
   implicit val positiveIntParser: Parser[Refined[Int, Positive]] =
     s =>
       for {

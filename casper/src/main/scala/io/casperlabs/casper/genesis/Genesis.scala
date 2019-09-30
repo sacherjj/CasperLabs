@@ -12,6 +12,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.Sorting._
@@ -33,7 +34,7 @@ object Genesis {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  val protocolVersion = 1L
+  val protocolVersion = 1
 
   /** Construct deploys that will set up the system contracts. */
   @silent("is never used")
@@ -95,7 +96,7 @@ object Genesis {
         )
         .withMintCode(mintCode)
         .withProofOfStakeCode(posCode)
-        .withProtocolVersion(state.ProtocolVersion(protocolVersion))
+        .withProtocolVersion(ProtocolVersion(protocolVersion))
         .withGenesisValidators(genesisValidators)
 
       deploy = ProtoUtil.basicDeploy(
@@ -149,7 +150,7 @@ object Genesis {
         justifications = Nil,
         state = stateWithContracts,
         rank = initial.getHeader.rank,
-        protocolVersion = initial.getHeader.protocolVersion,
+        protocolVersion = initial.getHeader.getProtocolVersion,
         timestamp = initial.getHeader.timestamp,
         chainId = initial.getHeader.chainId
       )
@@ -183,7 +184,7 @@ object Genesis {
       justifications = Nil,
       state = state,
       rank = 0,
-      protocolVersion = protocolVersion,
+      protocolVersion = ProtocolVersion(protocolVersion),
       timestamp = timestamp,
       chainId = chainId
     )
