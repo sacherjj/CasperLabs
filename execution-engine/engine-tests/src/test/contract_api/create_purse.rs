@@ -127,7 +127,7 @@ fn should_insert_into_account_known_urefs() {
         .commit()
         .finish()
         .builder()
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
     assert!(
@@ -180,7 +180,7 @@ fn should_create_usable_purse_id() {
 
     let account_1 = result
         .builder()
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
     let purse_key = account_1

@@ -73,7 +73,7 @@ fn should_run_known_urefs_contract() {
 
     let account = result
         .builder()
-        .get_account(Key::Account(DEFAULT_ACCOUNT_ADDR))
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("Unable to get account transformation");
     // Those named URefs are created, although removed at the end of the test
     assert!(account.urefs_lookup().get("URef1").is_none());

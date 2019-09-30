@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use contract_ffi::bytesrepr::{self, ToBytes};
+use contract_ffi::contract_api;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
@@ -416,6 +417,16 @@ where
                 let dest_ptr = Args::parse(args)?;
                 self.get_phase(dest_ptr)?;
                 Ok(None)
+            }
+
+            FunctionIndex::UpgradeContractAtURef => {
+                // args(0) = pointer to name in Wasm memory
+                // args(1) = size of name in Wasm memory
+                // args(2) = pointer to key in Wasm memory
+                // args(3) = size of key
+                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
+                let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
         }
     }

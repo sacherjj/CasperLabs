@@ -1,14 +1,12 @@
 use crate::support::test_support::{
     self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
-use contract_ffi::key::Key;
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::motes::Motes;
-
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
@@ -27,22 +25,20 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 fn should_transfer_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-    let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
     // Check genesis account balance
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     assert_eq!(genesis_balance, initial_genesis_amount,);
 
@@ -66,13 +62,13 @@ fn should_transfer_to_account() {
         .commit();
 
     let account = builder
-        .get_account(account_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account");
     let account_purse_id = account.purse_id();
 
     // Check genesis account balance
 
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     let gas_cost = Motes::from_gas(builder.get_exec_costs(0)[0], CONV_RATE)
         .expect("should convert gas to motes");
@@ -95,23 +91,20 @@ fn should_transfer_from_account_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
-    let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
     // Check genesis account balance
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     assert_eq!(genesis_balance, initial_genesis_amount,);
 
@@ -138,7 +131,7 @@ fn should_transfer_from_account_to_account() {
         .get_exec_response(0)
         .expect("should have exec response");
 
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
         .expect("should convert");
@@ -150,7 +143,7 @@ fn should_transfer_from_account_to_account() {
 
     // Check account 1 balance
     let account_1 = builder
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should have account 1");
     let account_1_purse_id = account_1.purse_id();
     let account_1_balance = builder.get_purse_balance(account_1_purse_id);
@@ -184,7 +177,7 @@ fn should_transfer_from_account_to_account() {
         .expect("should have exec response");
 
     let account_2 = builder
-        .get_account(account_2_key)
+        .get_account(ACCOUNT_2_ADDR)
         .expect("should have account 2");
 
     let account_2_purse_id = account_2.purse_id();
@@ -212,23 +205,20 @@ fn should_transfer_to_existing_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
-    let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let genesis_account = builder
-        .get_account(genesis_account_key)
+    let default_account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
     // Check genesis account balance
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     assert_eq!(genesis_balance, initial_genesis_amount,);
 
@@ -254,14 +244,14 @@ fn should_transfer_to_existing_account() {
     // Exec transfer contract
 
     let account_1 = builder
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account");
 
     let account_1_purse_id = account_1.purse_id();
 
     // Check genesis account balance
 
-    let genesis_balance = builder.get_purse_balance(genesis_account_purse_id);
+    let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
     let gas_cost = Motes::from_gas(builder.get_exec_costs(0)[0], CONV_RATE)
         .expect("should convert gas to motes");
@@ -299,7 +289,7 @@ fn should_transfer_to_existing_account() {
         .commit();
 
     let account_2 = builder
-        .get_account(account_2_key)
+        .get_account(ACCOUNT_2_ADDR)
         .expect("should get account");
 
     let account_2_purse_id = account_2.purse_id();

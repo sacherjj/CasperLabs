@@ -9,7 +9,7 @@ const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
 #[ignore]
 #[test]
-fn should_run_pos_refund_purse_contract_genesis_account() {
+fn should_run_pos_refund_purse_contract_default_account() {
     let mut builder = initialize();
     refund_tests(&mut builder, DEFAULT_ACCOUNT_ADDR);
 }

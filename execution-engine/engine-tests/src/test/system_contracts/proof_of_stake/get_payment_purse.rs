@@ -12,7 +12,7 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = 100_000_000 + 100;
 
 #[ignore]
 #[test]
-fn should_run_get_payment_purse_contract_genesis_account() {
+fn should_run_get_payment_purse_contract_default_account() {
     let exec_request = {
         let deploy = DeployBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
