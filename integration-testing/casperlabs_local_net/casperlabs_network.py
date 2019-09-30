@@ -44,6 +44,7 @@ class CasperLabsNetwork:
     """
 
     grpc_encryption = False
+    behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
@@ -141,6 +142,7 @@ class CasperLabsNetwork:
             node_private_key=kp.private_key,
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
+            behind_proxy=self.behind_proxy,
         )
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
@@ -311,6 +313,7 @@ class EncryptedTwoNodeNetwork(TwoNodeNetwork):
 
 class InterceptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+    behind_proxy = True
 
     def create_cl_network(self):
         kp = self.get_key()

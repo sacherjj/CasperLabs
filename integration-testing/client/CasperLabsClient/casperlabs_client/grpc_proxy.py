@@ -6,6 +6,7 @@ import logging
 import re
 
 from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc, kademlia_pb2_grpc
+from casperlabs_client import hexify
 
 
 def read_binary(file_name):
@@ -24,19 +25,24 @@ def stub_name(o):
     return s[: -len("ServiceStub")]
 
 
-def logging_pre_callback(name, request):
-    logging.info(f"PROXY PRE CALLBACK: {name} {request}")
-    return request
+class Interceptor:
+    def __str__(self):
+        return "logging_interceptor"
+
+    def pre_request(self, name, request):
+        logging.info(f"PRE REQUEST: {name}({hexify(request)})")
+        return request
+
+    def post_request(self, name, request, response):
+        logging.info(f"POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})")
+        return response
+
+    def post_request_stream(self, name, request, response):
+        logging.info(f"POST REQUEST STREAM: {name}({hexify(request)}) => {response}")
+        yield from response
 
 
-def logging_post_callback(name, request, response):
-    logging.info(f"PROXY POST CALLBACK: {name} {request} {response}")
-    return response
-
-
-def logging_post_callback_stream(name, request, response):
-    logging.info(f"PROXY POST CALLBACK STREAM: {name} {request} {response}")
-    yield from response
+logging_interceptor = Interceptor()
 
 
 class ProxyServicer:
@@ -50,9 +56,7 @@ class ProxyServicer:
         key_file: str = None,
         node_id: str = None,
         service_stub=None,
-        pre_callback=logging_pre_callback,
-        post_callback=logging_post_callback,
-        post_callback_stream=logging_post_callback_stream,
+        interceptor: Interceptor = Interceptor(),
     ):
         self.node_host = node_host
         self.node_port = node_port
@@ -61,9 +65,7 @@ class ProxyServicer:
         self.key_file = key_file
         self.node_id = node_id
         self.service_stub = service_stub
-        self.pre_callback = pre_callback
-        self.post_callback = post_callback
-        self.post_callback_stream = post_callback_stream
+        self.interceptor = interceptor
         self.node_address = f"{self.node_host}:{self.node_port}"
 
         self.encrypted_connection = encrypted_connection
@@ -77,6 +79,12 @@ class ProxyServicer:
                 ("grpc.ssl_target_name_override", self.node_id),
                 ("grpc.default_authority", self.node_id),
             ]
+        self.log_prefix = (
+            f"PROXY"
+            f" {self.node_host}:{self.node_port} on {self.proxy_port}"
+            f" {stub_name(self.service_stub)}"
+        )
+        logging.info(f"{self.log_prefix}, interceptor: {self.interceptor}")
 
     def channel(self):
         return (
@@ -91,34 +99,23 @@ class ProxyServicer:
         return method_name.startswith("Stream") or method_name.endswith("Chunked")
 
     def __getattr__(self, name):
-
-        prefix = (
-            f"PROXY"
-            f" {self.node_host}:{self.node_port} on {self.proxy_port}"
-            f" {stub_name(self.service_stub)}::{name}"
-        )
-        callback_info = (
-            f" [{fun_name(self.pre_callback)}"
-            f" {fun_name(self.post_callback)}"
-            f" {fun_name(self.post_callback_stream)}]"
-        )
-        logging.info(f"{prefix} {callback_info}")
-
         def unary_unary(request, context):
-            logging.info(f"{prefix}: ({request})")
+            logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.pre_callback(name, request)
+                preprocessed_request = self.interceptor.pre_request(name, request)
                 service_method = getattr(self.service_stub(channel), name)
                 response = service_method(preprocessed_request)
-                return self.post_callback(name, preprocessed_request, response)
+                return self.interceptor.post_request(
+                    name, preprocessed_request, response
+                )
 
         def unary_stream(request, context):
-            logging.info(f"{prefix}: ({request})")
+            logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.pre_callback(name, request)
+                preprocessed_request = self.interceptor.pre_request(name, request)
                 streaming_service_method = getattr(self.service_stub(channel), name)
                 response_stream = streaming_service_method(preprocessed_request)
-                yield from self.post_callback_stream(
+                yield from self.interceptor.post_request_stream(
                     name, preprocessed_request, response_stream
                 )
 
@@ -138,9 +135,7 @@ class ProxyThread(Thread):
         server_key_file: str = None,
         client_certificate_file: str = None,
         client_key_file: str = None,
-        pre_callback=None,
-        post_callback=None,
-        post_callback_stream=None,
+        interceptor: Interceptor = None,
     ):
         super().__init__()
         self.service_stub = service_stub
@@ -153,18 +148,13 @@ class ProxyThread(Thread):
         self.client_certificate_file = client_certificate_file
         self.client_key_file = client_key_file
         self.encrypted_connection = encrypted_connection
-        self.pre_callback = pre_callback
-        self.post_callback = post_callback
-        self.post_callback_stream = post_callback_stream
+        self.interceptor = interceptor
         self.node_id = None
         if self.encrypted_connection:
             self.node_id = casperlabs_client.extract_common_name(
                 self.client_certificate_file
             )
-
-    def run(self):
-        self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-        servicer = ProxyServicer(
+        self.servicer = ProxyServicer(
             node_host=self.node_host,
             node_port=self.node_port,
             proxy_port=self.proxy_port,
@@ -173,16 +163,18 @@ class ProxyThread(Thread):
             key_file=self.client_key_file,
             node_id=self.node_id,
             service_stub=self.service_stub,
-            pre_callback=self.pre_callback,
-            post_callback=self.post_callback,
-            post_callback_stream=self.post_callback_stream,
+            interceptor=self.interceptor,
         )
-        self.add_servicer_to_server(servicer, self.server)
+
+    def run(self):
+        self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+        self.add_servicer_to_server(self.servicer, self.server)
+        self.port = f"[::]:{self.proxy_port}"
         if not self.encrypted_connection:
-            self.server.add_insecure_port(f"[::]:{self.proxy_port}")
+            self.server.add_insecure_port(self.port)
         else:
             self.server.add_secure_port(
-                f"[::]:{self.proxy_port}",
+                self.port,
                 grpc.ssl_server_credentials(
                     [
                         (
@@ -212,9 +204,7 @@ def proxy_client(
     server_key_file: str = None,
     client_certificate_file: str = None,
     client_key_file: str = None,
-    pre_callback=logging_pre_callback,
-    post_callback=logging_post_callback,
-    post_callback_stream=logging_post_callback_stream,
+    interceptor: Interceptor = logging_interceptor,
 ):
     t = ProxyThread(
         casper_pb2_grpc.CasperServiceStub,
@@ -226,9 +216,7 @@ def proxy_client(
         server_key_file=server_key_file,
         client_certificate_file=client_certificate_file,
         client_key_file=client_key_file,
-        pre_callback=pre_callback,
-        post_callback=post_callback,
-        post_callback_stream=post_callback_stream,
+        interceptor=interceptor,
     )
     t.start()
     return t
@@ -242,9 +230,7 @@ def proxy_server(
     server_key_file=None,
     client_certificate_file=None,
     client_key_file=None,
-    pre_callback=logging_pre_callback,
-    post_callback=logging_post_callback,
-    post_callback_stream=logging_post_callback_stream,
+    interceptor: Interceptor = logging_interceptor,
 ):
     t = ProxyThread(
         gossiping_pb2_grpc.GossipServiceStub,
@@ -256,9 +242,7 @@ def proxy_server(
         server_key_file=server_key_file,
         client_certificate_file=client_certificate_file,
         client_key_file=client_key_file,
-        pre_callback=pre_callback,
-        post_callback=post_callback,
-        post_callback_stream=post_callback_stream,
+        interceptor=interceptor,
     )
     t.start()
     return t
@@ -268,9 +252,7 @@ def proxy_kademlia(
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    pre_callback=logging_pre_callback,
-    post_callback=logging_post_callback,
-    post_callback_stream=logging_post_callback_stream,
+    interceptor: Interceptor = logging_interceptor,
 ):
     t = ProxyThread(
         kademlia_pb2_grpc.KademliaServiceStub,
@@ -279,9 +261,7 @@ def proxy_kademlia(
         node_host=node_host,
         node_port=node_port,
         encrypted_connection=False,
-        pre_callback=pre_callback,
-        post_callback=post_callback,
-        post_callback_stream=post_callback_stream,
+        interceptor=interceptor,
     )
     t.start()
     return t

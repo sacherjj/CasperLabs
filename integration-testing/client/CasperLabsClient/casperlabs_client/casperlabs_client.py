@@ -38,7 +38,7 @@ CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 def _hex(text, as_utf8):
     try:
-        return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+        return (len(text) in (32, 64, 20)) and text.hex() or CEscape(text, as_utf8)
     except TypeError:
         return CEscape(text, as_utf8)
 
