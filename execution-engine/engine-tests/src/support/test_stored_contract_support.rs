@@ -627,9 +627,9 @@ impl WasmTestBuilder {
         let system_account = get_account(&genesis_transforms, &system_account)
             .expect("Unable to get system account");
 
-        let known_keys = system_account.known_keys();
+        let named_keys = system_account.named_keys();
 
-        let mint_contract_uref = known_keys
+        let mint_contract_uref = named_keys
             .get(MINT_NAME)
             .and_then(Key::as_uref)
             .cloned()

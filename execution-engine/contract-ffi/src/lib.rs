@@ -65,9 +65,9 @@ mod ext_ffi {
             extra_urefs_size: usize,
             hash_ptr: *const u8,
         );
-        pub fn serialize_known_keys() -> usize;
-        // Can only be called after `serialize_known_keys`.
-        pub fn list_known_keys(dest_ptr: *mut u8);
+        pub fn serialize_named_keys() -> usize;
+        // Can only be called after `serialize_named_keys`.
+        pub fn list_named_keys(dest_ptr: *mut u8);
         pub fn load_arg(i: u32) -> isize;
         pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
         pub fn ret(

@@ -336,7 +336,7 @@ fn deserialize_accessrights_add_write(b: &mut Bencher) {
     b.iter(|| AccessRights::from_bytes(&data));
 }
 
-fn make_known_keys() -> BTreeMap<String, Key> {
+fn make_named_keys() -> BTreeMap<String, Key> {
     let mut named_keys = BTreeMap::new();
     named_keys.insert(
         "ref1".to_string(),
@@ -358,19 +358,19 @@ fn make_purse_id() -> PurseId {
 }
 
 fn make_contract() -> Contract {
-    let known_keys = make_known_keys();
-    Contract::new(vec![0u8; 1024], known_keys, ProtocolVersion::new(1))
+    let named_keys = make_named_keys();
+    Contract::new(vec![0u8; 1024], named_keys, ProtocolVersion::new(1))
 }
 
 fn make_account() -> Account {
-    let known_keys = make_known_keys();
+    let named_keys = make_named_keys();
     let purse_id = make_purse_id();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
     let action_thresholds = Default::default();
     let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
     Account::new(
         [0u8; 32],
-        known_keys,
+        named_keys,
         purse_id,
         associated_keys,
         action_thresholds,

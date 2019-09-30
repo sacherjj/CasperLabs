@@ -32,9 +32,9 @@ pub extern "C" fn call() {
 
     let mint_key = Key::URef(mint_uref);
 
-    let mut known_keys: BTreeMap<String, Key> = BTreeMap::new();
-    known_keys.insert(String::from(MINT_NAME), mint_key);
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, known_keys);
+    let mut named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    named_keys.insert(String::from(MINT_NAME), mint_key);
+    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, named_keys);
     let key = contract_api::new_turef(contract).into();
     contract_api::put_key(CONTRACT_NAME, &key);
 }

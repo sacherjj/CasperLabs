@@ -1,11 +1,11 @@
 [package]
-name = "known-keys"
+name = "named-keys"
 version = "0.1.0"
 authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "known_keys"
+name = "named_keys"
 crate-type = ["cdylib"]
 
 [features]

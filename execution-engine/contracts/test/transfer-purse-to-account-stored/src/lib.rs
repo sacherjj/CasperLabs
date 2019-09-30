@@ -49,8 +49,8 @@ pub extern "C" fn transfer() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_keys: BTreeMap<String, Key> = BTreeMap::new();
-    let contract = contract_api::fn_by_name(TRANSFER_FUNCTION_NAME, known_keys);
+    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    let contract = contract_api::fn_by_name(TRANSFER_FUNCTION_NAME, named_keys);
     let key = contract_api::new_turef(contract).into();
     contract_api::put_key(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &key);
 }

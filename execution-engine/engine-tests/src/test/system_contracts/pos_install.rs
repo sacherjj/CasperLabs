@@ -19,7 +19,7 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
-// one known_key for each validator, one for the mint and three for the purses
+// one named_key for each validator, one for the mint and three for the purses
 const EXPECTED_KNOWN_KEYS_LEN: usize = (N_VALIDATORS as usize) + 1 + 3;
 
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
@@ -70,41 +70,41 @@ fn should_run_pos_install_contract() {
     assert_eq!(ret_value, ret_urefs[0]);
 
     // should have written a contract under that uref
-    let known_keys = match effect
+    let named_keys = match effect
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
     {
-        Some(Transform::Write(Value::Contract(contract))) => contract.known_keys(),
+        Some(Transform::Write(Value::Contract(contract))) => contract.named_keys(),
 
         _ => panic!("Expected contract to be written under the key"),
     };
 
-    assert_eq!(known_keys.len(), EXPECTED_KNOWN_KEYS_LEN);
+    assert_eq!(named_keys.len(), EXPECTED_KNOWN_KEYS_LEN);
 
     // bonding purse has correct balance
     let bonding_purse =
-        get_purse(known_keys, POS_BONDING_PURSE).expect("should find bonding purse in known_keys");
+        get_purse(named_keys, POS_BONDING_PURSE).expect("should find bonding purse in named_keys");
 
     let bonding_purse_balance = builder.get_purse_balance(bonding_purse);
     assert_eq!(bonding_purse_balance, total_bond);
 
     // payment purse has correct balance
     let payment_purse =
-        get_purse(known_keys, POS_PAYMENT_PURSE).expect("should find payment purse in known_keys");
+        get_purse(named_keys, POS_PAYMENT_PURSE).expect("should find payment purse in named_keys");
 
     let payment_purse_balance = builder.get_purse_balance(payment_purse);
     assert_eq!(payment_purse_balance, U512::zero());
 
     // rewards purse has correct balance
     let rewards_purse =
-        get_purse(known_keys, POS_REWARDS_PURSE).expect("should find rewards purse in known_keys");
+        get_purse(named_keys, POS_REWARDS_PURSE).expect("should find rewards purse in named_keys");
 
     let rewards_purse_balance = builder.get_purse_balance(rewards_purse);
     assert_eq!(rewards_purse_balance, U512::zero());
 }
 
-fn get_purse(known_keys: &BTreeMap<String, Key>, name: &str) -> Option<PurseId> {
-    known_keys
+fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<PurseId> {
+    named_keys
         .get(name)
         .and_then(Key::as_uref)
         .cloned()

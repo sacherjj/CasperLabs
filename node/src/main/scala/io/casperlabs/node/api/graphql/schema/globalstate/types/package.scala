@@ -136,7 +136,7 @@ package object types {
     "Contract",
     fields[Unit, state.Contract](
       Field("body", StringType, resolve = c => Base16.encode(c.value.body.toByteArray)),
-      Field("knownKeys", ListType(NamedKey), resolve = _.value.knownKeys),
+      Field("knownKeys", ListType(NamedKey), resolve = _.value.namedKeys),
       Field("protocolVersion", LongType, resolve = _.value.protocolVersion.get.value)
     )
   )
@@ -175,7 +175,7 @@ package object types {
     fields[Unit, state.Account](
       Field("pubKey", StringType, resolve = c => Base16.encode(c.value.publicKey.toByteArray)),
       Field("purseId", KeyURef, resolve = _.value.purseId.get),
-      Field("knownKeys", ListType(NamedKey), resolve = _.value.knownKeys),
+      Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys),
       Field("associatedKeys", ListType(AccountAssociatedKey), resolve = _.value.associatedKeys),
       Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds.get),
       Field("accountActivity", AccountAccountActivity, resolve = _.value.accountActivity.get)

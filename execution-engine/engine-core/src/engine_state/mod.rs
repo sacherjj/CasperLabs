@@ -154,9 +154,9 @@ where
 
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
-            let known_keys = BTreeMap::new();
+            let named_keys = BTreeMap::new();
             let purse = PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE));
-            Account::create(SYSTEM_ACCOUNT_ADDR, known_keys, purse)
+            Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
         };
 
         // Spec #4: Create a runtime.
@@ -304,7 +304,7 @@ where
         //
 
         // Create known keys for chainspec accounts
-        let account_known_keys = {
+        let account_named_keys = {
             let mut ret = BTreeMap::new();
             let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
             let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
@@ -314,7 +314,7 @@ where
         };
 
         // Create known keys for system account
-        let system_account_known_keys = {
+        let system_account_named_keys = {
             let mut ret = BTreeMap::new();
             ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
             ret.insert(POS_NAME.to_string(), Key::URef(proof_of_stake_reference));
@@ -330,14 +330,14 @@ where
                     .accounts()
                     .to_vec()
                     .into_iter()
-                    .map(|account| (account, account_known_keys.clone()))
+                    .map(|account| (account, account_named_keys.clone()))
                     .collect();
                 let system_account = GenesisAccount::new(
                     PublicKey::new(SYSTEM_ACCOUNT_ADDR),
                     Motes::zero(),
                     Motes::zero(),
                 );
-                ret.push((system_account, system_account_known_keys));
+                ret.push((system_account, system_account_named_keys));
                 ret
             };
 
@@ -351,7 +351,7 @@ where
             };
 
             // For each account...
-            for (account, known_keys) in accounts.into_iter() {
+            for (account, named_keys) in accounts.into_iter() {
                 let module = module.clone();
                 let args = {
                     let motes = account.balance().value();
@@ -400,7 +400,7 @@ where
                     let purse_id = PurseId::new(account_main_purse);
                     let value = Value::Account(Account::create(
                         account_public_key.value(),
-                        known_keys,
+                        named_keys,
                         purse_id,
                     ));
                     Validated::new(value, Validated::valid).unwrap() // safe to unwrap
@@ -543,7 +543,7 @@ where
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
-                let stored_contract_key = account.known_keys().get(name).ok_or_else(|| {
+                let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
                     error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
                 })?;
                 if let Key::URef(uref) = stored_contract_key {
@@ -575,11 +575,11 @@ where
                         URef::new(arr, AccessRights::READ)
                     };
                     let normalized_uref = Key::URef(read_only_uref).normalize();
-                    let maybe_known_key = account
-                        .known_keys()
+                    let maybe_named_key = account
+                        .named_keys()
                         .values()
-                        .find(|&known_key| known_key.normalize() == normalized_uref);
-                    match maybe_known_key {
+                        .find(|&named_key| named_key.normalize() == normalized_uref);
+                    match maybe_named_key {
                         Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                         Some(Key::URef(_)) => {
                             return Err(error::Error::ExecError(
@@ -732,7 +732,7 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = match account.known_keys().get(MINT_NAME) {
+            let mint_public_uref: Key = match account.named_keys().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
                 None => {
                     return Ok(ExecutionResult::precondition_failure(
@@ -760,7 +760,7 @@ where
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.known_keys().get(POS_NAME) {
+        let proof_of_stake_public_uref: Key = match account.named_keys().get(POS_NAME) {
             Some(uref) => uref.normalize(),
             None => {
                 return Ok(ExecutionResult::precondition_failure(
@@ -788,7 +788,7 @@ where
             // payment_code_spec_6: system contract validity
             let rewards_purse_key: Key = match proof_of_stake_info
                 .contract()
-                .known_keys()
+                .named_keys()
                 .get(POS_REWARDS_PURSE)
             {
                 Some(key) => *key,
@@ -904,7 +904,7 @@ where
             // payment_code_spec_6: system contract validity
             let payment_purse: Key = match proof_of_stake_info
                 .contract()
-                .known_keys()
+                .named_keys()
                 .get(POS_PAYMENT_PURSE)
             {
                 Some(key) => *key,
@@ -1017,7 +1017,7 @@ where
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
                 .contract()
-                .known_keys()
+                .named_keys()
                 .clone();
 
             let base_key = proof_of_stake_info.key();
@@ -1110,7 +1110,7 @@ where
         };
 
         let bonded_validators = contract
-            .known_keys()
+            .named_keys()
             .keys()
             .filter_map(|entry| utils::pos_validator_to_tuple(entry))
             .collect::<HashMap<PublicKey, U512>>();

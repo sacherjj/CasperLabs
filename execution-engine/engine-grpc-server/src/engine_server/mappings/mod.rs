@@ -168,11 +168,11 @@ impl TryFrom<&super::transforms::Transform> for transform::Transform {
 
 impl From<contract_ffi::value::Contract> for super::state::Contract {
     fn from(contract: contract_ffi::value::Contract) -> Self {
-        let (bytes, known_keys, protocol_version) = contract.destructure();
+        let (bytes, named_keys, protocol_version) = contract.destructure();
         let mut contract = super::state::Contract::new();
-        let known_keys = KnownKeys(known_keys).into();
+        let named_keys = KnownKeys(named_keys).into();
         contract.set_body(bytes);
-        contract.set_known_keys(protobuf::RepeatedField::from_vec(known_keys));
+        contract.set_named_keys(protobuf::RepeatedField::from_vec(named_keys));
         contract.set_protocol_version(protocol_version.into());
         contract
     }
@@ -182,10 +182,10 @@ impl TryFrom<&super::state::Contract> for contract_ffi::value::Contract {
     type Error = ParsingError;
 
     fn try_from(value: &super::state::Contract) -> Result<Self, Self::Error> {
-        let known_keys: KnownKeys = value.get_known_keys().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         Ok(contract_ffi::value::Contract::new(
             value.get_body().to_vec(),
-            known_keys.0,
+            named_keys.0,
             ProtocolVersion::new(value.get_protocol_version().value),
         ))
     }
@@ -323,9 +323,9 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
             tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
             tmp
         };
-        let account_known_keys = KnownKeys(account.known_keys().to_owned());
-        let ipc_urefs: Vec<super::state::NamedKey> = account_known_keys.into();
-        ipc_account.set_known_keys(ipc_urefs.into());
+        let account_named_keys = KnownKeys(account.named_keys().to_owned());
+        let ipc_urefs: Vec<super::state::NamedKey> = account_named_keys.into();
+        ipc_account.set_named_keys(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
         ipc_account.set_account_activity(account_activity);
         ipc_account
@@ -344,7 +344,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
             buff.copy_from_slice(&value.public_key);
             buff
         };
-        let known_keys: KnownKeys = value.get_known_keys().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         let purse_id: PurseId = PurseId::new(value.get_purse_id().try_into()?);
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
@@ -393,7 +393,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
         };
         Ok(contract_ffi::value::Account::new(
             pub_key,
-            known_keys.0,
+            named_keys.0,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -1114,7 +1114,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use contract_ffi::gens::{account_arb, contract_arb, key_arb, known_keys_arb, value_arb};
+    use contract_ffi::gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
     use engine_core::engine_state::error::Error::ExecError;
@@ -1291,13 +1291,13 @@ mod tests {
         }
 
         #[test]
-        fn known_keys_roundtrip(known_keys in known_keys_arb(10)) {
-            let known_keys_newtype = super::KnownKeys(known_keys.clone());
-            let ipc_known_keys: Vec<state::NamedKey> = known_keys_newtype.into();
-            let ipc_urefs_slice: &[state::NamedKey] = &ipc_known_keys;
-            let known_keys_back: super::KnownKeys = ipc_urefs_slice.try_into()
+        fn named_keys_roundtrip(named_keys in named_keys_arb(10)) {
+            let named_keys_newtype = super::KnownKeys(named_keys.clone());
+            let ipc_named_keys: Vec<state::NamedKey> = named_keys_newtype.into();
+            let ipc_urefs_slice: &[state::NamedKey] = &ipc_named_keys;
+            let named_keys_back: super::KnownKeys = ipc_urefs_slice.try_into()
                 .expect("Transforming Vec<state::NamedKey> to KnownKeys should succeed.");
-            assert_eq!(known_keys, known_keys_back.0)
+            assert_eq!(named_keys, named_keys_back.0)
         }
 
         #[test]

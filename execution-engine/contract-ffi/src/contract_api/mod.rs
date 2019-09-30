@@ -319,11 +319,11 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
-pub fn list_known_keys() -> BTreeMap<String, Key> {
-    let bytes_size = unsafe { ext_ffi::serialize_known_keys() };
+pub fn list_named_keys() -> BTreeMap<String, Key> {
+    let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
     let dest_ptr = alloc_bytes(bytes_size);
     let bytes = unsafe {
-        ext_ffi::list_known_keys(dest_ptr);
+        ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
     deserialize(&bytes).unwrap()
@@ -338,19 +338,19 @@ pub fn list_known_keys() -> BTreeMap<String, Key> {
 /// module. Note that the function is wrapped up in a new module and re-exported
 /// under the name "call". `fn_bytes_by_name` is meant to be used when storing a
 /// contract on-chain at an unforgable reference.
-pub fn fn_by_name(name: &str, known_keys: BTreeMap<String, Key>) -> Contract {
+pub fn fn_by_name(name: &str, named_keys: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     let protocol_version = unsafe { ext_ffi::protocol_version() };
     let protocol_version = ProtocolVersion::new(protocol_version);
-    Contract::new(bytes, known_keys, protocol_version)
+    Contract::new(bytes, named_keys, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
 /// computes gets the address from the host to produce a key where the contract
 /// is then stored in the global state. This key is returned.
-pub fn store_function(name: &str, known_keys: BTreeMap<String, Key>) -> ContractPointer {
+pub fn store_function(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
     let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&known_keys);
+    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&named_keys);
     let mut tmp = [0u8; 32];
     let tmp_ptr = tmp.as_mut_ptr();
     unsafe {
@@ -360,8 +360,8 @@ pub fn store_function(name: &str, known_keys: BTreeMap<String, Key>) -> Contract
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_keys: BTreeMap<String, Key>, uref: TURef<Contract>) {
-    let contract = fn_by_name(name, known_keys);
+pub fn store_function_at(name: &str, named_keys: BTreeMap<String, Key>, uref: TURef<Contract>) {
+    let contract = fn_by_name(name, named_keys);
     write(uref, contract);
 }
 
@@ -390,7 +390,7 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 }
 
 /// Return the unforgable reference known by the current module under the given
-/// name. This either comes from the known_keys of the account or contract,
+/// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
@@ -413,7 +413,7 @@ pub fn has_key(name: &str) -> bool {
     result == 0
 }
 
-/// Put the given key to the known_keys map under the given name
+/// Put the given key to the named_keys map under the given name
 pub fn put_key(name: &str, key: &Key) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
@@ -760,7 +760,7 @@ pub fn get_phase() -> Phase {
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
-/// that URef with a new Contract instance containing the original contract's known_keys, the
+/// that URef with a new Contract instance containing the original contract's named_keys, the
 /// current protocol version, and the newly created bytes of the stored function.
 pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);

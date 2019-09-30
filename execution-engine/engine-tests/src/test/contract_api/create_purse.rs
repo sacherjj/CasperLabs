@@ -83,7 +83,7 @@ fn should_insert_mint_add_keys_transform() {
 
 #[ignore]
 #[test]
-fn should_insert_account_into_known_keys() {
+fn should_insert_account_into_named_keys() {
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
@@ -114,8 +114,8 @@ fn should_insert_account_into_known_keys() {
         .expect("should have account");
 
     assert!(
-        account_1.known_keys().contains_key(TEST_PURSE_NAME),
-        "account_1 known_keys should include test purse"
+        account_1.named_keys().contains_key(TEST_PURSE_NAME),
+        "account_1 named_keys should include test purse"
     );
 }
 
@@ -159,7 +159,7 @@ fn should_create_usable_purse_id() {
         .expect("should have account");
 
     let purse_key = account_1
-        .known_keys()
+        .named_keys()
         .get(TEST_PURSE_NAME)
         .expect("should have known key");
 

@@ -50,9 +50,9 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::SerKnownKeysFuncIndex => {
+            FunctionIndex::SerNamedKeysFuncIndex => {
                 // No args, returns byte size of the known URefs.
-                let size = self.serialize_known_keys()?;
+                let size = self.serialize_named_keys()?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -195,10 +195,10 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::ListKnownKeysFuncIndex => {
+            FunctionIndex::ListNamedKeysFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let ptr = Args::parse(args)?;
-                self.list_known_keys(ptr)?;
+                self.list_named_keys(ptr)?;
                 Ok(None)
             }
 

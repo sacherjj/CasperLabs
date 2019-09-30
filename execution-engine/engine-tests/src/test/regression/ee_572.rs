@@ -70,7 +70,7 @@ fn should_run_ee_572_regression() {
             _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account
-            .known_keys()
+            .named_keys()
             .get(CREATE)
             .expect("Could not find contract pointer")
     };

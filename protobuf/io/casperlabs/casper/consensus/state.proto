@@ -79,7 +79,7 @@ message NamedKey {
 
 message Contract {
 	bytes body = 1;
-	repeated NamedKey known_keys = 2;
+	repeated NamedKey named_keys = 2;
     ProtocolVersion protocol_version = 3;
 }
 
@@ -88,7 +88,7 @@ message Account {
 	reserved 2;
 	bytes public_key = 1;
 	Key.URef purse_id = 3;
-	repeated NamedKey known_keys = 4;
+	repeated NamedKey named_keys = 4;
 	repeated AssociatedKey associated_keys = 5;
 	ActionThresholds action_thresholds = 6;
 	AccountActivity account_activity = 7;

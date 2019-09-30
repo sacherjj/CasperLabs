@@ -100,14 +100,14 @@ fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SI
 fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
-    known_keys: &'a mut BTreeMap<String, Key>,
+    named_keys: &'a mut BTreeMap<String, Key>,
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     address_generator: AddressGenerator,
 ) -> RuntimeContext<'a, InMemoryGlobalStateView> {
     let tc = mock_tc(base_key, account.clone());
     RuntimeContext::new(
         Rc::new(RefCell::new(tc)),
-        known_keys,
+        named_keys,
         access_rights,
         Vec::new(),
         BTreeSet::from_iter(vec![PublicKey::new([0; 32])]),
@@ -849,7 +849,7 @@ fn remove_uref_works() {
     // which is one of the current RuntimeContext, and also puts that change
     // into the `TrackingCopy` so that it's later committed to the GlobalState.
 
-    let known_keys = HashMap::new();
+    let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc_addr);
@@ -858,33 +858,33 @@ fn remove_uref_works() {
     let uref_key = create_uref(&mut address_generator, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
     let mut runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_keys, address_generator);
+        mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
 
-    assert!(runtime_context.known_keys_contains_key(&uref_name));
+    assert!(runtime_context.named_keys_contains_key(&uref_name));
     assert!(runtime_context.remove_key(&uref_name).is_ok());
     assert!(runtime_context.validate_key(&uref_key).is_err());
-    assert!(!runtime_context.known_keys_contains_key(&uref_name));
+    assert!(!runtime_context.named_keys_contains_key(&uref_name));
     let effects = runtime_context.effect();
     let transform = effects.transforms.get(&key).unwrap();
     let account = match transform {
         Transform::Write(Value::Account(account)) => account,
         _ => panic!("Invalid transform operation found"),
     };
-    assert!(!account.known_keys().contains_key(&uref_name));
+    assert!(!account.named_keys().contains_key(&uref_name));
 }
 
 #[test]
 fn validate_valid_purse_id_of_an_account() {
     // Tests that URef which matches a purse_id of a given context gets validated
     let mock_purse_id = [42u8; 32];
-    let known_keys = HashMap::new();
+    let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse_id(base_acc_addr, mock_purse_id);
     let address_generator = AddressGenerator::new(deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
     let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, known_keys, address_generator);
+        mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
 
     // URef that has the same id as purse_id of an account gets validated
     // successfully.

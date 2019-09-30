@@ -72,10 +72,10 @@ where
 
     let account = builder.get_account(address).expect("should find account");
 
-    let mut known_keys = account.known_keys().clone();
+    let mut named_keys = account.named_keys().clone();
 
     let access_rights = {
-        let mut ret = execution::extract_access_rights_from_keys(known_keys.values().cloned());
+        let mut ret = execution::extract_access_rights_from_keys(named_keys.values().cloned());
         let extras = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
         ret.extend(extras.into_iter());
         ret
@@ -83,7 +83,7 @@ where
 
     let context = RuntimeContext::new(
         Rc::clone(&tracking_copy),
-        &mut known_keys,
+        &mut named_keys,
         access_rights,
         arguments,
         BTreeSet::new(),

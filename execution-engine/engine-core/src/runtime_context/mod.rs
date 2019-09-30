@@ -32,7 +32,7 @@ mod tests;
 pub struct RuntimeContext<'a, R> {
     state: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
-    known_keys: &'a mut BTreeMap<String, Key>,
+    named_keys: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
@@ -60,7 +60,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         state: Rc<RefCell<TrackingCopy<R>>>,
-        known_keys: &'a mut BTreeMap<String, Key>,
+        named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
         args: Vec<Vec<u8>>,
         authorization_keys: BTreeSet<PublicKey>,
@@ -78,7 +78,7 @@ where
     ) -> Self {
         RuntimeContext {
             state,
-            known_keys,
+            named_keys,
             access_rights,
             args,
             account,
@@ -100,20 +100,20 @@ where
         &self.authorization_keys
     }
 
-    pub fn known_keys_get(&self, name: &str) -> Option<&Key> {
-        self.known_keys.get(name)
+    pub fn named_keys_get(&self, name: &str) -> Option<&Key> {
+        self.named_keys.get(name)
     }
 
-    pub fn known_keys(&self) -> &BTreeMap<String, Key> {
-        &self.known_keys
+    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+        &self.named_keys
     }
 
     pub fn fn_store_id(&self) -> u32 {
         self.fn_store_id
     }
 
-    pub fn known_keys_contains_key(&self, name: &str) -> bool {
-        self.known_keys.contains_key(name)
+    pub fn named_keys_contains_key(&self, name: &str) -> bool {
+        self.named_keys.contains_key(name)
     }
 
     // Helper function to avoid duplication in `remove_uref`.
@@ -123,7 +123,7 @@ where
         mut contract: Contract,
         name: &str,
     ) -> Result<(), Error> {
-        contract.known_keys_mut().remove(name);
+        contract.named_keys_mut().remove(name);
         // By this point in the code path, there is no further validation needed.
         let validated_uref = Validated::new(key, Validated::valid)?;
         let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
@@ -135,16 +135,16 @@ where
         Ok(())
     }
 
-    /// Remove Key from the `known_keys` map of the current context.
-    /// It removes both from the ephemeral map (RuntimeContext::known_keys) but
+    /// Remove Key from the `named_keys` map of the current context.
+    /// It removes both from the ephemeral map (RuntimeContext::named_keys) but
     /// also persistable map (one that is found in the
     /// TrackingCopy/GlobalState).
     pub fn remove_key(&mut self, name: &str) -> Result<(), Error> {
         match self.base_key() {
             public_key @ Key::Account(_) => {
                 let mut account: Account = self.read_gs_typed(&public_key)?;
-                self.known_keys.remove(name);
-                account.known_keys_mut().remove(name);
+                self.named_keys.remove(name);
+                account.named_keys_mut().remove(name);
                 let validated_uref = Validated::new(public_key, Validated::valid)?;
                 let validated_value =
                     Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
@@ -157,7 +157,7 @@ where
             }
             contract_uref @ Key::URef(_) => {
                 // We do not need to validate the base key because a contract
-                // is always able to remove keys from its own known_keys.
+                // is always able to remove keys from its own named_keys.
                 let contract_key = Validated::new(contract_uref, Validated::valid)?;
 
                 let contract: Contract = {
@@ -176,17 +176,17 @@ where
                     })?
                 };
 
-                self.known_keys.remove(name);
+                self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
                 let contract: Contract = self.read_gs_typed(&contract_hash)?;
-                self.known_keys.remove(name);
+                self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local(_) => {
                 let contract: Contract = self.read_gs_typed(&contract_local)?;
-                self.known_keys.remove(name);
+                self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
             }
         }
@@ -435,7 +435,7 @@ where
         if let Key::URef(uref) = *key {
             self.insert_uref(uref);
         }
-        self.known_keys.insert(name, *key);
+        self.named_keys.insert(name, *key);
     }
 
     pub fn insert_uref(&mut self, uref: URef) {
@@ -471,21 +471,21 @@ where
                 // This should never happen as accounts can't be created by contracts.
                 // I am putting this here for the sake of completness.
                 account
-                    .known_keys()
+                    .named_keys()
                     .values()
                     .try_for_each(|key| self.validate_key(key))
             }
             Value::Contract(contract) => contract
-                .known_keys()
+                .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
         }
     }
 
     /// Validates whether key is not forged (whether it can be found in the
-    /// `known_keys`) and whether the version of a key that contract wants
+    /// `named_keys`) and whether the version of a key that contract wants
     /// to use, has access rights that are less powerful than access rights'
-    /// of the key in the `known_keys`.
+    /// of the key in the `named_keys`.
     pub fn validate_key(&self, key: &Key) -> Result<(), Error> {
         let uref = match key {
             Key::URef(uref) => uref,
@@ -797,10 +797,10 @@ where
         &mut self,
         key: Key,
         bytes: Vec<u8>,
-        known_keys: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
     ) -> Result<(), Error> {
         let protocol_version = self.protocol_version();
-        let contract = Contract::new(bytes, known_keys, protocol_version);
+        let contract = Contract::new(bytes, named_keys, protocol_version);
         let contract = Value::Contract(contract);
         let validated_key: Validated<Key> = Validated::new(key, |key| {
             self.validate_writeable(&key).and(self.validate_key(&key))

@@ -41,7 +41,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&default_account.known_keys()["purse_transfer_result"].normalize()];
+        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()];
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -51,7 +51,7 @@ fn should_run_purse_to_purse_transfer() {
     assert_eq!(purse_transfer_result, "TransferSuccessful");
 
     let main_purse_balance =
-        &transform[&default_account.known_keys()["main_purse_balance"].normalize()];
+        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -62,8 +62,8 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = default_account.known_keys()["purse:secondary"];
-    let _purse_main_key = default_account.known_keys()["purse:main"];
+    let purse_secondary_key = default_account.named_keys()["purse:secondary"];
+    let _purse_main_key = default_account.named_keys()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -142,7 +142,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&default_account.known_keys()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
+        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -153,7 +153,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Obtain main purse's balance
     let main_purse_balance =
-        &transform[&default_account.known_keys()["main_purse_balance"].normalize()];
+        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -178,8 +178,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = default_account.known_keys()["purse:secondary"];
-    let _purse_main_key = default_account.known_keys()["purse:main"];
+    let purse_secondary_key = default_account.named_keys()["purse:secondary"];
+    let _purse_main_key = default_account.named_keys()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent

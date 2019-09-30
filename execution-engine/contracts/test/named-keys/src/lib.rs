@@ -15,14 +15,14 @@ pub extern "C" fn call() {
     let initi_uref_num = 2; // TODO: this is very brittle as it breaks whenever we add another default uref
 
     // Account starts with two known urefs: mint uref & pos uref
-    if contract_api::list_known_keys().len() != initi_uref_num {
+    if contract_api::list_named_keys().len() != initi_uref_num {
         contract_api::revert(201);
     }
 
     // Add new urefs
     let hello_world_key: Key = contract_api::new_turef(String::from("Hello, world!")).into();
     contract_api::put_key("hello-world", &hello_world_key);
-    assert_eq!(contract_api::list_known_keys().len(), initi_uref_num + 1);
+    assert_eq!(contract_api::list_named_keys().len(), initi_uref_num + 1);
 
     // Verify if the uref is present
     assert!(contract_api::has_key("hello-world"));
@@ -30,11 +30,11 @@ pub extern "C" fn call() {
     let big_value_key: Key = contract_api::new_turef(U512::max_value()).into();
     contract_api::put_key("big-value", &big_value_key);
 
-    assert_eq!(contract_api::list_known_keys().len(), initi_uref_num + 2);
+    assert_eq!(contract_api::list_named_keys().len(), initi_uref_num + 2);
 
     // Read data hidden behind `URef1` uref
     let hello_world: String = contract_api::read(
-        contract_api::list_known_keys()
+        contract_api::list_named_keys()
             .get("hello-world")
             .expect("Unable to get hello-world")
             .to_turef()
@@ -86,5 +86,5 @@ pub extern "C" fn call() {
     // Cleaned up state
     assert!(!contract_api::has_key("hello-world"));
     assert!(!contract_api::has_key("big-value"));
-    assert_eq!(contract_api::list_known_keys().len(), initi_uref_num);
+    assert_eq!(contract_api::list_named_keys().len(), initi_uref_num);
 }

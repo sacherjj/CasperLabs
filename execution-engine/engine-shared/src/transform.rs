@@ -164,11 +164,11 @@ impl Transform {
             AddUInt512(i) => wrapping_addition(i, v, "UInt512"),
             AddKeys(mut keys) => match v {
                 Value::Contract(mut c) => {
-                    c.known_keys_append(&mut keys);
+                    c.named_keys_append(&mut keys);
                     Ok(c.into())
                 }
                 Value::Account(mut a) => {
-                    a.known_keys_append(&mut keys);
+                    a.named_keys_append(&mut keys);
                     Ok(Value::Account(a))
                 }
                 other => {

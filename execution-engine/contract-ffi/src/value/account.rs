@@ -563,7 +563,7 @@ impl AssociatedKeys {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: [u8; 32],
-    known_keys: BTreeMap<String, Key>,
+    named_keys: BTreeMap<String, Key>,
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
@@ -573,7 +573,7 @@ pub struct Account {
 impl Account {
     pub fn new(
         public_key: [u8; 32],
-        known_keys: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
@@ -581,7 +581,7 @@ impl Account {
     ) -> Self {
         Account {
             public_key,
-            known_keys,
+            named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -591,7 +591,7 @@ impl Account {
 
     pub fn create(
         account_addr: [u8; 32],
-        known_keys: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
@@ -600,7 +600,7 @@ impl Account {
             AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
         Account::new(
             account_addr,
-            known_keys,
+            named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -608,16 +608,16 @@ impl Account {
         )
     }
 
-    pub fn known_keys_append(&mut self, keys: &mut BTreeMap<String, Key>) {
-        self.known_keys.append(keys);
+    pub fn named_keys_append(&mut self, keys: &mut BTreeMap<String, Key>) {
+        self.named_keys.append(keys);
     }
 
-    pub fn known_keys(&self) -> &BTreeMap<String, Key> {
-        &self.known_keys
+    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+        &self.named_keys
     }
 
-    pub fn known_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
-        &mut self.known_keys
+    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.named_keys
     }
 
     pub fn pub_key(&self) -> [u8; 32] {
@@ -890,10 +890,10 @@ impl ToBytes for Account {
         let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
-        let known_keys_size = UREF_SIZE * self.known_keys.len() + U32_SIZE;
+        let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
         let purse_id_size = UREF_SIZE;
         let serialized_account_size = KEY_SIZE // pub key
-            + known_keys_size
+            + named_keys_size
             + purse_id_size
             + associated_keys_size
             + action_thresholds_size
@@ -903,7 +903,7 @@ impl ToBytes for Account {
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
-        result.append(&mut self.known_keys.to_bytes()?);
+        result.append(&mut self.named_keys.to_bytes()?);
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
@@ -915,7 +915,7 @@ impl ToBytes for Account {
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (known_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -924,7 +924,7 @@ impl FromBytes for Account {
         Ok((
             Account {
                 public_key,
-                known_keys,
+                named_keys,
                 purse_id,
                 associated_keys,
                 action_thresholds,

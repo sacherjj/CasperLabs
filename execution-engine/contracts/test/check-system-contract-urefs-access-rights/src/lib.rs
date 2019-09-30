@@ -11,8 +11,8 @@ use contract_ffi::uref::URef;
 #[allow(clippy::redundant_closure)]
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_keys = contract_api::list_known_keys();
-    let mut access_rights_iter = known_keys
+    let named_keys = contract_api::list_named_keys();
+    let mut access_rights_iter = named_keys
         .values()
         .filter_map(Key::as_uref)
         .filter_map(URef::access_rights);

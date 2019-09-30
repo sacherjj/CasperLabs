@@ -137,7 +137,7 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     Ok(unbonds)
 }
 
-/// Attempts to look up a purse from the known_keys
+/// Attempts to look up a purse from the named_keys
 fn get_purse_id(name: &str) -> core::result::Result<PurseId, PurseLookupError> {
     contract_api::get_key(name)
         .ok_or(PurseLookupError::KeyNotFound)
