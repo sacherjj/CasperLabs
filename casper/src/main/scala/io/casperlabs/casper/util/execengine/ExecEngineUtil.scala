@@ -173,13 +173,12 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage](
+  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocolVersions](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
-    val deploys         = ProtoUtil.deploys(block).flatMap(_.deploy)
-    val protocolVersion = CasperLabsProtocolVersions.thresholdsVersionMap.fromBlock(block)
-    val blocktime       = block.getHeader.timestamp
+    val deploys   = ProtoUtil.deploys(block).flatMap(_.deploy)
+    val blocktime = block.getHeader.timestamp
 
     if (isGenesisLike(block)) {
       // The new Genesis definition is that there's a chain spec that everyone's supposed to
@@ -196,6 +195,7 @@ object ExecEngineUtil {
       }
     } else {
       for {
+        protocolVersion <- CasperLabsProtocolVersions[F].fromBlock(block)
         processedDeploys <- processDeploys[F](
                              prestate,
                              blocktime,

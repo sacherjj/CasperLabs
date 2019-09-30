@@ -16,7 +16,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
@@ -68,7 +68,17 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
-      genesis <- makeGenesis[F](conf)
+      spec <- makeChainSpec[F](conf)
+
+      genesis <- makeGenesis[F](spec)
+
+      implicit0(protocolVersions: CasperLabsProtocolVersions[F]) <- Resource.liftF[
+                                                                     F,
+                                                                     CasperLabsProtocolVersions[F]
+                                                                   ](
+                                                                     CasperLabsProtocolVersions
+                                                                       .fromChainSpec[F](spec)
+                                                                   )
 
       cachedConnections <- makeConnectionsCache(
                             conf,
@@ -195,25 +205,30 @@ package object gossiping {
     } yield ()
   }
 
+  private def makeChainSpec[F[_]: MonadThrowable](conf: Configuration): Resource[F, ipc.ChainSpec] =
+    Resource.liftF[F, ipc.ChainSpec] {
+      ChainSpecReader
+        .fromConf(conf)
+        .fold(
+          errors =>
+            MonadThrowable[F].raiseError(
+              new IllegalArgumentException(
+                errors.toList.mkString(", ")
+              )
+            ),
+          _.pure[F]
+        )
+    }
+
   private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
-      conf: Configuration
+      spec: ipc.ChainSpec
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
-        _ <- Log[F].info("Constructing Genesis block...")
-        genesis <- ChainSpecReader
-                    .fromConf(conf)
-                    .fold(
-                      errors =>
-                        MonadThrowable[F].raiseError(
-                          new IllegalArgumentException(
-                            errors.toList.mkString(", ")
-                          )
-                        ),
-                      spec => Genesis.fromChainSpec[F](spec.getGenesis)
-                    )
-                    .map(_.getBlockMessage)
-      } yield genesis
+        _       <- Log[F].info("Constructing Genesis block...")
+        genesis <- Genesis.fromChainSpec[F](spec.getGenesis)
+        _       <- Log[F].info(s"Genesis hash is ${show(genesis.getBlockMessage.blockHash)}")
+      } yield genesis.getBlockMessage
     }
 
   /** Check if we have a block yet. */
@@ -224,7 +239,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -343,7 +358,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -395,7 +410,7 @@ package object gossiping {
   // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
   // which could be based on the presence of other known validators, signaled by their approvals.
   // That just gives us the assurance that we are using the right chain spec because other are as well.
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F],
@@ -505,7 +520,7 @@ package object gossiping {
                  )
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation](
+  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],

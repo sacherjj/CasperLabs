@@ -7,6 +7,7 @@ import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.ipc
@@ -20,9 +21,11 @@ trait Validation[F[_]] {
 
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean]
 
-  def blockSummary(summary: BlockSummary, chainId: String): F[Unit]
+  def blockSummary(summary: BlockSummary, chainId: String)(
+      implicit versions: CasperLabsProtocolVersions[F]
+  ): F[Unit]
 
-  def version(b: BlockSummary, m: Long => state.ProtocolVersion): F[Boolean]
+  def version(b: BlockSummary, m: Long => F[state.ProtocolVersion]): F[Boolean]
 
   def parents(
       b: Block,
@@ -56,7 +59,7 @@ trait Validation[F[_]] {
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F]): F[Unit]
+  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit]
 
   def preTimestamp(b: Block): F[Option[FiniteDuration]]
 }

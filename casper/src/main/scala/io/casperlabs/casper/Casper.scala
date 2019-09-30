@@ -18,6 +18,7 @@ import io.casperlabs.comm.gossiping
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 
 trait Casper[F[_], A] {
   def addBlock(block: Block): F[BlockStatus]
@@ -65,7 +66,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield (blockProcessingLock, casperState)
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection: CasperLabsProtocolVersions](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

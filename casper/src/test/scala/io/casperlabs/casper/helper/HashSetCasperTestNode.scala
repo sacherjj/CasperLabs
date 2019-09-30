@@ -15,6 +15,7 @@ import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
@@ -76,6 +77,8 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val casperSmartContractsApi =
     maybeMakeEE.map(_(bonds)) getOrElse
       HashSetCasperTestNode.simpleEEApi[F](bonds)
+
+  implicit val versions = HashSetCasperTestNode.protocolVersions[F]
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -311,4 +314,8 @@ object HashSetCasperTestNode {
       // Tests are not signing the deploys.
       override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
     }
+
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
+    0L -> consensus.state.ProtocolVersion(1)
+  )
 }
