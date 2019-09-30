@@ -212,7 +212,7 @@ where
                 preprocessor.preprocess(bytes)?
             };
             let args = Vec::new();
-            let mut key_lookup = BTreeMap::new();
+            let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
@@ -221,7 +221,7 @@ where
             executor.better_exec(
                 mint_installer_module,
                 &args,
-                &mut key_lookup,
+                &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
                 authorization_keys,
@@ -255,7 +255,7 @@ where
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")
             };
-            let mut key_lookup = {
+            let mut named_keys = {
                 let mut ret = BTreeMap::new();
                 ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
                 ret
@@ -268,7 +268,7 @@ where
             executor.better_exec(
                 proof_of_stake_installer_module,
                 &args,
-                &mut key_lookup,
+                &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
                 authorization_keys,
@@ -362,7 +362,7 @@ where
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
-                let mut key_lookup = BTreeMap::new();
+                let mut named_keys_exec = BTreeMap::new();
                 let base_key = Key::URef(mint_reference);
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
@@ -376,7 +376,7 @@ where
                 let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
                     module,
                     &args,
-                    &mut key_lookup,
+                    &mut named_keys_exec,
                     base_key,
                     &virtual_system_account,
                     authorization_keys,
