@@ -9,7 +9,8 @@ use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    GENESIS_INITIAL_BALANCE,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
 
@@ -25,7 +26,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
@@ -36,7 +37,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -51,7 +52,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .to_owned();
 
     let account_1_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("revert.wasm", ())
@@ -59,7 +60,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
             .with_authorization_keys(&[account_1_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let account_1_response = builder
@@ -99,7 +100,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
@@ -110,7 +111,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -186,7 +187,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code("revert.wasm", (payment_purse_amount,))
@@ -197,7 +198,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
@@ -275,7 +276,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
@@ -286,7 +287,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -317,7 +318,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
@@ -325,7 +326,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -381,7 +382,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
@@ -392,7 +393,7 @@ fn should_correctly_charge_when_session_code_fails() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -443,7 +444,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
@@ -454,7 +455,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -529,7 +530,7 @@ fn should_finalize_to_rewards_purse() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -540,7 +541,7 @@ fn should_finalize_to_rewards_purse() {
             .with_deploy_hash([1; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
@@ -570,7 +571,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);
 
     let setup_exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -581,7 +582,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_deploy_hash([1; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     // create another account via transfer
@@ -592,7 +593,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         .commit();
 
     let exec_request_from_genesis = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
@@ -600,11 +601,11 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_deploy_hash([2; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let exec_request_from_account_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
@@ -612,7 +613,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_deploy_hash([1; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     // run two independent deploys
@@ -659,7 +660,7 @@ fn should_charge_non_main_purse() {
 
     // arrange
     let setup_exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm", // creates account_1
@@ -670,11 +671,11 @@ fn should_charge_non_main_purse() {
             .with_deploy_hash([1; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let create_purse_exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(
                 "transfer_main_purse_to_new_purse.wasm", // creates test purse
@@ -685,7 +686,7 @@ fn should_charge_non_main_purse() {
             .with_deploy_hash([2; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = builder
@@ -736,7 +737,7 @@ fn should_charge_non_main_purse() {
 
     // should be able to pay for exec using new purse
     let account_payment_exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(
@@ -747,7 +748,7 @@ fn should_charge_non_main_purse() {
             .with_deploy_hash([3; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = builder
