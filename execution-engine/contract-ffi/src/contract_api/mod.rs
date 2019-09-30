@@ -8,7 +8,7 @@ use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::{AccessRights, URef};
+use crate::uref::URef;
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
@@ -733,7 +733,8 @@ fn get_system_contract(name: &str) -> ContractPointer {
     let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef.into()));
 
     if let Key::URef(uref) = key {
-        let reference = TURef::new(uref.addr(), AccessRights::READ);
+        let reference =
+            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::UnexpectedKeyVariant.into()));
         ContractPointer::URef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant.into())

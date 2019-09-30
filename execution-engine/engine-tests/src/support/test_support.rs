@@ -21,10 +21,11 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, DeployItem, DeployPayload, DeployResult,
-    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
-    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-    StoredContractURef,
+    ChainSpec_ActivationPoint, ChainSpec_UpgradePoint, CommitRequest, Deploy, DeployCode,
+    DeployItem, DeployPayload, DeployResult, DeployResult_ExecutionResult,
+    DeployResult_PreconditionFailure, ExecuteRequest, ExecuteResponse, GenesisResponse,
+    QueryRequest, StoredContractHash, StoredContractName, StoredContractURef, UpgradeRequest,
+    UpgradeResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -41,13 +42,14 @@ use engine_storage::global_state::StateProvider;
 use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_wasm_prep::wasm_costs::WasmCosts;
+use protobuf::RepeatedField;
 use transforms::TransformEntry;
 
 use crate::test::{
     CONTRACT_MINT_INSTALL, CONTRACT_POS_INSTALL, CONTRACT_STANDARD_PAYMENT, DEFAULT_CHAIN_NAME,
     DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
 };
-use protobuf::RepeatedField;
 
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
@@ -291,6 +293,98 @@ impl Default for ExecuteRequestBuilder {
             deploy_items,
             execute_request,
         }
+    }
+}
+
+pub struct UpgradeRequestBuilder {
+    pre_state_hash: Vec<u8>,
+    current_protocol_version: ProtocolVersion,
+    new_protocol_version: ProtocolVersion,
+    upgrade_installer: DeployCode,
+    new_costs: Option<WasmCosts>,
+    activation_point: ChainSpec_ActivationPoint,
+}
+
+impl UpgradeRequestBuilder {
+    pub fn new() -> Self {
+        UpgradeRequestBuilder {
+            pre_state_hash: Default::default(),
+            current_protocol_version: Default::default(),
+            new_protocol_version: Default::default(),
+            upgrade_installer: Default::default(),
+            new_costs: None,
+            activation_point: Default::default(),
+        }
+    }
+
+    pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
+        self.pre_state_hash = pre_state_hash.to_vec();
+        self
+    }
+
+    pub fn with_current_protocol_version(mut self, protocol_version: u64) -> Self {
+        self.current_protocol_version = {
+            let mut ret = ProtocolVersion::new();
+            ret.set_value(protocol_version);
+            ret
+        };
+        self
+    }
+
+    pub fn with_new_protocol_version(mut self, protocol_version: u64) -> Self {
+        self.new_protocol_version = {
+            let mut ret = ProtocolVersion::new();
+            ret.set_value(protocol_version);
+            ret
+        };
+        self
+    }
+
+    pub fn with_installer_code(mut self, upgrade_installer: DeployCode) -> Self {
+        self.upgrade_installer = upgrade_installer;
+        self
+    }
+
+    pub fn with_new_costs(mut self, wasm_costs: WasmCosts) -> Self {
+        self.new_costs = Some(wasm_costs);
+        self
+    }
+
+    pub fn with_activation_point(mut self, rank: u64) -> Self {
+        self.activation_point = {
+            let mut ret = ChainSpec_ActivationPoint::new();
+            ret.set_rank(rank);
+            ret
+        };
+        self
+    }
+
+    pub fn build(self) -> UpgradeRequest {
+        let mut upgrade_point = ChainSpec_UpgradePoint::new();
+        upgrade_point.set_activation_point(self.activation_point);
+        match self.new_costs {
+            None => {}
+            Some(wasm_costs) => {
+                let new_costs = wasm_costs.into();
+                let mut cost_table =
+                    engine_grpc_server::engine_server::ipc::ChainSpec_CostTable::new();
+                cost_table.set_wasm(new_costs);
+                upgrade_point.set_new_costs(cost_table);
+            }
+        }
+        upgrade_point.set_protocol_version(self.new_protocol_version);
+        upgrade_point.set_upgrade_installer(self.upgrade_installer);
+
+        let mut upgrade_request = UpgradeRequest::new();
+        upgrade_request.set_protocol_version(self.current_protocol_version);
+        upgrade_request.set_upgrade_point(upgrade_point);
+        upgrade_request
+    }
+}
+
+impl Default for UpgradeRequestBuilder {
+    fn default() -> Self {
+        unimplemented!()
     }
 }
 
@@ -543,6 +637,7 @@ pub struct WasmTestBuilder<S> {
     /// EngineState`
     engine_state: Rc<EngineState<S>>,
     exec_responses: Vec<ExecuteResponse>,
+    upgrade_responses: Vec<UpgradeResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
@@ -568,6 +663,7 @@ impl Default for InMemoryWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
@@ -587,6 +683,7 @@ impl<S> Clone for WasmTestBuilder<S> {
         WasmTestBuilder {
             engine_state: Rc::clone(&self.engine_state),
             exec_responses: self.exec_responses.clone(),
+            upgrade_responses: self.upgrade_responses.clone(),
             genesis_hash: self.genesis_hash.clone(),
             post_state_hash: self.post_state_hash.clone(),
             transforms: self.transforms.clone(),
@@ -645,6 +742,7 @@ impl LmdbWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
@@ -702,6 +800,7 @@ impl LmdbWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: Some(post_state_hash),
             transforms: Vec::new(),
@@ -725,6 +824,7 @@ where
         WasmTestBuilder {
             engine_state: result.0.engine_state,
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: result.0.genesis_hash,
             post_state_hash: result.0.post_state_hash,
             transforms: Vec::new(),
@@ -974,6 +1074,31 @@ where
         self
     }
 
+    pub fn upgrade_with_upgrade_request(
+        &mut self,
+        upgrade_request: &mut UpgradeRequest,
+    ) -> &mut Self {
+        let upgrade_request = {
+            let hash = self
+                .post_state_hash
+                .clone()
+                .expect("expected post_state_hash");
+            upgrade_request.set_parent_state_hash(hash.to_vec());
+            upgrade_request
+        };
+        let upgrade_response = self
+            .engine_state
+            .upgrade(RequestOptions::new(), upgrade_request.clone())
+            .wait_drop_metadata()
+            .expect("should upgrade");
+
+        let upgrade_success = upgrade_response.get_success();
+        self.post_state_hash = Some(upgrade_success.get_post_state_hash().to_vec());
+
+        self.upgrade_responses.push(upgrade_response.clone());
+        self
+    }
+
     /// Expects a successful run and caches transformations
     pub fn expect_success(&mut self) -> &mut Self {
         // Check first result, as only first result is interesting for a simple test
@@ -1065,6 +1190,10 @@ where
 
     pub fn get_exec_response(&self, index: usize) -> Option<&ExecuteResponse> {
         self.exec_responses.get(index)
+    }
+
+    pub fn get_upgrade_response(&self, index: usize) -> Option<&UpgradeResponse> {
+        self.upgrade_responses.get(index)
     }
 
     pub fn finish(&self) -> WasmTestResult<S> {

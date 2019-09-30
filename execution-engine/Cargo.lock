@@ -1223,6 +1223,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "modified-mint"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "mint-token 0.1.0",
+]
+
+[[package]]
+name = "modified-mint-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "modified-mint-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "modified-mint 0.1.0",
+]
+
+[[package]]
 name = "named-keys"
 version = "0.1.0"
 dependencies = [

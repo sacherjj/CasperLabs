@@ -5,6 +5,7 @@ pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod upgrade;
 pub mod utils;
 
 use std::cell::RefCell;
@@ -39,6 +40,7 @@ use self::genesis::{
     GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
 };
 use crate::engine_state::error::Error::MissingSystemContractError;
+use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
 use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
@@ -82,6 +84,13 @@ where
         &self.config
     }
 
+    pub fn wasm_costs(&self, protocol_version: ProtocolVersion) -> Option<WasmCosts> {
+        match self.state.get_protocol_data(protocol_version) {
+            Ok(Some(protocol_data)) => Some(*protocol_data.wasm_costs()),
+            _ => None,
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn commit_genesis(
         &self,
@@ -98,7 +107,19 @@ where
             1,
             "legacy genesis only supports protocol version 1"
         );
-        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+
+        let wasm_costs = WasmCosts {
+            regular: 1,
+            div: 16,
+            mul: 4,
+            mem: 2,
+            initial_mem: 4096,
+            grow_mem: 8192,
+            memcpy: 1,
+            max_stack_height: 64 * 1024,
+            opcodes_mul: 3,
+            opcodes_div: 8,
+        };
 
         let mut accounts = Vec::new();
 
@@ -426,6 +447,166 @@ where
         let genesis_result = GenesisResult::from_commit_result(commit_result, effects);
 
         Ok(genesis_result)
+    }
+
+    pub fn commit_upgrade(
+        &self,
+        correlation_id: CorrelationId,
+        upgrade_config: UpgradeConfig,
+    ) -> Result<UpgradeResult, Error> {
+        // per specification:
+        // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/139854367/Upgrading+System+Contracts+Specification
+
+        // 3.1.1.1.1.1 validate pre state hash exists
+        // 3.1.2.1 get a tracking_copy at the provided pre_state_hash
+        let pre_state_hash = upgrade_config.pre_state_hash();
+        let tracking_copy = match self.tracking_copy(pre_state_hash)? {
+            Some(tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
+            None => panic!("state has not been initialized properly"),
+        };
+
+        // 3.1.1.1.1.2 current protocol version is required
+        let current_protocol_version = upgrade_config.current_protocol_version();
+        let current_protocol_data = match self.state.get_protocol_data(current_protocol_version) {
+            Ok(Some(protocol_data)) => protocol_data,
+            Ok(None) => {
+                return Err(Error::InvalidProtocolVersion {
+                    protocol_version: current_protocol_version,
+                });
+            }
+            Err(error) => {
+                return Err(Error::ExecError(error.into()));
+            }
+        };
+
+        // 3.1.1.1.1.3 activation point is not currently used by EE but possible future use...
+        let _activation_point = upgrade_config.activation_point();
+
+        // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
+        let new_protocol_version = upgrade_config.new_protocol_version();
+        // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
+        if new_protocol_version.value() != current_protocol_version.value() + 1 {
+            return Err(Error::InvalidProtocolVersion {
+                protocol_version: new_protocol_version,
+            });
+        }
+
+        // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
+        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
+        let upgrade_installer_bytes = upgrade_config.upgrade_installer_bytes();
+
+        // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
+        let new_wasm_costs = match upgrade_config.wasm_costs() {
+            Some(new_wasm_costs) => new_wasm_costs,
+            None => *current_protocol_data.wasm_costs(),
+        };
+
+        // 3.1.2.2 persist wasm CostTable
+        let new_protocol_data = ProtocolData::new(
+            new_wasm_costs,
+            current_protocol_data.mint(),
+            current_protocol_data.proof_of_stake(),
+        );
+
+        self.state
+            .put_protocol_data(new_protocol_version, &new_protocol_data)
+            .map_err(Into::into)?;
+
+        // 3.1.2.3 execute upgrade installer if one is provided
+        if upgrade_installer_bytes.is_some() {
+            // preprocess installer module
+            let upgrade_installer_module = {
+                let preprocessor = WasmiPreprocessor::new(new_wasm_costs);
+                let bytes = upgrade_config.upgrade_installer_bytes().unwrap(); // safe to unwrap
+                preprocessor.preprocess(bytes)?
+            };
+
+            // currently there are no expected args for an upgrade installer but args are supported
+            let args = match upgrade_config.upgrade_installer_args() {
+                Some(args) => args,
+                None => &[],
+            };
+
+            // execute as system account
+            let system_account = {
+                // safe to unwrap (Validated::valid is always true)
+                let key =
+                    Validated::new(Key::Account(SYSTEM_ACCOUNT_ADDR), Validated::valid).unwrap();
+                match tracking_copy.borrow_mut().read(correlation_id, &key) {
+                    Ok(Some(Value::Account(account))) => account,
+                    Ok(_) => panic!("system account must exist"),
+                    Err(error) => return Err(Error::ExecError(error.into())),
+                }
+            };
+
+            let keys = &mut BTreeMap::new();
+            keys.insert(
+                MINT_NAME.to_string(),
+                Key::URef(current_protocol_data.mint()),
+            );
+            keys.insert(
+                POS_NAME.to_string(),
+                Key::URef(current_protocol_data.proof_of_stake()),
+            );
+
+            let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+
+            let mut authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            authorization_keys.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+
+            // TODO: do we need blocktime on the request?
+            let blocktime = BlockTime::default();
+            let deploy_hash = {
+                let bytes: Vec<u8> = {
+                    let mut ret = Vec::new();
+                    ret.extend_from_slice(
+                        &upgrade_config.new_protocol_version().value().to_le_bytes(),
+                    );
+                    ret
+                };
+                Blake2bHash::new(&bytes).into()
+            };
+            // upgrade has no gas limit; approximating with MAX
+            let gas_limit = Gas::new(std::u64::MAX.into());
+            let phase = Phase::System;
+            let address_generator = {
+                let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                Rc::new(RefCell::new(generator))
+            };
+            let state = Rc::clone(&tracking_copy);
+
+            WasmiExecutor.better_exec(
+                upgrade_installer_module,
+                &args,
+                keys,
+                initial_base_key,
+                &system_account,
+                authorization_keys,
+                blocktime,
+                deploy_hash,
+                gas_limit,
+                address_generator,
+                new_protocol_version,
+                correlation_id,
+                state,
+                phase,
+            )?
+        };
+
+        let effects = tracking_copy.borrow().effect();
+
+        // commit
+        let commit_result = self
+            .state
+            .commit(
+                correlation_id,
+                pre_state_hash,
+                effects.transforms.to_owned(),
+            )
+            .map_err(Into::into)?;
+
+        // return result and effects
+        Ok(UpgradeResult::from_commit_result(commit_result, effects))
     }
 
     pub fn tracking_copy(
@@ -983,8 +1164,6 @@ where
             session_tc
         };
 
-        let _session_result_cost = session_result.cost();
-
         // NOTE: session_code_spec_3: (do not include session execution effects in
         // results) is enforced in execution_result_builder.build()
         execution_result_builder.set_session_execution_result(session_result);
@@ -1091,7 +1270,7 @@ where
     {
         let protocol_data = match self.state.get_protocol_data(protocol_version)? {
             Some(protocol_data) => protocol_data,
-            None => return Err(Error::InvalidProtocolVersion),
+            None => return Err(Error::InvalidProtocolVersion { protocol_version }),
         };
 
         let proof_of_stake = {
