@@ -60,7 +60,7 @@ object ProtocolVersions {
       if (next.minor != 0) {
         Some("Protocol minor versions should be 0 after major version change.")
       } else if (next.patch != 0) {
-        Some("Protocol path versions should be 0 after major version change.")
+        Some("Protocol patch versions should be 0 after major version change.")
       } else {
         None
       }
