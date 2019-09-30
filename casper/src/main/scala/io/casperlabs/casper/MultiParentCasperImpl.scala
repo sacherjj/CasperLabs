@@ -14,7 +14,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.DeployExecutionPlan.filterDeploysNotInPast
+import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
@@ -410,6 +410,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
+                         dag,
                          parents,
                          merged,
                          remainingHashes,
@@ -443,16 +444,20 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       parents: Seq[Block],
       timestamp: Long
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
+    val earlierPendingDeploys = DeployBuffer[F].readPendingHashesAndHeaders
+      .through(DeployFilters.timestampBefore[F](timestamp))
+    val unexpired = earlierPendingDeploys.through(DeployFilters.ttlAfter[F](timestamp))
+
     for {
-      plan <- DeployExecutionPlan.chooseDeploys[F](dag, parents, timestamp)
-      // anything with timestamp earlier than now and not included in the current plan
+      unexpiredList <- unexpired.map(_._1).compile.toList
+      validDeploys  <- DeployFilters.filterDeploysNotInPast(dag, parents, unexpiredList).map(_.toSet)
+      // anything with timestamp earlier than now and not included in the valid deploys
       // can be discarded as a duplicate and/or expired deploy
-      earlierPendingDeploys <- DeployExecutionPlan.earlierPendingDeploys[F](timestamp)
-      deploysToDiscard      = earlierPendingDeploys diff plan
+      deploysToDiscard <- earlierPendingDeploys.map(_._1).compile.to[Set].map(_ diff validDeploys)
       _ <- DeployBuffer[F]
             .markAsDiscardedByHashes(deploysToDiscard.toList)
             .whenA(deploysToDiscard.nonEmpty)
-    } yield plan
+    } yield validDeploys
   }
 
   /** If another node proposed a block which orphaned something proposed by this node,
@@ -479,6 +484,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   //TODO: Need to specify SEQ vs PAR type block?
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
+      dag: DagRepresentation[F],
       parents: Seq[Block], // TODO: We only need their hashes
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       deploys: Set[DeployHash],
@@ -486,11 +492,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       timestamp: Long,
       protocolVersion: ProtocolVersion
   ): F[CreateBlockStatus] = Metrics[F].timer("createProposal") {
+    val deployStream =
+      DeployBuffer[F].getByHashes(deploys).through(DeployFilters.dependenciesMet[F](dag, parents))
     (for {
       result <- ExecEngineUtil
                  .computeDeploysCheckpoint[F](
                    merged,
-                   deploys,
+                   deployStream,
                    timestamp,
                    protocolVersion
                  )
@@ -501,7 +509,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         deploysForBlock,
         protocolVersion
       )                 = result
-      dag               <- dag
       justificationMsgs <- justifications.toList.traverse(j => dag.lookup(j.latestBlockHash))
       rank              = ProtoUtil.nextRank(justificationMsgs.flatten)
       status = if (deploysForBlock.isEmpty) {

@@ -102,7 +102,7 @@ object BlockGenerator {
       _ <- deployBuffer.addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
-                 deploys.map(_.deployHash).toSet,
+                 fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
                  ProtocolVersion(1)
                )
