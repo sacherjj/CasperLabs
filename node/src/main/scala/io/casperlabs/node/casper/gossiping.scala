@@ -93,7 +93,19 @@ package object gossiping {
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
 
-      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
+      isInitialRef <- Resource.liftF(
+                       Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
+                     )
+
+      synchronizer <- makeSynchronizer(conf, connectToGossip, isInitialRef)
+
+      downloadManager <- makeDownloadManager(
+                          conf,
+                          connectToGossip,
+                          relaying,
+                          synchronizer,
+                          validatorId
+                        )
 
       genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
 
@@ -132,14 +144,13 @@ package object gossiping {
                         }
                       }
 
-      isInitialRef <- Resource.liftF(
-                       Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
-                     )
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
+      stashingSynchronizer <- Resource.liftF {
+                               StashingSynchronizer.wrap(synchronizer, awaitApproval.join)
+                             }
 
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
-                              synchronizer,
+                              stashingSynchronizer,
                               downloadManager,
                               genesisApprover
                             )
@@ -311,6 +322,7 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
+      synchronizer: Synchronizer[F],
       validatorId: Option[ValidatorIdentity]
   ): Resource[F, DownloadManager[F]] =
     for {
@@ -345,6 +357,29 @@ package object gossiping {
                             ): F[Unit] =
                               // Storing the block automatically stores the summary as well.
                               ().pure[F]
+
+                            override def onScheduled(summary: consensus.BlockSummary) =
+                              // The EquivocationDetector treats equivocations with children differently,
+                              // so let Casper know about the DAG dependencies up front.
+                              MultiParentCasperRef[F].get.flatMap {
+                                case Some(casper: MultiParentCasperImpl[F]) =>
+                                  val partialBlock = consensus
+                                    .Block()
+                                    .withBlockHash(summary.blockHash)
+                                    .withHeader(summary.getHeader)
+
+                                  Log[F].debug(
+                                    s"Feeding a pending blocks to Casper: ${show(summary.blockHash)}"
+                                  ) *>
+                                    casper.addMissingDependencies(partialBlock)
+
+                                case _ => ().pure[F]
+                              }
+
+                            override def onDownloaded(blockHash: ByteString) =
+                              // Calling `addBlock` during validation has already stored the block,
+                              // so we have nothing more to do here with the consensus.
+                              synchronizer.downloaded(blockHash)
                           },
                           relaying = relaying,
                           retriesConf = DownloadManagerImpl.RetriesConf(
@@ -508,46 +543,44 @@ package object gossiping {
   def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _         <- SynchronizerImpl.establishMetrics[F]
       isInitial <- isInitialRef.get
       _         <- Log[F].info(s"Creating synchronizer in initial mode: $isInitial")
-      underlying <- SynchronizerImpl[F](
-                     connectToGossip,
-                     new SynchronizerImpl.Backend[F] {
-                       override def tips: F[List[ByteString]] =
-                         for {
-                           casper         <- unsafeGetCasper[F]
-                           dag            <- casper.dag
-                           latestMessages <- dag.latestMessageHashes
-                           tipHashes      <- casper.estimator(dag, latestMessages)
-                         } yield tipHashes.toList
+      synchronizer <- SynchronizerImpl[F](
+                       connectToGossip,
+                       new SynchronizerImpl.Backend[F] {
+                         override def tips: F[List[ByteString]] =
+                           for {
+                             casper         <- unsafeGetCasper[F]
+                             dag            <- casper.dag
+                             latestMessages <- dag.latestMessageHashes
+                             tipHashes      <- casper.estimator(dag, latestMessages)
+                           } yield tipHashes.toList
 
-                       override def justifications: F[List[ByteString]] =
-                         for {
-                           casper <- unsafeGetCasper[F]
-                           dag    <- casper.dag
-                           latest <- dag.latestMessageHashes
-                         } yield latest.values.toList
+                         override def justifications: F[List[ByteString]] =
+                           for {
+                             casper <- unsafeGetCasper[F]
+                             dag    <- casper.dag
+                             latest <- dag.latestMessageHashes
+                           } yield latest.values.toList
 
-                       override def validate(blockSummary: BlockSummary): F[Unit] =
-                         Validation[F].blockSummary(blockSummary, conf.casper.chainId)
+                         override def validate(blockSummary: BlockSummary): F[Unit] =
+                           Validation[F].blockSummary(blockSummary, conf.casper.chainId)
 
-                       override def notInDag(blockHash: ByteString): F[Boolean] =
-                         isInDag(blockHash).map(!_)
-                     },
-                     maxPossibleDepth = conf.server.syncMaxPossibleDepth,
-                     minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
-                     maxBondingRate = conf.server.syncMaxBondingRate,
-                     maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                     maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                     isInitialRef = isInitialRef
-                   )
-      stashing <- StashingSynchronizer.wrap(underlying, awaitApproved)
-    } yield stashing
+                         override def notInDag(blockHash: ByteString): F[Boolean] =
+                           isInDag(blockHash).map(!_)
+                       },
+                       maxPossibleDepth = conf.server.syncMaxPossibleDepth,
+                       minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
+                       maxBondingRate = conf.server.syncMaxBondingRate,
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
+                       isInitialRef = isInitialRef
+                     )
+    } yield synchronizer
   }
 
   /** Create gossip service. */
@@ -571,49 +604,23 @@ package object gossiping {
                       BlockStorage[F]
                         .get(blockHash)
                         .map(_.map(_.getBlockMessage))
+
+                    override def listTips =
+                      for {
+                        casper         <- unsafeGetCasper[F]
+                        dag            <- casper.dag
+                        latestMessages <- dag.latestMessageHashes
+                        tipHashes      <- casper.estimator(dag, latestMessages)
+                        tips           <- tipHashes.toList.traverse(BlockStorage[F].getBlockSummary(_))
+                      } yield tips.flatten
                   }
                 }
-
-      consensus <- Resource.pure[F, GossipServiceServer.Consensus[F]] {
-                    new GossipServiceServer.Consensus[F] {
-                      override def onPending(dag: Vector[consensus.BlockSummary]) =
-                        // The EquivocationDetector treats equivocations with children differently,
-                        // so let Casper know about the DAG dependencies up front.
-                        for {
-                          _      <- Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.")
-                          casper <- unsafeGetCasper[F].map(_.asInstanceOf[MultiParentCasperImpl[F]])
-                          _ <- dag.traverse { summary =>
-                                val partialBlock = consensus
-                                  .Block()
-                                  .withBlockHash(summary.blockHash)
-                                  .withHeader(summary.getHeader)
-
-                                casper.addMissingDependencies(partialBlock)
-                              }
-                        } yield ()
-
-                      override def onDownloaded(blockHash: ByteString) =
-                        // Calling `addBlock` during validation has already stored the block,
-                        // so we have nothing more to do here with the consensus.
-                        synchronizer.downloaded(blockHash)
-
-                      override def listTips =
-                        for {
-                          casper         <- unsafeGetCasper[F]
-                          dag            <- casper.dag
-                          latestMessages <- dag.latestMessageHashes
-                          tipHashes      <- casper.estimator(dag, latestMessages)
-                          tips           <- tipHashes.toList.traverse(backend.getBlockSummary(_))
-                        } yield tips.flatten
-                    }
-                  }
 
       server <- Resource.liftF {
                  GossipServiceServer[F](
                    backend,
                    synchronizer,
                    downloadManager,
-                   consensus,
                    genesisApprover,
                    maxChunkSize = conf.server.chunkSize,
                    maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
