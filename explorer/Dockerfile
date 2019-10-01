@@ -1,9 +1,9 @@
 FROM node:12.5.0-stretch-slim
 
 COPY server/node_modules /app/node_modules
-COPY contracts/client/transfer_to_account.wasm /app/contracts/transfer.wasm
-COPY contracts/client/standard_payment.wasm /app/contracts/payment.wasm
-COPY contracts/explorer/faucet.wasm /app/contracts/faucet.wasm
+COPY contracts/transfer_to_account.wasm /app/contracts/transfer.wasm
+COPY contracts/standard_payment.wasm /app/contracts/payment.wasm
+COPY contracts/faucet.wasm /app/contracts/faucet.wasm
 COPY server/dist /app/server
 COPY ui/build /app/ui
 

@@ -292,30 +292,24 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 
 
 # Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-# The target works .make/contracts/client/standard_payment for example and compiles the standard-payment project in EE;
+# The target works .make/contracts/standard_payment for example and compiles the standard-payment project in EE;
 # in the EE project all the contracts appear individually in the cargo workspace.
 .make/contracts/%: $(RUST_SRC) .make/rustup-update
-	@# Transform the target contract from e.g. `client/standard_payment` into `standard-payment`
-	$(eval CONTRACT=$(subst _,-,$(shell echo $* | awk -F'/' '{print $$2}')))
+	$(eval CONTRACT=$(subst _,-,$*))
 	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
-client/src/main/resources/%.wasm: .make/contracts/client/%
-	$(eval CONTRACT=$*)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+client/src/main/resources/%.wasm: .make/contracts/%
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 # Compile a contract and put it in the node resources so they get packaged with the JAR.
-node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/node/%
-	$(eval CONTRACT=$*)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 # Copy a client or explorer contract to the explorer.
 explorer/contracts/%.wasm: .make/contracts/%
-	@# Extract the contract name from e.g. `client/standard_payment` or `explorer/faucet`.
-	$(eval CONTRACT=$(shell echo $* | awk -F'/' '{print $$2}'))
-	mkdir -p $(dir $@)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 build-client: \
 	.make/sbt-stage/client
@@ -337,9 +331,9 @@ build-explorer: \
 	.make/npm/explorer
 
 build-explorer-contracts: \
-	explorer/contracts/client/transfer_to_account.wasm \
-	explorer/contracts/client/standard_payment.wasm \
-	explorer/contracts/explorer/faucet.wasm
+	explorer/contracts/transfer_to_account.wasm \
+	explorer/contracts/standard_payment.wasm \
+	explorer/contracts/faucet.wasm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.
