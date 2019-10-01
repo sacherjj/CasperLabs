@@ -68,11 +68,11 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   private def addWithStatus(deploys: List[Deploy], status: Int): F[Unit] =
     deploysWithMetadataRef.update(
-      _ ++ deploys
+      deploys
         .map(
           d => (d, Metadata(status, now, now, Nil))
         )
-        .toMap
+        .toMap ++ _
     )
 
   override def markAsPendingByHashes(hashes: List[ByteString]): F[Unit] =
@@ -127,17 +127,20 @@ class MockDeployStorage[F[_]: Sync: Log](
     )
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
-    val f: ((Deploy, Metadata)) => Boolean = (_: (Deploy, Metadata)) match {
-      case (_, Metadata(`DiscardedStatusCode`, updatedAt, _, _))
-          if updatedAt < now - expirationPeriod.toMillis =>
+    val selectDiscarding: ((Deploy, Metadata)) => Boolean = (_: (Deploy, Metadata)) match {
+      case (_, Metadata(`DiscardedStatusCode`, updatedAt, _, processingResults))
+          if updatedAt < now - expirationPeriod.toMillis && processingResults.isEmpty =>
         true
       case _ => false
     }
 
-    logOperation("cleanupDiscarded", deploysWithMetadataRef.modify { ds =>
-      val deletedNum = ds.count(f)
-      (ds.filter(f andThen (_.unary_!)), deletedNum)
-    })
+    logOperation(
+      "cleanupDiscarded",
+      deploysWithMetadataRef.modify { ds =>
+        val deletedNum = ds.count(selectDiscarding)
+        (ds.filterNot { case (d, metadata) => selectDiscarding((d, metadata)) }, deletedNum)
+      }
+    )
   }
 
   override def readProcessed: F[List[Deploy]] = readByStatus(ProcessedStatusCode)
