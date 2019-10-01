@@ -7,9 +7,8 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support;
 use crate::support::test_support::{
-    DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
     GENESIS_INITIAL_BALANCE,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};

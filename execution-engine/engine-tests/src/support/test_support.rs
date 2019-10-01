@@ -211,11 +211,9 @@ impl DeployItemBuilder {
 
 impl Default for DeployItemBuilder {
     fn default() -> Self {
-        let mut deploy = DeployItem::new();
-        deploy.set_gas_price(1);
-        DeployItemBuilder {
-            deploy_item: deploy,
-        }
+        let mut deploy_item = DeployItem::new();
+        deploy_item.set_gas_price(1);
+        DeployItemBuilder { deploy_item }
     }
 }
 
@@ -283,15 +281,15 @@ impl ExecuteRequestBuilder {
 
 impl Default for ExecuteRequestBuilder {
     fn default() -> Self {
-        let deploys = vec![];
-        let mut exec_request = ExecuteRequest::new();
-        exec_request.set_block_time(DEFAULT_BLOCK_TIME);
+        let deploy_items = vec![];
+        let mut execute_request = ExecuteRequest::new();
+        execute_request.set_block_time(DEFAULT_BLOCK_TIME);
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(1);
-        exec_request.set_protocol_version(protocol_version);
+        execute_request.set_protocol_version(protocol_version);
         ExecuteRequestBuilder {
-            deploy_items: deploys,
-            execute_request: exec_request,
+            deploy_items,
+            execute_request,
         }
     }
 }
