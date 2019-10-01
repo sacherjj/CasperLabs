@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# TODO: Use Makefile instead? Something like `make lrt`.
-
 # Runs a local LRT:
 # 3 nodes continuously send motes to each other in parallel.
 # Sending deploys without proposes, expects auto proposer to be enabled
