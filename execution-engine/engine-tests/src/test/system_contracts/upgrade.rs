@@ -1,7 +1,6 @@
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
-use engine_core::engine_state::EngineConfig;
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::transform::Transform;
 use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -39,10 +38,7 @@ fn get_upgraded_wasm_costs() -> WasmCosts {
 fn should_upgrade_only_protocol_version() {
     let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
@@ -98,10 +94,7 @@ fn should_upgrade_only_protocol_version() {
 fn should_upgrade_system_contract() {
     let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
@@ -176,10 +169,7 @@ fn should_upgrade_system_contract() {
 #[ignore]
 #[test]
 fn should_upgrade_wasm_costs() {
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
@@ -218,10 +208,7 @@ fn should_upgrade_wasm_costs() {
 fn should_upgrade_system_contract_and_wasm_costs() {
     let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
@@ -311,10 +298,7 @@ fn should_upgrade_system_contract_and_wasm_costs() {
 fn should_not_downgrade() {
     let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
@@ -374,10 +358,7 @@ fn should_not_downgrade() {
 #[ignore]
 #[test]
 fn should_not_skip_major_versions() {
-    let mut builder = {
-        let engine_config = EngineConfig::default().set_use_payment_code(true);
-        InMemoryWasmTestBuilder::new(engine_config)
-    };
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 

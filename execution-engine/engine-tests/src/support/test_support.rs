@@ -307,14 +307,7 @@ pub struct UpgradeRequestBuilder {
 
 impl UpgradeRequestBuilder {
     pub fn new() -> Self {
-        UpgradeRequestBuilder {
-            pre_state_hash: Default::default(),
-            current_protocol_version: Default::default(),
-            new_protocol_version: Default::default(),
-            upgrade_installer: Default::default(),
-            new_costs: None,
-            activation_point: Default::default(),
-        }
+        Default::default()
     }
 
     pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
@@ -384,7 +377,14 @@ impl UpgradeRequestBuilder {
 
 impl Default for UpgradeRequestBuilder {
     fn default() -> Self {
-        unimplemented!()
+        UpgradeRequestBuilder {
+            pre_state_hash: Default::default(),
+            current_protocol_version: Default::default(),
+            new_protocol_version: Default::default(),
+            upgrade_installer: Default::default(),
+            new_costs: None,
+            activation_point: Default::default(),
+        }
     }
 }
 

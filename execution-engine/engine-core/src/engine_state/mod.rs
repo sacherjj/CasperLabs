@@ -462,7 +462,7 @@ where
         let pre_state_hash = upgrade_config.pre_state_hash();
         let tracking_copy = match self.tracking_copy(pre_state_hash)? {
             Some(tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
-            None => panic!("state has not been initialized properly"),
+            None => return Ok(UpgradeResult::RootNotFound),
         };
 
         // 3.1.1.1.1.2 current protocol version is required
@@ -490,11 +490,6 @@ where
                 protocol_version: new_protocol_version,
             });
         }
-
-        // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
-        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
-        let upgrade_installer_bytes = upgrade_config.upgrade_installer_bytes();
-
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
         let new_wasm_costs = match upgrade_config.wasm_costs() {
             Some(new_wasm_costs) => new_wasm_costs,
@@ -512,12 +507,13 @@ where
             .put_protocol_data(new_protocol_version, &new_protocol_data)
             .map_err(Into::into)?;
 
+        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
+        // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
         // 3.1.2.3 execute upgrade installer if one is provided
-        if upgrade_installer_bytes.is_some() {
+        if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
             // preprocess installer module
             let upgrade_installer_module = {
                 let preprocessor = WasmiPreprocessor::new(new_wasm_costs);
-                let bytes = upgrade_config.upgrade_installer_bytes().unwrap(); // safe to unwrap
                 preprocessor.preprocess(bytes)?
             };
 
