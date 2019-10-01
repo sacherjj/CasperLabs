@@ -1074,19 +1074,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
     for {
-      deploy1 <- ProtoUtil.basicDeploy[Effect]()
-      deploy2Body = Deploy
-        .Body()
-        .withSession(Deploy.Code().withWasm(ByteString.EMPTY))
-        .withPayment(Deploy.Code().withWasm(ByteString.EMPTY))
-      deploy2Header = Deploy
-        .Header()
-        .withDependencies(List(deploy1.deployHash))
-        .withBodyHash(ProtoUtil.protoHash(deploy2Body))
-      deploy2 = Deploy()
-        .withHeader(deploy2Header)
-        .withBody(deploy2Body)
-        .withDeployHash(ProtoUtil.protoHash(deploy2Header))
+      deploy1         <- ProtoUtil.basicDeploy[Effect]()
+      deploy2         = DeployBuilder().withDependencies(Seq(deploy1.deployHash)).build
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block1) <- node.casperEff.createBlock
