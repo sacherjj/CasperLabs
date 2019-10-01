@@ -10,7 +10,7 @@ use engine_shared::test_utils;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, ExecRequest, QueryRequest, ValidateRequest,
+    CommitRequest, DeployItem, ExecuteRequest, QueryRequest, ValidateRequest,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::state::{Key, Key_Address};
@@ -98,18 +98,19 @@ fn should_exec_with_metrics() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
     let engine_state = EngineState::new(global_state, engine_config);
 
-    let mut exec_request = ExecRequest::new();
+    let mut execute_request = ExecuteRequest::new();
     {
-        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
+        let mut deploys: protobuf::RepeatedField<DeployItem> =
+            <protobuf::RepeatedField<DeployItem>>::new();
         deploys.push(test_support::get_mock_deploy());
 
-        exec_request.set_deploys(deploys);
-        exec_request.set_parent_state_hash(root_hash);
-        exec_request.set_protocol_version(test_support::get_protocol_version());
+        execute_request.set_deploys(deploys);
+        execute_request.set_parent_state_hash(root_hash);
+        execute_request.set_protocol_version(test_support::get_protocol_version());
     }
 
     let _exec_response_result = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), execute_request)
         .wait_drop_metadata();
 
     let log_items = BUFFERED_LOGGER
