@@ -18,7 +18,7 @@ pub fn delegate() {
         None => contract_api::revert(Error::MissingArgument.into()),
     };
     let purse_id = contract_api::create_purse();
-    contract_api::add_uref(&purse_name, &purse_id.value().into());
+    contract_api::put_key(&purse_name, &purse_id.value().into());
 }
 
 #[cfg(not(feature = "lib"))]

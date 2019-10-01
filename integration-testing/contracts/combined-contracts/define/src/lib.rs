@@ -28,7 +28,7 @@ pub extern "C" fn hello_name_ext() {
 }
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
-    get_uref(name).unwrap().to_turef().unwrap()
+    get_key(name).unwrap().to_turef().unwrap()
 }
 
 fn update_list(name: String) {
@@ -43,13 +43,13 @@ fn update_list(name: String) {
 }
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
-    if has_uref(&name) {
+    if has_key(&name) {
         let init_message = vec![String::from("Hello again!")];
         Some(new_turef(init_message)) //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_turef = new_turef(init_message);
-        add_uref(&name, &new_turef.clone().into());
+        put_key(&name, &new_turef.clone().into());
         update_list(name);
         Some(new_turef)
     }
@@ -98,7 +98,7 @@ pub extern "C" fn mailing_list_ext() {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let turef: TURef<i32> = get_uref("count").unwrap().to_turef().unwrap();
+    let turef: TURef<i32> = get_key("count").unwrap().to_turef().unwrap();
     let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
         "inc" => add(turef, 1),
@@ -118,7 +118,7 @@ pub extern "C" fn counter_ext() {
 pub extern "C" fn call() {
     // hello_name
     let pointer = store_function("hello_name_ext", BTreeMap::new());
-    add_uref("hello_name", &pointer.into());
+    put_key("hello_name", &pointer.into());
 
     // counter
     let counter_local_turef = new_turef(0); //initialize counter
@@ -128,7 +128,7 @@ pub extern "C" fn call() {
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_turef.into());
     let _counter_hash = store_function("counter_ext", counter_urefs);
-    add_uref("counter", &_counter_hash.into());
+    put_key("counter", &_counter_hash.into());
 
     // mailing list
     let init_list: Vec<String> = Vec::new();
@@ -140,5 +140,5 @@ pub extern "C" fn call() {
     mailing_list_urefs.insert(key_name, list_turef.into());
 
     let pointer = store_function("mailing_list_ext", mailing_list_urefs);
-    add_uref("mailing", &pointer.into())
+    put_key("mailing", &pointer.into())
 }

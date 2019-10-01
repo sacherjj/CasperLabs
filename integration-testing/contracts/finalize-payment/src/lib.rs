@@ -58,7 +58,7 @@ pub extern "C" fn call() {
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {
         let refund_purse = contract_api::create_purse();
-        contract_api::add_uref("local_refund_purse", &Key::URef(refund_purse.value()));
+        contract_api::put_key("local_refund_purse", &Key::URef(refund_purse.value()));
         set_refund_purse(&pos_pointer, &refund_purse);
     }
     finalize_payment(&pos_pointer, amount_spent, account);

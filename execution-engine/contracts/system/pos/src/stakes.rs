@@ -23,7 +23,7 @@ impl StakesProvider for ContractStakes {
     /// Reads the current stakes from the contract's known urefs.
     fn read() -> Result<Stakes> {
         let mut stakes = BTreeMap::new();
-        for (name, _) in contract_api::list_known_urefs() {
+        for (name, _) in contract_api::list_named_keys() {
             let mut split_name = name.split('_');
             if Some("v") != split_name.next() {
                 continue;
@@ -68,13 +68,13 @@ impl StakesProvider for ContractStakes {
             })
             .collect();
         // Remove and add urefs to update the contract's known urefs accordingly.
-        for (name, _) in contract_api::list_known_urefs() {
+        for (name, _) in contract_api::list_named_keys() {
             if name.starts_with("v_") && !new_urefs.remove(&name) {
-                contract_api::remove_uref(&name);
+                contract_api::remove_key(&name);
             }
         }
         for name in new_urefs {
-            contract_api::add_uref(&name, &Key::Hash([0; 32]));
+            contract_api::put_key(&name, &Key::Hash([0; 32]));
         }
     }
 }

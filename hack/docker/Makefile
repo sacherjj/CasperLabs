@@ -98,11 +98,10 @@ slow:
 	@# Create a `facet-account` to hold some initial tokens to distribute.
 	mkdir -p keys/faucet-account
 	../key-management/docker-gen-account-keys.sh keys/faucet-account
-	(cat keys/faucet-account/account-id; echo ",1000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
+	(cat keys/faucet-account/account-id; echo ",10000000000,0") > .casperlabs/chainspec/genesis/accounts.csv
 
 	@# Create bonded validators with 0 balance.
-	bash -c 'i=0 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
-		echo Generating validator $$i / $(CL_CASPER_NUM_VALIDATORS) ; \
+	bash -c 'i=1 ; while [[ $$i -lt $(CL_CASPER_NUM_VALIDATORS) ]] ; do \
 		mkdir -p .casperlabs/node-$$i ; \
 		mkdir -p keys/account-$$i ; \
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \

@@ -57,5 +57,5 @@ pub extern "C" fn call() {
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");
     uref_name.push_str(value);
-    contract_api::add_uref(&uref_name, &result_key);
+    contract_api::put_key(&uref_name, &result_key);
 }

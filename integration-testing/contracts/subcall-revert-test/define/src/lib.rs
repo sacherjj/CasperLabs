@@ -16,5 +16,5 @@ pub extern "C" fn revert_test_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let pointer = store_function("revert_test_ext", BTreeMap::new());
-    add_uref("revert_test", &pointer.into())
+    put_key("revert_test", &pointer.into())
 }
