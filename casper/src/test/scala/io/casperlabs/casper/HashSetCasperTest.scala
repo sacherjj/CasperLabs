@@ -1070,6 +1070,34 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "not execute deploys until dependencies are met" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    for {
+      deploy1 <- ProtoUtil.basicDeploy[Effect]()
+      deploy2Body = Deploy
+        .Body()
+        .withSession(Deploy.Code().withWasm(ByteString.EMPTY))
+        .withPayment(Deploy.Code().withWasm(ByteString.EMPTY))
+      deploy2Header = Deploy
+        .Header()
+        .withDependencies(List(deploy1.deployHash))
+        .withBodyHash(ProtoUtil.protoHash(deploy2Body))
+      deploy2 = Deploy()
+        .withHeader(deploy2Header)
+        .withBody(deploy2Body)
+        .withDeployHash(ProtoUtil.protoHash(deploy2Header))
+      _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
+      _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
+      Created(block1) <- node.casperEff.createBlock
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      Created(block2) <- node.casperEff.createBlock
+      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
+      _               = block2.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy2)
+      _               <- node.tearDown()
+    } yield ()
+  }
+
   it should "not execute deploys which are already in the past" in effectTest {
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
