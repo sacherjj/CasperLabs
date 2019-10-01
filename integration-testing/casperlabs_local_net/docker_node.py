@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, testing_root_path
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -52,7 +52,12 @@ class DockerNode(LoggingDockerBase):
         self.cl_network = cl_network
 
         def local_path(p):
-            return "resources/bootstrap_certificate/" + p.split("/")[-1]
+            return str(
+                testing_root_path()
+                / "resources"
+                / "bootstrap_certificate"
+                / p.split("/")[-1]
+            )
 
         self.proxy_server = None
         self.proxy_kademlia = None
