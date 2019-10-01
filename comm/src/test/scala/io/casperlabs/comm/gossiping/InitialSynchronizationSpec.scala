@@ -216,6 +216,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     def hasBlock(blockHash: ByteString)        = ???
     def getBlockSummary(blockHash: ByteString) = ???
     def getBlock(blockHash: ByteString)        = ???
+    def listTips                               = ???
   }
 
   object MockSynchronizer extends Synchronizer[Task] {
@@ -225,12 +226,6 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
 
   object MockDownloadManager extends DownloadManager[Task] {
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-  }
-
-  object MockConsensus extends GossipServiceServer.Consensus[Task] {
-    def onPending(dag: Vector[BlockSummary]) = ???
-    def onDownloaded(blockHash: ByteString)  = ???
-    def listTips                             = ???
   }
 
   object MockGenesisApprover extends GenesisApprover[Task] {
@@ -246,7 +241,6 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
         MockBackend,
         MockSynchronizer,
         MockDownloadManager,
-        MockConsensus,
         MockGenesisApprover,
         0,
         MockSemaphore
