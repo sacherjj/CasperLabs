@@ -27,7 +27,6 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
-    consensus: GossipServiceServer.Consensus[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
     blockDownloadSemaphore: Semaphore[F]
@@ -104,29 +103,17 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
                    )
       _ <- dagOrError.fold(
             syncError => logSyncError(syncError), { dag =>
-              for {
-                _ <- Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...")
-                _ <- consensus.onPending(dag)
-                watches <- dag.traverse { summary =>
-                            downloadManager.scheduleDownload(
-                              summary,
-                              source = source,
-                              relay = !skipRelaying && newBlockHashes(summary.blockHash)
-                            )
-                          }
-                _ <- (dag zip watches).parTraverse {
-                      case (summary, watch) =>
-                        // TODO: Called from here the consensus engine can be notified multiple times.
-                        // The pending and final notifications should most likely be moved
-                        // to the DownloadManager. We'll see this clearer when we integrate
-                        // the new gossiping machinery with Casper and the Block Strategy.
-                        watch *> consensus.onDownloaded(summary.blockHash)
-                    }
-                _ <- Log[F].info(s"Synced ${dag.size} blocks with ${source.show}.")
-              } yield ()
+              Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
+                dag.traverse { summary =>
+                  downloadManager.scheduleDownload(
+                    summary,
+                    source = source,
+                    relay = !skipRelaying && newBlockHashes(summary.blockHash)
+                  )
+                }
             }
           )
-    } yield dagOrError.map(_ => ())
+    } yield dagOrError.void
 
     trySync.onError {
       case NonFatal(ex) =>
@@ -192,7 +179,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   override def streamDagTipBlockSummaries(
       request: StreamDagTipBlockSummariesRequest
   ): Iterant[F, BlockSummary] =
-    Iterant.liftF(consensus.listTips).flatMap(Iterant.fromSeq(_))
+    Iterant.liftF(backend.listTips).flatMap(Iterant.fromSeq(_))
 
   override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
@@ -271,22 +258,11 @@ object GossipServiceServer {
     Iterator(Chunk().withHeader(header)) ++ chunks
   }
 
-  /** Interface to local storage. */
+  /** Interface to storage and consensus. */
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString): F[Option[Block]]
-  }
-
-  /** Interface to the consensus engine. These could be exposed as Observables. */
-  trait Consensus[F[_]] {
-
-    /** Notify about new blocks we were told about but haven't acquired yet.
-      * Pass them in topological order. */
-    def onPending(dag: Vector[BlockSummary]): F[Unit]
-
-    /** Notify about a new block we downloaded, verified and stored. */
-    def onDownloaded(blockHash: ByteString): F[Unit]
 
     /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
     def listTips: F[Seq[BlockSummary]]
@@ -296,7 +272,6 @@ object GossipServiceServer {
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
-      consensus: Consensus[F],
       genesisApprover: GenesisApprover[F],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
@@ -306,7 +281,6 @@ object GossipServiceServer {
         backend,
         synchronizer,
         downloadManager,
-        consensus,
         genesisApprover,
         maxChunkSize,
         blockDownloadSemaphore

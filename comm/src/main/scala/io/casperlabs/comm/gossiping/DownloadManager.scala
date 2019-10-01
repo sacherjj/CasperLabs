@@ -1,8 +1,10 @@
 package io.casperlabs.comm.gossiping
 
-import cats.Monad
+import cats._
+import cats.syntax._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
@@ -60,12 +62,18 @@ object DownloadManagerImpl {
   type DownloadFeedback[F[_]] = Feedback[F] @@ DownloadTag
   type ScheduleFeedback[F[_]] = Feedback[F] @@ ScheduleTag
 
-  /** Interface to the local backend dependencies. */
+  /** Interface to the storage and consensus dependencies and callbacks. */
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def validateBlock(block: Block): F[Unit]
     def storeBlock(block: Block): F[Unit]
     def storeBlockSummary(summary: BlockSummary): F[Unit]
+
+    /** Notify about new blocks we were told about but haven't acquired yet. */
+    def onScheduled(summary: BlockSummary): F[Unit]
+
+    /** Notify about a new block we downloaded, verified and stored. */
+    def onDownloaded(blockHash: ByteString): F[Unit]
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
@@ -135,7 +143,7 @@ object DownloadManagerImpl {
           relaying,
           retriesConf
         )
-        managerLoop <- Concurrent[F].start(manager.run)
+        managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
     } {
       case (isShutdown, workersRef, managerLoop, _) =>
@@ -204,15 +212,15 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
         val start =
           isDownloaded(summary.blockHash).ifM(
             downloadFeedback.complete(Right(())),
-            ensureNoMissingDependencies(summary) *> {
-              for {
-                items <- itemsRef.get
-                item  <- mergeItem(items, summary, source, relay, downloadFeedback)
-                _     <- itemsRef.update(_ + (summary.blockHash -> item))
-                _     <- if (item.canStart) startWorker(item) else Sync[F].unit
-                _     <- setScheduledGauge
-              } yield ()
-            }
+            for {
+              _     <- ensureNoMissingDependencies(summary)
+              _     <- backend.onScheduled(summary).start
+              items <- itemsRef.get
+              item  <- mergeItem(items, summary, source, relay, downloadFeedback)
+              _     <- itemsRef.update(_ + (summary.blockHash -> item))
+              _     <- if (item.canStart) startWorker(item) else Sync[F].unit
+              _     <- setScheduledGauge
+            } yield ()
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
         start.attempt.flatMap(scheduleFeedback.complete) >> run
@@ -234,6 +242,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
+          _                      <- backend.onDownloaded(blockHash).start
           _                      <- startables.traverse(startWorker)
           _                      <- setScheduledGauge
         } yield ()
