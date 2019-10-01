@@ -438,77 +438,6 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn run_deploy_item<A, P: Preprocessor<A>, E: Executor<A>>(
-        &self,
-        session: ExecutableDeployItem,
-        payment: ExecutableDeployItem,
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
-    ) -> Result<ExecutionResult, RootNotFound> {
-        self.deploy(
-            session,
-            payment,
-            address,
-            authorization_keys,
-            blocktime,
-            deploy_hash,
-            prestate_hash,
-            protocol_version,
-            correlation_id,
-            executor,
-            preprocessor,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
-        &self,
-        session_module_bytes: &[u8],
-        session_args: &[u8],
-        payment_module_bytes: &[u8],
-        payment_args: &[u8],
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
-    ) -> Result<ExecutionResult, RootNotFound> {
-        let session = ExecutableDeployItem::ModuleBytes {
-            module_bytes: session_module_bytes.into(),
-            args: session_args.into(),
-        };
-        let payment = ExecutableDeployItem::ModuleBytes {
-            module_bytes: payment_module_bytes.into(),
-            args: payment_args.into(),
-        };
-
-        self.deploy(
-            session,
-            payment,
-            address,
-            authorization_keys,
-            blocktime,
-            deploy_hash,
-            prestate_hash,
-            protocol_version,
-            correlation_id,
-            executor,
-            preprocessor,
-        )
-    }
-
     pub fn get_module<A, P: Preprocessor<A>>(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
@@ -612,7 +541,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
+    pub fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,
         session: ExecutableDeployItem,
         payment: ExecutableDeployItem,

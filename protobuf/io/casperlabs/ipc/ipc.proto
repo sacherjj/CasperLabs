@@ -68,20 +68,6 @@ message DeployItem {
     bytes deploy_hash = 9;
 }
 
-message ExecRequest {
-    bytes parent_state_hash = 1;
-    uint64 block_time = 2;
-    repeated Deploy deploys = 3;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 4;
-}
-
-message ExecResponse {
-    oneof result {
-        ExecResult success = 1;
-        RootNotFound missing_parent = 2;
-    }
-}
-
 message ExecuteRequest {
     bytes parent_state_hash = 1;
     uint64 block_time = 2;
@@ -374,7 +360,6 @@ message UpgradeResponse {
 // Definition of the service.
 // ExecutionEngine implements server part while Consensus implements client part.
 service ExecutionEngineService {
-    rpc exec (ExecRequest) returns (ExecResponse) {}
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
     rpc validate (ValidateRequest) returns (ValidateResponse) {}
