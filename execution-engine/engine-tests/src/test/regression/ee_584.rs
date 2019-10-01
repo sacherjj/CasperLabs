@@ -3,7 +3,9 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
+use crate::support::test_support::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
@@ -14,7 +16,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code("ee_584_regression.wasm", ())
             .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
@@ -22,7 +24,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
             .with_deploy_hash([1u8; 32])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);

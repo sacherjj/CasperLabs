@@ -61,7 +61,7 @@ pub extern "C" fn call() {
                 &vec![],
             );
             let version_key = contract_api::new_turef(version).into();
-            contract_api::add_uref(METHOD_VERSION, &version_key);
+            contract_api::put_key(METHOD_VERSION, &version_key);
         }
         _ => {
             let purse_name: String = match contract_api::get_arg(Args::PurseName as u32) {

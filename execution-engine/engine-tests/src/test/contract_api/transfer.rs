@@ -100,9 +100,9 @@ fn should_transfer_to_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -144,7 +144,7 @@ fn should_transfer_to_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -213,9 +213,9 @@ fn should_transfer_from_account_to_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -245,7 +245,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_1_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -317,7 +317,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_2_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -384,9 +384,9 @@ fn should_transfer_to_existing_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -427,7 +427,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -499,7 +499,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -571,7 +571,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -610,7 +610,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -643,7 +643,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 

@@ -57,7 +57,7 @@ pub extern "C" fn apply_method() {
         METHOD_ADD => {
             let purse_name = purse_name();
             let purse_id = contract_api::create_purse();
-            contract_api::add_uref(&purse_name, &purse_id.value().into());
+            contract_api::put_key(&purse_name, &purse_id.value().into());
         }
         METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
         _ => contract_api::revert(Error::User(CustomError::UnknownMethodName as u16).into()),
@@ -74,13 +74,13 @@ pub extern "C" fn call() {
         ContractPointer::URef(turef) => turef.into(),
     };
     let mint_key = Key::URef(mint_uref);
-    let mut known_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    known_urefs.insert(String::from(MINT_NAME), mint_key);
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, known_urefs);
+    let mut named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    named_keys.insert(String::from(MINT_NAME), mint_key);
+    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, named_keys);
     let contract_name_key = contract_api::new_turef(contract).into();
-    contract_api::add_uref(CONTRACT_NAME, &contract_name_key);
+    contract_api::put_key(CONTRACT_NAME, &contract_name_key);
 
     // set version
     let version_key = contract_api::new_turef(VERSION.to_string()).into();
-    contract_api::add_uref(METHOD_VERSION, &version_key);
+    contract_api::put_key(METHOD_VERSION, &version_key);
 }

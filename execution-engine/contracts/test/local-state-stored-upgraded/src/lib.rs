@@ -55,5 +55,5 @@ pub extern "C" fn call() {
     let contract =
         contract_api::fn_by_name(ENTRY_FUNCTION_NAME, alloc::collections::BTreeMap::new());
     let key = contract_api::new_turef(contract).into();
-    contract_api::add_uref(CONTRACT_NAME, &key);
+    contract_api::put_key(CONTRACT_NAME, &key);
 }

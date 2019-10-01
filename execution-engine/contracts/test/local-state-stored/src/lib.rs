@@ -20,8 +20,8 @@ pub extern "C" fn delegate() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, known_urefs);
+    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, named_keys);
     let key = contract_api::new_turef(contract).into();
-    contract_api::add_uref(CONTRACT_NAME, &key);
+    contract_api::put_key(CONTRACT_NAME, &key);
 }

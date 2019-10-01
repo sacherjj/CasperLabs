@@ -382,9 +382,9 @@ proptest! {
         hash in u8_slice_32(), // hash for contract key
     ) {
         let correlation_id = CorrelationId::new();
-        let mut known_urefs = BTreeMap::new();
-        known_urefs.insert(name.clone(), k);
-        let contract: Value = Contract::new(body, known_urefs, ProtocolVersion::new(1)).into();
+        let mut named_keys = BTreeMap::new();
+        named_keys.insert(name.clone(), k);
+        let contract: Value = Contract::new(body, named_keys, ProtocolVersion::new(1)).into();
         let contract_key = Key::Hash(hash);
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
@@ -417,12 +417,12 @@ proptest! {
         address in u8_slice_32(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
-        let known_urefs = iter::once((name.clone(), k)).collect();
+        let named_keys = iter::once((name.clone(), k)).collect();
         let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            known_urefs,
+            named_keys,
             purse_id,
             associated_keys,
             Default::default(),
@@ -462,19 +462,19 @@ proptest! {
     ) {
         let correlation_id = CorrelationId::new();
         // create contract which knows about value
-        let mut contract_known_urefs = BTreeMap::new();
-        contract_known_urefs.insert(state_name.clone(), k);
-        let contract: Value = Contract::new(body, contract_known_urefs, ProtocolVersion::new(1)).into();
+        let mut contract_named_keys = BTreeMap::new();
+        contract_named_keys.insert(state_name.clone(), k);
+        let contract: Value = Contract::new(body, contract_named_keys, ProtocolVersion::new(1)).into();
         let contract_key = Key::Hash(hash);
 
         // create account which knows about contract
-        let mut account_known_urefs = BTreeMap::new();
-        account_known_urefs.insert(contract_name.clone(), contract_key);
+        let mut account_named_keys = BTreeMap::new();
+        account_named_keys.insert(contract_name.clone(), contract_key);
         let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
         let associated_keys = AssociatedKeys::new(PublicKey::new(pk), Weight::new(1));
         let account = Account::new(
             pk,
-            account_known_urefs,
+            account_named_keys,
             purse_id,
             associated_keys,
             Default::default(),
