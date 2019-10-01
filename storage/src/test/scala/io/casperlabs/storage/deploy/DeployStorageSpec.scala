@@ -285,6 +285,21 @@ trait DeployStorageSpec
         },
         timeout = 15.seconds
       )
+
+      "not delete deploys which were executed before" in
+        testFixture { (reader, writer) =>
+          val b  = sample(arbBlock.arbitrary.suchThat(_.getBody.deploys.nonEmpty))
+          val ds = b.getBody.deploys.map(_.getDeploy).toList
+          for {
+            _      <- writer.addAsExecuted(b)
+            _      <- writer.addAsDiscarded(ds)
+            _      <- Task.sleep(200.millis)
+            _      <- writer.cleanupDiscarded(Duration.Zero)
+            gotNum <- ds.flatTraverse(d => reader.getProcessingResults(d.deployHash)).map(_.size)
+          } yield {
+            gotNum shouldBe ds.size
+          }
+        }
     }
 
     "markAsDiscarded(duration)" should {
@@ -381,8 +396,10 @@ trait DeployStorageSpec
   private implicit class DeployStorageWriterOps(writer: DeployStorageWriter[Task]) {
     def addAsPending(d: Deploy): Task[Unit]   = writer.addAsPending(List(d))
     def addAsProcessed(d: Deploy): Task[Unit] = writer.addAsProcessed(List(d))
+    def addAsDiscarded(ds: List[Deploy]): Task[Unit] =
+      writer.addAsPending(ds) >> writer.markAsDiscarded(ds.map((_, "")))
     def addAsDiscarded(d: Deploy): Task[Unit] =
-      writer.addAsPending(List(d)) >> writer.markAsDiscarded(List((d, "")))
+      addAsDiscarded(List(d))
     def markAsDiscarded(ds: List[Deploy]): Task[Unit] = writer.markAsDiscarded(ds.map((_, "")))
     def addAsFinalized(d: Deploy): Task[Unit] =
       writer.addAsProcessed(List(d)) >> writer.markAsFinalized(List(d))

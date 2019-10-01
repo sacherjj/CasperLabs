@@ -162,8 +162,15 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                    .query[ByteString]
                    .to[List]
         _ <- Update[ByteString](s"DELETE FROM buffered_deploys WHERE hash=?").updateMany(hashes)
-        _ <- Update[ByteString](s"DELETE FROM deploys WHERE hash=?").updateMany(hashes)
-      } yield hashes.size
+        deletedNum <- Update[ByteString](
+                       s"""|DELETE
+                           |FROM deploys
+                           |WHERE hash = ?
+                           |  AND NOT EXISTS(SELECT 1
+                           |                 FROM deploy_process_results dpr
+                           |                 WHERE deploys.hash = dpr.deploy_hash)""".stripMargin
+                     ).updateMany(hashes)
+      } yield deletedNum
 
     for {
       now        <- Time[F].currentMillis

@@ -55,8 +55,10 @@ import scala.concurrent.duration._
     * Marks deploys as discarded that were added as pending more than 'now - expirationPeriod' time ago. */
   def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit]
 
-  /** Deletes discarded deploys that are older than 'now - expirationPeriod'.
-    * @return Number of deleted deploys */
+  /** Deletes discarded deploys from buffer that are older than 'now - expirationPeriod'.
+    * Won't delete bodies of deploys which were [[addAsExecuted]] before.
+    * Otherwise all the data will be deleted.
+    * @return Number of deleted deploys from buffer minus those who [[addAsExecuted]] */
   def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int]
 
   def clear(): F[Unit]
