@@ -86,7 +86,10 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
       }
 
   /** Synchronize and download any missing blocks to get to the new ones.
-    * This method will complete when all the downloads are ready. */
+    * This method will in itself not block on the results, just return a
+    * list of deferred handles that the caller can decide to wait upon,
+    * which some uses cases do, but mostly we expect to let them complete
+    * asynchronously in the background. */
   private def sync(
       source: Node,
       newBlockHashes: Set[ByteString],
