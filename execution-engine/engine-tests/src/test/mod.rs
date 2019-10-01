@@ -45,7 +45,7 @@ lazy_static! {
         ret.push(genesis_account);
         ret
     };
-    pub static ref DEFAULT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::new(1);
+    pub static ref DEFAULT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
     pub static ref DEFAULT_PAYMENT: U512 = 100_000_000.into();
     pub static ref DEFAULT_WASM_COSTS: WasmCosts = test_utils::wasm_costs_mock();
     pub static ref DEFAULT_GENESIS_CONFIG: GenesisConfig = {

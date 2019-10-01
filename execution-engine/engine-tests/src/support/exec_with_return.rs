@@ -24,7 +24,6 @@ use std::rc::Rc;
 use crate::test::DEFAULT_WASM_COSTS;
 
 const INIT_FN_STORE_ID: u32 = 0;
-const INIT_PROTOCOL_VERSION: u64 = 1;
 
 /// This function allows executing the contract stored in the given `wasm_file`, while capturing the
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of
@@ -66,7 +65,7 @@ where
     let gas_counter = Gas::default();
     let fn_store_id = INIT_FN_STORE_ID;
     let gas_limit = Gas::from_u64(std::u64::MAX);
-    let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
+    let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
     let base_key = Key::Account(address);

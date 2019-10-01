@@ -185,11 +185,14 @@ impl TryFrom<&super::state::Contract> for contract_ffi::value::Contract {
     type Error = ParsingError;
 
     fn try_from(value: &super::state::Contract) -> Result<Self, Self::Error> {
+        let input = value.get_protocol_version();
+        let protocol_version =
+            ProtocolVersion::from_parts(input.get_major(), input.get_minor(), input.get_patch());
         let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         Ok(contract_ffi::value::Contract::new(
             value.get_body().to_vec(),
             named_keys.0,
-            ProtocolVersion::new(value.get_protocol_version().value),
+            protocol_version,
         ))
     }
 }
@@ -986,7 +989,7 @@ impl TryFrom<ipc::ChainSpec_GenesisConfig> for GenesisConfig {
     fn try_from(genesis_config: ipc::ChainSpec_GenesisConfig) -> Result<Self, Self::Error> {
         let name = genesis_config.get_name().to_string();
         let timestamp = genesis_config.get_timestamp();
-        let protocol_version = genesis_config.get_protocol_version().get_value();
+        let protocol_version = genesis_config.get_protocol_version();
         let mint_initializer_bytes = genesis_config.get_mint_installer().to_vec();
         let proof_of_stake_initializer_bytes = genesis_config.get_pos_installer().to_vec();
         let accounts = genesis_config
@@ -999,7 +1002,11 @@ impl TryFrom<ipc::ChainSpec_GenesisConfig> for GenesisConfig {
         Ok(GenesisConfig::new(
             name,
             timestamp,
-            ProtocolVersion::new(protocol_version),
+            ProtocolVersion::from_parts(
+                protocol_version.get_major(),
+                protocol_version.get_minor(),
+                protocol_version.get_patch(),
+            ),
             mint_initializer_bytes,
             proof_of_stake_initializer_bytes,
             accounts,
@@ -1086,14 +1093,21 @@ impl TryFrom<ipc::UpgradeRequest> for UpgradeConfig {
 
 impl From<&state::ProtocolVersion> for contract_ffi::value::ProtocolVersion {
     fn from(protocol_version: &state::ProtocolVersion) -> Self {
-        contract_ffi::value::ProtocolVersion::new(protocol_version.value)
+        contract_ffi::value::ProtocolVersion::from_parts(
+            protocol_version.major,
+            protocol_version.minor,
+            protocol_version.patch,
+        )
     }
 }
 
 impl From<contract_ffi::value::ProtocolVersion> for state::ProtocolVersion {
     fn from(protocol_version: ProtocolVersion) -> Self {
+        let sem_ver = protocol_version.value();
         let mut protocol = super::state::ProtocolVersion::new();
-        protocol.set_value(protocol_version.value());
+        protocol.set_major(sem_ver.major);
+        protocol.set_minor(sem_ver.minor);
+        protocol.set_patch(sem_ver.patch);
         protocol
     }
 }
