@@ -1,4 +1,4 @@
-import { Contracts, Keys } from "casperlabsjs";
+import { Contracts, Keys } from "casperlabs-sdk";
 import dotenv from "dotenv";
 import express from "express";
 import jwt from "express-jwt";

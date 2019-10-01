@@ -10,7 +10,7 @@ import { BlockDAG } from './BlockDAG';
 import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { shortHash } from './Utils';
 import ObservableValueMap, { ObservableValue } from '../lib/ObservableValueMap';
-import { decodeBase16, encodeBase16 } from 'casperlabsjs';
+import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
 
 // https://www.pluralsight.com/guides/react-router-typescript
 

@@ -9,7 +9,7 @@ import {
 } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Redirect } from 'react-router';
 import Pages from './Pages';
-import { encodeBase16 } from 'casperlabsjs';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 interface Props {
   search: SearchContainer;

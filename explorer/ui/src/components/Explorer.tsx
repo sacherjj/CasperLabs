@@ -14,7 +14,7 @@ import $ from 'jquery';
 import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
-import { encodeBase16 } from 'casperlabsjs';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 interface Props {
   dag: DagContainer;

@@ -8,7 +8,7 @@ import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';
 import { Balance } from './BlockDetails';
-import { decodeBase16, encodeBase16 } from 'casperlabsjs';
+import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
 
 // URL parameter
 type Params = {

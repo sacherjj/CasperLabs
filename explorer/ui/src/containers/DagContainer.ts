@@ -1,7 +1,7 @@
 import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService } from 'casperlabsjs';
+import { CasperService } from 'casperlabs-sdk';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 
 export class DagStep {

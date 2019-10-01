@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import TimeAgo from 'javascript-time-ago';
 import en from 'javascript-time-ago/locale/en';
-import { encodeBase16 } from 'casperlabsjs';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 interface Props {
   dag: DagContainer;

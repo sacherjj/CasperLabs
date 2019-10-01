@@ -1,4 +1,4 @@
-import { ByteArray, Contracts, Keys } from "casperlabsjs";
+import { ByteArray, Contracts, Keys } from "casperlabs-sdk";
 import commandLineArgs from "command-line-args";
 import DeployService from "./services/DeployService";
 

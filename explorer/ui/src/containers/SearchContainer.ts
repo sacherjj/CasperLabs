@@ -1,7 +1,7 @@
 import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, decodeBase16, GrpcError } from 'casperlabsjs';
+import { CasperService, decodeBase16, GrpcError } from 'casperlabs-sdk';
 import { CleanableFormData } from './FormData';
 import {
   BlockInfo,

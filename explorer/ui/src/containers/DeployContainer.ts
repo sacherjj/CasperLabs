@@ -1,7 +1,7 @@
 import { observable, action, computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, BalanceService, encodeBase16 } from 'casperlabsjs';
+import { CasperService, BalanceService, encodeBase16 } from 'casperlabs-sdk';
 import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
