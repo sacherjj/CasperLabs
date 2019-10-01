@@ -4,7 +4,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
-use contract_ffi::contract_api::{get_caller, store_function, add_uref};
+use contract_ffi::contract_api::{get_caller, store_function, put_key};
 use contract_ffi::value::account::PublicKey;
 
 fn test_get_caller() {
@@ -27,5 +27,5 @@ pub extern "C" fn call() {
     // works in session code
     test_get_caller();
     let pointer = store_function("get_caller_ext", BTreeMap::new());
-    add_uref("get_caller", &pointer.into());
+    put_key("get_caller", &pointer.into());
 }

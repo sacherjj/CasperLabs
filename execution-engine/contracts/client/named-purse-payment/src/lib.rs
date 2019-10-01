@@ -25,7 +25,7 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::MissingArgument.into()),
     };
 
-    let purse_key = contract_api::get_uref(&purse_name)
+    let purse_key = contract_api::get_key(&purse_name)
         .unwrap_or_else(|| contract_api::revert(Error::InvalidPurseName.into()));
     let purse = match purse_key.as_uref() {
         Some(uref) => PurseId::new(*uref),

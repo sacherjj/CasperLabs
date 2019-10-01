@@ -507,7 +507,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -704,7 +704,7 @@ fn should_charge_non_main_purse() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
     // get purse
-    let purse_id_key = account_1.urefs_lookup()[TEST_PURSE_NAME];
+    let purse_id_key = account_1.named_keys()[TEST_PURSE_NAME];
     let purse_id = PurseId::new(*purse_id_key.as_uref().expect("should have uref"));
 
     let purse_starting_balance = {

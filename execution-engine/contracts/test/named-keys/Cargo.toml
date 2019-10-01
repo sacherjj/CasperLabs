@@ -1,11 +1,11 @@
 [package]
-name = "known-urefs"
+name = "named-keys"
 version = "0.1.0"
 authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "known_urefs"
+name = "named_keys"
 crate-type = ["cdylib"]
 
 [features]
