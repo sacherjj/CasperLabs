@@ -1,5 +1,6 @@
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::Error;

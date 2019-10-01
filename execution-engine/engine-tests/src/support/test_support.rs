@@ -21,10 +21,10 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployItem, DeployCode, DeployPayload, DeployResult,
+    CommitRequest, CommitResponse, Deploy, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
     ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-    StoredContractURef,  ValidateRequest, ValidateResponse, CommitResponse,
+    StoredContractURef, ValidateRequest, ValidateResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -1054,7 +1054,7 @@ pub fn get_mock_deploy_item() -> DeployItem {
     let mut deploy_item = DeployItem::new();
     deploy_item.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
     deploy_item.set_gas_price(1);
-    
+
     let mut payment_payload = DeployPayload::new();
     payment_payload.set_deploy_code(get_mock_deploy_code());
     deploy_item.set_payment(payment_payload);
@@ -1066,7 +1066,6 @@ pub fn get_mock_deploy_item() -> DeployItem {
     deploy_item.set_deploy_hash([1u8; 32].to_vec());
     deploy_item
 }
-
 
 fn get_compiled_wasm_path(contract_file: PathBuf) -> PathBuf {
     let mut path = std::env::current_dir().expect("should get working directory");

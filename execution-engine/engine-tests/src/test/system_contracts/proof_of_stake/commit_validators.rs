@@ -13,7 +13,8 @@ const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];

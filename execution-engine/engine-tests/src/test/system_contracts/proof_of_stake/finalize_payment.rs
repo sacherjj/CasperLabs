@@ -9,7 +9,8 @@ use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 

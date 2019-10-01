@@ -1,6 +1,4 @@
-use crate::support::test_support::{
-    self, InMemoryWasmTestBuilder, ExecuteRequestBuilder,
-};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::key::Key;
 use engine_core::engine_state::EngineConfig;
 use engine_shared::logging::log_level::LogLevel;
@@ -87,7 +85,9 @@ fn should_exec_with_metrics() {
 
     let exec_request = {
         let deploy_item = test_support::get_mock_deploy_item();
-        ExecuteRequestBuilder::new().push_deploy(deploy_item).build()
+        ExecuteRequestBuilder::new()
+            .push_deploy(deploy_item)
+            .build()
     };
 
     let _result = InMemoryWasmTestBuilder::new(global_state, engine_config)

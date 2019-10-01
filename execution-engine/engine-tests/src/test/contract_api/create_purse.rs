@@ -1,5 +1,6 @@
 use crate::support::test_support::{
-    get_exec_costs, DeployItemBuilder, ExecuteRequestBuilder, WasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    get_exec_costs, DeployItemBuilder, ExecuteRequestBuilder, WasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 
 use contract_ffi::base16;

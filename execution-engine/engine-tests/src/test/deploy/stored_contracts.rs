@@ -535,7 +535,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-   let mut builder_by_uref = InMemoryWasmTestBuilder::default();
+    let mut builder_by_uref = InMemoryWasmTestBuilder::default();
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
@@ -601,7 +601,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let test_result = builder_by_uref.exec_commit_finish(exec_request_by_uref);
     let direct_uref_transforms = &test_result.builder().get_transforms()[1];
 
-   let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
+    let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
     builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
     let _ = builder_by_named_uref.exec_commit_finish(exec_request_genesis);
 

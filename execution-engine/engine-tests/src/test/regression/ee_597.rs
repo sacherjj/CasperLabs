@@ -1,5 +1,6 @@
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;

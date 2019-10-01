@@ -11,7 +11,8 @@ use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::DEFAULT_PAYMENT;
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};

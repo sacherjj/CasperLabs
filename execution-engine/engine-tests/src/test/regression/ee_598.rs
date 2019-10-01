@@ -2,7 +2,8 @@ use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
 use engine_core::engine_state::genesis::GenesisAccount;
