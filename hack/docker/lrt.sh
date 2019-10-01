@@ -19,7 +19,7 @@ trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
 make clean
-make up node-0/up node-1/up node-2/up
+CL_CASPER_AUTO_PROPOSE_ENABLED=true make up node-0/up node-1/up node-2/up
 
 save_logs() {
   NODE_INDEX="$1"
