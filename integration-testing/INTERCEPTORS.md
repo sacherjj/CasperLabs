@@ -2,7 +2,7 @@
 
 ## Overview
 
-In order to test CasperLabs network's response to nodes exhbiting malicious or erroneous behaviour,
+In order to test CasperLabs network's response to nodes exhibiting malicious or erroneous behaviour,
 the integration test framework has been extended 
 with capability to intercept communication 
 between nodes and modify, censor or add additional messages. 
@@ -15,7 +15,7 @@ which is meant to always behave correctly.
 To achieve this a generic gRPC proxy has been developed in Python.
 A proxy is set up to receive all incoming traffic
 to a node in the test network.
-It is then normally passing the messages (for example: blocks) to tbe node,
+It is then normally passing the messages (for example: blocks) to the node,
 but before doing so it can modify the message or decide not to pass it to the node at all. 
 Capability to send extra messages from the proxy to the node
 is planned to be added in the next stage.
