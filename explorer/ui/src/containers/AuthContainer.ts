@@ -7,9 +7,8 @@ import AuthService from '../services/AuthService';
 import {
   BalanceService,
   CasperService,
-  decodeBase64,
-  encodeBase64
 } from 'casperlabsjs';
+import {decodeBase64, encodeBase64} from 'casperlabsjs'
 import ObservableValueMap from '../lib/ObservableValueMap';
 
 // https://www.npmjs.com/package/tweetnacl-ts#signatures

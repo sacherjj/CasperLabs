@@ -6,7 +6,7 @@ import { CleanableFormData } from './FormData';
 import {
   BlockInfo,
   DeployInfo
-} from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { grpc } from '@improbable-eng/grpc-web';
 
 export enum Target {

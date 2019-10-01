@@ -1,13 +1,13 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { Block } from '../../grpc/src/io/casperlabs/casper/consensus/consensus_pb';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import {
   BlockInfo,
   DeployInfo
-} from '../../grpc/src/io/casperlabs/casper/consensus/info_pb';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import {
   Key,
   Value as StateValue
-} from '../../grpc/src/io/casperlabs/casper/consensus/state_pb';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import {
   GetBlockInfoRequest,
   GetBlockStateRequest,
@@ -15,8 +15,8 @@ import {
   StateQuery,
   StreamBlockDeploysRequest,
   StreamBlockInfosRequest
-} from '../../grpc/src/io/casperlabs/node/api/casper_pb';
-import { CasperService as GrpcCasperService } from '../../grpc/src/io/casperlabs/node/api/casper_pb_service';
+} from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
+import { CasperService as GrpcCasperService } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb_service';
 import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
 import { ByteArrayArg } from '../lib/Serialization';

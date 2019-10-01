@@ -2,8 +2,8 @@ import { observable, action, computed } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, BalanceService, encodeBase16 } from 'casperlabsjs';
-import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { Block } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/consensus_pb';
+import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import ObservableValueMap from '../lib/ObservableValueMap';
 
 type AccountB16 = string;

@@ -1,12 +1,12 @@
 import blake from 'blakejs';
-import * as fs from 'fs';
-import { Message } from 'google-protobuf';
-import * as nacl from 'tweetnacl-ts';
 import {
   Approval,
   Deploy,
   Signature
-} from '../../grpc/src/io/casperlabs/casper/consensus/consensus_pb';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import * as fs from 'fs';
+import { Message } from 'google-protobuf';
+import * as nacl from 'tweetnacl-ts';
 import { ByteArray } from '../index';
 import { Args, BigIntValue, BytesValue, LongValue } from './Args';
 

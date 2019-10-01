@@ -4,6 +4,7 @@
   "description": "CasperLabs Explorer Server",
   "main": "dist/server.js",
   "scripts": {
+    "postinstall": "npm install --no-save ../grpc ../sdk",
     "clean:dist": "rm -rf dist",
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
@@ -38,6 +39,7 @@
     "@types/express-jwt": "0.0.42",
     "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
+    "casperlabs-grpc": "latest",
     "casperlabsjs": "latest",
     "command-line-args": "^5.1.1",
     "dotenv": "^8.0.0",

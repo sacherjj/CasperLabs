@@ -3,7 +3,7 @@ import { RouteComponentProps, withRouter, Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import { DeployContainer } from '../containers/DeployContainer';
 import DataTable from './DataTable';
-import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
+import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
 import { RefreshableComponent, Icon, shortHash } from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';

@@ -3,7 +3,7 @@ import { computed } from 'mobx';
 import ErrorContainer from './ErrorContainer';
 import StorageCell from '../lib/StorageCell';
 import FaucetService from '../services/FaucetService';
-import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
+import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { GrpcError, CasperService } from 'casperlabsjs';
 import { grpc } from '@improbable-eng/grpc-web';
 

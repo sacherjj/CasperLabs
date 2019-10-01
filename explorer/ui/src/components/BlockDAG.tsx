@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BlockInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { RefreshButton, Loading, ListInline } from './Utils';
 import * as d3 from 'd3';
 import $ from 'jquery';

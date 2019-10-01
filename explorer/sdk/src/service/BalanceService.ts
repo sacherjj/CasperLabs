@@ -1,4 +1,4 @@
-import { Key } from '../../grpc/src/io/casperlabs/casper/consensus/state_pb';
+import { Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
 import CasperService from './CasperService';

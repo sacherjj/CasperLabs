@@ -11,8 +11,8 @@ import {
   Card
 } from './Utils';
 import DataTable from './DataTable';
-import { DeployInfo } from 'casperlabsjs/grpc/src/io/casperlabs/casper/consensus/info_pb';
-import { base64to16, encodeBase16, decodeBase64 } from 'casperlabsjs';
+import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { base64to16, encodeBase16, decodeBase64 } from 'casperlabsjs/dist/lib/Conversions';
 
 interface Props {
   auth: AuthContainer;
