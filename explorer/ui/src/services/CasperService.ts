@@ -26,7 +26,7 @@ export default class CasperService {
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
-  ) {}
+  ) { }
 
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
@@ -185,7 +185,7 @@ export default class CasperService {
       );
 
       const mintPublic = account
-        .getKnownUrefsList()
+        .getNamedKeysList()
         .find(x => x.getName() === 'mint')!;
 
       const mintQuery = QueryUref(mintPublic.getKey()!.getUref()!);
