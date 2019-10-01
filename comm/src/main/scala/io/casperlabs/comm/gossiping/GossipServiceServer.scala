@@ -36,8 +36,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
-    // then asynchronously sync the DAG, schedule the downloads,
-    // and finally notify the consensus engine.
+    // then asynchronously sync the DAG, and schedule the downloads.
     newBlocks(
       request,
       skipRelaying = false,
@@ -53,8 +52,12 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     newBlocks(
       request,
       skipRelaying,
+      // Wait for the the returned handles. This is the assumed behaviour in Casper unit tests.
       (syncOpt, response) =>
-        syncOpt.fold(response.asRight[SyncError].pure[F])(_.map(_.as(response)))
+        syncOpt.fold(response.asRight[SyncError].pure[F])(_.flatMap {
+          case Left(error)    => error.asLeft[NewBlocksResponse].pure[F]
+          case Right(waiters) => waiters.parTraverse(identity).as(response.asRight)
+        })
     )
 
   /** Creates the syncing procedure if there are blocks missing,
@@ -63,7 +66,9 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
   private def newBlocks[T](
       request: NewBlocksRequest,
       skipRelaying: Boolean,
-      start: (Option[F[Either[SyncError, Unit]]], NewBlocksResponse) => F[T]
+      // Callback to switch between sync and async modes;
+      // the option None is no syncing is required.
+      start: (Option[F[Either[SyncError, Vector[WaitHandle[F]]]]], NewBlocksResponse) => F[T]
   ): F[T] =
     request.blockHashes.distinct.toList
       .filterA { blockHash =>
@@ -86,38 +91,40 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
       source: Node,
       newBlockHashes: Set[ByteString],
       skipRelaying: Boolean
-  ): F[Either[SyncError, Unit]] = {
-    def logSyncError(syncError: SyncError): F[Unit] = {
+  ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
+    def logSyncError(syncError: SyncError) = {
       val prefix  = s"Failed to sync DAG, source: ${source.show}."
       val message = syncError.getMessage
-      Log[F].warn(s"$prefix $message")
+      Log[F].warn(s"$prefix $message").as(syncError.asLeft)
     }
 
-    val trySync = for {
+    val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].info(
             s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show}: ${newBlockHashes.map(Utils.hex).mkString(", ")}"
           )
-      dagOrError <- synchronizer.syncDag(
+      errorOrDag <- synchronizer.syncDag(
                      source = source,
                      targetBlockHashes = newBlockHashes
                    )
-      _ <- dagOrError.fold(
-            syncError => logSyncError(syncError), { dag =>
-              Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
-                dag.traverse { summary =>
-                  downloadManager.scheduleDownload(
-                    summary,
-                    source = source,
-                    relay = !skipRelaying && newBlockHashes(summary.blockHash)
-                  )
-                }
-            }
-          )
-    } yield dagOrError.void
+      errorOrWaiters <- errorOrDag.fold(
+                         syncError => logSyncError(syncError), { dag =>
+                           Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
+                             dag.traverse { summary =>
+                               downloadManager.scheduleDownload(
+                                 summary,
+                                 source = source,
+                                 relay = !skipRelaying && newBlockHashes(summary.blockHash)
+                               )
+                             } map { waiters =>
+                             waiters.asRight[SyncError]
+                           }
+                         }
+                       )
+    } yield errorOrWaiters
 
     trySync.onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not sync new blocks with ${source.show}.", ex)
+        Log[F].error(s"Could not synchronize with ${source.show}: $ex")
     }
   }
 

@@ -336,6 +336,27 @@ object GossipServiceCasperTestNodeFactory {
                                ): F[Unit] =
                                  // No means to store summaries separately yet.
                                  ().pure[F]
+
+                               override def onScheduled(summary: consensus.BlockSummary) =
+                                 // The EquivocationDetector treats equivocations with children differently,
+                                 // so let Casper know about the DAG dependencies up front.
+                                 Log[F].debug(
+                                   s"Feeding pending block to Casper: ${PrettyPrinter.buildString(summary.blockHash)}"
+                                 ) *> {
+                                   val partialBlock = consensus
+                                     .Block()
+                                     .withBlockHash(summary.blockHash)
+                                     .withHeader(summary.getHeader)
+
+                                   casper.addMissingDependencies(partialBlock)
+                                 }
+
+                               override def onDownloaded(blockHash: ByteString) =
+                                 // Calling `addBlock` during validation has already stored the block.
+                                 Log[F].debug(
+                                   s"Download ready for ${PrettyPrinter.buildString(blockHash)}"
+                                 )
+
                              },
                              relaying = relaying,
                              retriesConf = DownloadManagerImpl.RetriesConf.noRetries
@@ -400,30 +421,12 @@ object GossipServiceCasperTestNodeFactory {
                          blockStorage
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
-                   },
-                   synchronizer = synchronizer,
-                   downloadManager = downloadManager,
-                   consensus = new GossipServiceServer.Consensus[F] {
-                     override def onPending(dag: Vector[consensus.BlockSummary]) =
-                       // The EquivocationDetector treats equivocations with children differently,
-                       // so let Casper know about the DAG dependencies up front.
-                       Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.") *>
-                         dag.traverse { summary =>
-                           val partialBlock = consensus
-                             .Block()
-                             .withBlockHash(summary.blockHash)
-                             .withHeader(summary.getHeader)
-
-                           casper.addMissingDependencies(partialBlock)
-                         }.void
-
-                     override def onDownloaded(blockHash: ByteString) =
-                       // Calling `addBlock` during validation has already stored the block.
-                       Log[F].debug(s"Download ready for ${PrettyPrinter.buildString(blockHash)}")
 
                      override def listTips =
                        ???
                    },
+                   synchronizer = synchronizer,
+                   downloadManager = downloadManager,
                    // Not testing the genesis ceremony.
                    genesisApprover = new GenesisApprover[F] {
                      override def getCandidate = ???
