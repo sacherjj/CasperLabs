@@ -123,7 +123,13 @@ class DockerClient(CasperLabsClient, LoggingMixin):
 
     def get_balance(self, account_address: str, block_hash: str) -> int:
         """
-        Returns balance of account according to block given.
+        Deprecated to make interface common to CLI naming.
+        """
+        return self.balance(account_address, block_hash)
+
+    def balance(self, account_address: str, block_hash: str) -> int:
+        """
+        Returns get_balance of account according to block given.
 
         :param account_address: account public key in hex
         :param block_hash: block_hash in hex
@@ -179,6 +185,178 @@ class DockerClient(CasperLabsClient, LoggingMixin):
             command += f" --session-args='{session_args}'"
 
         return self.invoke_client(command)
+
+    def bond(
+        self,
+        amount: int,
+        private_key: Union[Path, str],
+        payment_amount: int = DEFAULT_PAYMENT_COST,
+    ) -> str:
+        """
+        Subcommand: bond - Issues bonding request
+  -a, --amount  <arg>           amount of motes to bond
+  -g, --gas-price  <arg>        The price of gas for this transaction in
+                                motes/gas. Must be positive integer.
+      --payment-amount  <arg>   Standard payment amount. Use this with the
+                                default payment, or override with --payment-args
+                                if custom payment code is used.
+      --payment-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the payment, e.g. '[{"name":
+                                "amount", "value": {"big_int": {"value":
+                                "123456", "bit_width": 512}}}]'
+      --payment-hash  <arg>     Hash of the stored contract to be called in the
+                                payment; base16 encoded.
+      --payment-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the payment.
+  -p, --payment-path  <arg>     Path to the file with payment code.
+      --payment-uref  <arg>     URef of the stored contract to be called in the
+                                payment; base16 encoded.
+      --private-key  <arg>      Path to the file with account private key
+                                (Ed25519)
+  -s, --session  <arg>          Path to the file with session code.
+      --session-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the session, e.g. '[{"name":
+                                "amount", "value": {"long_value": 123456}}]'
+      --session-hash  <arg>     Hash of the stored contract to be called in the
+                                session; base16 encoded.
+      --session-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the session.
+      --session-uref  <arg>     URef of the stored contract to be called in the
+                                session; base16 encoded.
+  -h, --help                    Show help message
+        """
+        command = (
+            f"bond --amount {amount} "
+            f"--payment-amount {payment_amount} "
+            f"--private-key {private_key}"
+        )
+
+        return self.invoke_client(command)
+
+    def unbond(self):
+        """
+        Subcommand: unbond - Issues unbonding request
+  -a, --amount  <arg>           Amount of motes to unbond. If not provided then
+                                a request to unbond with full staked amount is
+                                made.
+  -g, --gas-price  <arg>        The price of gas for this transaction in
+                                motes/gas. Must be positive integer.
+      --payment-amount  <arg>   Standard payment amount. Use this with the
+                                default payment, or override with --payment-args
+                                if custom payment code is used.
+      --payment-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the payment, e.g. '[{"name":
+                                "amount", "value": {"big_int": {"value":
+                                "123456", "bit_width": 512}}}]'
+      --payment-hash  <arg>     Hash of the stored contract to be called in the
+                                payment; base16 encoded.
+      --payment-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the payment.
+  -p, --payment-path  <arg>     Path to the file with payment code.
+      --payment-uref  <arg>     URef of the stored contract to be called in the
+                                payment; base16 encoded.
+      --private-key  <arg>      Path to the file with account private key
+                                (Ed25519)
+  -s, --session  <arg>          Path to the file with session code.
+      --session-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the session, e.g. '[{"name":
+                                "amount", "value": {"long_value": 123456}}]'
+      --session-hash  <arg>     Hash of the stored contract to be called in the
+                                session; base16 encoded.
+      --session-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the session.
+      --session-uref  <arg>     URef of the stored contract to be called in the
+                                session; base16 encoded.
+  -h, --help                    Show help message
+        """
+        raise NotImplementedError()
+
+    def transfer(self):
+        """
+        Subcommand: transfer - Transfers funds between accounts
+  -a, --amount  <arg>           Amount of motes to transfer. Note: a mote is the
+                                smallest, indivisible unit of a token.
+  -g, --gas-price  <arg>        The price of gas for this transaction in
+                                motes/gas. Must be positive integer.
+      --payment-amount  <arg>   Standard payment amount. Use this with the
+                                default payment, or override with --payment-args
+                                if custom payment code is used.
+      --payment-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the payment, e.g. '[{"name":
+                                "amount", "value": {"big_int": {"value":
+                                "123456", "bit_width": 512}}}]'
+      --payment-hash  <arg>     Hash of the stored contract to be called in the
+                                payment; base16 encoded.
+      --payment-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the payment.
+  -p, --payment-path  <arg>     Path to the file with payment code.
+      --payment-uref  <arg>     URef of the stored contract to be called in the
+                                payment; base16 encoded.
+      --private-key  <arg>      Path to the file with (from) account private key
+                                (Ed25519)
+  -s, --session  <arg>          Path to the file with session code.
+      --session-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the session, e.g. '[{"name":
+                                "amount", "value": {"long_value": 123456}}]'
+      --session-hash  <arg>     Hash of the stored contract to be called in the
+                                session; base16 encoded.
+      --session-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the session.
+      --session-uref  <arg>     URef of the stored contract to be called in the
+                                session; base16 encoded.
+  -t, --target-account  <arg>   base64 representation of target account's public
+                                key
+  -h, --help                    Show help message
+        """
+        raise NotImplementedError()
+
+    def make_deploy(self):
+        """
+        Subcommand: make-deploy - Constructs a deploy that can be signed and sent to a node.
+  -o, --deploy-path  <arg>      Path to the file where deploy will be saved.
+                                Optional, if not provided the deploy will be
+                                printed to STDOUT.
+  -f, --from  <arg>             The public key of the account which is the
+                                context of this deployment, base16 encoded.
+  -g, --gas-price  <arg>        The price of gas for this transaction in
+                                motes/gas. Must be positive integer.
+  -p, --payment  <arg>          Path to the file with payment code.
+      --payment-amount  <arg>   Standard payment amount. Use this with the
+                                default payment, or override with --payment-args
+                                if custom payment code is used.
+      --payment-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the payment, e.g. '[{"name":
+                                "amount", "value": {"big_int": {"value":
+                                "123456", "bit_width": 512}}}]'
+      --payment-hash  <arg>     Hash of the stored contract to be called in the
+                                payment; base16 encoded.
+      --payment-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the payment.
+      --payment-uref  <arg>     URef of the stored contract to be called in the
+                                payment; base16 encoded.
+      --public-key  <arg>       Path to the file with account public key
+                                (Ed25519)
+  -s, --session  <arg>          Path to the file with session code.
+      --session-args  <arg>     JSON encoded list of Deploy.Arg protobuf
+                                messages for the session, e.g. '[{"name":
+                                "amount", "value": {"long_value": 123456}}]'
+      --session-hash  <arg>     Hash of the stored contract to be called in the
+                                session; base16 encoded.
+      --session-name  <arg>     Name of the stored contract (associated with the
+                                executing account) to be called in the session.
+      --session-uref  <arg>     URef of the stored contract to be called in the
+                                session; base16 encoded.
+  -h, --help                    Show help message
+  """
+        raise NotImplementedError()
+
+    def send_deploy(self):
+        """
+Subcommand: send-deploy - Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.
+  -i, --deploy-path  <arg>   Path to the file with signed Deploy.
+  -h, --help                 Show help message
+        """
+        raise NotImplementedError()
 
     def show_block(self, block_hash: str) -> str:
         return self.invoke_client(f"show-block {block_hash}")
