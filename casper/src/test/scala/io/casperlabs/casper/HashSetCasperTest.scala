@@ -12,6 +12,7 @@ import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.genesis.contracts._
 import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.casper.helper._
+import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -1075,7 +1076,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
     for {
       deploy1         <- ProtoUtil.basicDeploy[Effect]()
-      deploy2         = DeployBuilder().withDependencies(Seq(deploy1.deployHash)).build
+      deploy2         <- ProtoUtil.basicDeploy[Effect]().map(_.withDependencies(Seq(deploy1.deployHash)))
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block1) <- node.casperEff.createBlock
@@ -1090,10 +1091,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   it should "only execute deploys during the appropriate time window" in effectTest {
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
-    val minTTL  = 60 * 60 * 1000
-    val deploy1 = DeployBuilder().withTimestamp(3L).withTtl(minTTL).build
-    val deploy2 = DeployBuilder().withTimestamp(5L).withTtl(minTTL).build
+    val minTTL = 60 * 60 * 1000
     for {
+      deploy1         <- ProtoUtil.basicDeploy[Effect]().map(_.withTimestamp(3L).withTtl(minTTL))
+      deploy2         <- ProtoUtil.basicDeploy[Effect]().map(_.withTimestamp(5L).withTtl(minTTL))
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(()) // gets deploy1
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(()) // gets deploy2
       _               = node.timeEff.clock = 0
