@@ -106,6 +106,7 @@ slow:
 	../key-management/docker-gen-account-keys.sh .casperlabs/genesis/system-account
 	../key-management/docker-gen-account-keys.sh keys/account-0
 	../key-management/docker-gen-keys.sh .casperlabs/node-0
+	cp -r .casperlabs/genesis/system-account keys/system-account
 
 	cp -r .casperlabs/node-0/node-id .casperlabs/bootstrap/node-id
 	(cat .casperlabs/node-0/validator-id; echo " $(CL_CASPER_NUM_VALIDATORS)") >> .casperlabs/genesis/bonds.txt

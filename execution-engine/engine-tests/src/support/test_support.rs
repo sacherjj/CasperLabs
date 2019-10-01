@@ -21,11 +21,10 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    ChainSpec_ActivationPoint, ChainSpec_UpgradePoint, CommitRequest, Deploy, DeployCode,
-    DeployItem, DeployPayload, DeployResult, DeployResult_ExecutionResult,
-    DeployResult_PreconditionFailure, ExecuteRequest, ExecuteResponse, GenesisResponse,
-    QueryRequest, StoredContractHash, StoredContractName, StoredContractURef, UpgradeRequest,
-    UpgradeResponse,
+    ChainSpec_ActivationPoint, ChainSpec_UpgradePoint, CommitRequest, DeployCode, DeployItem,
+    DeployPayload, DeployResult, DeployResult_ExecutionResult, DeployResult_PreconditionFailure,
+    ExecuteRequest, ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash,
+    StoredContractName, StoredContractURef, UpgradeRequest, UpgradeResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -394,13 +393,18 @@ pub fn get_protocol_version() -> ProtocolVersion {
     protocol_version
 }
 
-pub fn get_mock_deploy() -> Deploy {
-    let mut deploy = Deploy::new();
+pub fn get_mock_deploy() -> DeployItem {
+    let mut deploy = DeployItem::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
     deploy.set_gas_price(1);
-    let mut deploy_code = DeployCode::new();
-    deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
-    deploy.set_session(deploy_code);
+    let deploy_payload = {
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
+        let mut deploy_payload = DeployPayload::new();
+        deploy_payload.set_deploy_code(deploy_code);
+        deploy_payload
+    };
+    deploy.set_session(deploy_payload);
     deploy.set_deploy_hash([1u8; 32].to_vec());
     deploy
 }
