@@ -1,5 +1,5 @@
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::Error;
@@ -25,14 +25,14 @@ const ARG1_VALUE: u64 = 42;
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("get_arg.wasm", args)
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

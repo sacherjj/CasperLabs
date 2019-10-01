@@ -62,11 +62,11 @@ pub extern "C" fn apply_method() {
         METHOD_ADD => {
             let purse_name = purse_name();
             let purse_id = contract_api::create_purse();
-            contract_api::add_uref(&purse_name, &purse_id.value().into());
+            contract_api::put_key(&purse_name, &purse_id.value().into());
         }
         METHOD_REMOVE => {
             let purse_name = purse_name();
-            contract_api::remove_uref(&purse_name);
+            contract_api::remove_key(&purse_name);
         }
         METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
         _ => contract_api::revert_with_error(CustomError::UnknownMethodName),
@@ -89,5 +89,5 @@ pub extern "C" fn call() {
 
     // set new version
     let version_key = contract_api::new_turef(VERSION.to_string()).into();
-    contract_api::add_uref(METHOD_VERSION, &version_key);
+    contract_api::put_key(METHOD_VERSION, &version_key);
 }

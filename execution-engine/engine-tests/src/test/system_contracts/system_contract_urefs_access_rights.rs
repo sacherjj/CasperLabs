@@ -2,7 +2,7 @@ use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
@@ -16,7 +16,7 @@ fn should_have_read_only_access_to_system_contract_urefs() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -26,18 +26,18 @@ fn should_have_read_only_access_to_system_contract_urefs() {
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("check_system_contract_urefs_access_rights.wasm", ())
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     builder

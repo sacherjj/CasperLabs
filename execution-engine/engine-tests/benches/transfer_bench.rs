@@ -9,7 +9,7 @@ use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
 
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
     STANDARD_PAYMENT_CONTRACT,
 };
 use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -38,14 +38,14 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     let data_dir = TempDir::new().expect("should create temp dir");
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("create_accounts.wasm", (accounts_bytes, amount))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
@@ -66,14 +66,14 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
     // To see raw numbers take current time
     for i in 0..TRANSFER_BATCH_SIZE {
         let exec_request = {
-            let deploy = DeployBuilder::new()
+            let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
                 .with_session_code("transfer_to_existing_account.wasm", (account, amount))
                 .with_deploy_hash([2 + i as u8; 32])
                 .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
                 .build();
-            ExecRequestBuilder::from_deploy(deploy).build()
+            ExecuteRequestBuilder::from_deploy_item(deploy).build()
         };
         builder
             .exec_with_exec_request(exec_request)
@@ -84,10 +84,10 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
 
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
-    let mut exec_builder = ExecRequestBuilder::new();
+    let mut exec_builder = ExecuteRequestBuilder::new();
 
     for i in 0..TRANSFER_BATCH_SIZE {
-        let deploy = DeployBuilder::default()
+        let deploy = DeployItemBuilder::default()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("transfer_to_existing_account.wasm", (account, U512::one()))

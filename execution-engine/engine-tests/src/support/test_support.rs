@@ -21,9 +21,10 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, CommitResponse, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
-    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisResponse, QueryRequest,
-    ValidateRequest, ValidateResponse,
+    CommitRequest, Deploy, DeployItem, DeployCode, DeployPayload, DeployResult,
+    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
+    StoredContractURef,  ValidateRequest, ValidateResponse, CommitResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -47,6 +48,7 @@ use crate::test::{
     CONTRACT_MINT_INSTALL, CONTRACT_POS_INSTALL, CONTRACT_STANDARD_PAYMENT, DEFAULT_CHAIN_NAME,
     DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
 };
+use protobuf::RepeatedField;
 
 pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 
@@ -63,17 +65,17 @@ const DEFAULT_LMDB_PAGES: usize = 2560;
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
 
-pub struct DeployBuilder {
-    deploy: Deploy,
+pub struct DeployItemBuilder {
+    deploy_item: DeployItem,
 }
 
-impl DeployBuilder {
+impl DeployItemBuilder {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn with_address(mut self, address: [u8; 32]) -> Self {
-        self.deploy.set_address(address.to_vec());
+        self.deploy_item.set_address(address.to_vec());
         self
     }
 
@@ -83,10 +85,54 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut payment = DeployCode::new();
-        payment.set_code(wasm_bytes);
-        payment.set_args(args);
-        self.deploy.set_payment(payment);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_args(args);
+        deploy_code.set_code(wasm_bytes);
+        let mut payment = DeployPayload::new();
+        payment.set_deploy_code(deploy_code);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_hash(item);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_name(item);
+        self.deploy_item.set_payment(payment);
         self
     }
 
@@ -96,10 +142,54 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut session = DeployCode::new();
-        session.set_code(wasm_bytes);
-        session.set_args(args);
-        self.deploy.set_session(session);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(wasm_bytes);
+        deploy_code.set_args(args);
+        let mut session = DeployPayload::new();
+        session.set_deploy_code(deploy_code);
+        self.deploy_item.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractHash = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_hash(item);
+        self.deploy_item.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractURef = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
+        self.deploy_item.set_session(payment);
+        self
+    }
+
+    pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_name(item);
+        self.deploy_item.set_session(session);
         self
     }
 
@@ -108,83 +198,83 @@ impl DeployBuilder {
             .iter()
             .map(|public_key| public_key.value().to_vec())
             .collect();
-        self.deploy.set_authorization_keys(authorization_keys);
+        self.deploy_item.set_authorization_keys(authorization_keys);
         self
     }
 
     pub fn with_deploy_hash(mut self, hash: [u8; 32]) -> Self {
-        self.deploy.set_deploy_hash(hash.to_vec());
+        self.deploy_item.set_deploy_hash(hash.to_vec());
         self
     }
 
-    pub fn build(self) -> Deploy {
-        self.deploy
+    pub fn build(self) -> DeployItem {
+        self.deploy_item
     }
 }
 
-impl Default for DeployBuilder {
+impl Default for DeployItemBuilder {
     fn default() -> Self {
-        let mut deploy = Deploy::new();
-        deploy.set_gas_price(1);
-        DeployBuilder { deploy }
+        let mut deploy_item = DeployItem::new();
+        deploy_item.set_gas_price(1);
+        DeployItemBuilder { deploy_item }
     }
 }
 
-pub struct ExecRequestBuilder {
-    deploys: Vec<Deploy>,
-    exec_request: ExecRequest,
+pub struct ExecuteRequestBuilder {
+    deploy_items: Vec<DeployItem>,
+    execute_request: ExecuteRequest,
 }
 
-impl ExecRequestBuilder {
+impl ExecuteRequestBuilder {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn from_deploy(deploy: Deploy) -> Self {
-        ExecRequestBuilder::new().push_deploy(deploy)
+    pub fn from_deploy_item(deploy_item: DeployItem) -> Self {
+        ExecuteRequestBuilder::new().push_deploy(deploy_item)
     }
 
-    pub fn push_deploy(mut self, deploy: Deploy) -> Self {
-        self.deploys.push(deploy);
+    pub fn push_deploy(mut self, deploy: DeployItem) -> Self {
+        self.deploy_items.push(deploy);
         self
     }
 
     pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
-        self.exec_request
+        self.execute_request
             .set_parent_state_hash(pre_state_hash.to_vec());
         self
     }
 
     pub fn with_block_time(mut self, block_time: u64) -> Self {
-        self.exec_request.set_block_time(block_time);
+        self.execute_request.set_block_time(block_time);
         self
     }
 
     pub fn with_protocol_version(mut self, version: u64) -> Self {
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(version);
-        self.exec_request.set_protocol_version(protocol_version);
+        self.execute_request.set_protocol_version(protocol_version);
         self
     }
 
-    pub fn build(mut self) -> ExecRequest {
-        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-        for deploy in self.deploys {
+    pub fn build(mut self) -> ExecuteRequest {
+        let mut deploys = RepeatedField::<DeployItem>::new();
+        for deploy in self.deploy_items {
             deploys.push(deploy);
         }
-        self.exec_request.set_deploys(deploys);
-        self.exec_request
+        self.execute_request.set_deploys(deploys);
+        self.execute_request
     }
 
     pub fn standard(
         addr: [u8; 32],
         session_file: &str,
         session_args: impl ArgsParser,
-    ) -> ExecRequest {
+    ) -> ExecuteRequest {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(addr)
             .with_session_code(session_file, session_args)
             .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
@@ -192,21 +282,21 @@ impl ExecRequestBuilder {
             .with_deploy_hash(deploy_hash)
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     }
 }
 
-impl Default for ExecRequestBuilder {
+impl Default for ExecuteRequestBuilder {
     fn default() -> Self {
-        let deploys = vec![];
-        let mut exec_request = ExecRequest::new();
-        exec_request.set_block_time(DEFAULT_BLOCK_TIME);
+        let deploy_items = vec![];
+        let mut execute_request = ExecuteRequest::new();
+        execute_request.set_block_time(DEFAULT_BLOCK_TIME);
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(1);
-        exec_request.set_protocol_version(protocol_version);
-        ExecRequestBuilder {
-            deploys,
-            exec_request,
+        execute_request.set_protocol_version(protocol_version);
+        ExecuteRequestBuilder {
+            deploy_items,
+            execute_request,
         }
     }
 }
@@ -219,12 +309,178 @@ pub enum SystemContractType {
     ProofOfStakeInstall,
 }
 
+pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
+    let name = DEFAULT_CHAIN_NAME.to_string();
+    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
+    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
+    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
+    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
+    let wasm_costs = *DEFAULT_WASM_COSTS;
+    GenesisConfig::new(
+        name,
+        timestamp,
+        protocol_version,
+        mint_installer_bytes,
+        proof_of_stake_installer_bytes,
+        accounts,
+        wasm_costs,
+    )
+}
+
+pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String>) -> QueryRequest {
+    let mut query_request = QueryRequest::new();
+
+    query_request.set_state_hash(post_state);
+    query_request.set_base_key(base_key.into());
+    query_request.set_path(path.into());
+
+    query_request
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn create_exec_request(
+    address: [u8; 32],
+    payment_file: &str,
+    payment_args: impl ArgsParser,
+    session_file: &str,
+    session_args: impl ArgsParser,
+    pre_state_hash: &[u8],
+    block_time: u64,
+    deploy_hash: [u8; 32],
+    authorized_keys: Vec<PublicKey>,
+) -> ExecuteRequest {
+    let deploy = DeployItemBuilder::new()
+        .with_session_code(session_file, session_args)
+        .with_payment_code(payment_file, payment_args)
+        .with_address(address)
+        .with_authorization_keys(&authorized_keys)
+        .with_deploy_hash(deploy_hash)
+        .build();
+
+    ExecuteRequestBuilder::new()
+        .with_pre_state_hash(pre_state_hash)
+        .with_protocol_version(1)
+        .with_block_time(block_time)
+        .push_deploy(deploy)
+        .build()
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn create_commit_request(
+    prestate_hash: &[u8],
+    effects: &HashMap<Key, Transform>,
+) -> CommitRequest {
+    let effects: Vec<TransformEntry> = effects
+        .iter()
+        .map(|(k, t)| (k.to_owned(), t.to_owned()).into())
+        .collect();
+
+    let mut commit_request = CommitRequest::new();
+    commit_request.set_prestate_hash(prestate_hash.to_vec());
+    commit_request.set_effects(effects.into());
+    commit_request
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
+    let commit_transforms: CommitTransforms = genesis_response
+        .get_success()
+        .get_effect()
+        .get_transform_map()
+        .try_into()
+        .expect("should convert");
+    commit_transforms.value()
+}
+
+pub fn get_exec_transforms(exec_response: &ExecuteResponse) -> Vec<HashMap<Key, Transform>> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| {
+            let commit_transforms: CommitTransforms = deploy_result
+                .get_execution_result()
+                .get_effects()
+                .get_transform_map()
+                .try_into()
+                .expect("should convert");
+            commit_transforms.value()
+        })
+        .collect()
+}
+
+pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+        .collect()
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_mint_contract_uref(
+    transforms: &HashMap<Key, Transform>,
+    contracts: &HashMap<SystemContractType, WasmiBytes>,
+) -> Option<URef> {
+    let mint_contract_bytes: Vec<u8> = contracts
+        .get(&SystemContractType::Mint)
+        .map(ToOwned::to_owned)
+        .map(Into::into)
+        .expect("Should get mint bytes.");
+
+    get_contract_uref(&transforms, mint_contract_bytes)
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
+    transforms.get(account).and_then(|transform| {
+        if let Transform::Write(Value::Account(account)) = transform {
+            Some(account.to_owned())
+        } else {
+            None
+        }
+    })
+}
+
+pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_execution_result()
+        .to_owned()
+}
+
+pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_precondition_failure()
+        .to_owned()
+}
+
+pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
+    let error = execution_result.get_error();
+
+    if error.has_gas_error() {
+        "Gas limit".to_string()
+    } else {
+        error.get_exec_error().get_message().to_string()
+    }
+}
+
 /// Builder for simple WASM test
 pub struct WasmTestBuilder<S> {
     /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
     /// EngineState`
     engine_state: Rc<EngineState<S>>,
-    exec_responses: Vec<ExecResponse>,
+    exec_responses: Vec<ExecuteResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
@@ -454,15 +710,15 @@ where
         let genesis_account =
             get_account(&transforms, &system_account).expect("Unable to get system account");
 
-        let known_keys = genesis_account.urefs_lookup();
+        let named_keys = genesis_account.named_keys();
 
-        let mint_contract_uref = known_keys
+        let mint_contract_uref = named_keys
             .get(MINT_NAME)
             .and_then(Key::as_uref)
             .cloned()
             .expect("Unable to get mint contract URef");
 
-        let pos_contract_uref = known_keys
+        let pos_contract_uref = named_keys
             .get(POS_NAME)
             .and_then(Key::as_uref)
             .cloned()
@@ -504,7 +760,7 @@ where
         }
     }
 
-    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecRequest) -> &mut Self {
+    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {
         let exec_request = {
             let hash = self
                 .post_state_hash
@@ -515,7 +771,7 @@ where
         };
         let exec_response = self
             .engine_state
-            .exec(RequestOptions::new(), exec_request)
+            .execute(RequestOptions::new(), exec_request)
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
@@ -556,7 +812,7 @@ where
     pub fn send_commit_request(
         &self,
         prestate_hash: Vec<u8>,
-        effects: HashMap<contract_ffi::key::Key, Transform>,
+        effects: HashMap<Key, Transform>,
     ) -> CommitResponse {
         let commit_request = create_commit_request(&prestate_hash, &effects);
 
@@ -690,7 +946,7 @@ where
         &self.engine_state
     }
 
-    pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
+    pub fn get_exec_response(&self, index: usize) -> Option<&ExecuteResponse> {
         self.exec_responses.get(index)
     }
 
@@ -762,6 +1018,13 @@ where
         let execution_result = get_success_result(&response);
         Some(get_error_message(execution_result))
     }
+
+    pub fn exec_commit_finish(&mut self, execute_request: ExecuteRequest) -> WasmTestResult<S> {
+        self.exec_with_exec_request(execute_request)
+            .expect_success()
+            .commit()
+            .finish()
+    }
 }
 
 pub fn get_protocol_version() -> ProtocolVersion {
@@ -781,6 +1044,30 @@ pub fn get_mock_deploy() -> Deploy {
     deploy
 }
 
+fn get_mock_deploy_code() -> DeployCode {
+    let mut deploy_code = DeployCode::new();
+    deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
+    deploy_code
+}
+
+pub fn get_mock_deploy_item() -> DeployItem {
+    let mut deploy_item = DeployItem::new();
+    deploy_item.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
+    deploy_item.set_gas_price(1);
+    
+    let mut payment_payload = DeployPayload::new();
+    payment_payload.set_deploy_code(get_mock_deploy_code());
+    deploy_item.set_payment(payment_payload);
+
+    let mut session_payload = DeployPayload::new();
+    session_payload.set_deploy_code(get_mock_deploy_code());
+    deploy_item.set_session(session_payload);
+
+    deploy_item.set_deploy_hash([1u8; 32].to_vec());
+    deploy_item
+}
+
+
 fn get_compiled_wasm_path(contract_file: PathBuf) -> PathBuf {
     let mut path = std::env::current_dir().expect("should get working directory");
     path.push(PathBuf::from(COMPILED_WASM_PATH));
@@ -796,123 +1083,10 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
         .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
 }
 
-pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
-    let name = DEFAULT_CHAIN_NAME.to_string();
-    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
-    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
-    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
-    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
-    let wasm_costs = *DEFAULT_WASM_COSTS;
-    GenesisConfig::new(
-        name,
-        timestamp,
-        protocol_version,
-        mint_installer_bytes,
-        proof_of_stake_installer_bytes,
-        accounts,
-        wasm_costs,
-    )
-}
-
-pub fn create_query_request(
-    post_state: Vec<u8>,
-    base_key: contract_ffi::key::Key,
-    path: Vec<String>,
-) -> QueryRequest {
-    let mut query_request = QueryRequest::new();
-
-    query_request.set_state_hash(post_state);
-    query_request.set_base_key(base_key.into());
-    query_request.set_path(path.into());
-
-    query_request
-}
-
 fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
     let mut validate_request = ValidateRequest::new();
     validate_request.set_wasm_code(wasm_bytes);
     validate_request
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn create_exec_request(
-    address: [u8; 32],
-    payment_file: &str,
-    payment_args: impl ArgsParser,
-    session_file: &str,
-    session_args: impl ArgsParser,
-    pre_state_hash: &[u8],
-    block_time: u64,
-    deploy_hash: [u8; 32],
-    authorized_keys: Vec<PublicKey>,
-) -> ExecRequest {
-    let deploy = DeployBuilder::new()
-        .with_session_code(session_file, session_args)
-        .with_payment_code(payment_file, payment_args)
-        .with_address(address)
-        .with_authorization_keys(&authorized_keys)
-        .with_deploy_hash(deploy_hash)
-        .build();
-
-    ExecRequestBuilder::new()
-        .with_pre_state_hash(pre_state_hash)
-        .with_protocol_version(1)
-        .with_block_time(block_time)
-        .push_deploy(deploy)
-        .build()
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn create_commit_request(
-    prestate_hash: &[u8],
-    effects: &HashMap<Key, Transform>,
-) -> CommitRequest {
-    let effects: Vec<TransformEntry> = effects
-        .iter()
-        .map(|(k, t)| (k.to_owned(), t.to_owned()).into())
-        .collect();
-
-    let mut commit_request = CommitRequest::new();
-    commit_request.set_prestate_hash(prestate_hash.to_vec());
-    commit_request.set_effects(effects.into());
-    commit_request
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
-    let commit_transforms: CommitTransforms = genesis_response
-        .get_success()
-        .get_effect()
-        .get_transform_map()
-        .try_into()
-        .expect("should convert");
-    commit_transforms.value()
-}
-
-pub fn get_exec_transforms(exec_response: &ExecResponse) -> Vec<HashMap<Key, Transform>> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| {
-            let commit_transforms: CommitTransforms = deploy_result
-                .get_execution_result()
-                .get_effects()
-                .get_transform_map()
-                .try_into()
-                .expect("should convert");
-            commit_transforms.value()
-        })
-        .collect()
-}
-
-pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
-        .collect()
 }
 
 #[allow(clippy::implicit_hasher)]
@@ -937,20 +1111,6 @@ pub fn get_contract_uref(transforms: &HashMap<Key, Transform>, contract: Vec<u8>
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_mint_contract_uref(
-    transforms: &HashMap<Key, Transform>,
-    contracts: &HashMap<SystemContractType, WasmiBytes>,
-) -> Option<URef> {
-    let mint_contract_bytes: Vec<u8> = contracts
-        .get(&SystemContractType::Mint)
-        .map(ToOwned::to_owned)
-        .map(Into::into)
-        .expect("Should get mint bytes.");
-
-    get_contract_uref(&transforms, mint_contract_bytes)
-}
-
-#[allow(clippy::implicit_hasher)]
 pub fn get_pos_contract_uref(
     transforms: &HashMap<Key, Transform>,
     contracts: &HashMap<SystemContractType, WasmiBytes>,
@@ -964,45 +1124,59 @@ pub fn get_pos_contract_uref(
     get_contract_uref(&transforms, mint_contract_bytes)
 }
 
-#[allow(clippy::implicit_hasher)]
-pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
-    transforms.get(account).and_then(|transform| {
-        if let Transform::Write(Value::Account(account)) = transform {
-            Some(account.to_owned())
-        } else {
-            None
+/// Represents the difference between two [`HashMap`]s.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Diff {
+    left: HashMap<Key, Transform>,
+    both: HashMap<Key, Transform>,
+    right: HashMap<Key, Transform>,
+}
+
+impl Diff {
+    /// Creates a diff from two [`HashMap`]s.
+    pub fn new(left: HashMap<Key, Transform>, right: HashMap<Key, Transform>) -> Diff {
+        let both = Default::default();
+        let left_clone = left.clone();
+        let mut ret = Diff { left, both, right };
+
+        for key in left_clone.keys() {
+            let l = ret.left.remove_entry(key);
+            let r = ret.right.remove_entry(key);
+
+            match (l, r) {
+                (Some(le), Some(re)) => {
+                    if le == re {
+                        ret.both.insert(*key, re.1);
+                    } else {
+                        ret.left.insert(*key, le.1);
+                        ret.right.insert(*key, re.1);
+                    }
+                }
+                (None, Some(re)) => {
+                    ret.right.insert(*key, re.1);
+                }
+                (Some(le), None) => {
+                    ret.left.insert(*key, le.1);
+                }
+                (None, None) => unreachable!(),
+            }
         }
-    })
-}
 
-pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResult {
-    let result = response.get_success();
+        ret
+    }
 
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_execution_result()
-        .to_owned()
-}
+    /// Returns the entries that are unique to the `left` input.
+    pub fn left(&self) -> &HashMap<Key, Transform> {
+        &self.left
+    }
 
-pub fn get_precondition_failure(response: &ExecResponse) -> DeployResult_PreconditionFailure {
-    let result = response.get_success();
+    /// Returns the entries that are unique to the `right` input.
+    pub fn right(&self) -> &HashMap<Key, Transform> {
+        &self.right
+    }
 
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_precondition_failure()
-        .to_owned()
-}
-
-pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
-    let error = execution_result.get_error();
-
-    if error.has_gas_error() {
-        "Gas limit".to_string()
-    } else {
-        error.get_exec_error().get_message().to_string()
+    /// Returns the entries shared by both inputs.
+    pub fn both(&self) -> &HashMap<Key, Transform> {
+        &self.both
     }
 }

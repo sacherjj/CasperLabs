@@ -2,7 +2,9 @@ use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
+use crate::support::test_support::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -35,7 +37,7 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U5
         let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
         let account_1_public_key = PublicKey::new(address);
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
@@ -46,7 +48,7 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U5
             .with_authorization_keys(&[genesis_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     builder
@@ -59,7 +61,7 @@ fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
     let exec_request = {
         let public_key = PublicKey::new(address);
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(address)
             .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", ())
@@ -67,7 +69,7 @@ fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
             .with_authorization_keys(&[public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     builder

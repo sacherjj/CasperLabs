@@ -1,5 +1,5 @@
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::U512;
@@ -13,14 +13,14 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("ee_539_regression.wasm", (Weight::new(4), Weight::new(3)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let _result = InMemoryWasmTestBuilder::default()

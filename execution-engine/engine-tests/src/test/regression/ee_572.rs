@@ -4,7 +4,7 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
@@ -29,35 +29,35 @@ fn should_run_ee_572_regression() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(CONTRACT_TRANSFER, account_1_creation_args)
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(CONTRACT_TRANSFER, account_2_creation_args)
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_3 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(CONTRACT_CREATE, account_2_creation_args)
             .with_deploy_hash([3u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // Create Accounts
@@ -82,20 +82,20 @@ fn should_run_ee_572_regression() {
             _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account
-            .urefs_lookup()
+            .named_keys()
             .get(CREATE)
             .expect("Could not find contract pointer")
     };
 
     let exec_request_4 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_2_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(CONTRACT_ESCALATE, (contract,))
             .with_deploy_hash([3u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_2_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // Attempt to forge a new URef with escalated privileges

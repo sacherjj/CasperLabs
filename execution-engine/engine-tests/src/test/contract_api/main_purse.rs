@@ -1,5 +1,5 @@
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
@@ -28,14 +28,14 @@ fn should_run_main_purse_contract_default_account() {
     };
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("main_purse.wasm", (default_account.purse_id(), ()))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     builder
@@ -52,7 +52,7 @@ fn should_run_main_purse_contract_account_1() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -62,7 +62,7 @@ fn should_run_main_purse_contract_account_1() {
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let builder = builder
@@ -79,14 +79,14 @@ fn should_run_main_purse_contract_account_1() {
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("main_purse.wasm", (account_1.purse_id(),))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     builder

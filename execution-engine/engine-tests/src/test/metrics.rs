@@ -1,10 +1,8 @@
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, InMemoryWasmTestBuilder, ExecuteRequestBuilder,
 };
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
-use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use engine_core::engine_state::EngineConfig;
 use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
 use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
@@ -88,8 +86,8 @@ fn should_exec_with_metrics() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = test_support::get_mock_deploy();
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        let deploy_item = test_support::get_mock_deploy_item();
+        ExecuteRequestBuilder::new().push_deploy(deploy_item).build()
     };
 
     let _result = InMemoryWasmTestBuilder::new(global_state, engine_config)

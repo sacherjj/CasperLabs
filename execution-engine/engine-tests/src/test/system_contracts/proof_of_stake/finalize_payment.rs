@@ -9,7 +9,7 @@ use engine_core::engine_state::CONV_RATE;
 use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
@@ -24,7 +24,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -34,11 +34,11 @@ fn initialize() -> InMemoryWasmTestBuilder {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -48,7 +48,7 @@ fn initialize() -> InMemoryWasmTestBuilder {
             .with_deploy_hash([2; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     builder
@@ -78,24 +78,24 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     );
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(FINALIZE_PAYMENT, args)
             .with_deploy_hash([3u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(FINALIZE_PAYMENT, args)
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     assert!(builder.exec_with_exec_request(exec_request_1).is_error());
@@ -128,7 +128,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let exec_request = {
         let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
@@ -136,7 +136,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .with_authorization_keys(&[genesis_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
     builder
         .exec_with_exec_request(exec_request)
@@ -188,7 +188,7 @@ fn get_pos_refund_purse(builder: &InMemoryWasmTestBuilder) -> Option<Key> {
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(POS_REFUND_PURSE_NAME)
         .cloned()
 }
@@ -200,7 +200,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -219,7 +219,7 @@ fn get_named_account_balance(
         .expect("should find balance uref");
 
     let purse_id = account
-        .urefs_lookup()
+        .named_keys()
         .get(name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u));

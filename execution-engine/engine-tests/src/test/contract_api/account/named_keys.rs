@@ -6,23 +6,23 @@ use engine_shared::transform::Transform;
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use engine_core::engine_state::MAX_PAYMENT;
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
-fn should_run_known_urefs_contract() {
+fn should_run_named_keys_contract() {
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("known_urefs.wasm", ())
+            .with_session_code("named_keys.wasm", ())
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::default()
@@ -76,6 +76,6 @@ fn should_run_known_urefs_contract() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("Unable to get account transformation");
     // Those named URefs are created, although removed at the end of the test
-    assert!(account.urefs_lookup().get("URef1").is_none());
-    assert!(account.urefs_lookup().get("URef2").is_none());
+    assert!(account.named_keys().get("URef1").is_none());
+    assert!(account.named_keys().get("URef2").is_none());
 }

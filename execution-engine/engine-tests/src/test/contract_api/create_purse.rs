@@ -1,5 +1,5 @@
 use crate::support::test_support::{
-    get_exec_costs, DeployBuilder, ExecRequestBuilder, WasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    get_exec_costs, DeployItemBuilder, ExecuteRequestBuilder, WasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 
 use contract_ffi::base16;
@@ -49,7 +49,7 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 #[test]
 fn should_insert_mint_add_keys_transform() {
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -59,17 +59,17 @@ fn should_insert_mint_add_keys_transform() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let mint_transform: &Transform = {
@@ -92,9 +92,9 @@ fn should_insert_mint_add_keys_transform() {
 
 #[ignore]
 #[test]
-fn should_insert_into_account_known_urefs() {
+fn should_insert_account_into_named_keys() {
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -104,18 +104,18 @@ fn should_insert_into_account_known_urefs() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -131,8 +131,8 @@ fn should_insert_into_account_known_urefs() {
         .expect("should have account");
 
     assert!(
-        account_1.urefs_lookup().contains_key(TEST_PURSE_NAME),
-        "account_1 known_urefs should include test purse"
+        account_1.named_keys().contains_key(TEST_PURSE_NAME),
+        "account_1 named_keys should include test purse"
     );
 }
 
@@ -140,7 +140,7 @@ fn should_insert_into_account_known_urefs() {
 #[test]
 fn should_create_usable_purse_id() {
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -150,18 +150,18 @@ fn should_create_usable_purse_id() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("create_purse_01.wasm", (TEST_PURSE_NAME,))
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let result = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -184,9 +184,9 @@ fn should_create_usable_purse_id() {
         .expect("should have account");
 
     let purse_key = account_1
-        .urefs_lookup()
+        .named_keys()
         .get(TEST_PURSE_NAME)
-        .expect("should have known_uref");
+        .expect("should have known key");
 
     let purse_id = PurseId::new(*purse_key.as_uref().expect("should have uref"));
 

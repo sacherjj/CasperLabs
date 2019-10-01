@@ -11,7 +11,7 @@ use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::DEFAULT_PAYMENT;
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
@@ -39,7 +39,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -79,7 +79,7 @@ fn should_run_successful_bond_and_unbond() {
     let pos = result.builder().get_pos_contract_uref();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -89,7 +89,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -123,7 +123,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
         GENESIS_ACCOUNT_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -133,7 +133,7 @@ fn should_run_successful_bond_and_unbond() {
     );
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -147,11 +147,11 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_3 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -164,7 +164,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // Create new account (from genesis funds) and bond with it
@@ -209,7 +209,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -224,7 +224,7 @@ fn should_run_successful_bond_and_unbond() {
     // queue)
     //
     let exec_request_4 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -237,7 +237,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([2; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -272,7 +272,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     let lookup_key = format!(
         "v_{}_{}",
@@ -281,7 +281,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     // Account 1 is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 2b - Genesis unbonds by decreasing less than 50% (and is still in the
@@ -289,7 +289,7 @@ fn should_run_successful_bond_and_unbond() {
     //
     // Genesis account unbonds less than 50% of his stake
     let exec_request_5 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -302,7 +302,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([3; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_5)
@@ -343,7 +343,7 @@ fn should_run_successful_bond_and_unbond() {
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
     let exec_request_6 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -356,7 +356,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([3; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -393,7 +393,7 @@ fn should_run_successful_bond_and_unbond() {
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 isn't tracked anymore in the bonding queue
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 3b - Fully unbond account1 with Some(TOTAL_AMOUNT)
@@ -401,7 +401,7 @@ fn should_run_successful_bond_and_unbond() {
 
     // Genesis account unbonds less than 50% of his stake
     let exec_request_7 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(
@@ -411,7 +411,7 @@ fn should_run_successful_bond_and_unbond() {
             .with_deploy_hash([4; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -455,7 +455,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     // Genesis is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Final checks on validator queue
@@ -465,7 +465,7 @@ fn should_run_successful_bond_and_unbond() {
     // suffix
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(|(key, _)| key.starts_with(&format!(
                 "v_{}",
@@ -476,7 +476,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(
                 |(key, _)| key.starts_with(&format!("v_{}", base16::encode_lower(&ACCOUNT_1_ADDR)))
@@ -487,7 +487,7 @@ fn should_run_successful_bond_and_unbond() {
     // only genesis validator is still in the queue
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(|(key, _)| key.starts_with("v_"))
             .count(),
@@ -512,7 +512,7 @@ fn should_fail_bonding_with_insufficient_funds() {
     let genesis_config = test_support::create_genesis_config(accounts);
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -526,10 +526,10 @@ fn should_fail_bonding_with_insufficient_funds() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),)) // That's already too much assuming non-zero costs of wasm execution
             .with_session_code(
@@ -542,7 +542,7 @@ fn should_fail_bonding_with_insufficient_funds() {
             .with_deploy_hash([2; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::default()
@@ -584,7 +584,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
     let genesis_config = test_support::create_genesis_config(accounts);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -594,7 +594,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
             .with_deploy_hash([1; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let result = InMemoryWasmTestBuilder::default()

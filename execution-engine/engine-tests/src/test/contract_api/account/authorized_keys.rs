@@ -1,5 +1,5 @@
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::{PublicKey, Weight};
@@ -11,14 +11,14 @@ use engine_core::execution;
 #[test]
 fn should_deploy_with_authorized_identity_key() {
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
@@ -37,14 +37,14 @@ fn should_raise_auth_failure_with_invalid_key() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_1)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // Basic deploy with single key
@@ -85,7 +85,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
@@ -96,7 +96,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
                 PublicKey::new(key_3),
             ])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // Basic deploy with single key
@@ -136,37 +136,37 @@ fn should_raise_deploy_authorization_failure() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_2),))
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_3 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_3),))
             .with_deploy_hash([3u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_4 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // Deploy threshold is equal to 3, keymgmnt is still 1.
@@ -178,7 +178,7 @@ fn should_raise_deploy_authorization_failure() {
             .with_deploy_hash([4u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
@@ -201,7 +201,7 @@ fn should_raise_deploy_authorization_failure() {
         .finish();
 
     let exec_request_5 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // Next deploy will see deploy threshold == 4, keymgmnt == 5
@@ -212,7 +212,7 @@ fn should_raise_deploy_authorization_failure() {
             .with_deploy_hash([5u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_1)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // With deploy threshold == 3 using single secondary key
@@ -240,7 +240,7 @@ fn should_raise_deploy_authorization_failure() {
         )))
     }
     let exec_request_6 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // change deployment threshold to 4
@@ -253,7 +253,7 @@ fn should_raise_deploy_authorization_failure() {
                 PublicKey::new(key_3),
             ])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
     let result3 = InMemoryWasmTestBuilder::from_result(result2)
@@ -263,7 +263,7 @@ fn should_raise_deploy_authorization_failure() {
         .finish();
 
     let exec_request_7 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // change deployment threshold to 4
@@ -274,7 +274,7 @@ fn should_raise_deploy_authorization_failure() {
             .with_deploy_hash([6u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_2), PublicKey::new(key_1)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // deployment threshold is now 4
@@ -303,7 +303,7 @@ fn should_raise_deploy_authorization_failure() {
     }
 
     let exec_request_8 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // change deployment threshold to 4
@@ -319,7 +319,7 @@ fn should_raise_deploy_authorization_failure() {
                 PublicKey::new(key_3),
             ])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     // success: identity key weight + key_1 weight + key_2 weight >= deployment
@@ -343,24 +343,24 @@ fn should_authorize_deploy_with_multiple_keys() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_2),))
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
@@ -377,14 +377,14 @@ fn should_authorize_deploy_with_multiple_keys() {
     // key_1 (w: 2) key_2 (w: 2) each passes default threshold of 1
 
     let exec_request_3 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("authorized_keys.wasm", (Weight::new(0), Weight::new(0)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_2), PublicKey::new(key_1)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_exec_request(exec_request_3)
@@ -401,18 +401,18 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let exec_request_2 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             // change deployment threshold to 3
@@ -420,7 +420,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
@@ -435,7 +435,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         .finish();
 
     let exec_request_3 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("authorized_keys.wasm", (Weight::new(0), Weight::new(0)))
@@ -453,7 +453,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
                 PublicKey::new(key_1),
             ])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     // success: identity key weight + key_1 weight + key_2 weight >= deployment
     // threshold

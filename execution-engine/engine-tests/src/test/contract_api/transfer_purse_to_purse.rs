@@ -5,7 +5,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
     STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
@@ -19,7 +19,7 @@ fn should_run_purse_to_purse_transfer() {
     let target = "purse:secondary".to_string();
 
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code(
@@ -29,7 +29,7 @@ fn should_run_purse_to_purse_transfer() {
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
     let transfer_result = InMemoryWasmTestBuilder::default()
@@ -49,7 +49,7 @@ fn should_run_purse_to_purse_transfer() {
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&default_account.urefs_lookup()["purse_transfer_result"].normalize()];
+        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()];
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -59,7 +59,7 @@ fn should_run_purse_to_purse_transfer() {
     assert_eq!(purse_transfer_result, "TransferSuccessful");
 
     let main_purse_balance =
-        &transform[&default_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -70,8 +70,8 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = default_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = default_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = default_account.named_keys()["purse:secondary"];
+    let _purse_main_key = default_account.named_keys()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
@@ -120,7 +120,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
     let exec_request_1 = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),)) // amount
             .with_session_code(
@@ -130,7 +130,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .build();
-        ExecRequestBuilder::from_deploy(deploy).build()
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -149,7 +149,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Get the `purse_transfer_result` for a given
     let purse_transfer_result =
-        &transform[&default_account.urefs_lookup()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
+        &transform[&default_account.named_keys()["purse_transfer_result"].normalize()]; //addkeys["purse_transfer_result"].as_uref().unwrap();
     let purse_transfer_result = if let Transform::Write(Value::String(s)) = purse_transfer_result {
         s
     } else {
@@ -160,7 +160,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
 
     // Obtain main purse's balance
     let main_purse_balance =
-        &transform[&default_account.urefs_lookup()["main_purse_balance"].normalize()];
+        &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance = if let Transform::Write(Value::UInt512(balance)) = main_purse_balance {
         balance
     } else {
@@ -185,8 +185,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
     };
 
     // Assert secondary purse value after successful transfer
-    let purse_secondary_key = default_account.urefs_lookup()["purse:secondary"];
-    let _purse_main_key = default_account.urefs_lookup()["purse:main"];
+    let purse_secondary_key = default_account.named_keys()["purse:secondary"];
+    let _purse_main_key = default_account.named_keys()["purse:main"];
 
     // Lookup key used to find the actual purse uref
     // TODO: This should be more consistent
