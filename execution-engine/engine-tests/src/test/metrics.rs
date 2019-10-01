@@ -88,14 +88,7 @@ fn should_exec_with_metrics() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
-            .with_address(test_support::MOCKED_ACCOUNT_ADDRESS)
-            .with_deploy_hash([1; 32])
-            .with_session_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_payment_code("do_nothing.wasm", ())
-            .with_authorization_keys(&[PublicKey::new(test_support::MOCKED_ACCOUNT_ADDRESS)])
-            .build();
-
+        let deploy = test_support::get_mock_deploy();
         ExecRequestBuilder::new().push_deploy(deploy).build()
     };
 
