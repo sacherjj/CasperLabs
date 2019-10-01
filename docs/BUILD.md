@@ -40,7 +40,7 @@ The `casperlabs-client` executable will be found here:
 
 ```
 cd execution-engine
-make build
+CARGO_FLAGS=--release make build
 ```
 
 The `casperlabs-engine-grpc-server` executable will be found here:
