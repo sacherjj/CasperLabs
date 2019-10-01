@@ -98,7 +98,9 @@ object DownloadManagerImpl {
       dependencies: Set[ByteString],
       isDownloading: Boolean = false,
       isError: Boolean = false,
-      watcher: Option[DownloadFeedback[F]]
+      // Keep returning the same Deferred until one attempt to download is finished.
+      // The next schedule will create a new Deferred that will be completed anew.
+      maybeWatcher: Option[DownloadFeedback[F]]
   ) {
     val canStart: Boolean = !isDownloading && dependencies.isEmpty
   }
@@ -242,7 +244,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                    val startables = dependants.collect {
                      case (_, dep) if dep.canStart => dep
                    }
-                   (items ++ dependants - blockHash, item.watcher.toList -> startables.toList)
+                   (items ++ dependants - blockHash, item.maybeWatcher.toList -> startables.toList)
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
@@ -262,8 +264,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           watchers <- itemsRef.modify { items =>
                        val item = items(blockHash)
                        val tombstone: Item[F] =
-                         item.copy(isDownloading = false, isError = true, watcher = None)
-                       (items + (blockHash -> tombstone), item.watcher.toList)
+                         item.copy(isDownloading = false, isError = true, maybeWatcher = None)
+                       (items + (blockHash -> tombstone), item.maybeWatcher.toList)
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
@@ -289,16 +291,16 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       source: Node,
       relay: Boolean
   ): F[(Item[F], DownloadFeedback[F])] =
-    makeDownloadFeedback flatMap { downloadFeedback =>
+    makeDownloadFeedback flatMap { freshDownloadFeedback =>
       items.get(summary.blockHash) map { existing =>
         Sync[F].pure {
-          val df = existing.watcher getOrElse downloadFeedback
+          // If it was already scheduled we keep the existing Deferred.
+          val downloadFeedback = existing.maybeWatcher getOrElse freshDownloadFeedback
           existing.copy(
             sources = existing.sources + source,
             relay = existing.relay || relay,
-            // Every time we schedule we may have to
-            watcher = Some(df)
-          ) -> df
+            maybeWatcher = Some(downloadFeedback)
+          ) -> downloadFeedback
         }
       } getOrElse {
         // Collect which dependencies have already been downloaded.
@@ -312,8 +314,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
             Set(source),
             relay,
             dependencies = pending,
-            watcher = Some(downloadFeedback)
-          ) -> downloadFeedback
+            maybeWatcher = Some(freshDownloadFeedback)
+          ) -> freshDownloadFeedback
         }
       }
     }
