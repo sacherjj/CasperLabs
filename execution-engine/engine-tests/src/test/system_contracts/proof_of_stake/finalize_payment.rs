@@ -9,7 +9,7 @@ use engine_core::engine_state::MAX_PAYMENT;
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
 
 use crate::support::test_support::{
-    self, DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
     STANDARD_PAYMENT_CONTRACT,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
@@ -116,7 +116,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let exec_request = {
         let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
@@ -124,7 +124,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .with_authorization_keys(&[genesis_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
     builder
         .exec_with_exec_request(exec_request)

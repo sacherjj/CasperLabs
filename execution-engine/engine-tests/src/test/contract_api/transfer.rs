@@ -144,7 +144,7 @@ fn should_transfer_to_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -245,7 +245,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_1_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -317,7 +317,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_2_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -427,7 +427,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -499,7 +499,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -571,7 +571,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -610,7 +610,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -643,7 +643,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 

@@ -15,7 +15,7 @@ use clap::{crate_version, App, Arg};
 
 use casperlabs_engine_tests::support::profiling_common;
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder,
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
 };
 use contract_ffi::base16;
 use contract_ffi::value::U512;
@@ -102,7 +102,7 @@ fn main() {
     let account_2_public_key = profiling_common::account_2_public_key();
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(account_1_public_key.value())
             .with_deploy_hash([1; 32])
             .with_session_code(
@@ -113,7 +113,7 @@ fn main() {
             .with_authorization_keys(&[account_1_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut test_builder = LmdbWasmTestBuilder::open(
