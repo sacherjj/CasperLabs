@@ -50,7 +50,7 @@ class GossipServiceCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
-    timeEff: Time[F],
+    val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
     val logEff: LogStub[F]

@@ -60,7 +60,7 @@ class TransportLayerCasperTestNode[F[_]](
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
     val errorHandlerEff: ErrorHandler[F],
-    val timeEff: Time[F],
+    val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState]
 ) extends HashSetCasperTestNode[F](

@@ -1087,6 +1087,27 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "only execute deploys during the appropriate time window" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    val minTTL  = 60 * 60 * 1000
+    val deploy1 = DeployBuilder().withTimestamp(3L).withTtl(minTTL).build
+    val deploy2 = DeployBuilder().withTimestamp(5L).withTtl(minTTL).build
+    for {
+      _               <- node.casperEff.deploy(deploy1) shouldBeF Right(()) // gets deploy1
+      _               <- node.casperEff.deploy(deploy2) shouldBeF Right(()) // gets deploy2
+      _               = node.timeEff.clock = 0
+      _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // too early to execute deploy, since t = 1
+      _               = node.timeEff.clock = 3
+      Created(block1) <- node.casperEff.createBlock //now we can execute deploy1, but not deploy2
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
+      _               = node.timeEff.clock = minTTL.toLong + 10L
+      _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // now it is too late to execute deploy2
+      _               <- node.tearDown()
+    } yield ()
+  }
+
   it should "not execute deploys which are already in the past" in effectTest {
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
