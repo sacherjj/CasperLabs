@@ -17,16 +17,18 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
+  /* Should not be used as long as `DagRepresentation` is not immutable. See NODE-923
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
       equivocationsTracker: EquivocationsTracker
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[List[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
                  .tips[F](dag, genesis, latestMessageHashes, equivocationsTracker)
-    } yield result.toIndexedSeq
+    } yield result
+   */
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],

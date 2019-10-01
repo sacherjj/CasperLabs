@@ -22,16 +22,20 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
+import com.google.protobuf.ByteString
 
-trait Casper[F[_], A] {
+trait MultiParentCasper[F[_]] {
+  //// Brought from Casper trait
   def addBlock(block: Block): F[BlockStatus]
   def contains(block: Block): F[Boolean]
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
-  def estimator(dag: DagRepresentation[F]): F[A]
+  def estimator(
+      dag: DagRepresentation[F],
+      latestMessages: Map[ByteString, ByteString]
+  ): F[List[ByteString]]
   def createBlock: F[CreateBlockStatus]
-}
+  ////
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   def dag: F[DagRepresentation[F]]
   def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
@@ -47,10 +51,11 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
   def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStorage]: F[Block] =
     for {
-      dag       <- MultiParentCasper[F].dag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
-      tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      dag            <- MultiParentCasper[F].dag
+      latestMessages <- dag.latestMessageHashes
+      tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
+      tipHash        = tipHashes.head
+      tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip
 }
 

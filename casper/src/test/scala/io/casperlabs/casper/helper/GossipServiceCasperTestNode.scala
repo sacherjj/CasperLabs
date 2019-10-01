@@ -348,8 +348,9 @@ object GossipServiceCasperTestNodeFactory {
                          backend = new SynchronizerImpl.Backend[F] {
                            override def tips: F[List[ByteString]] =
                              for {
-                               dag       <- casper.dag
-                               tipHashes <- casper.estimator(dag)
+                               dag                 <- casper.dag
+                               latestMessageHashes <- dag.latestMessageHashes
+                               tipHashes           <- casper.estimator(dag, latestMessageHashes)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =

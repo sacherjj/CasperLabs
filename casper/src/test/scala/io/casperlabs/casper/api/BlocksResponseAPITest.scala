@@ -78,8 +78,14 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
               bonds,
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
+        dag                 <- dagStorage.getRepresentation
+        latestMessageHashes <- dag.latestMessageHashes
+        tips <- Estimator.tips[Task](
+                 dag,
+                 genesis.blockHash,
+                 latestMessageHashes,
+                 EquivocationsTracker.empty
+               )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -139,8 +145,14 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
               bonds,
               HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
             )
-        dag  <- dagStorage.getRepresentation
-        tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
+        dag                 <- dagStorage.getRepresentation
+        latestMessageHashes <- dag.latestMessageHashes
+        tips <- Estimator.tips[Task](
+                 dag,
+                 genesis.blockHash,
+                 latestMessageHashes,
+                 EquivocationsTracker.empty
+               )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
@@ -216,8 +228,14 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                 bonds,
                 HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
               )
-          dag  <- dagStorage.getRepresentation
-          tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
+          dag                 <- dagStorage.getRepresentation
+          latestMessageHashes <- dag.latestMessageHashes
+          tips <- Estimator.tips[Task](
+                   dag,
+                   genesis.blockHash,
+                   latestMessageHashes,
+                   EquivocationsTracker.empty
+                 )
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],
                            tips

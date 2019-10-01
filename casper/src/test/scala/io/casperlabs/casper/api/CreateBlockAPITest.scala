@@ -139,8 +139,11 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
   def contains(b: Block): F[Boolean]                = underlying.contains(b)
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    underlying.estimator(dag)
+  def estimator(
+      dag: DagRepresentation[F],
+      latestMessagesHashes: Map[ByteString, ByteString]
+  ): F[List[BlockHash]] =
+    underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)

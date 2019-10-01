@@ -520,9 +520,10 @@ package object gossiping {
                      new SynchronizerImpl.Backend[F] {
                        override def tips: F[List[ByteString]] =
                          for {
-                           casper    <- unsafeGetCasper[F]
-                           dag       <- casper.dag
-                           tipHashes <- casper.estimator(dag)
+                           casper         <- unsafeGetCasper[F]
+                           dag            <- casper.dag
+                           latestMessages <- dag.latestMessageHashes
+                           tipHashes      <- casper.estimator(dag, latestMessages)
                          } yield tipHashes.toList
 
                        override def justifications: F[List[ByteString]] =
@@ -598,10 +599,11 @@ package object gossiping {
 
                       override def listTips =
                         for {
-                          casper    <- unsafeGetCasper[F]
-                          dag       <- casper.dag
-                          tipHashes <- casper.estimator(dag)
-                          tips      <- tipHashes.toList.traverse(backend.getBlockSummary(_))
+                          casper         <- unsafeGetCasper[F]
+                          dag            <- casper.dag
+                          latestMessages <- dag.latestMessageHashes
+                          tipHashes      <- casper.estimator(dag, latestMessages)
+                          tips           <- tipHashes.toList.traverse(backend.getBlockSummary(_))
                         } yield tips.flatten
                     }
                   }

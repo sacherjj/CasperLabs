@@ -198,11 +198,12 @@ object BlockAPI {
       depth: Int
   ): F[IndexedSeq[Block]] =
     for {
-      dag       <- MultiParentCasper[F].dag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
-      tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
-      mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
+      dag            <- MultiParentCasper[F].dag
+      latestMessages <- dag.latestMessageHashes
+      tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
+      tipHash        = tipHashes.head
+      tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      mainChain      <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
     } yield mainChain
 
   // TOOD extract common code from show blocks
@@ -253,12 +254,13 @@ object BlockAPI {
 
     def casperResponse(implicit casper: MultiParentCasper[F]) =
       for {
-        dag        <- MultiParentCasper[F].dag
-        tipHashes  <- MultiParentCasper[F].estimator(dag)
-        tipHash    = tipHashes.head
-        tip        <- ProtoUtil.unsafeGetBlock[F](tipHash)
-        mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
-        blockInfos <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
+        dag            <- MultiParentCasper[F].dag
+        latestMessages <- dag.latestMessageHashes
+        tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
+        tipHash        = tipHashes.head
+        tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
+        mainChain      <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
+        blockInfos     <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
       } yield blockInfos
 
     MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
