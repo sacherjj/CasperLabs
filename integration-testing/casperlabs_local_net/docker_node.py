@@ -77,7 +77,7 @@ class DockerNode(LoggingDockerBase):
             self.proxy_server = grpc_proxy.proxy_server(
                 node_port=self.GRPC_SERVER_PORT + 10000,
                 node_host=node_host,
-                proxy_port=self.GRPC_SERVER_PORT + self.config.number,
+                proxy_port=self.server_proxy_port,
                 server_certificate_file=server_certificate_path,
                 server_key_file=server_key_path,
                 client_certificate_file=server_certificate_path,
@@ -86,12 +86,20 @@ class DockerNode(LoggingDockerBase):
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
                 node_port=self.KADEMLIA_PORT + 10000,
                 node_host=node_host,
-                proxy_port=self.KADEMLIA_PORT + self.config.number,
+                proxy_port=self.kademlia_proxy_port,
             )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+
+    @property
+    def server_proxy_port(self) -> int:
+        return self.GRPC_SERVER_PORT + self.config.number * 100
+
+    @property
+    def kademlia_proxy_port(self) -> int:
+        return self.KADEMLIA_PORT + self.config.number * 100
 
     @property
     def docker_port_offset(self) -> int:
@@ -462,8 +470,8 @@ class DockerNode(LoggingDockerBase):
             certificate_path = self.config.tls_certificate_local_path()
             logging.info(f"certificate_path: {certificate_path}")
             node_id = extract_common_name(certificate_path)
-            protocol_port = self.GRPC_SERVER_PORT + self.config.number
-            discovery_port = self.KADEMLIA_PORT + self.config.number
+            protocol_port = self.server_proxy_port
+            discovery_port = self.kademlia_proxy_port
             addr = f"casperlabs://{node_id}@{host_name}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
