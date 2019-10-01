@@ -36,9 +36,9 @@ initialize_accounts() {
     ACCOUNT_ID="$(cat keys/account-${ACCOUNT_INDEX}/account-id)"
     ./client.sh node-0 transfer \
       --private-key="/keys/system-account/account-private.pem" \
-      --amount=10000000000000 \
+      --amount=333333333 \
       --target-account="$ACCOUNT_ID" \
-      --payment-amount=10000000
+      --payment-amount=1000000
   done
 }
 
@@ -56,7 +56,7 @@ run_node_cycle() {
       --private-key="$ORIGINATOR_PRIVATE_KEY" \
       --amount=1 \
       --target-account="$RECIPIENT_ID" \
-      --payment-amount=10000000
+      --payment-amount=1000000
       sleep 5
   done
 }
