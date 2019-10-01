@@ -560,7 +560,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
                 .get_account(DEFAULT_ACCOUNT_ADDR)
                 .expect("genesis account should exist");
             account
-                .urefs_lookup()
+                .named_keys()
                 .get("pos")
                 .and_then(Key::as_uref)
                 .expect("should have pos uref")
@@ -804,7 +804,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 ));
 
                 // la has stored contracts under named urefs
-                assert_ne!(la.urefs_lookup(), ra.urefs_lookup());
+                assert_ne!(la.named_keys(), ra.named_keys());
             }
             (Transform::AddUInt512(_), Transform::AddUInt512(_)) => {
                 // differing payment

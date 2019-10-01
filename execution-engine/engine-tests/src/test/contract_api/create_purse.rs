@@ -83,7 +83,7 @@ fn should_insert_mint_add_keys_transform() {
 
 #[ignore]
 #[test]
-fn should_insert_into_account_known_urefs() {
+fn should_insert_account_into_named_keys() {
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
@@ -114,8 +114,8 @@ fn should_insert_into_account_known_urefs() {
         .expect("should have account");
 
     assert!(
-        account_1.urefs_lookup().contains_key(TEST_PURSE_NAME),
-        "account_1 known_urefs should include test purse"
+        account_1.named_keys().contains_key(TEST_PURSE_NAME),
+        "account_1 named_keys should include test purse"
     );
 }
 
@@ -159,9 +159,9 @@ fn should_create_usable_purse_id() {
         .expect("should have account");
 
     let purse_key = account_1
-        .urefs_lookup()
+        .named_keys()
         .get(TEST_PURSE_NAME)
-        .expect("should have known_uref");
+        .expect("should have known key");
 
     let purse_id = PurseId::new(*purse_key.as_uref().expect("should have uref"));
 

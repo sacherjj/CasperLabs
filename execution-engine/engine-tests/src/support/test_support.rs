@@ -767,15 +767,15 @@ where
         let genesis_account =
             get_account(&transforms, &system_account).expect("Unable to get system account");
 
-        let known_keys = genesis_account.urefs_lookup();
+        let named_keys = genesis_account.named_keys();
 
-        let mint_contract_uref = known_keys
+        let mint_contract_uref = named_keys
             .get(MINT_NAME)
             .and_then(Key::as_uref)
             .cloned()
             .expect("Unable to get mint contract URef");
 
-        let pos_contract_uref = known_keys
+        let pos_contract_uref = named_keys
             .get(POS_NAME)
             .and_then(Key::as_uref)
             .cloned()

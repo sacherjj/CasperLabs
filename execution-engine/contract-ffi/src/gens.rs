@@ -20,7 +20,7 @@ pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     })
 }
 
-pub fn uref_map_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>> {
+pub fn named_keys_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>> {
     btree_map("\\PC*", key_arb(), depth)
 }
 
@@ -90,7 +90,7 @@ pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
 prop_compose! {
     pub fn account_arb()(
         pub_key in u8_slice_32(),
-        urefs in uref_map_arb(3),
+        urefs in named_keys_arb(3),
         purse_id in uref_arb(),
         thresholds in action_threshold_arb(),
         account_activity in account_activity_arb(),
@@ -111,7 +111,7 @@ prop_compose! {
 
 pub fn contract_arb() -> impl Strategy<Value = Contract> {
     any::<u64>().prop_flat_map(move |u64arb| {
-        uref_map_arb(20).prop_flat_map(move |urefs| {
+        named_keys_arb(20).prop_flat_map(move |urefs| {
             vec(any::<u8>(), 1..1000).prop_map(move |body| {
                 Contract::new(body, urefs.clone(), ProtocolVersion::new(u64arb))
             })

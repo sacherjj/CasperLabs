@@ -30,5 +30,5 @@ pub extern "C" fn call() {
     {
         contract_api::revert(Error::Transfer.into());
     }
-    contract_api::add_uref(&destination_name, &destination.value().into());
+    contract_api::put_key(&destination_name, &destination.value().into());
 }
