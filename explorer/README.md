@@ -49,8 +49,8 @@ Run the transfer from the genesis account to our test faucet account.
 ```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
-  --transfer-contract-path contracts/client/transfer_to_account.wasm \
-  --payment-contract-path contracts/client/standard_payment.wasm \
+  --transfer-contract-path contracts/transfer_to_account.wasm \
+  --payment-contract-path contracts/standard_payment.wasm \
   --payment-amount 100000 \
   --from-private-key-path ../hack/docker/keys/faucet-account/account-private.pem \
   --from-public-key-path ../hack/docker/keys/faucet-account/account-public.pem \
