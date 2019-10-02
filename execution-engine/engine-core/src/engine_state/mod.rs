@@ -550,7 +550,6 @@ where
                 ret
             };
 
-            // TODO: do we need blocktime on the request?
             let blocktime = BlockTime::default();
             let deploy_hash = {
                 let bytes: Vec<u8> = {
