@@ -5,6 +5,7 @@ import cats.effect.{Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
@@ -55,6 +56,7 @@ final case class CasperState(
     equivocationsTracker: EquivocationsTracker = EquivocationsTracker.empty
 )
 
+@silent("is never used")
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: Fs2Compiler: DeploySelection](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
@@ -251,18 +253,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       } yield ()
     }
 
-  // CON-86 will implement a 2nd pass that will calculate the threshold for secondary parents;
-  // right now the FinalityDetector only works for main parents. When it's fixed remove this part.
+  // NODE-930. To be replaced when we implement finality streams
   private def isFinalized(dag: DagRepresentation[F], blockHash: BlockHash): F[Boolean] =
-    isGreaterThanFaultToleranceThreshold(dag, blockHash).ifM(
-      true.pure[F],
-      dag
-        .children(blockHash)
-        .flatMap(
-          _.toList
-            .existsM(isFinalized(dag, _))
-        )
-    )
+    true.pure[F]
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Long] =
