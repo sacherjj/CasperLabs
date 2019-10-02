@@ -261,11 +261,7 @@ impl ExecuteRequestBuilder {
         self.execute_request
     }
 
-    pub fn standard(
-        addr: [u8; 32],
-        session_file: &str,
-        session_args: impl ArgsParser,
-    ) -> ExecuteRequest {
+    pub fn standard(addr: [u8; 32], session_file: &str, session_args: impl ArgsParser) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
@@ -277,7 +273,7 @@ impl ExecuteRequestBuilder {
             .with_deploy_hash(deploy_hash)
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy)
     }
 }
 

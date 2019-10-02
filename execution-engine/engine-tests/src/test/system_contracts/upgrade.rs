@@ -1,19 +1,17 @@
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::transform::Transform;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
+    self, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS};
 
 const PROTOCOL_VERSION: u64 = 1;
 const NEW_PROTOCOL_VERSION: u64 = 2;
 const DEFAULT_ACTIVATION_POINT: u64 = 1;
-const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
 const PAYMENT_AMOUNT: u64 = 200_000_000;
@@ -71,8 +69,6 @@ fn should_upgrade_only_protocol_version() {
 #[ignore]
 #[test]
 fn should_upgrade_system_contract() {
-    let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -97,23 +93,18 @@ fn should_upgrade_system_contract() {
 
     assert!(upgrade_response.has_success(), "expected success");
 
-    let exec_request_call = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(MODIFIED_MINT_CALLER_CONTRACT_NAME, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(PAYMENT_AMOUNT),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
-
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(NEW_PROTOCOL_VERSION)
-            .build()
+    let exec_request = {
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &MODIFIED_MINT_CALLER_CONTRACT_NAME,
+            (U512::from(PAYMENT_AMOUNT),),
+        )
+        .with_protocol_version(NEW_PROTOCOL_VERSION)
+        .build()
     };
 
     builder
-        .exec_with_exec_request(exec_request_call)
+        .exec_with_exec_request(exec_request)
         .expect_success();
 
     let transforms = builder.get_transforms();
@@ -188,8 +179,6 @@ fn should_upgrade_wasm_costs() {
 #[ignore]
 #[test]
 fn should_upgrade_system_contract_and_wasm_costs() {
-    let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -217,23 +206,18 @@ fn should_upgrade_system_contract_and_wasm_costs() {
 
     assert!(upgrade_response.has_success(), "expected success");
 
-    let exec_request_call = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(MODIFIED_MINT_CALLER_CONTRACT_NAME, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(PAYMENT_AMOUNT),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
-
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(NEW_PROTOCOL_VERSION)
-            .build()
+    let exec_request = {
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &MODIFIED_MINT_CALLER_CONTRACT_NAME,
+            (U512::from(PAYMENT_AMOUNT),),
+        )
+        .with_protocol_version(NEW_PROTOCOL_VERSION)
+        .build()
     };
 
     builder
-        .exec_with_exec_request(exec_request_call)
+        .exec_with_exec_request(exec_request)
         .expect_success();
 
     let transforms = builder.get_transforms();
