@@ -86,7 +86,7 @@ pub enum Error {
     UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
-    ///
+    /// No access rights.
     NoAccessRights,
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
