@@ -7,5 +7,4 @@ CREATE TABLE deploy_headers
     FOREIGN KEY (hash) REFERENCES deploys (hash)
 );
 
-CREATE INDEX idx_deploy_headers_account ON deploy_headers (account);
-CREATE INDEX idx_deploy_headers_timestamps_millis ON deploy_headers (timestamp_millis);
+CREATE INDEX idx_deploy_headers_account_timestamps_millis ON deploy_headers (account, timestamp_millis);
