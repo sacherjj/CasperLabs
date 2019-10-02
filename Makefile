@@ -13,7 +13,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
-PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
+PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \) | grep -v node_modules)
 TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/sdk/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
