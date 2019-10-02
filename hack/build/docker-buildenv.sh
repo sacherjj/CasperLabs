@@ -17,14 +17,13 @@ else
 		--entrypoint sh \
 		casperlabs/buildenv:latest \
 		-c "\
-			apt-get install sudo ; \
+			set -ex ; \
 			useradd -u ${USERID} -m builder ; \
 			cp -r /root/. /home/builder/ ; \
 			chown -R builder /home/builder ; \
-			sudo -u builder bash -c '\
+			su -s /bin/bash -c '\
 				export HOME=/home/builder ; \
 				export PATH=/home/builder/.cargo/bin:\$PATH ; \
 				cd /CasperLabs ; \
-				${CMD} \
-		'"
+				${CMD}' builder"
 fi
