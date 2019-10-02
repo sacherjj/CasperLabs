@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import 'mocha';
-import * as nacl from "tweetnacl-ts";
-import { Args, PublicKeyArg, UInt64Arg } from './Serialization';
+import * as nacl from 'tweetnacl-ts';
+import { Args, PublicKeyArg, UInt64Arg } from '../../src/lib/Serialization';
 
 describe('PublicKeyArg', () => {
   it('should serialize as 32 bytes with size ++ content using little endiannes', () => {
@@ -45,6 +45,7 @@ describe('Args', () => {
     const a = Buffer.alloc(32, 1);
     const b = BigInt(67305985);
     const result = Args(PublicKeyArg(a), UInt64Arg(b));
+    // prettier-ignore
     const expected = Buffer.from([
       2, 0, 0, 0,
       36, 0, 0, 0,

@@ -6,7 +6,7 @@ import { RefreshableComponent, Button, IconButton, ListInline } from './Utils';
 import DataTable from './DataTable';
 import Modal from './Modal';
 import { Form, TextField } from './Forms';
-import { base64to16, encodeBase16 } from '../lib/Conversions';
+import { base64to16, encodeBase16 } from 'casperlabs-sdk';
 import { ObservableValue } from '../lib/ObservableValueMap';
 
 interface Props {
