@@ -15,7 +15,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
 import io.casperlabs.casper.util.execengine.{
   DeploysCheckpoint,
@@ -55,6 +55,14 @@ class ValidationTest
     with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
   implicit val raiseValidateErr = validation.raiseValidateErrorThroughApplicativeError[Task]
+  implicit val versions = {
+    import Scheduler.Implicits.global
+    CasperLabsProtocolVersions[Task](
+      0L -> state.ProtocolVersion(1)
+    ).runSyncUnsafe(Duration.Inf)
+  }
+  import DeriveValidation._
+
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
@@ -68,8 +76,6 @@ class ValidationTest
     log.reset()
     timeEff.reset()
   }
-
-  import DeriveValidation._
 
   def withoutStorage(t: => Task[_]) = {
     import Scheduler.Implicits.global
@@ -863,8 +869,10 @@ class ValidationTest
     val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
     // while `protocolVersionForGenesisBlock` returns proper one (version=1)
-    val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
-    val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
+    val missingProtocolVersionForBlock: Long => Task[ProtocolVersion] =
+      _ => Task.now(ProtocolVersion(-1))
+    val protocolVersionForGenesisBlock: Long => Task[ProtocolVersion] =
+      _ => Task.now(ProtocolVersion(1))
     for {
       dag     <- dagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519)

@@ -5,8 +5,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.util.{implicits, DagOperations}
-import implicits.{eqBlockHash, showBlockHash}
+import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}

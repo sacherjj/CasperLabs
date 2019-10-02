@@ -1,14 +1,12 @@
 package io.casperlabs.node.api
 
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.ipc
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.node.api.GrpcDeployService.splitPath
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
 
-class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
+class UtilsTest extends FlatSpec with EitherValues with Matchers {
 
   def attemptToKeyTest(
       nBytes: Int,
@@ -69,16 +67,6 @@ class GrpcCasperService extends FlatSpec with EitherValues with Matchers {
     attemptToKey("hash", randomBytes(e)) shouldBe ('left)
     attemptToKey("uref", randomBytes(e)) shouldBe ('left)
     attemptToKey("address", randomBytes(e)) shouldBe ('left)
-  }
-
-  "splitPath" should "split on '/' and exclude empty components" in {
-    val pathA = "a/b/c"
-    val pathB = ""
-    val pathC = "///a//b///////"
-
-    splitPath(pathA) shouldBe Seq("a", "b", "c")
-    splitPath(pathB) shouldBe Seq.empty[String]
-    splitPath(pathC) shouldBe Seq("a", "b")
   }
 
   private def randomBytes(length: Int): String =

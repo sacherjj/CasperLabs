@@ -2,7 +2,6 @@ package io.casperlabs.comm.discovery
 
 import cats.{Eq, Show}
 import com.google.protobuf.ByteString
-import io.casperlabs.comm.{CommError, ParseError}
 import io.casperlabs.crypto.codec.Base16
 import io.lemonlabs.uri.Url
 
@@ -34,7 +33,7 @@ object NodeUtils {
     def apply(id: NodeIdentifier, host: String, protocol: Int, discovery: Int): Node =
       Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery)
 
-    def fromAddress(str: String): Either[CommError, Node] = {
+    def fromAddress(str: String): Either[String, Node] = {
       // TODO toInt, not URL, scheme not casperlabs, renameflag to discovery-port
       val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
@@ -48,7 +47,9 @@ object NodeUtils {
               protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
             } yield apply(NodeIdentifier(id), host.value, protocol, discovery)
         )
-      maybePeer.fold[Either[CommError, Node]](Left(ParseError(s"bad address: $str")))(Right(_))
+      maybePeer.fold[Either[String, Node]](
+        Left(s"bad address: $str")
+      )(Right(_))
     }
   }
 }

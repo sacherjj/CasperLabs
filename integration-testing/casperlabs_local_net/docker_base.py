@@ -101,12 +101,9 @@ class DockerBase:
         return f"/tmp/resources_{self.docker_tag}_{self.config.number}_{self.config.rand_str}"
 
     @property
-    def bonds_file(self) -> str:
-        return f"{self.host_mount_dir}/bonds.txt"
-
-    @property
-    def host_genesis_dir(self) -> str:
-        return f"{self.host_mount_dir}/genesis"
+    def host_chainspec_dir(self) -> str:
+        # Mirror the default chainspec packaged in the node so we can apply partial overrides.
+        return f"{self.host_mount_dir}/chainspec"
 
     @property
     def host_bootstrap_dir(self) -> str:

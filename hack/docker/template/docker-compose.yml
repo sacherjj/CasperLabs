@@ -29,7 +29,7 @@ services:
       # Volume for a socket to be created and shared with the execution engine.
       - socketvolume:/root/.casperlabs/sockets
       # Common bonds file
-      - $PWD/../.casperlabs/genesis:/root/.casperlabs/genesis
+      - $PWD/../.casperlabs/chainspec:/root/.casperlabs/chainspec
       # Bootstrap node ID
       - $PWD/../.casperlabs/bootstrap:/root/.casperlabs/bootstrap
       # Node keys
@@ -44,8 +44,6 @@ services:
       CL_SERVER_RELAY_FACTOR: 1
       CL_SERVER_NO_UPNP: "true"
       CL_LOG_LEVEL: $CL_LOG_LEVEL
-      CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH: /root/.casperlabs/genesis/system-account/account-public.pem
-      CL_CASPER_INITIAL_MOTES: 10000000000
       CL_CASPER_VALIDATOR_PUBLIC_KEY_PATH: /root/.casperlabs/node/validator-public.pem
       CL_CASPER_VALIDATOR_PRIVATE_KEY_PATH: /root/.casperlabs/node/validator-private.pem
       CL_TLS_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem
@@ -54,8 +52,6 @@ services:
       CL_TLS_API_KEY: /root/.casperlabs/node/node.key.pem
       CL_GRPC_USE_TLS: "true"
       CL_METRICS_PROMETHEUS: "true"
-      CL_CASPER_MINT_CODE_PATH: /root/.casperlabs/genesis/system-contracts/mint_token.wasm
-      CL_CASPER_POS_CODE_PATH: /root/.casperlabs/genesis/system-contracts/pos.wasm
       CL_CASPER_AUTO_PROPOSE_ENABLED: ${CL_CASPER_AUTO_PROPOSE_ENABLED}
     entrypoint:
       - sh
