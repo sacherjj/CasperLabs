@@ -36,7 +36,7 @@ def _add_update_associate_key(
 ):
     """ Handles both add and update calls due to commonality """
     session_args = ABI.args(
-        [ABI.account(bytes.fromhex(key.public_key_hex)), ABI.u32(weight)]
+        [ABI.account("account", key.public_key_hex), ABI.u32("amount", weight)]
     )
     return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
@@ -63,7 +63,7 @@ def update_associated_key(node, weight_key: Account, key: Account, weight: int):
 
 def remove_associated_key(node, weight_key: Account, key: Account):
     """ Removes a key from the IDENTITY_KEY account """
-    args = ABI.args([ABI.account(bytes.fromhex(key.public_key_hex))])
+    args = ABI.args([ABI.account("account", key.public_key_hex)])
     return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
         session_contract=Contract.REMOVE_ASSOCIATED_KEY,
@@ -75,7 +75,12 @@ def remove_associated_key(node, weight_key: Account, key: Account):
 
 def set_key_thresholds(node, weight_key, key_mgmt_weight: int, deploy_weight: int):
     """ Sets key management and deploy thresholds for IDENTITY_KEY account """
-    args = ABI.args([ABI.u32(key_mgmt_weight), ABI.u32(deploy_weight)])
+    args = ABI.args(
+        [
+            ABI.u32("key_mgmt_weight", key_mgmt_weight),
+            ABI.u32("deploy_weight", deploy_weight),
+        ]
+    )
     return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
         session_contract=Contract.SET_KEY_THRESHOLDS,

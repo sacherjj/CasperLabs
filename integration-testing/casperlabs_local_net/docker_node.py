@@ -15,6 +15,7 @@ from casperlabs_local_net.python_client import PythonClient
 from casperlabs_local_net.docker_base import DockerConfig
 from casperlabs_local_net.casperlabs_accounts import is_valid_account, Account
 from casperlabs_local_net.graphql import GraphQL
+from casperlabs_client import ABI
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -272,10 +273,11 @@ class DockerNode(LoggingDockerBase):
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
 
-        ABI = self.p_client.abi
-
         session_args = ABI.args(
-            [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
+            [
+                ABI.account("account", to_account.public_key_binary),
+                ABI.u32("amount", amount),
+            ]
         )
 
         response, deploy_hash_bytes = self.p_client.deploy(
