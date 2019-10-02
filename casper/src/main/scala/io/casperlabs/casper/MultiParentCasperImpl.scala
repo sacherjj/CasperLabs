@@ -391,7 +391,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
    *  TODO: Make this return Either so that we get more information about why not block was
    *  produced (no deploys, already processing, no validator id)
    */
-  def createBlock: F[CreateBlockStatus] = validatorId match {
+  def createBlock(canCreateBallot: Boolean): F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       Metrics[F].timer("createBlock") {
         for {
@@ -415,7 +415,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           justifications   = toJustification(bondedLatestMsgs.values.toSeq)
           rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  <- CasperLabsProtocolVersions[F].versionAt(rank)
-          proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
+          proposal <- if (remainingHashes.nonEmpty || parents.length > 1 || canCreateBallot) {
                        createProposal(
                          latestMessages,
                          merged,

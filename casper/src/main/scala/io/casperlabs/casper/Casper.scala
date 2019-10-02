@@ -31,9 +31,8 @@ trait MultiParentCasper[F[_]] {
       dag: DagRepresentation[F],
       latestMessages: Map[ByteString, ByteString]
   ): F[List[ByteString]]
-  def createBlock: F[CreateBlockStatus]
-  ////
-
+  def estimator(dag: DagRepresentation[F]): F[A]
+  def createBlock(canCreateBallot: Boolean): F[CreateBlockStatus]
   def dag: F[DagRepresentation[F]]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
