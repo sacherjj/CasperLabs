@@ -34,7 +34,7 @@ fn should_upgrade_do_nothing_to_do_something() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder
@@ -70,6 +70,7 @@ fn should_upgrade_do_nothing_to_do_something() {
                 &contract_name,
                 (*do_nothing_stored_uref,),
             )
+            .build()
         };
 
         builder
@@ -87,6 +88,7 @@ fn should_upgrade_do_nothing_to_do_something() {
                 &contract_name,
                 (*do_nothing_stored_uref, PURSE_1),
             )
+            .build()
         };
 
         builder
@@ -122,7 +124,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder
@@ -172,6 +174,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
@@ -215,7 +218,7 @@ fn should_support_extending_functionality() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder
@@ -244,6 +247,7 @@ fn should_support_extending_functionality() {
                 &contract_name,
                 (*stored_uref, METHOD_ADD, PURSE_1),
             )
+            .build()
         };
 
         builder
@@ -266,6 +270,7 @@ fn should_support_extending_functionality() {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
@@ -293,6 +298,7 @@ fn should_support_extending_functionality() {
                 &contract_name,
                 (*stored_uref, METHOD_REMOVE, PURSE_1),
             )
+            .build()
         };
 
         builder
@@ -326,7 +332,7 @@ fn should_maintain_named_keys_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder
@@ -357,6 +363,7 @@ fn should_maintain_named_keys_across_upgrade() {
                 &contract_name,
                 (*stored_uref, METHOD_ADD, purse_name),
             )
+            .build()
         };
 
         builder
@@ -379,6 +386,7 @@ fn should_maintain_named_keys_across_upgrade() {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
@@ -418,7 +426,7 @@ fn should_maintain_local_state_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
         builder
@@ -443,6 +451,7 @@ fn should_maintain_local_state_across_upgrade() {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
@@ -467,6 +476,7 @@ fn should_maintain_local_state_across_upgrade() {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
@@ -481,6 +491,7 @@ fn should_maintain_local_state_across_upgrade() {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
+                .build()
         };
 
         builder
