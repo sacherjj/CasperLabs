@@ -1,12 +1,15 @@
 use std::fmt;
 
-use crate::engine_state::execution_effect::ExecutionEffect;
 use contract_ffi::key::Key;
 use contract_ffi::value::ProtocolVersion;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::TypeMismatch;
 use engine_storage::global_state::CommitResult;
 use engine_wasm_prep::wasm_costs::WasmCosts;
+
+use crate::engine_state::execution_effect::ExecutionEffect;
+
+pub type ActivationPoint = u64;
 
 pub enum UpgradeResult {
     RootNotFound,
@@ -56,7 +59,7 @@ pub struct UpgradeConfig {
     upgrade_installer_args: Option<Vec<u8>>,
     upgrade_installer_bytes: Option<Vec<u8>>,
     wasm_costs: Option<WasmCosts>,
-    activation_point: Option<u64>,
+    activation_point: Option<ActivationPoint>,
 }
 
 impl UpgradeConfig {
@@ -67,7 +70,7 @@ impl UpgradeConfig {
         upgrade_installer_args: Option<Vec<u8>>,
         upgrade_installer_bytes: Option<Vec<u8>>,
         wasm_costs: Option<WasmCosts>,
-        activation_point: Option<u64>,
+        activation_point: Option<ActivationPoint>,
     ) -> Self {
         UpgradeConfig {
             pre_state_hash,

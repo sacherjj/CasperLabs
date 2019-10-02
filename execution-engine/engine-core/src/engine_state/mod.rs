@@ -551,16 +551,17 @@ where
             };
 
             let blocktime = BlockTime::default();
+
             let deploy_hash = {
-                let bytes: Vec<u8> = {
-                    let mut ret = Vec::new();
-                    ret.extend_from_slice(
-                        &upgrade_config.new_protocol_version().value().to_le_bytes(),
-                    );
-                    ret
-                };
+                // seeds address generator w/ protocol version
+                let bytes: Vec<u8> = upgrade_config
+                    .new_protocol_version()
+                    .value()
+                    .to_le_bytes()
+                    .to_vec();
                 Blake2bHash::new(&bytes).into()
             };
+
             // upgrade has no gas limit; approximating with MAX
             let gas_limit = Gas::new(std::u64::MAX.into());
             let phase = Phase::System;

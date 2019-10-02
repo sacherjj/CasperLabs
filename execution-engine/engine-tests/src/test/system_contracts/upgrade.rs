@@ -1,5 +1,6 @@
 use contract_ffi::key::Key;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
+use engine_core::engine_state::upgrade::ActivationPoint;
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::transform::Transform;
 use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -11,7 +12,7 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COS
 
 const PROTOCOL_VERSION: u64 = 1;
 const NEW_PROTOCOL_VERSION: u64 = 2;
-const DEFAULT_ACTIVATION_POINT: u64 = 1;
+const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
 const PAYMENT_AMOUNT: u64 = 200_000_000;
