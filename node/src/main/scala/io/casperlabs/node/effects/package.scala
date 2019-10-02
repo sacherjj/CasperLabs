@@ -32,6 +32,7 @@ package object effects {
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
+      alivePeersCacheExpirationPeriod: FiniteDuration,
       gossipingRelayFactor: Int,
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
@@ -50,7 +51,8 @@ package object effects {
         gossipingRelayFactor,
         gossipingRelaySaturation,
         ingressScheduler,
-        egressScheduler
+        egressScheduler,
+        alivePeersCacheExpirationPeriod = alivePeersCacheExpirationPeriod
       )(init)
 
   def time(implicit timer: Timer[Task]): Time[Task] =

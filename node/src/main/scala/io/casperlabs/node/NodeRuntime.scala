@@ -154,6 +154,7 @@ class NodeRuntime private[node] (
                                                           id,
                                                           kademliaPort,
                                                           conf.server.defaultTimeout,
+                                                          conf.server.alivePeersCacheExpirationPeriod,
                                                           conf.server.relayFactor,
                                                           conf.server.relaySaturation,
                                                           ingressScheduler,

@@ -309,6 +309,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverAlivePeersCacheExpirationPeriod =
+      gen[FiniteDuration](
+        "Time to cache live peers for and to ban unresponsive ones."
+      )
+
+    @scallop
     val serverSyncMaxPossibleDepth =
       gen[Int]("Maximum DAG depth to allow when syncing after a new block notification.")
 

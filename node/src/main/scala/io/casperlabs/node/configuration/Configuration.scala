@@ -68,6 +68,7 @@ object Configuration extends ParserImplicits {
       relaySaturation: Int,
       approvalRelayFactor: Int,
       approvalPollInterval: FiniteDuration,
+      alivePeersCacheExpirationPeriod: FiniteDuration,
       syncMaxPossibleDepth: Int Refined Positive,
       syncMinBlockCountToCheckWidth: Int Refined NonNegative,
       syncMaxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],

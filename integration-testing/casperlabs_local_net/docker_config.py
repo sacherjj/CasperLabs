@@ -68,6 +68,9 @@ class DockerConfig:
     def node_command_options(self, server_host: str) -> dict:
         options = {
             "--server-default-timeout": "10second",
+            "--server-approval-poll-interval": "10second",
+            "--server-init-sync-round-period": "10second",
+            "--server-alive-peers-cache-expiration-period": "10second",
             "--server-host": server_host,
             "--grpc-socket": "/root/.casperlabs/sockets/.casper-node.sock",
             "--metrics-prometheus": "",

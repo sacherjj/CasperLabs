@@ -73,6 +73,7 @@ class ConfigurationSpec
       relaySaturation = 1,
       approvalRelayFactor = 1,
       approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      alivePeersCacheExpirationPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       syncMaxPossibleDepth = 1,
       syncMinBlockCountToCheckWidth = 1,
       syncMaxBondingRate = 1.0,
