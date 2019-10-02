@@ -78,7 +78,7 @@ impl TestContext {
 fn should_transfer_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_key = Key::Account(ACCOUNT_1_ADDR);
 
     let engine_config = EngineConfig::new().set_use_payment_code(true);
@@ -100,9 +100,9 @@ fn should_transfer_to_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -110,18 +110,18 @@ fn should_transfer_to_account() {
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account =
-        crate::support::test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account =
+        crate::support::test_support::get_account(&genesis_transforms, &default_account_key)
             .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&genesis_transforms, genesis_account_purse_id)
+        .lookup(&genesis_transforms, default_account_purse_id)
         .expect("should lookup");
 
     assert_eq!(
@@ -144,7 +144,7 @@ fn should_transfer_to_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -160,7 +160,7 @@ fn should_transfer_to_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_transforms, genesis_account_purse_id)
+        .lookup(&exec_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
@@ -191,7 +191,7 @@ fn should_transfer_from_account_to_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
@@ -213,9 +213,9 @@ fn should_transfer_from_account_to_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -223,12 +223,12 @@ fn should_transfer_from_account_to_account() {
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account = test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account = test_support::get_account(&genesis_transforms, &default_account_key)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Exec transfer 1 contract
 
@@ -245,7 +245,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_1_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -261,7 +261,7 @@ fn should_transfer_from_account_to_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_1_transforms, genesis_account_purse_id)
+        .lookup(&exec_1_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_1_response)[0], CONV_RATE)
@@ -317,7 +317,7 @@ fn should_transfer_from_account_to_account() {
     );
 
     let exec_2_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -362,7 +362,7 @@ fn should_transfer_to_existing_account() {
     let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
     let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
     let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
+    let default_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
     let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_2_key = Key::Account(ACCOUNT_2_ADDR);
 
@@ -384,9 +384,9 @@ fn should_transfer_to_existing_account() {
     let system_account = get_account(&genesis_transforms, &Key::Account(SYSTEM_ACCOUNT_ADDR))
         .expect("Unable to get system account");
 
-    let known_keys = system_account.urefs_lookup();
+    let named_keys = system_account.named_keys();
 
-    let mint_contract_uref = known_keys
+    let mint_contract_uref = named_keys
         .get(MINT_NAME)
         .and_then(Key::as_uref)
         .cloned()
@@ -394,17 +394,17 @@ fn should_transfer_to_existing_account() {
 
     let mut test_context = TestContext::new(mint_contract_uref);
 
-    let genesis_account = test_support::get_account(&genesis_transforms, &genesis_account_key)
+    let default_account = test_support::get_account(&genesis_transforms, &default_account_key)
         .expect("should get account");
 
-    let genesis_account_purse_id = genesis_account.purse_id();
+    let default_account_purse_id = default_account.purse_id();
 
-    test_context.track(&genesis_transforms, genesis_account_purse_id);
+    test_context.track(&genesis_transforms, default_account_purse_id);
 
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&genesis_transforms, genesis_account_purse_id)
+        .lookup(&genesis_transforms, default_account_purse_id)
         .expect("should lookup");
 
     assert_eq!(
@@ -427,7 +427,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -443,7 +443,7 @@ fn should_transfer_to_existing_account() {
     // Check genesis account balance
 
     let genesis_balance_transform = test_context
-        .lookup(&exec_1_transforms, genesis_account_purse_id)
+        .lookup(&exec_1_transforms, default_account_purse_id)
         .expect("should lookup");
 
     let gas_cost = Motes::from_gas(test_support::get_exec_costs(&exec_response)[0], CONV_RATE)
@@ -499,7 +499,7 @@ fn should_transfer_to_existing_account() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -571,7 +571,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -610,7 +610,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 
@@ -643,7 +643,7 @@ fn should_fail_when_insufficient_funds() {
     );
 
     let exec_response = engine_state
-        .exec(RequestOptions::new(), exec_request)
+        .execute(RequestOptions::new(), exec_request)
         .wait_drop_metadata()
         .unwrap();
 

@@ -68,25 +68,23 @@ where
     let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
-
     let base_key = Key::Account(address);
-    let account = builder.get_account(base_key).expect("should find account");
 
-    let mut uref_lookup = account.urefs_lookup().clone();
-    let known_urefs = {
-        let mut from_account =
-            execution::extract_access_rights_from_keys(uref_lookup.values().cloned());
-        let from_extra = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
+    let account = builder.get_account(address).expect("should find account");
 
-        from_account.extend(from_extra.into_iter());
+    let mut named_keys = account.named_keys().clone();
 
-        from_account
+    let access_rights = {
+        let mut ret = execution::extract_access_rights_from_keys(named_keys.values().cloned());
+        let extras = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
+        ret.extend(extras.into_iter());
+        ret
     };
 
     let context = RuntimeContext::new(
         Rc::clone(&tracking_copy),
-        &mut uref_lookup,
-        known_urefs,
+        &mut named_keys,
+        access_rights,
         arguments,
         BTreeSet::new(),
         &account,

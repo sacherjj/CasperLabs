@@ -8,7 +8,6 @@ import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -84,45 +83,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       case _                      => None
     }
 
-  def signature(d: Data, sig: protocol.Signature): Boolean =
-    signatureVerifiers(sig.algorithm).fold(false) { verify =>
-      verify(d, Signature(sig.sig.toByteArray), PublicKey(sig.publicKey.toByteArray))
+  def signature(d: Data, sig: consensus.Signature, key: PublicKey): Boolean =
+    signatureVerifiers(sig.sigAlgorithm).fold(false) { verify =>
+      verify(d, Signature(sig.sig.toByteArray), key)
     }
-
-  def approvedBlock(
-      a: ApprovedBlock,
-      requiredValidators: Set[PublicKeyBS]
-  ): F[Boolean] = {
-    val maybeSigData = for {
-      c     <- a.candidate
-      bytes = c.toByteArray
-    } yield Blake2b256.hash(bytes)
-
-    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
-
-    maybeSigData match {
-      case Some(sigData) =>
-        val validatedSigs =
-          (for {
-            s      <- a.sigs
-            verify <- signatureVerifiers(s.algorithm)
-            pk     = s.publicKey
-            if verify(sigData, Signature(s.sig.toByteArray), PublicKey(pk.toByteArray))
-          } yield pk).toSet
-
-        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
-          true.pure[F]
-        else
-          Log[F]
-            .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
-            .map(_ => false)
-
-      case None =>
-        Log[F]
-          .warn("Received invalid ApprovedBlock message not containing any candidate.")
-          .map(_ => false)
-    }
-  }
 
   /** Validate just the BlockSummary, assuming we don't have the block yet, or all its dependencies.
     * We can check that all the fields are present, the signature is fine, etc.
@@ -131,14 +95,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def blockSummary(
       summary: BlockSummary,
       chainId: String
-  ): F[Unit] = {
+  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable(
             formatOfFields(summary, treatAsGenesis),
             version(
               summary,
-              CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+              CasperLabsProtocolVersions[F].versionAt(_)
             ),
             if (!treatAsGenesis) blockSignature(summary) else true.pure[F]
           )
@@ -153,7 +117,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F]): F[Unit] = {
+  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -342,20 +306,21 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Validates whether block was built using correct protocol version.
   def version(
       b: BlockSummary,
-      m: BlockHeight => state.ProtocolVersion
+      m: BlockHeight => F[state.ProtocolVersion]
   ): F[Boolean] = {
     val blockVersion = b.getHeader.protocolVersion
     val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).value
-    if (blockVersion == version) {
-      true.pure[F]
-    } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"Received block version $blockVersion, expected version $version."
-        )
-      ) *> false.pure[F]
+    m(blockHeight).map(_.value).flatMap { version =>
+      if (blockVersion == version) {
+        true.pure[F]
+      } else {
+        Log[F].warn(
+          ignore(
+            b,
+            s"Received block version $blockVersion, expected version $version."
+          )
+        ) *> false.pure[F]
+      }
     }
   }
 

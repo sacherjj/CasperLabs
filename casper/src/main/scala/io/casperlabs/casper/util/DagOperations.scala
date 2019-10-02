@@ -6,6 +6,7 @@ import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentatio
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.shared.StreamT
 import simulacrum.typeclass
@@ -290,9 +291,6 @@ object DagOperations {
       } yield gca.get
     }
 
-  private def missingDependencyError[A: Show](a: A): Throwable =
-    new IllegalStateException(s"Missing ${Show[A].show(a)} dependency.")
-
   /** Computes Latest Common Ancestor of two elements.
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
@@ -338,12 +336,16 @@ object DagOperations {
       starters: List[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    import io.casperlabs.casper.util.implicits.{eqBlockMetadata, showBlockHash}
     def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
       el =>
         dag
           .lookup(f(el))
-          .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(f(el))))
+          .flatMap(
+            MonadThrowable[F].fromOption(
+              _,
+              new IllegalStateException(s"Missing ${PrettyPrinter.buildString(f(el))} dependency.")
+            )
+          )
 
     starters
       .traverse(lookup(identity))

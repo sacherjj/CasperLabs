@@ -52,14 +52,13 @@ fn should_run_purse_to_account_transfer() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -75,7 +74,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s
@@ -138,14 +137,13 @@ fn should_run_purse_to_account_transfer() {
     let transforms = transfer_result.builder().get_transforms();
     let transform = &transforms[1];
 
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
     let account_1 = transfer_result
         .builder()
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&account_1.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&account_1.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -158,7 +156,7 @@ fn should_run_purse_to_account_transfer() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&account_1.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&account_1.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s
@@ -219,14 +217,13 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let transform = &transforms[0];
 
     // Get transforms output for genesis account
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-    let genesis_account = transfer_result
+    let default_account = transfer_result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get genesis account");
 
     // Obtain main purse's balance
-    let final_balance = &transform[&genesis_account.urefs_lookup()["final_balance"].normalize()];
+    let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(Value::UInt512(balance)) = final_balance {
         balance
     } else {
@@ -244,7 +241,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
 
     // Get the `transfer_result` for a given account
     let transfer_result_transform =
-        &transform[&genesis_account.urefs_lookup()["transfer_result"].normalize()];
+        &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(Value::String(s)) = transfer_result_transform {
             s

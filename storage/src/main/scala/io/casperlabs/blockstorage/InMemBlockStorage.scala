@@ -6,7 +6,6 @@ import cats.implicits._
 import cats.{Apply, Monad}
 import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -17,8 +16,7 @@ class InMemBlockStorage[F[_]] private (
     implicit
     monadF: Monad[F],
     refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
-    reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
-    approvedBlockRef: Ref[F, Option[ApprovedBlock]]
+    reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]]
 ) extends BlockStorage[F] {
 
   def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
@@ -44,12 +42,6 @@ class InMemBlockStorage[F[_]] private (
         }
       }
 
-  def getApprovedBlock(): F[Option[ApprovedBlock]] =
-    approvedBlockRef.get
-
-  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-    approvedBlockRef.set(Some(block))
-
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     refF.get.map(_.get(blockHash).map(_._2))
 
@@ -72,7 +64,6 @@ object InMemBlockStorage {
       monadF: Monad[F],
       refF: Ref[F, Map[BlockHash, (BlockMsgWithTransform, BlockSummary)]],
       reverseIdxRefF: Ref[F, Map[DeployHash, Seq[BlockHash]]],
-      approvedBlockRef: Ref[F, Option[ApprovedBlock]],
       metricsF: Metrics[F]
   ): BlockStorage[F] =
     new InMemBlockStorage[F] with MeteredBlockStorage[F] {
@@ -88,9 +79,8 @@ object InMemBlockStorage {
 
   def empty[F[_]: Sync: Metrics] =
     for {
-      blockMapRef      <- Ref[F].of(Map.empty[BlockHash, (BlockMsgWithTransform, BlockSummary)])
-      deployMapRef     <- Ref[F].of(Map.empty[DeployHash, Seq[BlockHash]])
-      approvedBlockRef <- Ref.of[F, Option[ApprovedBlock]](None)
-      store            = create[F](Sync[F], blockMapRef, deployMapRef, approvedBlockRef, Metrics[F])
+      blockMapRef  <- Ref[F].of(Map.empty[BlockHash, (BlockMsgWithTransform, BlockSummary)])
+      deployMapRef <- Ref[F].of(Map.empty[DeployHash, Seq[BlockHash]])
+      store        = create[F](Sync[F], blockMapRef, deployMapRef, Metrics[F])
     } yield store
 }

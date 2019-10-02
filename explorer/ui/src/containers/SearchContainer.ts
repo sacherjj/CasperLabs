@@ -1,14 +1,12 @@
 import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import CasperService from '../services/CasperService';
+import { CasperService, decodeBase16, GrpcError } from 'casperlabs-sdk';
 import { CleanableFormData } from './FormData';
 import {
   BlockInfo,
   DeployInfo
-} from '../grpc/io/casperlabs/casper/consensus/info_pb';
-import { decodeBase16 } from '../lib/Conversions';
-import { GrpcError } from '../services/Errors';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { grpc } from '@improbable-eng/grpc-web';
 
 export enum Target {

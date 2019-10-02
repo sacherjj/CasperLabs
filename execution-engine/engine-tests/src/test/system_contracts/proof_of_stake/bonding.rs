@@ -39,7 +39,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -54,8 +54,6 @@ fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
 #[ignore]
 #[test]
 fn should_run_successful_bond_and_unbond() {
-    let genesis_account_key = Key::Account(DEFAULT_ACCOUNT_ADDR);
-
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
@@ -73,9 +71,9 @@ fn should_run_successful_bond_and_unbond() {
         .run_genesis(&genesis_config)
         .finish();
 
-    let genesis_account = result
+    let default_account = result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
@@ -119,7 +117,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
         GENESIS_ACCOUNT_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -161,8 +159,6 @@ fn should_run_successful_bond_and_unbond() {
         .commit()
         .finish();
 
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
-
     let exec_response = result
         .builder()
         .get_exec_response(0)
@@ -171,7 +167,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let account_1 = result
         .builder()
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
@@ -195,7 +191,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -254,7 +250,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     let lookup_key = format!(
         "v_{}_{}",
@@ -263,7 +259,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     // Account 1 is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 2b - Genesis unbonds by decreasing less than 50% (and is still in the
@@ -297,7 +293,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -365,7 +361,7 @@ fn should_run_successful_bond_and_unbond() {
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 isn't tracked anymore in the bonding queue
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 3b - Fully unbond account1 with Some(TOTAL_AMOUNT)
@@ -396,7 +392,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -421,7 +417,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     // Genesis is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Final checks on validator queue
@@ -431,7 +427,7 @@ fn should_run_successful_bond_and_unbond() {
     // suffix
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(|(key, _)| key.starts_with(&format!(
                 "v_{}",
@@ -442,7 +438,7 @@ fn should_run_successful_bond_and_unbond() {
     );
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(
                 |(key, _)| key.starts_with(&format!("v_{}", base16::encode_lower(&ACCOUNT_1_ADDR)))
@@ -453,7 +449,7 @@ fn should_run_successful_bond_and_unbond() {
     // only genesis validator is still in the queue
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(|(key, _)| key.starts_with("v_"))
             .count(),

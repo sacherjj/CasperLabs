@@ -4,7 +4,9 @@ use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
+use crate::support::test_support::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
@@ -15,7 +17,7 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_deploy_hash([1; 32])
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code("ee_601_regression.wasm", (U512::from(MAX_PAYMENT),))
@@ -23,7 +25,7 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
             .with_authorization_keys(&[genesis_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut builder = InMemoryWasmTestBuilder::new(engine_config);

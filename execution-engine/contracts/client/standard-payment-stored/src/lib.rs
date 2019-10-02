@@ -42,7 +42,7 @@ pub extern "C" fn pay() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let pointer = contract_api::store_function(PAY_FUNCTION_NAME, known_urefs);
-    contract_api::add_uref(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
+    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    let pointer = contract_api::store_function(PAY_FUNCTION_NAME, named_keys);
+    contract_api::put_key(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
 }

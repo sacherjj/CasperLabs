@@ -10,7 +10,6 @@ import io.casperlabs.blockstorage.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.blockstorage.InMemBlockStorage.emptyMapRef
 import io.casperlabs.blockstorage.blockImplicits.{blockBatchesGen, blockElementsGen}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.ipc._
 import io.casperlabs.casper.consensus.state.{Unit => SUnit, _}
@@ -195,10 +194,9 @@ class InMemBlockStorageTest extends BlockStorageTest {
     val test = for {
       refTask             <- emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)]
       deployHashesRefTask <- emptyMapRef[Task, Seq[BlockHash]]
-      approvedBlockRef    <- Ref[Task].of(none[ApprovedBlock])
       metrics             = new MetricsNOP[Task]()
       storage = InMemBlockStorage
-        .create[Task](Monad[Task], refTask, deployHashesRefTask, approvedBlockRef, metrics)
+        .create[Task](Monad[Task], refTask, deployHashesRefTask, metrics)
       _      <- storage.findBlockHash(_ => true).map(x => assert(x.isEmpty))
       result <- f(storage)
     } yield result
@@ -303,28 +301,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
     }
   }
 
-  "FileLMDBIndexBlockStorage" should "persist approved block on restart" in {
-    import io.casperlabs.casper.protocol.{BlockMessage, Signature}
-    withStorageLocation { blockStorageDataDir =>
-      val approvedBlock =
-        ApprovedBlock(
-          Some(ApprovedBlockCandidate(Some(BlockMessage()), 1)),
-          List(Signature(ByteString.EMPTY, "", ByteString.EMPTY))
-        )
-
-      for {
-        firstStorage        <- createBlockStorage(blockStorageDataDir)
-        _                   <- firstStorage.putApprovedBlock(approvedBlock)
-        _                   <- firstStorage.close()
-        secondStorage       <- createBlockStorage(blockStorageDataDir)
-        storedApprovedBlock <- secondStorage.getApprovedBlock()
-        _ = storedApprovedBlock shouldBe Some(
-          approvedBlock
-        )
-        _ <- secondStorage.close()
-      } yield ()
-    }
-  }
+  behavior of "FileLMDBIndexBlockStorage"
 
   it should "persist storage after checkpoint" in {
     forAll(blockElementsGen, minSize(10), sizeRange(10)) { blockStorageElements =>
@@ -397,9 +374,8 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
   it should "be able to clean storage and continue to work" in {
     forAll(blockBatchesGen, minSize(5), sizeRange(10)) { blockStorageBatches =>
       withStorageLocation { blockStorageDataDir =>
-        val blocks            = blockStorageBatches.flatten
-        val checkpointsDir    = blockStorageDataDir.resolve("checkpoints")
-        val approvedBlockPath = blockStorageDataDir.resolve("approved-block")
+        val blocks         = blockStorageBatches.flatten
+        val checkpointsDir = blockStorageDataDir.resolve("checkpoints")
         for {
           firstStorage <- createBlockStorage(blockStorageDataDir)
           _ <- blockStorageBatches.traverse_[Task, Unit](
@@ -413,9 +389,7 @@ class FileLMDBIndexBlockStorageTest extends BlockStorageTest {
                   firstStorage.get(block.blockHash).map(_ shouldBe Some(b))
               }
           _ <- firstStorage.findBlockHash(_ => true).map(_.isEmpty shouldBe blocks.isEmpty)
-          _ = approvedBlockPath.toFile.exists() shouldBe true
           _ <- firstStorage.clear()
-          _ = approvedBlockPath.toFile.exists() shouldBe false
           _ = checkpointsDir.toFile.list().size shouldBe 0
           _ <- firstStorage.findBlockHash(_ => true).map(_ shouldBe empty)
           _ <- blockStorageBatches.traverse_[Task, Unit](
