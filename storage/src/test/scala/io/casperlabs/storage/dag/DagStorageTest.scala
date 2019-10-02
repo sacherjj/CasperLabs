@@ -5,7 +5,12 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
-import io.casperlabs.storage.{ArbitraryStorageData, BlockMsgWithTransform, SQLiteFixture, SQLiteStorage}
+import io.casperlabs.storage.{
+  ArbitraryStorageData,
+  BlockMsgWithTransform,
+  SQLiteFixture,
+  SQLiteStorage
+}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Shrink

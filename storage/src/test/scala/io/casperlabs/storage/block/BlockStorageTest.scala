@@ -5,7 +5,12 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.storage.block.BlockStorage.BlockHash
-import io.casperlabs.storage.{ArbitraryStorageData, BlockMsgWithTransform, SQLiteFixture, SQLiteStorage}
+import io.casperlabs.storage.{
+  ArbitraryStorageData,
+  BlockMsgWithTransform,
+  SQLiteFixture,
+  SQLiteStorage
+}
 import monix.eval.Task
 import org.scalacheck._
 import org.scalactic.anyvals.PosInt

@@ -1,5 +1,6 @@
 package io.casperlabs.node.configuration
 
+/////// WARNING! Do not clean this imports, they needed for @scallop macro
 import java.nio.file.Path
 
 import cats._
@@ -70,9 +71,11 @@ private[configuration] final case class Options private (
 ) extends ScallopConf(arguments) {
   helpWidth(120)
   //Do not clean this imports, they needed for @scallop macro
-  import Options.Flag
+  import Converter._
   import cats.syntax.show._
   import io.casperlabs.comm.discovery.NodeUtils._
+  import io.casperlabs.comm.discovery.NodeUtils
+  import Options.Flag
 
   //Used in @scallop macro when it puts things into `field`
   private implicit def showList[T: Show]: Show[List[T]] = xs => xs.map(_.show).mkString(" ")

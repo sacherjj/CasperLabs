@@ -12,7 +12,7 @@ import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.{CasperState, InvalidBlock, validation}
+import io.casperlabs.casper.{validation, CasperState, InvalidBlock}
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.storage.block.BlockStorage

@@ -10,7 +10,10 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.finality.singlesweep.{FinalityDetector, FinalityDetectorBySingleSweepImpl}
+import io.casperlabs.casper.finality.singlesweep.{
+  FinalityDetector,
+  FinalityDetectorBySingleSweepImpl
+}
 import io.casperlabs.casper.helper.NoOpsCasperEffect
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil

@@ -9,10 +9,21 @@ import io.casperlabs.casper.HashSetCasperTest.{buildGenesis, createBonds}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.helper.{HashSetCasperTestNode, NoOpsCasperEffect, NoOpsLastFinalizedBlockHashContainer}
+import io.casperlabs.casper.helper.{
+  HashSetCasperTestNode,
+  NoOpsCasperEffect,
+  NoOpsLastFinalizedBlockHashContainer
+}
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
-import io.casperlabs.casper.util.comm.CasperPacketHandler.{ApprovedBlockReceivedHandler, BootstrapCasperHandler, CasperPacketHandlerImpl, CasperPacketHandlerInternal, GenesisValidatorHandler, StandaloneCasperHandler}
+import io.casperlabs.casper.util.comm.CasperPacketHandler.{
+  ApprovedBlockReceivedHandler,
+  BootstrapCasperHandler,
+  CasperPacketHandlerImpl,
+  CasperPacketHandlerInternal,
+  GenesisValidatorHandler,
+  StandaloneCasperHandler
+}
 import io.casperlabs.casper.util.comm.CasperPacketHandlerSpec._
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.catscontrib.ApplicativeError_

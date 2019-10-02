@@ -5,11 +5,11 @@ import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.temp.par.Par
-import cats.{Applicative, ApplicativeError, Defer, Id, Monad, Parallel, ~>}
+import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
-import io.casperlabs.casper.consensus.{Block, Bond, state}
+import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}

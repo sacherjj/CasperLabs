@@ -14,8 +14,16 @@ import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil, ExecutionEngineServiceStub}
-import io.casperlabs.casper.validation.Errors.{DeployHeaderError, DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.util.execengine.{
+  DeploysCheckpoint,
+  ExecEngineUtil,
+  ExecutionEngineServiceStub
+}
+import io.casperlabs.casper.validation.Errors.{
+  DeployHeaderError,
+  DropErrorWrapper,
+  ValidateErrorWrapper
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.PrivateKey

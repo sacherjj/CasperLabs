@@ -6,14 +6,14 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.state._
-import io.casperlabs.casper.consensus.{Block, state}
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
-import io.casperlabs.casper.{DeploySelection, consensus}
+import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
