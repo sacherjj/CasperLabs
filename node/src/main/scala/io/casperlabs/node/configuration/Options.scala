@@ -1,9 +1,9 @@
 package io.casperlabs.node.configuration
 
+/////// WARNING! Do not clean this imports, they needed for @scallop macro
 import java.nio.file.Path
 
 import cats._
-import cats.syntax._
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import io.casperlabs.comm.discovery.Node
@@ -124,7 +124,7 @@ private[configuration] final case class Options private (
   banner(
     """
       |Configuration file --config-file can contain tables
-      |[server], [grpc], [lmdb], [casper], [tls], [metrics], [influx] and [blockstorage].
+      |[server], [grpc], [casper], [tls], [metrics], [influx] and [blockstorage].
       |
       |CLI options match TOML keys and environment variables, example:
       |    --[prefix]-[key-name]=value e.g. --server-data-dir=/casperlabs
@@ -480,22 +480,6 @@ private[configuration] final case class Options private (
     @scallop
     val serverMaxNumOfConnections =
       gen[Int]("Maximum number of peers allowed to connect to the node.")
-
-    @scallop
-    val lmdbBlockStorageSize =
-      gen[Long]("Casper BlockStorage map size (in bytes).")
-
-    @scallop
-    val lmdbMaxDbs =
-      gen[Int]("LMDB max databases.")
-
-    @scallop
-    val lmdbMaxReaders =
-      gen[Int]("LMDB max readers.")
-
-    @scallop
-    val lmdbUseTls =
-      gen[Flag]("LMDB use TLS.")
 
     @scallop
     val blockstorageCacheMaxSizeBytes =

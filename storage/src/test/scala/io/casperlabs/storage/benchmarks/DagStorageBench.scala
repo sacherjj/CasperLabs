@@ -1,6 +1,5 @@
 package io.casperlabs.storage.benchmarks
 
-import io.casperlabs.storage.benchmarks.Init._
 import io.casperlabs.storage.benchmarks.StorageBenchSuite._
 import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
@@ -39,30 +38,4 @@ abstract class DagStorageBench {
         StorageBenchSuite.blocksIter.next()._2.blockMessage.get
       )
       .runSyncUnsafe()
-}
-
-class FileDagStorageWithLmdbBlockStorageBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(lmdbBlockStorage)
-}
-
-class FileDagStorageWithInMemBlockStorageBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(inMemBlockStorage)
-}
-
-class FileDagStorageWithFileLmdbIndexBlockStorageBench extends DagStorageBench {
-  override val dagStorage = fileDagStorage(fileLmdbIndexBlockStorage)
-}
-
-class IndexedDagStorageWithLmdbBlockStorageBench extends DagStorageBench {
-  override val dagStorage: DagStorage[Task] =
-    indexedDagStorage(
-      fileDagStorage(lmdbBlockStorage)
-    )
-}
-
-class IndexedDagStorageWithFileLmdbIndexBlockStorageBench extends DagStorageBench {
-  override val dagStorage: DagStorage[Task] =
-    indexedDagStorage(
-      fileDagStorage(fileLmdbIndexBlockStorage)
-    )
 }
