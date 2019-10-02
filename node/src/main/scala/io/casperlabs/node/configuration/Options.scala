@@ -264,6 +264,9 @@ private[configuration] final case class Options private (
     @scallop
     val casperAutoProposeCheckInterval =
       gen[FiniteDuration]("Time between proposal checks.")
+    @scallop
+    val casperAutoProposeBallotInterval =
+      gen[FiniteDuration]("Maximum time to allow before trying to propose a ballot or block.")
 
     @scallop
     val casperAutoProposeAccInterval =

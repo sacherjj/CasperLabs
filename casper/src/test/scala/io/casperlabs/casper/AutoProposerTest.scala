@@ -75,6 +75,32 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     } yield ()
   }
 
+  it should "propose a ballot if none of the thresholds are reached for a long time" in TestFixture(
+    ballotInterval = 1.seconds,
+    accInterval = 10.seconds,
+    accCount = 10
+  ) { _ => implicit casperRef => implicit deployBuffer =>
+    for {
+      casper <- MockMultiParentCasper[Task]
+      _      <- Timer[Task].sleep(1500.millis)
+      _      = casper.ballotCount shouldBe 1
+    } yield ()
+  }
+
+  it should "not propose a ballot if a block has been proposed" in TestFixture(
+    ballotInterval = 1.seconds,
+    accInterval = 500.millis,
+    accCount = 10
+  ) { _ => implicit casperRef => implicit deployBuffer =>
+    for {
+      casper <- MockMultiParentCasper[Task]
+      _      <- casper.deploy(sampleDeployData)
+      _      <- Timer[Task].sleep(1500.millis)
+      _      = casper.proposalCount shouldBe 1
+      _      = casper.ballotCount shouldBe 0
+    } yield ()
+  }
+
   it should "not propose if there are no new deploys" in TestFixture(
     accInterval = 1.second,
     accCount = 1
@@ -100,7 +126,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     accCount = 1
   ) { _ => implicit casperRef => implicit deployStorage =>
     val defectiveCasper = new MockMultiParentCasper[Task]() {
-      override def createBlock: Task[CreateBlockStatus] =
+      override def createMessage(canCreateBallot: Boolean): Task[CreateBlockStatus] =
         throw new RuntimeException("Oh no!")
     }
     for {
@@ -134,6 +160,7 @@ object AutoProposerTest {
   object TestFixture {
     def apply(
         checkInterval: FiniteDuration = DefaultCheckInterval,
+        ballotInterval: FiniteDuration = 1.minute, // Long enough that it won't affect tests unless set.
         accInterval: FiniteDuration,
         accCount: Int
     )(
@@ -147,6 +174,7 @@ object AutoProposerTest {
         blockApiLock                                    <- Resource.liftF(Semaphore[Task](1))
         proposer <- AutoProposer[Task](
                      checkInterval = checkInterval,
+                     ballotInterval = ballotInterval,
                      accInterval = accInterval,
                      accCount = accCount,
                      blockApiLock = blockApiLock
@@ -173,21 +201,25 @@ object AutoProposerTest {
       extends MultiParentCasper[F] {
 
     @volatile var proposalCount = 0
+    @volatile var ballotCount   = 0
 
     override def deploy(deployData: Deploy): F[Either[Throwable, Unit]] =
       DeployStorageWriter[F].addAsPending(List(deployData)) >> Sync[F].delay {
         Right(())
       }
 
-    override def createBlock: F[CreateBlockStatus] =
+    override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
       for {
         pending <- DeployStorageReader[F].readPending
         _       <- DeployStorageWriter[F].markAsProcessed(pending).whenA(pending.nonEmpty)
         _       <- Sync[F].delay(proposalCount += 1)
-      } yield {
         // Doesn't matter what we return in this test.
-        if (pending.nonEmpty) Created(Block()) else NoNewDeploys
-      }
+        result <- if (pending.nonEmpty)
+                   Created(Block()).pure[F]
+                 else if (canCreateBallot)
+                   Sync[F].delay(ballotCount += 1).as(Created(Block()))
+                 else NoNewDeploys.pure[F]
+      } yield result
 
     override def addBlock(block: Block): F[BlockStatus] = (Valid: BlockStatus).pure[F]
     override def contains(block: Block): F[Boolean]     = ???

@@ -108,6 +108,7 @@ class ConfigurationSpec
       standalone = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeBallotInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccCount = 1,
       maxBlockSizeBytes = 1

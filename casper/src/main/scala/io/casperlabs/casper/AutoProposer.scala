@@ -25,7 +25,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
   val accIntervalMillis    = accInterval.toMillis
   val ballotIntervalMillis = ballotInterval.toMillis
 
-  private def run(lastCreatedBlockTimestamp: Long): F[Unit] = {
+  private def run(lastProposeMillis: Long): F[Unit] = {
 
     def loop(
         // Deploys we tried to propose last time.
@@ -62,7 +62,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
           Log[F].info(
             s"Proposing a block or ballot after ${lastProposeMillis - startMillis} ms."
           ) *>
-            tryPropose(true) >> { hasProposed =>
+            tryPropose(true) >>= { hasProposed =>
             loop(deploys, 0, if (hasProposed) currentMillis else lastProposeMillis)
           }
 
@@ -71,7 +71,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
       }
     }
 
-    loop(Set.empty, 0, lastCreatedBlockTimestamp) onError {
+    loop(Set.empty, 0, lastProposeMillis) onError {
       case NonFatal(ex) =>
         Log[F].error(s"Auto-proposal stopped unexpectedly.", ex)
     }
@@ -79,7 +79,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 
   /** Try to propose a block or ballot. Return true if anything was created. */
   private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
-    BlockAPI.propose(blockApiLock).flatMap { blockHash =>
+    BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
       Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}").as(true)
     } handleErrorWith {
       case NonFatal(ex) =>
@@ -95,15 +95,18 @@ object AutoProposer {
       ballotInterval: FiniteDuration,
       accInterval: FiniteDuration,
       accCount: Int,
-      blockApiLock: Semaphore[F],
-      lastCreatedBlockTimestamp: Long
+      blockApiLock: Semaphore[F]
   ): Resource[F, AutoProposer[F]] =
     Resource[F, AutoProposer[F]] {
       for {
         ap <- Sync[F].delay(
                new AutoProposer(checkInterval, ballotInterval, accInterval, accCount, blockApiLock)
              )
-        fiber <- Concurrent[F].start(ap.run(lastCreatedBlockTimestamp))
+        // We could retrieve the time we last proposed a block from storage
+        // but it would likely be empty or older than the ballot interval
+        // and just add complexity to the startup.
+        start <- Time[F].currentMillis
+        fiber <- Concurrent[F].start(ap.run(start))
       } yield ap -> fiber.cancel
     }
 }

@@ -198,6 +198,9 @@ auto-propose-enabled = false
 # Time between proposal checks.
 auto-propose-check-interval = "1second"
 
+# Maximum time to allow before proposing a ballot or block.
+auto-propose-ballot-interval = "1minute"
+
 # Time to accumulate deploys before proposing.
 auto-propose-acc-interval = "5seconds"
 

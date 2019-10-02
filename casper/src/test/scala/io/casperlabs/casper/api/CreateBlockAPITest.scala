@@ -147,9 +147,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
-  override def createBlock: F[CreateBlockStatus] =
+  override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
     for {
-      result <- underlying.createBlock
+      result <- underlying.createMessage(canCreateBallot)
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 
