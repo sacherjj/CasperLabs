@@ -154,6 +154,7 @@ class CachingBlockStorageTest
 
   "CachingBlockStorage" should {
     "cache `contains`" in {
+      // 'contains' uses 'getæ internally in BlockStorage
       verifyCached("contains" :: "get" :: Nil, true) { store =>
         store.contains(_)
       }
