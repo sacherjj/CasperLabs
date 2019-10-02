@@ -58,29 +58,10 @@ fn should_upgrade_only_protocol_version() {
 
     assert!(upgrade_response.has_success(), "expected success");
 
-    let exec_request_call = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(MODIFIED_MINT_CALLER_CONTRACT_NAME, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(PAYMENT_AMOUNT),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
-
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(NEW_PROTOCOL_VERSION)
-            .build()
-    };
-
-    builder
-        .exec_with_exec_request(exec_request_call)
-        .expect_success()
-        .commit();
-
     let upgraded_wasm_costs = builder
         .get_engine_state()
         .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .expect("should have result")
         .expect("should have costs");
 
     assert_eq!(
@@ -133,7 +114,9 @@ fn should_upgrade_system_contract() {
             .build()
     };
 
-    builder.exec_with_exec_request(exec_request_call);
+    builder
+        .exec_with_exec_request(exec_request_call)
+        .expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];
@@ -195,6 +178,7 @@ fn should_upgrade_wasm_costs() {
     let upgraded_wasm_costs = builder
         .get_engine_state()
         .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .expect("should have result")
         .expect("should have upgraded costs");
 
     assert_eq!(
@@ -250,7 +234,9 @@ fn should_upgrade_system_contract_and_wasm_costs() {
             .build()
     };
 
-    builder.exec_with_exec_request(exec_request_call);
+    builder
+        .exec_with_exec_request(exec_request_call)
+        .expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];
@@ -285,6 +271,7 @@ fn should_upgrade_system_contract_and_wasm_costs() {
     let upgraded_wasm_costs = builder
         .get_engine_state()
         .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .expect("should have result")
         .expect("should have upgraded costs");
 
     assert_eq!(
@@ -296,8 +283,6 @@ fn should_upgrade_system_contract_and_wasm_costs() {
 #[ignore]
 #[test]
 fn should_not_downgrade() {
-    let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -318,25 +303,16 @@ fn should_not_downgrade() {
 
     assert!(upgrade_response.has_success(), "expected success");
 
-    let exec_request_call = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(MODIFIED_MINT_CALLER_CONTRACT_NAME, ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(PAYMENT_AMOUNT),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
+    let upgraded_wasm_costs = builder
+        .get_engine_state()
+        .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .expect("should have result")
+        .expect("should have costs");
 
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(NEW_PROTOCOL_VERSION)
-            .build()
-    };
-
-    builder
-        .exec_with_exec_request(exec_request_call)
-        .expect_success()
-        .commit();
+    assert_eq!(
+        *DEFAULT_WASM_COSTS, upgraded_wasm_costs,
+        "upgraded costs should equal original costs"
+    );
 
     let mut downgrade_request = {
         UpgradeRequestBuilder::new()

@@ -21,10 +21,11 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    ChainSpec_ActivationPoint, ChainSpec_UpgradePoint, CommitRequest, DeployCode, DeployItem,
-    DeployPayload, DeployResult, DeployResult_ExecutionResult, DeployResult_PreconditionFailure,
-    ExecuteRequest, ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash,
-    StoredContractName, StoredContractURef, UpgradeRequest, UpgradeResponse,
+    ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
+    CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
+    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
+    StoredContractURef, UpgradeRequest, UpgradeResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -300,7 +301,7 @@ pub struct UpgradeRequestBuilder {
     current_protocol_version: ProtocolVersion,
     new_protocol_version: ProtocolVersion,
     upgrade_installer: DeployCode,
-    new_costs: Option<WasmCosts>,
+    new_costs: Option<ChainSpec_CostTable_WasmCosts>,
     activation_point: ChainSpec_ActivationPoint,
 }
 
@@ -338,7 +339,18 @@ impl UpgradeRequestBuilder {
     }
 
     pub fn with_new_costs(mut self, wasm_costs: WasmCosts) -> Self {
-        self.new_costs = Some(wasm_costs);
+        let mut new_costs = ChainSpec_CostTable_WasmCosts::new();
+        new_costs.set_regular(wasm_costs.regular);
+        new_costs.set_opcodes_mul(wasm_costs.opcodes_mul);
+        new_costs.set_opcodes_div(wasm_costs.opcodes_div);
+        new_costs.set_mul(wasm_costs.mul);
+        new_costs.set_div(wasm_costs.div);
+        new_costs.set_grow_mem(wasm_costs.grow_mem);
+        new_costs.set_initial_mem(wasm_costs.initial_mem);
+        new_costs.set_max_stack_height(wasm_costs.max_stack_height);
+        new_costs.set_mem(wasm_costs.mem);
+        new_costs.set_memcpy(wasm_costs.memcpy);
+        self.new_costs = Some(new_costs);
         self
     }
 
@@ -356,8 +368,7 @@ impl UpgradeRequestBuilder {
         upgrade_point.set_activation_point(self.activation_point);
         match self.new_costs {
             None => {}
-            Some(wasm_costs) => {
-                let new_costs = wasm_costs.into();
+            Some(new_costs) => {
                 let mut cost_table =
                     engine_grpc_server::engine_server::ipc::ChainSpec_CostTable::new();
                 cost_table.set_wasm(new_costs);

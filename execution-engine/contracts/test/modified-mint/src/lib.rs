@@ -6,7 +6,7 @@ extern crate alloc;
 extern crate contract_ffi;
 extern crate mint_token;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 
 use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::system_contracts::mint::error::Error;
@@ -15,6 +15,8 @@ use contract_ffi::value::U512;
 use mint_token::internal_purse_id::{DepositId, WithdrawId};
 use mint_token::mint::Mint;
 use mint_token::CLMint;
+
+const VERSION: &str = "1.1.0";
 
 pub fn delegate() {
     let mint = CLMint;
@@ -101,7 +103,7 @@ pub fn delegate() {
             contract_api::ret(&transfer_result, &vec![]);
         }
         "version" => {
-            contract_api::ret(&"1.1.0", &vec![]);
+            contract_api::ret(&VERSION.to_string(), &vec![]);
         }
 
         _ => panic!("Unknown method name!"),

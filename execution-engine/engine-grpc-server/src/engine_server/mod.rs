@@ -169,7 +169,7 @@ where
         let blocktime = BlockTime(exec_request.get_block_time());
 
         // TODO: don't unwrap
-        let wasm_costs = self.wasm_costs(protocol_version).unwrap();
+        let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
 
         let deploys = exec_request.get_deploys();
 

@@ -163,10 +163,6 @@ pub fn delegate() {
             let transfer_result = mint.transfer(source, target, amount);
             contract_api::ret(&transfer_result, &vec![]);
         }
-        "version" => {
-            contract_api::ret(&"1.0.0", &vec![]);
-        }
-
         _ => panic!("Unknown method name!"),
     }
 }

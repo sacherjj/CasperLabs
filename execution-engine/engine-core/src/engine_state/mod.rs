@@ -84,10 +84,14 @@ where
         &self.config
     }
 
-    pub fn wasm_costs(&self, protocol_version: ProtocolVersion) -> Option<WasmCosts> {
+    pub fn wasm_costs(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<WasmCosts>, Error> {
         match self.state.get_protocol_data(protocol_version) {
-            Ok(Some(protocol_data)) => Some(*protocol_data.wasm_costs()),
-            _ => None,
+            Ok(Some(protocol_data)) => Ok(Some(*protocol_data.wasm_costs())),
+            Err(error) => Err(Error::ExecError(error.into())),
+            _ => Ok(None),
         }
     }
 
@@ -470,25 +474,19 @@ where
         let current_protocol_data = match self.state.get_protocol_data(current_protocol_version) {
             Ok(Some(protocol_data)) => protocol_data,
             Ok(None) => {
-                return Err(Error::InvalidProtocolVersion {
-                    protocol_version: current_protocol_version,
-                });
+                return Err(Error::InvalidProtocolVersion(current_protocol_version));
             }
             Err(error) => {
                 return Err(Error::ExecError(error.into()));
             }
         };
 
-        // 3.1.1.1.1.3 activation point is not currently used by EE but possible future use...
-        let _activation_point = upgrade_config.activation_point();
-
+        // 3.1.1.1.1.3 activation point is not currently used by EE; skipping
         // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
         let new_protocol_version = upgrade_config.new_protocol_version();
         // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
         if new_protocol_version.value() != current_protocol_version.value() + 1 {
-            return Err(Error::InvalidProtocolVersion {
-                protocol_version: new_protocol_version,
-            });
+            return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
         let new_wasm_costs = match upgrade_config.wasm_costs() {
@@ -546,9 +544,11 @@ where
             );
 
             let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-
-            let mut authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-            authorization_keys.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+            let authorization_keys = {
+                let mut ret = BTreeSet::new();
+                ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                ret
+            };
 
             // TODO: do we need blocktime on the request?
             let blocktime = BlockTime::default();
@@ -1195,7 +1195,7 @@ where
     {
         let protocol_data = match self.state.get_protocol_data(protocol_version)? {
             Some(protocol_data) => protocol_data,
-            None => return Err(Error::InvalidProtocolVersion { protocol_version }),
+            None => return Err(Error::InvalidProtocolVersion(protocol_version)),
         };
 
         let proof_of_stake = {

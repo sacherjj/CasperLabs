@@ -86,6 +86,8 @@ pub enum Error {
     UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
+    ///
+    NoAccessRights,
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
@@ -108,6 +110,7 @@ impl From<Error> for u32 {
             Error::InvalidArgument => 12,
             Error::UpgradeContractAtURef => 13,
             Error::Transfer => 14,
+            Error::NoAccessRights => 15,
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
     }
@@ -130,6 +133,7 @@ impl Debug for Error {
             Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
+            Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
         write!(f, " [{}]", u32::from(*self))
@@ -160,6 +164,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         12 => Err(Error::InvalidArgument),
         13 => Err(Error::UpgradeContractAtURef),
         14 => Err(Error::Transfer),
+        15 => Err(Error::NoAccessRights),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -734,7 +739,7 @@ fn get_system_contract(name: &str) -> ContractPointer {
 
     if let Key::URef(uref) = key {
         let reference =
-            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::UnexpectedKeyVariant.into()));
+            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights.into()));
         ContractPointer::URef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant.into())

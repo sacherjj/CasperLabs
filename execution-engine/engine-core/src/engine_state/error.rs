@@ -15,7 +15,7 @@ pub enum Error {
     #[fail(display = "Invalid public key length: expected {}, actual {}", _0, _1)]
     InvalidPublicKeyLength { expected: usize, actual: usize },
     #[fail(display = "Invalid protocol version: {}", _0)]
-    InvalidProtocolVersion { protocol_version: ProtocolVersion },
+    InvalidProtocolVersion(ProtocolVersion),
     #[fail(display = "Wasm preprocessing error: {:?}", _0)]
     WasmPreprocessingError(engine_wasm_prep::PreprocessingError),
     #[fail(display = "Wasm serialization error: {:?}", _0)]
