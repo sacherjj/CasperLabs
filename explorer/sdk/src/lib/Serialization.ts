@@ -1,9 +1,10 @@
+import { ByteArray } from '../index';
 
 // Functions to convert data to the FFI
 
 type Serializer<T> = (arg: T) => ByteArray;
 
-const Size: Serializer<number> = (size) => {
+const Size: Serializer<number> = size => {
   const buffer = Buffer.alloc(4);
   buffer.writeInt32LE(size, 0);
   return buffer;
@@ -14,7 +15,7 @@ const Size: Serializer<number> = (size) => {
 // 2) your array of bytes
 //
 // So for `[1,2,3,4,5,6]` it serializes to`[6, 0, 0, 0, 1, 2, 3, 4, 5, 6]`
-export const ByteArrayArg: Serializer<ByteArray> = (bytes) => {
+export const ByteArrayArg: Serializer<ByteArray> = bytes => {
   return Buffer.concat([Size(bytes.length), bytes]);
 };
 
@@ -25,7 +26,7 @@ export const ByteArrayArg: Serializer<ByteArray> = (bytes) => {
 // [32, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 export const PublicKeyArg = ByteArrayArg;
 
-export const UInt64Arg: Serializer<bigint> = (value) => {
+export const UInt64Arg: Serializer<bigint> = value => {
   const u64Buffer = Buffer.alloc(8);
   u64Buffer.writeBigUInt64LE(value, 0);
   return u64Buffer;

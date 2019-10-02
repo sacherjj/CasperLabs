@@ -1,25 +1,26 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { CasperService as GrpcCasperService } from '../grpc/io/casperlabs/node/api/casper_pb_service';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import {
-  DeployInfo,
-  BlockInfo
-} from '../grpc/io/casperlabs/casper/consensus/info_pb';
+  BlockInfo,
+  DeployInfo
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import {
-  GetDeployInfoRequest,
-  StreamBlockInfosRequest,
-  StateQuery,
-  GetBlockStateRequest,
+  Key,
+  Value as StateValue
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import {
   GetBlockInfoRequest,
-  StreamBlockDeploysRequest
-} from '../grpc/io/casperlabs/node/api/casper_pb';
+  GetBlockStateRequest,
+  GetDeployInfoRequest,
+  StateQuery,
+  StreamBlockDeploysRequest,
+  StreamBlockInfosRequest
+} from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
+import { CasperService as GrpcCasperService } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb_service';
+import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
-import { GrpcError } from './Errors';
-import {
-  Value as StateValue,
-  Key
-} from '../grpc/io/casperlabs/casper/consensus/state_pb';
 import { ByteArrayArg } from '../lib/Serialization';
-import { Block } from '../grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { GrpcError } from './Errors';
 
 export default class CasperService {
   constructor(
@@ -35,7 +36,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetDeployInfo, {
         host: this.url,
-        request: request,
+        request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as DeployInfo);
@@ -62,7 +63,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetBlockInfo, {
         host: this.url,
-        request: request,
+        request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as BlockInfo);
@@ -80,11 +81,11 @@ export default class CasperService {
       request.setDepth(depth);
       request.setMaxRank(maxRank || 0);
 
-      let blocks: BlockInfo[] = [];
+      const blocks: BlockInfo[] = [];
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
-        request: request,
+        request,
         onMessage: msg => {
           blocks.push(msg as BlockInfo);
         },
@@ -99,16 +100,18 @@ export default class CasperService {
     });
   }
 
-  getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
+  getBlockDeploys(
+    blockHash: ByteArray
+  ): Promise<Block.ProcessedDeploy[]> {
     return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
       const request = new StreamBlockDeploysRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
 
-      let deploys: Block.ProcessedDeploy[] = [];
+      const deploys: Block.ProcessedDeploy[] = [];
 
       grpc.invoke(GrpcCasperService.StreamBlockDeploys, {
         host: this.url,
-        request: request,
+        request,
         onMessage: msg => {
           deploys.push(msg as Block.ProcessedDeploy);
         },
@@ -134,7 +137,7 @@ export default class CasperService {
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
-        request: request,
+        request,
         onMessage: msg => {
           if (!resolved) {
             resolved = true;
@@ -158,7 +161,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetBlockState, {
         host: this.url,
-        request: request,
+        request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as StateValue);

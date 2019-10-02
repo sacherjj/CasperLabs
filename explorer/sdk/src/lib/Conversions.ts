@@ -1,8 +1,9 @@
 import { decodeBase64 } from 'tweetnacl-util';
-
-export { encodeBase64, decodeBase64 } from 'tweetnacl-util';
+import { ByteArray } from '../index';
 
 // https://nodejs.org/api/buffer.html
+
+export {encodeBase64, decodeBase64} from 'tweetnacl-util';
 
 export function base64to16(base64: string): string {
   return encodeBase16(decodeBase64(base64));
