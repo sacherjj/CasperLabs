@@ -13,14 +13,11 @@ import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.Utils._
-import io.casperlabs.storage.block._
-import org.scalacheck.ScalacheckShapeless._
 import org.scalacheck.Shrink
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.concurrent.duration._
-import scala.io.Source
 
 class ConfigurationSpec
     extends FunSuite
@@ -134,13 +131,6 @@ class ConfigurationSpec
       apiCertificate = Paths.get("/tmp/test.api.crt"),
       apiKey = Paths.get("/tmp/test.api.key")
     )
-    val lmdb = LMDBBlockStorage.Config(
-      dir = Paths.get("/tmp/lmdb-block-storage"),
-      blockStorageSize = 1L,
-      maxDbs = 1,
-      maxReaders = 1,
-      useTls = false
-    )
     val blockStorage = Configuration.BlockStorage(
       cacheMaxSizeBytes = 1
     )
@@ -164,7 +154,6 @@ class ConfigurationSpec
       grpcServer,
       tls,
       casper,
-      lmdb,
       blockStorage,
       kamonSettings,
       influx.some
@@ -265,7 +254,6 @@ class ConfigurationSpec
         expected.grpc shouldEqual result.grpc
         expected.tls shouldEqual result.tls
         expected.casper shouldEqual result.casper
-        expected.lmdb shouldEqual result.lmdb
         expected.blockstorage shouldEqual result.blockstorage
         expected.metrics shouldEqual result.metrics
     }
@@ -389,10 +377,7 @@ class ConfigurationSpec
       .toList
 
   def toEnvVars(conf: Configuration): Map[String, String] = {
-    val mapper = (_: String).replace(" ", "") match {
-      case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
-      case x                                => x
-    }
+    val mapper = (_: String).replace(" ", "")
 
     reduce(conf, Map.empty[String, String])({
       case n: Node => mapper(n.show)

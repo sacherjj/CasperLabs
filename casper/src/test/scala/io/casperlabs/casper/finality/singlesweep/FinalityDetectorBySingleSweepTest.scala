@@ -3,11 +3,12 @@ package io.casperlabs.casper.finality.singlesweep
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

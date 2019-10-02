@@ -1,30 +1,17 @@
 package io.casperlabs.storage.benchmarks
 
-import java.nio.file.Files.createTempDirectory
-import java.nio.file.Paths
-import java.util.{Properties, UUID}
+import java.util.Properties
 
-import cats.Monad
-import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
-import cats.implicits.none
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.Key
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage.BlockHash
-import io.casperlabs.storage.block.{
-  BlockStorage,
-  FileLMDBIndexBlockStorage,
-  InMemBlockStorage,
-  LMDBBlockStorage
-}
-import io.casperlabs.storage.dag.{DagStorage, FileDagStorage, IndexedDagStorage}
+import io.casperlabs.storage.dag.{DagStorage, IndexedDagStorage}
 import io.casperlabs.{metrics, shared}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -159,57 +146,6 @@ object StorageBenchSuite {
 }
 
 object Init {
-  import StorageBenchSuite._
-
-  def createPath(path: String) =
-    Paths.get(s"/tmp/$path-${UUID.randomUUID()}")
-
-  def lmdbBlockStorage = LMDBBlockStorage.create[Task](
-    LMDBBlockStorage.Config(
-      dir = createPath("lmdb_block_storage"),
-      blockStorageSize = 1073741824L * 12,
-      maxDbs = 1,
-      maxReaders = 126,
-      useTls = false
-    )
-  )
-
-  def fileLmdbIndexBlockStorage =
-    FileLMDBIndexBlockStorage
-      .create[Task](
-        FileLMDBIndexBlockStorage.Config(
-          storagePath = createPath("file_lmdb_storage"),
-          indexPath = createPath("file_lmdb_index"),
-          approvedBlockPath = createPath("file_lmdb_approvedBlock"),
-          checkpointsDirPath = createPath("file_lmdb_checkpoints"),
-          mapSize = 1073741824L * 12
-        )
-      )
-      .runSyncUnsafe()
-      .right
-      .get
-
-  def inMemBlockStorage = InMemBlockStorage.create[Task](
-    Monad[Task],
-    InMemBlockStorage.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
-    InMemBlockStorage.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
-    Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
-    metricsNop
-  )
-
-  def fileDagStorage(blockStorage: BlockStorage[Task]) =
-    FileDagStorage
-      .create(
-        FileDagStorage.Config(
-          dir = createTempDirectory("dag_file_storage")
-        )
-      )(
-        Concurrent[Task],
-        logNop,
-        blockStorage,
-        metricsNop
-      )
-      .runSyncUnsafe()
 
   def indexedDagStorage(dagStorage: DagStorage[Task]) =
     IndexedDagStorage.create[Task](dagStorage).runSyncUnsafe()

@@ -10,11 +10,8 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
-import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
+import io.casperlabs.casper.finality.singlesweep.{FinalityDetector, FinalityDetectorBySingleSweepImpl}
+import io.casperlabs.casper.helper.NoOpsCasperEffect
 import io.casperlabs.casper.protocol.BlockQuery
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.Fs2Compiler
@@ -26,6 +23,7 @@ import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

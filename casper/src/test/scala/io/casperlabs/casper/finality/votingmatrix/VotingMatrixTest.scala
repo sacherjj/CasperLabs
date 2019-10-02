@@ -9,8 +9,8 @@ import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
 import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
+import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
@@ -19,6 +19,7 @@ import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 

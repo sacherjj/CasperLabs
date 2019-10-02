@@ -5,15 +5,16 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.FinalityDetectorUtil
+import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.storage.dag._
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 

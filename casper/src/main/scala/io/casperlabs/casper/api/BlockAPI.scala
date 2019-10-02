@@ -1,24 +1,17 @@
 package io.casperlabs.casper.api
 
-import cats.{Functor, Monad}
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
+import cats.{Functor, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.protocol.{
-  BlockInfoWithoutTuplespace,
-  BlockQuery,
-  BlockQueryResponse,
-  DeployServiceResponse,
-  BlockInfo => BlockInfoWithTuplespace
-}
+import io.casperlabs.casper.protocol.{BlockInfoWithoutTuplespace, BlockQuery, BlockQueryResponse, DeployServiceResponse, BlockInfo => BlockInfoWithTuplespace}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{protocol, BlockStatus => _, _}
@@ -321,7 +314,6 @@ object BlockAPI {
   def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
       deployHashBase16: String
   ): F[Option[DeployInfo]] =
-    // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {

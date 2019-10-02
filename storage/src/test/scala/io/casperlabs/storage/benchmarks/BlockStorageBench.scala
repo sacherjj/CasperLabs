@@ -70,15 +70,3 @@ abstract class BlockStorageBench {
   def containsInserted() =
     blockStorage.contains(inserted.next()).runSyncUnsafe()
 }
-
-class InMemBench extends BlockStorageBench {
-  override val blockStorage = Init.inMemBlockStorage
-}
-
-class LMDBBench extends BlockStorageBench {
-  override val blockStorage = Init.lmdbBlockStorage
-}
-
-class FileLMDBIndexBench extends BlockStorageBench {
-  override val blockStorage = Init.fileLmdbIndexBlockStorage
-}

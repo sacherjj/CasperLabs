@@ -361,7 +361,6 @@ lazy val storage = (project in file("storage"))
     name := "storage",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-      lmdbjava,
       doobieCore,
       doobieHikari,
       flyway,

@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.ArbitraryStorageData
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
@@ -163,7 +164,7 @@ object CachingBlockStorageTest {
 
       val test = {
         for {
-          underlying <- InMemBlockStorage.empty[Task]
+          underlying <- StorageFixture.createStorages[Task].map(_._1)
           cache      <- CachingBlockStorage[Task](underlying, maxSizeBytes)
           _          <- f(TestFixture(underlying, cache, metrics))
         } yield ()

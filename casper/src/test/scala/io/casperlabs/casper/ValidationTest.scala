@@ -10,20 +10,12 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
-import io.casperlabs.casper.util.execengine.{
-  DeploysCheckpoint,
-  ExecEngineUtil,
-  ExecutionEngineServiceStub
-}
-import io.casperlabs.casper.validation.Errors.{
-  DeployHeaderError,
-  DropErrorWrapper,
-  ValidateErrorWrapper
-}
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil, ExecutionEngineServiceStub}
+import io.casperlabs.casper.validation.Errors.{DeployHeaderError, DropErrorWrapper, ValidateErrorWrapper}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.PrivateKey
@@ -37,12 +29,13 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
+import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
