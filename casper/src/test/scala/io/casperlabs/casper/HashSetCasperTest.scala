@@ -946,7 +946,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                     <- checkLastFinalizedBlock(nodes(0), block1)
       pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(0)
+      _                     = pendingOrProcessedNum should be(1)
 
       Created(block7) <- nodes(0).casperEff
                           .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
@@ -956,7 +956,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                     <- checkLastFinalizedBlock(nodes(0), block2)
       pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(0) // deploys contained in block 4 and block 7
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block8) <- nodes(1).casperEff
                           .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -966,7 +966,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                     <- checkLastFinalizedBlock(nodes(0), block3)
       pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(0) // deploys contained in block 4 and block 7
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
@@ -976,7 +976,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                     <- checkLastFinalizedBlock(nodes(0), block4)
       pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(0) // deploys contained in block 7
+      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
       Created(block10) <- nodes(0).casperEff
                            .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
@@ -986,7 +986,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _                     <- checkLastFinalizedBlock(nodes(0), block5)
       pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(0) // deploys contained in block 7 and block 10
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1028,7 +1028,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield assert(!block.body.get.deploys.head.isError)
   }
 
-  ignore should "put orphaned deploys back into the pending deploy buffer" in effectTest {
+  it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
     for {
       nodes <- networkEff(
                 validatorKeys.take(2),

@@ -238,7 +238,18 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                         }
                         .map(_.flatten.distinct)
 
-        finalizedBlockHashes <- blockHashes.filterA(isFinalized(dag, _))
+        lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
+        lastFinalizedBlock     <- dag.lookup(lastFinalizedBlockHash).map(_.get)
+
+        finalizedBlockHashes <- blockHashes.filterA { blockHash =>
+                                 // NODE-930. To be replaced when we implement finality streams.
+                                 dag.lookup(blockHash) map {
+                                   // This is just a mock finality formula that still allows some
+                                   // chance for orhpans to be re-queued in blocks ahead of the
+                                   // last finalized blocks.
+                                   _.fold(false)(_.rank <= lastFinalizedBlock.rank)
+                                 }
+                               }
 
         _ <- finalizedBlockHashes.traverse { blockHash =>
               removeDeploysInBlock(blockHash) flatMap { removed =>
@@ -252,10 +263,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             }
       } yield ()
     }
-
-  // NODE-930. To be replaced when we implement finality streams
-  private def isFinalized(dag: DagRepresentation[F], blockHash: BlockHash): F[Boolean] =
-    true.pure[F]
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock(blockHash: BlockHash): F[Long] =
