@@ -237,8 +237,8 @@ class DeployBufferImpl[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   private def readHashesAndHeadersByStatus(
       status: Int
   ): fs2.Stream[F, (ByteString, Deploy.Header)] =
-    sql"""|SELECT hash, header FROM deploy_headers
-          |INNER JOIN buffered_deploys bd on deploy_headers.hash = bd.hash
+    sql"""|SELECT dh.hash, dh.header FROM deploy_headers dh
+          |INNER JOIN buffered_deploys bd on dh.hash = bd.hash
           |WHERE bd.status=$status""".stripMargin
       .query[(ByteString, Deploy.Header)]
       .streamWithChunkSize(chunkSize)
