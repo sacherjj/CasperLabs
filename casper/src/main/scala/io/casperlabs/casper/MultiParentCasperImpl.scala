@@ -238,8 +238,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                         }
                         .map(_.flatten.distinct)
 
-        lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-        lastFinalizedBlock     <- dag.lookup(lastFinalizedBlockHash).map(_.get)
+        lastFinalizedBlock <- (LastFinalizedBlockHashContainer[F].get >>= dag.lookup).map(_.get)
 
         finalizedBlockHashes <- blockHashes.filterA { blockHash =>
                                  // NODE-930. To be replaced when we implement finality streams.
