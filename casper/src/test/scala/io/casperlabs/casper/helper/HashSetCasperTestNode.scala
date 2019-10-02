@@ -32,11 +32,11 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
 
+import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */

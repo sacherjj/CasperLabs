@@ -5,8 +5,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.helper.BlockGenerator
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
@@ -14,7 +14,6 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Cell
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
-import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

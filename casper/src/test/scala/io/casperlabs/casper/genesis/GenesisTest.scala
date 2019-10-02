@@ -7,7 +7,7 @@ import java.util.Base64
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.HashSetCasperTestNode
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
@@ -18,7 +18,6 @@ import io.casperlabs.shared.{FilesAPI, Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.helpers.StorageFixture
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 

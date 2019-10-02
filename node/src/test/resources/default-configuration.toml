@@ -1,4 +1,4 @@
-# Do not support:
+# Does not support:
 #   * Nested tables
 #   * Arrays
 
@@ -40,12 +40,6 @@ download-retry-backoff-factor = 1.0
 relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
-
-[lmdb]
-block-storage-size = 1
-max-dbs = 1
-max-readers = 1
-use-tls = false
 
 [grpc]
 socket = "/tmp/test"

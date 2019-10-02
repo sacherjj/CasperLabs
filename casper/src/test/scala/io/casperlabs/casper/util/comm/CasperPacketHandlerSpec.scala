@@ -12,7 +12,8 @@ import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.helper.{
   HashSetCasperTestNode,
   NoOpsCasperEffect,
-  NoOpsLastFinalizedBlockHashContainer
+  NoOpsLastFinalizedBlockHashContainer,
+  StorageFixture
 }
 import io.casperlabs.casper.protocol.{NoApprovedBlockAvailable, _}
 import io.casperlabs.casper.util.TestTime
@@ -46,7 +47,6 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{DeployStorage, MockDeployStorage}
-import io.casperlabs.storage.helpers.StorageFixture
 import monix.catnap.Semaphore
 import monix.eval.Task
 import monix.execution.Scheduler

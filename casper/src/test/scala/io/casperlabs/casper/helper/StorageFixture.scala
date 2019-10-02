@@ -1,4 +1,4 @@
-package io.casperlabs.storage.helpers
+package io.casperlabs.casper.helper
 
 import java.nio.file.{Files, Path}
 
