@@ -1,10 +1,11 @@
 # Casper Explorer
 
 The purpose of the explorer is to help users interact with the blockchain:
-* Sign up to participate in devnet
-* Create accounts (public/private key pairs)
-* Ask the faucet for tokens on devnet
-* Explore the block DAG
+
+- Sign up to participate in devnet
+- Create accounts (public/private key pairs)
+- Ask the faucet for tokens on devnet
+- Explore the block DAG
 
 ## Build
 
@@ -76,6 +77,7 @@ Done.
 ```
 
 You can also confirm it in the node's logs in `hack/docker`:
+
 ```console
 $ docker logs --tail 1 node-0
 18:13:45.264 [grpc-default-executor-2] INFO  i.c.casper.MultiParentCasperImpl - Received Deploy 7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734 (f78786150599b50a1353476f5e2f12cd13c214e512096741c48e7ec63639af56 / 1)
@@ -207,7 +209,6 @@ unit {
 Alas, that's not the balance. We'll have to figure out how to get there,
 apparently there's an indirection from the purse to a local address we
 can't easily see.
-
 
 ### Create an account
 

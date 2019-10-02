@@ -1,9 +1,14 @@
-import blake from "blakejs";
-import fs from "fs";
-import { Message } from "google-protobuf";
-import * as nacl from "tweetnacl-ts";
-import { Approval, Deploy, Signature } from "../grpc/io/casperlabs/casper/consensus/consensus_pb";
-import { Args, BigIntValue, BytesValue, LongValue } from "./Args";
+import blake from 'blakejs';
+import {
+  Approval,
+  Deploy,
+  Signature
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import * as fs from 'fs';
+import { Message } from 'google-protobuf';
+import * as nacl from 'tweetnacl-ts';
+import { ByteArray } from '../index';
+import { Args, BigIntValue, BytesValue, LongValue } from './Args';
 
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
@@ -29,15 +34,15 @@ export class Contract {
     args: Deploy.Arg[],
     paymentAmount: bigint,
     accountPublicKey: ByteArray,
-    signingKeyPair: nacl.SignKeyPair): Deploy {
-
+    signingKeyPair: nacl.SignKeyPair
+  ): Deploy {
     const session = new Deploy.Code();
     session.setWasm(this.sessionWasm);
     session.setArgsList(args);
 
     const payment = new Deploy.Code();
     payment.setWasm(this.paymentWasm);
-    payment.setArgsList(Args(["amount", BigIntValue(paymentAmount)]));
+    payment.setArgsList(Args(['amount', BigIntValue(paymentAmount)]));
 
     const body = new Deploy.Body();
     body.setSession(session);
@@ -54,8 +59,10 @@ export class Contract {
     deploy.setDeployHash(protoHash(header));
 
     const signature = new Signature();
-    signature.setSigAlgorithm("ed25519");
-    signature.setSig(nacl.sign_detached(deploy.getDeployHash_asU8(), signingKeyPair.secretKey));
+    signature.setSigAlgorithm('ed25519');
+    signature.setSig(
+      nacl.sign_detached(deploy.getDeployHash_asU8(), signingKeyPair.secretKey)
+    );
 
     const approval = new Approval();
     approval.setApproverPublicKey(signingKeyPair.publicKey);
@@ -69,34 +76,35 @@ export class Contract {
 
 /** Always use the same account for deploying and signing. */
 export class BoundContract {
-
   constructor(
     private contract: Contract,
-    private contractKeyPair: nacl.SignKeyPair) {
-  }
+    private contractKeyPair: nacl.SignKeyPair
+  ) {}
 
   public deploy(args: Deploy.Arg[], paymentAmount: bigint): Deploy {
     return this.contract.deploy(
       args,
       paymentAmount,
       this.contractKeyPair.publicKey,
-      this.contractKeyPair);
+      this.contractKeyPair
+    );
   }
 }
 
 export class Faucet {
   public static args(accountPublicKey: ByteArray): Deploy.Arg[] {
-    return Args(
-      ["account", BytesValue(accountPublicKey)]
-    );
+    return Args(['account', BytesValue(accountPublicKey)]);
   }
 }
 
 export class Transfer {
-  public static args(accountPublicKey: ByteArray, amount: bigint): Deploy.Arg[] {
+  public static args(
+    accountPublicKey: ByteArray,
+    amount: bigint
+  ): Deploy.Arg[] {
     return Args(
-      ["account", BytesValue(accountPublicKey)],
-      ["amount", LongValue(amount)]
+      ['account', BytesValue(accountPublicKey)],
+      ['amount', LongValue(amount)]
     );
   }
 }
