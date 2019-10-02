@@ -36,8 +36,6 @@ fn get_upgraded_wasm_costs() -> WasmCosts {
 #[ignore]
 #[test]
 fn should_upgrade_only_protocol_version() {
-    let account_1_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
