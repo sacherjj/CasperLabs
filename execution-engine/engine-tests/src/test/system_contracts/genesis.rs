@@ -73,15 +73,15 @@ fn should_run_genesis_with_chainspec() {
     builder.run_genesis(&genesis_config);
 
     let system_account = builder
-        .get_account(Key::Account(SYSTEM_ACCOUNT_ADDR))
+        .get_account(SYSTEM_ACCOUNT_ADDR)
         .expect("system account should exist");
 
     let account_1 = builder
-        .get_account(Key::Account(ACCOUNT_1_ADDR))
+        .get_account(ACCOUNT_1_ADDR)
         .expect("account 1 should exist");
 
     let account_2 = builder
-        .get_account(Key::Account(ACCOUNT_2_ADDR))
+        .get_account(ACCOUNT_2_ADDR)
         .expect("account 2 should exist");
 
     let system_account_balance_actual = builder.get_purse_balance(system_account.purse_id());

@@ -17,7 +17,7 @@ impl ByteSize for Key {
 
 impl ByteSize for Account {
     fn byte_size(&self) -> usize {
-        std::mem::size_of::<Self>() + self.heap_size() + self.urefs_lookup().byte_size()
+        std::mem::size_of::<Self>() + self.heap_size() + self.named_keys().byte_size()
     }
 }
 
@@ -25,7 +25,7 @@ impl ByteSize for Contract {
     fn byte_size(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.heap_size()
-            + self.urefs_lookup().byte_size()
+            + self.named_keys().byte_size()
             + self.bytes().len()
     }
 }
@@ -86,13 +86,13 @@ impl HeapSizeOf for Key {
 
 impl HeapSizeOf for Account {
     fn heap_size(&self) -> usize {
-        self.urefs_lookup().heap_size()
+        self.named_keys().heap_size()
     }
 }
 
 impl HeapSizeOf for Contract {
     fn heap_size(&self) -> usize {
-        self.urefs_lookup().heap_size() + self.bytes().len()
+        self.named_keys().heap_size() + self.bytes().len()
     }
 }
 

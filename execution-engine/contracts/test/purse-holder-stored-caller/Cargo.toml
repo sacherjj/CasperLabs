@@ -1,11 +1,11 @@
 [package]
-name = "known-urefs"
+name = "purse-holder-stored-caller"
 version = "0.1.0"
-authors = ["Michał Papierski <michal@casperlabs.io>"]
+authors = ["Ed Hastings <ed@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "known_urefs"
+name = "purse_holder_stored_caller"
 crate-type = ["cdylib"]
 
 [features]

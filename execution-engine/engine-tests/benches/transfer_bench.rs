@@ -9,8 +9,8 @@ use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
 
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME,
-    STANDARD_PAYMENT_CONTRACT,
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
+    DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
 use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
@@ -77,10 +77,10 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
 
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
-    let mut exec_builder = ExecRequestBuilder::new();
+    let mut exec_builder = ExecuteRequestBuilder::new();
 
     for i in 0..TRANSFER_BATCH_SIZE {
-        let deploy = DeployBuilder::default()
+        let deploy = DeployItemBuilder::default()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
             .with_session_code("transfer_to_existing_account.wasm", (account, U512::one()))

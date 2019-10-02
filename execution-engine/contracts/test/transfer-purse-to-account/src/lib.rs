@@ -35,8 +35,8 @@ pub extern "C" fn call() {
     let result = format!("{:?}", transfer_result);
 
     let result_uref: Key = contract_api::new_turef(result).into();
-    contract_api::add_uref(TRANSFER_RESULT_UREF_NAME, &result_uref);
-    contract_api::add_uref(
+    contract_api::put_key(TRANSFER_RESULT_UREF_NAME, &result_uref);
+    contract_api::put_key(
         MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
         &contract_api::new_turef(final_balance).into(),
     );

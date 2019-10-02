@@ -2,15 +2,16 @@ use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 
-use crate::support::test_support::{DeployBuilder, ExecRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::support::test_support::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+};
+use crate::test::{CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_account() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let nonexistent_account_addr = [99u8; 32];
     let payment_purse_amount = 10_000_000;
@@ -19,8 +20,8 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -31,7 +32,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
             .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
@@ -56,19 +57,19 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
-
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_session_code("do_nothing.wasm", ())
+            .with_payment_code(CONTRACT_STANDARD_PAYMENT, ())
             .with_deploy_hash([1; 32])
             // empty authorization keys to force error
             .with_authorization_keys(&[])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
@@ -93,7 +94,6 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
-    let genesis_addr = DEFAULT_ACCOUNT_ADDR;
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let nonexistent_account_addr = [99u8; 32];
     let payment_purse_amount = 10_000_000;
@@ -102,8 +102,8 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
-            .with_address(genesis_addr)
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
@@ -114,7 +114,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
             .with_authorization_keys(&[PublicKey::new(nonexistent_account_addr)])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let transfer_result = InMemoryWasmTestBuilder::new(engine_config)

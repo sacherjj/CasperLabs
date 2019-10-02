@@ -226,6 +226,57 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .map(_.forall(identity))
     }
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
+  private val MAX_DEPENDENCIES: Int = 10
+
+  private def validateTimeToLive(
+      ttl: Int,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (ttl < MIN_TTL)
+      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(_.some)
+    else if (ttl > MAX_TTL)
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  private def validateDependencies(
+      dependencies: Seq[ByteString],
+      deployHash: ByteString
+  ): F[List[Errors.DeployHeaderError]] = {
+    val numDependencies = dependencies.length
+    val tooMany =
+      if (numDependencies > MAX_DEPENDENCIES)
+        Errors.DeployHeaderError
+          .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
+          .logged[F]
+          .map(_.some)
+      else
+        none[Errors.DeployHeaderError].pure[F]
+
+    val invalid = dependencies.toList
+      .filter(_.size != 32)
+      .traverse(dep => Errors.DeployHeaderError.invalidDependency(deployHash, dep).logged[F])
+
+    Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
+  }
+
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+    d.header match {
+      case Some(header) =>
+        Applicative[F].map2(
+          validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
+          validateDependencies(header.dependencies, d.deployHash)
+        ) {
+          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+        }
+
+      case None =>
+        Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
+    }
+
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
