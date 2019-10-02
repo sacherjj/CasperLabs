@@ -12,13 +12,15 @@ import io.casperlabs.casper.validation.ValidationImpl.MAX_TTL
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 
 /**
-  * This provides functions for selecting which deploys to attempt to execute
-  * in a block. Note that they may not all be selected to be included in the block
-  * (e.g. due to conflicts between effects or the block being too full). In the future
-  * this will also provide the plan for which deploys to run sequentially, and which to
-  * tun in parallel (though this feature does not yet exist).
+  * Provides filters for dealing with streams of deploys. The intent is to
+  * compose these filters when selecting deploys to include in a block.
   */
 object DeployFilters {
+
+  /**
+    * Retains only deploys where `deploy.header.timestamp` is less than or equal
+    * to the given timestamp.
+    */
   def timestampBefore[F[_]](
       timestamp: Long
   ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
@@ -27,6 +29,11 @@ object DeployFilters {
         header.timestamp <= timestamp
     }
 
+  /**
+    * Retains only deploys where `deploy.header.timestamp + deploy.header.ttl_millis`
+    * is greater than or equal to the given timestamp. I.e. this takes deploys that
+    * are not expired as of the provided timestamp.
+    */
   def ttlAfter[F[_]](
       timestamp: Long
   ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
@@ -36,6 +43,10 @@ object DeployFilters {
         timestamp <= (header.timestamp + ttl)
     }
 
+  /**
+    * Retains only deploys where all `deploy.header.dependencies` are contained in
+    * blocks in the p-past-cone of one or more of the provided `parents`.
+    */
   def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
       dag: DagRepresentation[F],
       parents: Seq[Block]
