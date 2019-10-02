@@ -7,7 +7,7 @@ extern crate contract_ffi;
 use contract_ffi::contract_api::{self, Error, TransferResult};
 use contract_ffi::value::U512;
 
-const TRANSFER_AMOUNT: u32 = 50_000_000 + 1000;
+const TRANSFER_AMOUNT: u32 = 250_000_000 + 1000;
 
 #[no_mangle]
 pub extern "C" fn call() {

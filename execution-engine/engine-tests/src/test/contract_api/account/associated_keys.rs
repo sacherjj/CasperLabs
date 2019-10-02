@@ -1,15 +1,18 @@
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::{Account, U512};
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key";
+const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
-const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
+lazy_static! {
+    static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT * 10;
+}
 
 #[ignore]
 #[test]
@@ -19,27 +22,16 @@ fn should_manage_associated_key() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (DEFAULT_ACCOUNT_ADDR,))
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (DEFAULT_ACCOUNT_ADDR,))
     };
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -68,14 +60,8 @@ fn should_manage_associated_key() {
     assert_eq!(*gen_weight, expected_weight, "unexpected weight");
 
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("remove_associated_key.wasm", (DEFAULT_ACCOUNT_ADDR,))
-            .with_deploy_hash([3u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_REMOVE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (DEFAULT_ACCOUNT_ADDR,))
     };
 
     builder

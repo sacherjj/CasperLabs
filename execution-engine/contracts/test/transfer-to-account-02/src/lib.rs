@@ -20,6 +20,5 @@ pub extern "C" fn call() {
     };
 
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
-
     assert_ne!(result, TransferResult::TransferError);
 }

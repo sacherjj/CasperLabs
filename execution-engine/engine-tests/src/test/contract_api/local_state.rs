@@ -1,39 +1,23 @@
 use contract_ffi::bytesrepr::ToBytes;
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::Value;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+const CONTRACT_LOCAL_STATE: &str = "local_state";
 
 #[ignore]
 #[test]
 fn should_run_local_state_contract() {
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("local_state.wasm", ())
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
     };
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("local_state.wasm", ())
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
     };
 
     // This test runs a contract that's after every call extends the same key with

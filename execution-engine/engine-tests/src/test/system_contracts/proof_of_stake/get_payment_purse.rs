@@ -1,12 +1,10 @@
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_POS_GET_PAYMENT_PURSE: &str = "pos_get_payment_purse";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_INITIAL_BALANCE: u64 = 100_000_000 + 100;
 
@@ -14,18 +12,8 @@ const ACCOUNT_1_INITIAL_BALANCE: u64 = 100_000_000 + 100;
 #[test]
 fn should_run_get_payment_purse_contract_default_account() {
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "pos_get_payment_purse.wasm",
-                // Default funding amount for standard payment
-                (U512::from(MAX_PAYMENT),),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_GET_PAYMENT_PURSE);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*DEFAULT_PAYMENT,))
     };
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -38,28 +26,16 @@ fn should_run_get_payment_purse_contract_default_account() {
 #[test]
 fn should_run_get_payment_purse_contract_account_1() {
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                // Default funding amount for standard payment
-                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code("pos_get_payment_purse.wasm", (*DEFAULT_PAYMENT,))
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_GET_PAYMENT_PURSE);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*DEFAULT_PAYMENT,))
     };
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

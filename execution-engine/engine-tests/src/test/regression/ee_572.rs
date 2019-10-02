@@ -1,21 +1,16 @@
 use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_CREATE: &str = "ee_572_regression_create";
+const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate";
+const CONTRACT_TRANSFER: &str = "transfer_purse_to_account";
 const CREATE: &str = "create";
 
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
-
-const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
-const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
-const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";
 
 #[ignore]
 #[test]
@@ -29,35 +24,25 @@ fn should_run_ee_572_regression() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(CONTRACT_TRANSFER, account_1_creation_args)
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            account_1_creation_args,
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(CONTRACT_TRANSFER, account_2_creation_args)
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            account_2_creation_args,
+        )
     };
 
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(CONTRACT_CREATE, account_2_creation_args)
-            .with_deploy_hash([3u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_CREATE);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, account_2_creation_args)
     };
 
     // Create Accounts
@@ -88,14 +73,8 @@ fn should_run_ee_572_regression() {
     };
 
     let exec_request_4 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_2_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(CONTRACT_ESCALATE, (contract,))
-            .with_deploy_hash([3u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_2_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ESCALATE);
+        ExecuteRequestBuilder::standard(ACCOUNT_2_ADDR, &contract_name, (contract,))
     };
 
     // Attempt to forge a new URef with escalated privileges

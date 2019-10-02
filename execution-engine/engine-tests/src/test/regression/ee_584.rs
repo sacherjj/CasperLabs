@@ -1,28 +1,17 @@
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::MAX_PAYMENT;
+use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
+const CONTRACT_EE_584_REGRESSION: &str = "ee_584_regression";
 
 #[ignore]
 #[test]
 fn should_run_ee_584_no_errored_session_transforms() {
-    let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code("ee_584_regression.wasm", ())
-            .with_payment_code("standard_payment.wasm", (U512::from(MAX_PAYMENT),))
-            .with_authorization_keys(&[genesis_public_key])
-            .with_deploy_hash([1u8; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_EE_584_REGRESSION);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();

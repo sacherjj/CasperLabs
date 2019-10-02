@@ -17,6 +17,8 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CON
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_REVERT: &str = "revert";
 
 #[ignore]
 #[test]
@@ -24,18 +26,12 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
-            )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
+        )
     };
 
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -50,15 +46,8 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .to_owned();
 
     let account_1_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code("revert.wasm", ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT - 1),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_REVERT);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, ())
     };
 
     let account_1_response = builder

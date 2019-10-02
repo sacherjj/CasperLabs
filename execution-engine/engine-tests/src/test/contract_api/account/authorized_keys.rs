@@ -6,19 +6,19 @@ use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::U512;
 use engine_core::engine_state::{self, MAX_PAYMENT};
 use engine_core::execution;
+const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key";
+const CONTRACT_AUTHORIZED_KEYS: &str = "authorized_keys";
 
 #[ignore]
 #[test]
 fn should_deploy_with_authorized_identity_key() {
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(1), Weight::new(1)),
+        )
     };
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
@@ -37,10 +37,12 @@ fn should_raise_auth_failure_with_invalid_key() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request = {
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
+            .with_session_code(&contract_name, (Weight::new(1), Weight::new(1)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_1)])
             .build();
@@ -63,7 +65,11 @@ fn should_raise_auth_failure_with_invalid_key() {
         .get(0)
         .expect("should have at least one deploy result");
 
-    assert!(deploy_result.has_precondition_failure());
+    assert!(
+        deploy_result.has_precondition_failure(),
+        "{:?}",
+        deploy_result
+    );
     let message = deploy_result.get_precondition_failure().get_message();
 
     assert_eq!(
@@ -136,49 +142,41 @@ fn should_raise_deploy_authorization_failure() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_3);
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_1),),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_2),))
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_2),),
+        )
     };
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_3),))
-            .with_deploy_hash([3u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_3),),
+        )
     };
     let exec_request_4 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            // Deploy threshold is equal to 3, keymgmnt is still 1.
-            // Even after verifying weights and thresholds to not
-            // lock out the account, those values should work as
-            // account now has 1. identity key with weight=1 and
-            // a key with weight=2.
-            .with_session_code("authorized_keys.wasm", (Weight::new(4), Weight::new(3)))
-            .with_deploy_hash([4u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        // Deploy threshold is equal to 3, keymgmnt is still 1.
+        // Even after verifying weights and thresholds to not
+        // lock out the account, those values should work as
+        // account now has 1. identity key with weight=1 and
+        // a key with weight=2.
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(4), Weight::new(3)),
+        )
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
@@ -201,18 +199,12 @@ fn should_raise_deploy_authorization_failure() {
         .finish();
 
     let exec_request_5 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            // Next deploy will see deploy threshold == 4, keymgmnt == 5
-            .with_session_code(
-                "authorized_keys.wasm",
-                (Weight::new(5), Weight::new(4)), //args
-            )
-            .with_deploy_hash([5u8; 32])
-            .with_authorization_keys(&[PublicKey::new(key_1)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(5), Weight::new(4)), //args
+        )
     };
 
     // With deploy threshold == 3 using single secondary key
@@ -263,18 +255,12 @@ fn should_raise_deploy_authorization_failure() {
         .finish();
 
     let exec_request_7 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            // change deployment threshold to 4
-            .with_session_code(
-                "authorized_keys.wasm",
-                (Weight::new(0), Weight::new(0)), //args
-            )
-            .with_deploy_hash([6u8; 32])
-            .with_authorization_keys(&[PublicKey::new(key_2), PublicKey::new(key_1)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(0), Weight::new(0)), //args
+        )
     };
 
     // deployment threshold is now 4
@@ -343,24 +329,20 @@ fn should_authorize_deploy_with_multiple_keys() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_2);
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_1),),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_2),))
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_2),),
+        )
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
@@ -377,14 +359,12 @@ fn should_authorize_deploy_with_multiple_keys() {
     // key_1 (w: 2) key_2 (w: 2) each passes default threshold of 1
 
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("authorized_keys.wasm", (Weight::new(0), Weight::new(0)))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(key_2), PublicKey::new(key_1)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(0), Weight::new(0)),
+        )
     };
     InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_exec_request(exec_request_3)
@@ -401,26 +381,21 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     assert_ne!(DEFAULT_ACCOUNT_ADDR, key_1);
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("add_update_associated_key.wasm", (PublicKey::new(key_1),))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (PublicKey::new(key_1),),
+        )
     };
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            // change deployment threshold to 3
-            .with_session_code("authorized_keys.wasm", (Weight::new(4), Weight::new(3)))
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_AUTHORIZED_KEYS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (Weight::new(4), Weight::new(3)),
+        )
     };
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()

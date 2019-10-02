@@ -1,17 +1,18 @@
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, GENESIS_INITIAL_BALANCE,
-    STANDARD_PAYMENT_CONTRACT,
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
-const ACCOUNT_1_INITIAL_FUND: u64 = MAX_PAYMENT + 42;
+lazy_static! {
+    static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT + 42;
+}
 
 #[ignore]
 #[test]
@@ -19,30 +20,20 @@ fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(ACCOUNT_1_INITIAL_FUND)),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (account_1_public_key, *ACCOUNT_1_INITIAL_FUND),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(account_1_public_key.value())
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (genesis_public_key, U512::from(1)),
-            )
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(account_1_public_key.value())])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            account_1_public_key.value(),
+            &contract_name,
+            (genesis_public_key, U512::from(1)),
+        )
     };
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -78,8 +69,8 @@ fn should_run_purse_to_account_transfer() {
         );
     };
     assert_eq!(
-        final_balance,
-        &U512::from(GENESIS_INITIAL_BALANCE - (MAX_PAYMENT * 2) - 42)
+        *final_balance,
+        U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - (*DEFAULT_PAYMENT * 2) - 42
     );
 
     // Get the `transfer_result` for a given account
@@ -138,7 +129,7 @@ fn should_run_purse_to_account_transfer() {
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
-    assert_eq!(purse_secondary_balance, &U512::from(MAX_PAYMENT + 42));
+    assert_eq!(*purse_secondary_balance, *ACCOUNT_1_INITIAL_FUND);
 
     //
     // Exec 2 - Transfer from new account back to genesis to verify
@@ -209,17 +200,12 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (account_1_key, U512::max_value()),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (account_1_key, U512::max_value()),
+        )
     };
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -249,8 +235,8 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     };
     // When trying to send too much coins the balance is left unchanged
     assert_eq!(
-        final_balance,
-        &U512::from(100_000_000_000u64 - MAX_PAYMENT),
+        *final_balance,
+        U512::from(100_000_000_000u64) - *DEFAULT_PAYMENT,
         "final balance incorrect"
     );
 

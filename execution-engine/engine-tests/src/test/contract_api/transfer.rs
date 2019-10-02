@@ -1,31 +1,32 @@
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    STANDARD_PAYMENT_CONTRACT,
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
-use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::motes::Motes;
 
-const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01";
+const CONTRACT_TRANSFER_TO_ACCOUNT_02: &str = "transfer_to_account_02";
+// const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
 
-const TRANSFER_1_AMOUNT: u64 = (MAX_PAYMENT * 5) + 1000;
-const TRANSFER_2_AMOUNT: u32 = 750;
-
-const TRANSFER_2_AMOUNT_WITH_ADV: u64 = MAX_PAYMENT + TRANSFER_2_AMOUNT as u64;
-const TRANSFER_TOO_MUCH: u64 = u64::max_value();
+lazy_static! {
+    static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
+    static ref TRANSFER_2_AMOUNT: U512 = U512::from(750);
+    static ref TRANSFER_2_AMOUNT_WITH_ADV: U512 = *DEFAULT_PAYMENT + *TRANSFER_2_AMOUNT;
+    static ref TRANSFER_TOO_MUCH: U512 = U512::from(u64::max_value());
+    static ref ACCOUNT_1_INITIAL_BALANCE: U512 = *DEFAULT_PAYMENT;
+}
 
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
-const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 #[ignore]
 #[test]
 fn should_transfer_to_account() {
-    let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
-    let transfer_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
+    let initial_genesis_amount: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
+    let transfer_amount: U512 = *TRANSFER_1_AMOUNT;
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -46,15 +47,8 @@ fn should_transfer_to_account() {
     // Exec transfer contract
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("transfer_to_account_01.wasm", (ACCOUNT_1_ADDR,))
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
     };
 
     builder
@@ -89,9 +83,9 @@ fn should_transfer_to_account() {
 #[ignore]
 #[test]
 fn should_transfer_from_account_to_account() {
-    let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
-    let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
-    let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
+    let initial_genesis_amount: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
+    let transfer_1_amount: U512 = *TRANSFER_1_AMOUNT;
+    let transfer_2_amount: U512 = *TRANSFER_2_AMOUNT;
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -112,15 +106,8 @@ fn should_transfer_from_account_to_account() {
     // Exec transfer 1 contract
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("transfer_to_account_01.wasm", (ACCOUNT_1_ADDR,))
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
     };
 
     builder
@@ -154,18 +141,8 @@ fn should_transfer_from_account_to_account() {
     // Exec transfer 2 contract
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([2; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_to_account_02.wasm",
-                (U512::from(TRANSFER_2_AMOUNT),),
-            )
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_2_AMOUNT,))
     };
 
     builder
@@ -203,9 +180,9 @@ fn should_transfer_from_account_to_account() {
 #[ignore]
 #[test]
 fn should_transfer_to_existing_account() {
-    let initial_genesis_amount: U512 = U512::from(INITIAL_GENESIS_AMOUNT);
-    let transfer_1_amount: U512 = U512::from(TRANSFER_1_AMOUNT);
-    let transfer_2_amount: U512 = U512::from(TRANSFER_2_AMOUNT);
+    let initial_genesis_amount: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
+    let transfer_1_amount: U512 = *TRANSFER_1_AMOUNT;
+    let transfer_2_amount: U512 = *TRANSFER_2_AMOUNT;
 
     // Run genesis
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -226,15 +203,8 @@ fn should_transfer_to_existing_account() {
     // Exec transfer 1 contract
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("transfer_to_account_01.wasm", (ACCOUNT_1_ADDR,))
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
     };
 
     builder
@@ -271,18 +241,8 @@ fn should_transfer_to_existing_account() {
     // Exec transfer contract
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([2; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_to_account_02.wasm",
-                (U512::from(TRANSFER_2_AMOUNT),),
-            )
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_2_AMOUNT,))
     };
     builder
         .exec_with_exec_request(exec_request_2)
@@ -320,42 +280,22 @@ fn should_fail_when_insufficient_funds() {
     // Run genesis
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("transfer_to_account_01.wasm", (ACCOUNT_1_ADDR,))
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
     };
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([2; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_to_account_02.wasm",
-                (U512::from(TRANSFER_2_AMOUNT_WITH_ADV),),
-            )
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (*TRANSFER_2_AMOUNT_WITH_ADV,),
+        )
     };
 
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([2; 32])
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_to_account_02.wasm",
-                (U512::from(TRANSFER_TOO_MUCH),),
-            )
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_TOO_MUCH,))
     };
 
     let result = InMemoryWasmTestBuilder::default()
@@ -368,7 +308,7 @@ fn should_fail_when_insufficient_funds() {
         .exec_with_exec_request(exec_request_2)
         .expect_success()
         .commit()
-        // Exec transfer contract
+        // // Exec transfer contract
         .exec_with_exec_request(exec_request_3)
         // .expect_success()
         .commit()
@@ -389,31 +329,21 @@ fn should_transfer_total_amount() {
     let mut builder = test_support::InMemoryWasmTestBuilder::default();
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        )
     };
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),)) // New account transfers exactly N motes to new account (total amount)
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (ACCOUNT_2_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            )
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (ACCOUNT_2_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        )
     };
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

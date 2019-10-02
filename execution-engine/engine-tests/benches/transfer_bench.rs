@@ -19,6 +19,9 @@ use engine_core::engine_state::EngineConfig;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 
+const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts";
+const CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT: &str = "transfer_to_existing_account";
+
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 
@@ -38,14 +41,12 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     let data_dir = TempDir::new().expect("should create temp dir");
 
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("create_accounts.wasm", (accounts_bytes, amount))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_CREATE_ACCOUNTS);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (accounts_bytes, amount),
+        )
     };
 
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
@@ -64,16 +65,10 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
     let amount = U512::one();
 
     // To see raw numbers take current time
-    for i in 0..TRANSFER_BATCH_SIZE {
+    for _ in 0..TRANSFER_BATCH_SIZE {
         let exec_request = {
-            let deploy = DeployItemBuilder::new()
-                .with_address(DEFAULT_ACCOUNT_ADDR)
-                .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-                .with_session_code("transfer_to_existing_account.wasm", (account, amount))
-                .with_deploy_hash([2 + i as u8; 32])
-                .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-                .build();
-            ExecuteRequestBuilder::from_deploy_item(deploy).build()
+            let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (account, amount))
         };
         builder
             .exec_with_exec_request(exec_request)

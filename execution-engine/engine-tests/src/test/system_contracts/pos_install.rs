@@ -1,22 +1,18 @@
 use std::collections::BTreeMap;
 
 use crate::support::exec_with_return;
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME,
-    STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::Value;
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
-const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
@@ -33,14 +29,8 @@ fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
 
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("transfer_to_account_01.wasm", (SYSTEM_ADDR,))
-            .with_deploy_hash(DEPLOY_HASH_1)
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (SYSTEM_ADDR,))
     };
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

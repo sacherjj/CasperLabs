@@ -6,16 +6,13 @@ use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
-use engine_core::engine_state::MAX_PAYMENT;
 use std::collections::HashMap;
 
+const CONTRACT_LOCAL_STATE: &str = "local_state";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 const ACCOUNT_2_BALANCE: u64 = 2000;
@@ -44,14 +41,8 @@ fn should_return_bonded_validators() {
     let genesis_config = test_support::create_genesis_config(accounts.clone());
 
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("local_state.wasm", ())
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
     };
 
     let actual = InMemoryWasmTestBuilder::default()

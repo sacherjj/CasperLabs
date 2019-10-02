@@ -6,17 +6,13 @@ use contract_ffi::value::{Value, U512};
 
 use engine_core::engine_state::genesis::{GenesisAccount, POS_BONDING_PURSE};
 use engine_core::engine_state::CONV_RATE;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::DEFAULT_PAYMENT;
-use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT};
 
+const CONTRACT_POS_BONDING: &str = "pos_bonding";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_SEED_AMOUNT: u64 = 100_000_000 * 2;
 const ACCOUNT_1_STAKE: u64 = 42_000;
@@ -80,17 +76,12 @@ fn should_run_successful_bond_and_unbond() {
     let pos = result.builder().get_pos_contract_uref();
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
-            )
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
+        )
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -134,38 +125,28 @@ fn should_run_successful_bond_and_unbond() {
     );
 
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_SEED_NEW_ACCOUNT),
-                    PublicKey::new(ACCOUNT_1_ADDR),
-                    U512::from(ACCOUNT_1_SEED_AMOUNT),
-                ),
-            )
-            .with_deploy_hash([2u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_SEED_NEW_ACCOUNT),
+                PublicKey::new(ACCOUNT_1_ADDR),
+                U512::from(ACCOUNT_1_SEED_AMOUNT),
+            ),
+        )
     };
 
     let exec_request_3 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_BOND_FROM_MAIN_PURSE),
-                    U512::from(ACCOUNT_1_STAKE),
-                ),
-            )
-            .with_deploy_hash([1; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_BOND_FROM_MAIN_PURSE),
+                U512::from(ACCOUNT_1_STAKE),
+            ),
+        )
     };
 
     // Create new account (from genesis funds) and bond with it
@@ -225,20 +206,15 @@ fn should_run_successful_bond_and_unbond() {
     // queue)
     //
     let exec_request_4 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_UNBOND),
-                    Some(U512::from(ACCOUNT_1_UNBOND_1)),
-                ),
-            )
-            .with_deploy_hash([2; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(ACCOUNT_1_UNBOND_1)),
+            ),
+        )
     };
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -290,20 +266,15 @@ fn should_run_successful_bond_and_unbond() {
     //
     // Genesis account unbonds less than 50% of his stake
     let exec_request_5 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_UNBOND),
-                    Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
-                ),
-            )
-            .with_deploy_hash([3; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
+            ),
+        )
     };
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_5)
@@ -344,20 +315,15 @@ fn should_run_successful_bond_and_unbond() {
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
     let exec_request_6 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_UNBOND),
-                    Some(U512::from(ACCOUNT_1_UNBOND_2)),
-                ),
-            )
-            .with_deploy_hash([3; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_UNBOND),
+                Some(U512::from(ACCOUNT_1_UNBOND_2)),
+            ),
+        )
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -402,17 +368,12 @@ fn should_run_successful_bond_and_unbond() {
 
     // Genesis account unbonds less than 50% of his stake
     let exec_request_7 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (String::from(TEST_UNBOND), None as Option<U512>),
-            )
-            .with_deploy_hash([4; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (String::from(TEST_UNBOND), None as Option<U512>),
+        )
     };
 
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -513,37 +474,27 @@ fn should_fail_bonding_with_insufficient_funds() {
     let genesis_config = test_support::create_genesis_config(accounts);
 
     let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_SEED_NEW_ACCOUNT),
-                    PublicKey::new(ACCOUNT_1_ADDR),
-                    U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
-                ),
-            )
-            .with_deploy_hash([1; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_SEED_NEW_ACCOUNT),
+                PublicKey::new(ACCOUNT_1_ADDR),
+                *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
+            ),
+        )
     };
     let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),)) // That's already too much assuming non-zero costs of wasm execution
-            .with_session_code(
-                "pos_bonding.wasm",
-                (
-                    String::from(TEST_BOND_FROM_MAIN_PURSE),
-                    U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
-                ),
-            )
-            .with_deploy_hash([2; 32])
-            .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            ACCOUNT_1_ADDR,
+            &contract_name,
+            (
+                String::from(TEST_BOND_FROM_MAIN_PURSE),
+                *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
+            ),
+        )
     };
 
     let result = InMemoryWasmTestBuilder::default()
@@ -585,17 +536,12 @@ fn should_fail_unbonding_validator_without_bonding_first() {
     let genesis_config = test_support::create_genesis_config(accounts);
 
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code(
-                "pos_bonding.wasm",
-                (String::from(TEST_UNBOND), Some(U512::from(42))),
-            )
-            .with_deploy_hash([1; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_POS_BONDING);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (String::from(TEST_UNBOND), Some(U512::from(42))),
+        )
     };
 
     let result = InMemoryWasmTestBuilder::default()

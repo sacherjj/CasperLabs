@@ -1,23 +1,18 @@
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
+
+const CONTRACT_DESERIALIZE_ERROR: &str = "deserialize_error";
 
 #[ignore]
 #[test]
 fn should_not_fail_deserializing() {
     let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
-            .with_session_code("deserialize_error.wasm", (DEFAULT_ACCOUNT_ADDR,))
-            .with_deploy_hash([1u8; 32])
-            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .build();
-        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+        let contract_name = format!("{}.wasm", CONTRACT_DESERIALIZE_ERROR);
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            &contract_name,
+            (DEFAULT_ACCOUNT_ADDR,),
+        )
     };
     let is_error = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
