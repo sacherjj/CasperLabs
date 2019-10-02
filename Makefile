@@ -309,6 +309,7 @@ node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
 
 # Copy a client or explorer contract to the explorer.
 explorer/contracts/%.wasm: .make/contracts/%
+	mkdir -p explorer/contracts
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 build-client: \
