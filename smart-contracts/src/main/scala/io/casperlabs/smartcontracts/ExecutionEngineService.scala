@@ -19,12 +19,12 @@ import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 import scala.util.{Either, Try}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.ipc.ChainSpec.GenesisConfig
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
   def runGenesis(
-      deploys: Seq[DeployItem],
-      protocolVersion: ProtocolVersion
+      genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]]
   def exec(
       prestate: ByteString,
@@ -109,48 +109,20 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   }
 
   override def runGenesis(
-      deploys: Seq[DeployItem],
-      protocolVersion: ProtocolVersion
+      genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]] =
-    deploys.length match {
-      case 0 =>
-        // NOTE: For now the EE supports the original 303030... default account.
-        GenesisResult()
-          .withPoststateHash(emptyStateHash)
-          .withEffect(ExecutionEffect())
-          .asRight[Throwable]
-          .pure[F]
-      case 1 =>
-        for {
-          code <- deploys.head.getSession.payload match {
-                   case DeployPayload.Payload.DeployCode(code) =>
-                     code.code.pure[F]
-                   case _ =>
-                     MonadThrowable[F].raiseError[ByteString](
-                       new IllegalArgumentException(
-                         "Executing Genesis deploys without code is not supported."
-                       )
-                     )
+    for {
+      response <- sendMessage(genesisConfig, _.runGenesisWithChainspec) {
+                   _.result match {
+                     case GenesisResponse.Result.Success(result) =>
+                       Right(result)
+                     case GenesisResponse.Result.FailedDeploy(error) =>
+                       Left(new SmartContractEngineError(error.message))
+                     case GenesisResponse.Result.Empty =>
+                       Left(new SmartContractEngineError("empty response"))
+                   }
                  }
-          request <- MonadThrowable[F].fromTry(Try(GenesisRequest.parseFrom(code.toByteArray)))
-          response <- sendMessage(request, _.runGenesis) {
-                       _.result match {
-                         case GenesisResponse.Result.Success(result) =>
-                           Right(result)
-                         case GenesisResponse.Result.FailedDeploy(error) =>
-                           Left(new SmartContractEngineError(error.message))
-                         case GenesisResponse.Result.Empty =>
-                           Left(new SmartContractEngineError("empty response"))
-                       }
-                     }
-        } yield response
-      case _ =>
-        MonadThrowable[F].raiseError(
-          new IllegalArgumentException(
-            "Executing more than one blessed contract is not supported at the moment."
-          )
-        )
-    }
+    } yield response
 
   override def commit(
       prestate: ByteString,

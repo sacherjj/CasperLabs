@@ -1,5 +1,6 @@
 package io.casperlabs.casper.api
 
+import cats.effect.Sync
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
@@ -31,73 +32,6 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-
-  "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      for {
-        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createAndStoreBlock[Task](
-               Seq(genesis.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b3 <- createAndStoreBlock[Task](
-               Seq(genesis.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-             )
-        b4 <- createAndStoreBlock[Task](
-               Seq(b2.blockHash),
-               v3,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
-             )
-        b5 <- createAndStoreBlock[Task](
-               Seq(b3.blockHash),
-               v2,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
-             )
-        b6 <- createAndStoreBlock[Task](
-               Seq(b4.blockHash),
-               v1,
-               bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
-             )
-        _ <- createAndStoreBlock[Task](
-              Seq(b5.blockHash),
-              v3,
-              bonds,
-              HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
-        _ <- createAndStoreBlock[Task](
-              Seq(b6.blockHash),
-              v2,
-              bonds,
-              HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-            )
-        dag                 <- dagStorage.getRepresentation
-        latestMessageHashes <- dag.latestMessageHashes
-        tips <- Estimator.tips[Task](
-                 dag,
-                 genesis.blockHash,
-                 latestMessageHashes,
-                 EquivocationsTracker.empty
-               )
-        casperEffect <- NoOpsCasperEffect[Task](
-                         HashMap.empty[BlockHash, BlockMsgWithTransform],
-                         tips
-                       )
-        implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
-        _                                                <- casperRef.set(casperEffect)
-        implicit0(finalityDetector: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-          Task
-        ]()
-        blocksResponse <- BlockAPI.showMainChain[Task](Int.MaxValue)
-      } yield blocksResponse.length should be(5)
-  }
 
   "showBlocks" should "return all blocks" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
@@ -157,104 +91,94 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
                          tips
                        )
-        implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
-        _                                                <- casperRef.set(casperEffect)
-        implicit0(finalityDetector: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-          Task
-        ]()
-        blocksResponse <- BlockAPI.showBlocks[Task](Int.MaxValue)
+        casperRef              <- MultiParentCasperRef.of[Task]
+        _                      <- casperRef.set(casperEffect)
+        finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()
+        blocksResponse         <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
-  it should "return until depth" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
-      _ =>
-        /**
-          * The Dag looks like
-          *
-          *
-          *  4          b8
-          *           /
-          *  3     b6 ----   b7
-          *                x
-          *  2          b5  b4
-          *           /    /
-          *  1     b3   b2
-          *         \   |
-          *  0       genesis
-          *
-          */
-        for {
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          b2 <- createAndStoreBlock[Task](
-                 Seq(genesis.blockHash),
-                 v2,
-                 bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-               )
-          b3 <- createAndStoreBlock[Task](
-                 Seq(genesis.blockHash),
-                 v1,
-                 bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
-               )
-          b4 <- createAndStoreBlock[Task](
-                 Seq(b2.blockHash),
-                 v3,
-                 bonds,
-                 HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
-               )
-          b5 <- createAndStoreBlock[Task](
-                 Seq(b3.blockHash),
-                 v2,
-                 bonds,
-                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
-               )
-          b6 <- createAndStoreBlock[Task](
-                 Seq(b4.blockHash),
-                 v1,
-                 bonds,
-                 HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
-               )
-          _ <- createAndStoreBlock[Task](
-                Seq(b5.blockHash),
-                v3,
-                bonds,
-                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-              )
-          _ <- createAndStoreBlock[Task](
-                Seq(b6.blockHash),
-                v2,
-                bonds,
-                HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
-              )
-          dag                 <- dagStorage.getRepresentation
-          latestMessageHashes <- dag.latestMessageHashes
-          tips <- Estimator.tips[Task](
-                   dag,
-                   genesis.blockHash,
-                   latestMessageHashes,
-                   EquivocationsTracker.empty
-                 )
-          casperEffect <- NoOpsCasperEffect[Task](
-                           HashMap.empty[BlockHash, BlockMsgWithTransform],
-                           tips
-                         )
-          implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
-          _                                                <- casperRef.set(casperEffect)
-          implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-            Task
-          ]()
-          blocksWithRankBelow1 <- BlockAPI.showBlocks[Task](1)
-          _                    = blocksWithRankBelow1.length shouldBe 1
-          blocksWithRankBelow2 <- BlockAPI.showBlocks[Task](2)
-          _                    = blocksWithRankBelow2.length shouldBe 3
-          blocksWithRankBelow3 <- BlockAPI.showBlocks[Task](3)
-          _                    = blocksWithRankBelow3.length shouldBe 5
-          blocksWithRankBelow4 <- BlockAPI.showBlocks[Task](4)
-          _                    = blocksWithRankBelow4.length shouldBe 7
-          blocksWithRankBelow5 <- BlockAPI.showBlocks[Task](5)
-          result               = blocksWithRankBelow5.length shouldBe 8
-        } yield result
+  it should "return until depth" in withStorage { implicit blockStorage => implicit dagStorage =>
+    /**
+      * The Dag looks like
+      *
+      *
+      *  4          b8
+      *           /
+      *  3     b6 ----   b7
+      *                x
+      *  2          b5  b4
+      *           /    /
+      *  1     b3   b2
+      *         \   |
+      *  0       genesis
+      *
+      */
+    for {
+      genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
+      b2 <- createBlock[Task](
+             Seq(genesis.blockHash),
+             v2,
+             bonds,
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+           )
+      b3 <- createBlock[Task](
+             Seq(genesis.blockHash),
+             v1,
+             bonds,
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+           )
+      b4 <- createBlock[Task](
+             Seq(b2.blockHash),
+             v3,
+             bonds,
+             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+           )
+      b5 <- createBlock[Task](
+             Seq(b3.blockHash),
+             v2,
+             bonds,
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+           )
+      b6 <- createBlock[Task](
+             Seq(b4.blockHash),
+             v1,
+             bonds,
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
+           )
+      _ <- createBlock[Task](
+            Seq(b5.blockHash),
+            v3,
+            bonds,
+            HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+          )
+      _ <- createBlock[Task](
+            Seq(b6.blockHash),
+            v2,
+            bonds,
+            HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
+          )
+      dag  <- dagStorage.getRepresentation
+      tips <- Estimator.tips[Task](dag, genesis.blockHash, EquivocationsTracker.empty)
+      casperEffect <- NoOpsCasperEffect[Task](
+                       HashMap.empty[BlockHash, BlockMsgWithTransform],
+                       tips
+                     )
+      implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
+      _                                                <- casperRef.set(casperEffect)
+      implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
+        Task
+      ]()
+      blocksWithRankBelow1 <- BlockAPI.getBlockInfos[Task](1)
+      _                    = blocksWithRankBelow1.length shouldBe 1
+      blocksWithRankBelow2 <- BlockAPI.getBlockInfos[Task](2)
+      _                    = blocksWithRankBelow2.length shouldBe 3
+      blocksWithRankBelow3 <- BlockAPI.getBlockInfos[Task](3)
+      _                    = blocksWithRankBelow3.length shouldBe 5
+      blocksWithRankBelow4 <- BlockAPI.getBlockInfos[Task](4)
+      _                    = blocksWithRankBelow4.length shouldBe 7
+      blocksWithRankBelow5 <- BlockAPI.getBlockInfos[Task](5)
+      result               = blocksWithRankBelow5.length shouldBe 8
+    } yield result
   }
 }

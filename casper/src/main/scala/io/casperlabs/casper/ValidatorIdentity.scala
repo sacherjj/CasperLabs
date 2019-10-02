@@ -6,7 +6,7 @@ import cats.Monad
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.Signature
+import io.casperlabs.casper.consensus.Signature
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base64
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
@@ -22,7 +22,6 @@ final case class ValidatorIdentity(
 ) {
   def signature(data: Array[Byte]): Signature =
     Signature(
-      ByteString.copyFrom(publicKey),
       signatureAlgorithm.name,
       ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
     )

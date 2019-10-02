@@ -3,19 +3,11 @@ package io.casperlabs.casper.util
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.BlockMessage
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.models.Message
 
 object implicits {
-  implicit class RichBlockMessage(b: BlockMessage) {
-    def signFunction: (Array[Byte], PrivateKey) => Array[Byte] =
-      b.sigAlgorithm match {
-        case SignatureAlgorithm(sa) => sa.sign
-      }
-  }
-
   implicit val showBlockHash: cats.Show[BlockHash] = cats.Show.show(PrettyPrinter.buildString)
   implicit val showBlockSummary: cats.Show[BlockSummary] =
     cats.Show.show(m => PrettyPrinter.buildString(m.blockHash))

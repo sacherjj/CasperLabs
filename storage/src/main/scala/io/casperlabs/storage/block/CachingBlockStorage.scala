@@ -3,10 +3,9 @@ package io.casperlabs.storage.block
 import cats._
 import cats.effect._
 import cats.implicits._
-import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import com.google.protobuf.ByteString
+import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
@@ -71,12 +70,6 @@ class CachingBlockStorage[F[_]: Sync](
     Sync[F]
       .delay(cache.asMap.keySet.contains(blockHash))
       .ifM(true.pure[F], underlying.contains(blockHash))
-
-  override def getApprovedBlock(): F[Option[ApprovedBlock]] =
-    underlying.getApprovedBlock()
-
-  override def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-    underlying.putApprovedBlock(block)
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     cacheOrUnderlying(

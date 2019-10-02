@@ -13,10 +13,10 @@ import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
@@ -71,6 +71,8 @@ abstract class HashSetCasperTestNode[F[_]](
     maybeMakeEE.map(_(bonds)) getOrElse
       HashSetCasperTestNode.simpleEEApi[F](bonds)
 
+  implicit val versions = HashSetCasperTestNode.protocolVersions[F]
+
   /** Handle one message. */
   def receive(): F[Unit]
 
@@ -123,7 +125,6 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit
-      errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F],
@@ -138,14 +139,13 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
-  ): TestNode[Effect] =
-    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
-      ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect],
-      ContextShift[Effect]
-    ).value.unsafeRunSync.right.get
+  ): TestNode[Task] =
+    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+      Concurrent[Task],
+      Par[Task],
+      Timer[Task],
+      ContextShift[Task]
+    ).unsafeRunSync
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
@@ -155,7 +155,7 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
-      implicit errorHandler: ErrorHandler[F],
+      implicit
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F],
@@ -168,9 +168,9 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
-  ): Effect[IndexedSeq[TestNode[Effect]]] =
-    networkF[Effect](
+      maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
+  ): Task[IndexedSeq[TestNode[Task]]] =
+    networkF[Task](
       sks,
       genesis,
       transforms,
@@ -178,11 +178,10 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold,
       maybeMakeEE
     )(
-      ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect],
-      ContextShift[Effect]
+      Concurrent[Task],
+      Par[Task],
+      Timer[Task],
+      ContextShift[Task]
     )
 
   protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
@@ -191,69 +190,8 @@ trait HashSetCasperTestNodeFactory {
 }
 
 object HashSetCasperTestNode {
-  type Effect[A]                        = EitherT[Task, CommError, A]
   type Bonds                            = Map[Keys.PublicKey, Long]
   type MakeExecutionEngineService[F[_]] = Bonds => ExecutionEngineService[F]
-
-  val appErrId = new ApplicativeError[Id, CommError] {
-    def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
-    def pure[A](x: A): Id[A]                       = Applicative[Id].pure[A](x)
-    def raiseError[A](e: CommError): Id[A] = {
-      val errString = e match {
-        case UnknownCommError(msg)                => s"UnknownCommError($msg)"
-        case DatagramSizeError(size)              => s"DatagramSizeError($size)"
-        case DatagramFramingError(ex)             => s"DatagramFramingError($ex)"
-        case DatagramException(ex)                => s"DatagramException($ex)"
-        case HeaderNotAvailable                   => "HeaderNotAvailable"
-        case ProtocolException(th)                => s"ProtocolException($th)"
-        case UnknownProtocolError(msg)            => s"UnknownProtocolError($msg)"
-        case PublicKeyNotAvailable(node)          => s"PublicKeyNotAvailable($node)"
-        case ParseError(msg)                      => s"ParseError($msg)"
-        case EncryptionHandshakeIncorrectlySigned => "EncryptionHandshakeIncorrectlySigned"
-        case BootstrapNotProvided                 => "BootstrapNotProvided"
-        case PeerNodeNotFound(peer)               => s"PeerNodeNotFound($peer)"
-        case PeerUnavailable(peer)                => s"PeerUnavailable($peer)"
-        case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
-        case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
-        case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
-        case TimeOut                              => "TimeOut"
-        case _                                    => e.toString
-      }
-
-      throw new Exception(errString)
-    }
-
-    def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
-  }
-
-  implicit val syncEffectInstance = cats.effect.Sync.catsEitherTSync[Task, CommError]
-
-  implicit val parEffectInstance: Par[Effect] = Par.fromParallel(CatsParallelForEffect)
-
-  // We could try figuring this out for a type as follows:
-  // type EffectPar[A] = EitherT[Task.Par, CommError, A]
-  object CatsParallelForEffect extends Parallel[Effect, Task.Par] {
-    override def applicative: Applicative[Task.Par] = CatsParallelForTask.applicative
-    override def monad: Monad[Effect]               = Concurrent[Effect]
-
-    override val sequential: Task.Par ~> Effect = new (Task.Par ~> Effect) {
-      def apply[A](fa: Task.Par[A]): Effect[A] = {
-        val task = Task.Par.unwrap(fa)
-        EitherT.liftF(task)
-      }
-    }
-    override val parallel: Effect ~> Task.Par = new (Effect ~> Task.Par) {
-      def apply[A](fa: Effect[A]): Task.Par[A] = {
-        val task = fa.value.flatMap {
-          case Left(ce) => Task.raiseError(new RuntimeException(ce.toString))
-          case Right(a) => Task.pure(a)
-        }
-        Task.Par.apply(task)
-      }
-    }
-  }
-
-  val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 
@@ -324,8 +262,7 @@ object HashSetCasperTestNode {
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[ipc.DeployItem],
-          protocolVersion: ProtocolVersion
+          genesisConfig: ipc.ChainSpec.GenesisConfig
       ): F[Either[Throwable, GenesisResult]] =
         commit(emptyStateHash, Seq.empty).map {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
@@ -370,4 +307,8 @@ object HashSetCasperTestNode {
       // Tests are not signing the deploys.
       override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
     }
+
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
+    0L -> consensus.state.ProtocolVersion(1)
+  )
 }

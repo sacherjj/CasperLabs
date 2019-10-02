@@ -6,7 +6,6 @@ import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
@@ -132,11 +131,6 @@ object SQLiteStorage {
               )
           _ <- blockStorage.put(blockHash, blockMsgWithTransform)
         } yield ()
-
-      override def getApprovedBlock(): F[Option[ApprovedBlock]] = blockStorage.getApprovedBlock()
-
-      override def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-        blockStorage.putApprovedBlock(block)
 
       override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
         dagStorage.lookup(blockHash).map(_.map(_.blockSummary))

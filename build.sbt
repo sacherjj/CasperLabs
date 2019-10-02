@@ -154,8 +154,7 @@ lazy val comm = (project in file("comm"))
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufPathFilter(
         "io/casperlabs/comm/discovery",
-        "io/casperlabs/comm/gossiping",
-        "io/casperlabs/comm/protocol/routing" // TODO: Eventually remove.
+        "io/casperlabs/comm/gossiping"
       )
     ),
     PB.targets in Compile := Seq(
@@ -204,7 +203,6 @@ lazy val models = (project in file("models"))
       protobufPathFilter(
         "google/api",
         "io/casperlabs/casper/consensus",
-        "io/casperlabs/casper/protocol", // TODO: Eventually remove.
         "io/casperlabs/ipc/transforms.proto"
       )
     ),
@@ -240,7 +238,8 @@ lazy val node = (project in file("node"))
         scalapbRuntimegGrpc,
         tomlScala,
         sangria,
-        javaWebsocket
+        javaWebsocket,
+        apacheCommons
       ),
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(

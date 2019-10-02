@@ -8,20 +8,14 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.{BlockStatus => _, _}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.protocol.{
-  BlockInfoWithoutTuplespace,
-  BlockQuery,
-  BlockQueryResponse,
-  DeployServiceResponse,
-  BlockInfo => BlockInfoWithTuplespace
-}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{protocol, BlockStatus => _, _}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
@@ -56,34 +50,6 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  @deprecated("To be removed before devnet. Use the one with `Deploy`.", "0.4")
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: Metrics](
-      d: protocol.DeployData
-  ): F[DeployServiceResponse] = {
-    def casperDeploy(implicit casper: MultiParentCasper[F]): F[DeployServiceResponse] =
-      for {
-        _ <- Metrics[F].incrementCounter("deploys")
-        n = LegacyConversions.toDeploy(d)
-        r <- MultiParentCasper[F].deploy(n)
-        re <- r match {
-               case Right(_) =>
-                 Metrics[F].incrementCounter("deploys-success") *>
-                   DeployServiceResponse(success = true, "Success!").pure[F]
-               case Left(err) =>
-                 DeployServiceResponse(success = false, err.getMessage).pure[F]
-             }
-      } yield re
-
-    val errorMessage = "Could not deploy."
-
-    MultiParentCasperRef
-      .withCasper[F, DeployServiceResponse](
-        casperDeploy(_),
-        errorMessage,
-        DeployServiceResponse(success = false, s"Error: $errorMessage").pure[F]
-      )
-  }
-
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: FinalityDetector: Log: Metrics](
       d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
@@ -115,30 +81,6 @@ object BlockAPI {
           }
     } yield ()
   }
-
-  @deprecated("To be removed before devnet. Use `propose`.", "0.4")
-  def createBlock[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics](
-      blockApiLock: Semaphore[F]
-  ): F[DeployServiceResponse] =
-    propose(blockApiLock) map { blockHash =>
-      DeployServiceResponse(
-        success = true,
-        s"Success! Block ${Base16.encode(blockHash.toByteArray)} created and added."
-      )
-    } handleError {
-      case InvalidArgument(msg) =>
-        DeployServiceResponse(success = false, s"Failure! $msg")
-      case Internal(msg) =>
-        DeployServiceResponse(success = false, msg)
-      case Aborted(msg) =>
-        DeployServiceResponse(success = false, s"Error: $msg")
-      case FailedPrecondition(msg) =>
-        DeployServiceResponse(success = false, s"Error while creating block: $msg")
-      case OutOfRange(msg) =>
-        DeployServiceResponse(success = false, s"Error while creating block: $msg")
-      case Unavailable(_) =>
-        DeployServiceResponse(success = false, s"Error: Could not create block.")
-    }
 
   def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
@@ -189,133 +131,6 @@ object BlockAPI {
       }
     }
   }
-
-  // FIX: Not used at the moment - in RChain it's being used in method like `getListeningName*`
-  @deprecated("To be removed before devnet.", "0.4")
-  @silent("is never used")
-  private def getMainChainFromTip[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage](
-      depth: Int
-  ): F[IndexedSeq[Block]] =
-    for {
-      dag            <- MultiParentCasper[F].dag
-      latestMessages <- dag.latestMessageHashes
-      tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
-      tipHash        = tipHashes.head
-      tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
-      mainChain      <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
-    } yield mainChain
-
-  // TOOD extract common code from show blocks
-  @deprecated("To be removed before devnet. Use `getBlockInfos`.", "0.4")
-  def showBlocks[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage: Fs2Compiler](
-      depth: Int
-  ): F[List[BlockInfoWithoutTuplespace]] = {
-    val errorMessage =
-      "Could not show blocks."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
-      for {
-        dag <- MultiParentCasper[F].dag
-        flattenedBlockInfosUntilDepth <- getFlattenedBlockInfosUntilDepth[F](
-                                          depth,
-                                          dag
-                                        )
-      } yield flattenedBlockInfosUntilDepth.reverse
-
-    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
-      casperResponse(_),
-      errorMessage,
-      List.empty[BlockInfoWithoutTuplespace].pure[F]
-    )
-  }
-
-  private def getFlattenedBlockInfosUntilDepth[F[_]: MonadThrowable: MultiParentCasper: Log: FinalityDetector: BlockStorage: Fs2Compiler](
-      depth: Int,
-      dag: DagRepresentation[F]
-  ): F[List[BlockInfoWithoutTuplespace]] =
-    for {
-      topoSort <- dag.topoSortTail(depth).compile.toVector
-      result <- topoSort.foldM(List.empty[BlockInfoWithoutTuplespace]) {
-                 case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
-                   for {
-                     blocksAtHeight     <- blockHashesAtHeight.traverse(ProtoUtil.unsafeGetBlock[F])
-                     blockInfosAtHeight <- blocksAtHeight.traverse(getBlockInfoWithoutTuplespace[F])
-                   } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
-               }
-    } yield result
-
-  @deprecated("To be removed before devnet.", "0.4")
-  def showMainChain[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
-      depth: Int
-  ): F[List[BlockInfoWithoutTuplespace]] = {
-    val errorMessage =
-      "Could not show main chain."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
-      for {
-        dag            <- MultiParentCasper[F].dag
-        latestMessages <- dag.latestMessageHashes
-        tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
-        tipHash        = tipHashes.head
-        tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
-        mainChain      <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[Block], depth)
-        blockInfos     <- mainChain.toList.traverse(getBlockInfoWithoutTuplespace[F])
-      } yield blockInfos
-
-    MultiParentCasperRef.withCasper[F, List[BlockInfoWithoutTuplespace]](
-      casperResponse(_),
-      errorMessage,
-      List.empty[BlockInfoWithoutTuplespace].pure[F]
-    )
-  }
-
-  // TODO: Replace with call to BlockStorage
-  @deprecated("To be removed before devnet. Will add `getDeployInfo`.", "0.4")
-  def findBlockWithDeploy[F[_]: MonadThrowable: MultiParentCasperRef: Log: FinalityDetector: BlockStorage: Fs2Compiler](
-      accountPublicKey: ByteString,
-      timestamp: Long
-  ): F[BlockQueryResponse] = {
-    val errorMessage =
-      "Could not find block with deploy."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[BlockQueryResponse] =
-      for {
-        dag               <- MultiParentCasper[F].dag
-        allBlocksTopoSort <- dag.topoSort(0L).compile.toVector
-        maybeBlock <- findBlockWithDeploy[F](
-                       allBlocksTopoSort.flatten.reverse,
-                       accountPublicKey,
-                       timestamp
-                     )
-        blockQueryResponse <- maybeBlock.traverse(getFullBlockInfo[F])
-      } yield blockQueryResponse.fold(
-        BlockQueryResponse(
-          status = s"Error: Failure to find block containing deploy signed by ${PrettyPrinter
-            .buildString(accountPublicKey)} with timestamp ${timestamp.toString}"
-        )
-      )(
-        blockInfo =>
-          BlockQueryResponse(
-            status = "Success",
-            blockInfo = Some(blockInfo)
-          )
-      )
-
-    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
-      casperResponse(_),
-      errorMessage,
-      BlockQueryResponse(status = s"Error: errorMessage").pure[F]
-    )
-  }
-
-  private def findBlockWithDeploy[F[_]: MonadThrowable: Log: BlockStorage](
-      blockHashes: Vector[BlockHash],
-      accountPublicKey: ByteString,
-      timestamp: Long
-  ): F[Option[Block]] =
-    blockHashes.toStream
-      .traverse(ProtoUtil.unsafeGetBlock[F](_))
-      .map(blocks => blocks.find(ProtoUtil.containsDeploy(_, accountPublicKey, timestamp)))
 
   def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
       deployHashBase16: String
@@ -494,129 +309,4 @@ object BlockAPI {
       full: Boolean = false
   ): F[List[BlockInfo]] =
     getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
-
-  @deprecated("To be removed before devnet. Use `getBlockInfo`.", "0.4")
-  def showBlock[F[_]: Monad: MultiParentCasperRef: Log: FinalityDetector: BlockStorage](
-      q: BlockQuery
-  ): F[BlockQueryResponse] = {
-    val errorMessage =
-      "Could not show block."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
-      for {
-        maybeBlock <- BlockStorage[F]
-                       .getByPrefix(q.hash)
-                       .map(_.map(_.getBlockMessage))
-
-        blockQueryResponse <- maybeBlock match {
-                               case Some(block) =>
-                                 for {
-                                   blockInfo <- getFullBlockInfo[F](block)
-                                 } yield BlockQueryResponse(
-                                   status = "Success",
-                                   blockInfo = Some(blockInfo)
-                                 )
-                               case None =>
-                                 BlockQueryResponse(
-                                   status = s"Error: Failure to find block with hash ${q.hash}"
-                                 ).pure[F]
-                             }
-      } yield blockQueryResponse
-
-    MultiParentCasperRef.withCasper[F, BlockQueryResponse](
-      casperResponse(_),
-      errorMessage,
-      BlockQueryResponse(status = s"Error: $errorMessage").pure[F]
-    )
-  }
-
-  private def getBlockInfo[A, F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
-      block: Block,
-      constructor: (
-          Block,
-          Long,
-          Int,
-          BlockHash,
-          Long,
-          BlockHash,
-          Seq[BlockHash]
-      ) => F[A]
-  ): F[A] = {
-    val header          = block.getHeader
-    val protocolVersion = header.protocolVersion
-    val deployCount     = header.deployCount
-    val postStateHash   = ProtoUtil.postStateHash(block)
-    val timestamp       = header.timestamp
-    val mainParent      = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
-    val parentsHashList = header.parentHashes
-    for {
-
-      blockInfo <- constructor(
-                    block,
-                    protocolVersion,
-                    deployCount,
-                    postStateHash,
-                    timestamp,
-                    mainParent,
-                    parentsHashList
-                  )
-    } yield blockInfo
-  }
-
-  private def getFullBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
-      block: Block
-  ): F[BlockInfoWithTuplespace] =
-    getBlockInfo[BlockInfoWithTuplespace, F](block, constructBlockInfo[F] _)
-
-  private def getBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
-      block: Block
-  ): F[BlockInfoWithoutTuplespace] =
-    getBlockInfo[BlockInfoWithoutTuplespace, F](block, constructBlockInfoWithoutTuplespace[F] _)
-
-  private def constructBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
-      block: Block,
-      protocolVersion: Long,
-      deployCount: Int,
-      postStateHash: BlockHash,
-      timestamp: Long,
-      mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash]
-  ): F[BlockInfoWithTuplespace] =
-    protocol
-      .BlockInfo(
-        blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-        blockSize = block.serializedSize.toString,
-        blockNumber = ProtoUtil.blockNumber(block),
-        protocolVersion = protocolVersion,
-        deployCount = deployCount,
-        globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
-        timestamp = timestamp,
-        mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-        parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-        sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey),
-        shardId = block.getHeader.chainId
-      )
-      .pure[F]
-
-  private def constructBlockInfoWithoutTuplespace[F[_]: Monad: MultiParentCasper: FinalityDetector: BlockStorage](
-      block: Block,
-      protocolVersion: Long,
-      deployCount: Int,
-      postStateHash: BlockHash,
-      timestamp: Long,
-      mainParent: BlockHash,
-      parentsHashList: Seq[BlockHash]
-  ): F[BlockInfoWithoutTuplespace] =
-    BlockInfoWithoutTuplespace(
-      blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
-      blockSize = block.serializedSize.toString,
-      blockNumber = ProtoUtil.blockNumber(block),
-      protocolVersion = protocolVersion,
-      deployCount = deployCount,
-      globalStateRootHash = PrettyPrinter.buildStringNoLimit(postStateHash),
-      timestamp = timestamp,
-      mainParentHash = PrettyPrinter.buildStringNoLimit(mainParent),
-      parentsHashList = parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      sender = PrettyPrinter.buildStringNoLimit(block.getHeader.validatorPublicKey)
-    ).pure[F]
 }

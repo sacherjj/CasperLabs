@@ -5,7 +5,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.CachingBlockStorageTest.{
@@ -230,10 +229,6 @@ object CachingBlockStorageTest {
               )
           _ <- underlyingBlockStorage.put(blockHash, blockMsgWithTransform)
         } yield ()
-
-      override def getApprovedBlock(): Task[Option[ApprovedBlock]] = ???
-
-      override def putApprovedBlock(block: ApprovedBlock): Task[Unit] = ???
 
       override def getBlockSummary(blockHash: BlockHash): Task[Option[BlockSummary]] =
         underlyingBlockStorage.getBlockSummary(blockHash)

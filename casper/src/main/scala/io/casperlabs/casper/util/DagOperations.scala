@@ -4,6 +4,8 @@ import cats.implicits._
 import cats.{Eq, Eval, Monad, Show}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.PrettyPrinter
+import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
 import io.casperlabs.shared.StreamT
@@ -294,9 +296,6 @@ object DagOperations {
       } yield gca.get
     }
 
-  private def missingDependencyError[A: Show](a: A): Throwable =
-    new IllegalStateException(s"Missing ${Show[A].show(a)} dependency.")
-
   /** Computes Latest Common Ancestor of two elements.
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
@@ -347,7 +346,12 @@ object DagOperations {
       el =>
         dag
           .lookup(f(el))
-          .flatMap(MonadThrowable[F].fromOption(_, missingDependencyError(f(el))))
+          .flatMap(
+            MonadThrowable[F].fromOption(
+              _,
+              new IllegalStateException(s"Missing ${PrettyPrinter.buildString(f(el))} dependency.")
+            )
+          )
 
     starters
       .traverse(lookup(identity))

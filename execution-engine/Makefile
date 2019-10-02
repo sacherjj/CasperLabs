@@ -22,7 +22,7 @@ SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
-PACKAGED_SYSTEM_CONTRACTS = mint_token.wasm pos.wasm
+PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
 
 .PHONY: all
 all: build build-contracts

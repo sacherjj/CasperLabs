@@ -10,7 +10,6 @@ import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
@@ -21,10 +20,7 @@ import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
-    xa: Transactor[F],
-    //TODO: It's used only in the legacy transport layer, so it should be fine storing it in memory
-    //We'll need to remove it when we drop legacy transport layer
-    approvedBlockRef: Ref[F, Option[ApprovedBlock]]
+    xa: Transactor[F]
 ) extends BlockStorage[F]
     with DoobieCodecs {
 
@@ -145,10 +141,6 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
       .transact(xa)
       .void
 
-  override def getApprovedBlock(): F[Option[ApprovedBlock]] = approvedBlockRef.get
-
-  override def putApprovedBlock(block: ApprovedBlock): F[Unit] = approvedBlockRef.set(block.some)
-
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     sql"""|SELECT data
           |FROM block_metadata
@@ -179,8 +171,7 @@ object SQLiteBlockStorage {
       fs2Compiler: Fs2Compiler[F]
   ): F[BlockStorage[F]] =
     for {
-      ref <- Ref.of[F, Option[ApprovedBlock]](None)
-      blockStorage <- Sync[F].delay(new SQLiteBlockStorage[F](xa, ref) with MeteredBlockStorage[F] {
+      blockStorage <- Sync[F].delay(new SQLiteBlockStorage[F](xa) with MeteredBlockStorage[F] {
                        override implicit val m: Metrics[F] = metricsF
                        override implicit val ms: Source =
                          Metrics.Source(BlockStorageMetricsSource, "sqlite")

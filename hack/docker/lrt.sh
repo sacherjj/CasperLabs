@@ -35,7 +35,7 @@ initialize_accounts() {
   for ACCOUNT_INDEX in {0..2}; do
     ACCOUNT_ID="$(cat keys/account-${ACCOUNT_INDEX}/account-id)"
     ./client.sh node-0 transfer \
-      --private-key="/keys/system-account/account-private.pem" \
+      --private-key="/keys/faucet-account/account-private.pem" \
       --amount=3333333333 \
       --target-account="$ACCOUNT_ID" \
       --payment-amount=10000000

@@ -1,8 +1,8 @@
 FROM node:12.5.0-stretch-slim
 
-COPY contracts/client/transfer_to_account.wasm /app/contracts/transfer.wasm
-COPY contracts/client/standard_payment.wasm /app/contracts/payment.wasm
-COPY contracts/explorer/faucet.wasm /app/contracts/faucet.wasm
+COPY contracts/transfer_to_account.wasm /app/contracts/transfer.wasm
+COPY contracts/standard_payment.wasm /app/contracts/payment.wasm
+COPY contracts/faucet.wasm /app/contracts/faucet.wasm
 
 COPY server/node_modules /app/server/node_modules
 # Copying the local projects because after a build the server node_modules contains symlinks.

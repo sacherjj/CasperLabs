@@ -52,7 +52,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
         implicit0(finalityDetector: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
           Task
         ]
-        result <- BlockAPI.showBlocks[Task](Int.MaxValue)
+        result <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
       } yield result
   }
 }

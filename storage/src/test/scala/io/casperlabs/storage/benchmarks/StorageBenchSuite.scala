@@ -3,6 +3,7 @@ package io.casperlabs.storage.benchmarks
 import java.util.Properties
 
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc.Transform.TransformInstance

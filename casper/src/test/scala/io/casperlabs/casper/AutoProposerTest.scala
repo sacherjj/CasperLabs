@@ -196,7 +196,6 @@ object AutoProposerTest {
         lm: Map[ByteString, ByteString]
     ): F[List[ByteString]]                                                        = ???
     override def dag: F[DagRepresentation[F]]                                     = ???
-    override def fetchDependencies: F[Unit]                                       = ???
     override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float] = ???
     override def lastFinalizedBlock: F[Block]                                     = ???
     override def faultToleranceThreshold                                          = 0f
