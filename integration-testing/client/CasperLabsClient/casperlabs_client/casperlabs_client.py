@@ -22,6 +22,7 @@ from pyblake2 import blake2b
 import ed25519
 import base64
 import json
+import struct
 import logging
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
@@ -594,8 +595,11 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
+        def abi_byte_array(a: bytes) -> bytes:
+            return struct.pack("<I", len(a)) + a
+
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
+        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
