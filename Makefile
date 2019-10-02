@@ -13,8 +13,8 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
-PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \))
-TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/grpc/generated -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
+PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \) | grep -v node_modules)
+TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/sdk/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 
 RUST_TOOLCHAIN := $(shell cat execution-engine/rust-toolchain)
 
@@ -37,6 +37,8 @@ publish: docker-push-all
 clean:
 	$(MAKE) -C execution-engine clean
 	sbt clean
+	cd explorer/grpc && rm -rf google io node_modules
+	cd explorer/sdk && rm -rf node_modules dist
 	cd explorer/ui && rm -rf node_modules build
 	cd explorer/server && rm -rf node_modules dist
 	rm -rf .make
@@ -186,7 +188,9 @@ cargo-native-packager/%:
 	explorer/server/package.json
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
-			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
+	        cd explorer/grpc   && npm install && cd - &&\
+	        cd explorer/sdk    && npm install && npm install --no-save ../grpc && npm run build && cd - &&\
+			cd explorer/ui     && npm install  && CI=false npm run build && cd - && \
 			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
@@ -198,9 +202,9 @@ cargo-native-packager/%:
 		.make/install/protoc-ts \
 		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
-	$(eval DIR_OUT = ./explorer/grpc/generated)
-	rm -rf $(DIR_OUT)
-	mkdir -p $(DIR_OUT)
+	$(eval DIR_OUT = ./explorer/grpc)
+	rm -rf $(DIR_OUT)/google
+	rm -rf $(DIR_OUT)/io
 	# First the pure data packages, so it doesn't create empty _pb_service.d.ts files.
 	# Then the service we'll invoke.
 	./hack/build/docker-buildenv.sh "\

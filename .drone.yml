@@ -384,6 +384,7 @@ steps:
     changeset:
       includes:
       - "**/.drone.yml"
+      - "**/**.proto"
       - "explorer/**"
   depends_on:
   - rust-compile-test-bors

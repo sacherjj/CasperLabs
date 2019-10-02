@@ -4,6 +4,7 @@
   "description": "CasperLabs Explorer Server",
   "main": "dist/server.js",
   "scripts": {
+    "postinstall": "npm install --no-save ../grpc ../sdk",
     "clean:dist": "rm -rf dist",
     "prebuild": "tslint -c tslint.json -p tsconfig.json --fix",
     "build": "tsc",
@@ -12,7 +13,7 @@
     "start": "node .",
     "dev": "nodemon -e ts --watch src --exec \"npm run build && npm run start\"",
     "start:both": "concurrently \"npm run dev\" \"cd ../ui && npm start\"",
-    "test": "TS_NODE_FILES=true mocha -r ts-node/register src/**/*.test.ts"
+    "test": "TS_NODE_FILES=true mocha -r ts-node/register test/**/*.test.ts"
   },
   "author": "",
   "license": "ISC",
@@ -38,6 +39,8 @@
     "@types/express-jwt": "0.0.42",
     "@types/google-protobuf": "^3.7.1",
     "blakejs": "^1.1.0",
+    "casperlabs-grpc": "latest",
+    "casperlabs-sdk": "latest",
     "command-line-args": "^5.1.1",
     "dotenv": "^8.0.0",
     "express": "^4.17.1",
