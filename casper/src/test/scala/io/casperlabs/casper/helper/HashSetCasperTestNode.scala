@@ -295,9 +295,6 @@ object HashSetCasperTestNode {
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

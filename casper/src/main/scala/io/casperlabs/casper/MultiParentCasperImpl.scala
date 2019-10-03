@@ -313,33 +313,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             .pure[F]
             .widen
 
-        case (Some(session), Some(payment)) =>
-          List(
-            "session" -> session,
-            "payment" -> payment
-          ).collect {
-              case (name, code) if code.contract.isWasm =>
-                // TODO: Should deploys have a protocol version, or a contract API version?
-                // Or should we use the version of the tips? The last finalized block?
-                ExecutionEngineService[F]
-                  .verifyWasm(ValidateRequest(code.getWasm, protocolVersion = None))
-                  .map(name -> _)
-            }
-            .sequence
-            .map { results =>
-              results.collect {
-                case (name, Left(message)) => name -> message
-              }
-            }
-            .flatMap {
-              case Nil =>
-                addDeploy(deploy)
-              case errors =>
-                val ex: Throwable = new IllegalArgumentException(
-                  s"Contract verification failed: ${errors.map(e => s"${e._1}: ${e._2}").mkString("; ")}"
-                )
-                ex.asLeft[Unit].pure[F]
-            }
+        case _ =>
+          addDeploy(deploy)
       }
     case None =>
       new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen

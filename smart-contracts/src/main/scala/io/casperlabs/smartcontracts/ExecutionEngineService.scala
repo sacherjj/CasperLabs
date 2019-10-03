@@ -43,7 +43,6 @@ import io.casperlabs.ipc.ChainSpec.GenesisConfig
       path: Seq[String],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Value]]
-  def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
@@ -166,20 +165,6 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-
-  override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-    stub.validate(contracts).to[F] >>= (
-      _.result match {
-        case ValidateResponse.Result.Empty =>
-          Sync[F].raiseError(
-            new IllegalStateException("Execution Engine service has sent a corrupted reply")
-          )
-        case ValidateResponse.Result.Success(_) =>
-          ().asRight[String].pure[F]
-        case ValidateResponse.Result.Failure(cause: String) =>
-          cause.asLeft[Unit].pure[F]
-      }
-    )
 }
 
 object ExecutionEngineService {
