@@ -57,17 +57,17 @@ mod ext_ffi {
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
         pub fn store_function(
-            value_ptr: *const u8,
-            value_size: usize,
-            extra_urefs_ptr: *const u8,
-            extra_urefs_size: usize,
-            hash_ptr: *const u8,
+            function_name_ptr: *const u8,
+            function_name_size: usize,
+            named_keys_ptr: *const u8,
+            named_keys_size: usize,
+            uref_addr_ptr: *const u8,
         );
         pub fn store_function_at(
-            value_ptr: *const u8,
-            value_size: usize,
-            extra_urefs_ptr: *const u8,
-            extra_urefs_size: usize,
+            function_name_ptr: *const u8,
+            function_name_size: usize,
+            named_keys_ptr: *const u8,
+            named_keys_size: usize,
             hash_ptr: *const u8,
         );
         pub fn serialize_named_keys() -> usize;
