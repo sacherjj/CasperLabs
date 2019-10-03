@@ -54,14 +54,12 @@ trait ArbitraryIpc {
       address           <- genBytes(32)
       sessionCode       <- arbDeployPayload.arbitrary
       paymentCode       <- arbDeployPayload.arbitrary
-      motes             <- Gen.choose(0L, Long.MaxValue)
       gasPrice          <- Gen.choose(1L, 1000)
       authorizationKeys <- Gen.listOfN(10, genBytes(32))
     } yield DeployItem()
       .withAddress(address)
       .withSession(sessionCode)
       .withPayment(paymentCode)
-      .withMotesTransferredInPayment(motes)
       .withGasPrice(gasPrice)
       .withAuthorizationKeys(authorizationKeys)
   }

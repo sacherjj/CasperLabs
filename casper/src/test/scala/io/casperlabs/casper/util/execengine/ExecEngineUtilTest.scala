@@ -190,7 +190,11 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                   d =>
                     DeployResult(
                       DeployResult.Value.ExecutionResult(
-                        DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                        DeployResult.ExecutionResult(
+                          Some(getExecutionEffect(d)),
+                          None,
+                          Some(state.BigInt("10", bitWidth = 512))
+                        )
                       )
                     )
                 )
