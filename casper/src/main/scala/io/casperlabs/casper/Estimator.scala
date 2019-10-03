@@ -1,17 +1,15 @@
 package io.casperlabs.casper
 
 import cats.Monad
-import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
-import io.casperlabs.casper.util.{implicits, DagOperations}
-import implicits.{eqBlockHash, showBlockHash}
-import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
-import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.storage.dag.DagRepresentation
 
-import scala.collection.immutable.{Map, Set}
+import scala.collection.immutable.Map
 
 object Estimator {
   type BlockHash = ByteString
@@ -19,16 +17,18 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
+  /* Should not be used as long as `DagRepresentation` is not immutable. See NODE-923
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
       equivocationsTracker: EquivocationsTracker
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[List[BlockHash]] =
     for {
       latestMessageHashes <- dag.latestMessageHashes
       result <- Estimator
                  .tips[F](dag, genesis, latestMessageHashes, equivocationsTracker)
-    } yield result.toIndexedSeq
+    } yield result
+   */
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -98,7 +98,7 @@ object Estimator {
     * @param stopHash Block at which we stop computing scores. Should be latest common ancestor of `latestMessagesHashes`.
     * @return Scores map.
     */
-  def lmdScoring[F[_]: Monad](
+  def lmdScoring[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash],
@@ -108,7 +108,7 @@ object Estimator {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => dag.lookup(hash).map(_.get.parents.take(1))
+            hash => dag.lookup(hash).map(_.get.parents.take(1).toList)
           )
           .takeUntil(_ == stopHash)
           .foldLeftF(acc) {

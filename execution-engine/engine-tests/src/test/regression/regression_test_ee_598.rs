@@ -15,7 +15,6 @@ use test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 #[allow(unused)]
 mod test_support;
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];
 
 const GENESIS_VALIDATOR_BOND: u64 = 50_000;
@@ -32,9 +31,9 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     };
 
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, genesis_validators)
+        .run_genesis(DEFAULT_ACCOUNT_ADDR, genesis_validators)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             "pos_bonding.wasm",
             DEFAULT_BLOCK_TIME,
             1,

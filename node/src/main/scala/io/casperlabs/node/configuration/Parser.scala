@@ -6,7 +6,6 @@ import scala.util.Try
 import cats._
 import cats.implicits._
 import cats.syntax._
-import io.casperlabs.comm.CommError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._
 import eu.timepit.refined._
@@ -44,7 +43,7 @@ private[configuration] trait ParserImplicits {
       .leftMap(_.getMessage)
 
   implicit val peerNodeParser: Parser[Node] = s => {
-    Node.fromAddress(s).leftMap(CommError.errorMessage)
+    Node.fromAddress(s)
   }
 
   implicit val positiveIntParser: Parser[Refined[Int, Positive]] =

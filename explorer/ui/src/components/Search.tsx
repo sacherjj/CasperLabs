@@ -6,10 +6,10 @@ import { Form, TextField, ErrorMessage, RadioField } from './Forms';
 import {
   BlockInfo,
   DeployInfo
-} from '../grpc/io/casperlabs/casper/consensus/info_pb';
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Redirect } from 'react-router';
 import Pages from './Pages';
-import { encodeBase16 } from '../lib/Conversions';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 interface Props {
   search: SearchContainer;

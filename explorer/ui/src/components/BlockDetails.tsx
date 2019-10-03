@@ -2,15 +2,15 @@ import React from 'react';
 import { RouteComponentProps, withRouter, Link } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import { BlockContainer } from '../containers/BlockContainer';
-import { decodeBase16, encodeBase16 } from '../lib/Conversions';
 import DataTable from './DataTable';
-import { BlockInfo } from '../grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
 import { RefreshableComponent, Icon } from './Utils';
 import { BlockDAG } from './BlockDAG';
-import { Block } from '../grpc/io/casperlabs/casper/consensus/consensus_pb';
+import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import { shortHash } from './Utils';
 import ObservableValueMap, { ObservableValue } from '../lib/ObservableValueMap';
+import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
 
 // https://www.pluralsight.com/guides/react-router-typescript
 

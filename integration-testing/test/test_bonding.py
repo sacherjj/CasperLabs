@@ -310,7 +310,9 @@ def transfer_to_account(
     session_contract=Contract.TRANSFER_TO_ACCOUNT,
 ):
 
-    session_args = ABI.args([ABI.account(bytes.fromhex(to_address)), ABI.u32(amount)])
+    session_args = ABI.args(
+        [ABI.account("account", to_address), ABI.u32("amount", amount)]
+    )
 
     _, deploy_hash_bytes = node.p_client.deploy(
         from_address=from_address,
@@ -356,12 +358,16 @@ def _call_pos_bonding(
     method: bytes = b"bond",
 ):
     if method == b"bond":
-        session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
+        session_args = ABI.args(
+            [ABI.byte_array("method", method), ABI.u512("amount", amount)]
+        )
     elif method == b"unbond":
         session_args = ABI.args(
             [
-                ABI.byte_array(method),
-                ABI.option(ABI.u512(amount) if amount is not None else None),
+                ABI.byte_array("method", method),
+                ABI.optional_value(
+                    "amount", ABI.u512("amount", amount) if amount is not None else None
+                ),
             ]
         )
     else:

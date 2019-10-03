@@ -1,20 +1,17 @@
 package io.casperlabs.casper.validation
 
+import cats.Applicative
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, ApplicativeError, Functor}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.protocol.ApprovedBlock
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
-import io.casperlabs.casper._
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
@@ -24,10 +21,11 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 import scala.util.{Success, Try}
-import io.casperlabs.casper.util.DagOperations
 
 object ValidationImpl {
   type Data        = Array[Byte]
@@ -35,29 +33,24 @@ object ValidationImpl {
 
   val DRIFT = 15000 // 15 seconds
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
+  val MAX_DEPENDENCIES: Int = 10
+
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
+  import ValidationImpl.MAX_TTL
+  import ValidationImpl.MIN_TTL
+  import ValidationImpl.MAX_DEPENDENCIES
+  import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
   type BlockHeight = Long
-
-  implicit class BlockSummaryOps(summary: BlockSummary) {
-    def isGenesisLike =
-      summary.getHeader.parentHashes.isEmpty &&
-        summary.getHeader.validatorPublicKey.isEmpty &&
-        summary.getSignature.sig.isEmpty
-  }
-
-  implicit class BlockOps(block: Block) {
-    def isGenesisLike =
-      block.getHeader.parentHashes.isEmpty &&
-        block.getHeader.validatorPublicKey.isEmpty &&
-        block.getSignature.sig.isEmpty
-  }
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
@@ -76,45 +69,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       case _                      => None
     }
 
-  def signature(d: Data, sig: protocol.Signature): Boolean =
-    signatureVerifiers(sig.algorithm).fold(false) { verify =>
-      verify(d, Signature(sig.sig.toByteArray), PublicKey(sig.publicKey.toByteArray))
+  def signature(d: Data, sig: consensus.Signature, key: PublicKey): Boolean =
+    signatureVerifiers(sig.sigAlgorithm).fold(false) { verify =>
+      verify(d, Signature(sig.sig.toByteArray), key)
     }
-
-  def approvedBlock(
-      a: ApprovedBlock,
-      requiredValidators: Set[PublicKeyBS]
-  ): F[Boolean] = {
-    val maybeSigData = for {
-      c     <- a.candidate
-      bytes = c.toByteArray
-    } yield Blake2b256.hash(bytes)
-
-    val requiredSigs = a.candidate.map(_.requiredSigs).getOrElse(0)
-
-    maybeSigData match {
-      case Some(sigData) =>
-        val validatedSigs =
-          (for {
-            s      <- a.sigs
-            verify <- signatureVerifiers(s.algorithm)
-            pk     = s.publicKey
-            if verify(sigData, Signature(s.sig.toByteArray), PublicKey(pk.toByteArray))
-          } yield pk).toSet
-
-        if (validatedSigs.size >= requiredSigs && requiredValidators.forall(validatedSigs.contains))
-          true.pure[F]
-        else
-          Log[F]
-            .warn("Received invalid ApprovedBlock message not containing enough valid signatures.")
-            .map(_ => false)
-
-      case None =>
-        Log[F]
-          .warn("Received invalid ApprovedBlock message not containing any candidate.")
-          .map(_ => false)
-    }
-  }
 
   /** Validate just the BlockSummary, assuming we don't have the block yet, or all its dependencies.
     * We can check that all the fields are present, the signature is fine, etc.
@@ -123,19 +81,20 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def blockSummary(
       summary: BlockSummary,
       chainId: String
-  ): F[Unit] = {
+  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable(
             formatOfFields(summary, treatAsGenesis),
             version(
               summary,
-              CasperLabsProtocolVersions.thresholdsVersionMap.versionAt
+              CasperLabsProtocolVersions[F].versionAt(_)
             ),
             if (!treatAsGenesis) blockSignature(summary) else true.pure[F]
           )
       _ <- summaryHash(summary)
       _ <- chainIdentifier(summary, chainId)
+      _ <- ballot(summary)
     } yield ()
   }
 
@@ -145,7 +104,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F]): F[Unit] = {
+  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -178,7 +137,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         verify(
           b.blockHash.toByteArray,
           Signature(b.getSignature.sig.toByteArray),
-          PublicKey(b.getHeader.validatorPublicKey.toByteArray)
+          PublicKey(b.validatorPublicKey.toByteArray)
         )
       ) match {
         case Success(true) => true.pure[F]
@@ -226,6 +185,52 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .map(_.forall(identity))
     }
 
+  private def validateTimeToLive(
+      ttl: Int,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (ttl < MIN_TTL)
+      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(_.some)
+    else if (ttl > MAX_TTL)
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  private def validateDependencies(
+      dependencies: Seq[ByteString],
+      deployHash: ByteString
+  ): F[List[Errors.DeployHeaderError]] = {
+    val numDependencies = dependencies.length
+    val tooMany =
+      if (numDependencies > MAX_DEPENDENCIES)
+        Errors.DeployHeaderError
+          .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
+          .logged[F]
+          .map(_.some)
+      else
+        none[Errors.DeployHeaderError].pure[F]
+
+    val invalid = dependencies.toList
+      .filter(_.size != 32)
+      .traverse(dep => Errors.DeployHeaderError.invalidDependency(deployHash, dep).logged[F])
+
+    Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
+  }
+
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+    d.header match {
+      case Some(header) =>
+        Applicative[F].map2(
+          validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
+          validateDependencies(header.dependencies, d.deployHash)
+        ) {
+          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+        }
+
+      case None =>
+        Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
+    }
+
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean] =
     for {
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
@@ -235,7 +240,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                    _ <- Log[F].warn(
                          ignore(
                            block,
-                           s"block creator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has 0 weight."
+                           s"block creator ${PrettyPrinter.buildString(block.validatorPublicKey)} has 0 weight."
                          )
                        )
                  } yield false
@@ -269,15 +274,15 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
       } yield false
-    } else if (b.getHeader.chainId.isEmpty) {
+    } else if (b.chainId.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block chain identifier is empty."))
       } yield false
-    } else if (b.getHeader.getState.postStateHash.isEmpty) {
+    } else if (b.state.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
-    } else if (b.getHeader.bodyHash.isEmpty) {
+    } else if (b.bodyHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
       } yield false
@@ -288,20 +293,21 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Validates whether block was built using correct protocol version.
   def version(
       b: BlockSummary,
-      m: BlockHeight => state.ProtocolVersion
+      m: BlockHeight => F[state.ProtocolVersion]
   ): F[Boolean] = {
-    val blockVersion = b.getHeader.protocolVersion
-    val blockHeight  = b.getHeader.rank
-    val version      = m(blockHeight).value
-    if (blockVersion == version) {
-      true.pure[F]
-    } else {
-      Log[F].warn(
-        ignore(
-          b,
-          s"Received block version $blockVersion, expected version $version."
-        )
-      ) *> false.pure[F]
+    val blockVersion = b.protocolVersion
+    val blockHeight  = b.rank
+    m(blockHeight).map(_.value).flatMap { version =>
+      if (blockVersion == version) {
+        true.pure[F]
+      } else {
+        Log[F].warn(
+          ignore(
+            b,
+            s"Received block version $blockVersion, expected version $version."
+          )
+        ) *> false.pure[F]
+      }
     }
   }
 
@@ -312,9 +318,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       block: BlockSummary
   )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
-      parentsPresent <- block.getHeader.parentHashes.toList
+      parentsPresent <- block.parentHashes.toList
                          .forallM(p => BlockStorage[F].contains(p))
-      justificationsPresent <- block.getHeader.justifications.toList
+      justificationsPresent <- block.justifications.toList
                                 .forallM(j => BlockStorage[F].contains(j.latestBlockHash))
       _ <- FunctorRaise[F, InvalidBlock]
             .raise[Unit](MissingBlocks)
@@ -327,9 +333,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   )(implicit bs: BlockStorage[F]): F[Unit] =
     for {
       currentTime  <- Time[F].currentMillis
-      timestamp    = b.getHeader.timestamp
+      timestamp    = b.timestamp
       beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
-      latestParentTimestamp <- b.getHeader.parentHashes.toList.foldM(0L) {
+      latestParentTimestamp <- b.parentHashes.toList.foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
                                   ProtoUtil
                                     .unsafeGetBlockSummary[F](parentHash)
@@ -361,7 +367,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   ): F[Option[FiniteDuration]] =
     for {
       currentMillis <- Time[F].currentMillis
-      delay <- b.getHeader.timestamp - currentMillis match {
+      delay <- b.timestamp - currentMillis match {
                 case n if n <= 0     => none[FiniteDuration].pure[F]
                 case n if n <= DRIFT =>
                   // Sleep for a little bit more time to ensure we won't propose block on top of block from future
@@ -377,7 +383,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      justificationMsgs <- b.getHeader.justifications.toList.traverse { justification =>
+      justificationMsgs <- b.justifications.toList.traverse { justification =>
                             dag.lookup(justification.latestBlockHash).flatMap {
                               MonadThrowable[F].fromOption(
                                 _,
@@ -388,7 +394,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                             }
                           }
       calculatedRank = ProtoUtil.nextRank(justificationMsgs)
-      actuallyRank   = b.getHeader.rank
+      actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
@@ -405,6 +411,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           }
     } yield ()
 
+  // Validates that a message that is supposed to be a ballot adheres to ballot's specification.
+  private def ballot(b: BlockSummary): F[Unit] =
+    FunctorRaise[F, InvalidBlock]
+      .raise[Unit](InvalidTargetHash)
+      .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
+
   /**
     * Works with either efficient justifications or full explicit justifications.
     * Specifically, with efficient justifications, if a block B doesn't update its
@@ -415,40 +427,45 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
-    for {
-      creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
-                                        dag,
-                                        b.getHeader.justifications,
-                                        b.getHeader.validatorPublicKey
-                                      )
-      number = b.getHeader.validatorBlockSeqNum
-      ok     = creatorJustificationSeqNumber == number
-      _ <- if (ok) {
-            Applicative[F].unit
-          } else {
-            for {
-              _ <- Log[F].warn(
-                    ignore(
-                      b,
-                      s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+    if (b.isGenesisLike)
+      FunctorRaise[F, InvalidBlock]
+        .raise[Unit](InvalidSequenceNumber)
+        .whenA(b.validatorBlockSeqNum != 0)
+    else
+      for {
+        creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
+                                          dag,
+                                          b.getHeader.justifications,
+                                          b.getHeader.validatorPublicKey
+                                        )
+        number = b.validatorBlockSeqNum
+        ok     = creatorJustificationSeqNumber == number
+        _ <- if (ok) {
+              Applicative[F].unit
+            } else {
+              for {
+                _ <- Log[F].warn(
+                      ignore(
+                        b,
+                        s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+                      )
                     )
-                  )
-              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
-            } yield ()
-          }
-    } yield ()
+                _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
+              } yield ()
+            }
+      } yield ()
 
   // Agnostic of justifications
   def chainIdentifier(
       b: BlockSummary,
       chainId: String
   ): F[Unit] =
-    if (b.getHeader.chainId == chainId) {
+    if (b.chainId == chainId) {
       Applicative[F].unit
     } else {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"got chain identifier ${b.getHeader.chainId} while $chainId was expected.")
+              ignore(b, s"got chain identifier ${b.chainId} while $chainId was expected.")
             )
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidChainId)
       } yield ()
@@ -482,7 +499,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     val bodyHashComputed  = ProtoUtil.protoHash(b.getBody)
 
     if (b.blockHash == blockHashComputed &&
-        b.getHeader.bodyHash == bodyHashComputed) {
+        b.bodyHash == bodyHashComputed) {
       Applicative[F].unit
     } else {
       def show(hash: ByteString) = PrettyPrinter.buildString(hash)
@@ -495,9 +512,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               .whenA(b.blockHash != blockHashComputed)
         _ <- Log[F]
               .warn(
-                s"Expected body hash ${show(bodyHashComputed)}; got ${show(b.getHeader.bodyHash)}"
+                s"Expected body hash ${show(bodyHashComputed)}; got ${show(b.bodyHash)}"
               )
-              .whenA(b.getHeader.bodyHash != bodyHashComputed)
+              .whenA(b.bodyHash != bodyHashComputed)
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockHash)
       } yield ()
     }
@@ -515,7 +532,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def deployCount(
       b: Block
   ): F[Unit] =
-    if (b.getHeader.deployCount == b.getBody.deploys.length) {
+    if (b.deployCount == b.getBody.deploys.length) {
       Applicative[F].unit
     } else {
       for {
@@ -664,7 +681,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       block: Block,
       invalidBlockTracker: Set[BlockHash]
   ): F[Unit] = {
-    val invalidJustifications = block.getHeader.justifications.filter(
+    val invalidJustifications = block.justifications.filter(
       justification => invalidBlockTracker.contains(justification.latestBlockHash)
     )
     val neglectedInvalidJustification = invalidJustifications.exists { justification =>

@@ -1,29 +1,25 @@
 package io.casperlabs.comm.gossiping
 
-import cats.implicits._
-import cats.effect.concurrent.Semaphore
-import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.auto._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric._
-import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.GossipError
-import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import java.util.concurrent.atomic.AtomicInteger
 
-import monix.eval.Task
-import monix.execution.{ExecutionModel, Scheduler}
-import monix.tail.Iterant
-import org.scalatest._
-import org.scalatest.concurrent._
-import org.scalacheck.{Arbitrary, Gen}
-import Arbitrary.arbitrary
+import cats.effect.concurrent.Semaphore
+import cats.implicits._
+import com.google.protobuf.ByteString
+import eu.timepit.refined.auto._
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
+import io.casperlabs.comm.GossipError
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
-import monix.execution.schedulers.TestScheduler
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.Log
+import monix.eval.Task
+import monix.execution.Scheduler
+import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
+import org.scalatest._
+
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration._
 
@@ -31,7 +27,7 @@ class DownloadManagerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus {
+    with ArbitraryConsensusAndComm {
 
   import DownloadManagerSpec._
   import Scheduler.Implicits.global
@@ -79,6 +75,7 @@ class DownloadManagerSpec
         case (manager, backend) =>
           for {
             ws <- scheduleAll(manager)
+            _  = backend.scheduled should contain theSameElementsAs dag.map(_.blockHash)
             _  <- awaitAll(ws)
           } yield {
             backend.blocks should contain theSameElementsAs dag.map(_.blockHash)
@@ -578,6 +575,8 @@ object DownloadManagerSpec {
     @volatile var validations = Vector.empty[ByteString]
     @volatile var blocks      = Vector.empty[ByteString]
     @volatile var summaries   = Vector.empty[ByteString]
+    @volatile var scheduled   = Vector.empty[ByteString]
+    @volatile var downloaded  = Vector.empty[ByteString]
 
     def hasBlock(blockHash: ByteString): Task[Boolean] =
       Task.now(blocks.contains(blockHash))
@@ -593,6 +592,13 @@ object DownloadManagerSpec {
 
     def storeBlockSummary(summary: BlockSummary): Task[Unit] = Task.delay {
       synchronized { summaries = summaries :+ summary.blockHash }
+    }
+    def onScheduled(summary: BlockSummary): Task[Unit] = Task.delay {
+      synchronized { scheduled = scheduled :+ summary.blockHash }
+    }
+
+    def onDownloaded(blockHash: ByteString): Task[Unit] = Task.delay {
+      synchronized { downloaded = downloaded :+ blockHash }
     }
   }
   object MockBackend {
@@ -622,11 +628,6 @@ object DownloadManagerSpec {
     private val emptyDownloadManager = new DownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
     }
-    private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
-      def onPending(dag: Vector[BlockSummary]) = ???
-      def onDownloaded(blockHash: ByteString)  = ???
-      def listTips                             = ???
-    }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
       def getCandidate                                           = ???
       def addApproval(blockHash: ByteString, approval: Approval) = ???
@@ -641,10 +642,10 @@ object DownloadManagerSpec {
           def hasBlock(blockHash: ByteString)        = ???
           def getBlock(blockHash: ByteString)        = Task.now(None)
           def getBlockSummary(blockHash: ByteString) = ???
+          def listTips: Task[Seq[BlockSummary]]      = ???
         },
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
-        consensus = emptyConsensus,
         genesisApprover = emptyGenesisApprover,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
@@ -668,10 +669,10 @@ object DownloadManagerSpec {
             def hasBlock(blockHash: ByteString)        = ???
             def getBlock(blockHash: ByteString)        = regetter(Task.delay(blockMap.get(blockHash)))
             def getBlockSummary(blockHash: ByteString) = ???
+            def listTips                               = ???
           },
           synchronizer = emptySynchronizer,
           downloadManager = emptyDownloadManager,
-          consensus = emptyConsensus,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
           blockDownloadSemaphore = semaphore

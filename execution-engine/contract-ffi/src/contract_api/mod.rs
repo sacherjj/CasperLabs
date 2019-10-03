@@ -8,7 +8,7 @@ use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::{AccessRights, URef};
+use crate::uref::URef;
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
@@ -82,8 +82,12 @@ pub enum Error {
     MissingArgument,
     /// Argument not of correct type.
     InvalidArgument,
+    /// Failed to upgrade contract at URef.
+    UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
+    /// No access rights.
+    NoAccessRights,
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
@@ -104,7 +108,9 @@ impl From<Error> for u32 {
             Error::InvalidPurse => 10,
             Error::MissingArgument => 11,
             Error::InvalidArgument => 12,
-            Error::Transfer => 13,
+            Error::UpgradeContractAtURef => 13,
+            Error::Transfer => 14,
+            Error::NoAccessRights => 15,
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
     }
@@ -125,10 +131,47 @@ impl Debug for Error {
             Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
             Error::MissingArgument => write!(f, "Error::MissingArgument")?,
             Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
+            Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
+            Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
         write!(f, " [{}]", u32::from(*self))
+    }
+}
+
+pub fn i32_from(result: Result<(), Error>) -> i32 {
+    match result {
+        Ok(()) => 0,
+        Err(error) => u32::from(error) as i32,
+    }
+}
+
+pub fn result_from(value: i32) -> Result<(), Error> {
+    match value {
+        0 => Ok(()),
+        1 => Err(Error::GetURef),
+        2 => Err(Error::Deserialize),
+        3 => Err(Error::ContractNotFound),
+        4 => Err(Error::UnexpectedKeyVariant),
+        5 => Err(Error::UnexpectedValueVariant),
+        6 => Err(Error::Read),
+        7 => Err(Error::ValueNotFound),
+        8 => Err(Error::MintFailure),
+        9 => Err(Error::InvalidPurseName),
+        10 => Err(Error::InvalidPurse),
+        11 => Err(Error::MissingArgument),
+        12 => Err(Error::InvalidArgument),
+        13 => Err(Error::UpgradeContractAtURef),
+        14 => Err(Error::Transfer),
+        15 => Err(Error::NoAccessRights),
+        _ => {
+            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
+                Err(Error::User(value as u16))
+            } else {
+                unreachable!()
+            }
+        }
     }
 }
 
@@ -281,11 +324,11 @@ fn fn_bytes_by_name(name: &str) -> Vec<u8> {
     }
 }
 
-pub fn list_known_urefs() -> BTreeMap<String, Key> {
-    let bytes_size = unsafe { ext_ffi::serialize_known_urefs() };
+pub fn list_named_keys() -> BTreeMap<String, Key> {
+    let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
     let dest_ptr = alloc_bytes(bytes_size);
     let bytes = unsafe {
-        ext_ffi::list_known_urefs(dest_ptr);
+        ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
     deserialize(&bytes).unwrap()
@@ -300,19 +343,19 @@ pub fn list_known_urefs() -> BTreeMap<String, Key> {
 /// module. Note that the function is wrapped up in a new module and re-exported
 /// under the name "call". `fn_bytes_by_name` is meant to be used when storing a
 /// contract on-chain at an unforgable reference.
-pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
+pub fn fn_by_name(name: &str, named_keys: BTreeMap<String, Key>) -> Contract {
     let bytes = fn_bytes_by_name(name);
     let protocol_version = unsafe { ext_ffi::protocol_version() };
     let protocol_version = ProtocolVersion::new(protocol_version);
-    Contract::new(bytes, known_urefs, protocol_version)
+    Contract::new(bytes, named_keys, protocol_version)
 }
 
 /// Gets the serialized bytes of an exported function (see `fn_by_name`), then
 /// computes gets the address from the host to produce a key where the contract
 /// is then stored in the global state. This key is returned.
-pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
+pub fn store_function(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
     let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&known_urefs);
+    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&named_keys);
     let mut tmp = [0u8; 32];
     let tmp_ptr = tmp.as_mut_ptr();
     unsafe {
@@ -322,8 +365,8 @@ pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> Contrac
 }
 
 /// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: TURef<Contract>) {
-    let contract = fn_by_name(name, known_urefs);
+pub fn store_function_at(name: &str, named_keys: BTreeMap<String, Key>, uref: TURef<Contract>) {
+    let contract = fn_by_name(name, named_keys);
     write(uref, contract);
 }
 
@@ -352,11 +395,11 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 }
 
 /// Return the unforgable reference known by the current module under the given
-/// name. This either comes from the known_urefs of the account or contract,
+/// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
-pub fn get_uref(name: &str) -> Option<Key> {
+pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_uref(name_ptr, name_size) };
+    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
     let dest_ptr = alloc_bytes(key_size);
     let key_bytes = unsafe {
         // TODO: unify FFIs that just copy from the host buffer
@@ -369,23 +412,23 @@ pub fn get_uref(name: &str) -> Option<Key> {
 }
 
 /// Check if the given name corresponds to a known unforgable reference
-pub fn has_uref(name: &str) -> bool {
+pub fn has_key(name: &str) -> bool {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let result = unsafe { ext_ffi::has_uref_name(name_ptr, name_size) };
+    let result = unsafe { ext_ffi::has_key(name_ptr, name_size) };
     result == 0
 }
 
-/// Add the given key to the known_urefs map under the given name
-pub fn add_uref(name: &str, key: &Key) {
+/// Put the given key to the named_keys map under the given name
+pub fn put_key(name: &str, key: &Key) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
-    unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
+    unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
 /// Removes Key persisted under [name] in the current context's map.
-pub fn remove_uref(name: &str) {
+pub fn remove_key(name: &str) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
+    unsafe { ext_ffi::remove_key(name_ptr, name_size) }
 }
 
 /// Returns caller of current context.
@@ -447,6 +490,13 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
         Vec::from_raw_parts(res_ptr, res_size, res_size)
     };
     deserialize(&res_bytes).unwrap()
+}
+
+/// Stops execution of a contract and reverts execution effects with a given reason.
+pub fn revert_with_error<T: Into<Error>>(error: T) -> ! {
+    unsafe {
+        ext_ffi::revert(error.into().into());
+    }
 }
 
 /// Stops execution of a contract and reverts execution effects
@@ -685,10 +735,11 @@ pub fn transfer_from_purse_to_purse(
 }
 
 fn get_system_contract(name: &str) -> ContractPointer {
-    let key = get_uref(name).unwrap_or_else(|| revert(Error::GetURef.into()));
+    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef.into()));
 
     if let Key::URef(uref) = key {
-        let reference = TURef::new(uref.addr(), AccessRights::READ);
+        let reference =
+            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights.into()));
         ContractPointer::URef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant.into())
@@ -712,6 +763,21 @@ pub fn get_phase() -> Phase {
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
     deserialize(&bytes).unwrap()
+}
+
+/// Takes the name of a function to store and a contract URef, and overwrites the value under
+/// that URef with a new Contract instance containing the original contract's named_keys, the
+/// current protocol version, and the newly created bytes of the stored function.
+pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let key: Key = uref.into();
+    let (key_ptr, key_size, _bytes) = to_ptr(&key);
+    let result_value =
+        unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
+    match result_from(result_value) {
+        Ok(()) => (),
+        Err(error) => revert_with_error(error),
+    }
 }
 
 #[cfg(test)]
