@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::{EngineConfig, CONV_RATE};
+use engine_core::engine_state::CONV_RATE;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
@@ -27,8 +27,6 @@ fn should_exec_non_stored_code() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -47,7 +45,7 @@ fn should_exec_non_stored_code() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -85,8 +83,6 @@ fn should_exec_non_stored_code() {
 fn should_exec_stored_code_by_hash() {
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -106,7 +102,7 @@ fn should_exec_stored_code_by_hash() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -206,8 +202,6 @@ fn should_exec_stored_code_by_hash() {
 fn should_exec_stored_code_by_named_hash() {
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -227,7 +221,7 @@ fn should_exec_stored_code_by_named_hash() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -307,8 +301,6 @@ fn should_exec_stored_code_by_named_hash() {
 fn should_exec_stored_code_by_named_uref() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store transfer contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -328,7 +320,7 @@ fn should_exec_stored_code_by_named_uref() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -405,8 +397,6 @@ fn should_exec_stored_code_by_named_uref() {
 fn should_exec_payment_and_session_stored_code() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -426,7 +416,7 @@ fn should_exec_payment_and_session_stored_code() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -545,8 +535,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder_by_uref = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder_by_uref = InMemoryWasmTestBuilder::default();
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
@@ -612,8 +601,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let test_result = builder_by_uref.exec_commit_finish(exec_request_by_uref);
     let direct_uref_transforms = &test_result.builder().get_transforms()[1];
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder_by_named_uref = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
     builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
     let _ = builder_by_named_uref.exec_commit_finish(exec_request_genesis);
 
@@ -652,11 +640,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let payment_purse_amount = 1_000_000_000;
     let transferred_amount = 1;
 
-    let config = EngineConfig::new().set_use_payment_code(true);
-
     let stored_transforms = {
-        let config = config.clone();
-
         let store_request = |name: &str, deploy_hash: [u8; 32]| {
             let store_transfer = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -674,17 +658,17 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .build()
         };
 
-        let mut builder = InMemoryWasmTestBuilder::new(config);
+        let mut builder = InMemoryWasmTestBuilder::default();
 
         let store_transforms = builder
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(store_request(
+            .exec(store_request(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 [1; 32],
             ))
             .expect_success()
             .commit()
-            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
+            .exec(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
             .expect_success()
             .commit()
             .get_transforms()[1]
@@ -721,7 +705,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         builder
-            .exec_with_exec_request(call_stored_request)
+            .exec(call_stored_request)
             .expect_success()
             .commit()
             .get_transforms()[2]
@@ -729,8 +713,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     };
 
     let provided_transforms = {
-        let config = config.clone();
-
         let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -764,15 +746,15 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             ExecuteRequestBuilder::new().push_deploy(deploy).build()
         };
 
-        InMemoryWasmTestBuilder::new(config)
+        InMemoryWasmTestBuilder::default()
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(do_nothing_request([1; 32]))
+            .exec(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(do_nothing_request([2; 32]))
+            .exec(do_nothing_request([2; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(provided_request)
+            .exec(provided_request)
             .expect_success()
             .get_transforms()[2]
             .to_owned()
