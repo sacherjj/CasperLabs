@@ -2,7 +2,9 @@ from typing import Generator
 
 import docker as docker_py
 import pytest
+import shutil
 
+from casperlabs_local_net.common import make_tempdir, random_string
 from casperlabs_local_net.casperlabs_network import (
     CustomConnectionNetwork,
     OneNodeNetwork,
@@ -16,6 +18,13 @@ from casperlabs_local_net.casperlabs_network import (
     ReadOnlyNodeNetwork,
 )
 from docker.client import DockerClient
+
+
+@pytest.fixture(scope="function")
+def deleting_temp_dir():
+    directory = make_tempdir(random_string(6))
+    yield directory
+    shutil.rmtree(directory)
 
 
 @pytest.fixture(scope="session")

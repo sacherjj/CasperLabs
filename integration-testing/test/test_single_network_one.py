@@ -1,4 +1,3 @@
-import os
 import logging
 import pytest
 import json
@@ -674,7 +673,7 @@ def test_cli_scala_help(scala_cli):
     assert 'Subcommand: make-deploy' in output
 
 
-def test_cli_scala_extended_deploy(scala_cli):
+def test_cli_scala_extended_deploy(scala_cli, deleting_temp_dir):
     cli = scala_cli
     account = GENESIS_ACCOUNT
 
@@ -682,30 +681,30 @@ def test_cli_scala_extended_deploy(scala_cli):
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
 
+    unsigned_deploy_path = f'{deleting_temp_dir}/unsigned.deploy'
+    signed_deploy_path = f'{deleting_temp_dir}/signed.deploy'
+
     cli('make-deploy',
-        '-o', '/tmp/unsigned.deploy',
+        '-o', unsigned_deploy_path,
         '--from', account.public_key_hex,
         '--session', cli.resource(Contract.HELLONAME),
         '--payment', cli.resource(Contract.STANDARD_PAYMENT),
         "--payment-args", cli.payment_json)
 
     cli('sign-deploy',
-        '-i', '/tmp/unsigned.deploy',
-        '-o', '/tmp/signed.deploy',
+        '-i', unsigned_deploy_path,
+        '-o', signed_deploy_path,
         '--private-key', account.private_key_docker_path,
         '--public-key', account.public_key_docker_path)
 
-    deploy_hash = cli('send-deploy', '-i', '/tmp/signed.deploy')
+    deploy_hash = cli('send-deploy', '-i', signed_deploy_path)
     cli('propose')
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
-    # TODO: This never gets cleaned up if assert fails.
-    try:
-        os.remove('/tmp/unsigned.deploy')
-        os.remove('/tmp/signed.deploy')
-    except Exception as e:
-        logging.warning(f"Could not delete temporary files: {str(e)}")
+    # Test that replay attacks fail
+    with pytest.raises(NonZeroExitCodeError):
+        _ = cli('send-deploy', '-i', signed_deploy_path)
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
