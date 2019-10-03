@@ -49,7 +49,8 @@ fn should_transfer_to_account() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (ACCOUNT_1_ADDR,),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -109,7 +110,8 @@ fn should_transfer_from_account_to_account() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (ACCOUNT_1_ADDR,),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -145,7 +147,8 @@ fn should_transfer_from_account_to_account() {
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_02,
         (*TRANSFER_2_AMOUNT,),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_2)
@@ -208,7 +211,8 @@ fn should_transfer_to_existing_account() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (ACCOUNT_1_ADDR,),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -247,7 +251,8 @@ fn should_transfer_to_existing_account() {
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_02,
         (*TRANSFER_2_AMOUNT,),
-    );
+    )
+    .build();
     builder
         .exec_with_exec_request(exec_request_2)
         .expect_success()
@@ -287,18 +292,21 @@ fn should_fail_when_insufficient_funds() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (ACCOUNT_1_ADDR,),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_02,
         (*TRANSFER_2_AMOUNT_WITH_ADV,),
-    );
+    )
+    .build();
 
     let exec_request_3 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_02,
         (*TRANSFER_TOO_MUCH,),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -334,13 +342,15 @@ fn should_transfer_total_amount() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-    );
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_2_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-    );
+    )
+    .build();
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

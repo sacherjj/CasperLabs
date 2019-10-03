@@ -41,7 +41,7 @@ fn should_return_bonded_validators() {
     let genesis_config = test_support::create_genesis_config(accounts.clone());
 
     let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     let actual = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)

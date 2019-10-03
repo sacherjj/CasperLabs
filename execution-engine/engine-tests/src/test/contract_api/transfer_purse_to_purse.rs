@@ -20,7 +20,8 @@ fn should_run_purse_to_purse_transfer() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_PURSE,
         (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
-    );
+    )
+    .build();
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -113,7 +114,8 @@ fn should_run_purse_to_purse_transfer_with_error() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_PURSE,
         (source, target, U512::from(999_999_999_999i64)),
-    );
+    )
+    .build();
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

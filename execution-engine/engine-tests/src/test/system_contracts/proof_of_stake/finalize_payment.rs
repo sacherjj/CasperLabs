@@ -28,13 +28,15 @@ fn initialize() -> InMemoryWasmTestBuilder {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (SYSTEM_ADDR, *DEFAULT_PAYMENT),
-    );
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_ADDR, *DEFAULT_PAYMENT),
-    );
+    )
+    .build();
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -63,9 +65,10 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     );
 
     let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args)
+            .build();
     let exec_request_2 =
-        ExecuteRequestBuilder::standard(ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args);
+        ExecuteRequestBuilder::standard(ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args).build();
 
     assert!(builder.exec_with_exec_request(exec_request_1).is_error());
 

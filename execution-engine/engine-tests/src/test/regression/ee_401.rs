@@ -10,13 +10,15 @@ const CONTRACT_EE_401_REGRESSION_CALL: &str = "ee_401_regression_call.wasm";
 #[test]
 fn should_execute_contracts_which_provide_extra_urefs() {
     let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_401_REGRESSION, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_401_REGRESSION, ())
+            .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_401_REGRESSION_CALL,
         (PublicKey::new(DEFAULT_ACCOUNT_ADDR),),
-    );
+    )
+    .build();
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

@@ -44,7 +44,7 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_CREATE_ACCOUNTS,
         (accounts_bytes, amount),
-    );
+    ).build();
 
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -67,7 +67,7 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
             DEFAULT_ACCOUNT_ADDR,
             CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT,
             (account, amount),
-        );
+        ).build();
         builder
             .exec_with_exec_request(exec_request)
             .expect_success()

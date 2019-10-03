@@ -15,7 +15,8 @@ fn should_run_get_payment_purse_contract_default_account() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_GET_PAYMENT_PURSE,
         (*DEFAULT_PAYMENT,),
-    );
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)
@@ -30,12 +31,14 @@ fn should_run_get_payment_purse_contract_account_1() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_GET_PAYMENT_PURSE,
         (*DEFAULT_PAYMENT,),
-    );
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

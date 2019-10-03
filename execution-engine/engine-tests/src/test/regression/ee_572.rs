@@ -27,15 +27,18 @@ fn should_run_ee_572_regression() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER,
         account_1_creation_args,
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER,
         account_2_creation_args,
-    );
+    )
+    .build();
 
     let exec_request_3 =
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_CREATE, account_2_creation_args);
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_CREATE, account_2_creation_args)
+            .build();
 
     // Create Accounts
     builder
@@ -65,7 +68,7 @@ fn should_run_ee_572_regression() {
     };
 
     let exec_request_4 =
-        ExecuteRequestBuilder::standard(ACCOUNT_2_ADDR, CONTRACT_ESCALATE, (contract,));
+        ExecuteRequestBuilder::standard(ACCOUNT_2_ADDR, CONTRACT_ESCALATE, (contract,)).build();
 
     // Attempt to forge a new URef with escalated privileges
     let response = builder

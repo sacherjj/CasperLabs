@@ -16,12 +16,14 @@ fn should_verify_key_management_permission_with_low_weight() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_KEY_MANAGEMENT_THRESHOLDS,
         (String::from("init"),),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_KEY_MANAGEMENT_THRESHOLDS,
         (String::from("test-permission-denied"),),
-    );
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -39,7 +41,8 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_KEY_MANAGEMENT_THRESHOLDS,
         (String::from("init"),),
-    );
+    )
+    .build();
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)

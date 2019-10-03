@@ -41,6 +41,7 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U5
             CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
             (public_key, amount),
         )
+        .build()
     };
 
     builder

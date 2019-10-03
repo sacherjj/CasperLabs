@@ -12,7 +12,7 @@ fn should_run_ee_532_get_uref_regression_test() {
     // more data
 
     let exec_request =
-        ExecuteRequestBuilder::standard(UNKNOWN_ADDR, CONTRACT_EE_532_REGRESSION, ());
+        ExecuteRequestBuilder::standard(UNKNOWN_ADDR, CONTRACT_EE_532_REGRESSION, ()).build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

@@ -10,7 +10,8 @@ fn should_not_fail_deserializing() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_DESERIALIZE_ERROR,
         (DEFAULT_ACCOUNT_ADDR,),
-    );
+    )
+    .build();
     let is_error = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

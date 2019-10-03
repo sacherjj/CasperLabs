@@ -11,7 +11,7 @@ fn regression_test_genesis_hash_mismatch() {
     let mut builder_base = InMemoryWasmTestBuilder::default();
 
     let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     // Step 1.
     let builder = builder_base.run_genesis(&DEFAULT_GENESIS_CONFIG);

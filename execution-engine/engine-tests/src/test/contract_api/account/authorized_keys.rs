@@ -16,7 +16,8 @@ fn should_deploy_with_authorized_identity_key() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(1), Weight::new(1)),
-    );
+    )
+    .build();
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -140,17 +141,20 @@ fn should_raise_deploy_authorization_failure() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (PublicKey::new(key_1),),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (PublicKey::new(key_2),),
-    );
+    )
+    .build();
     let exec_request_3 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (PublicKey::new(key_3),),
-    );
+    )
+    .build();
     // Deploy threshold is equal to 3, keymgmnt is still 1.
     // Even after verifying weights and thresholds to not
     // lock out the account, those values should work as
@@ -160,7 +164,8 @@ fn should_raise_deploy_authorization_failure() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(4), Weight::new(3)),
-    );
+    )
+    .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -185,7 +190,8 @@ fn should_raise_deploy_authorization_failure() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(5), Weight::new(4)), //args
-    );
+    )
+    .build();
 
     // With deploy threshold == 3 using single secondary key
     // with weight == 2 should raise deploy authorization failure.
@@ -238,7 +244,8 @@ fn should_raise_deploy_authorization_failure() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(0), Weight::new(0)), //args
-    );
+    )
+    .build();
 
     // deployment threshold is now 4
     // failure: key_2 weight + key_1 weight < deployment threshold
@@ -309,14 +316,14 @@ fn should_authorize_deploy_with_multiple_keys() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (PublicKey::new(key_1),),
-    );
-    let exec_request_2 = {
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
-            (PublicKey::new(key_2),),
-        )
-    };
+    )
+    .build();
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
+        (PublicKey::new(key_2),),
+    )
+    .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -335,7 +342,8 @@ fn should_authorize_deploy_with_multiple_keys() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(0), Weight::new(0)),
-    );
+    )
+    .build();
     InMemoryWasmTestBuilder::from_result(result1)
         .exec_with_exec_request(exec_request_3)
         .expect_success()
@@ -354,13 +362,15 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (PublicKey::new(key_1),),
-    );
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_AUTHORIZED_KEYS,
         (Weight::new(4), Weight::new(3)),
-    );
+    )
+    .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

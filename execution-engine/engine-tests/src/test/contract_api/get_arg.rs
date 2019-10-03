@@ -22,7 +22,7 @@ const ARG1_VALUE: u64 = 42;
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
     let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GET_ARG, args);
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GET_ARG, args).build();
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

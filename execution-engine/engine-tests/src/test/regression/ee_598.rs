@@ -43,7 +43,8 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
             PublicKey::new(ACCOUNT_1_ADDR),
             U512::from(ACCOUNT_1_BALANCE),
         ),
-    );
+    )
+    .build();
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)

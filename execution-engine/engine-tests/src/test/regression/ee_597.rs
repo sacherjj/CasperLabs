@@ -7,7 +7,8 @@ const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression.wasm";
 #[test]
 fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
     let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_597_REGRESSION, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_597_REGRESSION, ())
+            .build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

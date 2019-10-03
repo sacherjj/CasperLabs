@@ -79,7 +79,8 @@ fn should_run_successful_bond_and_unbond() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
         (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_1)
@@ -129,7 +130,8 @@ fn should_run_successful_bond_and_unbond() {
             PublicKey::new(ACCOUNT_1_ADDR),
             U512::from(ACCOUNT_1_SEED_AMOUNT),
         ),
-    );
+    )
+    .build();
 
     let exec_request_3 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
@@ -138,7 +140,8 @@ fn should_run_successful_bond_and_unbond() {
             String::from(TEST_BOND_FROM_MAIN_PURSE),
             U512::from(ACCOUNT_1_STAKE),
         ),
-    );
+    )
+    .build();
 
     // Create new account (from genesis funds) and bond with it
     let result = InMemoryWasmTestBuilder::from_result(result)
@@ -203,7 +206,8 @@ fn should_run_successful_bond_and_unbond() {
             String::from(TEST_UNBOND),
             Some(U512::from(ACCOUNT_1_UNBOND_1)),
         ),
-    );
+    )
+    .build();
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_4)
@@ -260,7 +264,8 @@ fn should_run_successful_bond_and_unbond() {
             String::from(TEST_UNBOND),
             Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
         ),
-    );
+    )
+    .build();
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_5)
         .expect_success()
@@ -306,7 +311,8 @@ fn should_run_successful_bond_and_unbond() {
             String::from(TEST_UNBOND),
             Some(U512::from(ACCOUNT_1_UNBOND_2)),
         ),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_6)
@@ -353,7 +359,8 @@ fn should_run_successful_bond_and_unbond() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
         (String::from(TEST_UNBOND), None as Option<U512>),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
         .exec_with_exec_request(exec_request_7)
@@ -460,7 +467,8 @@ fn should_fail_bonding_with_insufficient_funds() {
             PublicKey::new(ACCOUNT_1_ADDR),
             *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
         ),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_BONDING,
@@ -468,7 +476,8 @@ fn should_fail_bonding_with_insufficient_funds() {
             String::from(TEST_BOND_FROM_MAIN_PURSE),
             *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
         ),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
@@ -512,7 +521,8 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
         (String::from(TEST_UNBOND), Some(U512::from(42))),
-    );
+    )
+    .build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)

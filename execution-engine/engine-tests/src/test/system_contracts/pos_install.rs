@@ -32,7 +32,8 @@ fn should_run_pos_install_contract() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (SYSTEM_ADDR,),
-    );
+    )
+    .build();
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

@@ -23,12 +23,14 @@ fn should_run_purse_to_account_transfer() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (account_1_public_key, *ACCOUNT_1_INITIAL_FUND),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         account_1_public_key.value(),
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (genesis_public_key, U512::from(1)),
-    );
+    )
+    .build();
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -193,13 +195,12 @@ fn should_run_purse_to_account_transfer() {
 fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let exec_request_1 = {
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-            (account_1_key, U512::max_value()),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (account_1_key, U512::max_value()),
+    )
+    .build();
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

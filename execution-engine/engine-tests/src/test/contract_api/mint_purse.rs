@@ -12,8 +12,10 @@ fn should_run_mint_purse_contract() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT_01,
         (SYSTEM_ADDR,),
-    );
-    let exec_request_2 = ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_MINT_PURSE, ());
+    )
+    .build();
+    let exec_request_2 =
+        ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_MINT_PURSE, ()).build();
 
     WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -29,7 +31,7 @@ fn should_run_mint_purse_contract() {
 #[test]
 fn should_not_allow_non_system_accounts_to_mint() {
     let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_MINT_PURSE, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_MINT_PURSE, ()).build();
 
     assert!(WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

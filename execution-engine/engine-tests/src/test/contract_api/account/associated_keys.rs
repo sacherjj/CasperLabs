@@ -25,12 +25,14 @@ fn should_manage_associated_key() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
-    );
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
         (DEFAULT_ACCOUNT_ADDR,),
-    );
+    )
+    .build();
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -61,7 +63,8 @@ fn should_manage_associated_key() {
         ACCOUNT_1_ADDR,
         CONTRACT_REMOVE_ASSOCIATED_KEY,
         (DEFAULT_ACCOUNT_ADDR,),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_3)

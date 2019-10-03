@@ -12,7 +12,8 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_460_REGRESSION,
         (U512::max_value(),),
-    );
+    )
+    .build();
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

@@ -1,10 +1,7 @@
-use grpc::RequestOptions;
 use lazy_static;
 
-use engine_core::engine_state::{EngineConfig, EngineState};
-use engine_grpc_server::engine_server::ipc::{CommitRequest, QueryRequest, ValidateRequest};
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_grpc_server::engine_server::state::{Key, Key_Address};
+use contract_ffi::key::Key;
+use engine_core::engine_state::EngineConfig;
 use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
 use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
@@ -12,7 +9,7 @@ use engine_shared::newtypes::CorrelationId;
 use engine_shared::test_utils;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
-use crate::support::test_support;
+use crate::support::test_support::{self, InMemoryWasmTestBuilder};
 
 pub const PROC_NAME: &str = "ee-shared-lib-tests";
 

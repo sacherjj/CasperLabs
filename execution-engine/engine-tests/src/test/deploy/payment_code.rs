@@ -29,7 +29,8 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
-    );
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -42,7 +43,8 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .expect("there should be a response")
         .to_owned();
 
-    let account_1_request = ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ());
+    let account_1_request =
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ()).build();
 
     let account_1_response = builder
         .exec_with_exec_request(account_1_request)

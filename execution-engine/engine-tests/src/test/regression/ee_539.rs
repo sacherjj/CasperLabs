@@ -14,7 +14,8 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_539_REGRESSION,
         (Weight::new(4), Weight::new(3)),
-    );
+    )
+    .build();
 
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

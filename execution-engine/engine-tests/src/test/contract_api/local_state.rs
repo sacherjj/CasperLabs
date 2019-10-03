@@ -11,10 +11,10 @@ const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 #[test]
 fn should_run_local_state_contract() {
     let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     let exec_request_2 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
 
     // This test runs a contract that's after every call extends the same key with
     // more data

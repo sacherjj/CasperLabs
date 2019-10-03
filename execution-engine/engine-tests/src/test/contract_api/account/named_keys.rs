@@ -13,7 +13,7 @@ const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 #[test]
 fn should_run_named_keys_contract() {
     let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, ());
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, ()).build();
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

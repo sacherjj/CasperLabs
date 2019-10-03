@@ -27,7 +27,8 @@ fn should_run_main_purse_contract_default_account() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_MAIN_PURSE,
         (default_account.purse_id(),),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request)
@@ -44,7 +45,8 @@ fn should_run_main_purse_contract_account_1() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *DEFAULT_PAYMENT),
-    );
+    )
+    .build();
 
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -60,7 +62,8 @@ fn should_run_main_purse_contract_account_1() {
         ACCOUNT_1_ADDR,
         CONTRACT_MAIN_PURSE,
         (account_1.purse_id(),),
-    );
+    )
+    .build();
 
     builder
         .exec_with_exec_request(exec_request_2)

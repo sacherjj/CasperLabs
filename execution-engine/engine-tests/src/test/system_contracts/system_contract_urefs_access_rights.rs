@@ -21,13 +21,15 @@ fn should_have_read_only_access_to_system_contract_urefs() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
         (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-    );
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS,
         (),
-    );
+    )
+    .build();
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

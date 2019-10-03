@@ -22,11 +22,10 @@ use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
     ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
-    CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
+    CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
     DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
     ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
     StoredContractURef, UpgradeRequest, UpgradeResponse, ValidateRequest, ValidateResponse,
-    CommitRequest, CommitResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
