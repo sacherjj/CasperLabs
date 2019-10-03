@@ -30,6 +30,7 @@ services:
   test:
     image: casperlabs/integration-testing:||TAG||
     container_name: test-||TAG||
+    hostname: test-||TAG||
     volumes:
       - /tmp:/tmp
       - /var/run/docker.sock:/var/run/docker.sock
