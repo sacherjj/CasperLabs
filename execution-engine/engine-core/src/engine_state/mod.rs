@@ -5,6 +5,7 @@ pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod upgrade;
 pub mod utils;
 
 use std::cell::RefCell;
@@ -39,6 +40,7 @@ use self::genesis::{
     GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
 };
 use crate::engine_state::error::Error::MissingSystemContractError;
+use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
 use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
@@ -82,6 +84,17 @@ where
         &self.config
     }
 
+    pub fn wasm_costs(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<WasmCosts>, Error> {
+        match self.state.get_protocol_data(protocol_version) {
+            Ok(Some(protocol_data)) => Ok(Some(*protocol_data.wasm_costs())),
+            Err(error) => Err(Error::ExecError(error.into())),
+            _ => Ok(None),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn commit_genesis(
         &self,
@@ -98,7 +111,19 @@ where
             1,
             "legacy genesis only supports protocol version 1"
         );
-        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+
+        let wasm_costs = WasmCosts {
+            regular: 1,
+            div: 16,
+            mul: 4,
+            mem: 2,
+            initial_mem: 4096,
+            grow_mem: 8192,
+            memcpy: 1,
+            max_stack_height: 64 * 1024,
+            opcodes_mul: 3,
+            opcodes_div: 8,
+        };
 
         let mut accounts = Vec::new();
 
@@ -154,9 +179,9 @@ where
 
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
-            let known_keys = BTreeMap::new();
+            let named_keys = BTreeMap::new();
             let purse = PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE));
-            Account::create(SYSTEM_ACCOUNT_ADDR, known_keys, purse)
+            Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
         };
 
         // Spec #4: Create a runtime.
@@ -212,7 +237,7 @@ where
                 preprocessor.preprocess(bytes)?
             };
             let args = Vec::new();
-            let mut key_lookup = BTreeMap::new();
+            let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
@@ -221,7 +246,7 @@ where
             executor.better_exec(
                 mint_installer_module,
                 &args,
-                &mut key_lookup,
+                &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
                 authorization_keys,
@@ -255,7 +280,7 @@ where
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")
             };
-            let mut key_lookup = {
+            let mut named_keys = {
                 let mut ret = BTreeMap::new();
                 ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
                 ret
@@ -268,7 +293,7 @@ where
             executor.better_exec(
                 proof_of_stake_installer_module,
                 &args,
-                &mut key_lookup,
+                &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
                 authorization_keys,
@@ -304,7 +329,7 @@ where
         //
 
         // Create known keys for chainspec accounts
-        let account_known_keys = {
+        let account_named_keys = {
             let mut ret = BTreeMap::new();
             let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
             let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
@@ -314,7 +339,7 @@ where
         };
 
         // Create known keys for system account
-        let system_account_known_keys = {
+        let system_account_named_keys = {
             let mut ret = BTreeMap::new();
             ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
             ret.insert(POS_NAME.to_string(), Key::URef(proof_of_stake_reference));
@@ -330,14 +355,14 @@ where
                     .accounts()
                     .to_vec()
                     .into_iter()
-                    .map(|account| (account, account_known_keys.clone()))
+                    .map(|account| (account, account_named_keys.clone()))
                     .collect();
                 let system_account = GenesisAccount::new(
                     PublicKey::new(SYSTEM_ACCOUNT_ADDR),
                     Motes::zero(),
                     Motes::zero(),
                 );
-                ret.push((system_account, system_account_known_keys));
+                ret.push((system_account, system_account_named_keys));
                 ret
             };
 
@@ -351,7 +376,7 @@ where
             };
 
             // For each account...
-            for (account, known_keys) in accounts.into_iter() {
+            for (account, named_keys) in accounts.into_iter() {
                 let module = module.clone();
                 let args = {
                     let motes = account.balance().value();
@@ -362,7 +387,7 @@ where
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
-                let mut key_lookup = BTreeMap::new();
+                let mut named_keys_exec = BTreeMap::new();
                 let base_key = Key::URef(mint_reference);
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
@@ -376,7 +401,7 @@ where
                 let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
                     module,
                     &args,
-                    &mut key_lookup,
+                    &mut named_keys_exec,
                     base_key,
                     &virtual_system_account,
                     authorization_keys,
@@ -400,7 +425,7 @@ where
                     let purse_id = PurseId::new(account_main_purse);
                     let value = Value::Account(Account::create(
                         account_public_key.value(),
-                        known_keys,
+                        named_keys,
                         purse_id,
                     ));
                     Validated::new(value, Validated::valid).unwrap() // safe to unwrap
@@ -428,6 +453,158 @@ where
         Ok(genesis_result)
     }
 
+    pub fn commit_upgrade(
+        &self,
+        correlation_id: CorrelationId,
+        upgrade_config: UpgradeConfig,
+    ) -> Result<UpgradeResult, Error> {
+        // per specification:
+        // https://casperlabs.atlassian.net/wiki/spaces/EN/pages/139854367/Upgrading+System+Contracts+Specification
+
+        // 3.1.1.1.1.1 validate pre state hash exists
+        // 3.1.2.1 get a tracking_copy at the provided pre_state_hash
+        let pre_state_hash = upgrade_config.pre_state_hash();
+        let tracking_copy = match self.tracking_copy(pre_state_hash)? {
+            Some(tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
+            None => return Ok(UpgradeResult::RootNotFound),
+        };
+
+        // 3.1.1.1.1.2 current protocol version is required
+        let current_protocol_version = upgrade_config.current_protocol_version();
+        let current_protocol_data = match self.state.get_protocol_data(current_protocol_version) {
+            Ok(Some(protocol_data)) => protocol_data,
+            Ok(None) => {
+                return Err(Error::InvalidProtocolVersion(current_protocol_version));
+            }
+            Err(error) => {
+                return Err(Error::ExecError(error.into()));
+            }
+        };
+
+        // 3.1.1.1.1.3 activation point is not currently used by EE; skipping
+        // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
+        let new_protocol_version = upgrade_config.new_protocol_version();
+        // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
+        if new_protocol_version.value() != current_protocol_version.value() + 1 {
+            return Err(Error::InvalidProtocolVersion(new_protocol_version));
+        }
+        // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
+        let new_wasm_costs = match upgrade_config.wasm_costs() {
+            Some(new_wasm_costs) => new_wasm_costs,
+            None => *current_protocol_data.wasm_costs(),
+        };
+
+        // 3.1.2.2 persist wasm CostTable
+        let new_protocol_data = ProtocolData::new(
+            new_wasm_costs,
+            current_protocol_data.mint(),
+            current_protocol_data.proof_of_stake(),
+        );
+
+        self.state
+            .put_protocol_data(new_protocol_version, &new_protocol_data)
+            .map_err(Into::into)?;
+
+        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
+        // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
+        // 3.1.2.3 execute upgrade installer if one is provided
+        if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
+            // preprocess installer module
+            let upgrade_installer_module = {
+                let preprocessor = WasmiPreprocessor::new(new_wasm_costs);
+                preprocessor.preprocess(bytes)?
+            };
+
+            // currently there are no expected args for an upgrade installer but args are supported
+            let args = match upgrade_config.upgrade_installer_args() {
+                Some(args) => args,
+                None => &[],
+            };
+
+            // execute as system account
+            let system_account = {
+                // safe to unwrap (Validated::valid is always true)
+                let key =
+                    Validated::new(Key::Account(SYSTEM_ACCOUNT_ADDR), Validated::valid).unwrap();
+                match tracking_copy.borrow_mut().read(correlation_id, &key) {
+                    Ok(Some(Value::Account(account))) => account,
+                    Ok(_) => panic!("system account must exist"),
+                    Err(error) => return Err(Error::ExecError(error.into())),
+                }
+            };
+
+            let keys = &mut BTreeMap::new();
+            keys.insert(
+                MINT_NAME.to_string(),
+                Key::URef(current_protocol_data.mint()),
+            );
+            keys.insert(
+                POS_NAME.to_string(),
+                Key::URef(current_protocol_data.proof_of_stake()),
+            );
+
+            let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+            let authorization_keys = {
+                let mut ret = BTreeSet::new();
+                ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                ret
+            };
+
+            let blocktime = BlockTime::default();
+
+            let deploy_hash = {
+                // seeds address generator w/ protocol version
+                let bytes: Vec<u8> = upgrade_config
+                    .new_protocol_version()
+                    .value()
+                    .to_le_bytes()
+                    .to_vec();
+                Blake2bHash::new(&bytes).into()
+            };
+
+            // upgrade has no gas limit; approximating with MAX
+            let gas_limit = Gas::new(std::u64::MAX.into());
+            let phase = Phase::System;
+            let address_generator = {
+                let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                Rc::new(RefCell::new(generator))
+            };
+            let state = Rc::clone(&tracking_copy);
+
+            WasmiExecutor.better_exec(
+                upgrade_installer_module,
+                &args,
+                keys,
+                initial_base_key,
+                &system_account,
+                authorization_keys,
+                blocktime,
+                deploy_hash,
+                gas_limit,
+                address_generator,
+                new_protocol_version,
+                correlation_id,
+                state,
+                phase,
+            )?
+        };
+
+        let effects = tracking_copy.borrow().effect();
+
+        // commit
+        let commit_result = self
+            .state
+            .commit(
+                correlation_id,
+                pre_state_hash,
+                effects.transforms.to_owned(),
+            )
+            .map_err(Into::into)?;
+
+        // return result and effects
+        Ok(UpgradeResult::from_commit_result(commit_result, effects))
+    }
+
     pub fn tracking_copy(
         &self,
         hash: Blake2bHash,
@@ -436,77 +613,6 @@ where
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn run_deploy_item<A, P: Preprocessor<A>, E: Executor<A>>(
-        &self,
-        session: ExecutableDeployItem,
-        payment: ExecutableDeployItem,
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
-    ) -> Result<ExecutionResult, RootNotFound> {
-        self.deploy(
-            session,
-            payment,
-            address,
-            authorization_keys,
-            blocktime,
-            deploy_hash,
-            prestate_hash,
-            protocol_version,
-            correlation_id,
-            executor,
-            preprocessor,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn run_deploy<A, P: Preprocessor<A>, E: Executor<A>>(
-        &self,
-        session_module_bytes: &[u8],
-        session_args: &[u8],
-        payment_module_bytes: &[u8],
-        payment_args: &[u8],
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
-    ) -> Result<ExecutionResult, RootNotFound> {
-        let session = ExecutableDeployItem::ModuleBytes {
-            module_bytes: session_module_bytes.into(),
-            args: session_args.into(),
-        };
-        let payment = ExecutableDeployItem::ModuleBytes {
-            module_bytes: payment_module_bytes.into(),
-            args: payment_args.into(),
-        };
-
-        self.deploy(
-            session,
-            payment,
-            address,
-            authorization_keys,
-            blocktime,
-            deploy_hash,
-            prestate_hash,
-            protocol_version,
-            correlation_id,
-            executor,
-            preprocessor,
-        )
     }
 
     pub fn get_module<A, P: Preprocessor<A>>(
@@ -543,7 +649,7 @@ where
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
-                let stored_contract_key = account.urefs_lookup().get(name).ok_or_else(|| {
+                let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
                     error::Error::ExecError(execution::Error::URefNotFound(name.to_string()))
                 })?;
                 if let Key::URef(uref) = stored_contract_key {
@@ -575,12 +681,12 @@ where
                         URef::new(arr, AccessRights::READ)
                     };
                     let normalized_uref = Key::URef(read_only_uref).normalize();
-                    let maybe_known_uref = account
-                        .urefs_lookup()
+                    let maybe_named_key = account
+                        .named_keys()
                         .values()
-                        .find(|&known_uref| known_uref.normalize() == normalized_uref);
-                    match maybe_known_uref {
-                        Some(Key::URef(known_uref)) if known_uref.is_readable() => normalized_uref,
+                        .find(|&named_key| named_key.normalize() == normalized_uref);
+                    match maybe_named_key {
+                        Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
                         Some(Key::URef(_)) => {
                             return Err(error::Error::ExecError(
                                 execution::Error::ForgedReference(read_only_uref),
@@ -612,7 +718,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
+    pub fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
         &self,
         session: ExecutableDeployItem,
         payment: ExecutableDeployItem,
@@ -732,7 +838,7 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = match account.urefs_lookup().get(MINT_NAME) {
+            let mint_public_uref: Key = match account.named_keys().get(MINT_NAME) {
                 Some(uref) => uref.normalize(),
                 None => {
                     return Ok(ExecutionResult::precondition_failure(
@@ -760,7 +866,7 @@ where
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.urefs_lookup().get(POS_NAME) {
+        let proof_of_stake_public_uref: Key = match account.named_keys().get(POS_NAME) {
             Some(uref) => uref.normalize(),
             None => {
                 return Ok(ExecutionResult::precondition_failure(
@@ -788,7 +894,7 @@ where
             // payment_code_spec_6: system contract validity
             let rewards_purse_key: Key = match proof_of_stake_info
                 .contract()
-                .urefs_lookup()
+                .named_keys()
                 .get(POS_REWARDS_PURSE)
             {
                 Some(key) => *key,
@@ -904,7 +1010,7 @@ where
             // payment_code_spec_6: system contract validity
             let payment_purse: Key = match proof_of_stake_info
                 .contract()
-                .urefs_lookup()
+                .named_keys()
                 .get(POS_PAYMENT_PURSE)
             {
                 Some(key) => *key,
@@ -983,8 +1089,6 @@ where
             session_tc
         };
 
-        let _session_result_cost = session_result.cost();
-
         // NOTE: session_code_spec_3: (do not include session execution effects in
         // results) is enforced in execution_result_builder.build()
         execution_result_builder.set_session_execution_result(session_result);
@@ -1017,7 +1121,7 @@ where
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
                 .expect("PoS must be found because we found it earlier")
                 .contract()
-                .urefs_lookup()
+                .named_keys()
                 .clone();
 
             let base_key = proof_of_stake_info.key();
@@ -1091,7 +1195,7 @@ where
     {
         let protocol_data = match self.state.get_protocol_data(protocol_version)? {
             Some(protocol_data) => protocol_data,
-            None => return Err(Error::InvalidProtocolVersion),
+            None => return Err(Error::InvalidProtocolVersion(protocol_version)),
         };
 
         let proof_of_stake = {
@@ -1110,7 +1214,7 @@ where
         };
 
         let bonded_validators = contract
-            .urefs_lookup()
+            .named_keys()
             .keys()
             .filter_map(|entry| utils::pos_validator_to_tuple(entry))
             .collect::<HashMap<PublicKey, U512>>();

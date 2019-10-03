@@ -45,6 +45,8 @@ final case object InvalidBlockHash       extends InvalidBlock with Slashable
 final case object InvalidDeployCount     extends InvalidBlock with Slashable
 final case object InvalidDeployHash      extends InvalidBlock with Slashable
 final case object InvalidDeploySignature extends InvalidBlock with Slashable
+// Raised only for Ballot message type when parents.size != 1
+final case object InvalidTargetHash extends InvalidBlock
 
 object BlockStatus {
   val valid: BlockStatus      = Valid

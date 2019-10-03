@@ -69,6 +69,7 @@ execution-engine/system-contracts/mint-token/*.lock
 execution-engine/system-contracts/pos/*.lock
 
 # wasms
+node/src/main/resources/**/*.wasm
 client/src/main/resources/*.wasm
 explorer/contracts/**/*.wasm
 

@@ -159,6 +159,7 @@ fn set_panic_hook() {
 /// Gets command line arguments
 fn get_args() -> ArgMatches<'static> {
     App::new(APP_NAME)
+        .version(env!("CARGO_PKG_VERSION"))
         .arg(
             Arg::with_name(ARG_LOG_LEVEL)
                 .required(false)

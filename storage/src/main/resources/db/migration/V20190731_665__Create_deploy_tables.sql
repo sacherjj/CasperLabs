@@ -6,6 +6,7 @@ CREATE TABLE deploys
     account             BLOB             NOT NULL,
     -- Since Unix epoch
     create_time_seconds INTEGER          NOT NULL,
+    --Deploy
     data                BLOB             NOT NULL
 );
 

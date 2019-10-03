@@ -1,10 +1,11 @@
 # Casper Explorer
 
 The purpose of the explorer is to help users interact with the blockchain:
-* Sign up to participate in devnet
-* Create accounts (public/private key pairs)
-* Ask the faucet for tokens on devnet
-* Explore the block DAG
+
+- Sign up to participate in devnet
+- Create accounts (public/private key pairs)
+- Ask the faucet for tokens on devnet
+- Explore the block DAG
 
 ## Build
 
@@ -29,7 +30,8 @@ cd -
 
 ### Fund the Faucet
 
-If we are not using the Genesis account (the one with all the initial tokens) as the Faucet account, we have to establish the latter by transfering some tokens to it that it can later pass on.
+If we were not using the `faucet-account` that's created in the `hack/docker` setup as the Faucet account,
+we'd have to establish the an account by transfering some tokens to it that it can later pass on. Here's how to do it:
 
 Generate the necessary contracts first:
 
@@ -48,13 +50,13 @@ Run the transfer from the genesis account to our test faucet account.
 ```sh
 node ./server/dist/transfer.js \
   --host-url http://localhost:8401 \
-  --transfer-contract-path contracts/client/transfer_to_account.wasm \
-  --payment-contract-path contracts/client/standard_payment.wasm \
+  --transfer-contract-path contracts/transfer_to_account.wasm \
+  --payment-contract-path contracts/standard_payment.wasm \
   --payment-amount 100000 \
-  --from-private-key-path ../hack/docker/.casperlabs/genesis/system-account/account-private.pem \
-  --from-public-key-path ../hack/docker/.casperlabs/genesis/system-account/account-public.pem \
+  --from-private-key-path ../hack/docker/keys/faucet-account/account-private.pem \
+  --from-public-key-path ../hack/docker/keys/faucet-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
-  --amount 100000000
+  --amount 10000000
 ```
 
 NOTE: If you are connecting to a HTTPS endpoint which uses a self-signed certificate, which is the case in local testing, you have to relax the SSL certificate checks in Node.js like so:
@@ -75,6 +77,7 @@ Done.
 ```
 
 You can also confirm it in the node's logs in `hack/docker`:
+
 ```console
 $ docker logs --tail 1 node-0
 18:13:45.264 [grpc-default-executor-2] INFO  i.c.casper.MultiParentCasperImpl - Received Deploy 7401ecbe8b2c4e4de2c1e6422fddcfd1ae9d128058e2e6dba97ba62fc51db734 (f78786150599b50a1353476f5e2f12cd13c214e512096741c48e7ec63639af56 / 1)
@@ -206,7 +209,6 @@ unit {
 Alas, that's not the balance. We'll have to figure out how to get there,
 apparently there's an indirection from the purse to a local address we
 can't easily see.
-
 
 ### Create an account
 

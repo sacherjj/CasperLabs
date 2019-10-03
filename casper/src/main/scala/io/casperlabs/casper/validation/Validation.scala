@@ -1,16 +1,18 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
+import io.casperlabs.casper.consensus
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.{consensus, protocol}
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
-import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -20,9 +22,11 @@ trait Validation[F[_]] {
 
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean]
 
-  def blockSummary(summary: BlockSummary, chainId: String): F[Unit]
+  def blockSummary(summary: BlockSummary, chainId: String)(
+      implicit versions: CasperLabsProtocolVersions[F]
+  ): F[Unit]
 
-  def version(b: BlockSummary, m: Long => state.ProtocolVersion): F[Boolean]
+  def version(b: BlockSummary, m: Long => F[state.ProtocolVersion]): F[Boolean]
 
   def parents(
       b: Block,
@@ -33,13 +37,13 @@ trait Validation[F[_]] {
 
   def blockSignature(b: BlockSummary): F[Boolean]
 
-  def approvedBlock(a: ApprovedBlock, requiredValidators: Set[PublicKeyBS]): F[Boolean]
-
   def deployHash(d: consensus.Deploy): F[Boolean]
+
+  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]]
 
   def deploySignature(d: consensus.Deploy): F[Boolean]
 
-  def signature(d: Array[Byte], sig: protocol.Signature): Boolean
+  def signature(d: Array[Byte], sig: consensus.Signature, key: PublicKey): Boolean
 
   def formatOfFields(b: BlockSummary, treatAsGenesis: Boolean = false): F[Boolean]
 
@@ -56,7 +60,7 @@ trait Validation[F[_]] {
       dag: DagRepresentation[F],
       chainId: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F]): F[Unit]
+  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit]
 
   def preTimestamp(b: Block): F[Option[FiniteDuration]]
 }

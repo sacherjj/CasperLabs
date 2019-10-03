@@ -35,5 +35,5 @@ pub extern "C" fn create() {
 #[no_mangle]
 pub extern "C" fn call() {
     let contract: Key = contract_api::store_function(CONTRACT_NAME, Default::default()).into();
-    contract_api::add_uref(CONTRACT_NAME, &contract)
+    contract_api::put_key(CONTRACT_NAME, &contract)
 }

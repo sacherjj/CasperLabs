@@ -3,35 +3,27 @@ package io.casperlabs.casper.util.execengine
 import cats.Id
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.{consensus, DeploySelection}
-import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.state._
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub.mock
 import io.casperlabs.casper.util.execengine.Op.OpMap
+import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state._
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.ipc.{
-  DeployResult,
-  ExecutionEffect,
-  OpEntry,
-  Transform,
-  TransformEntry,
-  TransformIdentity
-}
+import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.deploy._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   implicit val logEff: LogStub[Task] = new LogStub[Task]()
 
@@ -39,7 +31,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val genesisDeploys = Vector(
         ByteString.EMPTY
       ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
@@ -74,34 +66,45 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
        */
 
       for {
-        genesis                                     <- createBlock[Task](Seq.empty, deploys = genesisDeploysCost)
-        b1                                          <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
-        b2                                          <- createBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
-        b3                                          <- createBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
-        dag1                                        <- dagStorage.getRepresentation
-        blockCheckpoint                             <- computeBlockCheckpoint(genesis, genesis, dag1)
-        (postGenStateHash, postGenProcessedDeploys) = blockCheckpoint
-        _                                           <- injectPostStateHash[Task](0, genesis, postGenStateHash, postGenProcessedDeploys)
-        dag2                                        <- dagStorage.getRepresentation
-        blockCheckpointB1                           <- computeBlockCheckpoint(b1, genesis, dag2)
-        (postB1StateHash, postB1ProcessedDeploys)   = blockCheckpointB1
-        _                                           <- injectPostStateHash[Task](1, b1, postB1StateHash, postB1ProcessedDeploys)
-        dag3                                        <- dagStorage.getRepresentation
-        blockCheckpointB2 <- computeBlockCheckpoint(
-                              b2,
-                              genesis,
-                              dag3
-                            )
-        (postB2StateHash, postB2ProcessedDeploys) = blockCheckpointB2
-        _                                         <- injectPostStateHash[Task](2, b2, postB2StateHash, postB2ProcessedDeploys)
+        genesis         <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysCost)
+        b1              <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysCost)
+        b2              <- createAndStoreBlock[Task](Seq(b1.blockHash), deploys = b2DeploysCost)
+        b3              <- createAndStoreBlock[Task](Seq(b2.blockHash), deploys = b3DeploysCost)
+        dag1            <- dagStorage.getRepresentation
+        blockCheckpoint <- computeBlockCheckpointFromDeploys(genesis, genesis, dag1)
+        _ <- injectPostStateHash[Task](
+              0,
+              genesis,
+              blockCheckpoint.postStateHash,
+              blockCheckpoint.deploysForBlock
+            )
+        dag2         <- dagStorage.getRepresentation
+        b1Checkpoint <- computeBlockCheckpointFromDeploys(b1, genesis, dag2)
+        _ <- injectPostStateHash[Task](
+              1,
+              b1,
+              b1Checkpoint.postStateHash,
+              b1Checkpoint.deploysForBlock
+            )
+        dag3 <- dagStorage.getRepresentation
+        b2Checkpoint <- computeBlockCheckpointFromDeploys(
+                         b2,
+                         genesis,
+                         dag3
+                       )
+        _ <- injectPostStateHash[Task](
+              2,
+              b2,
+              b2Checkpoint.postStateHash,
+              b2Checkpoint.deploysForBlock
+            )
 
         dag4 <- dagStorage.getRepresentation
-        blockCheckpointB4 <- computeBlockCheckpoint(
-                              b3,
-                              genesis,
-                              dag4
-                            )
-        (_, _) = blockCheckpointB4
+        _ <- computeBlockCheckpointFromDeploys(
+              b3,
+              genesis,
+              dag4
+            )
 //          b3PostState          = runtimeManager.storageRepr(postb3StateHash).get
 //
 //          _      = b3PostState.contains("@{1}!(1)") should be(true)
@@ -114,57 +117,59 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       deploy: Seq[consensus.Deploy],
       protocolVersion: state.ProtocolVersion = state.ProtocolVersion(1)
   )(
-      implicit executionEngineService: ExecutionEngineService[Task]
+      implicit executionEngineService: ExecutionEngineService[Task],
+      deployStorage: DeployStorage[Task]
   ): Task[Seq[ProcessedDeploy]] =
     for {
-      blocktime                                   <- Task.delay(System.currentTimeMillis)
-      implicit0(deployBuffer: DeployBuffer[Task]) <- MockDeployBuffer.create[Task]()
+      blocktime <- Task.delay(System.currentTimeMillis)
       implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
-      _ <- deployBuffer.addAsPending(deploy.toList)
+      _ <- deployStorage.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          deploy.map(_.deployHash).toSet,
+                          fs2.Stream.fromIterator[Task, consensus.Deploy](deploy.toIterator),
                           blocktime,
                           protocolVersion
                         )
       DeploysCheckpoint(_, _, _, result, _) = computeResult
     } yield result
 
-  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in {
-    // reference costs
-    // deploy each Rholang program separately and record its cost
-    val deploy1 = ProtoUtil.sourceDeploy(
-      ByteString.copyFromUtf8("@1!(Nil)"),
-      System.currentTimeMillis
-    )
-    val deploy2 =
-      ProtoUtil.sourceDeploy(
-        ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-        System.currentTimeMillis
-      )
-    val deploy3 =
-      ProtoUtil.sourceDeploy(
-        ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-        System.currentTimeMillis
-      )
-    for {
-      proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
-      proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
-      proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
-      singleResults = proc1 ++ proc2 ++ proc3
-      batchDeploy   = Seq(deploy1, deploy2, deploy3)
-      batchResult   <- computeSingleProcessedDeploy(batchDeploy)
-    } yield batchResult should contain theSameElementsAs singleResults
+  "computeDeploysCheckpoint" should "aggregate the result of deploying multiple programs within the block" in withStorage {
+    _ => _ =>
+      implicit deployStorage =>
+        // reference costs
+        // deploy each Rholang program separately and record its cost
+        val deploy1 = ProtoUtil.sourceDeploy(
+          ByteString.copyFromUtf8("@1!(Nil)"),
+          System.currentTimeMillis
+        )
+        val deploy2 =
+          ProtoUtil.sourceDeploy(
+            ByteString.copyFromUtf8("@3!([1,2,3,4])"),
+            System.currentTimeMillis
+          )
+        val deploy3 =
+          ProtoUtil.sourceDeploy(
+            ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
+            System.currentTimeMillis
+          )
+        for {
+          proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
+          proc2         <- computeSingleProcessedDeploy(Seq(deploy2))
+          proc3         <- computeSingleProcessedDeploy(Seq(deploy3))
+          singleResults = proc1 ++ proc2 ++ proc3
+          batchDeploy   = Seq(deploy1, deploy2, deploy3)
+          batchResult   <- computeSingleProcessedDeploy(batchDeploy)
+        } yield batchResult should contain theSameElementsAs singleResults
   }
 
   "computeDeploysCheckpoint" should "throw exception when EE Service Failed" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
@@ -173,7 +178,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
-          (_, _) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.DeployItem) = {
@@ -222,12 +227,13 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         for {
           b1  <- dagStorage.lookupByIdUnsafe(index)
           dag <- dagStorage.getRepresentation
-          computeBlockCheckpointResult <- computeBlockCheckpoint(
+          computeBlockCheckpointResult <- computeBlockCheckpointFromDeploys(
                                            b1,
                                            genesis,
                                            dag
                                          )
-          (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
+          postB1StateHash        = computeBlockCheckpointResult.postStateHash
+          postB1ProcessedDeploys = computeBlockCheckpointResult.deploysForBlock
           _ <- injectPostStateHash[Task](
                 index,
                 b1,
@@ -237,12 +243,12 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
         } yield postB1StateHash
 
       for {
-        genesis <- createBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
-        b1      <- createBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
-        _       <- createBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
-        _       <- step(0, genesis)
+        genesis <- createAndStoreBlock[Task](Seq.empty, deploys = genesisDeploysWithCost)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b1DeploysWithCost)
+        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), deploys = b2DeploysWithCost)
+        _       <- createAndStoreBlock[Task](Seq(b1.blockHash, b2.blockHash), deploys = b3DeploysWithCost)
         _       <- step(1, genesis)
+        _       <- step(2, genesis)
         r1 <- step(2, genesis)(failedExecEEService).onErrorHandleWith { ex =>
                Task.now {
                  ex.getMessage should startWith("failed when exec")

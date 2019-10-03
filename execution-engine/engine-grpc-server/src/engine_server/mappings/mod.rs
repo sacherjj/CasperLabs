@@ -17,6 +17,7 @@ use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
+use engine_core::engine_state::upgrade::UpgradeConfig;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
 use engine_shared::motes::Motes;
@@ -37,6 +38,7 @@ fn transform_write(v: contract_ffi::value::Value) -> Result<transform::Transform
 pub enum MappingError {
     InvalidPublicKeyLength { expected: usize, actual: usize },
     ParsingError(ParsingError),
+    InvalidHash(String),
 }
 
 impl MappingError {
@@ -63,6 +65,7 @@ impl Display for MappingError {
             MappingError::ParsingError(ParsingError(message)) => {
                 write!(f, "Parsing error: {}", message)
             }
+            MappingError::InvalidHash(message) => write!(f, "Invalid hash: {}", message),
         }
     }
 }
@@ -168,11 +171,11 @@ impl TryFrom<&super::transforms::Transform> for transform::Transform {
 
 impl From<contract_ffi::value::Contract> for super::state::Contract {
     fn from(contract: contract_ffi::value::Contract) -> Self {
-        let (bytes, known_urefs, protocol_version) = contract.destructure();
+        let (bytes, named_keys, protocol_version) = contract.destructure();
         let mut contract = super::state::Contract::new();
-        let urefs = URefMap(known_urefs).into();
+        let named_keys = KnownKeys(named_keys).into();
         contract.set_body(bytes);
-        contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+        contract.set_named_keys(protobuf::RepeatedField::from_vec(named_keys));
         contract.set_protocol_version(protocol_version.into());
         contract
     }
@@ -182,10 +185,10 @@ impl TryFrom<&super::state::Contract> for contract_ffi::value::Contract {
     type Error = ParsingError;
 
     fn try_from(value: &super::state::Contract) -> Result<Self, Self::Error> {
-        let known_urefs: URefMap = value.get_known_urefs().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         Ok(contract_ffi::value::Contract::new(
             value.get_body().to_vec(),
-            known_urefs.0,
+            named_keys.0,
             ProtocolVersion::new(value.get_protocol_version().value),
         ))
     }
@@ -323,10 +326,9 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
             tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
             tmp
         };
-        let account_urefs = account.urefs_lookup();
-        let account_urefs_lookup = URefMap(account_urefs.clone());
-        let ipc_urefs: Vec<super::state::NamedKey> = account_urefs_lookup.into();
-        ipc_account.set_known_urefs(ipc_urefs.into());
+        let account_named_keys = KnownKeys(account.named_keys().to_owned());
+        let ipc_urefs: Vec<super::state::NamedKey> = account_named_keys.into();
+        ipc_account.set_named_keys(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
         ipc_account.set_account_activity(account_activity);
         ipc_account
@@ -345,7 +347,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
             buff.copy_from_slice(&value.public_key);
             buff
         };
-        let uref_map: URefMap = value.get_known_urefs().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         let purse_id: PurseId = PurseId::new(value.get_purse_id().try_into()?);
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
@@ -394,7 +396,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
         };
         Ok(contract_ffi::value::Account::new(
             pub_key,
-            uref_map.0,
+            named_keys.0,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -445,7 +447,7 @@ impl From<transform::Transform> for super::transforms::Transform {
             }
             transform::Transform::AddKeys(keys_map) => {
                 let mut add = super::transforms::TransformAddKeys::new();
-                let keys = URefMap(keys_map).into();
+                let keys = KnownKeys(keys_map).into();
                 add.set_value(protobuf::RepeatedField::from_vec(keys));
                 t.set_add_keys(add);
             }
@@ -465,7 +467,7 @@ impl From<transform::Transform> for super::transforms::Transform {
 }
 
 // newtype because trait impl have to be defined in the crate of the type.
-pub struct URefMap(BTreeMap<String, contract_ffi::key::Key>);
+pub struct KnownKeys(BTreeMap<String, contract_ffi::key::Key>);
 
 impl TryFrom<&super::state::NamedKey> for (String, contract_ffi::key::Key) {
     type Error = ParsingError;
@@ -478,7 +480,7 @@ impl TryFrom<&super::state::NamedKey> for (String, contract_ffi::key::Key) {
 }
 
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
-impl TryFrom<&[super::state::NamedKey]> for URefMap {
+impl TryFrom<&[super::state::NamedKey]> for KnownKeys {
     type Error = ParsingError;
     fn try_from(from: &[super::state::NamedKey]) -> Result<Self, ParsingError> {
         let mut tree: BTreeMap<String, contract_ffi::key::Key> = BTreeMap::new();
@@ -486,12 +488,12 @@ impl TryFrom<&[super::state::NamedKey]> for URefMap {
             let (name, key) = nk.try_into()?;
             let _ = tree.insert(name, key);
         }
-        Ok(URefMap(tree))
+        Ok(KnownKeys(tree))
     }
 }
 
-impl From<URefMap> for Vec<super::state::NamedKey> {
-    fn from(uref_map: URefMap) -> Vec<super::state::NamedKey> {
+impl From<KnownKeys> for Vec<super::state::NamedKey> {
+    fn from(uref_map: KnownKeys) -> Vec<super::state::NamedKey> {
         uref_map
             .0
             .into_iter()
@@ -741,14 +743,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
-                    error @ EngineError::InvalidProtocolVersion => {
-                        let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
-                    }
                     error @ EngineError::InvalidHashLength { .. } => {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::InvalidPublicKeyLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
+                    error @ EngineError::InvalidProtocolVersion { .. } => {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::WasmPreprocessingError(_) => {
@@ -1035,6 +1036,54 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
     }
 }
 
+impl TryFrom<ipc::UpgradeRequest> for UpgradeConfig {
+    type Error = MappingError;
+
+    fn try_from(upgrade_request: ipc::UpgradeRequest) -> Result<Self, Self::Error> {
+        let pre_state_hash = upgrade_request
+            .get_parent_state_hash()
+            .try_into()
+            .map_err(|_| MappingError::InvalidHash("pre_state_hash".to_string()))?;
+
+        let current_protocol_version = upgrade_request.get_protocol_version().into();
+
+        let upgrade_point = upgrade_request.get_upgrade_point();
+        let new_protocol_version: ProtocolVersion = upgrade_point.get_protocol_version().into();
+        let (upgrade_installer_bytes, upgrade_installer_args) =
+            if !upgrade_point.has_upgrade_installer() {
+                (None, None)
+            } else {
+                let upgrade_installer = upgrade_point.get_upgrade_installer();
+                let bytes = upgrade_installer.get_code().to_vec();
+                let bytes = if bytes.is_empty() { None } else { Some(bytes) };
+                let args = upgrade_installer.get_args().to_vec();
+                let args = if args.is_empty() { None } else { Some(args) };
+                (bytes, args)
+            };
+
+        let wasm_costs = if !upgrade_point.has_new_costs() {
+            None
+        } else {
+            Some(upgrade_point.get_new_costs().get_wasm().to_owned().into())
+        };
+        let activation_point = if !upgrade_point.has_activation_point() {
+            None
+        } else {
+            Some(upgrade_point.get_activation_point().rank)
+        };
+
+        Ok(UpgradeConfig::new(
+            pre_state_hash,
+            current_protocol_version,
+            new_protocol_version,
+            upgrade_installer_args,
+            upgrade_installer_bytes,
+            wasm_costs,
+            activation_point,
+        ))
+    }
+}
+
 impl From<&state::ProtocolVersion> for contract_ffi::value::ProtocolVersion {
     fn from(protocol_version: &state::ProtocolVersion) -> Self {
         contract_ffi::value::ProtocolVersion::new(protocol_version.value)
@@ -1115,7 +1164,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use contract_ffi::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
+    use contract_ffi::gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
     use engine_core::engine_state::error::Error::ExecError;
@@ -1292,13 +1341,13 @@ mod tests {
         }
 
         #[test]
-        fn uref_map_roundtrip(uref_map in uref_map_arb(10)) {
-            let uref_map_newtype = super::URefMap(uref_map.clone());
-            let ipc_uref_map: Vec<state::NamedKey> = uref_map_newtype.into();
-            let ipc_urefs_slice: &[state::NamedKey] = &ipc_uref_map;
-            let uref_map_back: super::URefMap = ipc_urefs_slice.try_into()
-                .expect("Transforming Vec<state::NamedKey> to URefMap should succeed.");
-            assert_eq!(uref_map, uref_map_back.0)
+        fn named_keys_roundtrip(named_keys in named_keys_arb(10)) {
+            let named_keys_newtype = super::KnownKeys(named_keys.clone());
+            let ipc_named_keys: Vec<state::NamedKey> = named_keys_newtype.into();
+            let ipc_urefs_slice: &[state::NamedKey] = &ipc_named_keys;
+            let named_keys_back: super::KnownKeys = ipc_urefs_slice.try_into()
+                .expect("Transforming Vec<state::NamedKey> to KnownKeys should succeed.");
+            assert_eq!(named_keys, named_keys_back.0)
         }
 
         #[test]

@@ -4,14 +4,13 @@ from typing import Any, Optional
 from docker import DockerClient
 
 
-from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.common import random_string, BOOTSTRAP_PATH, testing_root_path
 
 
 DEFAULT_NODE_ENV = {
     "RUST_BACKTRACE": "full",
     "CL_LOG_LEVEL": os.environ.get("CL_LOG_LEVEL", "INFO"),
-    "CL_CASPER_IGNORE_DEPLOY_SIGNATURE": "false",
     "CL_SERVER_NO_UPNP": "true",
     "CL_VERSION": "test",
 }
@@ -36,12 +35,12 @@ class DockerConfig:
     is_validator: bool = True
     is_signed_deploy: bool = True
     bootstrap_address: Optional[str] = None
-    use_new_gossiping: bool = True
     initial_motes: int = 100 * (10 ** 9)  # 100 billion
     socket_volume: Optional[str] = None
     node_account: Account = None
     grpc_encryption: bool = False
     is_read_only: bool = False
+    behind_proxy: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -70,6 +69,9 @@ class DockerConfig:
     def node_command_options(self, server_host: str) -> dict:
         options = {
             "--server-default-timeout": "10second",
+            "--server-approval-poll-interval": "10second",
+            "--server-init-sync-round-period": "10second",
+            "--server-alive-peers-cache-expiration-period": "10second",
             "--server-host": server_host,
             "--grpc-socket": "/root/.casperlabs/sockets/.casper-node.sock",
             "--metrics-prometheus": "",
@@ -78,20 +80,15 @@ class DockerConfig:
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
         }
+        if self.behind_proxy:
+            options["--server-port"] = "50400"
+            options["--server-kademlia-port"] = "50404"
         if not self.is_read_only:
             options["--casper-validator-private-key"] = self.node_private_key
         if self.grpc_encryption:
             options["--grpc-use-tls"] = ""
         if self.bootstrap_address:
             options["--server-bootstrap"] = self.bootstrap_address
-        if self.is_bootstrap:
-            gen_acct_key_file = GENESIS_ACCOUNT.public_key_filename
-            options[
-                "--casper-genesis-account-public-key-path"
-            ] = f"/root/.casperlabs/accounts/{gen_acct_key_file}"
-            options["--casper-initial-motes"] = self.initial_motes
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
-        if self.use_new_gossiping:
-            options["--server-use-gossiping"] = ""
         return options

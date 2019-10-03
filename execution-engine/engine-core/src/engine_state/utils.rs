@@ -29,7 +29,7 @@ impl Into<Vec<u8>> for WasmiBytes {
 /// Helper function to create validator labels as they are constructed in PoS.
 pub fn pos_validator_key(pk: PublicKey, stakes: U512) -> String {
     let public_key_hex: String = addr_to_hex(&pk.value());
-    // This is how PoS contract stores validator keys in its known_urefs map.
+    // This is how PoS contract stores validator keys in its named_keys map.
     format!("v_{}_{}", public_key_hex, stakes)
 }
 

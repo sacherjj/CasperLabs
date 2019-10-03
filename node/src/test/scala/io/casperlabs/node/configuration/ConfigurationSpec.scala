@@ -6,22 +6,19 @@ import java.util.concurrent.TimeUnit
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
-import eu.timepit.refined._
 import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import io.casperlabs.blockstorage.{FileDagStorage, LMDBBlockStorage}
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
 import io.casperlabs.node.configuration.Utils._
+import org.scalacheck.Shrink
 import org.scalacheck.ScalacheckShapeless._
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.{Gen, Shrink}
+
 import scala.concurrent.duration._
-import scala.io.Source
 
 class ConfigurationSpec
     extends FunSuite
@@ -69,11 +66,11 @@ class ConfigurationSpec
       maxNumOfConnections = 1,
       maxMessageSize = 1,
       chunkSize = 1,
-      useGossiping = true,
       relayFactor = 1,
       relaySaturation = 1,
       approvalRelayFactor = 1,
       approvalPollInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      alivePeersCacheExpirationPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       syncMaxPossibleDepth = 1,
       syncMinBlockCountToCheckWidth = 1,
       syncMaxBondingRate = 1.0,
@@ -105,24 +102,10 @@ class ConfigurationSpec
       validatorPrivateKey = "test".some,
       validatorPrivateKeyPath = Paths.get("/tmp/test").some,
       validatorSigAlgorithm = "test",
-      bondsFile = Paths.get("/tmp/test"),
       knownValidatorsFile = Paths.get("/tmp/test").some,
-      numValidators = 1,
-      walletsFile = Paths.get("/tmp/test"),
-      minimumBond = 1L,
-      maximumBond = 1L,
       requiredSigs = 1,
-      genesisAccountPublicKeyPath = Paths.get("/tmp/test").some,
-      initialMotes = BigInt(1),
-      mintCodePath = Paths.get("/tmp/test").some,
-      posCodePath = Paths.get("/tmp/test").some,
-      shardId = "test",
+      chainSpecPath = Paths.get("/tmp/test").some,
       standalone = false,
-      approveGenesis = false,
-      approveGenesisInterval = FiniteDuration(1, TimeUnit.SECONDS),
-      approveGenesisDuration = FiniteDuration(1, TimeUnit.SECONDS),
-      deployTimestamp = 1L.some,
-      genesisPath = Paths.get("/tmp/genesis"),
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
@@ -135,15 +118,7 @@ class ConfigurationSpec
       apiCertificate = Paths.get("/tmp/test.api.crt"),
       apiKey = Paths.get("/tmp/test.api.key")
     )
-    val lmdb = LMDBBlockStorage.Config(
-      dir = Paths.get("/tmp/lmdb-block-storage"),
-      blockStorageSize = 1L,
-      maxDbs = 1,
-      maxReaders = 1,
-      useTls = false
-    )
     val blockStorage = Configuration.BlockStorage(
-      latestMessagesLogMaxSizeFactor = 1,
       cacheMaxSizeBytes = 1
     )
     val kamonSettings = Configuration.Kamon(
@@ -166,7 +141,6 @@ class ConfigurationSpec
       grpcServer,
       tls,
       casper,
-      lmdb,
       blockStorage,
       kamonSettings,
       influx.some
@@ -267,7 +241,6 @@ class ConfigurationSpec
         expected.grpc shouldEqual result.grpc
         expected.tls shouldEqual result.tls
         expected.casper shouldEqual result.casper
-        expected.lmdb shouldEqual result.lmdb
         expected.blockstorage shouldEqual result.blockstorage
         expected.metrics shouldEqual result.metrics
     }
@@ -391,10 +364,7 @@ class ConfigurationSpec
       .toList
 
   def toEnvVars(conf: Configuration): Map[String, String] = {
-    val mapper = (_: String).replace(" ", "") match {
-      case x @ ("InMem" | "Mixed" | "LMDB") => x.toLowerCase
-      case x                                => x
-    }
+    val mapper = (_: String).replace(" ", "")
 
     reduce(conf, Map.empty[String, String])({
       case n: Node => mapper(n.show)
