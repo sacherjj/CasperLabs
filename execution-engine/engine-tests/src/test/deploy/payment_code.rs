@@ -13,6 +13,8 @@ use engine_shared::transform::Transform;
 
 use crate::contract_ffi::bytesrepr::ToBytes;
 use crate::support::test_support;
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
@@ -367,9 +369,15 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
+    let success_result = crate::support::test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes) + modified_balance;
+    let tally = motes.value() + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -437,9 +445,14 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes) + modified_balance;
+    let success_result = crate::support::test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let tally = motes.value() + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -503,9 +516,15 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes + transferred_amount) + modified_balance;
+    let success_result = crate::support::test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let total = motes.value() + U512::from(transferred_amount);
+    let tally = total + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -784,9 +803,12 @@ fn should_charge_non_main_purse() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = crate::support::test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let expected_resting_balance = account_1_purse_funding_amount - motes;
+    let expected_resting_balance = account_1_purse_funding_amount - motes.value();
 
     let purse_final_balance = {
         let purse_bytes = purse_id
