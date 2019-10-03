@@ -117,7 +117,7 @@ pub extern "C" fn counter_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     // hello_name
-    let pointer = store_function("hello_name_ext", BTreeMap::new());
+    let pointer = store_function_at_hash("hello_name_ext", BTreeMap::new());
     put_key("hello_name", &pointer.into());
 
     // counter
@@ -127,7 +127,7 @@ pub extern "C" fn call() {
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_turef.into());
-    let _counter_hash = store_function("counter_ext", counter_urefs);
+    let _counter_hash = store_function_at_hash("counter_ext", counter_urefs);
     put_key("counter", &_counter_hash.into());
 
     // mailing list
@@ -139,6 +139,6 @@ pub extern "C" fn call() {
     let key_name = String::from("list");
     mailing_list_urefs.insert(key_name, list_turef.into());
 
-    let pointer = store_function("mailing_list_ext", mailing_list_urefs);
+    let pointer = store_function_at_hash("mailing_list_ext", mailing_list_urefs);
     put_key("mailing", &pointer.into())
 }
