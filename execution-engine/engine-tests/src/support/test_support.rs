@@ -398,166 +398,6 @@ impl Default for UpgradeRequestBuilder {
     }
 }
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum SystemContractType {
-    Mint,
-    MintInstall,
-    ProofOfStake,
-    ProofOfStakeInstall,
-}
-
-pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
-    let name = DEFAULT_CHAIN_NAME.to_string();
-    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
-    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
-    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
-    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
-    let wasm_costs = *DEFAULT_WASM_COSTS;
-    GenesisConfig::new(
-        name,
-        timestamp,
-        protocol_version,
-        mint_installer_bytes,
-        proof_of_stake_installer_bytes,
-        accounts,
-        wasm_costs,
-    )
-}
-
-pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String>) -> QueryRequest {
-    let mut query_request = QueryRequest::new();
-
-    query_request.set_state_hash(post_state);
-    query_request.set_base_key(base_key.into());
-    query_request.set_path(path.into());
-
-    query_request
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn create_exec_request(
-    address: [u8; 32],
-    payment_file: &str,
-    payment_args: impl ArgsParser,
-    session_file: &str,
-    session_args: impl ArgsParser,
-    pre_state_hash: &[u8],
-    block_time: u64,
-    deploy_hash: [u8; 32],
-    authorized_keys: Vec<PublicKey>,
-) -> ExecuteRequest {
-    let deploy = DeployItemBuilder::new()
-        .with_session_code(session_file, session_args)
-        .with_payment_code(payment_file, payment_args)
-        .with_address(address)
-        .with_authorization_keys(&authorized_keys)
-        .with_deploy_hash(deploy_hash)
-        .build();
-
-    ExecuteRequestBuilder::new()
-        .with_pre_state_hash(pre_state_hash)
-        .with_protocol_version(1)
-        .with_block_time(block_time)
-        .push_deploy(deploy)
-        .build()
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn create_commit_request(
-    prestate_hash: &[u8],
-    effects: &HashMap<Key, Transform>,
-) -> CommitRequest {
-    let effects: Vec<TransformEntry> = effects
-        .iter()
-        .map(|(k, t)| (k.to_owned(), t.to_owned()).into())
-        .collect();
-
-    let mut commit_request = CommitRequest::new();
-    commit_request.set_prestate_hash(prestate_hash.to_vec());
-    commit_request.set_effects(effects.into());
-    commit_request
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
-    let commit_transforms: CommitTransforms = genesis_response
-        .get_success()
-        .get_effect()
-        .get_transform_map()
-        .try_into()
-        .expect("should convert");
-    commit_transforms.value()
-}
-
-pub fn get_exec_transforms(exec_response: &ExecuteResponse) -> Vec<HashMap<Key, Transform>> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| {
-            let commit_transforms: CommitTransforms = deploy_result
-                .get_execution_result()
-                .get_effects()
-                .get_transform_map()
-                .try_into()
-                .expect("should convert");
-            commit_transforms.value()
-        })
-        .collect()
-}
-
-pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
-    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-    deploy_results
-        .iter()
-        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
-        .collect()
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
-    transforms.get(account).and_then(|transform| {
-        if let Transform::Write(Value::Account(account)) = transform {
-            Some(account.to_owned())
-        } else {
-            None
-        }
-    })
-}
-
-pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_execution_result()
-        .to_owned()
-}
-
-pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
-    let result = response.get_success();
-
-    result
-        .get_deploy_results()
-        .first()
-        .expect("should have a deploy result")
-        .get_precondition_failure()
-        .to_owned()
-}
-
-pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
-    let error = execution_result.get_error();
-
-    if error.has_gas_error() {
-        "Gas limit".to_string()
-    } else {
-        error.get_exec_error().get_message().to_string()
-    }
-}
-
 /// Builder for simple WASM test
 pub struct WasmTestBuilder<S> {
     /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
@@ -635,10 +475,16 @@ impl<S> WasmTestResult<S> {
 }
 
 impl InMemoryWasmTestBuilder {
-    pub fn new(global_state: InMemoryGlobalState, engine_config: EngineConfig) -> Self {
+    pub fn new(
+        global_state: InMemoryGlobalState,
+        engine_config: EngineConfig,
+        post_state_hash: Vec<u8>,
+    ) -> Self {
         let engine_state = EngineState::new(global_state, engine_config);
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
+            genesis_hash: Some(post_state_hash.clone()),
+            post_state_hash: Some(post_state_hash),
             ..Default::default()
         }
     }
@@ -760,12 +606,6 @@ where
             pos_contract_uref: result.0.pos_contract_uref,
             genesis_transforms: result.0.genesis_transforms,
         }
-    }
-
-    pub fn with_genesis_hash(&mut self, genesis_hash: Vec<u8>) -> &mut Self {
-        self.genesis_hash = Some(genesis_hash);
-        self.post_state_hash = self.genesis_hash.clone();
-        self
     }
 
     pub fn run_genesis(&mut self, genesis_config: &GenesisConfig) -> &mut Self {
@@ -1164,6 +1004,113 @@ fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
     let mut validate_request = ValidateRequest::new();
     validate_request.set_wasm_code(wasm_bytes);
     validate_request
+}
+
+pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
+    let name = DEFAULT_CHAIN_NAME.to_string();
+    let timestamp = DEFAULT_GENESIS_TIMESTAMP;
+    let mint_installer_bytes = read_wasm_file_bytes(CONTRACT_MINT_INSTALL);
+    let proof_of_stake_installer_bytes = read_wasm_file_bytes(CONTRACT_POS_INSTALL);
+    let protocol_version = *DEFAULT_PROTOCOL_VERSION;
+    let wasm_costs = *DEFAULT_WASM_COSTS;
+    GenesisConfig::new(
+        name,
+        timestamp,
+        protocol_version,
+        mint_installer_bytes,
+        proof_of_stake_installer_bytes,
+        accounts,
+        wasm_costs,
+    )
+}
+
+pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String>) -> QueryRequest {
+    let mut query_request = QueryRequest::new();
+
+    query_request.set_state_hash(post_state);
+    query_request.set_base_key(base_key.into());
+    query_request.set_path(path.into());
+
+    query_request
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn create_commit_request(
+    prestate_hash: &[u8],
+    effects: &HashMap<Key, Transform>,
+) -> CommitRequest {
+    let effects: Vec<TransformEntry> = effects
+        .iter()
+        .map(|(k, t)| (k.to_owned(), t.to_owned()).into())
+        .collect();
+
+    let mut commit_request = CommitRequest::new();
+    commit_request.set_prestate_hash(prestate_hash.to_vec());
+    commit_request.set_effects(effects.into());
+    commit_request
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
+    let commit_transforms: CommitTransforms = genesis_response
+        .get_success()
+        .get_effect()
+        .get_transform_map()
+        .try_into()
+        .expect("should convert");
+    commit_transforms.value()
+}
+
+pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
+    let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
+
+    deploy_results
+        .iter()
+        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+        .collect()
+}
+
+#[allow(clippy::implicit_hasher)]
+pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
+    transforms.get(account).and_then(|transform| {
+        if let Transform::Write(Value::Account(account)) = transform {
+            Some(account.to_owned())
+        } else {
+            None
+        }
+    })
+}
+
+pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_execution_result()
+        .to_owned()
+}
+
+pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
+    let result = response.get_success();
+
+    result
+        .get_deploy_results()
+        .first()
+        .expect("should have a deploy result")
+        .get_precondition_failure()
+        .to_owned()
+}
+
+pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> String {
+    let error = execution_result.get_error();
+
+    if error.has_gas_error() {
+        "Gas limit".to_string()
+    } else {
+        error.get_exec_error().get_message().to_string()
+    }
 }
 
 /// Represents the difference between two [`HashMap`]s.

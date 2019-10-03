@@ -16,7 +16,6 @@ use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
@@ -24,7 +23,7 @@ const CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT: &str = "transfer_to_existing_accoun
 
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
-
+const PER_RUN_FUNDING: u64 = 10_000_000;
 const TARGET_ADDR: [u8; 32] = [127; 32];
 
 fn engine_with_payments() -> EngineConfig {
@@ -84,7 +83,7 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
     for i in 0..TRANSFER_BATCH_SIZE {
         let deploy = DeployItemBuilder::default()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(PER_RUN_FUNDING),))
             .with_session_code("transfer_to_existing_account.wasm", (account, U512::one()))
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .with_deploy_hash([2 + i as u8; 32]) // deploy_hash
