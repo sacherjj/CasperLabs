@@ -24,7 +24,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val accounts = Seq(
         ("KZZwxShJ8aqC6N/lvocsFrYAvwnMiYPgS5A0ETWPLeY=", 0, 100),
         ("V3dfs7swdXYE68RTvQObGZ6PCadHZKwWkPc25zS33hg=", 0, 200),

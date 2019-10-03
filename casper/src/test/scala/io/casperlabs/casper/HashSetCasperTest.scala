@@ -19,14 +19,14 @@ import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.FilesAPI
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable
-import io.casperlabs.storage.block.InMemBlockStorage
 
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
@@ -1194,10 +1194,11 @@ object HashSetCasperTest {
           .withBondedAmount(state.BigInt(bonds.getOrElse(key, 0L).toString, bitWidth = 512))
       })
 
-    InMemBlockStorage
-      .empty[Task]
-      .flatMap { implicit blockStorage =>
-        Genesis.fromChainSpec[Task](spec)
+    StorageFixture
+      .createStorages[Task]()
+      .flatMap {
+        case (implicit0(blockStorage: BlockStorage[Task]), _, _) =>
+          Genesis.fromChainSpec[Task](spec)
       }
       .unsafeRunSync
   }
