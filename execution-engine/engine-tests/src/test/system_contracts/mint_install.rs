@@ -1,12 +1,12 @@
-use crate::support::exec_with_return;
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
-use std::collections::HashMap;
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+use crate::support::exec_with_return;
+use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 
 #[ignore]
@@ -14,11 +14,11 @@ const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 fn should_run_mint_install_contract() {
     let mut builder = WasmTestBuilder::default();
 
-    builder.run_genesis(GENESIS_ADDR, HashMap::new());
+    builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
         &mut builder,
-        GENESIS_ADDR,
+        DEFAULT_ACCOUNT_ADDR,
         "mint_install.wasm",
         DEFAULT_BLOCK_TIME,
         DEPLOY_HASH_1,

@@ -14,13 +14,11 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 
 trait Casper[F[_], A] {
   def addBlock(block: Block): F[BlockStatus]
@@ -32,7 +30,6 @@ trait Casper[F[_], A] {
 
 trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   def dag: F[DagRepresentation[F]]
-  def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
@@ -68,32 +65,8 @@ sealed abstract class MultiParentCasperInstances {
                     )
     } yield (blockProcessingLock, casperState)
 
-  def fromTransportLayer[F[_]: Concurrent: ConnectionsCell: TransportLayer: Log: Time: Metrics: ErrorHandler: FinalityDetector: BlockStorage: RPConfAsk: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection](
-      validatorId: Option[ValidatorIdentity],
-      genesis: Block,
-      genesisPreState: StateHash,
-      genesisEffects: ExecEngineUtil.TransformMap,
-      chainId: String
-  ): F[MultiParentCasper[F]] =
-    for {
-      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
-                                                                              genesis,
-                                                                              genesisPreState,
-                                                                              genesisEffects
-                                                                            )
-      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
-      casper <- MultiParentCasperImpl.create[F](
-                 statelessExecutor,
-                 MultiParentCasperImpl.Broadcaster.fromTransportLayer(),
-                 validatorId,
-                 genesis,
-                 chainId,
-                 blockProcessingLock
-               )
-    } yield casper
-
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection: CasperLabsProtocolVersions](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

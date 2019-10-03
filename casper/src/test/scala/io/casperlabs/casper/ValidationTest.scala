@@ -15,14 +15,18 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture, HashSetCasperTestNode}
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
 import io.casperlabs.casper.util.execengine.{
   DeploysCheckpoint,
   ExecEngineUtil,
   ExecutionEngineServiceStub
 }
-import io.casperlabs.casper.validation.Errors.{DropErrorWrapper, ValidateErrorWrapper}
+import io.casperlabs.casper.validation.Errors.{
+  DeployHeaderError,
+  DropErrorWrapper,
+  ValidateErrorWrapper
+}
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.crypto.Keys.PrivateKey
@@ -35,7 +39,9 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
@@ -49,6 +55,14 @@ class ValidationTest
     with ArbitraryConsensus {
   implicit val log              = new LogStub[Task]
   implicit val raiseValidateErr = validation.raiseValidateErrorThroughApplicativeError[Task]
+  implicit val versions = {
+    import Scheduler.Implicits.global
+    CasperLabsProtocolVersions[Task](
+      0L -> state.ProtocolVersion(1)
+    ).runSyncUnsafe(Duration.Inf)
+  }
+  import DeriveValidation._
+
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
   // When raise errors we wrap them with Throwable so we need to do the same here.
   implicit def wrapWithThrowable[A <: InvalidBlock](err: A): Throwable =
@@ -62,8 +76,6 @@ class ValidationTest
     log.reset()
     timeEff.reset()
   }
-
-  import DeriveValidation._
 
   def withoutStorage(t: => Task[_]) = {
     import Scheduler.Implicits.global
@@ -270,6 +282,83 @@ class ValidationTest
 
     val deploy = sample(genDeploy)
     Validation[Task].deploySignature(deploy) shouldBeF false
+  }
+
+  "Deploy header validation" should "accept valid headers" in {
+    implicit val consensusConfig =
+      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
+
+    forAll { (deploy: consensus.Deploy) =>
+      withoutStorage { Validation[Task].deployHeader(deploy) } shouldBe Nil
+    }
+  }
+
+  it should "not accept too short time to live" in withoutStorage {
+    val minTTL = 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.choose(1, minTTL - 1)
+    } yield d.withHeader(
+      d.getHeader.withTtlMillis(ttl)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+    )
+  }
+
+  it should "not accept too long time to live" in withoutStorage {
+    val maxTTL = 24 * 60 * 60 * 1000
+    val genDeploy = for {
+      d   <- arbitrary[consensus.Deploy]
+      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
+    } yield d.withHeader(
+      d.getHeader.withTtlMillis(ttl)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+    )
+  }
+
+  it should "not accept too many dependencies" in withoutStorage {
+    val maxDependencies = 10
+    val genDeploy = for {
+      d               <- arbitrary[consensus.Deploy]
+      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
+      dependencies    <- Gen.listOfN(numDependencies, genHash)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(dependencies)
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError.tooManyDependencies(
+        deploy.deployHash,
+        deploy.getHeader.dependencies.size,
+        maxDependencies
+      )
+    )
+  }
+
+  it should "not accept invalid dependencies" in withoutStorage {
+    val genDeploy = for {
+      d          <- arbitrary[consensus.Deploy]
+      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
+      dependency <- genBytes(nBytes)
+    } yield d.withHeader(
+      d.getHeader.withDependencies(List(dependency))
+    )
+
+    val deploy = sample(genDeploy)
+    Validation[Task].deployHeader(deploy) shouldBeF List(
+      DeployHeaderError
+        .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
+    )
   }
 
   "Timestamp validation" should "not accept blocks with future time" in withStorage {
@@ -780,8 +869,10 @@ class ValidationTest
     val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
     // Genesis' block version is 1.  `missingProtocolVersionForBlock` will fail ProtocolVersion lookup
     // while `protocolVersionForGenesisBlock` returns proper one (version=1)
-    val missingProtocolVersionForBlock: Long => ProtocolVersion = _ => ProtocolVersion(-1)
-    val protocolVersionForGenesisBlock: Long => ProtocolVersion = _ => ProtocolVersion(1)
+    val missingProtocolVersionForBlock: Long => Task[ProtocolVersion] =
+      _ => Task.now(ProtocolVersion(-1))
+    val protocolVersionForGenesisBlock: Long => Task[ProtocolVersion] =
+      _ => Task.now(ProtocolVersion(1))
     for {
       dag     <- dagStorage.getRepresentation
       genesis <- ProtoUtil.signBlock(block, dag, pk, sk, Ed25519)

@@ -440,6 +440,10 @@ object ProtoUtil {
   def stringToByteString(string: String): ByteString =
     ByteString.copyFrom(Base16.decode(string))
 
+  def getTimeToLive(h: Deploy.Header, default: Int): Int =
+    if (h.ttlMillis == 0) default
+    else h.ttlMillis
+
   def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
     Time[F].currentMillis.map { now =>
       basicDeploy(now, ByteString.EMPTY)

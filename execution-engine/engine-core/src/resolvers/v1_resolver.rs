@@ -53,9 +53,9 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SerFnFuncIndex.into(),
             ),
-            "serialize_known_urefs" => FuncInstance::alloc_host(
+            "serialize_named_keys" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 0][..], Some(ValueType::I32)),
-                FunctionIndex::SerKnownURefs.into(),
+                FunctionIndex::SerNamedKeysFuncIndex.into(),
             ),
             "write" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
@@ -101,17 +101,17 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetCallResultFuncIndex.into(),
             ),
-            "get_uref" => FuncInstance::alloc_host(
+            "get_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::GetURefFuncIndex.into(),
+                FunctionIndex::GetKeyFuncIndex.into(),
             ),
-            "has_uref_name" => FuncInstance::alloc_host(
+            "has_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::HasURefFuncIndex.into(),
+                FunctionIndex::HasKeyFuncIndex.into(),
             ),
-            "add_uref" => FuncInstance::alloc_host(
+            "put_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
-                FunctionIndex::AddURefFuncIndex.into(),
+                FunctionIndex::PutKeyFuncIndex.into(),
             ),
             "gas" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
@@ -149,13 +149,13 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SetActionThresholdFuncIndex.into(),
             ),
-            "list_known_urefs" => FuncInstance::alloc_host(
+            "list_named_keys" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::ListKnownURefsIndex.into(),
+                FunctionIndex::ListNamedKeysFuncIndex.into(),
             ),
-            "remove_uref" => FuncInstance::alloc_host(
+            "remove_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
-                FunctionIndex::RemoveURef.into(),
+                FunctionIndex::RemoveKeyFuncIndex.into(),
             ),
             "get_caller" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
@@ -188,6 +188,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_phase" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetPhaseIndex.into(),
+            ),
+            "upgrade_contract_at_uref" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
+                FunctionIndex::UpgradeContractAtURef.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
-std = ["contract-ffi/std" ]
+std = ["contract-ffi/std"]
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

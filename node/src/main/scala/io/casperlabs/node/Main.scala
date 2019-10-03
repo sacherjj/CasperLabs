@@ -88,7 +88,7 @@ object Main {
   private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
     val node =
       for {
-        _       <- log.info(api.VersionInfo.get).toEffect
+        _       <- log.info(api.VersionInfo.get)
         runtime <- NodeRuntime(conf)
         _       <- runtime.main
       } yield ()
@@ -97,15 +97,11 @@ object Main {
     def raise(msg: String) =
       Task.raiseError(new Exception(msg) with NoStackTrace)
 
-    node.value >>= {
+    node.attempt >>= {
       case Right(_) =>
         Task.unit
-      case Left(CouldNotConnectToBootstrap) =>
-        raise("Node could not connect to bootstrap node.")
-      case Left(InitializationError(msg)) =>
-        raise(msg)
       case Left(error) =>
-        raise(s"Failed! Reason: '$error")
+        raise(s"Failed! Reason: $error")
     }
   }
 }

@@ -1,5 +1,5 @@
-import { decodeBase16 } from '../lib/Conversions';
 import AuthService from './AuthService';
+import { decodeBase16 } from 'casperlabs-sdk';
 
 /** Call the API on the server backend. */
 export default class FaucetService {

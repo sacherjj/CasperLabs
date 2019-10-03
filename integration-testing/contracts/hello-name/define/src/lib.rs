@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{add_uref, get_arg, ret, store_function};
+use contract_ffi::contract_api::{put_key, get_arg, ret, store_function};
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
@@ -18,7 +18,7 @@ fn hello_name(name: &str) -> String {
 
 #[no_mangle]
 pub extern "C" fn hello_name_ext() {
-    let name: String = get_arg(0);
+    let name: String = get_arg(0).unwrap().unwrap();
     let y = hello_name(&name);
     ret(&y, &Vec::new());
 }
@@ -26,5 +26,5 @@ pub extern "C" fn hello_name_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let pointer = store_function("hello_name_ext", BTreeMap::new());
-    add_uref("hello_name", &pointer.into());
+    put_key("hello_name", &pointer.into());
 }

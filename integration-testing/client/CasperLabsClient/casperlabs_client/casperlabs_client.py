@@ -627,11 +627,11 @@ class CasperLabsClient:
                 "balance", f"Expected Account type value under {address}."
             )
 
-        urefs = [u for u in account.known_urefs if u.name == "mint"]
+        urefs = [u for u in account.named_keys if u.name == "mint"]
         if len(urefs) == 0:
             raise InternalError(
                 "balance",
-                "Account's known_urefs map did not contain Mint contract address.",
+                "Account's named_keys map did not contain Mint contract address.",
             )
 
         mintPublic = urefs[0]

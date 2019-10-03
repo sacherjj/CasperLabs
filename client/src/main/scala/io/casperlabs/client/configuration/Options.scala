@@ -106,6 +106,20 @@ object Options {
       required = false
     )
 
+    val ttl = opt[Int](
+      descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
+      validate = _ > 0,
+      required = false,
+      noshort = true
+    )
+
+    val dependencies = opt[List[String]](
+      descr = "List of deploy hashes (base16 encoded) which must be executed before this deploy.",
+      validate = _.forall(hashCheck),
+      required = false,
+      noshort = true
+    )
+
     addValidation {
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)

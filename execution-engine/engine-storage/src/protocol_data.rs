@@ -93,22 +93,20 @@ mod tests {
     use proptest::proptest;
 
     use contract_ffi::uref::{AccessRights, URef};
-    use contract_ffi::value::ProtocolVersion;
     use engine_shared::test_utils;
-    use engine_wasm_prep::wasm_costs::WasmCosts;
 
     use super::{gens, ProtocolData};
 
     #[test]
     fn should_serialize_and_deserialize() {
         let v1 = {
-            let costs = WasmCosts::from_version(ProtocolVersion::new(1)).unwrap();
+            let costs = test_utils::wasm_costs_mock();
             let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
         };
         let free = {
-            let costs = WasmCosts::free();
+            let costs = test_utils::wasm_costs_free();
             let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)

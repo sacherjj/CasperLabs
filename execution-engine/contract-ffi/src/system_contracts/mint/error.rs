@@ -25,6 +25,10 @@ pub enum Error {
     InvalidAccessRights = 4,
     #[fail(display = "Invalid non-empty purse creation")]
     InvalidNonEmptyPurseCreation = 5,
+    #[fail(display = "Missing argument")]
+    MissingArgument = 102,
+    #[fail(display = "Passed argument is invalid")]
+    InvalidArgument = 103,
 }
 
 impl From<PurseIdError> for Error {
@@ -55,6 +59,11 @@ impl TryFrom<u32> for Error {
             d if d == Error::DestNotFound as u32 => Ok(Error::DestNotFound),
             d if d == Error::InvalidURef as u32 => Ok(Error::InvalidURef),
             d if d == Error::InvalidAccessRights as u32 => Ok(Error::InvalidAccessRights),
+            d if d == Error::MissingArgument as u32 => Ok(Error::MissingArgument),
+            d if d == Error::InvalidArgument as u32 => Ok(Error::InvalidArgument),
+            d if d == Error::InvalidNonEmptyPurseCreation as u32 => {
+                Ok(Error::InvalidNonEmptyPurseCreation)
+            }
             _ => Err(TryFromDeserializedU32Error(())),
         }
     }

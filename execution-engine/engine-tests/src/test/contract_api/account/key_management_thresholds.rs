@@ -1,22 +1,19 @@
-use std::collections::HashMap;
-
 use contract_ffi::value::account::PublicKey;
+use contract_ffi::value::U512;
+use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
     InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
 };
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
-
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
 #[test]
 fn should_verify_key_management_permission_with_low_weight() {
     InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "key_management_thresholds.wasm",
@@ -27,7 +24,7 @@ fn should_verify_key_management_permission_with_low_weight() {
         .expect_success()
         .commit()
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "key_management_thresholds.wasm",
@@ -44,9 +41,9 @@ fn should_verify_key_management_permission_with_low_weight() {
 #[test]
 fn should_verify_key_management_permission_with_sufficient_weight() {
     InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "key_management_thresholds.wasm",
@@ -57,7 +54,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
         .expect_success()
         .commit()
         .exec_with_args_and_keys(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "key_management_thresholds.wasm",
@@ -66,7 +63,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             DEFAULT_BLOCK_TIME,
             [2u8; 32],
             vec![
-                PublicKey::new(GENESIS_ADDR),
+                PublicKey::new(DEFAULT_ACCOUNT_ADDR),
                 // Key [42; 32] is created in init stage
                 PublicKey::new([42; 32]),
             ],

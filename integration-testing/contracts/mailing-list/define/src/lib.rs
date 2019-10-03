@@ -15,35 +15,47 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
-    get_uref(name).unwrap().to_turef().unwrap()
+    get_key(name).unwrap().to_turef().unwrap()
 }
 
 fn update_list(name: String) {
     let list_key = get_list_key("list");
-    let mut list = read(list_key.clone());
+    let mut list = match read(list_key.clone()) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     list.push(name);
     write(list_key, list);
 }
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
-    if has_uref(&name) {
+    if has_key(&name) {
         let init_message = vec![String::from("Hello again!")];
         let new_key = new_turef(init_message);
         Some(new_key) //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = new_turef(init_message);
-        add_uref(&name, &new_key.clone().into());
+        put_key(&name, &new_key.clone().into());
         update_list(name);
         Some(new_key)
     }
 }
 
 fn publish(msg: String) {
-    let curr_list = read(get_list_key("list"));
+    let curr_list = match read(get_list_key("list")) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     for name in curr_list.iter() {
         let uref = get_list_key(name);
-        let mut messages = read(uref.clone());
+        let mut messages = match read(uref.clone()) {
+            Ok(Some(messages)) => messages,
+            Ok(None) => revert(Error::ValueNotFound.into()),
+            Err(_) => revert(Error::Read.into()),
+        };
         messages.push(msg.clone());
         write(uref, messages);
     }
@@ -51,9 +63,9 @@ fn publish(msg: String) {
 
 #[no_mangle]
 pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
+    let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
-        "sub" => match sub(get_arg(1)) {
+        "sub" => match sub(get_arg(1).unwrap().unwrap()) {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
@@ -66,7 +78,7 @@ pub extern "C" fn mailing_list_ext() {
         //unforgable reference because otherwise anyone could
         //spam the mailing list.
         "pub" => {
-            publish(get_arg(1));
+            publish(get_arg(1).unwrap().unwrap());
         }
         _ => panic!("Unknown method name!"),
     }
@@ -83,5 +95,5 @@ pub extern "C" fn call() {
     mailing_list_urefs.insert(key_name, list_key.into());
 
     let pointer = store_function("mailing_list_ext", mailing_list_urefs);
-    add_uref("mailing", &pointer.into())
+    put_key("mailing", &pointer.into())
 }

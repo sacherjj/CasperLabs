@@ -1,26 +1,25 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
 use contract_ffi::key::Key;
 use contract_ffi::value::U512;
 use contract_ffi::value::{Account, Value};
 use engine_core::engine_state::MAX_PAYMENT;
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+use crate::support::test_support::{
+    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 #[ignore]
 #[test]
-fn should_run_main_purse_contract_genesis_account() {
+fn should_run_main_purse_contract_default_account() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let builder = builder.run_genesis(GENESIS_ADDR, HashMap::new());
+    let builder = builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
-    let genesis_account = if let Some(Value::Account(account)) =
-        builder.query(None, Key::Account(GENESIS_ADDR), &[])
+    let default_account = if let Some(Value::Account(account)) =
+        builder.query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
     {
         account
     } else {
@@ -29,11 +28,11 @@ fn should_run_main_purse_contract_genesis_account() {
 
     builder
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "main_purse.wasm",
-            (genesis_account.purse_id(), ()),
+            (default_account.purse_id(), ()),
             DEFAULT_BLOCK_TIME,
             [1u8; 32],
         )
@@ -49,9 +48,9 @@ fn should_run_main_purse_contract_account_1() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     let builder = builder
-        .run_genesis(GENESIS_ADDR, HashMap::new())
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_args(
-            GENESIS_ADDR,
+            DEFAULT_ACCOUNT_ADDR,
             STANDARD_PAYMENT_CONTRACT,
             (U512::from(MAX_PAYMENT),),
             "transfer_purse_to_account.wasm",

@@ -3,7 +3,6 @@ package io.casperlabs.blockstorage
 import cats.implicits._
 import cats.{Applicative, Apply}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
@@ -40,10 +39,6 @@ trait BlockStorage[F[_]] {
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
-
-  def getApprovedBlock(): F[Option[ApprovedBlock]]
-
-  def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 

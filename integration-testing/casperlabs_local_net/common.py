@@ -64,6 +64,7 @@ CONV_RATE = 10
 TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
+CHAINSPEC_PATH = "/root/.casperlabs/chainspec"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)

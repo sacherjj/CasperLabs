@@ -7,6 +7,7 @@ extern crate contract_ffi;
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::convert::From;
 
 use contract_ffi::contract_api::pointers::TURef;
 use contract_ffi::contract_api::*;
@@ -21,40 +22,52 @@ fn hello_name(name: &str) -> String {
 
 #[no_mangle]
 pub extern "C" fn hello_name_ext() {
-    let name: String = get_arg(0);
+    let name: String = get_arg(0).unwrap().unwrap();
     let y = hello_name(&name);
     ret(&y, &Vec::new());
 }
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
-    get_uref(name).unwrap().to_turef().unwrap()
+    get_key(name).unwrap().to_turef().unwrap()
 }
 
 fn update_list(name: String) {
     let list_key = get_list_key("list");
-    let mut list = read(list_key.clone());
+    let mut list = match read(list_key.clone()) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     list.push(name);
     write(list_key, list);
 }
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
-    if has_uref(&name) {
+    if has_key(&name) {
         let init_message = vec![String::from("Hello again!")];
         Some(new_turef(init_message)) //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_turef = new_turef(init_message);
-        add_uref(&name, &new_turef.clone().into());
+        put_key(&name, &new_turef.clone().into());
         update_list(name);
         Some(new_turef)
     }
 }
 
 fn publish(msg: String) {
-    let curr_list = read(get_list_key("list"));
+    let curr_list = match read(get_list_key("list")) {
+        Ok(Some(list)) => list,
+        Ok(None) => revert(Error::ValueNotFound.into()),
+        Err(_) => revert(Error::Read.into()),
+    };
     for name in curr_list.iter() {
         let uref = get_list_key(name);
-        let mut messages = read(uref.clone());
+        let mut messages = match read(uref.clone()) {
+            Ok(Some(messages)) => messages,
+            Ok(None) => revert(Error::ValueNotFound.into()),
+            Err(_) => revert(Error::Read.into()),
+        };
         messages.push(msg.clone());
         write(uref, messages);
     }
@@ -62,9 +75,9 @@ fn publish(msg: String) {
 
 #[no_mangle]
 pub extern "C" fn mailing_list_ext() {
-    let method_name: String = get_arg(0);
+    let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
-        "sub" => match sub(get_arg(1)) {
+        "sub" => match sub(get_arg(1).unwrap().unwrap()) {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
@@ -77,7 +90,7 @@ pub extern "C" fn mailing_list_ext() {
         //unforgable reference because otherwise anyone could
         //spam the mailing list.
         "pub" => {
-            publish(get_arg(1));
+            publish(get_arg(1).unwrap().unwrap());
         }
         _ => panic!("Unknown method name!"),
     }
@@ -85,12 +98,16 @@ pub extern "C" fn mailing_list_ext() {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let turef: TURef<i32> = get_uref("count").unwrap().to_turef().unwrap();
-    let method_name: String = get_arg(0);
+    let turef: TURef<i32> = get_key("count").unwrap().to_turef().unwrap();
+    let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
         "inc" => add(turef, 1),
         "get" => {
-            let result = read(turef);
+            let result = match read(turef) {
+                Ok(Some(result)) => result,
+                Ok(None) => revert(Error::ValueNotFound.into()),
+                Err(_) => revert(Error::Read.into()),
+            };
             ret(&result, &Vec::new());
         }
         _ => panic!("Unknown method name!"),
@@ -101,7 +118,7 @@ pub extern "C" fn counter_ext() {
 pub extern "C" fn call() {
     // hello_name
     let pointer = store_function("hello_name_ext", BTreeMap::new());
-    add_uref("hello_name", &pointer.into());
+    put_key("hello_name", &pointer.into());
 
     // counter
     let counter_local_turef = new_turef(0); //initialize counter
@@ -111,7 +128,7 @@ pub extern "C" fn call() {
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_turef.into());
     let _counter_hash = store_function("counter_ext", counter_urefs);
-    add_uref("counter", &_counter_hash.into());
+    put_key("counter", &_counter_hash.into());
 
     // mailing list
     let init_list: Vec<String> = Vec::new();
@@ -123,5 +140,5 @@ pub extern "C" fn call() {
     mailing_list_urefs.insert(key_name, list_turef.into());
 
     let pointer = store_function("mailing_list_ext", mailing_list_urefs);
-    add_uref("mailing", &pointer.into())
+    put_key("mailing", &pointer.into())
 }
