@@ -727,7 +727,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
-                // TODO: executionresult cost should be BIGINT; see https://casperlabs.atlassian.net/browse/EE-649
                 execution_result.set_cost(cost.value().into());
                 deploy_result.set_execution_result(execution_result);
                 deploy_result
@@ -1172,7 +1171,7 @@ mod tests {
         };
         let execution_effect: ExecutionEffect =
             ExecutionEffect::new(HashMap::new(), input_transforms.clone());
-        let cost: Gas = Gas::from_u64(123);
+        let cost: Gas = Gas::new(U512::from(123));
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
             cost,
@@ -1216,7 +1215,7 @@ mod tests {
     #[test]
     fn storage_error_has_cost() {
         use engine_storage::error::Error::*;
-        let cost: Gas = Gas::from_u64(100);
+        let cost: Gas = Gas::new(U512::from(100));
         // TODO: actually create an Rkv error
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = contract_ffi::bytesrepr::Error::EarlyEndOfStream;
@@ -1225,7 +1224,7 @@ mod tests {
 
     #[test]
     fn exec_err_has_cost() {
-        let cost: Gas = Gas::from_u64(100);
+        let cost: Gas = Gas::new(U512::from(100));
         // GasLimit error is treated differently at the moment so test separately
         assert_eq!(
             test_cost(cost, engine_core::execution::Error::GasLimit),
@@ -1270,13 +1269,13 @@ mod tests {
 
     #[test]
     fn revert_error_maps_to_execution_error() {
-        const AMOUNT: u64 = 15;
         const REVERT: u32 = 10;
         let revert_error = Error::Revert(REVERT);
+        let amount: U512 = U512::from(15);
         let exec_result = ExecutionResult::Failure {
             error: ExecError(revert_error),
             effect: Default::default(),
-            cost: Gas::from_u64(AMOUNT),
+            cost: Gas::new(amount),
         };
         let ipc_result: ipc::DeployResult = exec_result.into();
         assert!(
@@ -1288,11 +1287,7 @@ mod tests {
             .get_cost()
             .try_into()
             .expect("should map to U512");
-        assert_eq!(
-            execution_cost,
-            U512::from(AMOUNT),
-            "execution cost should equal amount"
-        );
+        assert_eq!(execution_cost, amount, "execution cost should equal amount");
         assert_eq!(
             ipc_execution_result
                 .get_error()

@@ -9,6 +9,7 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
+use contract_ffi::value::U512;
 use contract_ffi::value::{Account, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
@@ -166,7 +167,7 @@ impl Executor<Module> for WasmiExecutor {
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::from_u64(args.len() as u64),
+                Gas::new(U512::from(args.len() as u64)),
                 effects_snapshot
             )
         };
@@ -241,7 +242,7 @@ impl Executor<Module> for WasmiExecutor {
         } else {
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::from_u64(args.len() as u64),
+                Gas::new(U512::from(args.len() as u64)),
                 effects_snapshot
             )
         };

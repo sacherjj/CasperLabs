@@ -699,7 +699,7 @@ where
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
 
-            let session_motes = Motes::from_u64(DEFAULT_SESSION_MOTES);
+            let session_motes = Motes::new(U512::from(DEFAULT_SESSION_MOTES));
 
             let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
 
@@ -724,7 +724,7 @@ where
 
         // --- REMOVE ABOVE --- //
 
-        let max_payment_cost: Motes = Motes::from_u64(MAX_PAYMENT);
+        let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -1021,7 +1021,7 @@ where
                 .clone();
 
             let base_key = proof_of_stake_info.key();
-            let gas_limit = Gas::from_u64(std::u64::MAX);
+            let gas_limit = Gas::new(U512::from(std::u64::MAX));
 
             executor.exec_direct(
                 proof_of_stake_module,
