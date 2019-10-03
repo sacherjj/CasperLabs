@@ -6,6 +6,7 @@ extern crate contract_ffi;
 use contract_ffi::contract_api::{
     add_associated_key, get_arg, revert, set_action_threshold, Error,
 };
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::{ActionType, AddKeyFailure, PublicKey, Weight};
 
 #[no_mangle]
@@ -16,11 +17,7 @@ pub extern "C" fn call() {
         Ok(_) => {}
     };
 
-    let key_management_threshold: Weight = match get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument.into()),
-        None => revert(Error::MissingArgument.into()),
-    };
+    let key_management_threshold: Weight = get_arg(0).unwrap_or_revert().unwrap_or_revert();
     let deploy_threshold: Weight = match get_arg(1) {
         Some(Ok(data)) => data,
         Some(Err(_)) => revert(Error::InvalidArgument.into()),

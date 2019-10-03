@@ -1,4 +1,5 @@
 use contract_ffi::base16;
+use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::account::PurseId;
@@ -515,8 +516,11 @@ fn should_fail_bonding_with_insufficient_funds() {
         let execution_result = crate::support::test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::BondTransferFailed => 7
-    assert_eq!(error_message, "Exit code: 7");
+    // pos::Error::BondTransferFailed => 8
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(8)))
+    );
 }
 
 #[ignore]
@@ -559,6 +563,9 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         let execution_result = crate::support::test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::NotBonded => 0
-    assert_eq!(error_message, "Exit code: 0");
+    // pos::Error::NotBonded => 0
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(0)))
+    );
 }

@@ -5,16 +5,11 @@ extern crate alloc;
 extern crate contract_ffi;
 use alloc::string::{String, ToString};
 use contract_ffi::contract_api;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 pub const LOCAL_KEY: [u8; 32] = [66u8; 32];
 pub const HELLO_PREFIX: &str = " Hello, ";
 pub const WORLD_SUFFIX: &str = "world!";
-
-#[repr(u16)]
-enum CustomError {
-    UnableToReadMutatedLocalKey = 100,
-    LocalKeyReadMutatedBytesRepr = 101,
-}
 
 pub fn delegate() {
     // Appends " Hello, world!" to a [66; 32] local key with spaces trimmed.
@@ -30,16 +25,8 @@ pub fn delegate() {
 
     // Read (this should exercise cache)
     let mut res: String = contract_api::read_local(LOCAL_KEY)
-        .unwrap_or_else(|_| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::UnableToReadMutatedLocalKey as u16).into(),
-            )
-        })
-        .unwrap_or_else(|| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::LocalKeyReadMutatedBytesRepr as u16).into(),
-            )
-        });
+        .unwrap_or_revert()
+        .unwrap_or_revert();
     // Append
     res.push_str(WORLD_SUFFIX);
     // Write
