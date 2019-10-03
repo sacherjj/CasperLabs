@@ -1,17 +1,16 @@
 package io.casperlabs.comm.gossiping
 
-import cats.Applicative
-import cats.syntax.either._
 import cats.effect.concurrent.Deferred
+import cats.syntax.either._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import monix.eval.Task
-import monix.execution.{ExecutionModel, Scheduler}
 import monix.execution.atomic.{Atomic, AtomicInt}
 import monix.execution.schedulers.CanBlock.permit
 import monix.execution.schedulers.SchedulerService
+import monix.execution.{ExecutionModel, Scheduler}
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
@@ -22,10 +21,10 @@ class StashingSynchronizerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus
+    with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
-  import cats.implicits._
   import StashingSynchronizerSpec._
+  import cats.implicits._
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 

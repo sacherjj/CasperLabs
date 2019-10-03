@@ -73,7 +73,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       blocktime: Long,
       deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Seq[DeployResult]]] = {
+  ): F[Either[Throwable, Seq[DeployResult]]] = Metrics[F].timer("eeExec") {
     val baseExecRequest =
       ExecuteRequest(prestate, blocktime, protocolVersion = Some(protocolVersion))
     // Build batches limited by the size of message sent to EE.
@@ -128,20 +128,21 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       prestate: ByteString,
       effects: Seq[TransformEntry]
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
-    sendMessage(CommitRequest(prestate, effects), _.commit) {
-      _.result match {
-        case CommitResponse.Result.Success(commitResult) =>
-          Right(ExecutionEngineService.CommitResult(commitResult))
-        case CommitResponse.Result.Empty =>
-          Left(SmartContractEngineError("empty response"))
-        case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
-        case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-          Left(SmartContractEngineError(s"Error executing transform: $message"))
-        case CommitResponse.Result.KeyNotFound(value) =>
-          Left(SmartContractEngineError(s"Key not found in global state: $value"))
-        case CommitResponse.Result.TypeMismatch(err) =>
-          Left(SmartContractEngineError(err.toString))
+    Metrics[F].timer("eeCommit") {
+      sendMessage(CommitRequest(prestate, effects), _.commit) {
+        _.result match {
+          case CommitResponse.Result.Success(commitResult) =>
+            Right(ExecutionEngineService.CommitResult(commitResult))
+          case CommitResponse.Result.Empty => Left(SmartContractEngineError("empty response"))
+          case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
+            Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
+          case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
+            Left(SmartContractEngineError(s"Error executing transform: $message"))
+          case CommitResponse.Result.KeyNotFound(value) =>
+            Left(SmartContractEngineError(s"Key not found in global state: $value"))
+          case CommitResponse.Result.TypeMismatch(err) =>
+            Left(SmartContractEngineError(err.toString))
+        }
       }
     }
 

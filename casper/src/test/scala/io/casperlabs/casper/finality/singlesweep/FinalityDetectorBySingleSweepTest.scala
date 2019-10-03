@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
@@ -18,15 +18,15 @@ class FinalityDetectorBySingleSweepTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with DagStorageFixture {
+    with StorageFixture {
 
   behavior of "Finality Detector by Single Sweep"
 
   implicit val logEff = new LogStub[Task]
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *   b8
@@ -51,50 +51,50 @@ class FinalityDetectorBySingleSweepTest
         implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          b1 <- createBlock[Task](
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          b1 <- createAndStoreBlock[Task](
                  Seq(genesis.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> genesis.blockHash)
                )
-          b2 <- createBlock[Task](
+          b2 <- createAndStoreBlock[Task](
                  Seq(b1.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b1.blockHash)
                )
-          b3 <- createBlock[Task](
+          b3 <- createAndStoreBlock[Task](
                  Seq(b1.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> b1.blockHash)
                )
-          b4 <- createBlock[Task](
+          b4 <- createAndStoreBlock[Task](
                  Seq(b2.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b2.blockHash, v2 -> b3.blockHash)
                )
-          b5 <- createBlock[Task](
+          b5 <- createAndStoreBlock[Task](
                  Seq(b3.blockHash),
                  v2,
                  bonds,
                  HashMap(v2 -> b3.blockHash)
                )
-          b6 <- createBlock[Task](
+          b6 <- createAndStoreBlock[Task](
                  Seq(b4.blockHash),
                  v1,
                  bonds,
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
-          b7 <- createBlock[Task](
+          b7 <- createAndStoreBlock[Task](
                  Seq(b5.blockHash),
                  v2,
                  bonds,
                  HashMap(v1 -> b4.blockHash, v2 -> b5.blockHash)
                )
-          b8 <- createBlock[Task](
+          b8 <- createAndStoreBlock[Task](
                  Seq(b6.blockHash),
                  v1,
                  bonds,
@@ -103,7 +103,7 @@ class FinalityDetectorBySingleSweepTest
           dag           <- dagStorage.getRepresentation
           levelZeroMsgs <- finalityDetectorEffect.levelZeroMsgs(dag, b1.blockHash, List(v1, v2))
           lowestLevelZeroMsgs = levelZeroMsgs.flatMap {
-            case (_, msgs) => msgs.lastOption.map(_.blockHash)
+            case (_, msgs) => msgs.lastOption.map(_.messageHash)
           }.toSet
           _ = lowestLevelZeroMsgs shouldBe Set(b1.blockHash, b3.blockHash)
           _ <- dag.justificationToBlocks(b2.blockHash) shouldBeF Set(b4.blockHash)
@@ -161,7 +161,7 @@ class FinalityDetectorBySingleSweepTest
   }
 
   it should "take into account indirect justifications by non-level-zero direct justification" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v0 = generateValidator("V0")
       val v1 = generateValidator("V1")
 
@@ -190,45 +190,45 @@ class FinalityDetectorBySingleSweepTest
        *
        */
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b1 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v0,
                bonds,
                Map(v0 -> genesis.blockHash)
              )
-        b2 <- createBlock[Task](
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v3,
                bonds,
                Map(v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v1,
                bonds,
                Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v0,
                bonds,
                Map(v0 -> b1.blockHash)
              )
         // b5 vote for b2 instead of b1
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -243,7 +243,7 @@ class FinalityDetectorBySingleSweepTest
                         )
         lowestLevelZeroMsgs = committeeApproximation
           .flatMap(v => levelZeroMsgs(v).lastOption)
-        _ = lowestLevelZeroMsgs.map(_.blockHash) shouldBe Seq(
+        _ = lowestLevelZeroMsgs.map(_.messageHash) shouldBe Seq(
           b1.blockHash,
           b3.blockHash,
           b6.blockHash
@@ -267,7 +267,7 @@ class FinalityDetectorBySingleSweepTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -278,44 +278,44 @@ class FinalityDetectorBySingleSweepTest
 
       implicit val finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b5.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,

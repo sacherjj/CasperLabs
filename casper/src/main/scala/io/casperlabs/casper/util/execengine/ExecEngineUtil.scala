@@ -1,24 +1,27 @@
 package io.casperlabs.casper.util.execengine
 
-import cats.effect.Sync
+import cats.effect._
 import cats.implicits._
 import cats.kernel.Monoid
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{Key, Value}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
+import io.casperlabs.models.Message
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.models.BlockImplicits._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -35,7 +38,7 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployBuffer: Log: ExecutionEngineService: DeploySelection](
+  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
       hashes: Set[DeployHash],
       blocktime: Long,
@@ -43,7 +46,7 @@ object ExecEngineUtil {
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      deployStream = DeployBuffer[F].getByHashes(hashes)
+      deployStream = DeployStorage[F].getByHashes(hashes)
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )
@@ -75,7 +78,7 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  def handleInvalidDeploys[F[_]: MonadThrowable: DeployBuffer: Log](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log](
       invalidDeploys: List[NoEffectsFailure]
   ): F[Unit] =
     for {
@@ -92,8 +95,10 @@ object ExecEngineUtil {
       // as by default buffer is cleared when deploy gets included in
       // the finalized block. If that strategy ever changes, we will have to
       // put them back into the buffer explicitly.
-      _ <- DeployBuffer[F]
-            .markAsDiscarded(invalidDeploys.preconditionFailures.map(_.deploy)) whenA invalidDeploys.preconditionFailures.nonEmpty
+      _ <- DeployStorage[F]
+            .markAsDiscarded(
+              invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
+            ) whenA invalidDeploys.preconditionFailures.nonEmpty
     } yield ()
 
   def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
@@ -180,7 +185,7 @@ object ExecEngineUtil {
     val deploys   = ProtoUtil.deploys(block).flatMap(_.deploy)
     val blocktime = block.getHeader.timestamp
 
-    if (isGenesisLike(block)) {
+    if (block.isGenesisLike) {
       // The new Genesis definition is that there's a chain spec that everyone's supposed to
       // execute on their own and they aren't passed around to be executed.
       BlockStorage[F].get(block.blockHash).flatMap {
@@ -368,12 +373,13 @@ object ExecEngineUtil {
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] = {
 
-    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
-      b.parents.traverse(b => dag.lookup(b).map(_.get))
+    def parents(b: Message.Block): F[List[Message.Block]] =
+      b.parents.toList
+        .flatTraverse(b => dag.lookup(b).map(_.collect { case b: Message.Block => b }.toList))
 
-    def effect(blockMeta: BlockMetadata): F[Option[TransformMap]] =
+    def effect(blockMeta: Message.Block): F[Option[TransformMap]] =
       BlockStorage[F]
-        .get(blockMeta.blockHash)
+        .get(blockMeta.messageHash)
         .map(_.map { blockWithTransforms =>
           val blockHash  = blockWithTransforms.getBlockMessage.blockHash
           val transforms = blockWithTransforms.transformEntry
@@ -396,21 +402,23 @@ object ExecEngineUtil {
 
     def toOps(t: TransformMap): OpMap[state.Key] = Op.fromTransforms(t)
 
-    val candidateParents = candidateParentBlocks.map(BlockMetadata.fromBlock).toVector
-
+    import io.casperlabs.shared.Sorting.messageSummaryOrdering
     for {
-      ordering <- dag.deriveOrdering(0L) // TODO: Replace with an actual starting number
-      merged <- {
-        implicit val order = ordering
-        abstractMerge[F, TransformMap, BlockMetadata, state.Key](
-          candidateParents,
-          parents,
-          effect,
-          toOps
-        )
-      }
+      candidateParents <- MonadThrowable[F]
+                           .fromTry(
+                             candidateParentBlocks.toList.traverse(Message.fromBlock(_))
+                           )
+                           .map(_.collect {
+                             case b: Message.Block => b
+                           }.toVector)
+      merged <- abstractMerge[F, TransformMap, Message.Block, state.Key](
+                 candidateParents,
+                 parents,
+                 effect,
+                 toOps
+               )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
-      blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.blockHash))
+      blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
     } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(
       MergeResult.result(blocks.head, _, blocks.tail)
     )

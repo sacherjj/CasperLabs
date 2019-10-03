@@ -3,11 +3,10 @@ package io.casperlabs.casper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, DagStorage}
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
@@ -18,17 +17,23 @@ import io.casperlabs.comm.gossiping
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
+import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
 
-trait Casper[F[_], A] {
+trait MultiParentCasper[F[_]] {
+  //// Brought from Casper trait
   def addBlock(block: Block): F[BlockStatus]
   def contains(block: Block): F[Boolean]
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
-  def estimator(dag: DagRepresentation[F]): F[A]
+  def estimator(
+      dag: DagRepresentation[F],
+      latestMessages: Map[ByteString, ByteString]
+  ): F[List[ByteString]]
   def createBlock: F[CreateBlockStatus]
-}
+  ////
 
-trait MultiParentCasper[F[_]] extends Casper[F, IndexedSeq[BlockHash]] {
   def dag: F[DagRepresentation[F]]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
@@ -43,10 +48,11 @@ object MultiParentCasper extends MultiParentCasperInstances {
 
   def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStorage]: F[Block] =
     for {
-      dag       <- MultiParentCasper[F].dag
-      tipHashes <- MultiParentCasper[F].estimator(dag)
-      tipHash   = tipHashes.head
-      tip       <- ProtoUtil.unsafeGetBlock[F](tipHash)
+      dag            <- MultiParentCasper[F].dag
+      latestMessages <- dag.latestMessageHashes
+      tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
+      tipHash        = tipHashes.head
+      tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
     } yield tip
 }
 
@@ -66,7 +72,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield (blockProcessingLock, casperState)
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: DeploySelection: CasperLabsProtocolVersions](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocolVersions](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

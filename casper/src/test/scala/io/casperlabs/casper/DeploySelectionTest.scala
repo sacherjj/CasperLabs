@@ -11,10 +11,10 @@ import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion, Value}
 import io.casperlabs.casper.util.execengine.{DeployEffects, ExecutionEngineServiceStub}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
+import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task

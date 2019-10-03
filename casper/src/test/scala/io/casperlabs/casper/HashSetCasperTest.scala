@@ -5,7 +5,6 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
@@ -19,16 +18,15 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.PathOps.RichPath
-import io.casperlabs.shared.{FilesAPI, Log}
-import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.shared.FilesAPI
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable
-import io.casperlabs.blockstorage.InMemBlockStorage
 
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
@@ -135,7 +133,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    <- MultiParentCasper[Task].addBlock(signedBlock)
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Task].dag
-      estimate             <- MultiParentCasper[Task].estimator(dag)
+      latestMessageHashes  <- dag.latestMessageHashes
+      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
@@ -174,7 +173,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                     = logEff.warns shouldBe empty
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Task].dag
-      estimate              <- MultiParentCasper[Task].estimator(dag)
+      latestMessageHashes   <- dag.latestMessageHashes
+      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ <- node.tearDown()
@@ -214,7 +214,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _              <- MultiParentCasper[Task].addBlock(invalidBlock) shouldBeF InvalidUnslashableBlock
       _              = logEff.warns.count(_.contains("because block signature")) should be(1)
       _              <- node.tearDownNode()
-      result <- validateBlockStorage(node) { blockStorage =>
+      result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(block.blockHash) shouldBeF None
                }
     } yield result
@@ -271,7 +271,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    <- MultiParentCasper[Task].addBlock(signedBlock)
       _                    = exactly(1, logEff.warns) should include("Ignoring block")
       _                    <- node.tearDownNode()
-      result <- validateBlockStorage(node) { blockStorage =>
+      result <- node.validateBlockStorage { blockStorage =>
                  blockStorage.getBlockMessage(signedBlock.blockHash) shouldBeF None
                }
     } yield result
@@ -288,13 +288,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
       _                    <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
-              blockStorage
-                .getBlockMessage(signedBlock.blockHash)
+            node.validateBlockStorage {
+              _.getBlockMessage(signedBlock.blockHash)
                 .map(_.map(_.toProtoString)) shouldBeF Some(
                 signedBlock.toProtoString
               )
-            }(nodes(0).metricEff, nodes(0).logEff)
+            }
           }
     } yield result
   }
@@ -311,11 +310,11 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       result                     = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
       _                          <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
-              blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
+            node.validateBlockStorage(
+              _.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                 signedBlock1Prime
               )
-            }(nodes(0).metricEff, nodes(0).logEff)
+            )
           }
     } yield result
   }
@@ -486,7 +485,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes.map(_.tearDownNode()).toList.sequence
 
       _ = nodes.toList.traverse_[Task, Assertion] { node =>
-        validateBlockStorage(node) { blockStorage =>
+        node.validateBlockStorage { blockStorage =>
           for {
             _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
             _ <- blockStorage.getBlockMessage(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
@@ -494,7 +493,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                        signedBlock3
                      )
           } yield result
-        }(nodes(0).metricEff, nodes(0).logEff)
+        }
       }
     } yield result
   }
@@ -539,7 +538,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
+            node.validateBlockStorage { blockStorage =>
               for {
                 _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(
                       signedBlock1
@@ -548,7 +547,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                            signedBlock2
                          )
               } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+            }
           }
     } yield result
   }
@@ -694,14 +693,14 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ <- nodes(0).tearDownNode()
       _ <- nodes(1).tearDownNode()
-      _ <- validateBlockStorage(nodes(1)) { blockStorage =>
+      _ <- nodes(1).validateBlockStorage { blockStorage =>
             for {
               _ <- blockStorage.getBlockMessage(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
               result <- blockStorage.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
                          signedBlock1Prime
                        )
             } yield result
-          }(nodes(0).metricEff, nodes(0).logEff)
+          }
     } yield result
   }
 
@@ -759,11 +758,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       ) // Invalid seq num
 
       // This is going to be signed by node(1)
-      blockWithInvalidJustification <- buildBlockWithInvalidJustification(
-                                        nodes,
-                                        deploysWithCost,
-                                        signedInvalidBlock
-                                      )
+      blockWithInvalidJustification = buildBlockWithInvalidJustification(
+        deploysWithCost,
+        signedInvalidBlock
+      )
 
       // Adding the block that only refers to an invalid node as justification; it will not send notifications.
       _ <- nodes(1).casperEff
@@ -870,12 +868,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(0).receive()
       _               <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
-            validateBlockStorage(node) { blockStorage =>
+            node.validateBlockStorage { blockStorage =>
               for {
                 _      <- blockStorage.getBlockMessage(invalidBlock1.blockHash) shouldBeF None
                 result <- blockStorage.getBlockMessage(block2.blockHash) shouldBeF Some(block2)
               } yield result
-            }(nodes(0).metricEff, nodes(0).logEff)
+            }
           }
     } yield ()
   }
@@ -940,9 +938,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                <- checkLastFinalizedBlock(nodes(0), block1)
-      deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(1)
+      _                     <- checkLastFinalizedBlock(nodes(0), block1)
+      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      _                     = pendingOrProcessedNum should be(1)
 
       Created(block7) <- nodes(0).casperEff
                           .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
@@ -950,9 +948,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                <- checkLastFinalizedBlock(nodes(0), block2)
-      deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(2) // deploys contained in block 4 and block 7
+      _                     <- checkLastFinalizedBlock(nodes(0), block2)
+      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block8) <- nodes(1).casperEff
                           .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
@@ -960,9 +958,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
-      _                <- checkLastFinalizedBlock(nodes(0), block3)
-      deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(2) // deploys contained in block 4 and block 7
+      _                     <- checkLastFinalizedBlock(nodes(0), block3)
+      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
@@ -970,9 +968,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                <- checkLastFinalizedBlock(nodes(0), block4)
-      deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(1) // deploys contained in block 7
+      _                     <- checkLastFinalizedBlock(nodes(0), block4)
+      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
       Created(block10) <- nodes(0).casperEff
                            .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
@@ -980,9 +978,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                <- checkLastFinalizedBlock(nodes(0), block5)
-      deployBufferSize <- nodes(0).deployBufferEff.sizePendingOrProcessed()
-      _                = deployBufferSize should be(2) // deploys contained in block 7 and block 10
+      _                     <- checkLastFinalizedBlock(nodes(0), block5)
+      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1025,7 +1023,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
-    // Make a network where we don't validate nonces, I just want the merge conflict.
     for {
       nodes <- networkEff(
                 validatorKeys.take(2),
@@ -1040,7 +1037,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createA          <- nodes(0).casperEff.createBlock
       Created(blockA)  = createA
       _                <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
-      processedDeploys <- nodes(0).deployBufferEff.readProcessed
+      processedDeploys <- nodes(0).deployStorage.readProcessed
       _                = processedDeploys should contain(deployA)
 
       deployB         <- ProtoUtil.basicDeploy[Task]()
@@ -1049,7 +1046,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       Created(blockB) = createB
       // nodes(1) should have more weight then nodes(0) so it should take over
       _              <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
-      pendingDeploys <- nodes(0).deployBufferEff.readPending
+      pendingDeploys <- nodes(0).deployStorage.readPending
       _              = pendingDeploys should contain(deployA)
       _              <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
@@ -1066,12 +1063,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- node.casperEff.addBlock(block1) shouldBeF Valid
 
       // Should be finalized, so not stop it appearing again as pending.
-      processedDeploys <- node.deployBufferEff.readProcessed
+      processedDeploys <- node.deployStorage.readProcessed
       _                = processedDeploys shouldBe empty
 
       // Should be able to enquee the deploy again.
       _               <- node.casperEff.deploy(deploy)
-      pendingDeploys1 <- node.deployBufferEff.readPending
+      pendingDeploys1 <- node.deployStorage.readPending
       _               = pendingDeploys1 should not be empty
 
       // Should not put it in a block.
@@ -1079,7 +1076,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _       = createB shouldBe CreateBlockStatus.noNewDeploys
 
       // Should discard the deploy.
-      pendingDeploys2 <- node.deployBufferEff.readPending
+      pendingDeploys2 <- node.deployStorage.readPending
       _               = pendingDeploys2 shouldBe empty
 
       _ <- node.tearDown()
@@ -1137,10 +1134,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   }
 
   private def buildBlockWithInvalidJustification(
-      nodes: IndexedSeq[HashSetCasperTestNode[Task]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: Block
-  ): Task[Block] = {
+  ): Block = {
     val postState =
       Block.GlobalState().withBonds(ProtoUtil.bonds(genesis))
     val serializedJustifications =
@@ -1161,29 +1157,15 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
         .withBlockHash(blockHash)
         .withHeader(header)
         .withBody(body)
-    nodes(1).casperEff.dag.flatMap { dag =>
-      ProtoUtil.signBlock[Task](
-        blockThatPointsToInvalidBlock,
-        dag,
-        validators(1),
-        validatorKeys(1),
-        Ed25519
-      )
-    }
+    ProtoUtil.signBlock(
+      blockThatPointsToInvalidBlock,
+      validatorKeys(1),
+      Ed25519
+    )
   }
 }
 
 object HashSetCasperTest {
-  def validateBlockStorage[R](
-      node: HashSetCasperTestNode[Task]
-  )(f: BlockStorage[Task] => Task[R])(implicit metrics: Metrics[Task], log: Log[Task]) =
-    for {
-      bs     <- DagStorageTestFixture.createBlockStorage[Task](node.blockStorageDir)
-      result <- f(bs)
-      _      <- bs.close()
-      _      <- Sync[Task].delay { node.blockStorageDir.recursivelyDelete() }
-    } yield result
-
   def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
@@ -1212,10 +1194,11 @@ object HashSetCasperTest {
           .withBondedAmount(state.BigInt(bonds.getOrElse(key, 0L).toString, bitWidth = 512))
       })
 
-    InMemBlockStorage
-      .empty[Task]
-      .flatMap { implicit blockStorage =>
-        Genesis.fromChainSpec[Task](spec)
+    StorageFixture
+      .createStorages[Task]()
+      .flatMap {
+        case (implicit0(blockStorage: BlockStorage[Task]), _, _) =>
+          Genesis.fromChainSpec[Task](spec)
       }
       .unsafeRunSync
   }
