@@ -4,28 +4,23 @@ import cats._
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{
-  BlockMetadata,
-  BlockStorage,
-  DagRepresentation,
-  IndexedDagStorage
-}
 import io.casperlabs.casper.DeploySelection
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
-import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
-import io.casperlabs.casper.finality.votingmatrix.{FinalityDetectorVotingMatrix, VotingMatrix}
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
+import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -34,34 +29,25 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log](
       id: Int,
       genesis: Block
   ): F[Block] =
     for {
       b   <- IndexedDagStorage[F].lookupByIdUnsafe(id)
       dag <- IndexedDagStorage[F].getRepresentation
-      computeBlockCheckpointResult <- computeBlockCheckpoint[F](
-                                       b,
-                                       genesis,
-                                       dag
-                                     )
-      (postStateHash, processedDeploys) = computeBlockCheckpointResult
-      _                                 <- injectPostStateHash[F](id, b, postStateHash, processedDeploys)
+      blockCheckpoint <- computeBlockCheckpointFromDeploys[F](
+                          b,
+                          genesis,
+                          dag
+                        )
+      _ <- injectPostStateHash[F](
+            id,
+            b,
+            blockCheckpoint.postStateHash,
+            blockCheckpoint.deploysForBlock
+          )
     } yield b
-
-  def computeBlockCheckpoint[F[_]: Sync: BlockStorage: ExecutionEngineService: Log](
-      b: Block,
-      genesis: Block,
-      dag: DagRepresentation[F]
-  ): F[(StateHash, Seq[ProcessedDeploy])] =
-    for {
-      result <- computeBlockCheckpointFromDeploys[F](
-                 b,
-                 genesis,
-                 dag
-               )
-    } yield (result.postStateHash, result.deploysForBlock)
 
   def injectPostStateHash[F[_]: Monad: BlockStorage: IndexedDagStorage](
       id: Int,
@@ -80,7 +66,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -94,12 +80,11 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged                                   <- ExecEngineUtil.merge[F](parents, dag)
-      implicit0(deployBuffer: DeployBuffer[F]) <- MockDeployBuffer.create[F]()
+      merged <- ExecEngineUtil.merge[F](parents, dag)
       implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
         5 * 1024 * 1024
       )
-      _ <- deployBuffer.addAsPending(deploys.toList)
+      _ <- DeployStorage[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  fs2.Stream.fromIterator(deploys.toIterator),
@@ -111,7 +96,7 @@ object BlockGenerator {
 }
 
 trait BlockGenerator {
-  def createBlock[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createBlock[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
@@ -119,7 +104,8 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       chainId: String = "casperlabs",
-      preStateHash: ByteString = ByteString.EMPTY
+      preStateHash: ByteString = ByteString.EMPTY,
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
     for {
       now <- Time[F].currentMillis
@@ -137,10 +123,10 @@ trait BlockGenerator {
                                     .lookup(b)
                                     .map(
                                       _.fold(acc) { block =>
-                                        if (acc.contains(block.validatorPublicKey)) {
+                                        if (acc.contains(block.validatorId)) {
                                           acc
                                         } else {
-                                          acc + (block.validatorPublicKey -> block.blockHash)
+                                          acc + (block.validatorId -> block.messageHash)
                                         }
                                       }
                                     )
@@ -149,23 +135,53 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
+      validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
+                        else
+                          ProtoUtil.nextValidatorBlockSeqNum(dag, serializedJustifications, creator)
+      rank <- if (parentsHashList.isEmpty) 0L.pure[F]
+             else
+               updatedJustifications.values.toList
+                 .traverse(hash => dag.lookup(hash).map(_.get))
+                 .map(ProtoUtil.nextRank(_))
       header = ProtoUtil
         .blockHeader(
           body,
+          Keys.PublicKey(creator.toByteArray),
           parentsHashList,
           serializedJustifications,
           postState,
-          rank = 0,
+          rank,
+          validatorSeqNum,
           protocolVersion = 1,
-          timestamp = now,
-          chainId = chainId
+          now,
+          chainId
         )
-        .withValidatorPublicKey(creator)
-      block               = ProtoUtil.unsignedBlockProto(body, header)
-      serializedBlockHash = block.blockHash
-      modifiedBlock       <- IndexedDagStorage[F].insertIndexed(block)
-      // NOTE: Block hash should be recalculated.
-      _ <- BlockStorage[F]
-            .put(serializedBlockHash, modifiedBlock, Seq.empty)
-    } yield modifiedBlock
+        .withMessageType(messageType)
+      block = ProtoUtil.unsignedBlockProto(body, header)
+      _     <- IndexedDagStorage[F].index(block)
+    } yield block
+
+  def createAndStoreBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+      parentsHashList: Seq[BlockHash],
+      creator: Validator = ByteString.EMPTY,
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      postStateHash: ByteString = ByteString.EMPTY,
+      chainId: String = "casperlabs",
+      preStateHash: ByteString = ByteString.EMPTY
+  ): F[Block] =
+    for {
+      block <- createBlock[F](
+                parentsHashList = parentsHashList,
+                creator = creator,
+                bonds = bonds,
+                justifications = justifications,
+                deploys = deploys,
+                postStateHash = postStateHash,
+                chainId = chainId,
+                preStateHash = preStateHash
+              )
+      _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
+    } yield block
 }

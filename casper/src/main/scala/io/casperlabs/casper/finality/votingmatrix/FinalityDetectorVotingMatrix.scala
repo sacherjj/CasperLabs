@@ -1,11 +1,10 @@
 package io.casperlabs.casper.finality.votingmatrix
 
-import cats.Monad
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl.MonadState
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
+import cats.{Applicative, Monad}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.consensus.Block
@@ -14,7 +13,9 @@ import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix._votingMatrixS
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.dag.DagRepresentation
 
 class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)(
     implicit private val matrix: _votingMatrixS[F]
@@ -42,11 +43,11 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
             votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlock, block.blockHash)
             result <- votedBranch match {
                        case Some(branch) =>
-                         val blockMetadata = BlockMetadata.fromBlock(block)
                          for {
+                           msgSummary <- MonadThrowable[F].fromTry(Message.fromBlock(block))
                            _ <- updateVoterPerspective[F](
                                  dag,
-                                 blockMetadata,
+                                 msgSummary,
                                  branch,
                                  equivocationTracker
                                )
@@ -58,7 +59,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                                      .create[F](dag, newLFB.consensusValue, equivocationTracker)
                                      .flatMap(_.get.flatMap(matrix.set))
                                  case None =>
-                                   ().pure[F]
+                                   Applicative[F].unit
                                }
                          } yield result
 

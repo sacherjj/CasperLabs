@@ -21,11 +21,11 @@ use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_storage::global_state::{CommitResult, StateProvider};
-use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
+use engine_core::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use engine_shared::logging::log_level::LogLevel;
 
 pub mod ipc;
@@ -41,14 +41,16 @@ const METRIC_DURATION_EXEC: &str = "exec_duration";
 const METRIC_DURATION_QUERY: &str = "query_duration";
 const METRIC_DURATION_VALIDATE: &str = "validate_duration";
 const METRIC_DURATION_GENESIS: &str = "genesis_duration";
+const METRIC_DURATION_UPGRADE: &str = "upgrade_duration";
 
 const TAG_RESPONSE_COMMIT: &str = "commit_response";
 const TAG_RESPONSE_EXEC: &str = "exec_response";
 const TAG_RESPONSE_QUERY: &str = "query_response";
 const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
+const TAG_RESPONSE_UPGRADE: &str = "upgrade_response";
 
-const PROTOCOL_VERSION: u64 = 1;
+const DEFAULT_PROTOCOL_VERSION: u64 = 1;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -167,7 +169,7 @@ where
         let blocktime = BlockTime(exec_request.get_block_time());
 
         // TODO: don't unwrap
-        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+        let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
 
         let deploys = exec_request.get_deploys();
 
@@ -221,7 +223,13 @@ where
         let correlation_id = CorrelationId::new();
 
         // TODO
-        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+        let protocol_version = {
+            if commit_request.get_protocol_version().value < DEFAULT_PROTOCOL_VERSION {
+                ProtocolVersion::new(DEFAULT_PROTOCOL_VERSION)
+            } else {
+                ProtocolVersion::new(commit_request.get_protocol_version().value)
+            }
+        };
 
         // Acquire pre-state hash
         let pre_state_hash: Blake2bHash = match commit_request.get_prestate_hash().try_into() {
@@ -602,9 +610,81 @@ where
     fn upgrade(
         &self,
         _request_options: ::grpc::RequestOptions,
-        _upgrade_request: ipc::UpgradeRequest,
+        upgrade_request: ipc::UpgradeRequest,
     ) -> ::grpc::SingleResponse<ipc::UpgradeResponse> {
-        unimplemented!("todo: impl upgrade endpoint")
+        let start = Instant::now();
+        let correlation_id = CorrelationId::new();
+
+        let upgrade_config: UpgradeConfig = match upgrade_request.try_into() {
+            Ok(upgrade_config) => upgrade_config,
+            Err(error) => {
+                let err_msg = error.to_string();
+                logging::log_error(&err_msg);
+
+                let mut upgrade_deploy_error = ipc::UpgradeDeployError::new();
+                upgrade_deploy_error.set_message(err_msg);
+                let mut upgrade_response = ipc::UpgradeResponse::new();
+                upgrade_response.set_failed_deploy(upgrade_deploy_error);
+
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_UPGRADE,
+                    TAG_RESPONSE_UPGRADE,
+                    start.elapsed(),
+                );
+
+                return grpc::SingleResponse::completed(upgrade_response);
+            }
+        };
+
+        let upgrade_response = match self.commit_upgrade(correlation_id, upgrade_config) {
+            Ok(UpgradeResult::Success {
+                post_state_hash,
+                effect,
+            }) => {
+                let success_message = format!("upgrade successful: {}", post_state_hash);
+                log_info(&success_message);
+
+                let mut upgrade_result = ipc::UpgradeResult::new();
+                upgrade_result.set_post_state_hash(post_state_hash.to_vec());
+                upgrade_result.set_effect(effect.into());
+
+                let mut ret = ipc::UpgradeResponse::new();
+                ret.set_success(upgrade_result);
+                ret
+            }
+            Ok(upgrade_result) => {
+                let err_msg = upgrade_result.to_string();
+                logging::log_error(&err_msg);
+
+                let mut upgrade_deploy_error = ipc::UpgradeDeployError::new();
+                upgrade_deploy_error.set_message(err_msg);
+
+                let mut ret = ipc::UpgradeResponse::new();
+                ret.set_failed_deploy(upgrade_deploy_error);
+                ret
+            }
+            Err(err) => {
+                let err_msg = err.to_string();
+                logging::log_error(&err_msg);
+
+                let mut upgrade_deploy_error = ipc::UpgradeDeployError::new();
+                upgrade_deploy_error.set_message(err_msg);
+
+                let mut ret = ipc::UpgradeResponse::new();
+                ret.set_failed_deploy(upgrade_deploy_error);
+                ret
+            }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_UPGRADE,
+            TAG_RESPONSE_UPGRADE,
+            start.elapsed(),
+        );
+
+        grpc::SingleResponse::completed(upgrade_response)
     }
 }
 

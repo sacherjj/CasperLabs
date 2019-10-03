@@ -1,27 +1,30 @@
 package io.casperlabs.casper.api
 
-import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Bracket, Concurrent, Resource}
 import cats.implicits._
+import cats.{Functor, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation, StorageError}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper.{BlockStatus => _, _}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{BlockStatus => _, _}
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
+import io.casperlabs.storage.StorageError
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 
 object BlockAPI {
 
@@ -65,9 +68,6 @@ object BlockAPI {
               .whenA(headerErrors.nonEmpty)
           }
 
-      t = casper.faultToleranceThreshold
-      _ <- ensureNotInDag[F](d, t)
-
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
@@ -81,31 +81,6 @@ object BlockAPI {
           }
     } yield ()
   }
-
-  /** Check that we don't have this deploy already in the finalized part of the DAG. */
-  private def ensureNotInDag[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: FinalityDetector: Log](
-      d: Deploy,
-      faultToleranceThreshold: Float
-  ): F[Unit] =
-    BlockStorage[F]
-      .findBlockHashesWithDeployhash(d.deployHash)
-      .flatMap(
-        _.toList.traverse(blockHash => getBlockInfo[F](Base16.encode(blockHash.toByteArray)))
-      )
-      .flatMap {
-        case Nil =>
-          ().pure[F]
-        case infos =>
-          infos.find(_.getStatus.faultTolerance > faultToleranceThreshold).fold(().pure[F]) {
-            finalized =>
-              MonadThrowable[F].raiseError {
-                AlreadyExists(
-                  s"Block ${PrettyPrinter.buildString(finalized.getSummary.blockHash)} with fault tolerance ${finalized.getStatus.faultTolerance} already contains ${PrettyPrinter
-                    .buildString(d)}"
-                )
-              }
-          }
-      }
 
   def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
       blockApiLock: Semaphore[F]
@@ -157,55 +132,52 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployBuffer](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
       deployHashBase16: String
   ): F[Option[DeployInfo]] =
-    // LMDB throws an exception if a key isn't 32 bytes long, so we fail-fast here
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
-      unsafeWithCasper[F, Option[DeployInfo]]("Could not show deploy.") { implicit casper =>
-        val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
+      val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
-        BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
-          case blockHashes if blockHashes.nonEmpty =>
-            for {
-              blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-              blockInfos <- blocks.traverse { block =>
-                             val summary =
-                               BlockSummary(block.blockHash, block.header, block.signature)
-                             makeBlockInfo[F](summary, block.some)
-                           }
-              results = (blocks zip blockInfos).flatMap {
-                case (block, info) =>
-                  block.getBody.deploys
-                    .find(_.getDeploy.deployHash == deployHash)
-                    .map(_ -> info)
+      BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+        case blockHashes if blockHashes.nonEmpty =>
+          for {
+            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
+            blockInfos = blocks.map { block =>
+              val summary =
+                BlockSummary(block.blockHash, block.header, block.signature)
+              makeBlockInfo(summary, block.some)
+            }
+            results = (blocks zip blockInfos).flatMap {
+              case (block, info) =>
+                block.getBody.deploys
+                  .find(_.getDeploy.deployHash == deployHash)
+                  .map(_ -> info)
+            }
+            info = DeployInfo(
+              deploy = results.headOption.flatMap(_._1.deploy),
+              processingResults = results.map {
+                case (processedDeploy, blockInfo) =>
+                  DeployInfo
+                    .ProcessingResult(
+                      cost = processedDeploy.cost,
+                      isError = processedDeploy.isError,
+                      errorMessage = processedDeploy.errorMessage
+                    )
+                    .withBlockInfo(blockInfo)
               }
-              info = DeployInfo(
-                deploy = results.headOption.flatMap(_._1.deploy),
-                processingResults = results.map {
-                  case (processedDeploy, blockInfo) =>
-                    DeployInfo
-                      .ProcessingResult(
-                        cost = processedDeploy.cost,
-                        isError = processedDeploy.isError,
-                        errorMessage = processedDeploy.errorMessage
-                      )
-                      .withBlockInfo(blockInfo)
-                }
-              )
-            } yield info.some
+            )
+          } yield info.some
 
-          case _ =>
-            DeployBuffer[F]
-              .getPendingOrProcessed(deployHash)
-              .map(_.map(DeployInfo().withDeploy))
-        }
+        case _ =>
+          DeployStorageReader[F]
+            .getPendingOrProcessed(deployHash)
+            .map(_.map(DeployInfo().withDeploy))
       }
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployBuffer](
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
       deployHashBase16: String
   ): F[DeployInfo] =
     getDeployInfoOpt[F](deployHashBase16).flatMap(
@@ -215,41 +187,30 @@ object BlockAPI {
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage](
+  def getBlockDeploys[F[_]: Functor: BlockStorage](
       blockHashBase16: String
   ): F[Seq[Block.ProcessedDeploy]] =
-    unsafeWithCasper[F, Seq[Block.ProcessedDeploy]]("Could not show deploys.") { implicit casper =>
-      getByHashPrefix(blockHashBase16) {
-        ProtoUtil.unsafeGetBlock[F](_).map(_.some)
-      }.map(_.get.getBody.deploys)
-    }
+    BlockStorage[F]
+      .getByPrefix(blockHashBase16)
+      .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
 
-  def makeBlockInfo[F[_]: Monad: MultiParentCasper: FinalityDetector](
+  def makeBlockInfo(
       summary: BlockSummary,
       maybeBlock: Option[Block]
-  ): F[BlockInfo] =
-    for {
-      dag            <- MultiParentCasper[F].dag
-      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, summary.blockHash)
-      initialFault <- MultiParentCasper[F].normalizedInitialFault(
-                       ProtoUtil.weightMap(summary.getHeader)
-                     )
-      maybeStats = maybeBlock.map { block =>
-        BlockStatus
-          .Stats()
-          .withBlockSizeBytes(block.serializedSize)
-          .withDeployErrorCount(
-            block.getBody.deploys.count(_.isError)
-          )
-      }
-      status = BlockStatus(
-        faultTolerance = faultTolerance - initialFault,
-        stats = maybeStats
-      )
-      info = BlockInfo()
-        .withSummary(summary)
-        .withStatus(status)
-    } yield info
+  ): BlockInfo = {
+    val maybeStats = maybeBlock.map { block =>
+      BlockStatus
+        .Stats()
+        .withBlockSizeBytes(block.serializedSize)
+        .withDeployErrorCount(
+          block.getBody.deploys.count(_.isError)
+        )
+    }
+    val status = BlockStatus(stats = maybeStats)
+    BlockInfo()
+      .withSummary(summary)
+      .withStatus(status)
+  }
 
   def makeBlockInfo[F[_]: Monad: BlockStorage: MultiParentCasper: FinalityDetector](
       summary: BlockSummary,
@@ -263,7 +224,7 @@ object BlockAPI {
                    } else {
                      none[Block].pure[F]
                    }
-      info <- makeBlockInfo[F](summary, maybeBlock)
+      info = makeBlockInfo(summary, maybeBlock)
     } yield (info, maybeBlock)
 
   def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
@@ -281,19 +242,19 @@ object BlockAPI {
       }
     }
 
-  def getBlockInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: MultiParentCasperRef: FinalityDetector](
       blockHashBase16: String,
       full: Boolean = false
   ): F[Option[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block.") {
+    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block") {
       implicit casper =>
-        getByHashPrefix[F, BlockSummary](blockHashBase16)(
-          BlockStorage[F].getBlockSummary(_)
-        ).flatMap { maybeSummary =>
-          maybeSummary.fold(none[(BlockInfo, Option[Block])].pure[F])(
-            makeBlockInfo[F](_, full).map(_.some)
+        BlockStorage[F]
+          .getSummaryByPrefix(blockHashBase16)
+          .flatMap(
+            _.fold(none[(BlockInfo, Option[Block])].pure[F])(
+              makeBlockInfo[F](_, full).map(_.some)
+            )
           )
-        }
     }
 
   def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
@@ -312,7 +273,7 @@ object BlockAPI {
   /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false
@@ -321,9 +282,12 @@ object BlockAPI {
       implicit casper =>
         casper.dag flatMap { dag =>
           maxRank match {
-            case 0 => dag.topoSortTail(depth)
+            case 0 => dag.topoSortTail(depth).compile.toVector
             case r =>
-              dag.topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+              dag
+                .topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+                .compile
+                .toVector
           }
         } handleErrorWith {
           case ex: StorageError =>
@@ -339,25 +303,10 @@ object BlockAPI {
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       full: Boolean = false
   ): F[List[BlockInfo]] =
     getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
-
-  private def getByHashPrefix[F[_]: Monad: MultiParentCasper: BlockStorage, A](
-      blockHashBase16: String
-  )(f: ByteString => F[Option[A]]): F[Option[A]] =
-    if (blockHashBase16.length == 64) {
-      f(ByteString.copyFrom(Base16.decode(blockHashBase16)))
-    } else {
-      for {
-        maybeHash <- BlockStorage[F].findBlockHash { h =>
-                      Base16.encode(h.toByteArray).startsWith(blockHashBase16)
-                    }
-        maybeA <- maybeHash.fold(none[A].pure[F])(f(_))
-      } yield maybeA
-    }
-
 }

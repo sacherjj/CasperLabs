@@ -1,33 +1,34 @@
 package io.casperlabs.comm.gossiping
 
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import cats.Id
-import cats.implicits._
 import cats.effect._
+import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.comm.ServiceError.{NotFound, Unauthenticated, Unavailable}
+import io.casperlabs.comm.{ServiceError, TestRuntime}
+import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError
-import ServiceError.{NotFound, Unauthenticated, Unavailable}
-import io.casperlabs.comm.TestRuntime
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import io.netty.handler.ssl.{ClientAuth, SslContext}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import org.scalacheck.{Arbitrary, Gen}
-import Arbitrary.arbitrary
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-
+import org.scalacheck.Shrink
 import scala.concurrent.duration._
 
 class GrpcGossipServiceSpec
@@ -36,7 +37,7 @@ class GrpcGossipServiceSpec
     with Matchers
     with BeforeAndAfterAll
     with SequentialNestedSuiteExecution
-    with ArbitraryConsensus {
+    with ArbitraryConsensusAndComm {
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
@@ -47,6 +48,8 @@ class GrpcGossipServiceSpec
   val stubCert                                   = TestCert.generate
   var stub: GossipingGrpcMonix.GossipServiceStub = _
   var shutdown: Task[Unit]                       = _
+
+  implicit val noShrinkInt: Shrink[Int] = Shrink.shrinkAny
 
   override def beforeAll() =
     TestEnvironment(testDataRef, clientCert = Some(stubCert)).allocated.foreach {
@@ -352,6 +355,7 @@ class GrpcGossipServiceSpec
                 }
                 def hasBlock(blockHash: ByteString)        = ???
                 def getBlockSummary(blockHash: ByteString) = ???
+                def listTips                               = ???
               }
             }
 
@@ -427,8 +431,8 @@ class GrpcGossipServiceSpec
     implicit val consensusConfig                = ConsensusConfig()
 
     def elders(summary: BlockSummary): Seq[ByteString] =
-      summary.getHeader.parentHashes ++
-        summary.getHeader.justifications.map(_.latestBlockHash)
+      summary.parentHashes ++
+        summary.justifications.map(_.latestBlockHash)
 
     /** Collect the ancestors of a hash and return their minimum distance to the target. */
     def collectAncestors(
@@ -753,16 +757,11 @@ class GrpcGossipServiceSpec
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
             dag.exists { child =>
-              child.getHeader.parentHashes.contains(parent.blockHash)
+              child.parentHashes.contains(parent.blockHash)
             }
           }
-          val consensus = new GossipServiceServer.Consensus[Task] {
-            def onPending(dag: Vector[BlockSummary]) = ???
-            def onDownloaded(blockHash: ByteString)  = ???
-            def listTips                             = Task.delay(tips)
-          }
-          runTestUnsafe(TestData(summaries = dag)) {
-            TestEnvironment(testDataRef, consensus = consensus).use { stub =>
+          runTestUnsafe(TestData(summaries = dag, tips = tips)) {
+            TestEnvironment(testDataRef).use { stub =>
               stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
                 res =>
                   res should contain theSameElementsInOrderAs tips
@@ -946,36 +945,17 @@ class GrpcGossipServiceSpec
                     }
                   }
 
-                  val consensus = new GossipServiceServer.Consensus[Task] {
-                    @volatile var downloaded = Vector.empty[ByteString]
-                    def onPending(dag: Vector[BlockSummary]) = Task.now {
-                      dag.map(_.blockHash) shouldBe unknownBlocks.map(_.blockHash)
-                    }
-                    def onDownloaded(blockHash: ByteString) = Task.now {
-                      synchronized {
-                        downloaded = downloaded :+ blockHash
-                      }
-                    }
-                    def listTips = ???
-                  }
-
                   TestEnvironment(
                     testDataRef,
                     clientCert = Some(stubCert),
                     synchronizer = synchronizer,
-                    downloadManager = downloadManager,
-                    consensus = consensus
+                    downloadManager = downloadManager
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
                       val unknownHashes = unknownBlocks.map(_.blockHash)
                       res.isNew shouldBe true
-                      // Downloading should happen asynchronously.
-                      consensus.downloaded.size should be < unknownHashes.size
                       eventually {
                         downloadManager.scheduled should contain theSameElementsInOrderAs unknownHashes
-                      }
-                      eventually {
-                        consensus.downloaded should contain theSameElementsAs unknownHashes
                       }
                     }
                   }
@@ -1090,6 +1070,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
     def blocks: Map[ByteString, Block]
+    def tips: Seq[BlockSummary]
   }
 
   object TestData {
@@ -1099,13 +1080,16 @@ object GrpcGossipServiceSpec extends TestRuntime {
 
     def apply(
         summaries: Seq[BlockSummary] = Seq.empty,
-        blocks: Seq[Block] = Seq.empty
+        blocks: Seq[Block] = Seq.empty,
+        tips: Seq[BlockSummary] = Seq.empty
     ): TestData = {
       val ss = summaries
       val bs = blocks
+      val ts = tips
       new TestData {
         val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
         val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
+        val tips      = ts
       }
     }
   }
@@ -1117,11 +1101,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
     }
     private val emptyDownloadManager = new DownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
-      def onPending(dag: Vector[BlockSummary]) = ???
-      def onDownloaded(blockHash: ByteString)  = ???
-      def listTips                             = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
       def getCandidate                                           = ???
@@ -1137,6 +1116,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
+        def listTips =
+          Task.delay(testDataRef.get.tips)
       }
 
     def apply(
@@ -1147,7 +1128,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
-        consensus: GossipServiceServer.Consensus[Task] = emptyConsensus,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
@@ -1169,7 +1149,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
               backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
               downloadManager = downloadManager,
-              consensus = consensus,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads

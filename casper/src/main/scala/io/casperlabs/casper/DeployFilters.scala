@@ -4,12 +4,12 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 
-import io.casperlabs.blockstorage.{BlockStorage, DagRepresentation}
 import io.casperlabs.casper.consensus.{Block, Deploy}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.ValidationImpl.MAX_TTL
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 
 /**
   * Provides filters for dealing with streams of deploys. The intent is to

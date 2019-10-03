@@ -1,6 +1,5 @@
 use contract_ffi::bytesrepr;
 use contract_ffi::bytesrepr::{FromBytes, ToBytes, U32_SIZE};
-use contract_ffi::value::ProtocolVersion;
 
 const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
@@ -31,41 +30,6 @@ pub struct WasmCosts {
     /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` /
     /// `opcodes_div`
     pub opcodes_div: u32,
-}
-
-impl WasmCosts {
-    pub fn from_version(protocol_version: ProtocolVersion) -> Option<WasmCosts> {
-        match protocol_version.value() {
-            1 => Some(WasmCosts {
-                regular: 1,
-                div: 16,
-                mul: 4,
-                mem: 2,
-                initial_mem: 4096,
-                grow_mem: 8192,
-                memcpy: 1,
-                max_stack_height: 64 * 1024,
-                opcodes_mul: 3,
-                opcodes_div: 8,
-            }),
-            _ => None,
-        }
-    }
-
-    pub fn free() -> WasmCosts {
-        WasmCosts {
-            regular: 0,
-            div: 0,
-            mul: 0,
-            mem: 0,
-            initial_mem: 4096,
-            grow_mem: 8192,
-            memcpy: 0,
-            max_stack_height: 64 * 1024,
-            opcodes_mul: 1,
-            opcodes_div: 1,
-        }
-    }
 }
 
 impl ToBytes for WasmCosts {
@@ -154,13 +118,12 @@ mod tests {
 
     use engine_shared::test_utils;
 
-    use super::{gens, WasmCosts};
-    use contract_ffi::value::ProtocolVersion;
+    use super::gens;
 
     #[test]
     fn should_serialize_and_deserialize() {
-        let v1 = WasmCosts::from_version(ProtocolVersion::new(1)).unwrap();
-        let free = WasmCosts::free();
+        let v1 = test_utils::wasm_costs_mock();
+        let free = test_utils::wasm_costs_free();
         assert!(test_utils::test_serialization_roundtrip(&v1));
         assert!(test_utils::test_serialization_roundtrip(&free));
     }

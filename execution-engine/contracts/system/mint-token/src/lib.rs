@@ -11,9 +11,8 @@ mod capabilities;
 // so that their constructors are hidden and therefore
 // we must use the conversion methods from Key elsewhere
 // in the code.
-mod internal_purse_id;
-
-mod mint;
+pub mod internal_purse_id;
+pub mod mint;
 
 use alloc::string::String;
 use core::convert::TryInto;
@@ -31,7 +30,7 @@ use mint::Mint;
 
 const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
 
-struct CLMint;
+pub struct CLMint;
 
 impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
@@ -164,7 +163,6 @@ pub fn delegate() {
             let transfer_result = mint.transfer(source, target, amount);
             contract_api::ret(&transfer_result, &vec![]);
         }
-
         _ => panic!("Unknown method name!"),
     }
 }

@@ -2,24 +2,22 @@ package io.casperlabs.casper
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
-import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
+import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
-import org.scalatest.{Assertion, FlatSpec, Matchers}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import org.scalacheck.Gen
-
-import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.Gen
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, Map}
-import scala.util.Random
+import scala.concurrent.duration._
 
 @silent("is never used")
 class ForkchoiceTest
@@ -27,54 +25,53 @@ class ForkchoiceTest
     with Matchers
     with GeneratorDrivenPropertyChecks
     with BlockGenerator
-    with DagStorageFixture {
-
+    with StorageFixture {
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -92,51 +89,51 @@ class ForkchoiceTest
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 2)
       val v2Bond = Bond(v2, 3)
       val bonds  = Seq(v1Bond, v2Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b5.blockHash, v2 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b7.blockHash),
                v1,
                bonds,
@@ -157,7 +154,7 @@ class ForkchoiceTest
 
   // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   "Estimator on flipping forkchoice DAG" should "return the appropriate score map and forkchoice" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v3     = generateValidator("V3")
@@ -166,44 +163,44 @@ class ForkchoiceTest
       val v3Bond = Bond(v3, 15)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        b2 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
-        b5 <- createBlock[Task](
+        b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v1,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b5.blockHash),
                v3,
                bonds,
                HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
              )
-        b8 <- createBlock[Task](
+        b8 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
@@ -224,7 +221,7 @@ class ForkchoiceTest
 
   // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
   "Estimator on DAG having validators equivocated" should "return the appropriate score map and main parent" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
       val v1Bond = Bond(v1, 5)
@@ -232,12 +229,13 @@ class ForkchoiceTest
       val bonds  = Seq(v1Bond, v2Bond)
 
       for {
-        genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-        a1           <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        a2           <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-        b            <- createBlock[Task](Seq(a2.blockHash, genesis.blockHash), v2, bonds)
-        c            <- createBlock[Task](Seq(b.blockHash, a1.blockHash), v1, bonds)
-        dag          <- dagStorage.getRepresentation
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        a1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        a2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        b       <- createAndStoreBlock[Task](Seq(a2.blockHash), v2, bonds, Map(v1 -> a2.blockHash))
+        c       <- createAndStoreBlock[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
+        dag     <- dagStorage.getRepresentation
+
         latestBlocks <- dag.latestMessageHashes
         // Set the equivocationsTracker manually
         equivocationsTracker = new EquivocationsTracker(Map(v2 -> genesis.getHeader.rank))
@@ -255,9 +253,12 @@ class ForkchoiceTest
           c.blockHash       -> 0L
         )
 
+        latestMessageHashes <- dag.latestMessageHashes
+
         tips <- Estimator.tips(
                  dag,
                  genesis.blockHash,
+                 latestMessageHashes,
                  equivocationsTracker
                )
         _ = tips.head shouldBe c.blockHash
@@ -310,8 +311,8 @@ class ForkchoiceTest
   }
 
   "lmdScoring" should "propagate fixed weights on a tree" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like (|| is a main parent)
          *
          *
@@ -331,13 +332,13 @@ class ForkchoiceTest
         val v3Bond = Bond(v3, 3)
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
-          f            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(a.blockHash, c.blockHash), v3, bonds)
+          f            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           supportersWithoutEquivocating = Map(
@@ -358,8 +359,8 @@ class ForkchoiceTest
   }
 
   it should "propagate fixed weights on a DAG" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *
@@ -382,16 +383,16 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
 
@@ -415,8 +416,8 @@ class ForkchoiceTest
   }
 
   it should "stop traversing DAG when reaches the stop hash" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *          m
@@ -444,26 +445,26 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-          a       <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b       <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c       <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d       <- createBlock[Task](Seq(a.blockHash), v1, bonds)
-          e       <- createBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
-          f       <- createBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
-          g       <- createBlock[Task](Seq(f.blockHash), v1, bonds)
-          h       <- createBlock[Task](Seq(f.blockHash), v2, bonds)
-          i       <- createBlock[Task](Seq(f.blockHash), v3, bonds)
-          j       <- createBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
-          k       <- createBlock[Task](Seq(h.blockHash), v2, bonds)
-          l <- createBlock[Task](
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+          a       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c       <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d       <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
+          e       <- createAndStoreBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
+          f       <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
+          g       <- createAndStoreBlock[Task](Seq(f.blockHash), v1, bonds)
+          h       <- createAndStoreBlock[Task](Seq(f.blockHash), v2, bonds)
+          i       <- createAndStoreBlock[Task](Seq(f.blockHash), v3, bonds)
+          j       <- createAndStoreBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
+          k       <- createAndStoreBlock[Task](Seq(h.blockHash), v2, bonds)
+          l <- createAndStoreBlock[Task](
                 Seq(i.blockHash),
                 v3,
                 bonds,
                 justifications = Map(v3 -> i.blockHash)
               )
-          m            <- createBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
-          dag          <- blockDagStorage.getRepresentation
+          m            <- createAndStoreBlock[Task](Seq(j.blockHash, k.blockHash, l.blockHash), v2, bonds)
+          dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           supportersWithoutEquivocating = Map(
             f.blockHash -> Seq(v1, v2, v3),
@@ -483,8 +484,8 @@ class ForkchoiceTest
   }
 
   "lmdMainchainGhost" should "pick the correct fork choice tip" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /* The DAG looks like:
          *
          *
@@ -507,16 +508,16 @@ class ForkchoiceTest
         val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
         for {
-          genesis      <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          a            <- createBlock[Task](Seq(genesis.blockHash), v1, bonds)
-          b            <- createBlock[Task](Seq(genesis.blockHash), v2, bonds)
-          c            <- createBlock[Task](Seq(genesis.blockHash), v3, bonds)
-          d            <- createBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
-          e            <- createBlock[Task](Seq(b.blockHash), v2, bonds)
-          f            <- createBlock[Task](Seq(c.blockHash), v3, bonds)
-          g            <- createBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
-          h            <- createBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
-          i            <- createBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
+          genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+          b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+          c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3, bonds)
+          d            <- createAndStoreBlock[Task](Seq(a.blockHash, b.blockHash), v1, bonds)
+          e            <- createAndStoreBlock[Task](Seq(b.blockHash), v2, bonds)
+          f            <- createAndStoreBlock[Task](Seq(c.blockHash), v3, bonds)
+          g            <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v1, bonds)
+          h            <- createAndStoreBlock[Task](Seq(e.blockHash, f.blockHash), v2, bonds)
+          i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
           tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, EquivocationsTracker.empty)

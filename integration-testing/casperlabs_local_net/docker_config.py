@@ -40,6 +40,7 @@ class DockerConfig:
     node_account: Account = None
     grpc_encryption: bool = False
     is_read_only: bool = False
+    behind_proxy: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -79,6 +80,9 @@ class DockerConfig:
             "--tls-api-certificate": self.tls_certificate_path(),
             "--tls-api-key": self.tls_key_path(),
         }
+        if self.behind_proxy:
+            options["--server-port"] = "50400"
+            options["--server-kademlia-port"] = "50404"
         if not self.is_read_only:
             options["--casper-validator-private-key"] = self.node_private_key
         if self.grpc_encryption:

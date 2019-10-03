@@ -1,28 +1,31 @@
 package io.casperlabs.casper.finality.votingmatrix
 
-import cats.Monad
 import cats.implicits._
 import cats.mtl.MonadState
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, IndexedDagStorage}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
-import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.VotingMatrix
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.finality.{CommitteeWithConsensusValue, FinalityDetectorUtil}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.IndexedDagStorage
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 import scala.collection.immutable.{HashMap, Map}
 
 @silent("is never used")
-class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   behavior of "Voting Matrix"
 
@@ -76,8 +79,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
     } yield result
 
   it should "detect finality as appropriate" in withStorage {
-    implicit blockStore =>
-      implicit blockDagStorage =>
+    implicit blockStore => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * The Dag looks like
          *
@@ -97,8 +100,8 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         val v2Bond = Bond(v2, 10)
         val bonds  = Seq(v1Bond, v2Bond)
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY, bonds)
-          dag     <- blockDagStorage.getRepresentation
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          dag     <- dagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
                                                             dag,
@@ -222,7 +225,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
 
-          updatedDag <- blockDagStorage.getRepresentation
+          updatedDag <- dagStorage.getRepresentation
           // rebuild from new finalized block b1
           newVotingMatrix <- VotingMatrix
                               .create[Task](
@@ -246,7 +249,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
         } yield result
   }
 
-  def createAndUpdateVotingMatrix[F[_]: Monad: Time: BlockStorage: IndexedDagStorage](
+  def createAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
       parentsHashList: Seq[BlockHash],
       latestFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -256,12 +259,12 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with D
       implicit votingMatrix: VotingMatrix[F]
   ): F[Block] =
     for {
-      b           <- createBlock[F](parentsHashList, creator, bonds, justifications)
+      b           <- createAndStoreBlock[F](parentsHashList, creator, bonds, justifications)
       dag         <- IndexedDagStorage[F].getRepresentation
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(
             dag,
-            BlockMetadata.fromBlock(b),
+            Message.fromBlock(b).get,
             votedBranch.get,
             EquivocationsTracker.empty
           )

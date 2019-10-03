@@ -708,6 +708,7 @@ trigger:
   - "testing*"
   - trying
   - staging
+  - NODE-659-rdbms-epic # temporary, remove after NODE-659-rdbms-epic merged to dev
 
 ---
 kind: pipeline

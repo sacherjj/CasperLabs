@@ -14,6 +14,7 @@ from casperlabs_local_net.casperlabs_network import (
     OneNodeWithGRPCEncryption,
     EncryptedTwoNodeNetwork,
     ReadOnlyNodeNetwork,
+    InterceptedTwoNodeNetwork,
 )
 from docker.client import DockerClient
 
@@ -84,7 +85,7 @@ def two_node_network(docker_client_fixture):
         yield tnn
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def encrypted_two_node_network(docker_client_fixture):
     with EncryptedTwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
@@ -99,6 +100,13 @@ def three_node_network(docker_client_fixture):
 
 
 @pytest.fixture(scope="module")
+def intercepted_two_node_network(docker_client_fixture):
+    with InterceptedTwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture(scope="module")
 def nodes(three_node_network):
     return three_node_network.docker_nodes
 
@@ -106,12 +114,6 @@ def nodes(three_node_network):
 @pytest.fixture(scope="module")
 def node(one_node_network):
     return one_node_network.docker_nodes[0]
-
-
-@pytest.fixture(scope="module")
-def engine(one_node_network):
-    with one_node_network as network:
-        yield network.execution_engines[0]
 
 
 @pytest.fixture()

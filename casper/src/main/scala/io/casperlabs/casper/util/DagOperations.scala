@@ -2,13 +2,15 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import cats.{Eq, Eval, Monad, Show}
-import io.casperlabs.blockstorage.{BlockMetadata, BlockStorage, DagRepresentation}
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.PrettyPrinter
-import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
 import io.casperlabs.shared.StreamT
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
 
 import scala.collection.immutable.{BitSet, HashSet, Queue}
@@ -29,10 +31,11 @@ object DagOperations {
       type K = B
       def key(a: A) = k(a)
     }
-    def identity[A]               = instance[A, A](a => a)
-    implicit val blockKey         = instance[Block, BlockHash](_.blockHash)
-    implicit val blockMetadataKey = instance[BlockMetadata, BlockHash](_.blockHash)
-    implicit val blockHashKey     = identity[BlockHash]
+    def identity[A]                = instance[A, A](a => a)
+    implicit val blockKey          = instance[Block, BlockHash](_.blockHash)
+    implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
+    implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
+    implicit val blockHashKey      = identity[BlockHash]
   }
 
   def bfTraverseF[F[_]: Monad, A](
@@ -56,34 +59,36 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  val blockTopoOrderingAsc: Ordering[BlockMetadata] =
-    Ordering.by[BlockMetadata, Long](_.rank).reverse
+  val blockTopoOrderingAsc: Ordering[Message] =
+    Ordering.by[Message, Long](_.rank).reverse
 
-  val blockTopoOrderingDesc: Ordering[BlockMetadata] = Ordering.by(_.rank)
+  val blockTopoOrderingDesc: Ordering[Message] = Ordering.by(_.rank)
 
   def bfToposortTraverseF[F[_]: Monad](
-      start: List[BlockMetadata]
+      start: List[Message]
   )(
-      neighbours: BlockMetadata => F[List[BlockMetadata]]
-  )(implicit ord: Ordering[BlockMetadata]): StreamT[F, BlockMetadata] = {
+      neighbours: Message => F[List[Message]]
+  )(implicit ord: Ordering[Message]): StreamT[F, Message] = {
     def build(
-        q: mutable.PriorityQueue[BlockMetadata],
+        q: mutable.PriorityQueue[Message],
         prevVisited: HashSet[BlockHash]
-    ): F[StreamT[F, BlockMetadata]] =
-      if (q.isEmpty) StreamT.empty[F, BlockMetadata].pure[F]
+    ): F[StreamT[F, Message]] =
+      if (q.isEmpty) StreamT.empty[F, Message].pure[F]
       else {
         val curr = q.dequeue
-        if (prevVisited(curr.blockHash)) build(q, prevVisited)
+        if (prevVisited(curr.messageHash)) build(q, prevVisited)
         else
           for {
             ns      <- neighbours(curr)
-            visited = prevVisited + curr.blockHash
-            newQ    = q ++ ns.filterNot(b => visited(b.blockHash))
+            visited = prevVisited + curr.messageHash
+            newQ    = q ++ ns.filterNot(b => visited(b.messageHash))
           } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
       }
 
     StreamT.delay(
-      Eval.now(build(mutable.PriorityQueue.empty[BlockMetadata] ++ start, HashSet.empty[BlockHash]))
+      Eval.now(
+        build(mutable.PriorityQueue.empty[Message] ++ start, HashSet.empty[BlockHash])
+      )
     )
   }
 
@@ -238,15 +243,15 @@ object DagOperations {
   }
 
   def uncommonAncestors[F[_]: Monad](
-      blocks: IndexedSeq[BlockMetadata],
+      blocks: IndexedSeq[Message],
       dag: DagRepresentation[F]
   )(
-      implicit topoSort: Ordering[BlockMetadata]
-  ): F[Map[BlockMetadata, BitSet]] = {
-    def parents(b: BlockMetadata): F[List[BlockMetadata]] =
-      b.parents.traverse(b => dag.lookup(b).map(_.get))
+      implicit topoSort: Ordering[Message]
+  ): F[Map[Message, BitSet]] = {
+    def parents(b: Message): F[List[Message]] =
+      b.parents.toList.traverse(b => dag.lookup(b).map(_.get))
 
-    abstractUncommonAncestors[F, BlockMetadata](blocks, parents)
+    abstractUncommonAncestors[F, Message](blocks, parents)
   }
 
   //Conceptually, the GCA is the first point at which the histories of b1 and b2 diverge.
@@ -336,7 +341,8 @@ object DagOperations {
       starters: List[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    def lookup[A](f: A => BlockHash): A => F[BlockMetadata] =
+    import io.casperlabs.casper.util.implicits.{eqMessageSummary, showBlockHash}
+    def lookup[A](f: A => BlockHash): A => F[Message] =
       el =>
         dag
           .lookup(f(el))
@@ -350,9 +356,9 @@ object DagOperations {
     starters
       .traverse(lookup(identity))
       .flatMap(
-        latestCommonAncestorF[F, BlockMetadata](_)(lookup[BlockMetadata](_.parents.head)(_))
+        latestCommonAncestorF[F, Message](_)(lookup[Message](_.parents.head)(_))
       )
-      .map(_.blockHash)
+      .map(_.messageHash)
   }
 
   /** Check if there's a (possibly empty) path leading from any of the starting points to any of the targets. */
@@ -387,10 +393,10 @@ object DagOperations {
       descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
       minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
       reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
-                    blockMeta.parents.traverse(dag.lookup).map(_.flatten)
+                    blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
                   }.foldWhileLeft(Set.empty[BlockHash]) {
-                    case (reachable, blockMeta) if ancestors(blockMeta.blockHash) =>
-                      Left(reachable + blockMeta.blockHash)
+                    case (reachable, msgSummary) if ancestors(msgSummary.messageHash) =>
+                      Left(reachable + msgSummary.messageHash)
                     case (reachable, blockMeta) if blockMeta.rank >= minRank =>
                       Left(reachable)
                     case (reachable, _) =>
