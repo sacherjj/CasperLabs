@@ -163,6 +163,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createBlockResult0 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(ballot1)   = createBlockResult0
       _                  <- MultiParentCasper[Task].addBlock(ballot1)
+      _                  = Message.fromBlock(ballot1).get shouldBe a[Message.Ballot]
 
       _                  <- MultiParentCasper[Task].deploy(deploy)
       createBlockResult1 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
@@ -174,11 +175,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createBlockResult2 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(ballot2)   = createBlockResult2
       _                  = ProtoUtil.parentHashes(ballot2).head shouldBe block1.blockHash
+      _                  = Message.fromBlock(ballot2).get shouldBe a[Message.Ballot]
       _                  <- MultiParentCasper[Task].addBlock(ballot2)
 
       createBlockResult3 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(ballot3)   = createBlockResult3
       _                  = ProtoUtil.parentHashes(ballot3).head shouldBe block1.blockHash
+      _                  = Message.fromBlock(ballot3).get shouldBe a[Message.Ballot]
       _                  <- MultiParentCasper[Task].addBlock(ballot3)
 
       _ <- node.tearDown()
