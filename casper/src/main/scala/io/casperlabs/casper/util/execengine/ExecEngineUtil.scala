@@ -370,16 +370,6 @@ object ExecEngineUtil {
   }
 
   def merge[F[_]: MonadThrowable: BlockStorage](
-      candidateParentBlocks: List[Block],
-      dag: DagRepresentation[F]
-  ): F[MergeResult[TransformMap, Block]] =
-    NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
-      merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
-    } getOrElse {
-      MergeResult.empty[TransformMap, Block].pure[F]
-    }
-
-  def merge[F[_]: MonadThrowable: BlockStorage](
       candidateParentBlocks: NonEmptyList[Block],
       dag: DagRepresentation[F]
   ): F[MergeResult.Result[TransformMap, Block]] = {
