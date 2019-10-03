@@ -428,8 +428,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                          protocolVersion,
                          rank
                        )
-                     } else if (canCreateBallot) {
-                       ???
+                     } else if (canCreateBallot && merged.parents.nonEmpty) {
+                       createBallot(
+                         latestMessages,
+                         merged.parents.head,
+                         publicKey,
+                         privateKey,
+                         sigAlgorithm,
+                         protocolVersion,
+                         rank
+                       )
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
                      }
@@ -532,7 +540,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   private def createProposal(
       latestMessages: Map[ByteString, Message],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
-      remainingHashes: Set[BlockHash],
+      remainingHashes: Set[ByteString],
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -590,6 +598,40 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             )
             .as(CreateBlockStatus.internalDeployError(ex))
       }
+    }
+
+  private def createBallot(
+      latestMessages: Map[ByteString, Message],
+      parent: Block,
+      validatorId: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm,
+      protocolVersion: ProtocolVersion,
+      rank: Long
+  ): F[CreateBlockStatus] =
+    Time[F].currentMillis.map { now =>
+      // TODO: Remove redundant justifications.
+      val justifications = toJustification(latestMessages.values.toSeq)
+      // Start numbering from 1 (validator's first block seqNum = 1)
+      val validatorSeqNum =
+        latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+      val block = ProtoUtil.block(
+        justifications,
+        parent.getHeader.getState.preStateHash,
+        parent.getHeader.getState.postStateHash,
+        parent.getHeader.getState.bonds,
+        Nil,
+        protocolVersion,
+        List(parent.blockHash),
+        validatorSeqNum,
+        chainId,
+        now,
+        rank,
+        validatorId,
+        privateKey,
+        sigAlgorithm
+      )
+      CreateBlockStatus.created(block)
     }
 
   // MultiParentCasper Exposes the block DAG to those who need it.

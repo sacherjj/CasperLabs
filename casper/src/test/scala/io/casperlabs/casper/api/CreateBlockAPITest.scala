@@ -72,10 +72,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     ): Task[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
         t1 <- (BlockAPI.deploy[Task](deploys.head) *> BlockAPI
-               .propose[Task](blockApiLock)).start
+               .propose[Task](blockApiLock, canCreateBallot = false)).start
         _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Task](deploys.last) *> BlockAPI
-               .propose[Task](blockApiLock)).start //should fail because other not done
+               .propose[Task](blockApiLock, canCreateBallot = false)).start //should fail because other not done
         r1 <- t1.join.attempt
         r2 <- t2.join.attempt
       } yield (r1, r2)
@@ -111,7 +111,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         _ <- BlockAPI.deploy[Task](d)
       } yield ()
 
