@@ -92,7 +92,7 @@ fn should_commit_with_metrics() {
 
     let _commit_response = result
         .builder()
-        .send_commit_request(root_hash.to_vec(), Default::default());
+        .commit_transforms(root_hash.to_vec(), Default::default());
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())
@@ -135,7 +135,7 @@ fn should_validate_with_metrics() {
 
     let result = InMemoryWasmTestBuilder::new(global_state, engine_config).finish();
 
-    let _validate_response = result.builder().send_validate_request(wasm_bytes);
+    let _validate_response = result.builder().validate(wasm_bytes);
 
     let log_items = BUFFERED_LOGGER
         .extract_correlated(&correlation_id.to_string())

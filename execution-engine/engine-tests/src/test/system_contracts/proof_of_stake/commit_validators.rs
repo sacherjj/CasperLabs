@@ -1,18 +1,18 @@
 use num_traits::Zero;
+use std::collections::HashMap;
 
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
-use std::collections::HashMap;
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
-use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 const ACCOUNT_2_BALANCE: u64 = 2000;

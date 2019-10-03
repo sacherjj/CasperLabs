@@ -17,7 +17,6 @@ use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::contract::Contract;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
@@ -34,7 +33,6 @@ use engine_grpc_server::engine_server::transforms;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::os::get_page_size;
-use engine_shared::test_utils;
 use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
@@ -518,20 +516,6 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_mint_contract_uref(
-    transforms: &HashMap<Key, Transform>,
-    contracts: &HashMap<SystemContractType, WasmiBytes>,
-) -> Option<URef> {
-    let mint_contract_bytes: Vec<u8> = contracts
-        .get(&SystemContractType::Mint)
-        .map(ToOwned::to_owned)
-        .map(Into::into)
-        .expect("Should get mint bytes.");
-
-    get_contract_uref(&transforms, mint_contract_bytes)
-}
-
-#[allow(clippy::implicit_hasher)]
 pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
     transforms.get(account).and_then(|transform| {
         if let Transform::Write(Value::Account(account)) = transform {
@@ -914,7 +898,7 @@ where
     /// Sends raw commit request to the current engine response.
     ///
     /// Can be used where result is not necesary
-    pub fn send_commit_request(
+    pub fn commit_transforms(
         &self,
         prestate_hash: Vec<u8>,
         effects: HashMap<Key, Transform>,
@@ -927,7 +911,7 @@ where
             .expect("Should have commit response")
     }
 
-    pub fn send_validate_request(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
+    pub fn validate(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
         let validate_request = create_validate_request(wasm_bytes);
 
         self.engine_state
@@ -943,7 +927,7 @@ where
         prestate_hash: Vec<u8>,
         effects: HashMap<Key, Transform>,
     ) -> &mut Self {
-        let commit_response = self.send_commit_request(prestate_hash, effects);
+        let commit_response = self.commit_transforms(prestate_hash, effects);
         if !commit_response.has_success() {
             panic!(
                 "Expected commit success but received a failure instead: {:?}",
@@ -1135,7 +1119,7 @@ where
         }
     }
 
-    pub fn get_exec_costs(&self, index: usize) -> Vec<Gas> {
+    pub fn exec_costs(&self, index: usize) -> Vec<Gas> {
         let exec_response = self
             .get_exec_response(index)
             .expect("should have exec response");
@@ -1147,7 +1131,7 @@ where
             .collect()
     }
 
-    pub fn get_exec_error_message(&self, index: usize) -> Option<String> {
+    pub fn exec_error_message(&self, index: usize) -> Option<String> {
         let response = self.get_exec_response(index)?;
         let execution_result = get_success_result(&response);
         Some(get_error_message(execution_result))
@@ -1159,28 +1143,6 @@ where
             .commit()
             .finish()
     }
-}
-
-pub fn get_protocol_version() -> ProtocolVersion {
-    let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
-    protocol_version.set_value(1);
-    protocol_version
-}
-
-pub fn get_mock_deploy() -> DeployItem {
-    let mut deploy = DeployItem::new();
-    deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
-    deploy.set_gas_price(1);
-    let deploy_payload = {
-        let mut deploy_code = DeployCode::new();
-        deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
-        let mut deploy_payload = DeployPayload::new();
-        deploy_payload.set_deploy_code(deploy_code);
-        deploy_payload
-    };
-    deploy.set_session(deploy_payload);
-    deploy.set_deploy_hash([1u8; 32].to_vec());
-    deploy
 }
 
 fn get_compiled_wasm_path(contract_file: PathBuf) -> PathBuf {
@@ -1202,41 +1164,6 @@ fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
     let mut validate_request = ValidateRequest::new();
     validate_request.set_wasm_code(wasm_bytes);
     validate_request
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_contract_uref(transforms: &HashMap<Key, Transform>, contract: Vec<u8>) -> Option<URef> {
-    transforms
-        .iter()
-        .find(|(_, v)| match v {
-            Transform::Write(Value::Contract(mint_contract))
-                if mint_contract.bytes() == contract.as_slice() =>
-            {
-                true
-            }
-            _ => false,
-        })
-        .and_then(|(k, _)| {
-            if let Key::URef(uref) = k {
-                Some(*uref)
-            } else {
-                None
-            }
-        })
-}
-
-#[allow(clippy::implicit_hasher)]
-pub fn get_pos_contract_uref(
-    transforms: &HashMap<Key, Transform>,
-    contracts: &HashMap<SystemContractType, WasmiBytes>,
-) -> Option<URef> {
-    let mint_contract_bytes: Vec<u8> = contracts
-        .get(&SystemContractType::ProofOfStake)
-        .map(ToOwned::to_owned)
-        .map(Into::into)
-        .expect("Should get PoS bytes.");
-
-    get_contract_uref(&transforms, mint_contract_bytes)
 }
 
 /// Represents the difference between two [`HashMap`]s.

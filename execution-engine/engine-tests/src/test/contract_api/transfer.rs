@@ -66,8 +66,8 @@ fn should_transfer_to_account() {
 
     let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
-    let gas_cost = Motes::from_gas(builder.get_exec_costs(0)[0], CONV_RATE)
-        .expect("should convert gas to motes");
+    let gas_cost =
+        Motes::from_gas(builder.exec_costs(0)[0], CONV_RATE).expect("should convert gas to motes");
 
     assert_eq!(
         genesis_balance,
@@ -231,8 +231,8 @@ fn should_transfer_to_existing_account() {
 
     let genesis_balance = builder.get_purse_balance(default_account_purse_id);
 
-    let gas_cost = Motes::from_gas(builder.get_exec_costs(0)[0], CONV_RATE)
-        .expect("should convert gas to motes");
+    let gas_cost =
+        Motes::from_gas(builder.exec_costs(0)[0], CONV_RATE).expect("should convert gas to motes");
 
     assert_eq!(
         genesis_balance,
@@ -268,8 +268,8 @@ fn should_transfer_to_existing_account() {
 
     let account_1_balance = builder.get_purse_balance(account_1_purse_id);
 
-    let gas_cost = Motes::from_gas(builder.get_exec_costs(1)[0], CONV_RATE)
-        .expect("should convert gas to motes");
+    let gas_cost =
+        Motes::from_gas(builder.exec_costs(1)[0], CONV_RATE).expect("should convert gas to motes");
 
     assert_eq!(
         account_1_balance,
@@ -328,7 +328,7 @@ fn should_fail_when_insufficient_funds() {
         "Trap(Trap { kind: Unreachable })",
         result
             .builder()
-            .get_exec_error_message(2)
+            .exec_error_message(2)
             .expect("should have error message"),
     )
 }
