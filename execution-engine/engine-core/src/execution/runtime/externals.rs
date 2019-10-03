@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use contract_ffi::bytesrepr::{self, ToBytes};
+use contract_ffi::contract_api;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
@@ -49,9 +50,9 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::SerKnownURefs => {
+            FunctionIndex::SerNamedKeysFuncIndex => {
                 // No args, returns byte size of the known URefs.
-                let size = self.serialize_known_urefs()?;
+                let size = self.serialize_named_keys()?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -110,8 +111,8 @@ where
 
             FunctionIndex::LoadArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
-                let i = Args::parse(args)?;
-                let size = self.load_arg(i)?;
+                let i: u32 = Args::parse(args)?;
+                let size = self.load_arg(i as usize);
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -169,43 +170,43 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::GetURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::GetKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.get_uref(name_ptr, name_size)?;
+                let size = self.get_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::HasURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::HasKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                let result = self.has_uref(name_ptr, name_size)?;
+                let result = self.has_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
 
-            FunctionIndex::AddURefFuncIndex => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::PutKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 // args(2) = pointer to destination in Wasm memory
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
-                self.add_uref(name_ptr, name_size, key_ptr, key_size)?;
+                self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
 
-            FunctionIndex::ListKnownURefsIndex => {
+            FunctionIndex::ListNamedKeysFuncIndex => {
                 // args(0) = pointer to destination in Wasm memory
                 let ptr = Args::parse(args)?;
-                self.list_known_urefs(ptr)?;
+                self.list_named_keys(ptr)?;
                 Ok(None)
             }
 
-            FunctionIndex::RemoveURef => {
-                // args(0) = pointer to uref name in Wasm memory
-                // args(1) = size of uref name
+            FunctionIndex::RemoveKeyFuncIndex => {
+                // args(0) = pointer to key name in Wasm memory
+                // args(1) = size of key name
                 let (name_ptr, name_size) = Args::parse(args)?;
-                self.remove_uref(name_ptr, name_size)?;
+                self.remove_key(name_ptr, name_size)?;
                 Ok(None)
             }
 
@@ -416,6 +417,16 @@ where
                 let dest_ptr = Args::parse(args)?;
                 self.get_phase(dest_ptr)?;
                 Ok(None)
+            }
+
+            FunctionIndex::UpgradeContractAtURef => {
+                // args(0) = pointer to name in Wasm memory
+                // args(1) = size of name in Wasm memory
+                // args(2) = pointer to key in Wasm memory
+                // args(3) = size of key
+                let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
+                let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
         }
     }

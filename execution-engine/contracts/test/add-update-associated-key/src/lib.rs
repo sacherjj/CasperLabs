@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::account::{PublicKey, Weight};
 
 const INIT_WEIGHT: u8 = 1;
@@ -15,7 +15,11 @@ const UPDATE_FAILURE: u32 = 2;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = contract_api::get_arg(0);
+    let account: PublicKey = match contract_api::get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
+        None => contract_api::revert(Error::MissingArgument.into()),
+    };
 
     let weight1 = Weight::new(INIT_WEIGHT);
     contract_api::add_associated_key(account, weight1)

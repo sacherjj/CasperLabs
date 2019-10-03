@@ -17,18 +17,15 @@ use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
+use engine_core::engine_state::upgrade::UpgradeConfig;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
-use engine_shared::logging;
-use engine_shared::logging::log_level;
 use engine_shared::motes::Motes;
-use engine_shared::newtypes::Blake2bHash;
 use engine_shared::transform::{self, TypeMismatch};
-use engine_storage::global_state::{CommitResult, StateProvider};
+use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::engine_server::ipc::{ChainSpec_CostTable, ChainSpec_GenesisAccount};
 use crate::engine_server::{ipc, state, transforms};
-use engine_wasm_prep::wasm_costs::WasmCosts;
 
 mod uint;
 
@@ -41,6 +38,7 @@ fn transform_write(v: contract_ffi::value::Value) -> Result<transform::Transform
 pub enum MappingError {
     InvalidPublicKeyLength { expected: usize, actual: usize },
     ParsingError(ParsingError),
+    InvalidHash(String),
 }
 
 impl MappingError {
@@ -67,6 +65,7 @@ impl Display for MappingError {
             MappingError::ParsingError(ParsingError(message)) => {
                 write!(f, "Parsing error: {}", message)
             }
+            MappingError::InvalidHash(message) => write!(f, "Invalid hash: {}", message),
         }
     }
 }
@@ -172,11 +171,11 @@ impl TryFrom<&super::transforms::Transform> for transform::Transform {
 
 impl From<contract_ffi::value::Contract> for super::state::Contract {
     fn from(contract: contract_ffi::value::Contract) -> Self {
-        let (bytes, known_urefs, protocol_version) = contract.destructure();
+        let (bytes, named_keys, protocol_version) = contract.destructure();
         let mut contract = super::state::Contract::new();
-        let urefs = URefMap(known_urefs).into();
+        let named_keys = KnownKeys(named_keys).into();
         contract.set_body(bytes);
-        contract.set_known_urefs(protobuf::RepeatedField::from_vec(urefs));
+        contract.set_named_keys(protobuf::RepeatedField::from_vec(named_keys));
         contract.set_protocol_version(protocol_version.into());
         contract
     }
@@ -186,10 +185,10 @@ impl TryFrom<&super::state::Contract> for contract_ffi::value::Contract {
     type Error = ParsingError;
 
     fn try_from(value: &super::state::Contract) -> Result<Self, Self::Error> {
-        let known_urefs: URefMap = value.get_known_urefs().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         Ok(contract_ffi::value::Contract::new(
             value.get_body().to_vec(),
-            known_urefs.0,
+            named_keys.0,
             ProtocolVersion::new(value.get_protocol_version().value),
         ))
     }
@@ -225,13 +224,13 @@ impl From<contract_ffi::value::Value> for super::state::Value {
                 let named_key = {
                     let mut nk = super::state::NamedKey::new();
                     nk.set_name(name.to_string());
-                    nk.set_key((&key).into());
+                    nk.set_key(key.into());
                     nk
                 };
                 tv.set_named_key(named_key);
             }
             contract_ffi::value::Value::Key(key) => {
-                tv.set_key((&key).into());
+                tv.set_key(key.into());
             }
             contract_ffi::value::Value::Account(account) => tv.set_account(account.into()),
             contract_ffi::value::Value::Contract(contract) => {
@@ -327,10 +326,9 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
             tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
             tmp
         };
-        let account_urefs = account.urefs_lookup();
-        let account_urefs_lookup = URefMap(account_urefs.clone());
-        let ipc_urefs: Vec<super::state::NamedKey> = account_urefs_lookup.into();
-        ipc_account.set_known_urefs(ipc_urefs.into());
+        let account_named_keys = KnownKeys(account.named_keys().to_owned());
+        let ipc_urefs: Vec<super::state::NamedKey> = account_named_keys.into();
+        ipc_account.set_named_keys(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
         ipc_account.set_account_activity(account_activity);
         ipc_account
@@ -349,7 +347,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
             buff.copy_from_slice(&value.public_key);
             buff
         };
-        let uref_map: URefMap = value.get_known_urefs().try_into()?;
+        let named_keys: KnownKeys = value.get_named_keys().try_into()?;
         let purse_id: PurseId = PurseId::new(value.get_purse_id().try_into()?);
         let associated_keys: AssociatedKeys = {
             let mut keys = AssociatedKeys::empty();
@@ -398,7 +396,7 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
         };
         Ok(contract_ffi::value::Account::new(
             pub_key,
-            uref_map.0,
+            named_keys.0,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -449,7 +447,7 @@ impl From<transform::Transform> for super::transforms::Transform {
             }
             transform::Transform::AddKeys(keys_map) => {
                 let mut add = super::transforms::TransformAddKeys::new();
-                let keys = URefMap(keys_map).into();
+                let keys = KnownKeys(keys_map).into();
                 add.set_value(protobuf::RepeatedField::from_vec(keys));
                 t.set_add_keys(add);
             }
@@ -469,7 +467,7 @@ impl From<transform::Transform> for super::transforms::Transform {
 }
 
 // newtype because trait impl have to be defined in the crate of the type.
-pub struct URefMap(BTreeMap<String, contract_ffi::key::Key>);
+pub struct KnownKeys(BTreeMap<String, contract_ffi::key::Key>);
 
 impl TryFrom<&super::state::NamedKey> for (String, contract_ffi::key::Key) {
     type Error = ParsingError;
@@ -482,7 +480,7 @@ impl TryFrom<&super::state::NamedKey> for (String, contract_ffi::key::Key) {
 }
 
 // Helper method for turning gRPC Vec of NamedKey to domain BTreeMap.
-impl TryFrom<&[super::state::NamedKey]> for URefMap {
+impl TryFrom<&[super::state::NamedKey]> for KnownKeys {
     type Error = ParsingError;
     fn try_from(from: &[super::state::NamedKey]) -> Result<Self, ParsingError> {
         let mut tree: BTreeMap<String, contract_ffi::key::Key> = BTreeMap::new();
@@ -490,19 +488,19 @@ impl TryFrom<&[super::state::NamedKey]> for URefMap {
             let (name, key) = nk.try_into()?;
             let _ = tree.insert(name, key);
         }
-        Ok(URefMap(tree))
+        Ok(KnownKeys(tree))
     }
 }
 
-impl From<URefMap> for Vec<super::state::NamedKey> {
-    fn from(uref_map: URefMap) -> Vec<super::state::NamedKey> {
+impl From<KnownKeys> for Vec<super::state::NamedKey> {
+    fn from(uref_map: KnownKeys) -> Vec<super::state::NamedKey> {
         uref_map
             .0
             .into_iter()
             .map(|(n, k)| {
                 let mut nk = super::state::NamedKey::new();
                 nk.set_name(n);
-                nk.set_key((&k).into());
+                nk.set_key(k.into());
                 nk
             })
             .collect()
@@ -531,8 +529,8 @@ impl TryFrom<&state::Account_AssociatedKey> for (PublicKey, Weight) {
     }
 }
 
-impl From<&contract_ffi::key::Key> for super::state::Key {
-    fn from(key: &contract_ffi::key::Key) -> super::state::Key {
+impl From<contract_ffi::key::Key> for super::state::Key {
+    fn from(key: contract_ffi::key::Key) -> super::state::Key {
         let mut k = super::state::Key::new();
         match key {
             contract_ffi::key::Key::Account(acc) => {
@@ -546,7 +544,7 @@ impl From<&contract_ffi::key::Key> for super::state::Key {
                 k.set_hash(key_hash);
             }
             contract_ffi::key::Key::URef(uref) => {
-                let uref: super::state::Key_URef = (*uref).into();
+                let uref: super::state::Key_URef = uref.into();
                 k.set_uref(uref);
             }
             contract_ffi::key::Key::Local(hash) => {
@@ -672,7 +670,7 @@ impl TryFrom<&super::transforms::TransformEntry>
 impl From<(contract_ffi::key::Key, transform::Transform)> for super::transforms::TransformEntry {
     fn from((k, t): (contract_ffi::key::Key, transform::Transform)) -> Self {
         let mut tr_entry = super::transforms::TransformEntry::new();
-        tr_entry.set_key((&k).into());
+        tr_entry.set_key(k.into());
         tr_entry.set_transform(t.into());
         tr_entry
     }
@@ -683,7 +681,7 @@ impl From<ExecutionEffect> for super::ipc::ExecutionEffect {
         let mut eff = super::ipc::ExecutionEffect::new();
         let ipc_ops: Vec<super::ipc::OpEntry> = ee
             .ops
-            .iter()
+            .into_iter()
             .map(|(k, o)| {
                 let mut op_entry = super::ipc::OpEntry::new();
                 let ipc_key = k.into();
@@ -749,6 +747,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::InvalidPublicKeyLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
+                    error @ EngineError::InvalidProtocolVersion { .. } => {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::WasmPreprocessingError(_) => {
@@ -860,70 +861,6 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     },
                 }
             }
-        }
-    }
-}
-
-pub fn grpc_response_from_commit_result<S>(
-    prestate_hash: Blake2bHash,
-    input: Result<CommitResult, S::Error>,
-) -> ipc::CommitResponse
-where
-    S: StateProvider,
-    S::Error: Into<EngineError> + std::fmt::Debug,
-{
-    match input {
-        Ok(CommitResult::RootNotFound) => {
-            logging::log_warning("RootNotFound");
-            let mut root = ipc::RootNotFound::new();
-            root.set_hash(prestate_hash.to_vec());
-            let mut tmp_res = ipc::CommitResponse::new();
-            tmp_res.set_missing_prestate(root);
-            tmp_res
-        }
-        Ok(CommitResult::Success(post_state_hash)) => {
-            let mut properties: BTreeMap<String, String> = BTreeMap::new();
-
-            properties.insert(
-                "post-state-hash".to_string(),
-                format!("{:?}", post_state_hash),
-            );
-
-            properties.insert("success".to_string(), true.to_string());
-
-            logging::log_details(
-                log_level::LogLevel::Info,
-                "effects applied; new state hash is: {post-state-hash}".to_owned(),
-                properties,
-            );
-
-            let mut commit_result = ipc::CommitResult::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            commit_result.set_poststate_hash(post_state_hash.to_vec());
-            tmp_res.set_success(commit_result);
-            tmp_res
-        }
-        Ok(CommitResult::KeyNotFound(key)) => {
-            logging::log_warning("KeyNotFound");
-            let mut commit_response = ipc::CommitResponse::new();
-            commit_response.set_key_not_found((&key).into());
-            commit_response
-        }
-        Ok(CommitResult::TypeMismatch(type_mismatch)) => {
-            logging::log_warning("TypeMismatch");
-            let mut commit_response = ipc::CommitResponse::new();
-            commit_response.set_type_mismatch(type_mismatch.into());
-            commit_response
-        }
-        // TODO(mateusz.gorski): We should be more specific about errors here.
-        Err(storage_error) => {
-            let log_message = format!("storage error {:?} when applying effects", storage_error);
-            logging::log_error(&log_message);
-            let mut err = ipc::PostEffectsError::new();
-            let mut tmp_res = ipc::CommitResponse::new();
-            err.set_message(format!("{:?}", storage_error));
-            tmp_res.set_failed_transform(err);
-            tmp_res
         }
     }
 }
@@ -1099,6 +1036,54 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
     }
 }
 
+impl TryFrom<ipc::UpgradeRequest> for UpgradeConfig {
+    type Error = MappingError;
+
+    fn try_from(upgrade_request: ipc::UpgradeRequest) -> Result<Self, Self::Error> {
+        let pre_state_hash = upgrade_request
+            .get_parent_state_hash()
+            .try_into()
+            .map_err(|_| MappingError::InvalidHash("pre_state_hash".to_string()))?;
+
+        let current_protocol_version = upgrade_request.get_protocol_version().into();
+
+        let upgrade_point = upgrade_request.get_upgrade_point();
+        let new_protocol_version: ProtocolVersion = upgrade_point.get_protocol_version().into();
+        let (upgrade_installer_bytes, upgrade_installer_args) =
+            if !upgrade_point.has_upgrade_installer() {
+                (None, None)
+            } else {
+                let upgrade_installer = upgrade_point.get_upgrade_installer();
+                let bytes = upgrade_installer.get_code().to_vec();
+                let bytes = if bytes.is_empty() { None } else { Some(bytes) };
+                let args = upgrade_installer.get_args().to_vec();
+                let args = if args.is_empty() { None } else { Some(args) };
+                (bytes, args)
+            };
+
+        let wasm_costs = if !upgrade_point.has_new_costs() {
+            None
+        } else {
+            Some(upgrade_point.get_new_costs().get_wasm().to_owned().into())
+        };
+        let activation_point = if !upgrade_point.has_activation_point() {
+            None
+        } else {
+            Some(upgrade_point.get_activation_point().rank)
+        };
+
+        Ok(UpgradeConfig::new(
+            pre_state_hash,
+            current_protocol_version,
+            new_protocol_version,
+            upgrade_installer_args,
+            upgrade_installer_bytes,
+            wasm_costs,
+            activation_point,
+        ))
+    }
+}
+
 impl From<&state::ProtocolVersion> for contract_ffi::value::ProtocolVersion {
     fn from(protocol_version: &state::ProtocolVersion) -> Self {
         contract_ffi::value::ProtocolVersion::new(protocol_version.value)
@@ -1145,15 +1130,30 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
     deploy_result
 }
 
-pub fn to_domain_validators(bond: &ipc::Bond) -> Result<(PublicKey, U512), String> {
-    let pk = PublicKey::try_from(bond.get_validator_public_key())
-        .map_err(|_| "Public key has to be exactly 32 bytes long.")?;
-    match bond.get_stake().try_into() {
-        Ok(bond) => Ok((pk, bond)),
-        Err(err) => {
-            let err_msg = format!("{:?}", err);
-            Err(err_msg)
-        }
+impl From<(PublicKey, U512)> for ipc::Bond {
+    fn from(tuple: (PublicKey, U512)) -> Self {
+        let (key, amount) = tuple;
+        let mut ret = ipc::Bond::new();
+        ret.set_validator_public_key(key.to_vec());
+        ret.set_stake(amount.into());
+        ret
+    }
+}
+
+impl TryFrom<&ipc::Bond> for (PublicKey, U512) {
+    type Error = MappingError;
+
+    fn try_from(bond: &ipc::Bond) -> Result<Self, Self::Error> {
+        let public_key = {
+            let tmp = bond.get_validator_public_key();
+            // TODO: our TryFromSliceForPublicKeyError should convey length info
+            match tmp.try_into() {
+                Ok(public_key) => public_key,
+                Err(_) => return Err(MappingError::invalid_public_key_length(tmp.len())),
+            }
+        };
+        let stake = bond.get_stake().try_into()?;
+        Ok((public_key, stake))
     }
 }
 
@@ -1164,7 +1164,7 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use contract_ffi::gens::{account_arb, contract_arb, key_arb, uref_map_arb, value_arb};
+    use contract_ffi::gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
     use engine_core::engine_state::error::Error::ExecError;
@@ -1292,13 +1292,13 @@ mod tests {
         let setup: Vec<transforms::TransformEntry> = {
             let transform_entry_first = {
                 let mut tmp = transforms::TransformEntry::new();
-                tmp.set_key((&key).into());
+                tmp.set_key(key.into());
                 tmp.set_transform(Transform::Write(contract_ffi::value::Value::Int32(12)).into());
                 tmp
             };
             let transform_entry_second = {
                 let mut tmp = transforms::TransformEntry::new();
-                tmp.set_key((&key).into());
+                tmp.set_key(key.into());
                 tmp.set_transform(Transform::AddInt32(10).into());
                 tmp
             };
@@ -1335,19 +1335,19 @@ mod tests {
     proptest! {
         #[test]
         fn key_roundtrip(key in key_arb()) {
-            let ipc_key: super::state::Key = (&key).into();
+            let ipc_key: super::state::Key = key.into();
             let key_back: Key = (&ipc_key).try_into().expect("Transforming state::Key into domain Key should succeed.");
             assert_eq!(key_back, key)
         }
 
         #[test]
-        fn uref_map_roundtrip(uref_map in uref_map_arb(10)) {
-            let uref_map_newtype = super::URefMap(uref_map.clone());
-            let ipc_uref_map: Vec<state::NamedKey> = uref_map_newtype.into();
-            let ipc_urefs_slice: &[state::NamedKey] = &ipc_uref_map;
-            let uref_map_back: super::URefMap = ipc_urefs_slice.try_into()
-                .expect("Transforming Vec<state::NamedKey> to URefMap should succeed.");
-            assert_eq!(uref_map, uref_map_back.0)
+        fn named_keys_roundtrip(named_keys in named_keys_arb(10)) {
+            let named_keys_newtype = super::KnownKeys(named_keys.clone());
+            let ipc_named_keys: Vec<state::NamedKey> = named_keys_newtype.into();
+            let ipc_urefs_slice: &[state::NamedKey] = &ipc_named_keys;
+            let named_keys_back: super::KnownKeys = ipc_urefs_slice.try_into()
+                .expect("Transforming Vec<state::NamedKey> to KnownKeys should succeed.");
+            assert_eq!(named_keys, named_keys_back.0)
         }
 
         #[test]

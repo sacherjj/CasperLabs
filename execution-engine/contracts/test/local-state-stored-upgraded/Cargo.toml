@@ -1,0 +1,18 @@
+[package]
+name = "local-state-stored-upgraded"
+version = "0.1.0"
+authors = ["Ed Hastings <ed@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+name = "local_state_stored_upgraded"
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+std = ["contract-ffi/std"]
+lib = []
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+local-state = { path = "../local-state", default-features = false, features = ["lib"] }

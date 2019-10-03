@@ -2,7 +2,7 @@ import React from 'react';
 import { Route, RouteProps } from 'react-router-dom';
 import { observer } from 'mobx-react';
 import AuthContainer from '../containers/AuthContainer';
-import { encodeBase16 } from '../lib/Conversions';
+import { encodeBase16 } from 'casperlabs-sdk';
 
 export const Spinner = (msg: String) => (
   <div className="text-center">

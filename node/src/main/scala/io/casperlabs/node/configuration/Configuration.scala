@@ -2,14 +2,13 @@ package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.ValidatedNel
 import cats.syntax.either._
 import cats.syntax.validated._
 import com.github.ghik.silencer.silent
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
-import io.casperlabs.blockstorage.LMDBBlockStorage
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
@@ -28,7 +27,6 @@ final case class Configuration(
     grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
-    lmdb: LMDBBlockStorage.Config,
     blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
@@ -64,11 +62,11 @@ object Configuration extends ParserImplicits {
       maxNumOfConnections: Int,
       maxMessageSize: Int,
       chunkSize: Int,
-      useGossiping: Boolean,
       relayFactor: Int,
       relaySaturation: Int,
       approvalRelayFactor: Int,
       approvalPollInterval: FiniteDuration,
+      alivePeersCacheExpirationPeriod: FiniteDuration,
       syncMaxPossibleDepth: Int Refined Positive,
       syncMinBlockCountToCheckWidth: Int Refined NonNegative,
       syncMaxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
@@ -90,7 +88,6 @@ object Configuration extends ParserImplicits {
   ) extends SubConfig
 
   case class BlockStorage(
-      latestMessagesLogMaxSizeFactor: Int,
       cacheMaxSizeBytes: Long
   ) extends SubConfig
 
@@ -203,31 +200,4 @@ object Configuration extends ParserImplicits {
                     s => Parser[Path].parse(s)
                   )
     } yield dataDir
-
-  private[configuration] def parseToml(content: String): Map[CamelCase, String] = {
-    val tableRegex = """\[(.+)\]""".r
-    val valueRegex = """([a-z\-]+)\s*=\s*\"?([^\"]*)\"?""".r
-
-    val lines = content
-      .split('\n')
-    val withoutCommentsAndEmptyLines = lines
-      .filterNot(s => s.startsWith("#") || s.trim.isEmpty)
-      .map(_.trim)
-
-    val dashifiedMap: Map[String, String] = withoutCommentsAndEmptyLines
-      .foldLeft((Map.empty[String, String], Option.empty[String])) {
-        case ((acc, _), tableRegex(table)) =>
-          (acc, Some(table))
-        case ((acc, t @ Some(currentTable)), valueRegex(key, value)) =>
-          (acc + (currentTable + "-" + key -> value), t)
-        case (x, _) => x
-      }
-      ._1
-
-    val camelCasedMap: Map[CamelCase, String] = dashifiedMap.map {
-      case (k, v) => (dashToCamel(k), v)
-    }
-
-    camelCasedMap
-  }
 }

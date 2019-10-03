@@ -56,12 +56,15 @@ class Contract:
 # test_transfer_with_overdraft: 297, 296
 
 MAX_PAYMENT_COST = 10000000
+DEFAULT_PAYMENT_COST = 100000000
 INITIAL_MOTES_AMOUNT = 10 ** 20
-MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
+MAX_PAYMENT_ABI = ABI.args([ABI.big_int("amount", MAX_PAYMENT_COST)])
+DEFAULT_PAYMENT_ABI = ABI.args([ABI.big_int("amount", DEFAULT_PAYMENT_COST)])
 CONV_RATE = 10
-TEST_ACCOUNT_INITIAL_BALANCE = 100000000
+TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
+CHAINSPEC_PATH = "/root/.casperlabs/chainspec"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)

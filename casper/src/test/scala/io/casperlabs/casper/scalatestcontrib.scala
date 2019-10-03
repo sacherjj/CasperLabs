@@ -2,10 +2,10 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.syntax.functor._
-import io.casperlabs.casper.helper.HashSetCasperTestNode.Effect
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.execution.Scheduler
+import monix.eval.Task
 import org.scalatest.{Assertion, Assertions, Matchers}
 import org.scalactic.source
 
@@ -15,8 +15,8 @@ object scalatestcontrib extends Matchers with Assertions {
       leftSideValue.map(_ shouldBe value)
   }
 
-  def effectTest[T](f: Effect[T])(implicit scheduler: Scheduler): T =
-    f.value.unsafeRunSync(scheduler).right.get
+  def effectTest[T](f: Task[T])(implicit scheduler: Scheduler): T =
+    f.unsafeRunSync(scheduler)
 
   /** If a feature is missing we can do `Log[F].debug("FIXME: Implement feature X!")`
     * and add an assumption to the test that this has been done, otherwise cancel the test.

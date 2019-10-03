@@ -1,7 +1,5 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Path
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent._
@@ -10,25 +8,25 @@ import cats.mtl.DefaultApplicativeAsk
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.blockstorage._
 import io.casperlabs.casper
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
 }
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.{consensus, _}
-import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Cell, Log, Time}
-import monix.eval.Task
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
@@ -37,8 +35,6 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    dagDir: Path,
-    blockStorageDir: Path,
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
@@ -50,6 +46,7 @@ class GossipServiceCasperTestNode[F[_]](
     concurrentF: Concurrent[F],
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
+    deployStorage: DeployStorage[F],
     timeEff: Time[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -58,12 +55,8 @@ class GossipServiceCasperTestNode[F[_]](
       local,
       sk,
       genesis,
-      dagDir,
-      blockStorageDir,
       maybeMakeEE
-    )(concurrentF, blockStorage, dagStorage, metricEff, casperState) {
-  implicit val deployBufferEff: DeployBuffer[F] =
-    MockDeployBuffer.unsafeCreate[F]()(Concurrent[F], new NOPLog[F])
+    )(concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
@@ -98,7 +91,7 @@ class GossipServiceCasperTestNode[F[_]](
   /** Forget RPC calls intended for this node. */
   def clearMessages(): F[Unit] = gossipService.clearMessages()
 
-  override def tearDownNode() =
+  override def tearDownNode(): F[Unit] =
     gossipService.shutdown >> super.tearDownNode()
 }
 
@@ -110,7 +103,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   import GossipServiceCasperTestNodeFactory._
   import HashSetCasperTestNode.peerNode
 
-  def standaloneF[F[_]](
+  override def standaloneF[F[_]](
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
@@ -118,10 +111,10 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit
-      errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[GossipServiceCasperTestNode[F]] = {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
@@ -140,8 +133,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       relaySaturation = 0
     )
 
-    initStorage(genesis) flatMap {
-      case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
+    initStorage() flatMap {
+      case (blockStorage, dagStorage, deployStorage) =>
         for {
           blockProcessingLock <- Semaphore[F](1)
           casperState         <- Cell.mvarCell[F, CasperState](CasperState())
@@ -149,8 +142,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             identity,
             genesis,
             sk,
-            dagStorageDir,
-            blockStorageDir,
             blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
@@ -159,17 +150,18 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             concurrentF,
             blockStorage,
             dagStorage,
+            deployStorage,
             timeEff,
             metricEff,
             casperState,
             log
           )
-          _ <- node.initialize
+          _ <- node.initialize()
         } yield node
     }
   }
 
-  def networkF[F[_]](
+  override def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
@@ -177,13 +169,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
-      implicit errorHandler: ErrorHandler[F],
+      implicit
       concurrentF: Concurrent[F],
       parF: Par[F],
-      timerF: Timer[F]
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[IndexedSeq[GossipServiceCasperTestNode[F]]] = {
     val n     = sks.length
-    val names = (0 to n - 1).map(i => s"node-$i")
+    val names = (0 until n).map(i => s"node-$i")
     val peers = names.map(peerNode(_, 40400))
 
     var gossipServices = Map.empty[Node, TestGossipService[F]]
@@ -219,8 +212,8 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             isSynchronous = true
           )
 
-          initStorage(genesis) flatMap {
-            case (dagStorageDir, blockStorageDir, dagStorage, blockStorage) =>
+          initStorage() flatMap {
+            case (blockStorage, dagStorage, deployStorage) =>
               for {
                 semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
@@ -230,8 +223,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   peer,
                   genesis,
                   sk,
-                  dagStorageDir,
-                  blockStorageDir,
                   semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,
@@ -241,6 +232,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   concurrentF,
                   blockStorage,
                   dagStorage,
+                  deployStorage,
                   timeEff,
                   metricEff,
                   casperState,
@@ -281,7 +273,8 @@ object GossipServiceCasperTestNodeFactory {
   class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation]()
       extends GossipService[F] {
 
-    implicit val metrics = new Metrics.MetricsNOP[F]
+    implicit val metrics  = new Metrics.MetricsNOP[F]
+    implicit val versions = HashSetCasperTestNode.protocolVersions[F]
 
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _
@@ -344,6 +337,27 @@ object GossipServiceCasperTestNodeFactory {
                                ): F[Unit] =
                                  // No means to store summaries separately yet.
                                  ().pure[F]
+
+                               override def onScheduled(summary: consensus.BlockSummary) =
+                                 // The EquivocationDetector treats equivocations with children differently,
+                                 // so let Casper know about the DAG dependencies up front.
+                                 Log[F].debug(
+                                   s"Feeding pending block to Casper: ${PrettyPrinter.buildString(summary.blockHash)}"
+                                 ) *> {
+                                   val partialBlock = consensus
+                                     .Block()
+                                     .withBlockHash(summary.blockHash)
+                                     .withHeader(summary.getHeader)
+
+                                   casper.addMissingDependencies(partialBlock)
+                                 }
+
+                               override def onDownloaded(blockHash: ByteString) =
+                                 // Calling `addBlock` during validation has already stored the block.
+                                 Log[F].debug(
+                                   s"Download ready for ${PrettyPrinter.buildString(blockHash)}"
+                                 )
+
                              },
                              relaying = relaying,
                              retriesConf = DownloadManagerImpl.RetriesConf.noRetries
@@ -356,8 +370,9 @@ object GossipServiceCasperTestNodeFactory {
                          backend = new SynchronizerImpl.Backend[F] {
                            override def tips: F[List[ByteString]] =
                              for {
-                               dag       <- casper.dag
-                               tipHashes <- casper.estimator(dag)
+                               dag                 <- casper.dag
+                               latestMessageHashes <- dag.latestMessageHashes
+                               tipHashes           <- casper.estimator(dag, latestMessageHashes)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =
@@ -407,30 +422,12 @@ object GossipServiceCasperTestNodeFactory {
                          blockStorage
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
-                   },
-                   synchronizer = synchronizer,
-                   downloadManager = downloadManager,
-                   consensus = new GossipServiceServer.Consensus[F] {
-                     override def onPending(dag: Vector[consensus.BlockSummary]) =
-                       // The EquivocationDetector treats equivocations with children differently,
-                       // so let Casper know about the DAG dependencies up front.
-                       Log[F].debug(s"Feeding ${dag.size} pending blocks to Casper.") *>
-                         dag.traverse { summary =>
-                           val partialBlock = consensus
-                             .Block()
-                             .withBlockHash(summary.blockHash)
-                             .withHeader(summary.getHeader)
-
-                           casper.addMissingDependencies(partialBlock)
-                         }.void
-
-                     override def onDownloaded(blockHash: ByteString) =
-                       // Calling `addBlock` during validation has already stored the block.
-                       Log[F].debug(s"Download ready for ${PrettyPrinter.buildString(blockHash)}")
 
                      override def listTips =
                        ???
                    },
+                   synchronizer = synchronizer,
+                   downloadManager = downloadManager,
                    // Not testing the genesis ceremony.
                    genesisApprover = new GenesisApprover[F] {
                      override def getCandidate = ???
@@ -531,7 +528,7 @@ object GossipServiceCasperTestNodeFactory {
     ): Iterant[F, consensus.BlockSummary] =
       Iterant
         .liftF(Log[F].info(s"Received request for ancestors of ${request.targetBlockHashes
-          .map(PrettyPrinter.buildString(_))}"))
+          .map(PrettyPrinter.buildString)}"))
         .flatMap { _ =>
           underlying.streamAncestorBlockSummaries(request)
         }

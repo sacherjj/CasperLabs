@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{Error as ApiError, PurseTransferResult, TransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -21,7 +21,7 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::execution::Error::{KeyNotFound, URefNotFound};
+use crate::execution::Error::URefNotFound;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -67,7 +67,7 @@ pub fn instance_and_memory(
 
 /// Turns `key` into a `([u8; 32], AccessRights)` tuple.
 /// Returns None if `key` is not `Key::URef` as it wouldn't have `AccessRights`
-/// associated with it. Helper function for creating `known_urefs` associating
+/// associated with it. Helper function for creating `named_keys` associating
 /// addresses and corresponding `AccessRights`.
 pub fn key_to_tuple(key: Key) -> Option<([u8; 32], Option<AccessRights>)> {
     match key {
@@ -124,7 +124,7 @@ pub fn extract_access_rights_from_keys<I: IntoIterator<Item = Key>>(
 fn sub_call<R: StateReader<Key, Value>>(
     parity_module: Module,
     args: Vec<Vec<u8>>,
-    refs: &mut BTreeMap<String, Key>,
+    named_keys: &mut BTreeMap<String, Key>,
     key: Key,
     current_runtime: &mut Runtime<R>,
     // Unforgable references passed across the call boundary from caller to callee
@@ -137,7 +137,8 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let known_urefs = extract_access_rights_from_keys(refs.values().cloned().chain(extra_urefs));
+    let access_rights =
+        extract_access_rights_from_keys(named_keys.values().cloned().chain(extra_urefs));
 
     let mut runtime = Runtime {
         memory,
@@ -146,8 +147,8 @@ where
         host_buf: Vec::new(),
         context: RuntimeContext::new(
             current_runtime.context.state(),
-            refs,
-            known_urefs,
+            named_keys,
+            access_rights,
             args,
             current_runtime.context.authorization_keys().clone(),
             &current_runtime.context.account(),
@@ -179,7 +180,7 @@ where
                         //insert extra urefs returned from call
                         let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
-                        current_runtime.context.add_urefs(ret_urefs_map);
+                        current_runtime.context.access_rights_extend(ret_urefs_map);
                         return Ok(runtime.result);
                     }
                     Error::Revert(status) => {
@@ -298,38 +299,42 @@ where
     /// Load the i-th argument invoked as part of a `sub_call` into
     /// the runtime buffer so that a subsequent `get_arg` can return it
     /// to the caller.
-    pub fn load_arg(&mut self, i: usize) -> Result<usize, Trap> {
-        if i < self.context.args().len() {
-            self.host_buf = self.context.args()[i].clone();
-            Ok(self.host_buf.len())
-        } else {
-            Err(Error::ArgIndexOutOfBounds(i).into())
+    pub fn load_arg(&mut self, i: usize) -> isize {
+        match self.context.args().get(i) {
+            Some(arg) => {
+                self.host_buf = arg.clone();
+                self.host_buf.len() as isize
+            }
+            None => {
+                self.host_buf.clear();
+                -1
+            }
         }
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
+    pub fn get_key(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         // Take an optional uref, and pass its serialized value as is.
         // This makes it easy to deserialize optional value on the other
         // side without failing the execution when the value does not exist.
-        let uref = self.context.get_uref(&name).cloned();
+        let uref = self.context.named_keys_get(&name).cloned();
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
         self.host_buf = uref_bytes;
         Ok(self.host_buf.len())
     }
 
-    pub fn has_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
+    pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        if self.context.contains_uref(&name) {
+        if self.context.named_keys_contains_key(&name) {
             Ok(0)
         } else {
             Ok(1)
         }
     }
 
-    pub fn add_uref(
+    pub fn put_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
@@ -338,20 +343,20 @@ where
     ) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
-        self.context.add_uref(name, key).map_err(Into::into)
+        self.context.put_key(name, key).map_err(Into::into)
     }
 
     /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
     /// for the contract to read.
-    pub fn list_known_urefs(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+    pub fn list_named_keys(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         self.memory
             .set(dest_ptr, &self.host_buf)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    fn remove_uref(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
+    fn remove_key(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        self.context.remove_uref(&name)?;
+        self.context.remove_key(&name)?;
         Ok(())
     }
 
@@ -442,7 +447,7 @@ where
                         Ok((
                             args,
                             module,
-                            contract.urefs_lookup().clone(),
+                            contract.named_keys().clone(),
                             contract.protocol_version(),
                         ))
                     } else {
@@ -475,10 +480,10 @@ where
         Ok(self.host_buf.len())
     }
 
-    fn serialize_known_urefs(&mut self) -> Result<usize, Trap> {
+    fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
         let bytes: Vec<u8> = self
             .context
-            .list_known_urefs()
+            .named_keys()
             .to_bytes()
             .map_err(Error::BytesRepr)?;
         let length = bytes.len();
@@ -512,7 +517,7 @@ where
     }
 
     /// Generates new unforgable reference and adds it to the context's
-    /// known_uref set.
+    /// access_rights set.
     pub fn new_uref(&mut self, key_ptr: u32, value_ptr: u32, value_size: u32) -> Result<(), Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?; // read initial value from memory
         let key = self.context.new_uref(value)?;
@@ -677,40 +682,26 @@ where
         }
     }
 
-    /// looks up the public mint contract key in the caller's [uref_lookup] map.
-    fn get_mint_contract_public_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.get_uref(MINT_NAME) {
+    /// looks up the public mint contract key in the caller's `named_keys` map.
+    fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.named_keys_get(MINT_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(MINT_NAME))),
         }
     }
 
-    fn get_pos_contract_public_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.get_uref(POS_NAME) {
+    fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
+        match self.context.named_keys_get(POS_NAME) {
             Some(key @ Key::URef(_)) => Ok(*key),
             _ => Err(URefNotFound(String::from(POS_NAME))),
         }
     }
 
-    /// looks up the public mint contract key in the caller's [uref_lookup] map
-    /// and then gets the "internal" mint contract uref stored under the
-    /// public mint contract key.
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_mint_key = self.get_mint_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_mint_key)? {
-            Some(Value::Key(Key::URef(uref))) => URef::new(uref.addr(), AccessRights::READ),
-            _ => return Err(KeyNotFound(public_mint_key)),
-        };
-        Ok(internal_mint_uref)
-    }
-
-    fn get_pos_contract_uref(&mut self) -> Result<URef, Error> {
-        let public_pos_key = self.get_pos_contract_public_uref_key()?;
-        let internal_mint_uref = match self.context.read_gs(&public_pos_key)? {
-            Some(Value::Key(Key::URef(uref))) => uref,
-            _ => return Err(KeyNotFound(public_pos_key)),
-        };
-        Ok(internal_mint_uref)
+        let key = self.get_mint_contract_uref_key()?;
+        // unwrap is safe here because get_mint_contract_uref_key checks that the key is a URef
+        let reference = *key.as_uref().unwrap();
+        Ok(reference)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -773,9 +764,7 @@ where
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_uref = self.get_mint_contract_uref()?;
-        let pos_contract_uref = self.get_pos_contract_uref()?;
         let mint_contract_key = Key::URef(mint_contract_uref);
-        let pos_contract_key = Key::URef(pos_contract_uref);
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -793,17 +782,9 @@ where
 
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
-                let known_urefs = vec![
-                    (
-                        String::from(MINT_NAME),
-                        self.get_mint_contract_public_uref_key()?,
-                    ),
-                    (
-                        String::from(POS_NAME),
-                        self.get_pos_contract_public_uref_key()?,
-                    ),
-                    (pos_contract_uref.as_string(), pos_contract_key),
-                    (mint_contract_uref.as_string(), mint_contract_key),
+                let named_keys = vec![
+                    (String::from(MINT_NAME), self.get_mint_contract_uref_key()?),
+                    (String::from(POS_NAME), self.get_pos_contract_uref_key()?),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -814,7 +795,7 @@ where
                     }
                 })
                 .collect();
-                let account = Account::create(target_addr, known_urefs, target_purse_id);
+                let account = Account::create(target_addr, named_keys, target_purse_id);
                 self.context.write_account(target_key, account)?;
                 Ok(TransferResult::TransferredToNewAccount)
             }
@@ -935,5 +916,33 @@ where
         };
 
         Ok(ret)
+    }
+
+    /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
+    /// and writes them at the provided uref, overwriting existing value if any
+    pub fn upgrade_contract_at_uref(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        key_ptr: u32,
+        key_size: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let named_keys = match self.context.read_gs(&key)? {
+            None => Err(Error::KeyNotFound(key)),
+            Some(Value::Contract(contract)) => Ok(contract.named_keys().clone()),
+            Some(_) => Err(Error::FunctionNotFound(format!(
+                "Value at {:?} is not a contract",
+                key
+            ))),
+        }?;
+        let bytes = self.get_function_by_name(name_ptr, name_size)?;
+        match self
+            .context
+            .upgrade_contract_at_uref(key, bytes, named_keys)
+        {
+            Ok(_) => Ok(Ok(())),
+            Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
+        }
     }
 }

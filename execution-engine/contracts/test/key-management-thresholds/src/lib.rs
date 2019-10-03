@@ -8,7 +8,7 @@ use alloc::string::String;
 
 use contract_ffi::contract_api::{
     add_associated_key, get_arg, remove_associated_key, revert, set_action_threshold,
-    update_associated_key,
+    update_associated_key, Error,
 };
 use contract_ffi::value::account::{
     ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
@@ -17,7 +17,11 @@ use contract_ffi::value::account::{
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let stage: String = get_arg(0);
+    let stage: String = match get_arg(0) {
+        Some(Ok(data)) => data,
+        Some(Err(_)) => revert(Error::InvalidArgument.into()),
+        None => revert(Error::MissingArgument.into()),
+    };
     if stage == "init" {
         // executed with weight >= 1
         add_associated_key(PublicKey::new([42; 32]), Weight::new(100))

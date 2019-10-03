@@ -33,7 +33,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "casperlabs-contract-ffi"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -373,7 +373,7 @@ dependencies = [
 name = "test_args"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.14.0",
+ "casperlabs-contract-ffi 0.15.0",
 ]
 
 [[package]]

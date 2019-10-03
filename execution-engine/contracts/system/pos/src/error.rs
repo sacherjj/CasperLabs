@@ -17,6 +17,8 @@ pub enum Error {
     UnbondTooLarge,
     BondTransferFailed,
     UnbondTransferFailed,
+    MissingArgument,
+    InvalidArgument,
     // System errors
     TimeWentBackwards,
     StakesNotFound,
@@ -57,6 +59,8 @@ impl Into<u32> for Error {
             Error::BondTransferFailed => 7,
             Error::UnbondTransferFailed => 8,
             Error::BondTooSmall => 9,
+            Error::MissingArgument => 100,
+            Error::InvalidArgument => 101,
             // System errors
             Error::TimeWentBackwards => 256, // 0x100
             Error::StakesNotFound => 257,

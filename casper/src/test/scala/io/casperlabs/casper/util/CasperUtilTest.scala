@@ -2,20 +2,22 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.consensus.{Block, Bond}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.storage.dag._
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
-class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   implicit val logEff                  = new LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
@@ -35,9 +37,9 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   "isInMainChain and votedBranch" should "classify appropriately when using the same block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       for {
-        b      <- createBlock[Task](Seq())
+        b      <- createAndStoreBlock[Task](Seq())
         dag    <- dagStorage.getRepresentation
         _      <- isInMainChain(dag, b.blockHash, b.blockHash) shouldBeF true
         result <- votedBranch(dag, b.blockHash, b.blockHash) shouldBeF None
@@ -45,8 +47,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify appropriately" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /**
           * The DAG looks like:
           *
@@ -58,9 +60,9 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
           *
           */
         for {
-          genesis <- createBlock[Task](Seq())
-          b2      <- createBlock[Task](Seq(genesis.blockHash))
-          b3      <- createBlock[Task](Seq(b2.blockHash))
+          genesis <- createAndStoreBlock[Task](Seq())
+          b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b3      <- createAndStoreBlock[Task](Seq(b2.blockHash))
 
           implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -74,8 +76,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify diamond DAGs appropriately" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /**
           * The dag looks like:
           *
@@ -86,10 +88,10 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
           *          genesis
           */
         for {
-          genesis <- createBlock[Task](Seq())
-          b2      <- createBlock[Task](Seq(genesis.blockHash))
-          b3      <- createBlock[Task](Seq(genesis.blockHash))
-          b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash))
+          genesis <- createAndStoreBlock[Task](Seq())
+          b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b3      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b4      <- createAndStoreBlock[Task](Seq(b2.blockHash, b3.blockHash))
 
           implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -102,7 +104,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
   }
 
   it should "classify complicated chains appropriately" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v1 = generateValidator("V1")
       val v2 = generateValidator("V2")
 
@@ -124,14 +126,14 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
         *
         */
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b2      <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3      <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b4      <- createBlock[Task](Seq(b2.blockHash), v2)
-        b5      <- createBlock[Task](Seq(b2.blockHash), v1)
-        b6      <- createBlock[Task](Seq(b4.blockHash), v2)
-        b7      <- createBlock[Task](Seq(b4.blockHash), v1)
-        b8      <- createBlock[Task](Seq(b7.blockHash), v1)
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        b3      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b4      <- createAndStoreBlock[Task](Seq(b2.blockHash), v2)
+        b5      <- createAndStoreBlock[Task](Seq(b2.blockHash), v1)
+        b6      <- createAndStoreBlock[Task](Seq(b4.blockHash), v2)
+        b7      <- createAndStoreBlock[Task](Seq(b4.blockHash), v1)
+        b8      <- createAndStoreBlock[Task](Seq(b7.blockHash), v1)
 
         implicit0(dag: DagRepresentation[Task]) <- dagStorage.getRepresentation
 
@@ -154,94 +156,76 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
       } yield result
   }
 
+  // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
   "panoramaDagLevelsOfBlock" should "properly return the panorama of message B" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      val v0 = generateValidator("V0")
-      val v1 = generateValidator("V1")
-
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0         = generateValidator("V0")
+      val v1         = generateValidator("V1")
       val v2         = generateValidator("V2")
       val v3         = generateValidator("V3")
-      val validators = List(v0, v1, v2, v3)
+      val v4         = generateValidator("V4")
+      val validators = List(v0, v1, v2, v3, v4)
 
       val bonds = validators.map(v => Bond(v, 1))
 
-      /* The DAG looks like (|| means main parent)
-       *
-       *        v0  v1    v2  v3
-       *
-       *                  b7
-       *                  ||
-       *                  b6
-       *                //   \
-       *             //       b5
-       *          //   /----/ ||
-       *        b4  b3        ||
-       *        || //         ||
-       *        b1            b2
-       *         \\         //
-       *            genesis
-       *
-       */
       for {
-        genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
-        b1 <- createBlock[Task](
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v0,
                bonds,
                Map(v0 -> genesis.blockHash)
              )
-        b2 <- createBlock[Task](
+        b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v3,
                bonds,
                Map(v3 -> genesis.blockHash)
              )
-        b3 <- createBlock[Task](
+        b3 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v1,
                bonds,
                Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
              )
-        b4 <- createBlock[Task](
+        b4 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v0,
                bonds,
                Map(v0 -> b1.blockHash)
              )
-        // b5 vote for b2 instead of b1
-        b5 <- createBlock[Task](
+        // b5 votes for b2 instead of b1
+        b5 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
                Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
              )
-        b6 <- createBlock[Task](
+        b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
                Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
              )
-        b7 <- createBlock[Task](
+        b7 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
                v2,
                bonds,
                Map(v2 -> b6.blockHash)
              )
-        dag <- blockDagStorage.getRepresentation
-        // An extra new validator who hasn't proposed any block
-        v4 = generateValidator("V4")
+        dag <- dagStorage.getRepresentation
 
         panoramaDagLevel <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                              dag,
-                             BlockMetadata.fromBlock(genesis),
-                             validators.toSet + v4
+                             Message.fromBlock(genesis).get,
+                             validators.toSet
                            )
         _ = panoramaDagLevel shouldEqual Map()
 
         panoramaDagLevel1 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b1),
-                              validators.toSet + v4
+                              Message.fromBlock(b1).get,
+                              validators.toSet
                             )
         _ = panoramaDagLevel1 shouldEqual Map(
           v0 -> b1.getHeader.rank
@@ -249,8 +233,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel2 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b3),
-                              validators.toSet + v4
+                              Message.fromBlock(b3).get,
+                              validators.toSet
                             )
         _ = panoramaDagLevel2 shouldEqual Map(
           v0 -> b1.getHeader.rank,
@@ -259,8 +243,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel3 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b5),
-                              validators.toSet + v4
+                              Message.fromBlock(b5).get,
+                              validators.toSet
                             )
         _ = panoramaDagLevel3 shouldEqual Map(
           v0 -> b1.getHeader.rank,
@@ -270,8 +254,8 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel4 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b6),
-                              validators.toSet + v4
+                              Message.fromBlock(b6).get,
+                              validators.toSet
                             )
         _ = panoramaDagLevel4 shouldEqual Map(
           v0 -> b4.getHeader.rank,
@@ -282,14 +266,92 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Dag
 
         panoramaDagLevel5 <- FinalityDetectorUtil.panoramaDagLevelsOfBlock(
                               dag,
-                              BlockMetadata.fromBlock(b7),
-                              validators.toSet + v4
+                              Message.fromBlock(b7).get,
+                              validators.toSet
                             )
         _ = panoramaDagLevel5 shouldEqual Map(
           v0 -> b4.getHeader.rank,
           v1 -> b3.getHeader.rank,
           v2 -> b7.getHeader.rank,
           v3 -> b5.getHeader.rank
+        )
+      } yield ()
+  }
+
+  // See [[casper/src/test/resources/casper/panoramaForEquivocatorSwimlaneIsEmpty.png]]
+  "panoramaM" should "properly return the panorama of message B, and when V(j)-swimlane is empty or V(j) happens to be an equivocator, puts 0 in the corresponding cell." in withStorage {
+    implicit blockStorage => implicit blockDagStorage => _ =>
+      val v0                = generateValidator("V0")
+      val v1                = generateValidator("V1")
+      val v2                = generateValidator("V2")
+      val v3                = generateValidator("V3")
+      val v4                = generateValidator("V4")
+      val validators        = List(v0, v1, v2, v3, v4)
+      val validatorsToIndex = validators.zipWithIndex.toMap
+
+      val bonds = validators.map(v => Bond(v, 1))
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        b1 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v0,
+               bonds,
+               Map(v0 -> genesis.blockHash)
+             )
+        b2 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v3,
+               bonds,
+               Map(v3 -> genesis.blockHash)
+             )
+        b3 <- createAndStoreBlock[Task](
+               Seq(b1.blockHash),
+               v1,
+               bonds,
+               Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
+             )
+        b4 <- createAndStoreBlock[Task](
+               Seq(b1.blockHash),
+               v0,
+               bonds,
+               Map(v0 -> b1.blockHash)
+             )
+        // b5 votes for b2 instead of b1
+        b5 <- createAndStoreBlock[Task](
+               Seq(b2.blockHash),
+               v3,
+               bonds,
+               Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
+             )
+        b6 <- createAndStoreBlock[Task](
+               Seq(b4.blockHash),
+               v2,
+               bonds,
+               Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
+             )
+        b7 <- createAndStoreBlock[Task](
+               Seq(b6.blockHash),
+               v2,
+               bonds,
+               Map(v2 -> b6.blockHash)
+             )
+        dag <- blockDagStorage.getRepresentation
+        // Assume we know that v1 equivocated
+        equivocationsTracker = EquivocationsTracker.empty.updated(v1, 0)
+        panoramaM <- FinalityDetectorUtil.panoramaM(
+                      dag,
+                      validatorsToIndex,
+                      Message.fromBlock(b7).get,
+                      equivocationsTracker
+                    )
+        _ = panoramaM.size shouldBe (validatorsToIndex.size)
+        _ = panoramaM shouldBe IndexedSeq(
+          b4.getHeader.rank,
+          0, // V(1) happens to be an equivocator
+          b7.getHeader.rank,
+          b5.getHeader.rank,
+          0 // V(4)-swimlane is empty
         )
       } yield ()
   }
