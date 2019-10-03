@@ -990,7 +990,7 @@ class ValidationTest
         _ <- deployStorage.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
-                              deploys.map(_.deployHash).toSet,
+                              fs2.Stream.fromIterator[Task, Deploy](deploys.toIterator),
                               System.currentTimeMillis,
                               ProtocolVersion(1)
                             )

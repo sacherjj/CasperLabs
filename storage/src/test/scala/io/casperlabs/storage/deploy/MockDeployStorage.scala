@@ -154,6 +154,18 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def readPendingHashes: F[List[ByteString]] = readPending.map(_.map(_.deployHash))
 
+  override def readPendingHeaders: F[List[Deploy.Header]] = readPending.map(_.map(_.getHeader))
+
+  override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+    fs2.Stream
+      .eval(
+        for {
+          hashes  <- readPendingHashes
+          headers <- readPendingHeaders
+        } yield hashes.zip(headers)
+      )
+      .flatMap(result => fs2.Stream.fromIterator(result.toIterator))
+
   override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = {
     val deploys =
       (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => l.contains(d.deployHash)))

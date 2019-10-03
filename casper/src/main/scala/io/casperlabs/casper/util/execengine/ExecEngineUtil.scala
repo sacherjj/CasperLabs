@@ -40,13 +40,12 @@ object ExecEngineUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
-      hashes: Set[DeployHash],
+      deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion
   ): F[DeploysCheckpoint] =
     for {
       preStateHash <- computePrestate[F](merged)
-      deployStream = DeployStorage[F].getByHashes(hashes)
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )

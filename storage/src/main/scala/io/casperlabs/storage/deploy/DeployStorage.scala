@@ -76,6 +76,10 @@ import scala.concurrent.duration._
 
   def readPendingHashes: F[List[ByteString]]
 
+  def readPendingHeaders: F[List[Deploy.Header]]
+
+  def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)]
+
   def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
@@ -134,6 +138,12 @@ object DeployStorage {
 
     override def readPendingHashes: F[List[BlockHash]] =
       reader.readPendingHashes
+
+    override def readPendingHeaders: F[List[Deploy.Header]] =
+      reader.readPendingHeaders
+
+    override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+      reader.readPendingHashesAndHeaders
 
     override def getPendingOrProcessed(hash: BlockHash): F[Option[Deploy]] =
       reader.getPendingOrProcessed(hash)

@@ -9,6 +9,7 @@ import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.helper._
+import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -142,7 +143,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
   def deploysFromString(start: Long, strs: List[String]): List[Deploy] =
     strs.zipWithIndex.map(
-      s => ProtoUtil.basicDeploy(start + s._2, ByteString.copyFromUtf8(s._1))
+      s =>
+        ProtoUtil.basicDeploy(
+          0,
+          ByteString.copyFromUtf8((start + s._2).toString),
+          ByteString.copyFromUtf8(s._1)
+        )
     )
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
@@ -582,8 +588,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       private val accountPk = ProtoUtil.randomAccountAddress()
       def apply(): Deploy = synchronized {
         ProtoUtil.basicDeploy(
-          System.currentTimeMillis(),
-          ByteString.copyFromUtf8("A"),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           accountPk
         )
       }
@@ -593,8 +599,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       private val accountPk = ProtoUtil.randomAccountAddress()
       def apply(): Deploy = synchronized {
         ProtoUtil.basicDeploy(
-          System.currentTimeMillis(),
-          ByteString.copyFromUtf8("B"),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           accountPk
         )
       }
@@ -1032,7 +1038,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
                   Some(HashSetCasperTestNode.simpleEEApi[Task](_, generateConflict = true))
               )
 
-      deployA          <- ProtoUtil.basicDeploy[Task]()
+      sessionCode = ByteString.copyFromUtf8("Do the thing")
+      deployA     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("A"))
+      deployB     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("B"))
+
       _                <- nodes(0).casperEff.deploy(deployA)
       createA          <- nodes(0).casperEff.createBlock
       Created(blockA)  = createA
@@ -1040,7 +1049,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       processedDeploys <- nodes(0).deployStorage.readProcessed
       _                = processedDeploys should contain(deployA)
 
-      deployB         <- ProtoUtil.basicDeploy[Task]()
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
@@ -1049,6 +1057,48 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       pendingDeploys <- nodes(0).deployStorage.readPending
       _              = pendingDeploys should contain(deployA)
       _              <- nodes.map(_.tearDown()).toList.sequence
+    } yield ()
+  }
+
+  it should "not execute deploys until dependencies are met" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    for {
+      deploy1         <- ProtoUtil.basicDeploy[Task]()
+      deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withDependencies(Seq(deploy1.deployHash)))
+      _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
+      _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
+      Created(block1) <- node.casperEff.createBlock
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      Created(block2) <- node.casperEff.createBlock
+      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
+      _               = block2.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy2)
+      _               <- node.tearDown()
+    } yield ()
+  }
+
+  it should "only execute deploys during the appropriate time window" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    val minTTL = 60 * 60 * 1000
+    for {
+      deploy1         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(3L).withTtl(minTTL))
+      deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(5L).withTtl(minTTL))
+      _               <- node.casperEff.deploy(deploy1) shouldBeF Right(()) // gets deploy1
+      _               <- node.casperEff.deploy(deploy2) shouldBeF Right(()) // gets deploy2
+      _               <- Task.delay { node.timeEff.clock = 0 }
+      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
+      _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // too early to execute deploy, since t = 1
+      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
+      _               <- Task.delay { node.timeEff.clock = 3 }
+      Created(block1) <- node.casperEff.createBlock //now we can execute deploy1, but not deploy2
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
+      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy2)
+      _               <- Task.delay { node.timeEff.clock = minTTL.toLong + 10L }
+      _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // now it is too late to execute deploy2
+      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set.empty[Deploy]
+      _               <- node.tearDown()
     } yield ()
   }
 
