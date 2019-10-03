@@ -21,7 +21,7 @@ from docker.client import DockerClient
 
 
 @pytest.fixture(scope="function")
-def deleting_temp_dir():
+def temp_dir():
     directory = make_tempdir(random_string(6))
     yield directory
     shutil.rmtree(directory)

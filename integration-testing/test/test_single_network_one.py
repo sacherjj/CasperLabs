@@ -673,7 +673,7 @@ def test_cli_scala_help(scala_cli):
     assert 'Subcommand: make-deploy' in output
 
 
-def test_cli_scala_extended_deploy(scala_cli, deleting_temp_dir):
+def test_cli_scala_extended_deploy(scala_cli, temp_dir):
     cli = scala_cli
     account = GENESIS_ACCOUNT
 
@@ -681,8 +681,8 @@ def test_cli_scala_extended_deploy(scala_cli, deleting_temp_dir):
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
 
-    unsigned_deploy_path = f'{deleting_temp_dir}/unsigned.deploy'
-    signed_deploy_path = f'{deleting_temp_dir}/signed.deploy'
+    unsigned_deploy_path = f'{temp_dir}/unsigned.deploy'
+    signed_deploy_path = f'{temp_dir}/signed.deploy'
 
     cli('make-deploy',
         '-o', unsigned_deploy_path,
@@ -703,8 +703,9 @@ def test_cli_scala_extended_deploy(scala_cli, deleting_temp_dir):
     assert not deploy_info.processing_results[0].is_error
 
     # Test that replay attacks fail
-    with pytest.raises(NonZeroExitCodeError):
+    with pytest.raises(NonZeroExitCodeError) as excinfo:
         _ = cli('send-deploy', '-i', signed_deploy_path)
+    assert "supersedes Deploy" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
