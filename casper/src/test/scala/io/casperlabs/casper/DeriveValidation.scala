@@ -4,6 +4,7 @@ import cats.MonadError
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.shared.{Log, Time}
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 
 object DeriveValidation {
   implicit def deriveValidationImpl[F[_]](

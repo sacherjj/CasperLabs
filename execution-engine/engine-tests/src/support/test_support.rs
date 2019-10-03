@@ -21,8 +21,11 @@ use engine_core::engine_state::utils::WasmiBytes;
 use engine_core::engine_state::{EngineConfig, EngineState, MAX_PAYMENT, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
 use engine_grpc_server::engine_server::ipc::{
-    CommitRequest, Deploy, DeployCode, DeployResult, DeployResult_ExecutionResult,
-    DeployResult_PreconditionFailure, ExecRequest, ExecResponse, GenesisResponse, QueryRequest,
+    ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
+    CommitRequest, DeployCode, DeployItem, DeployPayload, DeployResult,
+    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
+    StoredContractURef, UpgradeRequest, UpgradeResponse,
 };
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
@@ -39,6 +42,8 @@ use engine_storage::global_state::StateProvider;
 use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
 use engine_storage::transaction_source::lmdb::LmdbEnvironment;
 use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_wasm_prep::wasm_costs::WasmCosts;
+use protobuf::RepeatedField;
 use transforms::TransformEntry;
 
 use crate::test::{
@@ -59,17 +64,17 @@ const DEFAULT_LMDB_PAGES: usize = 2560;
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
 
-pub struct DeployBuilder {
-    deploy: Deploy,
+pub struct DeployItemBuilder {
+    deploy_item: DeployItem,
 }
 
-impl DeployBuilder {
+impl DeployItemBuilder {
     pub fn new() -> Self {
         Default::default()
     }
 
     pub fn with_address(mut self, address: [u8; 32]) -> Self {
-        self.deploy.set_address(address.to_vec());
+        self.deploy_item.set_address(address.to_vec());
         self
     }
 
@@ -79,10 +84,54 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut payment = DeployCode::new();
-        payment.set_code(wasm_bytes);
-        payment.set_args(args);
-        self.deploy.set_payment(payment);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_args(args);
+        deploy_code.set_code(wasm_bytes);
+        let mut payment = DeployPayload::new();
+        payment.set_deploy_code(deploy_code);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_hash(item);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
+        self.deploy_item.set_payment(payment);
+        self
+    }
+
+    pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_name(item);
+        self.deploy_item.set_payment(payment);
         self
     }
 
@@ -92,10 +141,54 @@ impl DeployBuilder {
             .parse()
             .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
             .expect("should serialize args");
-        let mut session = DeployCode::new();
-        session.set_code(wasm_bytes);
-        session.set_args(args);
-        self.deploy.set_session(session);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(wasm_bytes);
+        deploy_code.set_args(args);
+        let mut session = DeployPayload::new();
+        session.set_deploy_code(deploy_code);
+        self.deploy_item.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractHash = StoredContractHash::new();
+        item.set_args(args);
+        item.set_hash(hash);
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_hash(item);
+        self.deploy_item.set_session(session);
+        self
+    }
+
+    pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item: StoredContractURef = StoredContractURef::new();
+        item.set_args(args);
+        item.set_uref(uref.addr().to_vec());
+        let mut payment = DeployPayload::new();
+        payment.set_stored_contract_uref(item);
+        self.deploy_item.set_session(payment);
+        self
+    }
+
+    pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+        let args = args
+            .parse()
+            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
+            .expect("should serialize args");
+        let mut item = StoredContractName::new();
+        item.set_args(args);
+        item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
+        let mut session = DeployPayload::new();
+        session.set_stored_contract_name(item);
+        self.deploy_item.set_session(session);
         self
     }
 
@@ -104,79 +197,75 @@ impl DeployBuilder {
             .iter()
             .map(|public_key| public_key.value().to_vec())
             .collect();
-        self.deploy.set_authorization_keys(authorization_keys);
+        self.deploy_item.set_authorization_keys(authorization_keys);
         self
     }
 
     pub fn with_deploy_hash(mut self, hash: [u8; 32]) -> Self {
-        self.deploy.set_deploy_hash(hash.to_vec());
+        self.deploy_item.set_deploy_hash(hash.to_vec());
         self
     }
 
-    pub fn build(self) -> Deploy {
-        self.deploy
+    pub fn build(self) -> DeployItem {
+        self.deploy_item
     }
 }
 
-impl Default for DeployBuilder {
+impl Default for DeployItemBuilder {
     fn default() -> Self {
-        let mut deploy = Deploy::new();
-        deploy.set_gas_price(1);
-        DeployBuilder { deploy }
+        let mut deploy_item = DeployItem::new();
+        deploy_item.set_gas_price(1);
+        DeployItemBuilder { deploy_item }
     }
 }
 
-pub struct ExecRequestBuilder {
-    deploys: Vec<Deploy>,
-    exec_request: ExecRequest,
+pub struct ExecuteRequestBuilder {
+    deploy_items: Vec<DeployItem>,
+    execute_request: ExecuteRequest,
 }
 
-impl ExecRequestBuilder {
+impl ExecuteRequestBuilder {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn push_deploy(mut self, deploy: Deploy) -> Self {
-        self.deploys.push(deploy);
+    pub fn push_deploy(mut self, deploy: DeployItem) -> Self {
+        self.deploy_items.push(deploy);
         self
     }
 
     pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
-        self.exec_request
+        self.execute_request
             .set_parent_state_hash(pre_state_hash.to_vec());
         self
     }
 
     pub fn with_block_time(mut self, block_time: u64) -> Self {
-        self.exec_request.set_block_time(block_time);
+        self.execute_request.set_block_time(block_time);
         self
     }
 
     pub fn with_protocol_version(mut self, version: u64) -> Self {
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(version);
-        self.exec_request.set_protocol_version(protocol_version);
+        self.execute_request.set_protocol_version(protocol_version);
         self
     }
 
-    pub fn build(mut self) -> ExecRequest {
-        let mut deploys: protobuf::RepeatedField<Deploy> = <protobuf::RepeatedField<Deploy>>::new();
-        for deploy in self.deploys {
+    pub fn build(mut self) -> ExecuteRequest {
+        let mut deploys = RepeatedField::<DeployItem>::new();
+        for deploy in self.deploy_items {
             deploys.push(deploy);
         }
-        self.exec_request.set_deploys(deploys);
-        self.exec_request
+        self.execute_request.set_deploys(deploys);
+        self.execute_request
     }
 
-    pub fn standard(
-        addr: [u8; 32],
-        session_file: &str,
-        session_args: impl ArgsParser,
-    ) -> ExecRequest {
+    pub fn standard(addr: [u8; 32], session_file: &str, session_args: impl ArgsParser) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(addr)
             .with_session_code(session_file, session_args)
             .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
@@ -184,21 +273,123 @@ impl ExecRequestBuilder {
             .with_deploy_hash(deploy_hash)
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy)
     }
 }
 
-impl Default for ExecRequestBuilder {
+impl Default for ExecuteRequestBuilder {
     fn default() -> Self {
-        let deploys = vec![];
-        let mut exec_request = ExecRequest::new();
-        exec_request.set_block_time(DEFAULT_BLOCK_TIME);
+        let deploy_items = vec![];
+        let mut execute_request = ExecuteRequest::new();
+        execute_request.set_block_time(DEFAULT_BLOCK_TIME);
         let mut protocol_version = ProtocolVersion::new();
         protocol_version.set_value(1);
-        exec_request.set_protocol_version(protocol_version);
-        ExecRequestBuilder {
-            deploys,
-            exec_request,
+        execute_request.set_protocol_version(protocol_version);
+        ExecuteRequestBuilder {
+            deploy_items,
+            execute_request,
+        }
+    }
+}
+
+pub struct UpgradeRequestBuilder {
+    pre_state_hash: Vec<u8>,
+    current_protocol_version: ProtocolVersion,
+    new_protocol_version: ProtocolVersion,
+    upgrade_installer: DeployCode,
+    new_costs: Option<ChainSpec_CostTable_WasmCosts>,
+    activation_point: ChainSpec_ActivationPoint,
+}
+
+impl UpgradeRequestBuilder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_pre_state_hash(mut self, pre_state_hash: &[u8]) -> Self {
+        self.pre_state_hash = pre_state_hash.to_vec();
+        self
+    }
+
+    pub fn with_current_protocol_version(mut self, protocol_version: u64) -> Self {
+        self.current_protocol_version = {
+            let mut ret = ProtocolVersion::new();
+            ret.set_value(protocol_version);
+            ret
+        };
+        self
+    }
+
+    pub fn with_new_protocol_version(mut self, protocol_version: u64) -> Self {
+        self.new_protocol_version = {
+            let mut ret = ProtocolVersion::new();
+            ret.set_value(protocol_version);
+            ret
+        };
+        self
+    }
+
+    pub fn with_installer_code(mut self, upgrade_installer: DeployCode) -> Self {
+        self.upgrade_installer = upgrade_installer;
+        self
+    }
+
+    pub fn with_new_costs(mut self, wasm_costs: WasmCosts) -> Self {
+        let mut new_costs = ChainSpec_CostTable_WasmCosts::new();
+        new_costs.set_regular(wasm_costs.regular);
+        new_costs.set_opcodes_mul(wasm_costs.opcodes_mul);
+        new_costs.set_opcodes_div(wasm_costs.opcodes_div);
+        new_costs.set_mul(wasm_costs.mul);
+        new_costs.set_div(wasm_costs.div);
+        new_costs.set_grow_mem(wasm_costs.grow_mem);
+        new_costs.set_initial_mem(wasm_costs.initial_mem);
+        new_costs.set_max_stack_height(wasm_costs.max_stack_height);
+        new_costs.set_mem(wasm_costs.mem);
+        new_costs.set_memcpy(wasm_costs.memcpy);
+        self.new_costs = Some(new_costs);
+        self
+    }
+
+    pub fn with_activation_point(mut self, rank: u64) -> Self {
+        self.activation_point = {
+            let mut ret = ChainSpec_ActivationPoint::new();
+            ret.set_rank(rank);
+            ret
+        };
+        self
+    }
+
+    pub fn build(self) -> UpgradeRequest {
+        let mut upgrade_point = ChainSpec_UpgradePoint::new();
+        upgrade_point.set_activation_point(self.activation_point);
+        match self.new_costs {
+            None => {}
+            Some(new_costs) => {
+                let mut cost_table =
+                    engine_grpc_server::engine_server::ipc::ChainSpec_CostTable::new();
+                cost_table.set_wasm(new_costs);
+                upgrade_point.set_new_costs(cost_table);
+            }
+        }
+        upgrade_point.set_protocol_version(self.new_protocol_version);
+        upgrade_point.set_upgrade_installer(self.upgrade_installer);
+
+        let mut upgrade_request = UpgradeRequest::new();
+        upgrade_request.set_protocol_version(self.current_protocol_version);
+        upgrade_request.set_upgrade_point(upgrade_point);
+        upgrade_request
+    }
+}
+
+impl Default for UpgradeRequestBuilder {
+    fn default() -> Self {
+        UpgradeRequestBuilder {
+            pre_state_hash: Default::default(),
+            current_protocol_version: Default::default(),
+            new_protocol_version: Default::default(),
+            upgrade_installer: Default::default(),
+            new_costs: None,
+            activation_point: Default::default(),
         }
     }
 }
@@ -209,13 +400,18 @@ pub fn get_protocol_version() -> ProtocolVersion {
     protocol_version
 }
 
-pub fn get_mock_deploy() -> Deploy {
-    let mut deploy = Deploy::new();
+pub fn get_mock_deploy() -> DeployItem {
+    let mut deploy = DeployItem::new();
     deploy.set_address(MOCKED_ACCOUNT_ADDRESS.to_vec());
     deploy.set_gas_price(1);
-    let mut deploy_code = DeployCode::new();
-    deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
-    deploy.set_session(deploy_code);
+    let deploy_payload = {
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(test_utils::create_empty_wasm_module_bytes());
+        let mut deploy_payload = DeployPayload::new();
+        deploy_payload.set_deploy_code(deploy_code);
+        deploy_payload
+    };
+    deploy.set_session(deploy_payload);
     deploy.set_deploy_hash([1u8; 32].to_vec());
     deploy
 }
@@ -282,8 +478,8 @@ pub fn create_exec_request(
     block_time: u64,
     deploy_hash: [u8; 32],
     authorized_keys: Vec<PublicKey>,
-) -> ExecRequest {
-    let deploy = DeployBuilder::new()
+) -> ExecuteRequest {
+    let deploy = DeployItemBuilder::new()
         .with_session_code(session_file, session_args)
         .with_payment_code(payment_file, payment_args)
         .with_address(address)
@@ -291,7 +487,7 @@ pub fn create_exec_request(
         .with_deploy_hash(deploy_hash)
         .build();
 
-    ExecRequestBuilder::new()
+    ExecuteRequestBuilder::new()
         .with_pre_state_hash(pre_state_hash)
         .with_protocol_version(1)
         .with_block_time(block_time)
@@ -326,7 +522,7 @@ pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key
     commit_transforms.value()
 }
 
-pub fn get_exec_transforms(exec_response: &ExecResponse) -> Vec<HashMap<Key, Transform>> {
+pub fn get_exec_transforms(exec_response: &ExecuteResponse) -> Vec<HashMap<Key, Transform>> {
     let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
 
     deploy_results
@@ -343,7 +539,7 @@ pub fn get_exec_transforms(exec_response: &ExecResponse) -> Vec<HashMap<Key, Tra
         .collect()
 }
 
-pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
+pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
     let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
 
     deploy_results
@@ -412,7 +608,7 @@ pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Optio
     })
 }
 
-pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResult {
+pub fn get_success_result(response: &ExecuteResponse) -> DeployResult_ExecutionResult {
     let result = response.get_success();
 
     result
@@ -423,7 +619,7 @@ pub fn get_success_result(response: &ExecResponse) -> DeployResult_ExecutionResu
         .to_owned()
 }
 
-pub fn get_precondition_failure(response: &ExecResponse) -> DeployResult_PreconditionFailure {
+pub fn get_precondition_failure(response: &ExecuteResponse) -> DeployResult_PreconditionFailure {
     let result = response.get_success();
 
     result
@@ -451,7 +647,8 @@ pub struct WasmTestBuilder<S> {
     /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
     /// EngineState`
     engine_state: Rc<EngineState<S>>,
-    exec_responses: Vec<ExecResponse>,
+    exec_responses: Vec<ExecuteResponse>,
+    upgrade_responses: Vec<UpgradeResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
@@ -477,6 +674,7 @@ impl Default for InMemoryWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
@@ -496,6 +694,7 @@ impl<S> Clone for WasmTestBuilder<S> {
         WasmTestBuilder {
             engine_state: Rc::clone(&self.engine_state),
             exec_responses: self.exec_responses.clone(),
+            upgrade_responses: self.upgrade_responses.clone(),
             genesis_hash: self.genesis_hash.clone(),
             post_state_hash: self.post_state_hash.clone(),
             transforms: self.transforms.clone(),
@@ -554,6 +753,7 @@ impl LmdbWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: None,
             transforms: Vec::new(),
@@ -611,6 +811,7 @@ impl LmdbWasmTestBuilder {
         WasmTestBuilder {
             engine_state: Rc::new(engine_state),
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: None,
             post_state_hash: Some(post_state_hash),
             transforms: Vec::new(),
@@ -634,6 +835,7 @@ where
         WasmTestBuilder {
             engine_state: result.0.engine_state,
             exec_responses: Vec::new(),
+            upgrade_responses: Vec::new(),
             genesis_hash: result.0.genesis_hash,
             post_state_hash: result.0.post_state_hash,
             transforms: Vec::new(),
@@ -676,15 +878,15 @@ where
         let genesis_account =
             get_account(&transforms, &system_account).expect("Unable to get system account");
 
-        let known_keys = genesis_account.urefs_lookup();
+        let named_keys = genesis_account.named_keys();
 
-        let mint_contract_uref = known_keys
+        let mint_contract_uref = named_keys
             .get(MINT_NAME)
             .and_then(Key::as_uref)
             .cloned()
             .expect("Unable to get mint contract URef");
 
-        let pos_contract_uref = known_keys
+        let pos_contract_uref = named_keys
             .get(POS_NAME)
             .and_then(Key::as_uref)
             .cloned()
@@ -726,7 +928,7 @@ where
         }
     }
 
-    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecRequest) -> &mut Self {
+    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {
         let exec_request = {
             let hash = self
                 .post_state_hash
@@ -737,7 +939,7 @@ where
         };
         let exec_response = self
             .engine_state
-            .exec(RequestOptions::new(), exec_request)
+            .execute(RequestOptions::new(), exec_request)
             .wait_drop_metadata()
             .expect("should exec");
         self.exec_responses.push(exec_response.clone());
@@ -883,6 +1085,31 @@ where
         self
     }
 
+    pub fn upgrade_with_upgrade_request(
+        &mut self,
+        upgrade_request: &mut UpgradeRequest,
+    ) -> &mut Self {
+        let upgrade_request = {
+            let hash = self
+                .post_state_hash
+                .clone()
+                .expect("expected post_state_hash");
+            upgrade_request.set_parent_state_hash(hash.to_vec());
+            upgrade_request
+        };
+        let upgrade_response = self
+            .engine_state
+            .upgrade(RequestOptions::new(), upgrade_request.clone())
+            .wait_drop_metadata()
+            .expect("should upgrade");
+
+        let upgrade_success = upgrade_response.get_success();
+        self.post_state_hash = Some(upgrade_success.get_post_state_hash().to_vec());
+
+        self.upgrade_responses.push(upgrade_response.clone());
+        self
+    }
+
     /// Expects a successful run and caches transformations
     pub fn expect_success(&mut self) -> &mut Self {
         // Check first result, as only first result is interesting for a simple test
@@ -972,8 +1199,12 @@ where
         &self.engine_state
     }
 
-    pub fn get_exec_response(&self, index: usize) -> Option<&ExecResponse> {
+    pub fn get_exec_response(&self, index: usize) -> Option<&ExecuteResponse> {
         self.exec_responses.get(index)
+    }
+
+    pub fn get_upgrade_response(&self, index: usize) -> Option<&UpgradeResponse> {
+        self.upgrade_responses.get(index)
     }
 
     pub fn finish(&self) -> WasmTestResult<S> {
@@ -1025,5 +1256,69 @@ where
         } else {
             None
         }
+    }
+
+    pub fn exec_commit_finish(&mut self, execute_request: ExecuteRequest) -> WasmTestResult<S> {
+        self.exec_with_exec_request(execute_request)
+            .expect_success()
+            .commit()
+            .finish()
+    }
+}
+
+/// Represents the difference between two [`HashMap`]s.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Diff {
+    left: HashMap<Key, Transform>,
+    both: HashMap<Key, Transform>,
+    right: HashMap<Key, Transform>,
+}
+
+impl Diff {
+    /// Creates a diff from two [`HashMap`]s.
+    pub fn new(left: HashMap<Key, Transform>, right: HashMap<Key, Transform>) -> Diff {
+        let both = Default::default();
+        let left_clone = left.clone();
+        let mut ret = Diff { left, both, right };
+
+        for key in left_clone.keys() {
+            let l = ret.left.remove_entry(key);
+            let r = ret.right.remove_entry(key);
+
+            match (l, r) {
+                (Some(le), Some(re)) => {
+                    if le == re {
+                        ret.both.insert(*key, re.1);
+                    } else {
+                        ret.left.insert(*key, le.1);
+                        ret.right.insert(*key, re.1);
+                    }
+                }
+                (None, Some(re)) => {
+                    ret.right.insert(*key, re.1);
+                }
+                (Some(le), None) => {
+                    ret.left.insert(*key, le.1);
+                }
+                (None, None) => unreachable!(),
+            }
+        }
+
+        ret
+    }
+
+    /// Returns the entries that are unique to the `left` input.
+    pub fn left(&self) -> &HashMap<Key, Transform> {
+        &self.left
+    }
+
+    /// Returns the entries that are unique to the `right` input.
+    pub fn right(&self) -> &HashMap<Key, Transform> {
+        &self.right
+    }
+
+    /// Returns the entries shared by both inputs.
+    pub fn both(&self) -> &HashMap<Key, Transform> {
+        &self.both
     }
 }

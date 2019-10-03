@@ -18,15 +18,11 @@ import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTr
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtoUtil._
-import io.casperlabs.casper.util.comm.CommUtil
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm.gossiping
-import io.casperlabs.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import io.casperlabs.comm.transport.TransportLayer
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
@@ -55,7 +51,7 @@ final case class CasperState(
     equivocationsTracker: EquivocationsTracker = EquivocationsTracker.empty
 )
 
-class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: deploybuffer.DeployBuffer: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocolVersions](
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -405,7 +401,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
           justifications   = toJustification(bondedLatestMsgs)
           rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
-          protocolVersion  = CasperLabsProtocolVersions.thresholdsVersionMap.versionAt(rank)
+          protocolVersion  <- CasperLabsProtocolVersions[F].versionAt(rank)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
                          parents,
@@ -653,14 +649,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       }
   }
 
-  /** Called periodically from outside to ask all peers again
-    * to send us blocks for which we are missing some dependencies. */
-  def fetchDependencies: F[Unit] =
-    for {
-      s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse(broadcaster.requestMissingDependency)
-    } yield ()
-
   /** The new gossiping first syncs the missing DAG, then downloads and adds the blocks in topological order.
     * However the EquivocationDetector wants to know about dependencies so it can assign different statuses,
     * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
@@ -674,7 +662,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: Cell[
+  def create[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployBuffer: Validation: CasperLabsProtocolVersions: Cell[
     ?[_],
     CasperState
   ]: DeploySelection](
@@ -701,7 +689,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       chainId: String
   ) {
     //TODO pull out
@@ -907,7 +895,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
         chainId: String
     ): F[StatelessExecutor[F]] =
       for {
@@ -921,66 +909,9 @@ object MultiParentCasperImpl {
         block: Block,
         status: BlockStatus
     ): F[Unit]
-
-    def requestMissingDependency(blockHash: BlockHash): F[Unit]
   }
 
   object Broadcaster {
-    def fromTransportLayer[F[_]: Monad: ConnectionsCell: TransportLayer: Log: Time: ErrorHandler: RPConfAsk]()(
-        implicit state: Cell[F, CasperState]
-    ) =
-      new Broadcaster[F] {
-
-        /** Gossip the created block, or ask for dependencies. */
-        def networkEffects(
-            block: Block, // Not just BlockHash because if the status MissingBlocks it's not in store yet; although we should be able to get it from CasperState.
-            status: BlockStatus
-        ): F[Unit] =
-          status match {
-            //Add successful! Send block to peers.
-            case Valid | EquivocatedBlock =>
-              CommUtil.sendBlock[F](LegacyConversions.fromBlock(block))
-
-            case MissingBlocks =>
-              // In the future this won't happen because the DownloadManager won't try to add blocks with missing dependencies.
-              fetchMissingDependencies(block)
-
-            case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
-                InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
-                InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
-                InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
-                InvalidPreStateHash | InvalidPostStateHash | Processing | Processed =>
-              Log[F].debug(
-                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $status"
-              )
-
-            case UnexpectedBlockException(ex) =>
-              Log[F].debug(
-                s"Not sending notification about ${PrettyPrinter.buildString(block.blockHash)}: $ex"
-              )
-          }
-
-        /** Ask all peers to send us a block. */
-        def requestMissingDependency(blockHash: BlockHash) =
-          CommUtil.sendBlockRequest[F](
-            protocol.BlockRequest(Base16.encode(blockHash.toByteArray), blockHash)
-          )
-
-        /** Check if the block has dependencies that we don't have in store of buffer.
-          * Add those to the dependency DAG and ask peers to send it. */
-        private def fetchMissingDependencies(
-            block: Block
-        )(implicit state: Cell[F, CasperState]): F[Unit] =
-          for {
-            casperState <- Cell[F, CasperState].read
-            missingDependencies = casperState.dependencyDag
-              .childToParentAdjacencyList(block.blockHash)
-              .toList
-            // NOTE: Requesting not just unseen dependencies so that something that was originally
-            // an `IgnorableEquivocation` can second time be fetched again and be an `AdmissibleEquivocation`.
-            _ <- missingDependencies.traverse(hash => requestMissingDependency(hash))
-          } yield ()
-      }
 
     /** Network access using the new RPC style gossiping. */
     def fromGossipServices[F[_]: Applicative](
@@ -1022,11 +953,6 @@ object MultiParentCasperImpl {
           case UnexpectedBlockException(_) =>
             ().pure[F]
         }
-
-      def requestMissingDependency(blockHash: BlockHash): F[Unit] =
-        // We are letting Casper know about the pending DAG, so it may try to ask for dependencies,
-        // but those will be naturally downloaded by the DownloadManager.
-        ().pure[F]
     }
   }
 

@@ -19,7 +19,6 @@ import io.casperlabs.blockstorage.util.fileIO
 import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
 import io.casperlabs.blockstorage.util.fileIO.{IOError, _}
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.metrics.Metrics, Metrics.Source
 import io.casperlabs.shared.ByteStringOps._
@@ -47,7 +46,6 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
     blockSummaryDB: Dbi[ByteBuffer],
     deployHashesDb: Dbi[ByteBuffer],
     storagePath: Path,
-    approvedBlockPath: Path,
     checkpointsDir: Path,
     state: MonadState[F, FileLMDBIndexBlockStorageState[F]]
 ) extends BlockStorage[F] {
@@ -193,23 +191,6 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield ()
     )
 
-  def getApprovedBlock(): F[Option[ApprovedBlock]] =
-    lock.withPermit(
-      readAllBytesFromFile(approvedBlockPath).map {
-        case bytes if bytes.isEmpty =>
-          None
-        case bytes =>
-          Some(ApprovedBlock.parseFrom(bytes))
-      }
-    )
-
-  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-    lock.withPermit {
-      val tmpFile = approvedBlockPath.resolveSibling(approvedBlockPath.getFileName + ".tmp")
-      writeToFile(tmpFile, block.toByteArray) >>
-        moveFile(tmpFile, approvedBlockPath, StandardCopyOption.ATOMIC_MOVE).as(())
-    }
-
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     withReadTxn { txn =>
       Option(blockSummaryDB.get(txn, blockHash.toDirectByteBuffer))
@@ -256,7 +237,6 @@ class FileLMDBIndexBlockStorage[F[_]: Monad: Sync: RaiseIOError: Log] private (
               index.drop(txn)
             }
         _      <- checkpointsDir.deleteDirectory()
-        _      <- approvedBlockPath.deleteSingleFile()
         _      <- makeDirectory(checkpointsDir)
         _      <- modifyCheckpoints(_.empty)
         _      <- modifyCurrentIndex(_ => 0)
@@ -287,7 +267,6 @@ object FileLMDBIndexBlockStorage {
   final case class Config(
       storagePath: Path,
       indexPath: Path,
-      approvedBlockPath: Path,
       checkpointsDirPath: Path,
       mapSize: Long,
       maxDbs: Int = 1,
@@ -345,14 +324,12 @@ object FileLMDBIndexBlockStorage {
     create(
       env,
       blockStorageDataDir.resolve("storage"),
-      blockStorageDataDir.resolve("approved-block"),
       blockStorageDataDir.resolve("checkpoints")
     )
 
   def create[F[_]: Monad: Concurrent: Log: Metrics](
       env: Env[ByteBuffer],
       storagePath: Path,
-      approvedBlockPath: Path,
       checkpointsDirPath: Path
   ): F[StorageErr[BlockStorage[F]]] = {
     implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
@@ -367,7 +344,6 @@ object FileLMDBIndexBlockStorage {
       deployHashesDB <- Sync[F].delay {
                          env.openDbi("deployHashes", MDB_CREATE, MDB_DUPSORT)
                        }
-      _                            <- createNewFile(approvedBlockPath)
       blockMessageRandomAccessFile <- RandomAccessIO.open(storagePath, RandomAccessIO.ReadWrite)
       sortedCheckpointsEither      <- loadCheckpoints(checkpointsDirPath)
       result <- sortedCheckpointsEither match {
@@ -390,7 +366,6 @@ object FileLMDBIndexBlockStorage {
                          blockSummaryDB,
                          deployHashesDB,
                          storagePath,
-                         approvedBlockPath,
                          checkpointsDirPath,
                          st
                        ) with MeteredBlockStorage[F] {
@@ -424,7 +399,6 @@ object FileLMDBIndexBlockStorage {
       result <- create[F](
                  env,
                  config.storagePath,
-                 config.approvedBlockPath,
                  config.checkpointsDirPath
                )
     } yield result

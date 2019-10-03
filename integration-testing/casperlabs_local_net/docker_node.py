@@ -13,9 +13,13 @@ from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
 from casperlabs_local_net.python_client import PythonClient
 from casperlabs_local_net.docker_base import DockerConfig
-from casperlabs_local_net.casperlabs_accounts import is_valid_account, Account
+from casperlabs_local_net.casperlabs_accounts import (
+    is_valid_account,
+    Account,
+    GENESIS_ACCOUNT,
+)
 from casperlabs_local_net.graphql import GraphQL
-from casperlabs_client import grpc_proxy, extract_common_name
+from casperlabs_client import grpc_proxy, extract_common_name, ABI
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -28,11 +32,10 @@ class DockerNode(LoggingDockerBase):
     CL_NODE_BINARY = "/opt/docker/bin/bootstrap"
     CL_NODE_DIRECTORY = "/root/.casperlabs"
     CL_NODE_DEPLOY_DIR = f"{CL_NODE_DIRECTORY}/deploy"
-    CL_GENESIS_DIR = f"{CL_NODE_DIRECTORY}/genesis"
+    CL_CHAINSPEC_DIR = f"{CL_NODE_DIRECTORY}/chainspec"
     CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
-    CL_BONDS_FILE = f"{CL_GENESIS_DIR}/bonds.txt"
     CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
 
     NUMBER_OF_BONDS = 10
@@ -47,9 +50,9 @@ class DockerNode(LoggingDockerBase):
     PYTHON_CLIENT = "p"
 
     def __init__(self, cl_network, config: DockerConfig):
+        self.cl_network = cl_network
         super().__init__(config)
         self.graphql = GraphQL(self)
-        self.cl_network = cl_network
 
         def local_path(p):
             return str(
@@ -216,7 +219,7 @@ class DockerNode(LoggingDockerBase):
     @property
     def volumes(self) -> dict:
         return {
-            self.host_genesis_dir: {"bind": self.CL_GENESIS_DIR, "mode": "rw"},
+            self.host_chainspec_dir: {"bind": self.CL_CHAINSPEC_DIR, "mode": "rw"},
             self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
             self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
             self.deploy_dir: {"bind": self.CL_NODE_DEPLOY_DIR, "mode": "rw"},
@@ -256,20 +259,25 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
-        self.create_bonds_file()
+        self.create_genesis_accounts_file()
 
     # TODO: Should be changed to using validator-id from accounts
-    def create_bonds_file(self) -> None:
+    def create_genesis_accounts_file(self) -> None:
         N = self.NUMBER_OF_BONDS
-        path = f"{self.host_genesis_dir}/bonds.txt"
+        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
+        path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
         os.makedirs(os.path.dirname(path))
         with open(path, "a") as f:
+            # Give the initial motes to the genesis account, so that tests which use
+            # this way of creating accounts work. But the accounts could be just
+            # created this way, without having to do a transfer.
+            f.write(f"{GENESIS_ACCOUNT.public_key},{self.cl_network.initial_motes},0\n")
             for i, pair in enumerate(
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
             ):
                 bond = N + 2 * i
-                f.write(f"{pair.public_key} {bond}\n")
+                f.write(f"{pair.public_key},0,{bond}\n")
 
     def cleanup(self):
         super().cleanup()
@@ -351,10 +359,11 @@ class DockerNode(LoggingDockerBase):
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
 
-        ABI = self.p_client.abi
-
         session_args = ABI.args(
-            [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
+            [
+                ABI.account("account", to_account.public_key_binary),
+                ABI.u32("amount", amount),
+            ]
         )
 
         response, deploy_hash_bytes = self.p_client.deploy(

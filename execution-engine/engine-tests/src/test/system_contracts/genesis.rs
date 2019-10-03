@@ -4,10 +4,10 @@ use contract_ffi::value::{ProtocolVersion, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::{EngineConfig, SYSTEM_ACCOUNT_ADDR};
 use engine_shared::motes::Motes;
-use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::support::test_support;
 use crate::support::test_support::InMemoryWasmTestBuilder;
+use crate::test::DEFAULT_WASM_COSTS;
 
 const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";
@@ -53,7 +53,7 @@ fn should_run_genesis_with_chainspec() {
     let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
     let accounts = vec![account_1, account_2];
     let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
-    let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+    let wasm_costs = *DEFAULT_WASM_COSTS;
 
     let genesis_config = GenesisConfig::new(
         name,
@@ -138,7 +138,8 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
-        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+        let wasm_costs = *DEFAULT_WASM_COSTS;
+
         GenesisConfig::new(
             name,
             TIMESTAMP,
@@ -188,7 +189,8 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         let pos_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
         let accounts = vec![account_1, account_2];
         let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
-        let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+        let wasm_costs = *DEFAULT_WASM_COSTS;
+
         GenesisConfig::new(
             name,
             TIMESTAMP,

@@ -187,7 +187,6 @@ object AutoProposerTest {
     override def contains(block: Block): F[Boolean]                               = ???
     override def estimator(dag: DagRepresentation[F]): F[IndexedSeq[ByteString]]  = ???
     override def dag: F[DagRepresentation[F]]                                     = ???
-    override def fetchDependencies: F[Unit]                                       = ???
     override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float] = ???
     override def lastFinalizedBlock: F[Block]                                     = ???
     override def faultToleranceThreshold                                          = 0f

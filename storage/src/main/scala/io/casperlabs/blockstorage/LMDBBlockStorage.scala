@@ -9,7 +9,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.blockstorage.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.configuration.{ignore, relativeToDataDir, SubConfig}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -104,12 +103,6 @@ class LMDBBlockStorage[F[_]] private (
         it.asScala.map(kv => ByteString.copyFrom(kv.key)).find(p)
       }
     }
-
-  def getApprovedBlock(): F[Option[ApprovedBlock]] =
-    none[ApprovedBlock].pure[F]
-
-  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-    ().pure[F]
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
     withReadTxn { txn =>

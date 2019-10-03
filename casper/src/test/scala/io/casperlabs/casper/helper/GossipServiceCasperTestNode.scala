@@ -18,8 +18,9 @@ import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetectorBySingleSweepImpl
 }
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.{consensus, _}
-import io.casperlabs.comm.CommError.ErrorHandler
+import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.crypto.Keys.PrivateKey
@@ -118,7 +119,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit
-      errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F]
@@ -177,7 +177,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
-      implicit errorHandler: ErrorHandler[F],
+      implicit
       concurrentF: Concurrent[F],
       parF: Par[F],
       timerF: Timer[F]
@@ -281,7 +281,8 @@ object GossipServiceCasperTestNodeFactory {
   class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation]()
       extends GossipService[F] {
 
-    implicit val metrics = new Metrics.MetricsNOP[F]
+    implicit val metrics  = new Metrics.MetricsNOP[F]
+    implicit val versions = HashSetCasperTestNode.protocolVersions[F]
 
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _
