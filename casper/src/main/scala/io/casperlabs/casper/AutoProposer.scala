@@ -17,58 +17,73 @@ import scala.util.control.NonFatal
   * we have more than a certain number of new deploys in the buffer. */
 class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
     checkInterval: FiniteDuration,
-    maxInterval: FiniteDuration,
-    maxCount: Int,
+    ballotInterval: FiniteDuration,
+    accInterval: FiniteDuration,
+    accCount: Int,
     blockApiLock: Semaphore[F]
 ) {
+  val accIntervalMillis    = accInterval.toMillis
+  val ballotIntervalMillis = ballotInterval.toMillis
 
-  private def run(): F[Unit] = {
-    val maxElapsedMillis = maxInterval.toMillis
+  private def run(lastProposeMillis: Long): F[Unit] = {
 
     def loop(
         // Deploys we tried to propose last time.
         prevDeploys: Set[ByteString],
         // Time we saw the first new deploys after an auto-proposal.
-        startMillis: Long
+        startMillis: Long,
+        // Time we proposed a block.
+        lastProposeMillis: Long
     ): F[Unit] = {
 
       val snapshot = for {
         currentMillis <- Time[F].currentMillis
         deploys       <- DeployStorageReader[F].readPendingHashes.map(_.toSet)
-      } yield (currentMillis, currentMillis - startMillis, deploys)
+      } yield (currentMillis, deploys)
 
       snapshot flatMap {
         // Reset time when we see a new deploy.
-        case (currentMillis, _, deploys) if deploys.nonEmpty && startMillis == 0 =>
-          Time[F].sleep(checkInterval) >> loop(prevDeploys, currentMillis)
+        case (currentMillis, deploys) if deploys.nonEmpty && startMillis == 0 =>
+          Time[F].sleep(checkInterval) >> loop(prevDeploys, currentMillis, lastProposeMillis)
 
-        case (_, elapsedMillis, deploys)
+        case (currentMillis, deploys)
             if deploys.nonEmpty
               && deploys != prevDeploys
-              && (elapsedMillis >= maxElapsedMillis || deploys.size >= maxCount) =>
+              && (currentMillis - startMillis >= accIntervalMillis || deploys.size >= accCount) =>
           Log[F].info(
-            s"Proposing block after ${elapsedMillis} ms with ${deploys.size} pending deploys."
+            s"Proposing a block after ${currentMillis - startMillis} ms with ${deploys.size} pending deploys."
           ) *>
-            tryPropose() >>
-            loop(deploys, 0)
+            tryPropose(false) >>= { hasProposed =>
+            loop(deploys, 0, if (hasProposed) currentMillis else lastProposeMillis)
+          }
+
+        case (currentMillis, deploys)
+            if currentMillis - lastProposeMillis >= ballotIntervalMillis =>
+          Log[F].info(
+            s"Proposing a block or ballot after ${lastProposeMillis - startMillis} ms."
+          ) *>
+            tryPropose(true) >>= { hasProposed =>
+            loop(deploys, 0, if (hasProposed) currentMillis else lastProposeMillis)
+          }
 
         case _ =>
-          Time[F].sleep(checkInterval) >> loop(prevDeploys, startMillis)
+          Time[F].sleep(checkInterval) >> loop(prevDeploys, startMillis, lastProposeMillis)
       }
     }
 
-    loop(Set.empty, 0) onError {
+    loop(Set.empty, 0, lastProposeMillis) onError {
       case NonFatal(ex) =>
         Log[F].error(s"Auto-proposal stopped unexpectedly.", ex)
     }
   }
 
-  private def tryPropose(): F[Unit] =
-    BlockAPI.propose(blockApiLock).flatMap { blockHash =>
-      Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}")
+  /** Try to propose a block or ballot. Return true if anything was created. */
+  private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
+    BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
+      Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}").as(true)
     } handleErrorWith {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not propose block.", ex)
+        Log[F].error(s"Could not propose block.", ex).as(false)
     }
 }
 
@@ -77,14 +92,21 @@ object AutoProposer {
   /** Start the proposal loop in the background. */
   def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
       checkInterval: FiniteDuration,
-      maxInterval: FiniteDuration,
-      maxCount: Int,
+      ballotInterval: FiniteDuration,
+      accInterval: FiniteDuration,
+      accCount: Int,
       blockApiLock: Semaphore[F]
   ): Resource[F, AutoProposer[F]] =
     Resource[F, AutoProposer[F]] {
       for {
-        ap    <- Sync[F].delay(new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock))
-        fiber <- Concurrent[F].start(ap.run())
+        ap <- Sync[F].delay(
+               new AutoProposer(checkInterval, ballotInterval, accInterval, accCount, blockApiLock)
+             )
+        // We could retrieve the time we last proposed a block from storage
+        // but it would likely be empty or older than the ballot interval
+        // and just add complexity to the startup.
+        start <- Time[F].currentMillis
+        fiber <- Concurrent[F].start(ap.run(start))
       } yield ap -> fiber.cancel
     }
 }

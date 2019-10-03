@@ -220,8 +220,9 @@ class NodeRuntime private[node] (
         // so that the operator can turn it on/off on the fly.
         _ <- AutoProposer[Task](
               checkInterval = conf.casper.autoProposeCheckInterval,
-              maxInterval = conf.casper.autoProposeMaxInterval,
-              maxCount = conf.casper.autoProposeMaxCount,
+              ballotInterval = conf.casper.autoProposeBallotInterval,
+              accInterval = conf.casper.autoProposeAccInterval,
+              accCount = conf.casper.autoProposeAccCount,
               blockApiLock = blockApiLock
             ).whenA(conf.casper.autoProposeEnabled)
 

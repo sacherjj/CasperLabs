@@ -198,11 +198,14 @@ auto-propose-enabled = false
 # Time between proposal checks.
 auto-propose-check-interval = "1second"
 
+# Maximum time to allow before proposing a ballot or block.
+auto-propose-ballot-interval = "1minute"
+
 # Time to accumulate deploys before proposing.
-auto-propose-max-interval = "5seconds"
+auto-propose-acc-interval = "5seconds"
 
 # Number of deploys to accumulate before proposing.
-auto-propose-max-count = 10
+auto-propose-acc-count = 10
 
 # Maximum block size in bytes
 max-block-size-bytes = 10485760

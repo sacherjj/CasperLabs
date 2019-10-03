@@ -114,6 +114,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- timestamp(summary)
       _ <- blockNumber(summary, dag)
       _ <- sequenceNumber(summary, dag)
+      // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
+
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)
@@ -597,8 +599,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     for {
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes.toList)}")
+      tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
       parentHashes         = ProtoUtil.parentHashes(b)

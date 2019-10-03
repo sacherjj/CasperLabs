@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -35,7 +36,7 @@ object Estimator {
       genesis: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash],
       equivocationsTracker: EquivocationsTracker
-  ): F[List[BlockHash]] = {
+  ): F[NonEmptyList[BlockHash]] = {
 
     /** Finds children of the block b that have been scored by the LMD algorithm.
       * If no children exist (block B is the tip) return the block.
@@ -86,7 +87,7 @@ object Estimator {
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
         .reverse
-    } yield newMainParent +: sortedSecParents
+    } yield NonEmptyList(newMainParent, sortedSecParents)
   }
 
   /** Computes scores for LMD GHOST.

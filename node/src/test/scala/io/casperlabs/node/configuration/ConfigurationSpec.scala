@@ -108,8 +108,9 @@ class ConfigurationSpec
       standalone = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
-      autoProposeMaxInterval = FiniteDuration(1, TimeUnit.SECONDS),
-      autoProposeMaxCount = 1,
+      autoProposeBallotInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeAccInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeAccCount = 1,
       maxBlockSizeBytes = 1
     )
     val tls = Tls(

@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Resource, Sync}
 import cats.implicits._
@@ -177,7 +178,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       latestMessagesHashes <- updatedDag.latestMessageHashes
       tipHashes            <- estimator(updatedDag, latestMessagesHashes)
       _ <- Log[F].debug(
-            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
+            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).toList.mkString(", ")}"
           )
       tipHash = tipHashes.head
       _       <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
@@ -364,7 +365,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def estimator(
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[ByteString, BlockHash]
-  ): F[List[BlockHash]] =
+  ): F[NonEmptyList[BlockHash]] =
     Metrics[F].timer("estimator") {
       Cell[F, CasperState].read
         .flatMap(
@@ -391,16 +392,18 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
    *  TODO: Make this return Either so that we get more information about why not block was
    *  produced (no deploys, already processing, no validator id)
    */
-  def createBlock: F[CreateBlockStatus] = validatorId match {
+  def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] = validatorId match {
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       Metrics[F].timer("createBlock") {
         for {
           dag            <- dag
           latestMessages <- dag.latestMessages
-          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
-          tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-          merged         <- ExecEngineUtil.merge[F](tips, dag)
-          parents        = merged.parents
+          // Tips can be either ballots or blocks.
+          tipHashes <- estimator(dag, latestMessages.mapValues(_.messageHash))
+          tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+          // Merged makes sure that we only get blocks.
+          merged  <- ExecEngineUtil.merge[F](tips, dag)
+          parents = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
@@ -415,11 +418,21 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           justifications   = toJustification(bondedLatestMsgs.values.toSeq)
           rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  <- CasperLabsProtocolVersions[F].versionAt(rank)
-          proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
+          proposal <- if (remainingHashes.nonEmpty) {
                        createProposal(
                          latestMessages,
                          merged,
                          remainingHashes,
+                         publicKey,
+                         privateKey,
+                         sigAlgorithm,
+                         protocolVersion,
+                         rank
+                       )
+                     } else if (canCreateBallot && merged.parents.nonEmpty) {
+                       createBallot(
+                         latestMessages,
+                         merged.parents.head,
                          publicKey,
                          privateKey,
                          sigAlgorithm,
@@ -471,7 +484,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     */
   private def requeueOrphanedDeploys(
       dag: DagRepresentation[F],
-      tipHashes: List[BlockHash]
+      tipHashes: NonEmptyList[BlockHash]
   ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
     for {
       // We actually need the tips which can be merged, the ones which we'd build on if we
@@ -528,7 +541,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   private def createProposal(
       latestMessages: Map[ByteString, Message],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
-      remainingHashes: Set[BlockHash],
+      remainingHashes: Set[ByteString],
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
@@ -586,6 +599,38 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             )
             .as(CreateBlockStatus.internalDeployError(ex))
       }
+    }
+
+  private def createBallot(
+      latestMessages: Map[ByteString, Message],
+      parent: Block,
+      validatorId: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm,
+      protocolVersion: ProtocolVersion,
+      rank: Long
+  ): F[CreateBlockStatus] =
+    Time[F].currentMillis.map { now =>
+      // TODO: Remove redundant justifications.
+      val justifications = toJustification(latestMessages.values.toSeq)
+      // Start numbering from 1 (validator's first block seqNum = 1)
+      val validatorSeqNum =
+        latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+      val block = ProtoUtil.ballot(
+        justifications,
+        parent.getHeader.getState.preStateHash,
+        parent.getHeader.getState.bonds,
+        protocolVersion,
+        parent.blockHash,
+        validatorSeqNum,
+        chainId,
+        now,
+        rank,
+        validatorId,
+        privateKey,
+        sigAlgorithm
+      )
+      CreateBlockStatus.created(block)
     }
 
   // MultiParentCasper Exposes the block DAG to those who need it.

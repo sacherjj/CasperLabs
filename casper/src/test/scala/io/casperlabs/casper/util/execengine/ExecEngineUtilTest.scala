@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.execengine
 
 import cats.Id
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -450,15 +451,13 @@ object ExecEngineUtilTest {
         candidates: Vector[OpDagNode]
     )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) = {
       val merged = ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
-        candidates,
+        NonEmptyList.fromListUnsafe(candidates.toList),
         getParents,
         getEffect,
         identity
       )
 
       merged match {
-        case ExecEngineUtil.MergeResult.EmptyMerge =>
-          throw new RuntimeException("No candidates were given to merge!")
         case ExecEngineUtil.MergeResult.Result(head, effect, tail) => (effect, head +: tail)
       }
     }

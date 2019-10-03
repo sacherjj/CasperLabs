@@ -1,7 +1,7 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
-import cats.data.EitherT
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -72,10 +72,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     ): Task[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
         t1 <- (BlockAPI.deploy[Task](deploys.head) *> BlockAPI
-               .propose[Task](blockApiLock)).start
+               .propose[Task](blockApiLock, canCreateBallot = false)).start
         _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Task](deploys.last) *> BlockAPI
-               .propose[Task](blockApiLock)).start //should fail because other not done
+               .propose[Task](blockApiLock, canCreateBallot = false)).start //should fail because other not done
         r1 <- t1.join.attempt
         r2 <- t2.join.attempt
       } yield (r1, r2)
@@ -111,7 +111,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         _ <- BlockAPI.deploy[Task](d)
       } yield ()
 
@@ -139,7 +139,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def estimator(
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[ByteString, ByteString]
-  ): F[List[BlockHash]] =
+  ): F[NonEmptyList[BlockHash]] =
     underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
@@ -147,9 +147,9 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
-  override def createBlock: F[CreateBlockStatus] =
+  override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
     for {
-      result <- underlying.createBlock
+      result <- underlying.createMessage(canCreateBallot)
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 

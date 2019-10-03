@@ -27,8 +27,9 @@ final case class CasperConf(
     standalone: Boolean,
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
-    autoProposeMaxInterval: FiniteDuration,
-    autoProposeMaxCount: Int,
+    autoProposeBallotInterval: FiniteDuration,
+    autoProposeAccInterval: FiniteDuration,
+    autoProposeAccCount: Int,
     maxBlockSizeBytes: Int
 ) extends SubConfig
 

@@ -148,7 +148,7 @@ class ForkchoiceTest
                        EquivocationsTracker.empty
                      )
         _      = forkchoice.head should be(b6.blockHash)
-        result = forkchoice(1) should be(b8.blockHash)
+        result = forkchoice.tail.head should be(b8.blockHash)
       } yield result
   }
 
@@ -215,7 +215,7 @@ class ForkchoiceTest
                        EquivocationsTracker.empty
                      )
         _      = forkchoice.head should be(b8.blockHash)
-        result = forkchoice(1) should be(b7.blockHash)
+        result = forkchoice.tail.head should be(b7.blockHash)
       } yield result
   }
 

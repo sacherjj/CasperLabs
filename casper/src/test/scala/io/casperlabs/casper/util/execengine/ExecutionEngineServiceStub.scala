@@ -1,9 +1,11 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.data.NonEmptyList
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
@@ -24,8 +26,20 @@ import scala.util.Either
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
+  import ExecEngineUtil.{MergeResult, TransformMap}
+
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
     casper.validation.raiseValidateErrorThroughApplicativeError[F]
+
+  def merge[F[_]: MonadThrowable: BlockStorage](
+      candidateParentBlocks: List[Block],
+      dag: DagRepresentation[F]
+  ): F[MergeResult[TransformMap, Block]] =
+    NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
+      ExecEngineUtil.merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
+    } getOrElse {
+      MergeResult.empty[TransformMap, Block].pure[F]
+    }
 
   def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService: CasperLabsProtocolVersions](
       b: Block,
@@ -39,7 +53,7 @@ object ExecutionEngineServiceStub {
     implicit val validation = new ValidationImpl[F]
     (for {
       parents      <- ProtoUtil.unsafeGetParents[F](b)
-      merged       <- ExecEngineUtil.merge[F](parents, dag)
+      merged       <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil.computePrestate[F](merged)
       effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
       _            <- Validation[F].transactions(b, preStateHash, effects)
