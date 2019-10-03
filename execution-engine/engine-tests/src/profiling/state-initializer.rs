@@ -11,11 +11,11 @@ use casperlabs_engine_tests::support::profiling_common;
 use casperlabs_engine_tests::support::test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
 };
-use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use casperlabs_engine_tests::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+};
 use contract_ffi::base16;
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
@@ -52,7 +52,7 @@ fn main() {
                     account_2_public_key,
                 ),
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_WASM, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[genesis_public_key])
             .build();
 

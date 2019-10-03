@@ -10,9 +10,11 @@ use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
     self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    GENESIS_INITIAL_BALANCE,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
+use crate::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
+    DEFAULT_GENESIS_CONFIG,
+};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
@@ -121,7 +123,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     }
 
     let modified_balance = modified_balance.expect("modified balance should be present");
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
 
     assert_eq!(
@@ -195,7 +197,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         "unexpected forced transfer transforms count"
     );
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
     let mut modified_balance: Option<U512> = None;
     let mut reward_balance: Option<U512> = None;
@@ -319,7 +321,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -384,7 +386,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -445,7 +447,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,

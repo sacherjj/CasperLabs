@@ -1,10 +1,9 @@
 use crate::support::test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 use contract_ffi::value::account::{PublicKey, Weight};
-use contract_ffi::value::U512;
-use engine_core::engine_state::{self, MAX_PAYMENT};
+use engine_core::engine_state;
 use engine_core::execution;
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
 const CONTRACT_AUTHORIZED_KEYS: &str = "authorized_keys.wasm";
@@ -37,7 +36,7 @@ fn should_raise_auth_failure_with_invalid_key() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code(CONTRACT_AUTHORIZED_KEYS, (Weight::new(1), Weight::new(1)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[PublicKey::new(key_1)])
@@ -89,7 +88,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code("authorized_keys.wasm", (Weight::new(1), Weight::new(1)))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[
@@ -220,7 +219,7 @@ fn should_raise_deploy_authorization_failure() {
     let exec_request_6 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             // change deployment threshold to 4
             .with_session_code("authorized_keys.wasm", (Weight::new(6), Weight::new(5)))
             .with_deploy_hash([6u8; 32])
@@ -275,7 +274,7 @@ fn should_raise_deploy_authorization_failure() {
     let exec_request_8 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             // change deployment threshold to 4
             .with_session_code(
                 "authorized_keys.wasm",
@@ -386,7 +385,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     let exec_request_3 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             .with_session_code("authorized_keys.wasm", (Weight::new(0), Weight::new(0)))
             .with_deploy_hash([3u8; 32])
             .with_authorization_keys(&[

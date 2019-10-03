@@ -1,11 +1,9 @@
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_KEY_MANAGEMENT_THRESHOLDS: &str = "key_management_thresholds.wasm";
 
@@ -46,7 +44,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
             // This test verifies that all key management operations succeed
             .with_session_code(
                 "key_management_thresholds.wasm",

@@ -1,11 +1,10 @@
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
 use crate::support::test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -21,7 +20,7 @@ fn should_run_pos_refund_purse_contract_default_account() {
 #[test]
 fn should_run_pos_refund_purse_contract_account_1() {
     let mut builder = initialize();
-    transfer(&mut builder, ACCOUNT_1_ADDR, U512::from(2 * MAX_PAYMENT));
+    transfer(&mut builder, ACCOUNT_1_ADDR, *DEFAULT_PAYMENT * 2);
     refund_tests(&mut builder, ACCOUNT_1_ADDR);
 }
 
@@ -58,7 +57,7 @@ fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
             .with_address(address)
             .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", ())
-            .with_payment_code("pos_refund_purse.wasm", (U512::from(MAX_PAYMENT),))
+            .with_payment_code("pos_refund_purse.wasm", (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[public_key])
             .build();
 

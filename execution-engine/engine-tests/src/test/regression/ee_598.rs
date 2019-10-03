@@ -5,19 +5,19 @@ use crate::support::test_support::{
     self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
     STANDARD_PAYMENT_CONTRACT,
 };
-use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
+use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
-
-use engine_core::engine_state::MAX_PAYMENT;
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
-const ACCOUNT_1_FUND: u64 = (MAX_PAYMENT * 5);
-const ACCOUNT_1_BALANCE: u64 = ACCOUNT_1_FUND + 100_000;
-const ACCOUNT_1_BOND: u64 = 25_000;
+lazy_static! {
+    static ref ACCOUNT_1_FUND: U512 = *DEFAULT_PAYMENT;
+    static ref ACCOUNT_1_BALANCE: U512 = *ACCOUNT_1_FUND + 100_000;
+    static ref ACCOUNT_1_BOND: U512 = 25_000.into();
+}
 
 #[ignore]
 #[test]
@@ -41,15 +41,15 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         (
             String::from("seed_new_account"),
             PublicKey::new(ACCOUNT_1_ADDR),
-            U512::from(ACCOUNT_1_BALANCE),
+            *ACCOUNT_1_BALANCE,
         ),
     )
     .build();
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(ACCOUNT_1_FUND),))
-            .with_session_code("ee_598_regression.wasm", (U512::from(ACCOUNT_1_BOND),))
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*ACCOUNT_1_FUND,))
+            .with_session_code("ee_598_regression.wasm", (*ACCOUNT_1_BOND,))
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[PublicKey::new(ACCOUNT_1_ADDR)])
             .build();
