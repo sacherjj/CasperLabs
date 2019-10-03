@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
@@ -30,7 +31,7 @@ trait MultiParentCasper[F[_]] {
   def estimator(
       dag: DagRepresentation[F],
       latestMessages: Map[ByteString, ByteString]
-  ): F[List[ByteString]]
+  ): F[NonEmptyList[ByteString]]
   def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus]
   def createBlock: F[CreateBlockStatus] = createMessage(false) // Left for the sake of unit tests.
   def dag: F[DagRepresentation[F]]

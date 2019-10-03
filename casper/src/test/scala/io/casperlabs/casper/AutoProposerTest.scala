@@ -3,6 +3,7 @@ package io.casperlabs.casper
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
@@ -226,7 +227,7 @@ object AutoProposerTest {
     override def estimator(
         dag: DagRepresentation[F],
         lm: Map[ByteString, ByteString]
-    ): F[List[ByteString]]                                                        = ???
+    ): F[NonEmptyList[ByteString]]                                                = ???
     override def dag: F[DagRepresentation[F]]                                     = ???
     override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float] = ???
     override def lastFinalizedBlock: F[Block]                                     = ???

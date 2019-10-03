@@ -599,8 +599,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     for {
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
-      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes.toList)}")
+      tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
       parentHashes         = ProtoUtil.parentHashes(b)

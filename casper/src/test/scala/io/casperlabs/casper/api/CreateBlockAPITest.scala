@@ -1,7 +1,7 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
-import cats.data.EitherT
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -139,7 +139,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def estimator(
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[ByteString, ByteString]
-  ): F[List[BlockHash]] =
+  ): F[NonEmptyList[BlockHash]] =
     underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =

@@ -194,7 +194,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       dag                  <- MultiParentCasper[Task].dag
       latestMessageHashes  <- dag.latestMessageHashes
       estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
-      _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
+      _                    = estimate.toList shouldBe List(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
   }
@@ -235,7 +235,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       latestMessageHashes   <- dag.latestMessageHashes
       estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
 
-      _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
+      _ = estimate.toList shouldBe List(signedBlock2.blockHash)
       _ <- node.tearDown()
     } yield ()
   }

@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Resource, Sync}
 import cats.implicits._
@@ -177,7 +178,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       latestMessagesHashes <- updatedDag.latestMessageHashes
       tipHashes            <- estimator(updatedDag, latestMessagesHashes)
       _ <- Log[F].debug(
-            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
+            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).toList.mkString(", ")}"
           )
       tipHash = tipHashes.head
       _       <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
@@ -364,7 +365,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def estimator(
       dag: DagRepresentation[F],
       latestMessagesHashes: Map[ByteString, BlockHash]
-  ): F[List[BlockHash]] =
+  ): F[NonEmptyList[BlockHash]] =
     Metrics[F].timer("estimator") {
       Cell[F, CasperState].read
         .flatMap(
@@ -398,7 +399,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           dag            <- dag
           latestMessages <- dag.latestMessages
           // Tips can be either ballots or blocks.
-          tipHashes <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
+          tipHashes <- estimator(dag, latestMessages.mapValues(_.messageHash))
           tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
           // Merged makes sure that we only get blocks.
           merged  <- ExecEngineUtil.merge[F](tips, dag)
@@ -483,7 +484,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     */
   private def requeueOrphanedDeploys(
       dag: DagRepresentation[F],
-      tipHashes: List[BlockHash]
+      tipHashes: NonEmptyList[BlockHash]
   ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
     for {
       // We actually need the tips which can be merged, the ones which we'd build on if we

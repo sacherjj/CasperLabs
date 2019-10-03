@@ -22,6 +22,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.DeployStorage
 import io.casperlabs.models.BlockImplicits._
+import cats.data.NonEmptyList
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -287,25 +288,25 @@ object ExecEngineUtil {
     *         and the list of the additional chosen parents apart from the first.
     */
   def abstractMerge[F[_]: Monad, T: Monoid, A: Ordering, K](
-      candidates: IndexedSeq[A],
+      candidates: NonEmptyList[A],
       parents: A => F[List[A]],
       effect: A => F[Option[T]],
       toOps: T => OpMap[K]
-  ): F[MergeResult[T, A]] = {
-    val n = candidates.length
+  ): F[MergeResult.Result[T, A]] = {
+    val n               = candidates.length
+    val candidateVector = candidates.toList.toVector
 
     def netEffect(blocks: Vector[A]): F[T] =
       blocks
         .traverse(block => effect(block))
         .map(va => Foldable[Vector].fold(va.flatten))
 
-    if (n == 0) {
-      MergeResult.empty[T, A].pure[F]
-    } else if (n == 1) {
-      MergeResult.result[T, A](candidates.head, Monoid[T].empty, Vector.empty).pure[F]
+    if (n == 1) {
+      MergeResult.Result[T, A](candidates.head, Monoid[T].empty, Vector.empty).pure[F]
     } else
       for {
-        uncommonAncestors <- DagOperations.abstractUncommonAncestors[F, A](candidates, parents)
+        uncommonAncestors <- DagOperations
+                              .abstractUncommonAncestors[F, A](candidateVector, parents)
 
         // collect uncommon ancestors based on which candidate they are an ancestor of
         groups = uncommonAncestors
@@ -364,14 +365,24 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
-        blocks                             = chosenParents.map(i => candidates(i))
-      } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
+        blocks                             = chosenParents.map(i => candidateVector(i))
+      } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, blocks.tail)
   }
 
   def merge[F[_]: MonadThrowable: BlockStorage](
-      candidateParentBlocks: Seq[Block],
+      candidateParentBlocks: List[Block],
       dag: DagRepresentation[F]
-  ): F[MergeResult[TransformMap, Block]] = {
+  ): F[MergeResult[TransformMap, Block]] =
+    NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
+      merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
+    } getOrElse {
+      MergeResult.empty[TransformMap, Block].pure[F]
+    }
+
+  def merge[F[_]: MonadThrowable: BlockStorage](
+      candidateParentBlocks: NonEmptyList[Block],
+      dag: DagRepresentation[F]
+  ): F[MergeResult.Result[TransformMap, Block]] = {
 
     // TODO: These things should be part of the validation.
     def getParent(child: ByteString, parent: ByteString): F[Message.Block] =
@@ -439,7 +450,7 @@ object ExecEngineUtil {
                              case ballot: Message.Ballot =>
                                getParent(ballot.messageHash, ballot.parentBlock)
                            }
-                           .map(_.distinct.toVector)
+                           .map(ps => NonEmptyList.fromListUnsafe(ps.distinct))
       merged <- abstractMerge[F, TransformMap, Message.Block, state.Key](
                  candidateParents,
                  getParents,
@@ -448,8 +459,6 @@ object ExecEngineUtil {
                )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
-    } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(
-      MergeResult.result(blocks.head, _, blocks.tail)
-    )
+    } yield MergeResult.Result(blocks.head, merged.nonFirstParentsCombinedEffect, blocks.tail)
   }
 }
