@@ -157,32 +157,24 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val node            = standaloneEff(genesis, transforms, validatorKeys.head)
     implicit val casper = node.casperEff
 
+    def createMessage(expectBallot: Boolean, expectedParent: ByteString) =
+      for {
+        createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+        Created(block)    = createBlockResult
+        _                 <- MultiParentCasper[Task].addBlock(block)
+        msg               = Message.fromBlock(block).get
+        _                 = if (expectBallot) msg shouldBe a[Message.Ballot] else msg shouldBe a[Message.Block]
+        _                 = ProtoUtil.parentHashes(block).head shouldBe expectedParent
+      } yield block
+
     for {
       deploy <- ProtoUtil.basicDeploy[Task]()
       // A ballot on top of genesis should not be built upon by the upcoming block.
-      createBlockResult0 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
-      Created(ballot1)   = createBlockResult0
-      _                  <- MultiParentCasper[Task].addBlock(ballot1)
-      _                  = Message.fromBlock(ballot1).get shouldBe a[Message.Ballot]
-
-      _                  <- MultiParentCasper[Task].deploy(deploy)
-      createBlockResult1 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
-      Created(block1)    = createBlockResult1
-      _                  = Message.fromBlock(block1).get shouldBe a[Message.Block]
-      _                  = ProtoUtil.parentHashes(block1).head shouldBe genesis.blockHash
-      _                  <- MultiParentCasper[Task].addBlock(block1)
-
-      createBlockResult2 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
-      Created(ballot2)   = createBlockResult2
-      _                  = ProtoUtil.parentHashes(ballot2).head shouldBe block1.blockHash
-      _                  = Message.fromBlock(ballot2).get shouldBe a[Message.Ballot]
-      _                  <- MultiParentCasper[Task].addBlock(ballot2)
-
-      createBlockResult3 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
-      Created(ballot3)   = createBlockResult3
-      _                  = ProtoUtil.parentHashes(ballot3).head shouldBe block1.blockHash
-      _                  = Message.fromBlock(ballot3).get shouldBe a[Message.Ballot]
-      _                  <- MultiParentCasper[Task].addBlock(ballot3)
+      _      <- createMessage(expectBallot = true, expectedParent = genesis.blockHash)
+      _      <- MultiParentCasper[Task].deploy(deploy)
+      block1 <- createMessage(expectBallot = false, expectedParent = genesis.blockHash)
+      _      <- createMessage(expectBallot = true, expectedParent = block1.blockHash)
+      _      <- createMessage(expectBallot = true, expectedParent = block1.blockHash)
 
       _ <- node.tearDown()
     } yield ()
