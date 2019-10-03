@@ -160,21 +160,26 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     for {
       deploy <- ProtoUtil.basicDeploy[Task]()
       // A ballot on top of genesis should not be built upon by the upcoming block.
-      _ <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      createBlockResult0 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(ballot1)   = createBlockResult0
+      _                  <- MultiParentCasper[Task].addBlock(ballot1)
 
       _                  <- MultiParentCasper[Task].deploy(deploy)
       createBlockResult1 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(block1)    = createBlockResult1
+      _                  = Message.fromBlock(block1).get shouldBe a[Message.Block]
       _                  = ProtoUtil.parentHashes(block1).head shouldBe genesis.blockHash
       _                  <- MultiParentCasper[Task].addBlock(block1)
 
       createBlockResult2 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(ballot2)   = createBlockResult2
       _                  = ProtoUtil.parentHashes(ballot2).head shouldBe block1.blockHash
+      _                  <- MultiParentCasper[Task].addBlock(ballot2)
 
       createBlockResult3 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(ballot3)   = createBlockResult3
       _                  = ProtoUtil.parentHashes(ballot3).head shouldBe block1.blockHash
+      _                  <- MultiParentCasper[Task].addBlock(ballot3)
 
       _ <- node.tearDown()
     } yield ()
