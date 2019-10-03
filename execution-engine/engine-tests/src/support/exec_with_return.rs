@@ -15,12 +15,13 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
-use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::WasmiPreprocessor;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::rc::Rc;
+
+use crate::test::DEFAULT_WASM_COSTS;
 
 const INIT_FN_STORE_ID: u32 = 0;
 const INIT_PROTOCOL_VERSION: u64 = 1;
@@ -105,7 +106,9 @@ where
         module_bytes: wasm_bytes,
         args: Vec::new(),
     };
-    let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+
+    let wasm_costs = *DEFAULT_WASM_COSTS;
+
     let preprocessor = WasmiPreprocessor::new(wasm_costs);
     let parity_module = builder
         .get_engine_state()

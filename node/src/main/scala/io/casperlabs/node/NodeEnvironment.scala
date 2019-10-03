@@ -3,11 +3,11 @@ package io.casperlabs.node
 import java.io.File
 import java.security.cert.X509Certificate
 
-import cats.data.EitherT.{leftT, rightT}
-import cats.syntax.applicativeError._
-import cats.syntax.either._
+import cats.syntax._
+import cats.implicits._
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.NodeIdentifier
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.CertificateHelper
 import io.casperlabs.node.configuration.Configuration
@@ -18,27 +18,33 @@ import scala.util._
 
 object NodeEnvironment {
 
-  def create(conf: Configuration)(implicit log: Log[Task]): Effect[NodeIdentifier] =
+  def create(conf: Configuration)(implicit log: Log[Task]): Task[NodeIdentifier] =
     for {
-      dataDir <- Task.delay(conf.server.dataDir.toFile).toEffect
+      dataDir <- Task.delay(conf.server.dataDir.toFile)
       _       <- canCreateDataDir(dataDir)
       _       <- haveAccessToDataDir(dataDir)
-      _       <- log.info(s"Using data dir: ${dataDir.getAbsolutePath}").toEffect
+      _       <- log.info(s"Using data dir: ${dataDir.getAbsolutePath}")
       _       <- hasCertificate(conf)
       _       <- hasKey(conf)
       name    <- name(conf)
     } yield NodeIdentifier(name)
 
-  private def isValid(pred: Boolean, msg: String): Effect[Unit] =
-    if (pred) Left[CommError, Unit](InitializationError(msg)).toEitherT
-    else Right(()).toEitherT
+  private def isValid(pred: Boolean, msg: String): Task[Unit] =
+    if (pred) MonadThrowable[Task].raiseError(new java.lang.IllegalArgumentException(msg))
+    else ().pure[Task]
 
-  private def name(conf: Configuration): Effect[String] = {
-    val certificate: Effect[X509Certificate] =
+  private def name(conf: Configuration): Task[String] = {
+    val certificate: Task[X509Certificate] =
       Task
         .delay(CertificateHelper.fromFile(conf.tls.certificate.toFile))
-        .attemptT
-        .leftMap(e => InitializationError(s"Failed to read the X.509 certificate: ${e.getMessage}"))
+        .recoverWith {
+          case e =>
+            MonadThrowable[Task].raiseError(
+              new java.lang.IllegalArgumentException(
+                s"Failed to read the X.509 certificate: ${e.getMessage}"
+              )
+            )
+        }
 
     for {
       cert <- certificate
@@ -47,33 +53,33 @@ object NodeEnvironment {
     } yield name
   }
 
-  private def certBase16(maybePubAddr: Option[Array[Byte]]): Effect[String] =
+  private def certBase16(maybePubAddr: Option[Array[Byte]]): Task[String] =
     maybePubAddr match {
-      case Some(bytes) => rightT(Base16.encode(bytes))
+      case Some(bytes) => Base16.encode(bytes).pure[Task]
       case None =>
-        leftT(
-          InitializationError(
+        MonadThrowable[Task].raiseError(
+          new java.lang.IllegalArgumentException(
             "Certificate must contain a secp256r1 EC Public Key"
           )
         )
     }
 
-  private def canCreateDataDir(dataDir: File): Effect[Unit] = isValid(
+  private def canCreateDataDir(dataDir: File): Task[Unit] = isValid(
     !dataDir.exists() && !dataDir.mkdir(),
     s"The data dir must be a directory and have read and write permissions:\\n${dataDir.getAbsolutePath}"
   )
 
-  private def haveAccessToDataDir(dataDir: File): Effect[Unit] = isValid(
+  private def haveAccessToDataDir(dataDir: File): Task[Unit] = isValid(
     !dataDir.isDirectory || !dataDir.canRead || !dataDir.canWrite,
     s"The data dir must be a directory and have read and write permissions:\n${dataDir.getAbsolutePath}"
   )
 
-  private def hasCertificate(conf: Configuration): Effect[Unit] = isValid(
+  private def hasCertificate(conf: Configuration): Task[Unit] = isValid(
     !conf.tls.certificate.toFile.exists(),
     s"Certificate file ${conf.tls.certificate} not found"
   )
 
-  private def hasKey(conf: Configuration): Effect[Unit] = isValid(
+  private def hasKey(conf: Configuration): Task[Unit] = isValid(
     !conf.tls.key.toFile.exists(),
     s"Secret key file ${conf.tls.key} not found"
   )

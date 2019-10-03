@@ -19,7 +19,6 @@ import io.casperlabs.blockstorage.{
   IndexedDagStorage,
   LMDBBlockStorage
 }
-import io.casperlabs.casper.protocol.ApprovedBlock
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.state.Key
 import io.casperlabs.ipc.Transform.TransformInstance
@@ -182,7 +181,6 @@ object Init {
         FileLMDBIndexBlockStorage.Config(
           storagePath = createPath("file_lmdb_storage"),
           indexPath = createPath("file_lmdb_index"),
-          approvedBlockPath = createPath("file_lmdb_approvedBlock"),
           checkpointsDirPath = createPath("file_lmdb_checkpoints"),
           mapSize = 1073741824L * 12
         )
@@ -195,7 +193,6 @@ object Init {
     Monad[Task],
     InMemBlockStorage.emptyMapRef[Task, (BlockMsgWithTransform, BlockSummary)].runSyncUnsafe(),
     InMemBlockStorage.emptyMapRef[Task, Seq[BlockHash]].runSyncUnsafe(),
-    Ref[Task].of(none[ApprovedBlock]).runSyncUnsafe(),
     metricsNop
   )
 

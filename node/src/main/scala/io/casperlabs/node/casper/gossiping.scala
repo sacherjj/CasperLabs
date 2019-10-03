@@ -3,6 +3,7 @@ package io.casperlabs.node.casper
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
@@ -15,10 +16,9 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.util.comm.BlockApproverProtocol
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{LegacyConversions, _}
+import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -26,9 +26,11 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.configuration.{ChainSpecReader, Configuration}
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.grpc.ManagedChannel
@@ -43,7 +45,8 @@ import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
-  import cats.data.NonEmptyList
+  import protocbridge.gens
+
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
@@ -65,6 +68,18 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
+      spec <- makeChainSpec[F](conf)
+
+      genesis <- makeGenesis[F](spec)
+
+      implicit0(protocolVersions: CasperLabsProtocolVersions[F]) <- Resource.liftF[
+                                                                     F,
+                                                                     CasperLabsProtocolVersions[F]
+                                                                   ](
+                                                                     CasperLabsProtocolVersions
+                                                                       .fromChainSpec[F](spec)
+                                                                   )
+
       cachedConnections <- makeConnectionsCache(
                             conf,
                             clientSslContext,
@@ -91,9 +106,15 @@ package object gossiping {
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
 
-      downloadManager <- makeDownloadManager(conf, connectToGossip, relaying, validatorId)
+      downloadManager <- makeDownloadManager(
+                          conf,
+                          connectToGossip,
+                          relaying,
+                          validatorId,
+                          genesis.getHeader.chainId
+                        )
 
-      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager)
+      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis)
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
@@ -121,7 +142,7 @@ package object gossiping {
                                        genesis,
                                        prestate,
                                        transforms,
-                                       conf.casper.chainId,
+                                       genesis.getHeader.chainId,
                                        relaying
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
@@ -133,7 +154,13 @@ package object gossiping {
       isInitialRef <- Resource.liftF(
                        Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
                      )
-      synchronizer <- makeSynchronizer(conf, connectToGossip, awaitApproval.join, isInitialRef)
+      synchronizer <- makeSynchronizer(
+                       conf,
+                       connectToGossip,
+                       awaitApproval.join,
+                       isInitialRef,
+                       genesis.getHeader.chainId
+                     )
 
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
@@ -178,6 +205,32 @@ package object gossiping {
     } yield ()
   }
 
+  private def makeChainSpec[F[_]: MonadThrowable](conf: Configuration): Resource[F, ipc.ChainSpec] =
+    Resource.liftF[F, ipc.ChainSpec] {
+      ChainSpecReader
+        .fromConf(conf)
+        .fold(
+          errors =>
+            MonadThrowable[F].raiseError(
+              new IllegalArgumentException(
+                errors.toList.mkString(", ")
+              )
+            ),
+          _.pure[F]
+        )
+    }
+
+  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
+      spec: ipc.ChainSpec
+  ): Resource[F, Block] =
+    Resource.liftF[F, Block] {
+      for {
+        _       <- Log[F].info("Constructing Genesis block...")
+        genesis <- Genesis.fromChainSpec[F](spec.getGenesis)
+        _       <- Log[F].info(s"Genesis hash is ${show(genesis.getBlockMessage.blockHash)}")
+      } yield genesis.getBlockMessage
+    }
+
   /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
     for {
@@ -186,7 +239,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       chainId: String,
       block: Block
   ): F[Unit] =
@@ -305,11 +358,12 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
-      validatorId: Option[ValidatorIdentity]
+      validatorId: Option[ValidatorIdentity],
+      chainId: String
   ): Resource[F, DownloadManager[F]] =
     for {
       _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
@@ -332,7 +386,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(conf.casper.chainId, block)
+                                validateAndAddBlock(chainId, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -353,17 +407,16 @@ package object gossiping {
                         )
     } yield downloadManager
 
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer](
+  // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
+  // which could be based on the presence of other known validators, signaled by their approvals.
+  // That just gives us the assurance that we are using the right chain spec because other are as well.
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployBuffer: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      downloadManager: DownloadManager[F]
+      downloadManager: DownloadManager[F],
+      genesis: Block
   ): Resource[F, GenesisApprover[F]] =
     for {
-      knownValidators <- Resource.liftF {
-                          // Based on `CasperPacketHandler.of` in default mode.
-                          CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
-                        }
-
       validatorId <- Resource.liftF {
                       for {
                         id <- ValidatorIdentity.fromConfig[F](conf.casper)
@@ -378,74 +431,52 @@ package object gossiping {
                       } yield id
                     }
 
+      _ <- Resource.liftF {
+            for {
+              // Validate it to make sure that code path is exercised.
+              _ <- Log[F].info(
+                    s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
+                  )
+              _ <- validateAndAddBlock(
+                    genesis.getHeader.chainId,
+                    genesis
+                  )
+            } yield ()
+          }
+
+      knownValidators <- Resource.liftF {
+                          // Based on `CasperPacketHandler.of` in default mode.
+                          CasperConf.parseValidatorsFile[F](conf.casper.knownValidatorsFile)
+                        }
+
+      // Produce an approval for a valid candiate if this node is a Genesis validator.
       maybeApproveBlock = (block: Block) =>
-        validatorId.map { id =>
-          val sig = id.signature(block.blockHash.toByteArray)
-          Approval()
-            .withApproverPublicKey(sig.publicKey)
-            .withSignature(
-              Signature()
-                .withSigAlgorithm(sig.algorithm)
-                .withSig(sig.sig)
-            )
-        }
-
-      // Function to read and set the bonds.txt in modes which generate the Genesis locally.
-      readBondsFile = {
-        for {
-          _     <- Log[F].info("Taking bonds from file.")
-          bonds <- Genesis.getBonds[F](conf.casper.bondsFile)
-        } yield bonds
-      }
-
-      candidateValidator <- Resource.liftF[F, Block => F[Either[Throwable, Option[Approval]]]] {
-                             if (conf.casper.approveGenesis) {
-                               // This is the case of a validator that will pull the genesis from the bootstrap, validate and approve it.
-                               // Based on `CasperPacketHandler.of`.
-                               for {
-                                 _       <- Log[F].info("Starting in approve genesis mode")
-                                 wallets <- Genesis.getWallets[F](conf.casper.walletsFile)
-                                 bonds   <- readBondsFile
-                                 bondsMap = bonds.map {
-                                   case (k, v) => ByteString.copyFrom(k) -> v
-                                 }
-                               } yield { (block: Block) =>
-                                 {
-                                   val candidate = protocol
-                                     .ApprovedBlockCandidate()
-                                     .withBlock(LegacyConversions.fromBlock(block))
-                                     .withRequiredSigs(conf.casper.requiredSigs)
-
-                                   BlockApproverProtocol.validateCandidate[F](
-                                     candidate,
-                                     wallets,
-                                     bondsMap,
-                                     BlockApproverProtocol.GenesisConf.fromCasperConf(conf.casper)
-                                   ) map {
-                                     case Left(msg) =>
-                                       Left(InvalidArgument(msg))
-
-                                     case Right(()) =>
-                                       Right(maybeApproveBlock(block))
-                                   }
-                                 }
-                               }
-                             } else if (conf.casper.standalone) {
-                               // This is the case of the bootstrap node. It will not pull candidates.
-                               Log[F].info("Starting in create genesis mode") *>
-                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
-                             } else {
-                               // Non-validating nodes. They are okay with everything,
-                               Log[F].info("Starting in default mode") *>
-                                 ((_: Block) => none[Approval].asRight[Throwable].pure[F]).pure[F]
-                             }
-                           }
+        validatorId
+          .filter { id =>
+            val publicKey = ByteString.copyFrom(id.publicKey)
+            block.getHeader.getState.bonds.exists { bond =>
+              bond.validatorPublicKey == publicKey
+            }
+          }
+          .map { id =>
+            val sig = id.signature(block.blockHash.toByteArray)
+            Approval()
+              .withApproverPublicKey(ByteString.copyFrom(id.publicKey))
+              .withSignature(sig)
+          }
 
       backend = new GenesisApproverImpl.Backend[F] {
+        // Everyone has to have the same chain spec, so approval is just a matter of checking the candidate hash.
         override def validateCandidate(
             block: Block
         ): F[Either[Throwable, Option[Approval]]] =
-          candidateValidator(block)
+          if (block.blockHash == genesis.blockHash) {
+            maybeApproveBlock(block).asRight.pure[F]
+          } else {
+            InvalidArgument(
+              s"Block hash ${show(block.blockHash)} did not equal the expected Genesis hash ${show(genesis.blockHash)}"
+            ).asLeft.pure[F].widen
+          }
 
         override def canTransition(
             block: Block,
@@ -461,11 +492,8 @@ package object gossiping {
         ): Boolean =
           Validation[F].signature(
             blockHash.toByteArray,
-            protocol
-              .Signature()
-              .withPublicKey(publicKey)
-              .withAlgorithm(signature.sigAlgorithm)
-              .withSig(signature.sig)
+            signature,
+            PublicKey(publicKey.toByteArray)
           )
 
         override def getBlock(blockHash: ByteString): F[Option[Block]] =
@@ -474,53 +502,30 @@ package object gossiping {
             .map(_.map(_.getBlockMessage))
       }
 
-      approver <- if (conf.casper.standalone) {
-                   for {
-                     genesis <- Resource.liftF {
-                                 for {
-                                   _       <- Log[F].info("Constructing Genesis candidate...")
-                                   genesis <- Genesis[F](conf.casper).map(_.getBlockMessage)
-                                   // Store it so others can pull it from the bootstrap node.
-                                   _ <- Log[F].info(
-                                         s"Trying to store generated Genesis candidate ${show(genesis.blockHash)}"
-                                       )
-                                   _ <- validateAndAddBlock(
-                                         conf.casper.chainId,
-                                         genesis
-                                       )
-                                 } yield genesis
-                               }
-
-                     approver <- GenesisApproverImpl.fromGenesis(
-                                  backend,
-                                  NodeDiscovery[F],
-                                  connectToGossip,
-                                  relayFactor = conf.server.approvalRelayFactor,
-                                  genesis = genesis,
-                                  maybeApproval = maybeApproveBlock(genesis)
-                                )
-                   } yield approver
-                 } else {
-                   for {
-                     bootstraps <- unsafeGetBootstraps[F](conf)
-                     approver <- GenesisApproverImpl.fromBootstraps(
-                                  backend,
-                                  NodeDiscovery[F],
-                                  connectToGossip,
-                                  bootstraps = bootstraps,
-                                  relayFactor = conf.server.approvalRelayFactor,
-                                  pollInterval = conf.server.approvalPollInterval,
-                                  downloadManager = downloadManager
-                                )
-                   } yield approver
-                 }
+      approver <- GenesisApproverImpl[F](
+                   backend,
+                   NodeDiscovery[F],
+                   connectToGossip,
+                   relayFactor = conf.server.approvalRelayFactor,
+                   maybeBootstrapParams = NonEmptyList.fromList(conf.server.bootstrap) map {
+                     bootstraps =>
+                       GenesisApproverImpl.BootstrapParams(
+                         bootstraps,
+                         conf.server.approvalPollInterval,
+                         downloadManager
+                       )
+                   },
+                   maybeGenesis = Some(genesis),
+                   maybeApproval = maybeApproveBlock(genesis)
+                 )
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation](
+  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
-      isInitialRef: Ref[F, Boolean]
+      isInitialRef: Ref[F, Boolean],
+      chainId: String
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _         <- SynchronizerImpl.establishMetrics[F]
@@ -544,7 +549,7 @@ package object gossiping {
                          } yield latest.values.toList
 
                        override def validate(blockSummary: BlockSummary): F[Unit] =
-                         Validation[F].blockSummary(blockSummary, conf.casper.chainId)
+                         Validation[F].blockSummary(blockSummary, chainId)
 
                        override def notInDag(blockHash: ByteString): F[Boolean] =
                          isInDag(blockHash).map(!_)
@@ -736,18 +741,6 @@ package object gossiping {
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
-
-  // Should only be called in non-stand alone mode.
-  private def unsafeGetBootstraps[F[_]: MonadThrowable](
-      conf: Configuration
-  ): Resource[F, NonEmptyList[Node]] =
-    Resource.liftF(
-      MonadThrowable[F]
-        .fromOption(
-          NonEmptyList.fromList(conf.server.bootstrap),
-          new java.lang.IllegalStateException("Bootstrap node hasn't been configured.")
-        )
-    )
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],

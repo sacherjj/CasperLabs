@@ -17,6 +17,7 @@ use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
+use engine_core::engine_state::upgrade::UpgradeConfig;
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
 use engine_shared::motes::Motes;
@@ -37,6 +38,7 @@ fn transform_write(v: contract_ffi::value::Value) -> Result<transform::Transform
 pub enum MappingError {
     InvalidPublicKeyLength { expected: usize, actual: usize },
     ParsingError(ParsingError),
+    InvalidHash(String),
 }
 
 impl MappingError {
@@ -63,6 +65,7 @@ impl Display for MappingError {
             MappingError::ParsingError(ParsingError(message)) => {
                 write!(f, "Parsing error: {}", message)
             }
+            MappingError::InvalidHash(message) => write!(f, "Invalid hash: {}", message),
         }
     }
 }
@@ -740,14 +743,13 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // TODO(mateusz.gorski): Fix error model for the storage errors.
                     // We don't have separate IPC messages for storage errors
                     // so for the time being they are all reported as "wasm errors".
-                    error @ EngineError::InvalidProtocolVersion => {
-                        let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
-                    }
                     error @ EngineError::InvalidHashLength { .. } => {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::InvalidPublicKeyLength { .. } => {
+                        precondition_failure(error.to_string())
+                    }
+                    error @ EngineError::InvalidProtocolVersion { .. } => {
                         precondition_failure(error.to_string())
                     }
                     error @ EngineError::WasmPreprocessingError(_) => {
@@ -1031,6 +1033,54 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
             ret.set_costs(cost_table);
         }
         ret
+    }
+}
+
+impl TryFrom<ipc::UpgradeRequest> for UpgradeConfig {
+    type Error = MappingError;
+
+    fn try_from(upgrade_request: ipc::UpgradeRequest) -> Result<Self, Self::Error> {
+        let pre_state_hash = upgrade_request
+            .get_parent_state_hash()
+            .try_into()
+            .map_err(|_| MappingError::InvalidHash("pre_state_hash".to_string()))?;
+
+        let current_protocol_version = upgrade_request.get_protocol_version().into();
+
+        let upgrade_point = upgrade_request.get_upgrade_point();
+        let new_protocol_version: ProtocolVersion = upgrade_point.get_protocol_version().into();
+        let (upgrade_installer_bytes, upgrade_installer_args) =
+            if !upgrade_point.has_upgrade_installer() {
+                (None, None)
+            } else {
+                let upgrade_installer = upgrade_point.get_upgrade_installer();
+                let bytes = upgrade_installer.get_code().to_vec();
+                let bytes = if bytes.is_empty() { None } else { Some(bytes) };
+                let args = upgrade_installer.get_args().to_vec();
+                let args = if args.is_empty() { None } else { Some(args) };
+                (bytes, args)
+            };
+
+        let wasm_costs = if !upgrade_point.has_new_costs() {
+            None
+        } else {
+            Some(upgrade_point.get_new_costs().get_wasm().to_owned().into())
+        };
+        let activation_point = if !upgrade_point.has_activation_point() {
+            None
+        } else {
+            Some(upgrade_point.get_activation_point().rank)
+        };
+
+        Ok(UpgradeConfig::new(
+            pre_state_hash,
+            current_protocol_version,
+            new_protocol_version,
+            upgrade_installer_args,
+            upgrade_installer_bytes,
+            wasm_costs,
+            activation_point,
+        ))
     }
 }
 

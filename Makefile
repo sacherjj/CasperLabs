@@ -137,14 +137,10 @@ cargo-native-packager/%:
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
 		.make/docker-build/universal/node \
-		hack/docker/test-node.Dockerfile \
-		package-system-contracts
+		hack/docker/test-node.Dockerfile
 	# Add system contracts so we can use them in integration testing.
 	# For live tests we should mount them from a real source.
-	mkdir -p hack/docker/.genesis/system-contracts
-	tar -xvzf execution-engine/target/system-contracts.tar.gz -C hack/docker/.genesis/system-contracts
 	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
-	rm -rf hack/docker/.genesis
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
@@ -176,8 +172,7 @@ cargo-native-packager/%:
 # Make an image to host the Casper Explorer UI and the faucet microservice.
 .make/docker-build/explorer: \
 		explorer/Dockerfile \
-		.make/npm/explorer \
-		build-explorer-contracts
+		build-explorer
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
@@ -185,7 +180,8 @@ cargo-native-packager/%:
 	$(TS_SRC) \
 	.make/protoc/explorer \
 	explorer/ui/package.json \
-	explorer/server/package.json
+	explorer/server/package.json \
+	build-explorer-contracts
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
 	        cd explorer/grpc   && npm install && cd - &&\
@@ -242,14 +238,8 @@ cargo-native-packager/%:
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-.make/client/contracts: build-client-contracts
-	mkdir -p $(dir $@) && touch $@
-
-.make/node/contracts:
-	mkdir -p $(dir $@) && touch $@
-
 # Refresh Scala build artifacts if source was changed.
-.make/sbt-stage/%: $(SCALA_SRC) .make/%/contracts
+.make/sbt-stage/%: $(SCALA_SRC) build-%-contracts
 	$(eval PROJECT = $*)
 	sbt -mem 5000 $(PROJECT)/universal:stage
 	mkdir -p $(dir $@) && touch $@
@@ -306,20 +296,28 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 
 
 # Compile a contract under execution-engine; it will be written for example to execution-engine/target/wasm32-unknown-unknown/release/mint_token.wasm
-.make/contracts/client/%: $(RUST_SRC) .make/rustup-update
-	$(eval CONTRACT=$(subst _,-,$*))
-	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
-	mkdir -p $(dir $@) && touch $@
-
-.make/contracts/explorer/%: $(RUST_SRC) .make/rustup-update
+# The target works .make/contracts/standard_payment for example and compiles the standard-payment project in EE;
+# in the EE project all the contracts appear individually in the cargo workspace.
+.make/contracts/%: $(RUST_SRC) .make/rustup-update
 	$(eval CONTRACT=$(subst _,-,$*))
 	$(MAKE) -C execution-engine build-contract/$(CONTRACT)
 	mkdir -p $(dir $@) && touch $@
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
-client/src/main/resources/%.wasm: .make/contracts/client/%
-	$(eval CONTRACT=$*)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+client/src/main/resources/%.wasm: .make/contracts/%
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
+
+# Compile a contract and put it in the node resources so they get packaged with the JAR.
+node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
+
+# Copy a client or explorer contract to the explorer.
+explorer/contracts/%.wasm: .make/contracts/%
+	mkdir -p explorer/contracts
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
+
+build-client: \
+	.make/sbt-stage/client
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
@@ -327,15 +325,20 @@ build-client-contracts: \
 	client/src/main/resources/transfer_to_account.wasm \
 	client/src/main/resources/standard_payment.wasm
 
-explorer/contracts/%.wasm: .make/contracts/%
-	$(eval CONTRACT=$(shell echo $* | awk -F'/' '{print $$2}'))
-	mkdir -p $(dir $@)
-	cp execution-engine/target/wasm32-unknown-unknown/release/$(CONTRACT).wasm $@
+build-node: \
+	.make/sbt-stage/node
+
+build-node-contracts: \
+	node/src/main/resources/chainspec/genesis/mint_install.wasm \
+	node/src/main/resources/chainspec/genesis/pos_install.wasm
+
+build-explorer: \
+	.make/npm/explorer
 
 build-explorer-contracts: \
-	explorer/contracts/client/transfer_to_account.wasm \
-	explorer/contracts/client/standard_payment.wasm \
-	explorer/contracts/explorer/faucet.wasm
+	explorer/contracts/transfer_to_account.wasm \
+	explorer/contracts/standard_payment.wasm \
+	explorer/contracts/faucet.wasm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

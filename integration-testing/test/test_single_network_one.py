@@ -1,7 +1,6 @@
 import os
 import logging
 import pytest
-import json
 from pytest import fixture, raises
 
 from casperlabs_local_net.contract_address import contract_address
@@ -397,42 +396,6 @@ def deploy_hashes(node, block_hash):
 # fmt: off
 
 
-def test_args_parser():
-    account = (
-        b"\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08"
-        b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
-    )
-
-    long_value = 123456
-    big_int_value = 123456789012345678901234567890
-
-    long_value_abi = ABI.long_value(long_value)
-    assert long_value_abi == b"@\xe2\x01\x00\x00\x00\x00\x00"
-
-    bytes_value_abi = ABI.account(account)
-    assert bytes_value_abi == b" \x00\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07\x00\x08" \
-                              b"\x00\x00\x00\x01\x00\x02\x00\x03\x00\x04\x00\x05\x00\x06\x00\x07"
-
-    optional_value_abi = ABI.optional_value(None)
-    assert optional_value_abi == b"\x00"
-
-    big_int_value_abi = ABI.big_int(big_int_value)
-    assert big_int_value_abi == b"\r\xd2\n?N\xee\xe0s\xc3\xf6\x0f\xe9\x8e\x01"
-
-    args = [{"name": "amount", "value": {"long_value": long_value}},
-            {"name": "account", "value": {"bytes_value": account.hex()}},
-            {"name": "purse_id", "value": {"optional_value": {}}},
-            {"name": "number", "value": {"big_int": {"value": f"{big_int_value}", "bit_width": 512}}}]
-
-    json_str = json.dumps(args)
-
-    json_abi = ABI.args_from_json(json_str)
-    raw_abi = ABI.args(
-        [long_value_abi, bytes_value_abi, optional_value_abi, big_int_value_abi]
-    )
-    assert json_abi == raw_abi
-
-
 @fixture()
 def genesis_public_signing_key():
     with GENESIS_ACCOUNT.public_key_binary_file() as f:
@@ -461,13 +424,13 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     client = node.p_client.client
 
     for wasm, encode in [
-        (resources_path() / Contract.ARGS_U32, ABI.u32),
-        (resources_path() / Contract.ARGS_U512, ABI.u512),
+        (resources_path() / Contract.ARGS_U32, ABI.int_value),
+        (resources_path() / Contract.ARGS_U512, ABI.big_int),
     ]:
         for number in [1, 12, 256, 1024]:
             response, deploy_hash = client.deploy(
                 session=wasm,
-                session_args=ABI.args([encode(number)]),
+                session_args=ABI.args([encode("number", number)]),
                 payment=resources_path() / Contract.STANDARD_PAYMENT,
                 payment_args=MAX_PAYMENT_ABI,
                 public_key=GENESIS_ACCOUNT.public_key_path,
@@ -493,7 +456,7 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     response, deploy_hash = client.deploy(
         session=wasm,
         session_args=ABI.args(
-            [ABI.account(bytes.fromhex(account_hex)), ABI.u32(number)]
+            [ABI.account("account", account_hex), ABI.u32("number", number)]
         ),
         payment=resources_path() / Contract.STANDARD_PAYMENT,
         payment_args=MAX_PAYMENT_ABI,
@@ -629,7 +592,8 @@ def test_cli_abi_unsigned_python(node, unsigned_type, test_contract, value):
 def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
     account = GENESIS_ACCOUNT
     for number in [2, 256, 1024]:
-        session_args = json.dumps([{"name": "number", "value": {unsigned_type: value(number)}}])
+        args = ABI.args([getattr(ABI, unsigned_type)("number", number)])
+        session_args = ABI.args_to_json(args)
         args = ('deploy',
                 '--from', account.public_key_hex,
                 '--session', cli.resource(test_contract),
@@ -653,8 +617,8 @@ def test_cli_abi_multiple(cli):
     number = 1000
     total_sum = sum([1, 2, 3, 4, 5, 6, 7, 8]) * 4 + number
 
-    session_args = json.dumps([{'name': 'account', 'value': {'account': account_hex}},
-                               {'name': 'number', 'value': {'int_value': number}}])
+    args = ABI.args([ABI.account("account", account_hex), ABI.int_value("number", number)])
+    session_args = ABI.args_to_json(args)
     deploy_hash = cli('deploy',
                       '--from', account.public_key_hex,
                       '--session', cli.resource(Contract.ARGS_MULTI),
