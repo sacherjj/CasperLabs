@@ -432,7 +432,14 @@ object ExecEngineUtil {
                             .fromTry(
                               candidateParentBlocks.toList.traverse(Message.fromBlock(_))
                             )
-      candidateParents <- candidateMessages.traverse(getParents).map(_.flatten.distinct.toVector)
+      candidateParents <- candidateMessages
+                           .traverse {
+                             case block: Message.Block =>
+                               block.pure[F]
+                             case ballot: Message.Ballot =>
+                               getParent(ballot.messageHash, ballot.parentBlock)
+                           }
+                           .map(_.distinct.toVector)
       merged <- abstractMerge[F, TransformMap, Message.Block, state.Key](
                  candidateParents,
                  getParents,

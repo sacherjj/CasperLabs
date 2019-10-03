@@ -120,6 +120,65 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
+  it should "create a ballot when asked and there are no deploys" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    for {
+      _                 <- MultiParentCasper[Task].createMessage(canCreateBallot = false) shouldBeF NoNewDeploys
+      createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(block)    = createBlockResult
+      parents           = ProtoUtil.parentHashes(block)
+
+      _ = parents should have size 1
+      _ = parents.head shouldBe genesis.blockHash
+      _ = block.getHeader.messageType shouldBe Block.MessageType.BALLOT
+      _ <- node.tearDown()
+    } yield ()
+  }
+
+  it should "perfer to create a block rather than a ballot" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    for {
+      deploy <- ProtoUtil.basicDeploy[Task]()
+      _      <- MultiParentCasper[Task].deploy(deploy)
+
+      createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(block)    = createBlockResult
+      _                 = block.getHeader.messageType shouldBe Block.MessageType.BLOCK
+      _                 <- node.tearDown()
+    } yield ()
+  }
+
+  it should "always choose the last block as the parent, never a ballot" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    for {
+      deploy <- ProtoUtil.basicDeploy[Task]()
+      // A ballot on top of genesis should not be built upon by the upcoming block.
+      _ <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+
+      _                  <- MultiParentCasper[Task].deploy(deploy)
+      createBlockResult1 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(block1)    = createBlockResult1
+      _                  = ProtoUtil.parentHashes(block1).head shouldBe genesis.blockHash
+      _                  <- MultiParentCasper[Task].addBlock(block1)
+
+      createBlockResult2 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(ballot2)   = createBlockResult2
+      _                  = ProtoUtil.parentHashes(ballot2).head shouldBe block1.blockHash
+
+      createBlockResult3 <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(ballot3)   = createBlockResult3
+      _                  = ProtoUtil.parentHashes(ballot3).head shouldBe block1.blockHash
+
+      _ <- node.tearDown()
+    } yield ()
+  }
+
   it should "accept signed blocks" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
     import node._

@@ -422,7 +422,8 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      messageType: Block.MessageType = Block.MessageType.BLOCK
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -442,7 +443,7 @@ object ProtoUtil {
       chainId = chainId,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum
-    )
+    ).withMessageType(messageType)
 
     val unsigned = unsignedBlockProto(body, header)
     signBlock(

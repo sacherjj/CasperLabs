@@ -629,7 +629,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         rank,
         validatorId,
         privateKey,
-        sigAlgorithm
+        sigAlgorithm,
+        messageType = Block.MessageType.BALLOT
       )
       CreateBlockStatus.created(block)
     }
