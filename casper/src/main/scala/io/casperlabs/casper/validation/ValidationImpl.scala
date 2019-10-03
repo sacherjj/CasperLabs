@@ -114,6 +114,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- timestamp(summary)
       _ <- blockNumber(summary, dag)
       _ <- sequenceNumber(summary, dag)
+      // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
+
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)

@@ -397,10 +397,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         for {
           dag            <- dag
           latestMessages <- dag.latestMessages
-          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
-          tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-          merged         <- ExecEngineUtil.merge[F](tips, dag)
-          parents        = merged.parents
+          // Tips can be either ballots or blocks.
+          tipHashes <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
+          tips      <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+          // Merged makes sure that we only get blocks.
+          merged  <- ExecEngineUtil.merge[F](tips, dag)
+          parents = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
@@ -415,7 +417,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           justifications   = toJustification(bondedLatestMsgs.values.toSeq)
           rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
           protocolVersion  <- CasperLabsProtocolVersions[F].versionAt(rank)
-          proposal <- if (remainingHashes.nonEmpty || parents.length > 1 || canCreateBallot) {
+          proposal <- if (remainingHashes.nonEmpty) {
                        createProposal(
                          latestMessages,
                          merged,
@@ -426,6 +428,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                          protocolVersion,
                          rank
                        )
+                     } else if (canCreateBallot) {
+                       ???
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
                      }
