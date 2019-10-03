@@ -66,6 +66,15 @@ pub enum ContractPointer {
     URef(TURef<Contract>),
 }
 
+impl ContractPointer {
+    pub fn into_turef(self) -> Option<TURef<Contract>> {
+        match self {
+            ContractPointer::URef(ret) => Some(ret),
+            _ => None,
+        }
+    }
+}
+
 impl<T> From<TURef<T>> for Key {
     fn from(turef: TURef<T>) -> Self {
         let uref = URef::new(turef.addr(), turef.access_rights());

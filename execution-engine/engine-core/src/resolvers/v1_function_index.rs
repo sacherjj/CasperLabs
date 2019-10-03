@@ -11,37 +11,36 @@ pub enum FunctionIndex {
     AddFuncIndex = 4,
     NewFuncIndex = 5,
     GetReadFuncIndex = 6,
-    SerFnFuncIndex = 7,
-    GetFnFuncIndex = 8,
-    LoadArgFuncIndex = 9,
-    GetArgFuncIndex = 10,
-    RetFuncIndex = 11,
-    GetCallResultFuncIndex = 12,
-    CallContractFuncIndex = 13,
-    GetKeyFuncIndex = 14,
-    GasFuncIndex = 15,
-    HasKeyFuncIndex = 16,
-    PutKeyFuncIndex = 17,
-    StoreFnIndex = 18,
-    ProtocolVersionFuncIndex = 19,
-    IsValidFnIndex = 20,
-    RevertFuncIndex = 21,
-    AddAssociatedKeyFuncIndex = 22,
-    RemoveAssociatedKeyFuncIndex = 23,
-    UpdateAssociatedKeyFuncIndex = 24,
-    SetActionThresholdFuncIndex = 25,
-    SerNamedKeysFuncIndex = 26,
-    ListNamedKeysFuncIndex = 27,
-    RemoveKeyFuncIndex = 28,
-    GetCallerIndex = 29,
-    GetBlocktimeIndex = 30,
-    CreatePurseIndex = 31,
-    TransferToAccountIndex = 32,
-    TransferFromPurseToAccountIndex = 33,
-    TransferFromPurseToPurseIndex = 34,
-    GetBalanceIndex = 35,
-    GetPhaseIndex = 36,
-    UpgradeContractAtURef = 37,
+    GetFnFuncIndex = 7,
+    LoadArgFuncIndex = 8,
+    GetArgFuncIndex = 9,
+    RetFuncIndex = 10,
+    GetCallResultFuncIndex = 11,
+    CallContractFuncIndex = 12,
+    GetKeyFuncIndex = 13,
+    GasFuncIndex = 14,
+    HasKeyFuncIndex = 15,
+    PutKeyFuncIndex = 16,
+    StoreFnIndex = 17,
+    StoreFnAtHashIndex = 18,
+    IsValidFnIndex = 19,
+    RevertFuncIndex = 20,
+    AddAssociatedKeyFuncIndex = 21,
+    RemoveAssociatedKeyFuncIndex = 22,
+    UpdateAssociatedKeyFuncIndex = 23,
+    SetActionThresholdFuncIndex = 24,
+    SerNamedKeysFuncIndex = 25,
+    ListNamedKeysFuncIndex = 26,
+    RemoveKeyFuncIndex = 27,
+    GetCallerIndex = 28,
+    GetBlocktimeIndex = 29,
+    CreatePurseIndex = 30,
+    TransferToAccountIndex = 31,
+    TransferFromPurseToAccountIndex = 32,
+    TransferFromPurseToPurseIndex = 33,
+    GetBalanceIndex = 34,
+    GetPhaseIndex = 35,
+    UpgradeContractAtURef = 36,
 }
 
 impl Into<usize> for FunctionIndex {
@@ -66,14 +65,14 @@ mod tests {
 
     #[test]
     fn primitive_to_enum() {
-        let element = FunctionIndex::try_from(20).expect("Unable to create enum from number");
+        let element = FunctionIndex::try_from(19).expect("Unable to create enum from number");
         assert_eq!(element, FunctionIndex::IsValidFnIndex);
     }
     #[test]
     fn enum_to_primitive() {
         let element = FunctionIndex::IsValidFnIndex;
         let primitive: usize = element.into();
-        assert_eq!(primitive, 20usize);
+        assert_eq!(primitive, 19usize);
     }
     #[test]
     #[should_panic]

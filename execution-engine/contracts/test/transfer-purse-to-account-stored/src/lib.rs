@@ -5,9 +5,6 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -49,8 +46,10 @@ pub extern "C" fn transfer() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    let contract = contract_api::fn_by_name(TRANSFER_FUNCTION_NAME, named_keys);
-    let key = contract_api::new_turef(contract).into();
+    let key = contract_api::store_function(TRANSFER_FUNCTION_NAME, Default::default())
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .into();
+
     contract_api::put_key(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &key);
 }
