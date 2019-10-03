@@ -4,9 +4,9 @@ use contract_ffi::value::{Value, U512};
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
-const CONTRACT_CREATE: &str = "ee_572_regression_create";
-const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate";
-const CONTRACT_TRANSFER: &str = "transfer_purse_to_account";
+const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
+const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";
+const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
 const CREATE: &str = "create";
 
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
@@ -23,27 +23,19 @@ fn should_run_ee_572_regression() {
     // more data
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            account_1_creation_args,
-        )
-    };
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            account_2_creation_args,
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER,
+        account_1_creation_args,
+    );
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER,
+        account_2_creation_args,
+    );
 
-    let exec_request_3 = {
-        let contract_name = format!("{}.wasm", CONTRACT_CREATE);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, account_2_creation_args)
-    };
+    let exec_request_3 =
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_CREATE, account_2_creation_args);
 
     // Create Accounts
     builder
@@ -72,10 +64,8 @@ fn should_run_ee_572_regression() {
             .expect("Could not find contract pointer")
     };
 
-    let exec_request_4 = {
-        let contract_name = format!("{}.wasm", CONTRACT_ESCALATE);
-        ExecuteRequestBuilder::standard(ACCOUNT_2_ADDR, &contract_name, (contract,))
-    };
+    let exec_request_4 =
+        ExecuteRequestBuilder::standard(ACCOUNT_2_ADDR, CONTRACT_ESCALATE, (contract,));
 
     // Attempt to forge a new URef with escalated privileges
     let response = builder

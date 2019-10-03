@@ -3,15 +3,16 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::U512;
 use engine_shared::transform::Transform;
 
-const CONTRACT_EE_460_REGRESSION: &str = "ee_460_regression";
+const CONTRACT_EE_460_REGRESSION: &str = "ee_460_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_run_ee_460_no_side_effects_on_error_regression() {
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_EE_460_REGRESSION);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (U512::max_value(),))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_EE_460_REGRESSION,
+        (U512::max_value(),),
+    );
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

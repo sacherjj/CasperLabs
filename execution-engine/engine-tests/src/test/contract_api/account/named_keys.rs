@@ -6,16 +6,14 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 
-const CONTRACT_NAMED_KEYS: &str = "named_keys";
+const CONTRACT_NAMED_KEYS: &str = "named_keys.wasm";
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
 fn should_run_named_keys_contract() {
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_NAMED_KEYS);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, ());
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

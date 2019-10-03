@@ -11,7 +11,7 @@ use engine_shared::transform::Transform;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01";
+const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
@@ -28,10 +28,11 @@ const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 fn should_run_pos_install_contract() {
     let mut builder = WasmTestBuilder::default();
 
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (SYSTEM_ADDR,))
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (SYSTEM_ADDR,),
+    );
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

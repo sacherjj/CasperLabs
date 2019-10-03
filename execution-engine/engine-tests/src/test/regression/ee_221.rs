@@ -1,17 +1,15 @@
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const CONTRACT_EE_221_REGRESSION: &str = "ee_221_regression";
+const CONTRACT_EE_221_REGRESSION: &str = "ee_221_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_run_ee_221_get_uref_regression_test() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_EE_221_REGRESSION);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_221_REGRESSION, ());
 
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

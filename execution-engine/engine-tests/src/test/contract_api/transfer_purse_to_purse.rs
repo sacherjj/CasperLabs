@@ -7,7 +7,7 @@ use crate::test::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
 
-const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse";
+const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse.wasm";
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
 
 #[ignore]
@@ -16,14 +16,11 @@ fn should_run_purse_to_purse_transfer() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_PURSE);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_PURSE,
+        (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
+    );
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -112,14 +109,11 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // more data
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_PURSE);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (source, target, U512::from(999_999_999_999i64)),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_PURSE,
+        (source, target, U512::from(999_999_999_999i64)),
+    );
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

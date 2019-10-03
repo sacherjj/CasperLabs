@@ -4,8 +4,8 @@ use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilde
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS: &str =
-    "check_system_contract_urefs_access_rights";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+    "check_system_contract_urefs_access_rights.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
 lazy_static! {
@@ -17,22 +17,17 @@ lazy_static! {
 fn should_have_read_only_access_to_system_contract_urefs() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!(
-            "{}.wasm",
-            CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS
-        );
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, ())
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS,
+        (),
+    );
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

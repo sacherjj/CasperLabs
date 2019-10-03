@@ -7,7 +7,7 @@ use crate::support::test_support::{
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
 #[ignore]
@@ -36,8 +36,11 @@ fn initialize() -> InMemoryWasmTestBuilder {
 fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U512) {
     let exec_request = {
         let public_key = PublicKey::new(address);
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (public_key, amount))
+        ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+            (public_key, amount),
+        )
     };
 
     builder

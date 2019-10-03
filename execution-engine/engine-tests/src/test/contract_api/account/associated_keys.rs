@@ -6,9 +6,9 @@ use contract_ffi::value::{Account, U512};
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
-const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key";
-const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
+const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT * 10;
@@ -21,18 +21,16 @@ fn should_manage_associated_key() {
     // that key
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
-        )
-    };
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_ADD_UPDATE_ASSOCIATED_KEY);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (DEFAULT_ACCOUNT_ADDR,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
+    );
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
+        (DEFAULT_ACCOUNT_ADDR,),
+    );
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -59,10 +57,11 @@ fn should_manage_associated_key() {
     let expected_weight = Weight::new(2);
     assert_eq!(*gen_weight, expected_weight, "unexpected weight");
 
-    let exec_request_3 = {
-        let contract_name = format!("{}.wasm", CONTRACT_REMOVE_ASSOCIATED_KEY);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (DEFAULT_ACCOUNT_ADDR,))
-    };
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_REMOVE_ASSOCIATED_KEY,
+        (DEFAULT_ACCOUNT_ADDR,),
+    );
 
     builder
         .exec_with_exec_request(exec_request_3)

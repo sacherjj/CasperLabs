@@ -5,20 +5,16 @@ use engine_shared::transform::Transform;
 
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
-const CONTRACT_LOCAL_STATE: &str = "local_state";
+const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 
 #[ignore]
 #[test]
 fn should_run_local_state_contract() {
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request_2 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
 
     // This test runs a contract that's after every call extends the same key with
     // more data

@@ -8,7 +8,7 @@ use engine_shared::motes::Motes;
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
 use std::collections::HashMap;
 
-const CONTRACT_LOCAL_STATE: &str = "local_state";
+const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
@@ -40,10 +40,8 @@ fn should_return_bonded_validators() {
 
     let genesis_config = test_support::create_genesis_config(accounts.clone());
 
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
 
     let actual = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)

@@ -12,8 +12,8 @@ use crate::support::test_support::{
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
-const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
@@ -24,23 +24,17 @@ const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (SYSTEM_ADDR, *DEFAULT_PAYMENT),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (SYSTEM_ADDR, *DEFAULT_PAYMENT),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_ADDR, *DEFAULT_PAYMENT),
-        )
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_ADDR, *DEFAULT_PAYMENT),
+    );
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -68,14 +62,10 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
         Some(ACCOUNT_ADDR),
     );
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_FINALIZE_PAYMENT);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args)
-    };
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_FINALIZE_PAYMENT);
-        ExecuteRequestBuilder::standard(ACCOUNT_ADDR, &contract_name, args)
-    };
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args);
+    let exec_request_2 =
+        ExecuteRequestBuilder::standard(ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args);
 
     assert!(builder.exec_with_exec_request(exec_request_1).is_error());
 

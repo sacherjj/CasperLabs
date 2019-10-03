@@ -8,8 +8,8 @@ use engine_shared::transform::Transform;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
-const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const TEST_PURSE_NAME: &str = "test_purse";
 
@@ -49,18 +49,16 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
 #[ignore]
 #[test]
 fn should_insert_mint_add_keys_transform() {
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_CREATE_PURSE_01);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (TEST_PURSE_NAME,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_CREATE_PURSE_01,
+        (TEST_PURSE_NAME,),
+    );
 
     let mint_transform: &Transform = {
         let result = WasmTestBuilder::default()
@@ -83,19 +81,17 @@ fn should_insert_mint_add_keys_transform() {
 #[ignore]
 #[test]
 fn should_insert_account_into_named_keys() {
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_CREATE_PURSE_01);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (TEST_PURSE_NAME,))
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_CREATE_PURSE_01,
+        (TEST_PURSE_NAME,),
+    );
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -118,19 +114,17 @@ fn should_insert_account_into_named_keys() {
 #[ignore]
 #[test]
 fn should_create_usable_purse_id() {
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_CREATE_PURSE_01);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (TEST_PURSE_NAME,))
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_CREATE_PURSE_01,
+        (TEST_PURSE_NAME,),
+    );
     let result = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

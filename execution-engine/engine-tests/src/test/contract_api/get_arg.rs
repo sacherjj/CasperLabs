@@ -14,17 +14,15 @@ enum GetArgContractError {
     InvalidArgument1,
 }
 
-const CONTRACT_GET_ARG: &str = "get_arg";
+const CONTRACT_GET_ARG: &str = "get_arg.wasm";
 const ARG0_VALUE: &str = "Hello, world!";
 const ARG1_VALUE: u64 = 42;
 
 /// Calls get_arg contract and returns Ok(()) in case no error, or String which is the error message
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_GET_ARG);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args)
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GET_ARG, args);
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

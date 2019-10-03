@@ -8,7 +8,7 @@ use crate::test::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
 
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT + 42;
@@ -19,22 +19,16 @@ lazy_static! {
 fn should_run_purse_to_account_transfer() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (account_1_public_key, *ACCOUNT_1_INITIAL_FUND),
-        )
-    };
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            account_1_public_key.value(),
-            &contract_name,
-            (genesis_public_key, U512::from(1)),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (account_1_public_key, *ACCOUNT_1_INITIAL_FUND),
+    );
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        account_1_public_key.value(),
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (genesis_public_key, U512::from(1)),
+    );
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)
@@ -200,10 +194,9 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let account_1_key = PublicKey::new(ACCOUNT_1_ADDR);
 
     let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
         ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
+            CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
             (account_1_key, U512::max_value()),
         )
     };

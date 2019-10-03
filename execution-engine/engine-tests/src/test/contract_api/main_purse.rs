@@ -4,8 +4,8 @@ use contract_ffi::value::Value;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
-const CONTRACT_MAIN_PURSE: &str = "main_purse";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
+const CONTRACT_MAIN_PURSE: &str = "main_purse.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 
 #[ignore]
@@ -23,14 +23,11 @@ fn should_run_main_purse_contract_default_account() {
         panic!("could not get account")
     };
 
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_MAIN_PURSE);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (default_account.purse_id(),),
-        )
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_MAIN_PURSE,
+        (default_account.purse_id(),),
+    );
 
     builder
         .exec_with_exec_request(exec_request)
@@ -43,14 +40,11 @@ fn should_run_main_purse_contract_default_account() {
 fn should_run_main_purse_contract_account_1() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *DEFAULT_PAYMENT),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *DEFAULT_PAYMENT),
+    );
 
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -62,10 +56,11 @@ fn should_run_main_purse_contract_account_1() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should get account");
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_MAIN_PURSE);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (account_1.purse_id(),))
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_MAIN_PURSE,
+        (account_1.purse_id(),),
+    );
 
     builder
         .exec_with_exec_request(exec_request_2)

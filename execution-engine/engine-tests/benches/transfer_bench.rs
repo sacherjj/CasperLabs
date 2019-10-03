@@ -19,8 +19,8 @@ use engine_core::engine_state::EngineConfig;
 use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 
-const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts";
-const CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT: &str = "transfer_to_existing_account";
+const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
+const CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT: &str = "transfer_to_existing_account.wasm";
 
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
@@ -40,14 +40,11 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 
     let data_dir = TempDir::new().expect("should create temp dir");
 
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_CREATE_ACCOUNTS);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (accounts_bytes, amount),
-        )
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_CREATE_ACCOUNTS,
+        (accounts_bytes, amount),
+    );
 
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -66,10 +63,11 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
 
     // To see raw numbers take current time
     for _ in 0..TRANSFER_BATCH_SIZE {
-        let exec_request = {
-            let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (account, amount))
-        };
+        let exec_request = ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT,
+            (account, amount),
+        );
         builder
             .exec_with_exec_request(exec_request)
             .expect_success()

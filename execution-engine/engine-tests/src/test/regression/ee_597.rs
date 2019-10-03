@@ -1,15 +1,14 @@
 use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression";
+const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_EE_597_REGRESSION);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_597_REGRESSION, ());
+
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request)

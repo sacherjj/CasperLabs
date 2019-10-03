@@ -17,22 +17,19 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CON
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
-const CONTRACT_REVERT: &str = "revert";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
+const CONTRACT_REVERT: &str = "revert.wasm";
 
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
-        )
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
+    );
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -45,10 +42,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         .expect("there should be a response")
         .to_owned();
 
-    let account_1_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_REVERT);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, ())
-    };
+    let account_1_request = ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ());
 
     let account_1_response = builder
         .exec_with_exec_request(account_1_request)

@@ -6,10 +6,9 @@ use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
 
-const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account";
-const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01";
-const CONTRACT_TRANSFER_TO_ACCOUNT_02: &str = "transfer_to_account_02";
-// const INITIAL_GENESIS_AMOUNT: u64 = 100_000_000_000;
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT_02: &str = "transfer_to_account_02.wasm";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -46,10 +45,11 @@ fn should_transfer_to_account() {
 
     // Exec transfer contract
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (ACCOUNT_1_ADDR,),
+    );
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -105,10 +105,11 @@ fn should_transfer_from_account_to_account() {
 
     // Exec transfer 1 contract
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (ACCOUNT_1_ADDR,),
+    );
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -140,10 +141,11 @@ fn should_transfer_from_account_to_account() {
 
     // Exec transfer 2 contract
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_2_AMOUNT,))
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_02,
+        (*TRANSFER_2_AMOUNT,),
+    );
 
     builder
         .exec_with_exec_request(exec_request_2)
@@ -202,10 +204,11 @@ fn should_transfer_to_existing_account() {
 
     // Exec transfer 1 contract
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (ACCOUNT_1_ADDR,),
+    );
 
     builder
         .exec_with_exec_request(exec_request_1)
@@ -240,10 +243,11 @@ fn should_transfer_to_existing_account() {
 
     // Exec transfer contract
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_2_AMOUNT,))
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_02,
+        (*TRANSFER_2_AMOUNT,),
+    );
     builder
         .exec_with_exec_request(exec_request_2)
         .expect_success()
@@ -279,24 +283,22 @@ fn should_transfer_to_existing_account() {
 fn should_fail_when_insufficient_funds() {
     // Run genesis
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_01);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (ACCOUNT_1_ADDR,))
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (ACCOUNT_1_ADDR,),
+    );
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_02,
+        (*TRANSFER_2_AMOUNT_WITH_ADV,),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
-        ExecuteRequestBuilder::standard(
-            ACCOUNT_1_ADDR,
-            &contract_name,
-            (*TRANSFER_2_AMOUNT_WITH_ADV,),
-        )
-    };
-
-    let exec_request_3 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_TO_ACCOUNT_02);
-        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, &contract_name, (*TRANSFER_TOO_MUCH,))
-    };
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_02,
+        (*TRANSFER_TOO_MUCH,),
+    );
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
@@ -328,23 +330,17 @@ fn should_fail_when_insufficient_funds() {
 fn should_transfer_total_amount() {
     let mut builder = test_support::InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            DEFAULT_ACCOUNT_ADDR,
-            &contract_name,
-            (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
 
-    let exec_request_2 = {
-        let contract_name = format!("{}.wasm", CONTRACT_TRANSFER_PURSE_TO_ACCOUNT);
-        ExecuteRequestBuilder::standard(
-            ACCOUNT_1_ADDR,
-            &contract_name,
-            (ACCOUNT_2_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
-        )
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_2_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    );
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec_with_exec_request(exec_request_1)

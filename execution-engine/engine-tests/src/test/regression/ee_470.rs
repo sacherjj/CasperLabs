@@ -3,17 +3,15 @@ use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
-const CONTRACT_LOCAL_STATE: &str = "local_state";
+const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 
 #[ignore]
 #[test]
 fn regression_test_genesis_hash_mismatch() {
     let mut builder_base = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 = {
-        let contract_name = format!("{}.wasm", CONTRACT_LOCAL_STATE);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ());
 
     // Step 1.
     let builder = builder_base.run_genesis(&DEFAULT_GENESIS_CONFIG);

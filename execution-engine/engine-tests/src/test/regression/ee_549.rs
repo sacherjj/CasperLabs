@@ -1,15 +1,13 @@
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-const CONTRACT_EE_549_REGRESSION: &str = "ee_549_regression";
+const CONTRACT_EE_549_REGRESSION: &str = "ee_549_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_run_ee_549_set_refund_regression() {
-    let exec_request = {
-        let contract_name = format!("{}.wasm", CONTRACT_EE_549_REGRESSION);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ())
-    };
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_549_REGRESSION, ());
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
