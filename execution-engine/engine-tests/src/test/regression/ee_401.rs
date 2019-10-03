@@ -21,10 +21,10 @@ fn should_execute_contracts_which_provide_extra_urefs() {
     .build();
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         .finish();

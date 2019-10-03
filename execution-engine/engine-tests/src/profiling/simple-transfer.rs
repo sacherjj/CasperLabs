@@ -123,10 +123,7 @@ fn main() {
         root_hash,
     );
 
-    test_builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    test_builder.exec(exec_request).expect_success().commit();
 
     if args.verbose {
         println!("{:#?}", test_builder.get_transforms());

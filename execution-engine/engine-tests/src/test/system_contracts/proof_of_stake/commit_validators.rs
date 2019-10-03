@@ -45,7 +45,7 @@ fn should_return_bonded_validators() {
 
     let actual = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .get_bonded_validators()[0]
         .clone();

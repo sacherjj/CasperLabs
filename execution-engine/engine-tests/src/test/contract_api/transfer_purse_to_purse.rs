@@ -25,7 +25,7 @@ fn should_run_purse_to_purse_transfer() {
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
@@ -118,7 +118,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     .build();
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();

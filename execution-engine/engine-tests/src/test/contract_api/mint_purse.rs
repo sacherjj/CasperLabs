@@ -19,10 +19,10 @@ fn should_run_mint_purse_contract() {
 
     WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .commit()
         .expect_success()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .expect_success();
 }
@@ -35,7 +35,7 @@ fn should_not_allow_non_system_accounts_to_mint() {
 
     assert!(WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .is_error());
 }

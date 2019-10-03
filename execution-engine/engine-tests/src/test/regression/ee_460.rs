@@ -16,7 +16,7 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
     .build();
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();

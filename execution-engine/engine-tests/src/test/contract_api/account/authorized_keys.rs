@@ -20,7 +20,7 @@ fn should_deploy_with_authorized_identity_key() {
     // Basic deploy with single key
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .expect_success();
 }
@@ -47,7 +47,7 @@ fn should_raise_auth_failure_with_invalid_key() {
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -103,7 +103,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
     // Basic deploy with single key
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -169,18 +169,18 @@ fn should_raise_deploy_authorization_failure() {
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .expect_success()
         .commit()
         // This should execute successfuly - change deploy and key management
         // thresholds.
-        .exec_with_exec_request(exec_request_4)
+        .exec(exec_request_4)
         .expect_success()
         .commit()
         .finish();
@@ -195,7 +195,7 @@ fn should_raise_deploy_authorization_failure() {
     // With deploy threshold == 3 using single secondary key
     // with weight == 2 should raise deploy authorization failure.
     let result2 = InMemoryWasmTestBuilder::from_result(result1)
-        .exec_with_exec_request(exec_request_5)
+        .exec(exec_request_5)
         .commit()
         .finish();
 
@@ -234,7 +234,7 @@ fn should_raise_deploy_authorization_failure() {
     };
     // identity key (w: 1) and key_1 (w: 2) passes threshold of 3
     let result3 = InMemoryWasmTestBuilder::from_result(result2)
-        .exec_with_exec_request(exec_request_6)
+        .exec(exec_request_6)
         .expect_success()
         .commit()
         .finish();
@@ -249,7 +249,7 @@ fn should_raise_deploy_authorization_failure() {
     // deployment threshold is now 4
     // failure: key_2 weight + key_1 weight < deployment threshold
     let result4 = InMemoryWasmTestBuilder::from_result(result3)
-        .exec_with_exec_request(exec_request_7)
+        .exec(exec_request_7)
         .commit()
         .finish();
 
@@ -294,7 +294,7 @@ fn should_raise_deploy_authorization_failure() {
     // success: identity key weight + key_1 weight + key_2 weight >= deployment
     // threshold
     InMemoryWasmTestBuilder::from_result(result4)
-        .exec_with_exec_request(exec_request_8)
+        .exec(exec_request_8)
         .commit()
         .expect_success()
         .finish();
@@ -327,10 +327,10 @@ fn should_authorize_deploy_with_multiple_keys() {
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         .finish();
@@ -344,7 +344,7 @@ fn should_authorize_deploy_with_multiple_keys() {
     )
     .build();
     InMemoryWasmTestBuilder::from_result(result1)
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .expect_success()
         .commit();
 }
@@ -374,10 +374,10 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Reusing a test contract that would add new key
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         .finish();
@@ -406,7 +406,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     // success: identity key weight + key_1 weight + key_2 weight >= deployment
     // threshold
     let final_result = InMemoryWasmTestBuilder::from_result(result1)
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .commit()
         .finish();
     let deploy_result = final_result

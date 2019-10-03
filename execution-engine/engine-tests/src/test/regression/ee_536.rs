@@ -14,7 +14,7 @@ fn should_run_ee_536_get_uref_regression_test() {
 
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();

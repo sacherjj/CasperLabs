@@ -33,10 +33,7 @@ fn should_upgrade_do_nothing_to_do_something() {
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // call stored do nothing, passing a purse name as an arg
@@ -69,10 +66,7 @@ fn should_upgrade_do_nothing_to_do_something() {
             .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // call upgraded contract
@@ -87,10 +81,7 @@ fn should_upgrade_do_nothing_to_do_something() {
             .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     let contract = builder
@@ -120,10 +111,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     let account = builder
@@ -170,10 +158,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // version should change after upgrade
@@ -211,10 +196,7 @@ fn should_support_extending_functionality() {
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     let account = builder
@@ -240,10 +222,7 @@ fn should_support_extending_functionality() {
             .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // verify known uref actually exists prior to upgrade
@@ -263,10 +242,7 @@ fn should_support_extending_functionality() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // verify uref still exists in named_keys after upgrade:
@@ -291,10 +267,7 @@ fn should_support_extending_functionality() {
             .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // verify known urefs no longer include removed purse
@@ -322,10 +295,7 @@ fn should_maintain_named_keys_across_upgrade() {
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     let account = builder
@@ -353,10 +323,7 @@ fn should_maintain_named_keys_across_upgrade() {
             .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
 
         // verify known uref actually exists prior to upgrade
         let contract = builder
@@ -376,10 +343,7 @@ fn should_maintain_named_keys_across_upgrade() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // verify all urefs still exist in named_keys after upgrade
@@ -413,10 +377,7 @@ fn should_maintain_local_state_across_upgrade() {
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     let account = builder
@@ -438,10 +399,7 @@ fn should_maintain_local_state_across_upgrade() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // confirm expected local state was written
@@ -463,10 +421,7 @@ fn should_maintain_local_state_across_upgrade() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // call upgraded local_state_stored_contract
@@ -478,10 +433,7 @@ fn should_maintain_local_state_across_upgrade() {
                 .build()
         };
 
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 
     // get transformed local state value post upgrade

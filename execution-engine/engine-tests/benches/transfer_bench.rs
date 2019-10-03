@@ -48,7 +48,7 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -69,10 +69,7 @@ fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account
             (account, amount),
         )
         .build();
-        builder
-            .exec_with_exec_request(exec_request)
-            .expect_success()
-            .commit();
+        builder.exec(exec_request).expect_success().commit();
     }
 }
 
@@ -91,10 +88,7 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
         exec_builder = exec_builder.push_deploy(deploy);
     }
 
-    builder
-        .exec_with_exec_request(exec_builder.build())
-        .expect_success()
-        .commit();
+    builder.exec(exec_builder.build()).expect_success().commit();
 }
 
 pub fn transfer_bench(c: &mut Criterion) {

@@ -36,7 +36,7 @@ fn should_run_pos_install_contract() {
     .build();
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .expect_success();
 

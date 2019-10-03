@@ -43,18 +43,15 @@ fn should_run_ee_572_regression() {
     // Create Accounts
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 
     // Store the creation contract
-    builder
-        .exec_with_exec_request(exec_request_3)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_3).expect_success().commit();
 
     let contract: Key = {
         let account = match builder.query(None, Key::Account(ACCOUNT_1_ADDR), &[]) {
@@ -72,7 +69,7 @@ fn should_run_ee_572_regression() {
 
     // Attempt to forge a new URef with escalated privileges
     let response = builder
-        .exec_with_exec_request(exec_request_4)
+        .exec(exec_request_4)
         .get_exec_response(3)
         .expect("should have a response")
         .to_owned();

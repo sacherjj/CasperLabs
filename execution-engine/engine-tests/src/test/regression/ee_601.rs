@@ -29,7 +29,7 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request);
+        .exec(exec_request);
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];

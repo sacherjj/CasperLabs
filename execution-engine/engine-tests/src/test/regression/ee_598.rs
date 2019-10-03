@@ -58,10 +58,10 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .finish();
 

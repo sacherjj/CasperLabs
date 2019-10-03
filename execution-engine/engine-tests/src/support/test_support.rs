@@ -689,7 +689,7 @@ where
         }
     }
 
-    pub fn exec_with_exec_request(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {
+    pub fn exec(&mut self, mut exec_request: ExecuteRequest) -> &mut Self {
         let exec_request = {
             let hash = self
                 .post_state_hash
@@ -978,7 +978,7 @@ where
     }
 
     pub fn exec_commit_finish(&mut self, execute_request: ExecuteRequest) -> WasmTestResult<S> {
-        self.exec_with_exec_request(execute_request)
+        self.exec(execute_request)
             .expect_success()
             .commit()
             .finish()

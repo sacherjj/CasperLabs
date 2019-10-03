@@ -17,7 +17,7 @@ fn should_run_ee_584_no_errored_session_transforms() {
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request);
+        .exec(exec_request);
 
     assert!(builder.is_error());
 

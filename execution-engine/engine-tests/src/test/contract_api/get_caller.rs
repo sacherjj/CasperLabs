@@ -19,7 +19,7 @@ fn should_run_get_caller_contract() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .commit()
         .expect_success();
 
@@ -37,10 +37,10 @@ fn should_run_get_caller_contract() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .expect_success()
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .commit()
         .expect_success();
 }
@@ -56,7 +56,7 @@ fn should_run_get_caller_subcall_contract() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .commit()
         .expect_success();
 
@@ -74,10 +74,10 @@ fn should_run_get_caller_subcall_contract() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .expect_success()
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .commit()
         .expect_success();
 }

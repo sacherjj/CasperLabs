@@ -35,10 +35,10 @@ fn should_manage_associated_key() {
     .build();
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 
@@ -66,10 +66,7 @@ fn should_manage_associated_key() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_3)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_3).expect_success().commit();
 
     let account_1: Account = {
         let tmp = builder.clone();

@@ -34,7 +34,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .finish();
 
     let response = transfer_result
@@ -69,7 +69,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .finish();
 
     let response = transfer_result
@@ -112,7 +112,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .finish();
 
     let response = transfer_result

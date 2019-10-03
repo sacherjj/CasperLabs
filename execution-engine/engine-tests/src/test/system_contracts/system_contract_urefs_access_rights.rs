@@ -33,9 +33,9 @@ fn should_have_read_only_access_to_system_contract_urefs() {
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .expect_success();
 }

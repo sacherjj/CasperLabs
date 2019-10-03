@@ -83,7 +83,7 @@ fn should_run_successful_bond_and_unbond() {
     .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
@@ -145,10 +145,10 @@ fn should_run_successful_bond_and_unbond() {
 
     // Create new account (from genesis funds) and bond with it
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         .expect_success()
         .commit()
         .finish();
@@ -210,7 +210,7 @@ fn should_run_successful_bond_and_unbond() {
     .build();
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_4)
+        .exec(exec_request_4)
         .expect_success()
         .commit()
         .finish();
@@ -267,7 +267,7 @@ fn should_run_successful_bond_and_unbond() {
     )
     .build();
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_5)
+        .exec(exec_request_5)
         .expect_success()
         .commit()
         .finish();
@@ -315,7 +315,7 @@ fn should_run_successful_bond_and_unbond() {
     .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_6)
+        .exec(exec_request_6)
         .expect_success()
         .commit()
         .finish();
@@ -363,7 +363,7 @@ fn should_run_successful_bond_and_unbond() {
     .build();
 
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_exec_request(exec_request_7)
+        .exec(exec_request_7)
         .expect_success()
         .commit()
         .finish();
@@ -481,9 +481,9 @@ fn should_fail_bonding_with_insufficient_funds() {
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .finish();
 
@@ -526,7 +526,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 

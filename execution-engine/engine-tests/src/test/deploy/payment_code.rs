@@ -38,7 +38,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .get_exec_response(0)
@@ -49,7 +49,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
         ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ()).build();
 
     let account_1_response = builder
-        .exec_with_exec_request(account_1_request)
+        .exec(account_1_request)
         .commit()
         .get_exec_response(1)
         .expect("there should be a response")
@@ -101,7 +101,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .get_exec_response(0)
         .expect("there should be a response")
@@ -184,7 +184,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -273,7 +273,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -310,7 +310,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -375,7 +375,7 @@ fn should_correctly_charge_when_session_code_fails() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -435,7 +435,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -522,10 +522,7 @@ fn should_finalize_to_rewards_purse() {
     let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
     assert!(rewards_purse_balance.is_zero());
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 
     let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
     assert!(!rewards_purse_balance.is_zero());
@@ -557,7 +554,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     // create another account via transfer
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(setup_exec_request)
+        .exec(setup_exec_request)
         .expect_success()
         .commit();
 
@@ -587,10 +584,10 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
 
     // run two independent deploys
     builder
-        .exec_with_exec_request(exec_request_from_genesis)
+        .exec(exec_request_from_genesis)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_from_account_1)
+        .exec(exec_request_from_account_1)
         .expect_success()
         .commit();
 
@@ -659,10 +656,10 @@ fn should_charge_non_main_purse() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(setup_exec_request)
+        .exec(setup_exec_request)
         .expect_success()
         .commit()
-        .exec_with_exec_request(create_purse_exec_request)
+        .exec(create_purse_exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -720,7 +717,7 @@ fn should_charge_non_main_purse() {
     };
 
     let transfer_result = builder
-        .exec_with_exec_request(account_payment_exec_request)
+        .exec(account_payment_exec_request)
         .expect_success()
         .commit()
         .finish();

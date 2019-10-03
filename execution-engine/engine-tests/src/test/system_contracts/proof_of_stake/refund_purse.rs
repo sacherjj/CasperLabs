@@ -43,10 +43,7 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32], amount: U5
         .build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 }
 
 fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
@@ -64,8 +61,5 @@ fn refund_tests(builder: &mut InMemoryWasmTestBuilder, address: [u8; 32]) {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 }

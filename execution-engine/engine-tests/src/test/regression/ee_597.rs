@@ -12,7 +12,7 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 

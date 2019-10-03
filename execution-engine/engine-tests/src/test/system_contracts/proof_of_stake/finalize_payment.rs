@@ -40,10 +40,10 @@ fn initialize() -> InMemoryWasmTestBuilder {
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 
@@ -70,9 +70,9 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
     let exec_request_2 =
         ExecuteRequestBuilder::standard(ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args).build();
 
-    assert!(builder.exec_with_exec_request(exec_request_1).is_error());
+    assert!(builder.exec(exec_request_1).is_error());
 
-    assert!(builder.exec_with_exec_request(exec_request_2).is_error());
+    assert!(builder.exec(exec_request_2).is_error());
 }
 
 #[ignore]
@@ -110,10 +110,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 
     let spent_amount: U512 = {
         let response = builder

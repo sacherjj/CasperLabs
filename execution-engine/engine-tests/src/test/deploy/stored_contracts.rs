@@ -662,13 +662,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         let store_transforms = builder
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(store_request(
+            .exec(store_request(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 [1; 32],
             ))
             .expect_success()
             .commit()
-            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
+            .exec(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
             .expect_success()
             .commit()
             .get_transforms()[1]
@@ -705,7 +705,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         builder
-            .exec_with_exec_request(call_stored_request)
+            .exec(call_stored_request)
             .expect_success()
             .commit()
             .get_transforms()[2]
@@ -748,13 +748,13 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
 
         InMemoryWasmTestBuilder::default()
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(do_nothing_request([1; 32]))
+            .exec(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(do_nothing_request([2; 32]))
+            .exec(do_nothing_request([2; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(provided_request)
+            .exec(provided_request)
             .expect_success()
             .get_transforms()[2]
             .to_owned()

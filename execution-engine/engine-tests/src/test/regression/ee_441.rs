@@ -30,7 +30,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
 
     let transforms = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .get_transforms();

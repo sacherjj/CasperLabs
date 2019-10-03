@@ -19,7 +19,7 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
 
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();

@@ -14,7 +14,7 @@ fn should_run_ee_549_set_refund_regression() {
 
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request);
+        .exec(exec_request);
 
     // Execution should encounter an error because set_refund
     // is not allowed to be called during session execution.

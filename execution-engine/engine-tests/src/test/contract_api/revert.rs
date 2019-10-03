@@ -10,7 +10,7 @@ fn should_revert() {
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, REVERT_WASM, ()).build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .is_error();
 }

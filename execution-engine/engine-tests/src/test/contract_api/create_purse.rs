@@ -65,10 +65,10 @@ fn should_insert_mint_add_keys_transform() {
     let mint_transform: &Transform = {
         let result = WasmTestBuilder::default()
             .run_genesis(&DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(exec_request_1)
+            .exec(exec_request_1)
             .expect_success()
             .commit()
-            .exec_with_exec_request(exec_request_2)
+            .exec(exec_request_2)
             .expect_success()
             .commit()
             .finish();
@@ -98,10 +98,10 @@ fn should_insert_account_into_named_keys() {
     .build();
     let account_1 = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         .finish()
@@ -133,10 +133,10 @@ fn should_create_usable_purse_id() {
     .build();
     let result = WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         .finish();

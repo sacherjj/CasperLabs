@@ -30,10 +30,7 @@ fn should_run_main_purse_contract_default_account() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 }
 
 #[ignore]
@@ -50,7 +47,7 @@ fn should_run_main_purse_contract_account_1() {
 
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit();
 
@@ -65,8 +62,5 @@ fn should_run_main_purse_contract_account_1() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_2)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_2).expect_success().commit();
 }

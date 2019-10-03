@@ -19,7 +19,7 @@ fn should_run_get_payment_purse_contract_default_account() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit();
 }
@@ -41,10 +41,10 @@ fn should_run_get_payment_purse_contract_account_1() {
     .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 }

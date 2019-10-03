@@ -36,10 +36,7 @@ fn regression_test_genesis_hash_mismatch() {
     assert_eq!(genesis_run_hash, genesis_transforms_hash);
 
     // Step 2.
-    builder
-        .exec_with_exec_request(exec_request_1)
-        .commit()
-        .expect_success();
+    builder.exec(exec_request_1).commit().expect_success();
 
     // No step 3.
     // Step 4.

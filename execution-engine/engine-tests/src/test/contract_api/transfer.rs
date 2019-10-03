@@ -52,10 +52,7 @@ fn should_transfer_to_account() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_1)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_1).expect_success().commit();
 
     let account = builder
         .get_account(ACCOUNT_1_ADDR)
@@ -113,10 +110,7 @@ fn should_transfer_from_account_to_account() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_1)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_1).expect_success().commit();
 
     let exec_1_response = builder
         .get_exec_response(0)
@@ -150,10 +144,7 @@ fn should_transfer_from_account_to_account() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_2)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_2).expect_success().commit();
 
     let exec_2_response = builder
         .get_exec_response(1)
@@ -214,10 +205,7 @@ fn should_transfer_to_existing_account() {
     )
     .build();
 
-    builder
-        .exec_with_exec_request(exec_request_1)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_1).expect_success().commit();
 
     // Exec transfer contract
 
@@ -253,10 +241,7 @@ fn should_transfer_to_existing_account() {
         (*TRANSFER_2_AMOUNT,),
     )
     .build();
-    builder
-        .exec_with_exec_request(exec_request_2)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request_2).expect_success().commit();
 
     let account_2 = builder
         .get_account(ACCOUNT_2_ADDR)
@@ -311,15 +296,15 @@ fn should_fail_when_insufficient_funds() {
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         // Exec transfer contract
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         // Exec transfer contract
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .expect_success()
         .commit()
         // // Exec transfer contract
-        .exec_with_exec_request(exec_request_3)
+        .exec(exec_request_3)
         // .expect_success()
         .commit()
         .finish();
@@ -353,10 +338,10 @@ fn should_transfer_total_amount() {
     .build();
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request_1)
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_2)
+        .exec(exec_request_2)
         .commit()
         .expect_success()
         .finish();

@@ -17,7 +17,7 @@ fn should_run_named_keys_contract() {
 
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .expect_success()
         .finish();
