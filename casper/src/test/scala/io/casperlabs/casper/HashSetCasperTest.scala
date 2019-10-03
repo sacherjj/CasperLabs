@@ -17,6 +17,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.FilesAPI
 import io.casperlabs.storage.block.BlockStorage
@@ -120,7 +121,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "create a ballot when asked and there are no deploys" in effectTest {
+  it should "create a ballot when asked to create a message and there are no deploys" in effectTest {
     val node            = standaloneEff(genesis, transforms, validatorKeys.head)
     implicit val casper = node.casperEff
 
@@ -132,12 +133,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       _ = parents should have size 1
       _ = parents.head shouldBe genesis.blockHash
-      _ = block.getHeader.messageType shouldBe Block.MessageType.BALLOT
+      _ = Message.fromBlock(block).get shouldBe a[Message.Ballot]
       _ <- node.tearDown()
     } yield ()
   }
 
-  it should "perfer to create a block rather than a ballot" in effectTest {
+  it should "create a block if a ballot is allowed but it has deploys in the buffer" in effectTest {
     val node            = standaloneEff(genesis, transforms, validatorKeys.head)
     implicit val casper = node.casperEff
 
@@ -147,7 +148,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
 
       createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
       Created(block)    = createBlockResult
-      _                 = block.getHeader.messageType shouldBe Block.MessageType.BLOCK
+      _                 = Message.fromBlock(block).get shouldBe a[Message.Block]
       _                 <- node.tearDown()
     } yield ()
   }
