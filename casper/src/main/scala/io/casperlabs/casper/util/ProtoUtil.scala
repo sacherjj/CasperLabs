@@ -422,8 +422,7 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm,
-      messageType: Block.MessageType = Block.MessageType.BLOCK
+      sigAlgorithm: SignatureAlgorithm
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -443,9 +442,54 @@ object ProtoUtil {
       chainId = chainId,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum
-    ).withMessageType(messageType)
+    )
 
     val unsigned = unsignedBlockProto(body, header)
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
+  /* Creates a signed ballot */
+  def ballot(
+      justifications: Seq[Justification],
+      stateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      protocolVersion: ProtocolVersion,
+      parent: ByteString,
+      validatorSeqNum: Int,
+      chainId: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): Block = {
+    val body = Block.Body()
+
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(stateHash)
+      .withPostStateHash(stateHash)
+      .withBonds(bondedValidators)
+
+    val header = blockHeader(
+      body,
+      parentHashes = List(parent),
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion.value,
+      timestamp = now,
+      chainId = chainId,
+      creator = publicKey,
+      validatorSeqNum = validatorSeqNum
+    ).withMessageType(Block.MessageType.BALLOT)
+
+    val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
