@@ -106,6 +106,10 @@ class ABI:
         )
 
     @staticmethod
+    def string_value(name, a):
+        return Arg(name=name, value=Value(string_value=a))
+
+    @staticmethod
     def args(l: list):
         c = consensus.Deploy.Code(args=l)
         return c.args

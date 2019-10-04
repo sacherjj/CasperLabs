@@ -729,24 +729,63 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
         assert deploy_info.error_message == 'Exit code: 2'
 
 
+def propose_check_no_errors(cli):
+    block_hash = cli("propose")
+    for deployInfo in cli.node.d_client.show_deploys(block_hash):
+        if deployInfo.is_error:
+            raise Exception(f"error_message: {deployInfo.error_message}")
+    return block_hash
+
+
 def test_multiple_deploys_per_block(cli):
     """
     Deploy from two different accounts then propose.
     Both deploys should be be included in the new block.
+
+    Create named purses to pay from for each deploy
+    (standard payment cannot be used because it causes
+    a WRITE against the main purse balance, but every
+    deploy has a READ against that balance to check it meets
+    the minimum balance condition, so standard payment calls
+    always conflict with any other deploy from the same account)
     """
     account = cli.node.test_account
-    genesis_account = cli.node.genesis_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account))
+
+    # Create purse_1
+    cli('deploy',
+        '--session', cli.resource('create_named_purse.wasm'),
+        '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_1")])),
+        '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+        '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
+    propose_check_no_errors(cli)
+
+    # Create purse_2
+    cli('deploy',
+        '--session', cli.resource('create_named_purse.wasm'),
+        '--session-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_2")])),
+        '--payment', cli.resource(Contract.STANDARD_PAYMENT),
+        '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000)])))
+    propose_check_no_errors(cli)
+
+    # First deploy uses first purse for payment
     deploy_hash1 = cli('deploy',
-                       '--from', genesis_account.public_key_hex,
+                       '--from', account.public_key_hex,
                        '--session', cli.resource('test_counterdefine.wasm'),
-                       '--private-key', cli.private_key_path(genesis_account),
-                       '--public-key', cli.public_key_path(genesis_account))
+                       '--payment', cli.resource("payment_from_named_purse.wasm"),
+                       '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_1")])))
+
+    # Second deploy uses second purse for payment
     deploy_hash2 = cli('deploy',
                        '--from', account.public_key_hex,
                        '--session', cli.resource('test_mailinglistdefine.wasm'),
-                       '--private-key', cli.private_key_path(account),
-                       '--public-key', cli.public_key_path(account))
-    block_hash = cli("propose")
+                       '--payment', cli.resource("payment_from_named_purse.wasm"),
+                       '--payment-args', ABI.args_to_json(ABI.args([ABI.big_int("amount", 100000000), ABI.string_value("purse-name", "purse_2")])))
+    block_hash = propose_check_no_errors(cli)
+
+    # Propose should include both deploys.
     deploys = list(cli("show-deploys", block_hash))
     assert len(deploys) == 2
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
