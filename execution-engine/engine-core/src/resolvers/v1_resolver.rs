@@ -117,7 +117,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], None),
                 FunctionIndex::StoreFnIndex.into(),
             ),
-            "store_function_at" => FuncInstance::alloc_host(
+            "store_function_at_hash" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 5][..], None),
                 FunctionIndex::StoreFnAtHashIndex.into(),
             ),

@@ -63,7 +63,7 @@ mod ext_ffi {
             named_keys_size: usize,
             uref_addr_ptr: *const u8,
         );
-        pub fn store_function_at(
+        pub fn store_function_at_hash(
             function_name_ptr: *const u8,
             function_name_size: usize,
             named_keys_ptr: *const u8,

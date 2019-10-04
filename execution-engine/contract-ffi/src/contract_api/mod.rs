@@ -348,7 +348,7 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
     let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
     let mut addr = [0u8; 32];
     unsafe {
-        ext_ffi::store_function_at(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
+        ext_ffi::store_function_at_hash(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
     }
     ContractPointer::Hash(addr)
 }
