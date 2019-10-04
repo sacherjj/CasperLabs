@@ -5,7 +5,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::string::String;
-use contract_ffi::contract_api::{self, PurseTransferResult, revert};
+use contract_ffi::contract_api::{self, revert, PurseTransferResult};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
@@ -49,7 +49,8 @@ pub extern "C" fn call() {
 }
 
 fn get_named_purse(name: &str) -> Option<PurseId> {
-    let key = contract_api::get_key(name).unwrap_or_else(|| revert(Error::NamedPurseNotFound as u32));
+    let key =
+        contract_api::get_key(name).unwrap_or_else(|| revert(Error::NamedPurseNotFound as u32));
     let uref = key.as_uref()?;
 
     Some(PurseId::new(*uref))
