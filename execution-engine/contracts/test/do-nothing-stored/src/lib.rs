@@ -30,11 +30,16 @@ pub extern "C" fn call() {
         ContractPointer::URef(turef) => turef.into(),
     };
 
-    let mint_key = Key::URef(mint_uref);
+    let named_keys = {
+        let mut tmp = BTreeMap::new();
+        tmp.insert(String::from(MINT_NAME), Key::URef(mint_uref));
+        tmp
+    };
 
-    let mut named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    named_keys.insert(String::from(MINT_NAME), mint_key);
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, named_keys);
-    let key = contract_api::new_turef(contract).into();
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, named_keys)
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .into();
+
     contract_api::put_key(CONTRACT_NAME, &key);
 }

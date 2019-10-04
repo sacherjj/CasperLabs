@@ -66,6 +66,7 @@ fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let do_nothing: ContractPointer = contract_api::store_function("do_nothing", BTreeMap::new());
+    let do_nothing: ContractPointer =
+        contract_api::store_function_at_hash("do_nothing", BTreeMap::new());
     my_call_contract(do_nothing.clone(), &());
 }

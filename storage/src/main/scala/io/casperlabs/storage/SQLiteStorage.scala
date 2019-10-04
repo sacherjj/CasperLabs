@@ -78,6 +78,12 @@ object SQLiteStorage {
 
       override def readPendingHashes: F[List[ByteString]] = deployStorage.readPendingHashes
 
+      override def readPendingHeaders: F[List[Deploy.Header]] =
+        deployStorage.readPendingHeaders
+
+      override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+        deployStorage.readPendingHashesAndHeaders
+
       override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
         deployStorage.getPendingOrProcessed(hash)
 

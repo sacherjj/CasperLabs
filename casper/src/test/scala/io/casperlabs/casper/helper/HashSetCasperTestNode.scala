@@ -55,6 +55,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val casperState: Cell[F, CasperState]
 ) {
   implicit val logEff: LogStub[F]
+  implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =

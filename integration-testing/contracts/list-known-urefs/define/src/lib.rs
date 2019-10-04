@@ -7,7 +7,7 @@ use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use contract_ffi::contract_api::{
-    put_key, get_key, list_named_keys, new_turef, revert, store_function,
+    put_key, get_key, list_named_keys, new_turef, revert, store_function_at_hash,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
@@ -40,6 +40,6 @@ pub extern "C" fn call() {
     // Store `list_named_keys_ext` to be called in the `call` part of this contract.
     // We don't have to  pass `expected_urefs` to exercise this function but
     // it adds initial known urefs to the state of the contract.
-    let pointer = store_function("list_named_keys_ext", expected_urefs);
+    let pointer = store_function_at_hash("list_named_keys_ext", expected_urefs);
     put_key("list_named_keys", &pointer.into())
 }

@@ -200,7 +200,7 @@ fn store_contract_with_uref_valid() {
 
     let query_result = test(access_rights, |mut rc| {
         let contract_addr = rc
-            .store_contract(contract.clone())
+            .store_function_at_hash(contract.clone())
             .expect("Storing contract with valid URefs should succeed.");
         let contract_key = Key::Hash(contract_addr);
         rc.read_gs(&contract_key)
@@ -223,7 +223,9 @@ fn store_contract_with_uref_forged() {
         ProtocolVersion::new(1),
     ));
 
-    let query_result = test(HashMap::new(), |mut rc| rc.store_contract(contract.clone()));
+    let query_result = test(HashMap::new(), |mut rc| {
+        rc.store_function_at_hash(contract.clone())
+    });
 
     assert_forged_reference(query_result);
 }

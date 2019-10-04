@@ -104,9 +104,7 @@ fn should_upgrade_system_contract() {
         .build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success();
+    builder.exec(exec_request).expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];
@@ -217,9 +215,7 @@ fn should_upgrade_system_contract_and_wasm_costs() {
         .build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success();
+    builder.exec(exec_request).expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];

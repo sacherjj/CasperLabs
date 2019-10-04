@@ -5,15 +5,15 @@ use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::U512;
 
 use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use engine_core::engine_state::MAX_PAYMENT;
-use engine_core::engine_state::{EngineConfig, CONV_RATE};
+use engine_core::engine_state::CONV_RATE;
 
 use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME,
-    STANDARD_PAYMENT_CONTRACT,
+    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
@@ -24,28 +24,26 @@ const ACCOUNT_ADDR: [u8; 32] = [1u8; 32];
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (SYSTEM_ADDR, *DEFAULT_PAYMENT),
+    )
+    .build();
+
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_ADDR, *DEFAULT_PAYMENT),
+    )
+    .build();
+
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            "transfer_purse_to_account.wasm",
-            (SYSTEM_ADDR, U512::from(MAX_PAYMENT)),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_ADDR, U512::from(MAX_PAYMENT)),
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 
@@ -66,36 +64,22 @@ fn finalize_payment_should_not_be_run_by_non_system_accounts() {
         Some(ACCOUNT_ADDR),
     );
 
-    assert!(builder
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            FINALIZE_PAYMENT,
-            args,
-            DEFAULT_BLOCK_TIME,
-            [3; 32],
-        )
-        .is_error());
-    assert!(builder
-        .exec_with_args(
-            ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (*DEFAULT_PAYMENT,),
-            FINALIZE_PAYMENT,
-            args,
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
-        .is_error());
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args)
+            .build();
+    let exec_request_2 =
+        ExecuteRequestBuilder::standard(ACCOUNT_ADDR, CONTRACT_FINALIZE_PAYMENT, args).build();
+
+    assert!(builder.exec(exec_request_1).is_error());
+
+    assert!(builder.exec(exec_request_2).is_error());
 }
 
 #[ignore]
 #[test]
 fn finalize_payment_should_refund_to_specified_purse() {
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
-    let payment_amount = U512::from(10_000_000);
+    let mut builder = InMemoryWasmTestBuilder::default();
+    let payment_amount = *DEFAULT_PAYMENT;
     let refund_purse_flag: u8 = 1;
     // Don't need to run finalize_payment manually, it happens during
     // the deploy because payment code is enabled.
@@ -126,10 +110,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 
     let spent_amount: U512 = {
         let response = builder
@@ -205,7 +186,7 @@ fn get_named_account_balance(
         .query(None, account_key, &[])
         .and_then(|v| v.try_into().ok())
         .expect("should find balance uref");
-
+    println!("account {:?}", account);
     let purse_id = account
         .named_keys()
         .get(name)

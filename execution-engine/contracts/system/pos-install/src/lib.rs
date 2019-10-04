@@ -21,6 +21,7 @@ const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 const MINT_NAME: &str = "mint";
+const POS_FUNCTION_NAME: &str = "pos_ext";
 
 #[repr(u32)]
 enum Args {
@@ -89,8 +90,10 @@ pub extern "C" fn call() {
         named_keys.insert(String::from(*name), Key::URef(*uref));
     });
 
-    let contract = contract_api::fn_by_name("pos_ext", named_keys);
-    let uref: URef = contract_api::new_turef(contract).into();
+    let uref = contract_api::store_function(POS_FUNCTION_NAME, named_keys)
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .into();
 
     contract_api::ret(&uref, &vec![uref]);
 }

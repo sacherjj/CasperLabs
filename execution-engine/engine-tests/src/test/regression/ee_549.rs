@@ -1,17 +1,20 @@
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+
+const CONTRACT_EE_549_REGRESSION: &str = "ee_549_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_run_ee_549_set_refund_regression() {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_549_REGRESSION, ())
+            .build();
+
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder.run_genesis(&DEFAULT_GENESIS_CONFIG).exec(
-        DEFAULT_ACCOUNT_ADDR,
-        "ee_549_regression.wasm",
-        DEFAULT_BLOCK_TIME,
-        [1u8; 32],
-    );
+    builder
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request);
 
     // Execution should encounter an error because set_refund
     // is not allowed to be called during session execution.

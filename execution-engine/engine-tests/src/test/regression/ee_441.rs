@@ -1,13 +1,11 @@
+use crate::support::test_support::{
+    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
+use contract_ffi::value::account::PublicKey;
 use engine_shared::transform::Transform;
-
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 fn get_uref(key: Key) -> URef {
     match key {
@@ -19,17 +17,20 @@ fn get_uref(key: Key) -> URef {
 fn do_pass(pass: &str) -> (URef, URef) {
     // This test runs a contract that's after every call extends the same key with
     // more data
+    let exec_request = {
+        let deploy = DeployItemBuilder::new()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_session_code("ee_441_rng_state.wasm", (pass.to_string(),))
+            .with_deploy_hash([1u8; 32])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
+            .build();
+        ExecuteRequestBuilder::from_deploy_item(deploy).build()
+    };
+
     let transforms = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "ee_441_rng_state.wasm",
-            (pass.to_string(),),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request)
         .expect_success()
         .commit()
         .get_transforms();

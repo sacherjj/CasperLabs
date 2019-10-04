@@ -450,7 +450,7 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
-            timestamp=int(time.time()),
+            timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=_hash(_serialize(body)),
         )
