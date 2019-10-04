@@ -5,18 +5,17 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::{EngineConfig, CONV_RATE};
-use engine_shared::transform::Transform;
-
-use crate::support::test_stored_contract_support::{
-    DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
-    GENESIS_INITIAL_BALANCE,
-};
 use engine_grpc_server::engine_server::ipc::ExecuteRequest;
-
-use crate::support::test_support;
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
+use engine_shared::transform::Transform;
 use std::convert::TryInto;
+
+use crate::support::test_stored_contract_support::{
+    self, DeployBuilder, Diff, ExecRequestBuilder, WasmTestBuilder, WasmTestResult,
+    GENESIS_INITIAL_BALANCE,
+};
+use crate::support::test_support;
 
 const GENESIS_ADDR: [u8; 32] = [12; 32];
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
@@ -87,8 +86,7 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let success_result =
-        crate::support::test_stored_contract_support::get_success_result(&response);
+    let success_result = test_stored_contract_support::get_success_result(&response);
     let cost = success_result
         .get_cost()
         .try_into()
@@ -164,7 +162,7 @@ fn should_exec_stored_code_by_hash() {
         "stored_payment_contract_hash should exist"
     );
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -210,7 +208,7 @@ fn should_exec_stored_code_by_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -276,7 +274,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -323,7 +321,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -389,7 +387,7 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -433,7 +431,7 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -499,7 +497,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -531,7 +529,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -567,7 +565,7 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = crate::support::test_stored_contract_support::get_success_result(&response);
+    let result = test_stored_contract_support::get_success_result(&response);
     let cost = result.get_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
@@ -769,7 +767,7 @@ fn should_produce_same_transforms_as_exec() {
         let config = config.clone();
 
         let request = {
-            let deploy = crate::support::test_support::DeployBuilder::new()
+            let deploy = test_support::DeployBuilder::new()
                 .with_address(genesis_addr)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),

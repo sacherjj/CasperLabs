@@ -9,16 +9,14 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::U512;
 use contract_ffi::value::{Account, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
 
-use crate::engine_state::execution_result::ExecutionResult;
-
 use super::Error;
 use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
+use crate::engine_state::execution_result::ExecutionResult;
 use crate::execution::address_generator::AddressGenerator;
 use crate::execution::FN_STORE_ID_INITIAL;
 use crate::runtime_context::RuntimeContext;
@@ -167,7 +165,7 @@ impl Executor<Module> for WasmiExecutor {
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::new(U512::from(args.len() as u64)),
+                Gas::new(args.len().into()),
                 effects_snapshot
             )
         };
@@ -242,7 +240,7 @@ impl Executor<Module> for WasmiExecutor {
         } else {
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::new(U512::from(args.len() as u64)),
+                Gas::new(args.len().into()),
                 effects_snapshot
             )
         };

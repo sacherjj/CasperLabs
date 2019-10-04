@@ -225,7 +225,7 @@ where
 
             FunctionIndex::GasFuncIndex => {
                 let gas_arg: u32 = Args::parse(args)?;
-                self.gas(Gas::new(U512::from(u64::from(gas_arg))))?;
+                self.gas(Gas::new(gas_arg.into()))?;
                 Ok(None)
             }
 
