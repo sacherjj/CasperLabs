@@ -739,7 +739,7 @@ def propose_check_no_errors(cli):
 
 def test_multiple_deploys_per_block(cli):
     """
-    Deploy from two different accounts then propose.
+    Two deploys from the same account then propose.
     Both deploys should be be included in the new block.
 
     Create named purses to pay from for each deploy
