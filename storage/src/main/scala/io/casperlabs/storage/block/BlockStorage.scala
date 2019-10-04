@@ -45,7 +45,7 @@ trait BlockStorage[F[_]] {
 
   def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]]
 
-  def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
+  def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
 
   def checkpoint(): F[Unit]
 
