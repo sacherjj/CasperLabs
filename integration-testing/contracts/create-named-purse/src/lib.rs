@@ -20,8 +20,8 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32);
-    let name: String = contract_api::get_arg(Arg::Name as u32);
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32).unwrap().unwrap();
+    let name: String = contract_api::get_arg(Arg::Name as u32).unwrap().unwrap();
     let main_purse: PurseId = contract_api::main_purse();
     let new_purse: PurseId = contract_api::create_purse();
 
@@ -32,5 +32,5 @@ pub extern "C" fn call() {
     }
 
     let new_purse_key: Key = new_purse.value().into();
-    contract_api::add_uref(&name, &new_purse_key);
+    contract_api::put_key(&name, &new_purse_key);
 }
