@@ -34,6 +34,7 @@ pub extern "C" fn create() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract: Key = contract_api::store_function(CONTRACT_NAME, Default::default()).into();
+    let contract: Key =
+        contract_api::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
     contract_api::put_key(CONTRACT_NAME, &contract)
 }

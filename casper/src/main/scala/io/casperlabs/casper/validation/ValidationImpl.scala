@@ -749,7 +749,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         for {
           deployToBlocksMap <- deploys
                                 .traverse { deploy =>
-                                  bs.findBlockHashesWithDeployhash(deploy.deployHash).map {
+                                  bs.findBlockHashesWithDeployHash(deploy.deployHash).map {
                                     blockHashes =>
                                       deploy -> blockHashes.filterNot(_ == block.blockHash)
                                   }

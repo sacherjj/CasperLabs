@@ -149,7 +149,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
       .option
       .transact(xa)
 
-  override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
+  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM deploy_process_results
           |WHERE deploy_hash=$deployHash

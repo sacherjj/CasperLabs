@@ -135,7 +135,7 @@ trait BlockStorageTest
           _ <- items.traverse[Task, Seq[Assertion]] { block =>
                 block.getBlockMessage.getBody.deploys.toList.traverse { deploy =>
                   storage
-                    .findBlockHashesWithDeployhash(deploy.getDeploy.deployHash)
+                    .findBlockHashesWithDeployHash(deploy.getDeploy.deployHash)
                     .map(
                       _ should contain theSameElementsAs (
                         deployHashToBlockHashes(deploy.getDeploy.deployHash)

@@ -474,12 +474,6 @@ where
         Ok(self.host_buf.len())
     }
 
-    pub fn serialize_function(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
-        let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-        self.host_buf = fn_bytes;
-        Ok(self.host_buf.len())
-    }
-
     fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
         let bytes: Vec<u8> = self
             .context
@@ -491,20 +485,34 @@ where
         Ok(length)
     }
 
-    /// Tries to store a function, represented as bytes from the Wasm memory,
-    /// into the GlobalState and writes back a function's hash at `hash_ptr`
-    /// in the Wasm memory.
     pub fn store_function(
         &mut self,
         fn_bytes: Vec<u8>,
-        urefs: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
         let contract = contract_ffi::value::contract::Contract::new(
             fn_bytes,
-            urefs,
+            named_keys,
             self.context.protocol_version(),
         );
-        let new_hash = self.context.store_contract(contract.into())?;
+        let contract_addr = self.context.store_function(contract.into())?;
+        Ok(contract_addr)
+    }
+
+    /// Tries to store a function, represented as bytes from the Wasm memory,
+    /// into the GlobalState and writes back a function's hash at `hash_ptr`
+    /// in the Wasm memory.
+    pub fn store_function_at_hash(
+        &mut self,
+        fn_bytes: Vec<u8>,
+        named_keys: BTreeMap<String, Key>,
+    ) -> Result<[u8; 32], Error> {
+        let contract = contract_ffi::value::contract::Contract::new(
+            fn_bytes,
+            named_keys,
+            self.context.protocol_version(),
+        );
+        let new_hash = self.context.store_function_at_hash(contract.into())?;
         Ok(new_hash)
     }
 

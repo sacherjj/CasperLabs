@@ -36,4 +36,6 @@ members = [
     "err-transfer-to-account",
     "endless-loop",
     "pos-bonding",
+    "payment-from-named-purse",
+    "create-named-purse",
 ]
