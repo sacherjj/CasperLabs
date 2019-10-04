@@ -13,4 +13,4 @@ default = []
 std = ["contract-ffi/std" ]
 
 [dependencies]
-contract-ffi = { path = "../../../execution-engine/contract-ffi", package = "casperlabs-contract-ffi" }
+contract-ffi = { path = "../../../../execution-engine/contract-ffi", package = "casperlabs-contract-ffi" }

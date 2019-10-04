@@ -10,14 +10,36 @@ CARGO_FLAGS="-Z unstable-options"
 # This is necessary for CI
 source "${HOME}/.cargo/env"
 
-# This is also necessary for CI
-rustup toolchain install $(cat "${DIR}/rust-toolchain")
+# Path to execution engine relative to this script
+EE_DIR="${DIR}/../../execution-engine"
+
+# Rust toolchain file
+RUST_TOOLCHAIN="$(<${EE_DIR}/rust-toolchain)"
 
 # This is also necessary for CI
-rustup target add --toolchain $(cat "${DIR}/rust-toolchain") $ARCH
+if ! rustup toolchain list | grep -q -c "$RUST_TOOLCHAIN"; then
+    rustup toolchain install $RUST_TOOLCHAIN
+fi
 
-pushd $DIR
+# This is also necessary for CI
+if ! rustup target list --toolchain "$RUST_TOOLCHAIN" | grep -q -c "$ARCH (installed)"; then
+    rustup target add --toolchain $RUST_TOOLCHAIN $ARCH
+fi
 
-cargo build $CARGO_FLAGS --target $ARCH --release --out-dir $DEST_DIR
+# Expand all integration test contracts into array in a similar way
+# `execution-engine/Makefile` does it.
+INTEGRATION_CONTRACTS=(${EE_DIR}/contracts/integration/*/)
 
-popd
+# Build all integration test contracts
+for dir in "${INTEGRATION_CONTRACTS[@]}"; do
+    if [ ! -f "$dir/Cargo.toml" ]; then
+        continue
+    fi
+
+    pushd $dir > /dev/null
+
+    cargo build $CARGO_FLAGS --target $ARCH --release --out-dir $DEST_DIR
+
+    popd > /dev/null
+
+done

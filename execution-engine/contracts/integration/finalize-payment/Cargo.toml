@@ -1,12 +1,12 @@
 [package]
-name = "refund-purse"
+name = "finalize-payment"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>",
            "Srinivas Reddy Thatiparthy <srini@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_refund_purse"
+name = "test_finalize_payment"
 crate-type = ["cdylib"]
 
 [features]
@@ -14,4 +14,4 @@ default = []
 std = ["contract-ffi/std"]
 
 [dependencies]
-contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../execution-engine/contract-ffi" }
+contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }
