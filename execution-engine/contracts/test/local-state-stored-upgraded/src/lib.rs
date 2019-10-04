@@ -6,6 +6,8 @@ extern crate local_state;
 
 use alloc::string::String;
 use contract_ffi::contract_api;
+#[cfg(not(feature = "lib"))]
+use contract_ffi::contract_api::Error;
 
 pub const ENTRY_FUNCTION_NAME: &str = "delegate";
 pub const CONTRACT_NAME: &str = "local_state_stored";
@@ -52,8 +54,10 @@ pub extern "C" fn delegate() {
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract =
-        contract_api::fn_by_name(ENTRY_FUNCTION_NAME, alloc::collections::BTreeMap::new());
-    let key = contract_api::new_turef(contract).into();
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, Default::default())
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .into();
+
     contract_api::put_key(CONTRACT_NAME, &key);
 }

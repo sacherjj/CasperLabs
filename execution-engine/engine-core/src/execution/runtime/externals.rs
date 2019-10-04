@@ -42,14 +42,6 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::SerFnFuncIndex => {
-                // args(0) = pointer to name in Wasm memory
-                // args(1) = size of name in Wasm memory
-                let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.serialize_function(name_ptr, name_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
-            }
-
             FunctionIndex::SerNamedKeysFuncIndex => {
                 // No args, returns byte size of the known URefs.
                 let size = self.serialize_named_keys()?;
@@ -237,7 +229,7 @@ where
                 //           to be saved with the function body
                 // args(3) = size of the additional unforgable names
                 // args(4) = pointer to a Wasm memory where we will save
-                //           hash of the new function
+                //           uref address of the new function
                 let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
                 let _uref_type: u32 = urefs_size;
                 let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
@@ -251,8 +243,25 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::ProtocolVersionFuncIndex => {
-                Ok(Some(self.context.protocol_version().value().into()))
+            FunctionIndex::StoreFnAtHashIndex => {
+                // args(0) = pointer to function name in Wasm memory
+                // args(1) = size of the name
+                // args(2) = pointer to additional unforgable names
+                //           to be saved with the function body
+                // args(3) = size of the additional unforgable names
+                // args(4) = pointer to a Wasm memory where we will save
+                //           hash of the new function
+                let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
+                let _uref_type: u32 = urefs_size;
+                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
+                let uref_bytes = self
+                    .memory
+                    .get(urefs_ptr, urefs_size as usize)
+                    .map_err(Error::Interpreter)?;
+                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
+                self.function_address(contract_hash, hash_ptr)?;
+                Ok(None)
             }
 
             FunctionIndex::IsValidFnIndex => {

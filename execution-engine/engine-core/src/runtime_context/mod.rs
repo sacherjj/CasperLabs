@@ -421,7 +421,17 @@ where
         }
     }
 
-    pub fn store_contract(&mut self, contract: Value) -> Result<[u8; 32], Error> {
+    pub fn store_function(&mut self, contract: Value) -> Result<[u8; 32], Error> {
+        let contract = Validated::new(contract, |c| self.validate_keys(&c))?;
+        if let Key::URef(contract_ref) = self.new_uref(contract.into_raw())? {
+            Ok(contract_ref.addr())
+        } else {
+            // TODO: make new_uref return only a URef
+            panic!("new_uref should never return anything other than a Key::URef")
+        }
+    }
+
+    pub fn store_function_at_hash(&mut self, contract: Value) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
         let validated_value = Validated::new(contract, |cntr| self.validate_keys(&cntr))?;
         let validated_key = Validated::new(Key::Hash(new_hash), Validated::valid)?;
