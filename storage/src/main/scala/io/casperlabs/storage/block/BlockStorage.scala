@@ -93,6 +93,12 @@ object BlockStorage {
         blockHash: BlockHash
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
+
+    abstract override def findBlockHashesWithDeployHash(deployHash: BlockHash): F[Seq[BlockHash]] =
+      incAndMeasure(
+        "findBlockHashesWithDeployHash",
+        super.findBlockHashesWithDeployHash(deployHash)
+      )
   }
 
   implicit class RichBlockStorage[F[_]](blockStorage: BlockStorage[F]) {
