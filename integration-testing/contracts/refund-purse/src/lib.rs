@@ -5,8 +5,8 @@ extern crate alloc;
 extern crate contract_ffi;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api;
 use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 
@@ -36,27 +36,27 @@ pub extern "C" fn call() {
     // get_refund_purse should return None before setting it
     let refund_result = get_refund_purse(&pos_pointer);
     if refund_result.is_some() {
-        contract_api::revert(1);
+        contract_api::revert(Error::User(1));
     }
 
     // it should return Some(x) after calling set_refund_purse(x)
     set_refund_purse(&pos_pointer, &p1);
     let refund_purse = match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(2),
+        None => contract_api::revert(Error::User(2)),
         Some(x) if x.value().addr() == p1.value().addr() => x.value(),
-        Some(_) => contract_api::revert(3),
+        Some(_) => contract_api::revert(Error::User(3)),
     };
 
     // the returned purse should not have any access rights
     if refund_purse.is_addable() || refund_purse.is_writeable() || refund_purse.is_readable() {
-        contract_api::revert(4)
+        contract_api::revert(Error::User(4))
     }
 
     // get_refund_purse should return correct value after setting a second time
     set_refund_purse(&pos_pointer, &p2);
     match get_refund_purse(&pos_pointer) {
-        None => contract_api::revert(5),
+        None => contract_api::revert(Error::User(5)),
         Some(x) if x.value().addr() == p2.value().addr() => (),
-        Some(_) => contract_api::revert(6),
+        Some(_) => contract_api::revert(Error::User(6)),
     }
 }

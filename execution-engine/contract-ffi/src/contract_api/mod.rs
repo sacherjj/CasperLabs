@@ -324,17 +324,9 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 }
 
 /// Stops execution of a contract and reverts execution effects with a given reason.
-pub fn revert_with_error<T: Into<Error>>(error: T) -> ! {
+pub fn revert<T: Into<Error>>(error: T) -> ! {
     unsafe {
         ext_ffi::revert(error.into().into());
-    }
-}
-
-/// Stops execution of a contract and reverts execution effects
-/// with a given reason.
-pub fn revert(status: u32) -> ! {
-    unsafe {
-        ext_ffi::revert(status);
     }
 }
 
@@ -431,8 +423,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 =
-        deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize.into()));
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize));
 
     Some(balance)
 }
@@ -534,14 +525,13 @@ pub fn transfer_from_purse_to_purse(
 }
 
 fn get_system_contract(name: &str) -> ContractPointer {
-    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef.into()));
+    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
 
     if let Key::URef(uref) = key {
-        let reference =
-            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights.into()));
+        let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
         ContractPointer::URef(reference)
     } else {
-        revert(Error::UnexpectedKeyVariant.into())
+        revert(Error::UnexpectedKeyVariant)
     }
 }
 
@@ -575,25 +565,6 @@ pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
         unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
     match result_from(result_value) {
         Ok(()) => (),
-        Err(error) => revert_with_error(error),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Error;
-    use core::u16;
-
-    #[test]
-    fn error() {
-        assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
-        assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
-
-        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
-        assert_eq!("Error::User(0) [65536]", &format!("{:?}", Error::User(0)));
-        assert_eq!(
-            "Error::User(65535) [131071]",
-            &format!("{:?}", Error::User(u16::MAX))
-        );
+        Err(error) => revert(error),
     }
 }

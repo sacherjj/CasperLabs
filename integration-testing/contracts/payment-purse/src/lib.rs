@@ -3,7 +3,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 use alloc::vec::Vec;
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::uint::U512;
 
@@ -20,22 +20,22 @@ pub extern "C" fn call() {
     if contract_api::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)
         .is_err()
     {
-        contract_api::revert(2);
+        contract_api::revert(Error::User(2));
     }
 
     let payment_balance = match contract_api::get_balance(payment_purse) {
         Some(amount) => amount,
-        None => contract_api::revert(3),
+        None => contract_api::revert(Error::User(3)),
     };
 
     if payment_balance != payment_amount {
-        contract_api::revert(4)
+        contract_api::revert(Error::User(4))
     }
 
     // cannot withdraw
     if contract_api::transfer_from_purse_to_purse(payment_purse, source_purse, payment_amount)
         .is_ok()
     {
-        contract_api::revert(5);
+        contract_api::revert(Error::User(5));
     }
 }

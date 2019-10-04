@@ -1,9 +1,13 @@
 use core::fmt::{self, Debug, Formatter};
-use core::u16;
+use core::{u16, u8};
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
 /// value less than or equal to `RESERVED_ERROR_MAX`.
 const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
+
+/// Proof of Stake errors (defined in "contracts/system/pos/src/error.rs") will have this value
+/// added to them when being converted to a `u32`.
+const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32;
 
 /// Variants to be passed to `contract_api::revert()`.
 ///
@@ -66,6 +70,8 @@ pub enum Error {
     Transfer,
     /// No access rights.
     NoAccessRights,
+    /// Error specific to Proof of Stake contract.
+    ProofOfStake(u8),
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
@@ -90,6 +96,7 @@ impl From<Error> for u32 {
             Error::UpgradeContractAtURef => 14,
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
+            Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
     }
@@ -116,6 +123,7 @@ impl Debug for Error {
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
+            Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
         write!(f, " [{}]", u32::from(*self))
@@ -150,9 +158,38 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
+            } else if value > POS_ERROR_OFFSET as i32 {
+                Err(Error::ProofOfStake(value as u8))
             } else {
                 unreachable!()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use core::{u16, u8};
+
+    #[test]
+    fn error() {
+        assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
+        assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
+
+        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!(
+            "Error::ProofOfStake(0) [65280]",
+            &format!("{:?}", Error::ProofOfStake(0))
+        );
+        assert_eq!(
+            "Error::ProofOfStake(255) [65535]",
+            &format!("{:?}", Error::ProofOfStake(u8::MAX))
+        );
+        assert_eq!("Error::User(0) [65536]", &format!("{:?}", Error::User(0)));
+        assert_eq!(
+            "Error::User(65535) [131071]",
+            &format!("{:?}", Error::User(u16::MAX))
+        );
     }
 }

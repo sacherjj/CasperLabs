@@ -29,14 +29,12 @@ pub extern "C" fn delegate() {
 pub extern "C" fn call() {
     let turef = match contract_api::get_arg(Args::DoNothingURef as u32) {
         Some(Ok(data)) => TURef::from_uref(data).unwrap_or_else(|_| {
-            contract_api::revert(Error::User(CustomError::InvalidTURef as u16).into())
+            contract_api::revert(Error::User(CustomError::InvalidTURef as u16))
         }),
         Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidDoNothingURefArg as u16).into())
+            contract_api::revert(Error::User(CustomError::InvalidDoNothingURefArg as u16))
         }
-        None => {
-            contract_api::revert(Error::User(CustomError::MissingDoNothingURefArg as u16).into())
-        }
+        None => contract_api::revert(Error::User(CustomError::MissingDoNothingURefArg as u16)),
     };
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref

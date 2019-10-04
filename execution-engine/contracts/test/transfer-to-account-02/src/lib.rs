@@ -15,8 +15,8 @@ pub extern "C" fn call() {
     let public_key = PublicKey::new(ACCOUNT_2_ADDR);
     let amount: U512 = match contract_ffi::contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);

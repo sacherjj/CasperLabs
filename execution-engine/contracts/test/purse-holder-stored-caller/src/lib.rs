@@ -34,18 +34,14 @@ pub extern "C" fn call() {
     let purse_holder_uref: URef = match contract_api::get_arg(Args::PurseHolderURef as u32) {
         Some(Ok(uref)) => uref,
         Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidPurseHolderURefArg as u16).into())
+            contract_api::revert(Error::User(CustomError::InvalidPurseHolderURefArg as u16))
         }
-        None => {
-            contract_api::revert(Error::User(CustomError::MissingPurseHolderURefArg as u16).into())
-        }
+        None => contract_api::revert(Error::User(CustomError::MissingPurseHolderURefArg as u16)),
     };
     let method_name: String = match contract_api::get_arg(Args::MethodName as u32) {
         Some(Ok(method)) => method,
-        Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidMethodNameArg as u16).into())
-        }
-        None => contract_api::revert(Error::User(CustomError::MissingMethodNameArg as u16).into()),
+        Some(Err(_)) => contract_api::revert(Error::User(CustomError::InvalidMethodNameArg as u16)),
+        None => contract_api::revert(Error::User(CustomError::MissingMethodNameArg as u16)),
     };
 
     let purse_holder_contract_pointer = ContractPointer::URef(TURef::new(
@@ -66,12 +62,10 @@ pub extern "C" fn call() {
         _ => {
             let purse_name: String = match contract_api::get_arg(Args::PurseName as u32) {
                 Some(Ok(purse)) => purse,
-                Some(Err(_)) => contract_api::revert(
-                    Error::User(CustomError::InvalidPurseNameArg as u16).into(),
-                ),
-                None => contract_api::revert(
-                    Error::User(CustomError::MissingPurseNameArg as u16).into(),
-                ),
+                Some(Err(_)) => {
+                    contract_api::revert(Error::User(CustomError::InvalidPurseNameArg as u16))
+                }
+                None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16)),
             };
 
             contract_api::call_contract::<_, ()>(

@@ -22,8 +22,8 @@ fn update_list(name: String) {
     let list_key = get_list_key("list");
     let mut list = match read(list_key.clone()) {
         Ok(Some(list)) => list,
-        Ok(None) => revert(Error::ValueNotFound.into()),
-        Err(_) => revert(Error::Read.into()),
+        Ok(None) => revert(Error::ValueNotFound),
+        Err(_) => revert(Error::Read),
     };
     list.push(name);
     write(list_key, list);
@@ -46,15 +46,15 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 fn publish(msg: String) {
     let curr_list = match read(get_list_key("list")) {
         Ok(Some(list)) => list,
-        Ok(None) => revert(Error::ValueNotFound.into()),
-        Err(_) => revert(Error::Read.into()),
+        Ok(None) => revert(Error::ValueNotFound),
+        Err(_) => revert(Error::Read),
     };
     for name in curr_list.iter() {
         let uref = get_list_key(name);
         let mut messages = match read(uref.clone()) {
             Ok(Some(messages)) => messages,
-            Ok(None) => revert(Error::ValueNotFound.into()),
-            Err(_) => revert(Error::Read.into()),
+            Ok(None) => revert(Error::ValueNotFound),
+            Err(_) => revert(Error::Read),
         };
         messages.push(msg.clone());
         write(uref, messages);

@@ -11,8 +11,8 @@ use contract_ffi::value::account::PurseId;
 pub extern "C" fn call() {
     let known_main_purse: PurseId = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let main_purse: PurseId = contract_api::main_purse();
     assert_eq!(

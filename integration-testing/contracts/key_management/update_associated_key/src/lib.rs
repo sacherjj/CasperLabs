@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{get_arg, revert, update_associated_key};
+use contract_ffi::contract_api::{get_arg, revert, update_associated_key, Error};
 use contract_ffi::value::account::{PublicKey, Weight};
 
 #[no_mangle]
@@ -13,6 +13,5 @@ pub extern "C" fn call() {
     let weight_val: u32 = get_arg(1).unwrap().unwrap();
     let weight = Weight::new(weight_val as u8);
 
-    update_associated_key(account, weight)
-        .unwrap_or_else(|_| revert(100));
+    update_associated_key(account, weight).unwrap_or_else(|_| revert(Error::User(100)));
 }

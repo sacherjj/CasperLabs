@@ -83,8 +83,8 @@ pub fn delegate() {
     let mint = CLMint;
     let method_name: String = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-        None => contract_api::revert(ApiError::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+        None => contract_api::revert(ApiError::MissingArgument),
     };
 
     match method_name.as_str() {
@@ -93,8 +93,8 @@ pub fn delegate() {
         "mint" => {
             let amount: U512 = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-                None => contract_api::revert(ApiError::MissingArgument.into()),
+                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+                None => contract_api::revert(ApiError::MissingArgument),
             };
 
             let maybe_purse_key = mint
@@ -117,8 +117,8 @@ pub fn delegate() {
         "balance" => {
             let key: URef = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-                None => contract_api::revert(ApiError::MissingArgument.into()),
+                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+                None => contract_api::revert(ApiError::MissingArgument),
             };
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
@@ -130,18 +130,18 @@ pub fn delegate() {
         "transfer" => {
             let source: URef = match contract_api::get_arg(1) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-                None => contract_api::revert(ApiError::MissingArgument.into()),
+                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+                None => contract_api::revert(ApiError::MissingArgument),
             };
             let target: URef = match contract_api::get_arg(2) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-                None => contract_api::revert(ApiError::MissingArgument.into()),
+                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+                None => contract_api::revert(ApiError::MissingArgument),
             };
             let amount: U512 = match contract_api::get_arg(3) {
                 Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-                None => contract_api::revert(ApiError::MissingArgument.into()),
+                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+                None => contract_api::revert(ApiError::MissingArgument),
             };
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {

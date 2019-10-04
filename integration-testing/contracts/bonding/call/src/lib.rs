@@ -4,7 +4,8 @@
 extern crate alloc;
 extern crate contract_ffi;
 use contract_ffi::contract_api::{
-    call_contract, create_purse, get_arg, get_pos, main_purse, revert, transfer_from_purse_to_purse,
+    call_contract, create_purse, get_arg, get_pos, main_purse, revert,
+    transfer_from_purse_to_purse, Error,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::uint::U512;
@@ -23,6 +24,6 @@ pub extern "C" fn call() {
             &vec![Key::URef(bonding_purse.value())],
         );
     } else {
-        revert(1324)
+        revert(Error::User(1324))
     }
 }

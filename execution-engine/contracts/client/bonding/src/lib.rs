@@ -20,8 +20,8 @@ pub extern "C" fn call() {
     let bonding_purse = contract_api::create_purse();
     let bond_amount: U512 = match contract_api::get_arg::<u64>(0) {
         Some(Ok(data)) => U512::from(data),
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     if contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount).is_ok()
@@ -32,6 +32,6 @@ pub extern "C" fn call() {
             &vec![Key::URef(bonding_purse.value())],
         )
     } else {
-        contract_api::revert(Error::Transfer.into())
+        contract_api::revert(Error::Transfer)
     }
 }

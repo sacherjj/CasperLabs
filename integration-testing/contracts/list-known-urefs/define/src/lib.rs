@@ -7,7 +7,7 @@ use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use contract_ffi::contract_api::{
-    put_key, get_key, list_named_keys, new_turef, revert, store_function_at_hash,
+    get_key, list_named_keys, new_turef, put_key, revert, store_function_at_hash, Error,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
@@ -15,7 +15,7 @@ use core::iter;
 
 #[no_mangle]
 pub extern "C" fn list_named_keys_ext() {
-    let passed_in_uref = get_key("Foo").unwrap_or_else(|| revert(100));
+    let passed_in_uref = get_key("Foo").unwrap_or_else(|| revert(Error::User(100)));
     let uref = new_turef(Value::String("Test".to_owned()));
     put_key("Bar", &uref.clone().into());
     let contracts_named_keys = list_named_keys();

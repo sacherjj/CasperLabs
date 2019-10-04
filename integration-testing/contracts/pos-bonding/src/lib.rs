@@ -57,7 +57,7 @@ pub extern "C" fn call() {
         let p1 = create_purse();
 
         if transfer_from_purse_to_purse(main_purse(), p1, amount).is_err() {
-            revert(ApiError::Transfer.into());
+            revert(ApiError::Transfer);
         }
 
         bond(&pos_pointer, &amount, p1);
@@ -69,12 +69,12 @@ pub extern "C" fn call() {
         let account: PublicKey = get_arg(1).unwrap().unwrap();
         let amount: U512 = get_arg(2).unwrap().unwrap();
         if transfer_from_purse_to_account(main_purse(), account, amount).is_err() {
-            revert(ApiError::User(Error::UnableToSeedAccount as u16).into());
+            revert(ApiError::User(Error::UnableToSeedAccount as u16));
         }
     } else if command == TEST_UNBOND {
         let maybe_amount: Option<U512> = get_arg(1).unwrap().unwrap();
         unbond(&pos_pointer, maybe_amount);
     } else {
-        revert(ApiError::User(Error::UnknownCommand as u16).into());
+        revert(ApiError::User(Error::UnknownCommand as u16));
     }
 }

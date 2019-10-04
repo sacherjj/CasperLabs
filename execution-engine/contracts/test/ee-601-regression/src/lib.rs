@@ -26,8 +26,8 @@ pub extern "C" fn call() {
     if phase == contract_ffi::execution::Phase::Payment {
         let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
             Some(Ok(data)) => data,
-            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-            None => contract_api::revert(ApiError::MissingArgument.into()),
+            Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+            None => contract_api::revert(ApiError::MissingArgument),
         };
 
         let main_purse: PurseId = contract_api::main_purse();
@@ -38,7 +38,7 @@ pub extern "C" fn call() {
             contract_api::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
         if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
-            contract_api::revert(ApiError::Transfer.into());
+            contract_api::revert(ApiError::Transfer);
         }
     }
 
@@ -49,8 +49,8 @@ pub extern "C" fn call() {
             _ => None,
         }
     };
-    let value = value
-        .unwrap_or_else(|| contract_api::revert(ApiError::User(Error::InvalidPhase as u16).into()));
+    let value =
+        value.unwrap_or_else(|| contract_api::revert(ApiError::User(Error::InvalidPhase as u16)));
     let result_key = contract_api::new_turef(value.to_string()).into();
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");

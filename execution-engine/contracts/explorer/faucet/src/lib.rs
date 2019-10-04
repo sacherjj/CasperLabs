@@ -22,19 +22,19 @@ const TRANSFER_AMOUNT: u32 = 10_000_000;
 pub extern "C" fn call() {
     let public_key: PublicKey = match get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument.into()),
-        None => revert(Error::MissingArgument.into()),
+        Some(Err(_)) => revert(Error::InvalidArgument),
+        None => revert(Error::MissingArgument),
     };
     // Maybe we will decide to allow multiple funds up until some maximum value.
     let already_funded = read_local::<PublicKey, U512>(public_key)
         .unwrap_or_default()
         .is_some();
     if already_funded {
-        revert(1);
+        revert(Error::User(1));
     } else {
         let u512_tokens = U512::from(TRANSFER_AMOUNT);
         if transfer_to_account(public_key, u512_tokens).is_err() {
-            revert(2)
+            revert(Error::User(2))
         } else {
             // Transfer successful; Store the fact of funding in the local state.
             write_local(public_key, u512_tokens);

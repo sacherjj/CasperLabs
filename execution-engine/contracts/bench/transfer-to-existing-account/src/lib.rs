@@ -21,13 +21,13 @@ enum Error {
 pub extern "C" fn call() {
     let public_key: PublicKey = match contract_api::get_arg(Arg::PublicKey as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-        None => contract_api::revert(ApiError::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+        None => contract_api::revert(ApiError::MissingArgument),
     };
     let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-        None => contract_api::revert(ApiError::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
+        None => contract_api::revert(ApiError::MissingArgument),
     };
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
     match result {
@@ -35,8 +35,8 @@ pub extern "C" fn call() {
             // This is the expected result, as all accounts have to be initialized beforehand
         }
         Ok(TransferredTo::NewAccount) => {
-            contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16).into())
+            contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16))
         }
-        Err(_) => contract_api::revert(ApiError::Transfer.into()),
+        Err(_) => contract_api::revert(ApiError::Transfer),
     }
 }

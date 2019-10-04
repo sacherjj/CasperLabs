@@ -31,7 +31,7 @@ fn submit_payment(pos: &ContractPointer, amount: U512) {
     let payment_purse = get_payment_purse(pos);
     let main_purse = contract_api::main_purse();
     if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
-        contract_api::revert(Error::Transfer.into());
+        contract_api::revert(Error::Transfer);
     }
 }
 
@@ -49,23 +49,23 @@ pub extern "C" fn call() {
 
     let payment_amount: U512 = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let refund_purse_flag: u8 = match contract_api::get_arg(1) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let maybe_amount_spent: Option<U512> = match contract_api::get_arg(2) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let maybe_account: Option<PublicKey> = match contract_api::get_arg(3) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     submit_payment(&pos_pointer, payment_amount);

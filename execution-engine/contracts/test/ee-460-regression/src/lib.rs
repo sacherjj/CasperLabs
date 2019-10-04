@@ -13,8 +13,8 @@ use contract_ffi::value::U512;
 pub extern "C" fn call() {
     let amount: U512 = match get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => revert(Error::InvalidArgument.into()),
-        None => revert(Error::MissingArgument.into()),
+        Some(Err(_)) => revert(Error::InvalidArgument),
+        None => revert(Error::MissingArgument),
     };
 
     let public_key = PublicKey::new([42; 32]);

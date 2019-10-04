@@ -21,21 +21,21 @@ enum Arg {
 pub extern "C" fn call() {
     let purse_name: String = match contract_api::get_arg(Arg::PurseName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     let purse_key = contract_api::get_key(&purse_name)
-        .unwrap_or_else(|| contract_api::revert(Error::InvalidPurseName.into()));
+        .unwrap_or_else(|| contract_api::revert(Error::InvalidPurseName));
     let purse = match purse_key.as_uref() {
         Some(uref) => PurseId::new(*uref),
-        None => contract_api::revert(Error::InvalidPurse.into()),
+        None => contract_api::revert(Error::InvalidPurse),
     };
 
     let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     let pos_pointer = contract_api::get_pos();
@@ -50,6 +50,6 @@ pub extern "C" fn call() {
     );
 
     if contract_api::transfer_from_purse_to_purse(purse, payment_purse, amount).is_err() {
-        contract_api::revert(Error::Transfer.into());
+        contract_api::revert(Error::Transfer);
     }
 }

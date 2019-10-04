@@ -24,6 +24,6 @@ pub extern "C" fn call() {
         contract_api::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
     if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
-        contract_api::revert(Error::Transfer.into());
+        contract_api::revert(Error::Transfer);
     }
 }

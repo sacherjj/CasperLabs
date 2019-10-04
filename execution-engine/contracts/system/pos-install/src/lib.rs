@@ -38,16 +38,16 @@ pub extern "C" fn pos_ext() {
 pub extern "C" fn call() {
     let mint_uref: URef = match contract_api::get_arg(Args::MintURef as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let mint = ContractPointer::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         match contract_api::get_arg(Args::GenesisValidators as u32) {
             Some(Ok(data)) => data,
-            Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-            None => contract_api::revert(Error::MissingArgument.into()),
+            Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+            None => contract_api::revert(Error::MissingArgument),
         };
 
     // Add genesis validators to PoS contract object.
@@ -92,7 +92,7 @@ pub extern "C" fn call() {
 
     let uref = contract_api::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
         .into();
 
     contract_api::ret(&uref, &vec![uref]);
@@ -104,5 +104,5 @@ fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
 
     result
         .map(PurseId::new)
-        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure.into()))
+        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure))
 }

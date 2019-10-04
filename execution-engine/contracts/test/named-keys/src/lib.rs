@@ -6,7 +6,7 @@ extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::U512;
 
@@ -16,7 +16,7 @@ pub extern "C" fn call() {
 
     // Account starts with two known urefs: mint uref & pos uref
     if contract_api::list_named_keys().len() != initi_uref_num {
-        contract_api::revert(201);
+        contract_api::revert(Error::User(201));
     }
 
     // Add new urefs
@@ -45,10 +45,11 @@ pub extern "C" fn call() {
     assert_eq!(hello_world, "Hello, world!");
 
     // Read data through dedicated FFI function
-    let uref1 = contract_api::get_key("hello-world").unwrap_or_else(|| contract_api::revert(100));
+    let uref1 = contract_api::get_key("hello-world")
+        .unwrap_or_else(|| contract_api::revert(Error::User(100)));
     let turef = uref1
         .to_turef()
-        .unwrap_or_else(|| contract_api::revert(101));
+        .unwrap_or_else(|| contract_api::revert(Error::User(101)));
     let hello_world = contract_api::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
 
@@ -60,8 +61,8 @@ pub extern "C" fn call() {
     assert!(contract_api::has_key("big-value"));
 
     // Get the big value back
-    let big_value_key =
-        contract_api::get_key("big-value").unwrap_or_else(|| contract_api::revert(102));
+    let big_value_key = contract_api::get_key("big-value")
+        .unwrap_or_else(|| contract_api::revert(Error::User(102)));
     let big_value_ref = big_value_key
         .to_turef()
         .expect("Unable to get turef for big-value");

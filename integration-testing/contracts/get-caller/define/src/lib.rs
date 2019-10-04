@@ -4,7 +4,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::collections::btree_map::BTreeMap;
-use contract_ffi::contract_api::{get_caller, store_function_at_hash, put_key};
+use contract_ffi::contract_api::{get_caller, put_key, store_function_at_hash};
 use contract_ffi::value::account::PublicKey;
 
 fn test_get_caller() {
@@ -12,7 +12,10 @@ fn test_get_caller() {
     // public key == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
     // Will fail if we ever change that.
     let caller = get_caller();
-    let expected_caller = PublicKey::new([174, 124, 216, 77, 97, 255, 85, 104, 6, 105, 27, 230, 30, 106, 178, 23, 121, 25, 5, 103, 122, 219, 190, 8, 91, 140, 84, 13, 145, 110, 131, 147]);
+    let expected_caller = PublicKey::new([
+        174, 124, 216, 77, 97, 255, 85, 104, 6, 105, 27, 230, 30, 106, 178, 23, 121, 25, 5, 103,
+        122, 219, 190, 8, 91, 140, 84, 13, 145, 110, 131, 147,
+    ]);
     assert_eq!(caller, expected_caller);
 }
 
