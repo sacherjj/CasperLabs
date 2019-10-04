@@ -7,7 +7,7 @@ use contract_ffi::contract_api;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Value, U512};
 
-use crate::error::{Error, Result};
+use contract_ffi::system_contracts::pos::{Error, Result};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -182,10 +182,10 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
+    use contract_ffi::system_contracts::pos::Error;
     use contract_ffi::value::account::{BlockTime, PublicKey};
     use contract_ffi::value::U512;
 
-    use crate::error::Error;
     use crate::queue::{Queue, QueueEntry};
 
     const KEY1: [u8; 32] = [1; 32];

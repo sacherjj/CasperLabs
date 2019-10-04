@@ -20,7 +20,7 @@ use core::convert::TryInto;
 
 use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
-use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::system_contracts::mint::Error;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::KEY_SIZE;

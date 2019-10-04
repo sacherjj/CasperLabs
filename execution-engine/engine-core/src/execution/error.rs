@@ -39,7 +39,7 @@ pub enum Error {
     RemoveKeyFailure(RemoveKeyFailure),
     UpdateKeyFailure(UpdateKeyFailure),
     SetThresholdFailure(SetThresholdFailure),
-    SystemContractError(system_contracts::error::Error),
+    SystemContractError(system_contracts::Error),
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
@@ -113,8 +113,8 @@ impl From<SetThresholdFailure> for Error {
     }
 }
 
-impl From<system_contracts::error::Error> for Error {
-    fn from(error: system_contracts::error::Error) -> Error {
+impl From<system_contracts::Error> for Error {
+    fn from(error: system_contracts::Error) -> Error {
         Error::SystemContractError(error)
     }
 }

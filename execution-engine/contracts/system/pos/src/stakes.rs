@@ -4,9 +4,8 @@ use core::fmt::Write;
 
 use contract_ffi::contract_api;
 use contract_ffi::key::Key;
+use contract_ffi::system_contracts::pos::{Error, Result};
 use contract_ffi::value::{account::PublicKey, U512};
-
-use crate::error::{Error, Result};
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
@@ -195,9 +194,9 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
+    use contract_ffi::system_contracts::pos::Error;
     use contract_ffi::value::{account::PublicKey, U512};
 
-    use crate::error::Error;
     use crate::stakes::Stakes;
 
     const KEY1: [u8; 32] = [1; 32];

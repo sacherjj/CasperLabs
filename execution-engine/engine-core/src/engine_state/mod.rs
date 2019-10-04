@@ -398,7 +398,7 @@ where
                 };
 
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
-                let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
+                let mint_result: Result<URef, mint::Error> = executor.better_exec(
                     module,
                     &args,
                     &mut named_keys_exec,
