@@ -30,6 +30,14 @@ fi
 # `execution-engine/Makefile` does it.
 INTEGRATION_CONTRACTS=(${EE_DIR}/contracts/integration/*/)
 
+# Extra contracts that are not part of ./integration/ contracts but are
+# used by the integration test suite.
+INTEGRATION_CONTRACTS+=(
+    "${EE_DIR}/contracts/client/standard-payment"
+    "${EE_DIR}/contracts/test/pos-bonding"
+    "${EE_DIR}/contracts/test/endless-loop"
+)
+
 # Build all integration test contracts
 for dir in "${INTEGRATION_CONTRACTS[@]}"; do
     if [ ! -f "$dir/Cargo.toml" ]; then
