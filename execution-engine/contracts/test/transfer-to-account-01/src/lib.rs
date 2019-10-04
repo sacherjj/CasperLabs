@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error, TransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::U512;
 
 const TRANSFER_AMOUNT: u32 = 250_000_000 + 1000;
@@ -20,5 +20,5 @@ pub extern "C" fn call() {
 
     let result = contract_api::transfer_to_account(public_key, amount);
 
-    assert_ne!(result, TransferResult::TransferError);
+    assert!(result.is_ok());
 }

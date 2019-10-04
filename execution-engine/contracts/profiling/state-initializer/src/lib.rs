@@ -4,7 +4,7 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error as ApiError, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, TransferredTo};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -21,11 +21,11 @@ enum Error {
 
 fn create_account_with_amount(account: PublicKey, amount: U512) {
     match contract_api::transfer_to_account(account, amount) {
-        TransferResult::TransferredToNewAccount => (),
-        TransferResult::TransferredToExistingAccount => {
+        Ok(TransferredTo::NewAccount) => (),
+        Ok(TransferredTo::ExistingAccount) => {
             contract_api::revert(ApiError::User(Error::AccountAlreadyExists as u16).into())
         }
-        TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
+        Err(_) => contract_api::revert(ApiError::Transfer.into()),
     }
 }
 

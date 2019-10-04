@@ -209,8 +209,8 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
     contract_api::remove_key(REFUND_PURSE_KEY); //unset refund purse after reading it
 
     // pay validators
-    if let contract_api::PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(payment_purse, rewards_purse, amount_spent)
+    if contract_api::transfer_from_purse_to_purse(payment_purse, rewards_purse, amount_spent)
+        .is_err()
     {
         contract_api::revert(Error::FailedTransferToRewardsPurse.into());
     }
@@ -218,8 +218,8 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
     // give refund
     if !refund_amount.is_zero() {
         if let Some(purse) = refund_purse {
-            if let contract_api::PurseTransferResult::TransferError =
-                contract_api::transfer_from_purse_to_purse(payment_purse, purse, refund_amount)
+            if contract_api::transfer_from_purse_to_purse(payment_purse, purse, refund_amount)
+                .is_err()
             {
                 // on case of failure to transfer to refund purse we fall back on the account's
                 // main purse
@@ -232,9 +232,7 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
 }
 
 fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
-    if let contract_api::TransferResult::TransferError =
-        contract_api::transfer_from_purse_to_account(payment_purse, account, amount)
-    {
+    if contract_api::transfer_from_purse_to_account(payment_purse, account, amount).is_err() {
         contract_api::revert(Error::FailedTransferToAccountPurse.into());
     }
 }
@@ -269,9 +267,7 @@ pub fn delegate() {
             // Transfer `amount` from the `source` purse to PoS internal purse.
             // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's
             // own purse.
-            if contract_api::PurseTransferResult::TransferError
-                == contract_api::transfer_from_purse_to_purse(source, pos_purse, amount)
-            {
+            if contract_api::transfer_from_purse_to_purse(source, pos_purse, amount).is_err() {
                 contract_api::revert(Error::BondTransferFailed.into());
             }
             bond::<QueueLocal, ContractStakes>(amount, validator, timestamp).unwrap_or_revert();
@@ -280,7 +276,7 @@ pub fn delegate() {
             // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
-                contract_api::transfer_from_purse_to_account(
+                let _ = contract_api::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,
                     entry.amount,
@@ -302,13 +298,12 @@ pub fn delegate() {
             // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
-                if contract_api::TransferResult::TransferError
-                    == contract_api::transfer_from_purse_to_account(
-                        pos_purse,
-                        entry.validator,
-                        entry.amount,
-                    )
-                {
+                let transfer_result = contract_api::transfer_from_purse_to_account(
+                    pos_purse,
+                    entry.validator,
+                    entry.amount,
+                );
+                if transfer_result.is_err() {
                     contract_api::revert(Error::UnbondTransferFailed.into());
                 }
             }
@@ -325,7 +320,7 @@ pub fn delegate() {
                 // can't recover from them and we shouldn't retry indefinitely.
                 // That would mean the contract just keeps the money forever,
                 // though.
-                contract_api::transfer_from_purse_to_account(
+                let _ = contract_api::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,
                     entry.amount,

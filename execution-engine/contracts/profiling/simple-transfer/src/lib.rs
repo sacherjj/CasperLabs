@@ -2,7 +2,7 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error as ApiError, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, TransferredTo};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -29,10 +29,10 @@ pub extern "C" fn call() {
         None => contract_api::revert(ApiError::MissingArgument.into()),
     };
     match contract_api::transfer_to_account(public_key, amount) {
-        TransferResult::TransferredToNewAccount => {
+        Ok(TransferredTo::NewAccount) => {
             contract_api::revert(ApiError::User(Error::NonExistentAccount as u16).into())
         }
-        TransferResult::TransferredToExistingAccount => (),
-        TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
+        Ok(TransferredTo::ExistingAccount) => (),
+        Err(_) => contract_api::revert(ApiError::Transfer.into()),
     }
 }

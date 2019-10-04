@@ -2,7 +2,7 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error, TransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -25,7 +25,7 @@ pub extern "C" fn call() {
     };
     let u512_motes = U512::from(transfer_amount);
     let transfer_result = contract_api::transfer_to_account(public_key, u512_motes);
-    if let TransferResult::TransferError = transfer_result {
+    if transfer_result.is_err() {
         contract_api::revert(2);
     }
 }

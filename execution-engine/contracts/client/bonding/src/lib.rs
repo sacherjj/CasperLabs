@@ -3,7 +3,7 @@
 #[macro_use]
 extern crate alloc;
 extern crate contract_ffi;
-use contract_ffi::contract_api::{self, Error, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::uint::U512;
 
@@ -24,13 +24,14 @@ pub extern "C" fn call() {
         None => contract_api::revert(Error::MissingArgument.into()),
     };
 
-    match contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
-        PurseTransferResult::TransferSuccessful => contract_api::call_contract(
+    if contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount).is_ok()
+    {
+        contract_api::call_contract(
             pos_pointer,
             &(BOND_METHOD_NAME, bond_amount, bonding_purse),
             &vec![Key::URef(bonding_purse.value())],
-        ),
-
-        PurseTransferResult::TransferError => contract_api::revert(Error::Transfer.into()),
+        )
+    } else {
+        contract_api::revert(Error::Transfer.into())
     }
 }

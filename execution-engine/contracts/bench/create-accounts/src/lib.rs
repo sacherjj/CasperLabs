@@ -4,7 +4,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::vec::Vec;
-use contract_ffi::contract_api::{self, Error, TransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use core::convert::TryFrom;
@@ -31,7 +31,7 @@ pub extern "C" fn call() {
     };
     for public_key in accounts {
         let result = contract_ffi::contract_api::transfer_to_account(public_key, seed_amount);
-        if result == TransferResult::TransferError {
+        if result.is_err() {
             contract_api::revert(Error::Transfer.into());
         }
     }

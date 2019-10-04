@@ -25,9 +25,7 @@ pub extern "C" fn call() {
 
     let source: PurseId = contract_api::main_purse();
     let destination = contract_api::create_purse();
-    if contract_api::transfer_from_purse_to_purse(source, destination, amount)
-        == contract_api::PurseTransferResult::TransferError
-    {
+    if contract_api::transfer_from_purse_to_purse(source, destination, amount).is_err() {
         contract_api::revert(Error::Transfer.into());
     }
     contract_api::put_key(&destination_name, &destination.value().into());

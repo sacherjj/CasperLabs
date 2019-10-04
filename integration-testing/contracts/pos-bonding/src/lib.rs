@@ -10,7 +10,6 @@ use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{
     call_contract, create_purse, get_arg, get_pos, main_purse, revert,
     transfer_from_purse_to_account, transfer_from_purse_to_purse, Error as ApiError,
-    PurseTransferResult, TransferResult,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -57,9 +56,7 @@ pub extern "C" fn call() {
         let amount: U512 = get_arg(1).unwrap().unwrap();
         let p1 = create_purse();
 
-        if transfer_from_purse_to_purse(main_purse(), p1, amount)
-            == PurseTransferResult::TransferError
-        {
+        if transfer_from_purse_to_purse(main_purse(), p1, amount).is_err() {
             revert(ApiError::Transfer.into());
         }
 
@@ -71,9 +68,7 @@ pub extern "C" fn call() {
     } else if command == TEST_SEED_NEW_ACCOUNT {
         let account: PublicKey = get_arg(1).unwrap().unwrap();
         let amount: U512 = get_arg(2).unwrap().unwrap();
-        if transfer_from_purse_to_account(main_purse(), account, amount)
-            == TransferResult::TransferError
-        {
+        if transfer_from_purse_to_account(main_purse(), account, amount).is_err() {
             revert(ApiError::User(Error::UnableToSeedAccount as u16).into());
         }
     } else if command == TEST_UNBOND {

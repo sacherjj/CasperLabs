@@ -4,7 +4,7 @@ extern crate alloc;
 extern crate contract_ffi;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::{self, Error as ApiError, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::uint::U512;
 
@@ -31,8 +31,8 @@ pub extern "C" fn call() {
         contract_api::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
 
     // can deposit
-    if let PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)
+    if contract_api::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)
+        .is_err()
     {
         contract_api::revert(ApiError::User(Error::TransferFromSourceToPayment as u16).into());
     }
@@ -47,8 +47,8 @@ pub extern "C" fn call() {
     }
 
     // cannot withdraw
-    if let PurseTransferResult::TransferSuccessful =
-        contract_api::transfer_from_purse_to_purse(payment_purse, source_purse, payment_amount)
+    if contract_api::transfer_from_purse_to_purse(payment_purse, source_purse, payment_amount)
+        .is_ok()
     {
         contract_api::revert(ApiError::User(Error::TransferFromPaymentToSource as u16).into());
     }

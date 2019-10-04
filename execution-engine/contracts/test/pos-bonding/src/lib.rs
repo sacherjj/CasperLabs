@@ -6,7 +6,7 @@ extern crate contract_ffi;
 use alloc::prelude::v1::{String, Vec};
 
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{self, Error as ApiError, PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
@@ -61,7 +61,7 @@ pub extern "C" fn call() {
         let p1 = contract_api::create_purse();
 
         if contract_api::transfer_from_purse_to_purse(contract_api::main_purse(), p1, amount)
-            == PurseTransferResult::TransferError
+            .is_err()
         {
             contract_api::revert(ApiError::Transfer.into());
         }
@@ -87,7 +87,7 @@ pub extern "C" fn call() {
             None => contract_api::revert(ApiError::MissingArgument.into()),
         };
         if contract_api::transfer_from_purse_to_account(contract_api::main_purse(), account, amount)
-            == TransferResult::TransferError
+            .is_err()
         {
             contract_api::revert(ApiError::User(Error::UnableToSeedAccount as u16).into());
         }

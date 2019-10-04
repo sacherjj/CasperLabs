@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 use alloc::string::{String, ToString};
-use contract_ffi::contract_api::{self, Error as ApiError, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
@@ -37,9 +37,7 @@ pub extern "C" fn call() {
         let payment_purse: PurseId =
             contract_api::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
-        if let PurseTransferResult::TransferError =
-            contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
-        {
+        if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
             contract_api::revert(ApiError::Transfer.into());
         }
     }

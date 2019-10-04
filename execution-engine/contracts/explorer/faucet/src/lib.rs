@@ -5,7 +5,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{
-    get_arg, read_local, revert, transfer_to_account, write_local, Error, TransferResult,
+    get_arg, read_local, revert, transfer_to_account, write_local, Error,
 };
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
@@ -33,12 +33,11 @@ pub extern "C" fn call() {
         revert(1);
     } else {
         let u512_tokens = U512::from(TRANSFER_AMOUNT);
-        match transfer_to_account(public_key, u512_tokens) {
-            TransferResult::TransferError => revert(2),
-            _ => {
-                // Transfer successful; Store the fact of funding in the local state.
-                write_local(public_key, u512_tokens);
-            }
+        if transfer_to_account(public_key, u512_tokens).is_err() {
+            revert(2)
+        } else {
+            // Transfer successful; Store the fact of funding in the local state.
+            write_local(public_key, u512_tokens);
         }
     }
 }

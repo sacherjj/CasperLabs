@@ -4,8 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 use contract_ffi::contract_api::{
-    call_contract, create_purse, get_arg, get_pos, main_purse, revert,
-    transfer_from_purse_to_purse, PurseTransferResult,
+    call_contract, create_purse, get_arg, get_pos, main_purse, revert, transfer_from_purse_to_purse,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::uint::U512;
@@ -17,15 +16,13 @@ pub extern "C" fn call() {
     let bonding_purse = create_purse();
     let bond_amount: U512 = U512::from(get_arg::<u32>(0).unwrap().unwrap());
 
-    match transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
-        PurseTransferResult::TransferSuccessful => {
-            let _result: () = call_contract(
-                pos_pointer,
-                &("bond", bond_amount, bonding_purse),
-                &vec![Key::URef(bonding_purse.value())],
-            );
-        }
-
-        PurseTransferResult::TransferError => revert(1324),
+    if transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount).is_ok() {
+        let _result: () = call_contract(
+            pos_pointer,
+            &("bond", bond_amount, bonding_purse),
+            &vec![Key::URef(bonding_purse.value())],
+        );
+    } else {
+        revert(1324)
     }
 }

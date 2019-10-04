@@ -3,7 +3,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error as ApiError, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, TransferredTo};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -31,12 +31,12 @@ pub extern "C" fn call() {
     };
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
     match result {
-        TransferResult::TransferredToExistingAccount => {
+        Ok(TransferredTo::ExistingAccount) => {
             // This is the expected result, as all accounts have to be initialized beforehand
         }
-        TransferResult::TransferredToNewAccount => {
+        Ok(TransferredTo::NewAccount) => {
             contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16).into())
         }
-        TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
+        Err(_) => contract_api::revert(ApiError::Transfer.into()),
     }
 }

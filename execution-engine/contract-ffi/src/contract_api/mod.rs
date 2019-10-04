@@ -24,6 +24,8 @@ use crate::value::{Contract, Value, U512};
 use argsparser::ArgsParser;
 pub use error::{i32_from, result_from, Error};
 
+pub type TransferResult = Result<TransferredTo, Error>;
+
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
@@ -449,31 +451,25 @@ pub fn main_purse() -> PurseId {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransferResult {
-    TransferredToExistingAccount,
-    TransferredToNewAccount,
-    TransferError,
+#[repr(i32)]
+pub enum TransferredTo {
+    ExistingAccount = 0,
+    NewAccount = 1,
 }
 
-impl TryFrom<i32> for TransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
+impl TransferredTo {
+    fn result_from(value: i32) -> TransferResult {
         match value {
-            0 => Ok(TransferResult::TransferredToExistingAccount),
-            1 => Ok(TransferResult::TransferredToNewAccount),
-            2 => Ok(TransferResult::TransferError),
-            _ => Err(()),
+            x if x == TransferredTo::ExistingAccount as i32 => Ok(TransferredTo::ExistingAccount),
+            x if x == TransferredTo::NewAccount as i32 => Ok(TransferredTo::NewAccount),
+            _ => Err(Error::Transfer),
         }
     }
-}
 
-impl From<TransferResult> for i32 {
-    fn from(result: TransferResult) -> Self {
+    pub fn i32_from(result: TransferResult) -> i32 {
         match result {
-            TransferResult::TransferredToExistingAccount => 0,
-            TransferResult::TransferredToNewAccount => 1,
-            TransferResult::TransferError => 2,
+            Ok(transferred_to) => transferred_to as i32,
+            Err(_) => 2,
         }
     }
 }
@@ -483,9 +479,9 @@ impl From<TransferResult> for i32 {
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
-        .try_into()
-        .expect("should parse result")
+    let return_code =
+        unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` account.
@@ -498,7 +494,7 @@ pub fn transfer_from_purse_to_account(
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let return_code = unsafe {
         ext_ffi::transfer_from_purse_to_account(
             source_ptr,
             source_size,
@@ -507,37 +503,8 @@ pub fn transfer_from_purse_to_account(
             amount_ptr,
             amount_size,
         )
-    }
-    .try_into()
-    .expect("should parse result")
-}
-
-// TODO: Improve returned result type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum PurseTransferResult {
-    TransferSuccessful,
-    TransferError,
-}
-
-impl TryFrom<i32> for PurseTransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(PurseTransferResult::TransferSuccessful),
-            1 => Ok(PurseTransferResult::TransferError),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<PurseTransferResult> for i32 {
-    fn from(result: PurseTransferResult) -> Self {
-        match result {
-            PurseTransferResult::TransferSuccessful => 0,
-            PurseTransferResult::TransferError => 1,
-        }
-    }
+    };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` purse.
@@ -545,11 +512,11 @@ pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,
     amount: U512,
-) -> PurseTransferResult {
+) -> Result<(), Error> {
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let result = unsafe {
         ext_ffi::transfer_from_purse_to_purse(
             source_ptr,
             source_size,
@@ -558,9 +525,12 @@ pub fn transfer_from_purse_to_purse(
             amount_ptr,
             amount_size,
         )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(Error::Transfer)
     }
-    .try_into()
-    .expect("Should parse result")
 }
 
 fn get_system_contract(name: &str) -> ContractPointer {
