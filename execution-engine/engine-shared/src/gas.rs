@@ -1,7 +1,8 @@
 use std::fmt;
 
-use contract_ffi::value::U512;
 use num::Zero;
+
+use contract_ffi::value::U512;
 
 use crate::motes::Motes;
 
@@ -26,16 +27,6 @@ impl Gas {
 
     pub fn checked_add(&self, rhs: Self) -> Option<Self> {
         self.0.checked_add(rhs.value()).map(Self::new)
-    }
-
-    // TODO: remove when possible; see https://casperlabs.atlassian.net/browse/EE-649
-    pub fn as_u64(&self) -> u64 {
-        self.0.as_u64()
-    }
-
-    // TODO: remove when possible; see https://casperlabs.atlassian.net/browse/EE-649
-    pub fn from_u64(value: u64) -> Self {
-        Gas(U512::from(value))
     }
 }
 
@@ -101,17 +92,6 @@ mod tests {
     fn should_be_able_to_get_instance_of_gas() {
         let initial_value = 1;
         let gas = Gas::new(U512::from(initial_value));
-        assert_eq!(
-            initial_value,
-            gas.value().as_u64(),
-            "should have equal value"
-        )
-    }
-
-    #[test]
-    fn should_be_able_to_get_instance_from_u64() {
-        let initial_value = 1;
-        let gas = Gas::from_u64(initial_value);
         assert_eq!(
             initial_value,
             gas.value().as_u64(),

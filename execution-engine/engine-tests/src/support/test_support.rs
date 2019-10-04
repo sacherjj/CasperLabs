@@ -376,7 +376,14 @@ pub fn get_exec_costs(exec_response: &ExecResponse) -> Vec<Gas> {
 
     deploy_results
         .iter()
-        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+        .map(|deploy_result| {
+            let execution_result = deploy_result.get_execution_result();
+            let cost = execution_result
+                .get_cost()
+                .try_into()
+                .expect("cost should map to U512");
+            Gas::new(cost)
+        })
         .collect()
 }
 

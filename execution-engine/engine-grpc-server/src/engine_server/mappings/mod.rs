@@ -727,8 +727,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                 let mut deploy_result = ipc::DeployResult::new();
                 let mut execution_result = ipc::DeployResult_ExecutionResult::new();
                 execution_result.set_effects(ipc_ee);
-                // TODO: executionresult cost should be BIGINT; see https://casperlabs.atlassian.net/browse/EE-649
-                execution_result.set_cost(cost.as_u64());
+                execution_result.set_cost(cost.value().into());
                 deploy_result.set_execution_result(execution_result);
                 deploy_result
             }
@@ -743,7 +742,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     // so for the time being they are all reported as "wasm errors".
                     error @ EngineError::InvalidProtocolVersion => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::InvalidHashLength { .. } => {
                         precondition_failure(error.to_string())
@@ -761,33 +760,33 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         ExecutionError::DeploymentAuthorizationFailure,
                     ) => precondition_failure(error.to_string()),
                     EngineError::StorageError(storage_err) => {
-                        execution_error(storage_err.to_string(), cost.as_u64(), effect)
+                        execution_error(storage_err.to_string(), cost.value(), effect)
                     }
                     error @ EngineError::AuthorizationError => {
                         precondition_failure(error.to_string())
                     }
                     EngineError::MissingSystemContractError(msg) => {
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::InsufficientPaymentError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::DeployError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::FinalizationError => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::SerializationError(_) => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     error @ EngineError::MintError(_) => {
                         let msg = error.to_string();
-                        execution_error(msg, cost.as_u64(), effect)
+                        execution_error(msg, cost.value(), effect)
                     }
                     EngineError::ExecError(exec_error) => match exec_error {
                         ExecutionError::GasLimit => {
@@ -800,7 +799,7 @@ impl From<ExecutionResult> for ipc::DeployResult {
                             let exec_result = {
                                 let mut tmp = ipc::DeployResult_ExecutionResult::new();
                                 tmp.set_error(deploy_error);
-                                tmp.set_cost(cost.as_u64());
+                                tmp.set_cost(cost.value().into());
                                 tmp.set_effects(effect.into());
                                 tmp
                             };
@@ -810,11 +809,11 @@ impl From<ExecutionResult> for ipc::DeployResult {
                         }
                         ExecutionError::KeyNotFound(key) => {
                             let msg = format!("Key {:?} not found.", key);
-                            execution_error(msg, cost.as_u64(), effect)
+                            execution_error(msg, cost.value(), effect)
                         }
                         ExecutionError::Revert(status) => {
                             let error_msg = format!("Exit code: {}", status);
-                            execution_error(error_msg, cost.as_u64(), effect)
+                            execution_error(error_msg, cost.value(), effect)
                         }
                         ExecutionError::Interpreter(error) => {
                             // If the error happens during contract execution it's mapped to
@@ -832,15 +831,15 @@ impl From<ExecutionResult> for ipc::DeployResult {
                                     match downcasted_error {
                                         ExecutionError::Revert(status) => {
                                             let errors_msg = format!("Exit code: {}", status);
-                                            execution_error(errors_msg, cost.as_u64(), effect)
+                                            execution_error(errors_msg, cost.value(), effect)
                                         }
                                         ExecutionError::KeyNotFound(key) => {
                                             let errors_msg = format!("Key {:?} not found.", key);
-                                            execution_error(errors_msg, cost.as_u64(), effect)
+                                            execution_error(errors_msg, cost.value(), effect)
                                         }
                                         other => execution_error(
                                             format!("{:?}", other),
-                                            cost.as_u64(),
+                                            cost.value(),
                                             effect,
                                         ),
                                     }
@@ -848,14 +847,14 @@ impl From<ExecutionResult> for ipc::DeployResult {
 
                                 None => {
                                     let msg = format!("{:?}", error);
-                                    execution_error(msg, cost.as_u64(), effect)
+                                    execution_error(msg, cost.value(), effect)
                                 }
                             }
                         }
                         // TODO(mateusz.gorski): Be more specific about execution errors
                         other => {
                             let msg = format!("{:?}", other);
-                            execution_error(msg, cost.as_u64(), effect)
+                            execution_error(msg, cost.value(), effect)
                         }
                     },
                 }
@@ -1061,7 +1060,7 @@ fn precondition_failure(msg: String) -> ipc::DeployResult {
 
 /// Constructs an instance of [[ipc::DeployResult]] with error set to
 /// [[ipc::DeployError_ExecutionError]].
-fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::DeployResult {
+fn execution_error(msg: String, cost: U512, effect: ExecutionEffect) -> ipc::DeployResult {
     let mut deploy_result = ipc::DeployResult::new();
     let deploy_error = {
         let mut tmp = ipc::DeployError::new();
@@ -1073,7 +1072,7 @@ fn execution_error(msg: String, cost: u64, effect: ExecutionEffect) -> ipc::Depl
     let execution_result = {
         let mut tmp = ipc::DeployResult_ExecutionResult::new();
         tmp.set_error(deploy_error);
-        tmp.set_cost(cost);
+        tmp.set_cost(cost.into());
         tmp.set_effects(effect.into());
         tmp
     };
@@ -1134,13 +1133,14 @@ mod tests {
     use super::ipc;
     use super::state;
     use super::transforms;
+    use contract_ffi::value::U512;
 
     // Test that wasm_error function actually returns DeployResult with result set
     // to WasmError
     #[test]
     fn wasm_error_result() {
         let error_msg = "ExecError";
-        let mut result = execution_error(error_msg.to_owned(), 0, Default::default());
+        let mut result = execution_error(error_msg.to_owned(), U512::zero(), Default::default());
         assert!(result.has_execution_result());
         let mut exec_result = result.take_execution_result();
         assert!(exec_result.has_error());
@@ -1171,7 +1171,7 @@ mod tests {
         };
         let execution_effect: ExecutionEffect =
             ExecutionEffect::new(HashMap::new(), input_transforms.clone());
-        let cost: Gas = Gas::from_u64(123);
+        let cost: Gas = Gas::new(U512::from(123));
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
             cost,
@@ -1179,7 +1179,8 @@ mod tests {
         let mut ipc_deploy_result: ipc::DeployResult = execution_result.into();
         assert!(ipc_deploy_result.has_execution_result());
         let mut success = ipc_deploy_result.take_execution_result();
-        assert_eq!(success.get_cost(), cost.as_u64());
+        let execution_cost: U512 = success.get_cost().try_into().expect("should map to U512");
+        assert_eq!(execution_cost, cost.value());
 
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: HashMap<Key, Transform> = {
@@ -1207,13 +1208,14 @@ mod tests {
         let ipc_deploy_result: ipc::DeployResult = execution_failure.into();
         assert!(ipc_deploy_result.has_execution_result());
         let success = ipc_deploy_result.get_execution_result();
-        Gas::from_u64(success.get_cost())
+        let execution_cost: U512 = success.get_cost().try_into().expect("should map to U512");
+        Gas::new(execution_cost)
     }
 
     #[test]
     fn storage_error_has_cost() {
         use engine_storage::error::Error::*;
-        let cost: Gas = Gas::from_u64(100);
+        let cost: Gas = Gas::new(U512::from(100));
         // TODO: actually create an Rkv error
         // assert_eq!(test_cost(cost, RkvError("Error".to_owned())), cost);
         let bytesrepr_err = contract_ffi::bytesrepr::Error::EarlyEndOfStream;
@@ -1222,7 +1224,7 @@ mod tests {
 
     #[test]
     fn exec_err_has_cost() {
-        let cost: Gas = Gas::from_u64(100);
+        let cost: Gas = Gas::new(U512::from(100));
         // GasLimit error is treated differently at the moment so test separately
         assert_eq!(
             test_cost(cost, engine_core::execution::Error::GasLimit),
@@ -1267,19 +1269,31 @@ mod tests {
 
     #[test]
     fn revert_error_maps_to_execution_error() {
-        let revert_error = Error::Revert(10);
+        const REVERT: u32 = 10;
+        let revert_error = Error::Revert(REVERT);
+        let amount: U512 = U512::from(15);
         let exec_result = ExecutionResult::Failure {
             error: ExecError(revert_error),
             effect: Default::default(),
-            cost: Gas::from_u64(10),
+            cost: Gas::new(amount),
         };
         let ipc_result: ipc::DeployResult = exec_result.into();
-        assert!(ipc_result.has_execution_result());
+        assert!(
+            ipc_result.has_execution_result(),
+            "should have execution result"
+        );
         let ipc_execution_result = ipc_result.get_execution_result();
-        assert_eq!(ipc_execution_result.cost, 10);
+        let execution_cost: U512 = ipc_execution_result
+            .get_cost()
+            .try_into()
+            .expect("should map to U512");
+        assert_eq!(execution_cost, amount, "execution cost should equal amount");
         assert_eq!(
-            ipc_execution_result.get_error().get_exec_error().message,
-            "Exit code: 10"
+            ipc_execution_result
+                .get_error()
+                .get_exec_error()
+                .get_message(),
+            format!("Exit code: {}", REVERT)
         );
     }
 
