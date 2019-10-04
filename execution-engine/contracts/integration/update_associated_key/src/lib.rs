@@ -13,6 +13,5 @@ pub extern "C" fn call() {
     let weight_val: u32 = get_arg(1).unwrap().unwrap();
     let weight = Weight::new(weight_val as u8);
 
-    update_associated_key(account, weight)
-        .unwrap_or_else(|_| revert(100));
+    update_associated_key(account, weight).unwrap_or_else(|_| revert(100));
 }

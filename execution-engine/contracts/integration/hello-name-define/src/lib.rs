@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{put_key, get_arg, ret, store_function_at_hash};
+use contract_ffi::contract_api::{get_arg, put_key, ret, store_function_at_hash};
 
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");

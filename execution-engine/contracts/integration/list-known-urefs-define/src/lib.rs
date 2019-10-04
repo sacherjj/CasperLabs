@@ -7,7 +7,7 @@ use alloc::borrow::ToOwned;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use contract_ffi::contract_api::{
-    put_key, get_key, list_named_keys, new_turef, revert, store_function_at_hash,
+    get_key, list_named_keys, new_turef, put_key, revert, store_function_at_hash,
 };
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;

@@ -19,7 +19,7 @@ pub extern "C" fn call() {
 
     match transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount) {
         PurseTransferResult::TransferSuccessful => {
-            let _result: () = call_contract(
+            call_contract::<_, ()>(
                 pos_pointer,
                 &("bond", bond_amount, bonding_purse),
                 &vec![Key::URef(bonding_purse.value())],

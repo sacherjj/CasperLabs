@@ -6,7 +6,7 @@ extern crate contract_ffi;
 use alloc::string::String;
 use alloc::vec::Vec;
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{put_key, call_contract, get_key, new_turef, revert};
+use contract_ffi::contract_api::{call_contract, get_key, new_turef, put_key, revert};
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 

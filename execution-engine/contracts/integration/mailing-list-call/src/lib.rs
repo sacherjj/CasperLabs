@@ -8,8 +8,8 @@ use alloc::vec::Vec;
 use core::convert::From;
 
 use contract_ffi::contract_api::pointers::*;
-use contract_ffi::contract_api::*;
 use contract_ffi::contract_api::Error as ApiError;
+use contract_ffi::contract_api::*;
 use contract_ffi::key::Key;
 
 #[repr(u16)]
@@ -32,7 +32,8 @@ impl From<Error> for ApiError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mailing_uref = get_key("mailing").unwrap_or_else(|| revert(ApiError::from(Error::GetMailingURef).into()));
+    let mailing_uref =
+        get_key("mailing").unwrap_or_else(|| revert(ApiError::from(Error::GetMailingURef).into()));
     let pointer = if let Key::Hash(hash) = mailing_uref {
         ContractPointer::Hash(hash)
     } else {
@@ -47,8 +48,8 @@ pub extern "C" fn call() {
             let key_name = "mail_feed";
             put_key(key_name, &sub_key);
 
-            let key_name_uref =
-                get_key(key_name).unwrap_or_else(|| revert(ApiError::from(Error::GetKeyNameURef).into()));
+            let key_name_uref = get_key(key_name)
+                .unwrap_or_else(|| revert(ApiError::from(Error::GetKeyNameURef).into()));
             if sub_key != key_name_uref {
                 revert(ApiError::from(Error::BadSubKey).into());
             }
@@ -56,7 +57,7 @@ pub extern "C" fn call() {
             let method = "pub";
             let message = "Hello, World!";
             let args = (method, message);
-            let _result: () = call_contract(pointer, &args, &Vec::new());
+            call_contract::<_, ()>(pointer, &args, &Vec::new());
 
             let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
             let messages = read(turef)

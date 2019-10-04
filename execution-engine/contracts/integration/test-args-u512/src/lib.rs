@@ -5,8 +5,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{get_arg, revert};
-use contract_ffi::value::{U512};
-
+use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {

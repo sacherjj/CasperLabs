@@ -17,5 +17,5 @@ pub extern "C" fn call() {
         revert(66); // exit code is currently arbitrary
     };
 
-    let _result: () = call_contract(pointer, &(), &Vec::new());
+    call_contract::<_, ()>(pointer, &(), &Vec::new());
 }

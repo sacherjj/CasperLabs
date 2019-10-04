@@ -11,6 +11,5 @@ use contract_ffi::value::account::PublicKey;
 pub extern "C" fn call() {
     let account: PublicKey = get_arg(0).unwrap().unwrap();
 
-    remove_associated_key(account)
-        .unwrap_or_else(|_| revert(1));
+    remove_associated_key(account).unwrap_or_else(|_| revert(1));
 }

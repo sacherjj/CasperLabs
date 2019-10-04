@@ -12,7 +12,7 @@ pub extern "C" fn call() {
     let number: u32 = get_arg(1).unwrap().unwrap();
 
     let account_sum: u8 = account_number.iter().sum();
-    let total_sum: u32 = account_sum as u32 + number;
+    let total_sum: u32 = u32::from(account_sum) + number;
 
     revert(total_sum);
 }
