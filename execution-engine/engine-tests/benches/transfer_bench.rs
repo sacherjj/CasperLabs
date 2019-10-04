@@ -4,25 +4,26 @@ extern crate contract_ffi;
 extern crate engine_core;
 extern crate engine_shared;
 extern crate engine_storage;
-use std::collections::HashMap;
 
 use criterion::{Criterion, Throughput};
 use tempfile::TempDir;
 
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder, WasmTestResult, DEFAULT_BLOCK_TIME,
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
     STANDARD_PAYMENT_CONTRACT,
 };
+use casperlabs_engine_tests::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
+
+const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
+const CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT: &str = "transfer_to_existing_account.wasm";
 
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
-
-const GENESIS_ADDR: [u8; 32] = [1; 32];
+const PER_RUN_FUNDING: u64 = 10_000_000;
 const TARGET_ADDR: [u8; 32] = [127; 32];
 
 fn engine_with_payments() -> EngineConfig {
@@ -37,17 +38,17 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     let amount = U512::one();
 
     let data_dir = TempDir::new().expect("should create temp dir");
+
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_CREATE_ACCOUNTS,
+        (accounts_bytes, amount),
+    )
+    .build();
+
     let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "create_accounts.wasm",
-            (accounts_bytes, amount), //args
-            DEFAULT_BLOCK_TIME,       // blocktime
-            [1; 32],                  // deploy_hash
-        )
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -59,42 +60,35 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
 /// batch determined by value of TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
     let amount = U512::one();
+
     // To see raw numbers take current time
-    for i in 0..TRANSFER_BATCH_SIZE {
-        builder
-            .exec_with_args(
-                GENESIS_ADDR,
-                STANDARD_PAYMENT_CONTRACT,
-                (U512::from(MAX_PAYMENT),),
-                "transfer_to_existing_account.wasm",
-                (account, amount),  //args
-                DEFAULT_BLOCK_TIME, // blocktime
-                [2 + i as u8; 32],  // deploy_hash
-            )
-            .expect_success()
-            .commit();
+    for _ in 0..TRANSFER_BATCH_SIZE {
+        let exec_request = ExecuteRequestBuilder::standard(
+            DEFAULT_ACCOUNT_ADDR,
+            CONTRACT_TRANSFER_TO_EXISTING_ACCOUNT,
+            (account, amount),
+        )
+        .build();
+        builder.exec(exec_request).expect_success().commit();
     }
 }
 
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
-    let mut exec_builder = ExecRequestBuilder::new();
+    let mut exec_builder = ExecuteRequestBuilder::new();
 
     for i in 0..TRANSFER_BATCH_SIZE {
-        let deploy = DeployBuilder::default()
-            .with_address(GENESIS_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(MAX_PAYMENT),))
+        let deploy = DeployItemBuilder::default()
+            .with_address(DEFAULT_ACCOUNT_ADDR)
+            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(PER_RUN_FUNDING),))
             .with_session_code("transfer_to_existing_account.wasm", (account, U512::one()))
-            .with_authorization_keys(&[PublicKey::new(GENESIS_ADDR)])
+            .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
             .with_deploy_hash([2 + i as u8; 32]) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);
     }
 
-    builder
-        .exec_with_exec_request(exec_builder.build())
-        .expect_success()
-        .commit();
+    builder.exec(exec_builder.build()).expect_success().commit();
 }
 
 pub fn transfer_bench(c: &mut Criterion) {

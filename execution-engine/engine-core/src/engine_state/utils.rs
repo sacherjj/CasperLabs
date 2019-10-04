@@ -1,35 +1,11 @@
-use parity_wasm::elements::Serialize;
-
-use crate::engine_state;
 use contract_ffi::key::addr_to_hex;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
-use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
-
-#[derive(Debug, Clone)]
-pub struct WasmiBytes(Vec<u8>);
-
-impl WasmiBytes {
-    pub fn new(raw_bytes: &[u8], wasm_costs: WasmCosts) -> Result<Self, engine_state::Error> {
-        let mut ret = vec![];
-        let wasmi_preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
-        let module = wasmi_preprocessor.preprocess(raw_bytes)?;
-        module.serialize(&mut ret)?;
-        Ok(WasmiBytes(ret))
-    }
-}
-
-impl Into<Vec<u8>> for WasmiBytes {
-    fn into(self) -> Vec<u8> {
-        self.0
-    }
-}
 
 /// Helper function to create validator labels as they are constructed in PoS.
 pub fn pos_validator_key(pk: PublicKey, stakes: U512) -> String {
     let public_key_hex: String = addr_to_hex(&pk.value());
-    // This is how PoS contract stores validator keys in its known_urefs map.
+    // This is how PoS contract stores validator keys in its named_keys map.
     format!("v_{}_{}", public_key_hex, stakes)
 }
 

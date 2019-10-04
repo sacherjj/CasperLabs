@@ -6,11 +6,12 @@ edition = "2018"
 
 [lib]
 name = "create_purse_01"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [features]
 default = []
 std = ["contract-ffi/std"]
+lib = []
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

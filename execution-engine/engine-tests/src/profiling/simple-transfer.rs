@@ -15,11 +15,12 @@ use clap::{crate_version, App, Arg};
 
 use casperlabs_engine_tests::support::profiling_common;
 use casperlabs_engine_tests::support::test_support::{
-    DeployBuilder, ExecRequestBuilder, LmdbWasmTestBuilder,
+    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
 };
+use casperlabs_engine_tests::test::DEFAULT_PAYMENT;
 use contract_ffi::base16;
 use contract_ffi::value::U512;
-use engine_core::engine_state::{EngineConfig, MAX_PAYMENT};
+use engine_core::engine_state::EngineConfig;
 
 const ABOUT: &str =
     "Executes a simple contract which transfers an amount between two accounts.  \
@@ -102,18 +103,18 @@ fn main() {
     let account_2_public_key = profiling_common::account_2_public_key();
 
     let exec_request = {
-        let deploy = DeployBuilder::new()
+        let deploy = DeployItemBuilder::new()
             .with_address(account_1_public_key.value())
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "simple_transfer.wasm",
                 (account_2_public_key, U512::from(TRANSFER_AMOUNT)),
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT),))
+            .with_payment_code(STANDARD_PAYMENT_WASM, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[account_1_public_key])
             .build();
 
-        ExecRequestBuilder::new().push_deploy(deploy).build()
+        ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
     let mut test_builder = LmdbWasmTestBuilder::open(
@@ -122,10 +123,7 @@ fn main() {
         root_hash,
     );
 
-    test_builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    test_builder.exec(exec_request).expect_success().commit();
 
     if args.verbose {
         println!("{:#?}", test_builder.get_transforms());

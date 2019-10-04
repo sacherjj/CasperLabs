@@ -1,0 +1,27 @@
+#![no_std]
+#![feature(cell_update)]
+
+extern crate alloc;
+extern crate contract_ffi;
+extern crate local_state;
+
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::Error;
+
+const ENTRY_FUNCTION_NAME: &str = "delegate";
+const CONTRACT_NAME: &str = "local_state_stored";
+
+#[no_mangle]
+pub extern "C" fn delegate() {
+    local_state::delegate()
+}
+
+#[no_mangle]
+pub extern "C" fn call() {
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, Default::default())
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .into();
+
+    contract_api::put_key(CONTRACT_NAME, &key);
+}

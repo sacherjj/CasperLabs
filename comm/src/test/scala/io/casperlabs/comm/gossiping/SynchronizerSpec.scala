@@ -1,12 +1,13 @@
 package io.casperlabs.comm.gossiping
 
-import cats.implicits._
 import cats.effect.concurrent.Ref
+import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
@@ -19,10 +20,11 @@ import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
-import org.scalacheck.Gen
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
+
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
 
@@ -30,7 +32,7 @@ class SynchronizerSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
-    with ArbitraryConsensus
+    with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
   import SynchronizerSpec._
 
@@ -136,8 +138,8 @@ class SynchronizerSpec
         val summaryMap = dag.groupBy(_.blockHash).mapValues(_.head)
         def collectAncestors(acc: Set[ByteString], blockHash: ByteString): Set[ByteString] = {
           val summary = summaryMap(blockHash)
-          val deps = summary.getHeader.justifications
-            .map(_.latestBlockHash) ++ summary.getHeader.parentHashes
+          val deps = summary.justifications
+            .map(_.latestBlockHash) ++ summary.parentHashes
           deps.foldLeft(acc) {
             case (acc, dep) if !acc(dep) =>
               collectAncestors(acc + dep, dep)
@@ -147,10 +149,10 @@ class SynchronizerSpec
         }
         val target    = dag.last.blockHash
         val ancestors = collectAncestors(Set(target), target)
-        val bonds     = dag.map(_.getHeader.validatorPublicKey).distinct.map(Bond(_, 1))
+        val bonds     = dag.map(_.validatorPublicKey).distinct.map(Bond(_, 1))
         val subdag = dag.filter(x => ancestors(x.blockHash)).map { summary =>
           summary
-            .withHeader(summary.getHeader.withState(summary.getHeader.getState.withBonds(bonds)))
+            .withHeader(summary.getHeader.withState(summary.state.withBonds(bonds)))
         }
         log.reset()
         TestFixture(subdag.reverse)(
@@ -357,9 +359,9 @@ class SynchronizerSpec
 
         def allAncestors(summary: BlockSummary): List[BlockSummary] = {
           def directAncestors(s: BlockSummary): List[BlockSummary] =
-            s.getHeader.parentHashes
+            s.parentHashes
               .flatMap(p => hashToSummary(p).toList)
-              .toList ::: s.getHeader.justifications
+              .toList ::: s.justifications
               .flatMap(j => hashToSummary(j.latestBlockHash))
               .toList
 

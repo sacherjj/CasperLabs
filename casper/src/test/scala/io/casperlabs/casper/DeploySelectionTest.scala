@@ -11,10 +11,10 @@ import io.casperlabs.casper.consensus.state.{BigInt, Key, ProtocolVersion, Value
 import io.casperlabs.casper.util.execengine.{DeployEffects, ExecutionEngineServiceStub}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.comm.gossiping.ArbitraryConsensus
 import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.{ExecutionResult, PreconditionFailure}
 import io.casperlabs.ipc._
+import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.smartcontracts.ExecutionEngineService.CommitResult
 import monix.eval.Task
@@ -318,7 +318,7 @@ object DeploySelectionTest {
           ProtocolVersion
       ) => F[Either[Throwable, Seq[DeployResult]]]
   ): ExecutionEngineService[F] = ExecutionEngineServiceStub.mock(
-    (_, _) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
+    (_) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
     (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]],

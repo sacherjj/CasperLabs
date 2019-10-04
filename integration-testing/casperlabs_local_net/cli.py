@@ -12,6 +12,7 @@ from casperlabs_local_net.client_parser import (
     parse,
 )
 from casperlabs_local_net.common import DEFAULT_PAYMENT_COST, resources_path
+from casperlabs_client import ABI
 
 
 class CLIErrorExit(Exception):
@@ -25,8 +26,8 @@ class CLIErrorExit(Exception):
 
 class CLI:
 
-    _DEFAULT_PAYMENT_JSON = json.dumps(
-        [{"name": "amount", "value": {"u512": DEFAULT_PAYMENT_COST}}]
+    _DEFAULT_PAYMENT_JSON = ABI.args_to_json(
+        ABI.args([ABI.big_int("amount", DEFAULT_PAYMENT_COST)])
     )
 
     def __init__(self, node, cli_cmd="casperlabs_client", tls_parameters=None):

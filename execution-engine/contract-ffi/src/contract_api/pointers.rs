@@ -1,9 +1,11 @@
-use crate::key::Key;
+use core::any::type_name;
+use core::fmt;
+use core::marker::PhantomData;
+
+use crate::key::{addr_to_hex, Key};
 use crate::uref::AccessRights;
 use crate::uref::URef;
 use crate::value::Contract;
-use core::fmt;
-use core::marker::PhantomData;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum AccessRightsError {
@@ -66,6 +68,15 @@ pub enum ContractPointer {
     URef(TURef<Contract>),
 }
 
+impl ContractPointer {
+    pub fn into_turef(self) -> Option<TURef<Contract>> {
+        match self {
+            ContractPointer::URef(ret) => Some(ret),
+            _ => None,
+        }
+    }
+}
+
 impl<T> From<TURef<T>> for Key {
     fn from(turef: TURef<T>) -> Self {
         let uref = URef::new(turef.addr(), turef.access_rights());
@@ -78,6 +89,47 @@ impl From<ContractPointer> for Key {
         match c_ptr {
             ContractPointer::Hash(h) => Key::Hash(h),
             ContractPointer::URef(turef) => turef.into(),
+        }
+    }
+}
+
+impl<T> core::fmt::Display for TURef<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(
+            f,
+            "TURef({}, {}; {})",
+            addr_to_hex(&self.addr()),
+            self.access_rights(),
+            type_name::<T>()
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::string::{String, ToString};
+
+    use crate::contract_api::pointers::TURef;
+    use crate::uref::AccessRights;
+    use crate::value::Value;
+
+    #[test]
+    fn turef_as_string() {
+        let addr_array = [48u8; 32];
+        {
+            let turef: TURef<String> = TURef::new(addr_array, AccessRights::ADD);
+            assert_eq!(
+                turef.to_string(),
+                "TURef(3030303030303030303030303030303030303030303030303030303030303030, ADD; alloc::string::String)"
+            );
+        }
+
+        {
+            let turef: TURef<Value> = TURef::new(addr_array, AccessRights::READ_ADD_WRITE);
+            assert_eq!(
+                turef.to_string(),
+                "TURef(3030303030303030303030303030303030303030303030303030303030303030, READ_ADD_WRITE; casperlabs_contract_ffi::value::Value)"
+            );
         }
     }
 }

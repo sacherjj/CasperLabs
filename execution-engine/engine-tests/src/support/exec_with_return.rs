@@ -19,10 +19,11 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
-use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::WasmiPreprocessor;
 
 use crate::support::test_support::{self, WasmTestBuilder};
+
+use crate::test::DEFAULT_WASM_COSTS;
 
 const INIT_FN_STORE_ID: u32 = 0;
 const INIT_PROTOCOL_VERSION: u64 = 1;
@@ -70,25 +71,23 @@ where
     let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
-
     let base_key = Key::Account(address);
-    let account = builder.get_account(base_key).expect("should find account");
 
-    let mut uref_lookup = account.urefs_lookup().clone();
-    let known_urefs = {
-        let mut from_account =
-            execution::extract_access_rights_from_keys(uref_lookup.values().cloned());
-        let from_extra = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
+    let account = builder.get_account(address).expect("should find account");
 
-        from_account.extend(from_extra.into_iter());
+    let mut named_keys = account.named_keys().clone();
 
-        from_account
+    let access_rights = {
+        let mut ret = execution::extract_access_rights_from_keys(named_keys.values().cloned());
+        let extras = execution::extract_access_rights_from_urefs(extra_urefs.into_iter());
+        ret.extend(extras.into_iter());
+        ret
     };
 
     let context = RuntimeContext::new(
         Rc::clone(&tracking_copy),
-        &mut uref_lookup,
-        known_urefs,
+        &mut named_keys,
+        access_rights,
         arguments,
         BTreeSet::new(),
         &account,
@@ -109,7 +108,9 @@ where
         module_bytes: wasm_bytes,
         args: Vec::new(),
     };
-    let wasm_costs = WasmCosts::from_version(protocol_version).unwrap();
+
+    let wasm_costs = *DEFAULT_WASM_COSTS;
+
     let preprocessor = WasmiPreprocessor::new(wasm_costs);
     let parity_module = builder
         .get_engine_state()

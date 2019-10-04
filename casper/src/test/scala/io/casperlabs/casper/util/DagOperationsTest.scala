@@ -4,21 +4,22 @@ import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockMetadata
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.models.Message
+import io.casperlabs.shared.Sorting.messageSummaryOrdering
+import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.BitSet
-import io.casperlabs.blockstorage.DagRepresentation
 
 @silent("deprecated")
 @silent("is never used")
-class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with DagStorageFixture {
+class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
     implicit val intKey = DagOperations.Key.identity[Int]
@@ -27,8 +28,8 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "bfToposortTraverseF" should "lazily breadth-first and order by rank when traverse a DAG with effectful neighbours" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * DAG Looks like this:
          *
@@ -47,38 +48,37 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         val v3 = generateValidator("v3")
 
         for {
-          genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash), v2)
-          b2      <- createBlock[Task](Seq(b1.blockHash), v1)
-          b3      <- createBlock[Task](Seq(b1.blockHash), v3)
-          b4      <- createBlock[Task](Seq(b3.blockHash), v2)
-          b5      <- createBlock[Task](Seq(b3.blockHash), v3)
-          b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash), v1)
-          b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), v3)
+          genesis <- createAndStoreBlock[Task](Seq.empty)
+          b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+          b2      <- createAndStoreBlock[Task](Seq(b1.blockHash), v1)
+          b3      <- createAndStoreBlock[Task](Seq(b1.blockHash), v3)
+          b4      <- createAndStoreBlock[Task](Seq(b3.blockHash), v2)
+          b5      <- createAndStoreBlock[Task](Seq(b3.blockHash), v3)
+          b6      <- createAndStoreBlock[Task](Seq(b2.blockHash, b4.blockHash), v1)
+          b7      <- createAndStoreBlock[Task](Seq(b4.blockHash, b5.blockHash), v3)
 
           dag                <- dagStorage.getRepresentation
           dagTopoOrderingAsc = DagOperations.blockTopoOrderingAsc
-          stream = DagOperations.bfToposortTraverseF[Task](List(BlockMetadata.fromBlock(genesis))) {
-            b =>
-              dag
-                .children(b.blockHash)
-                .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
+          stream = DagOperations.bfToposortTraverseF[Task](Message.fromBlock(genesis).toList) { b =>
+            dag
+              .children(b.messageHash)
+              .flatMap(_.toList.traverse(l => dag.lookup(l).map(_.get)))
           }(Monad[Task], dagTopoOrderingAsc)
           _                   <- stream.toList.map(_.map(_.rank) shouldBe List(0, 1, 2, 2, 3, 3, 4, 4))
           dagTopoOrderingDesc = DagOperations.blockTopoOrderingDesc
           stream2 = DagOperations
             .bfToposortTraverseF[Task](
-              List(BlockMetadata.fromBlock(b6), BlockMetadata.fromBlock(b7))
+              Message.fromBlock(b6).toList ++ Message.fromBlock(b7).toList
             ) { b =>
-              b.parents.traverse(l => dag.lookup(l).map(_.get))
+              b.parents.toList.traverse(l => dag.lookup(l).map(_.get))
             }(Monad[Task], dagTopoOrderingDesc)
           _ <- stream2.toList.map(_.map(_.rank) shouldBe List(4, 4, 3, 3, 2, 2, 1, 0))
         } yield ()
   }
 
   "Greatest common ancestor" should "be computed properly" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          * DAG Looks like this:
          *
@@ -93,14 +93,14 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
          *         genesis
          */
         for {
-          genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash))
-          b2      <- createBlock[Task](Seq(b1.blockHash))
-          b3      <- createBlock[Task](Seq(b1.blockHash))
-          b4      <- createBlock[Task](Seq(b3.blockHash))
-          b5      <- createBlock[Task](Seq(b3.blockHash))
-          b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
-          b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+          genesis <- createAndStoreBlock[Task](Seq.empty)
+          b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b2      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+          b3      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+          b4      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+          b5      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+          b6      <- createAndStoreBlock[Task](Seq(b2.blockHash, b4.blockHash))
+          b7      <- createAndStoreBlock[Task](Seq(b4.blockHash, b5.blockHash))
 
           dag <- dagStorage.getRepresentation
 
@@ -113,7 +113,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "Latest Common Ancestor" should "be computed properly for various j-DAGs" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1 = generateValidator("One")
       val v2 = generateValidator("Two")
       val v3 = generateValidator("Three")
@@ -126,10 +126,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        *
        */
       for {
-        genesis        <- createBlock[Task](Seq.empty)
-        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
+        genesis        <- createAndStoreBlock[Task](Seq.empty)
+        b1             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
@@ -144,9 +144,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        *
        */
       for {
-        genesis        <- createBlock[Task](Seq.empty)
-        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
+        genesis        <- createAndStoreBlock[Task](Seq.empty)
+        b1             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
@@ -166,13 +166,13 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        */
 
       for {
-        genesis        <- createBlock[Task](Seq.empty)
-        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
-        b4             <- createBlock[Task](Seq(b3.blockHash), v2)
-        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
-        b6             <- createBlock[Task](Seq(b5.blockHash), v3)
+        genesis        <- createAndStoreBlock[Task](Seq.empty)
+        b1             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createAndStoreBlock[Task](Seq(b3.blockHash), v2)
+        b5             <- createAndStoreBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createAndStoreBlock[Task](Seq(b5.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
@@ -192,13 +192,13 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        */
 
       for {
-        genesis        <- createBlock[Task](Seq.empty)
-        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
-        b4             <- createBlock[Task](Seq(b1.blockHash), v2)
-        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
-        b6             <- createBlock[Task](Seq(b5.blockHash), v3)
+        genesis        <- createAndStoreBlock[Task](Seq.empty)
+        b1             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createAndStoreBlock[Task](Seq(b1.blockHash), v2)
+        b5             <- createAndStoreBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createAndStoreBlock[Task](Seq(b5.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
@@ -216,14 +216,14 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        */
 
       for {
-        genesis        <- createBlock[Task](Seq.empty)
-        b1             <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b2             <- createBlock[Task](Seq(genesis.blockHash), v2)
-        b3             <- createBlock[Task](Seq(genesis.blockHash), v3)
-        b4             <- createBlock[Task](Seq(b2.blockHash), v2)
-        b5             <- createBlock[Task](Seq(b3.blockHash), v3)
-        b6             <- createBlock[Task](Seq(b4.blockHash), v1)
-        b7             <- createBlock[Task](Seq(b4.blockHash), v3)
+        genesis        <- createAndStoreBlock[Task](Seq.empty)
+        b1             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        b3             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
+        b4             <- createAndStoreBlock[Task](Seq(b2.blockHash), v2)
+        b5             <- createAndStoreBlock[Task](Seq(b3.blockHash), v3)
+        b6             <- createAndStoreBlock[Task](Seq(b4.blockHash), v1)
+        b7             <- createAndStoreBlock[Task](Seq(b4.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
@@ -248,20 +248,20 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        */
 
       for {
-        genesis      <- createBlock[Task](Seq(), ByteString.EMPTY)
-        a            <- createBlock[Task](Seq(genesis.blockHash), v1)
-        b            <- createBlock[Task](Seq(genesis.blockHash), v2)
-        c            <- createBlock[Task](Seq(genesis.blockHash), v3)
-        d            <- createBlock[Task](Seq(a.blockHash), v1)
-        e            <- createBlock[Task](Seq(c.blockHash), v2)
-        f            <- createBlock[Task](Seq(d.blockHash), v2)
-        g            <- createBlock[Task](Seq(f.blockHash), v1)
-        h            <- createBlock[Task](Seq(f.blockHash), v2)
-        i            <- createBlock[Task](Seq(f.blockHash), v3)
-        j            <- createBlock[Task](Seq(g.blockHash), v1)
-        k            <- createBlock[Task](Seq(h.blockHash), v2)
-        l            <- createBlock[Task](Seq(i.blockHash), v3)
-        m            <- createBlock[Task](Seq(l.blockHash), v2)
+        genesis      <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
+        a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
+        b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
+        c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
+        d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1)
+        e            <- createAndStoreBlock[Task](Seq(c.blockHash), v2)
+        f            <- createAndStoreBlock[Task](Seq(d.blockHash), v2)
+        g            <- createAndStoreBlock[Task](Seq(f.blockHash), v1)
+        h            <- createAndStoreBlock[Task](Seq(f.blockHash), v2)
+        i            <- createAndStoreBlock[Task](Seq(f.blockHash), v3)
+        j            <- createAndStoreBlock[Task](Seq(g.blockHash), v1)
+        k            <- createAndStoreBlock[Task](Seq(h.blockHash), v2)
+        l            <- createAndStoreBlock[Task](Seq(i.blockHash), v3)
+        m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2)
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
@@ -269,64 +269,64 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      implicit deployStorage =>
         /*
          *  DAG Looks like this:
          *
-         *         b6   b7
-         *        |  \ / |
-         *        b4  b5 |
-         *          \ |  |
-         *            b3 |
-         *            |  |
-         *           b1  b2
-         *            |  /
-         *          genesis
+         * rank
+         *  4        b6   b7
+         *          |  \ / |
+         *  3       b4  b5 |
+         *            \ |  |
+         *  2           b3 |
+         *              |  |
+         *  1          b1  b2
+         *              |  /
+         *  0         genesis
          */
-        implicit def toMetadata = BlockMetadata.fromBlock _
+        implicit def toMessageSummary: Block => Message = Message.fromBlock(_).get
         for {
-          genesis <- createBlock[Task](Seq.empty)
-          b1      <- createBlock[Task](Seq(genesis.blockHash))
-          b2      <- createBlock[Task](Seq(genesis.blockHash))
-          b3      <- createBlock[Task](Seq(b1.blockHash))
-          b4      <- createBlock[Task](Seq(b3.blockHash))
-          b5      <- createBlock[Task](Seq(b3.blockHash))
-          b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
-          b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash))
+          genesis <- createAndStoreBlock[Task](Seq.empty)
+          b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b2      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+          b3      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+          b4      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+          b5      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+          b6      <- createAndStoreBlock[Task](Seq(b4.blockHash, b5.blockHash))
+          b7      <- createAndStoreBlock[Task](Seq(b2.blockHash, b5.blockHash))
 
           dag <- dagStorage.getRepresentation
 
-          ordering <- dag.deriveOrdering(0L)
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b7), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b6) -> BitSet(0),
-                toMetadata(b4) -> BitSet(0),
-                toMetadata(b7) -> BitSet(1),
-                toMetadata(b2) -> BitSet(1)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b7), dag) shouldBeF Map(
+                toMessageSummary(b6) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(0),
+                toMessageSummary(b7) -> BitSet(1),
+                toMessageSummary(b2) -> BitSet(1)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b6, b3), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b6) -> BitSet(0),
-                toMetadata(b4) -> BitSet(0),
-                toMetadata(b5) -> BitSet(0)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b6, b3), dag) shouldBeF Map(
+                toMessageSummary(b6) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(0),
+                toMessageSummary(b5) -> BitSet(0)
               )
 
-          _ <- DagOperations.uncommonAncestors(Vector(b2, b4, b5), dag)(Monad[Task], ordering) shouldBeF Map(
-                toMetadata(b2) -> BitSet(0),
-                toMetadata(b4) -> BitSet(1),
-                toMetadata(b5) -> BitSet(2),
-                toMetadata(b3) -> BitSet(1, 2),
-                toMetadata(b1) -> BitSet(1, 2)
+          _ <- DagOperations.uncommonAncestors[Task](Vector(b2, b4, b5), dag) shouldBeF Map(
+                toMessageSummary(b2) -> BitSet(0),
+                toMessageSummary(b4) -> BitSet(1),
+                toMessageSummary(b5) -> BitSet(2),
+                toMessageSummary(b3) -> BitSet(1, 2),
+                toMessageSummary(b1) -> BitSet(1, 2)
               )
 
-          result <- DagOperations.uncommonAncestors(Vector(b1), dag)(Monad[Task], ordering) shouldBeF Map
-                     .empty[BlockMetadata, BitSet]
+          result <- DagOperations.uncommonAncestors[Task](Vector(b1), dag) shouldBeF Map
+                     .empty[Message, BitSet]
         } yield result
   }
 
   "anyDescendantPathExists" should
     "return whether there is a path from any of the possible ancestor blocks to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       def anyDescendantPathExists(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -351,14 +351,14 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        *         genesis
        */
       for {
-        genesis <- createBlock[Task](Seq.empty)
-        b1      <- createBlock[Task](Seq(genesis.blockHash))
-        b2      <- createBlock[Task](Seq(b1.blockHash))
-        b3      <- createBlock[Task](Seq(b1.blockHash))
-        b4      <- createBlock[Task](Seq(b3.blockHash))
-        b5      <- createBlock[Task](Seq(b3.blockHash))
-        b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
-        b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+        genesis <- createAndStoreBlock[Task](Seq.empty)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+        b2      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+        b3      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+        b4      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+        b5      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+        b6      <- createAndStoreBlock[Task](Seq(b2.blockHash, b4.blockHash))
+        b7      <- createAndStoreBlock[Task](Seq(b4.blockHash, b5.blockHash))
         dag     <- dagStorage.getRepresentation
         // self
         _ <- anyDescendantPathExists(dag, Set(genesis), Set(genesis)) shouldBeF true
@@ -379,7 +379,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
 
   "collectWhereDescendantPathExists" should
     "return from the possible ancestor blocks the ones which have a path to any of the potential descendants" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       def collect(
           dag: DagRepresentation[Task],
           start: Set[Block],
@@ -404,14 +404,14 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
        *         genesis
        */
       for {
-        genesis <- createBlock[Task](Seq.empty)
-        b1      <- createBlock[Task](Seq(genesis.blockHash))
-        b2      <- createBlock[Task](Seq(b1.blockHash))
-        b3      <- createBlock[Task](Seq(b1.blockHash))
-        b4      <- createBlock[Task](Seq(b3.blockHash))
-        b5      <- createBlock[Task](Seq(b3.blockHash))
-        b6      <- createBlock[Task](Seq(b2.blockHash, b4.blockHash))
-        b7      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash))
+        genesis <- createAndStoreBlock[Task](Seq.empty)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash))
+        b2      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+        b3      <- createAndStoreBlock[Task](Seq(b1.blockHash))
+        b4      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+        b5      <- createAndStoreBlock[Task](Seq(b3.blockHash))
+        b6      <- createAndStoreBlock[Task](Seq(b2.blockHash, b4.blockHash))
+        b7      <- createAndStoreBlock[Task](Seq(b4.blockHash, b5.blockHash))
         dag     <- dagStorage.getRepresentation
         // self
         _ <- collect(dag, Set(genesis), Set(genesis)) shouldBeF Set(genesis.blockHash)

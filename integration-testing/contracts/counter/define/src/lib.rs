@@ -14,7 +14,7 @@ use contract_ffi::key::Key;
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let turef: TURef<i32> = get_uref("count").unwrap().to_turef().unwrap();
+    let turef: TURef<i32> = get_key("count").unwrap().to_turef().unwrap();
     let method_name: String = get_arg(0).unwrap().unwrap();
     match method_name.as_str() {
         "inc" => add(turef, 1),
@@ -39,6 +39,6 @@ pub extern "C" fn call() {
     let key_name = String::from("count");
     counter_urefs.insert(key_name, counter_local_key.into());
 
-    let pointer = store_function("counter_ext", counter_urefs);
-    add_uref("counter", &pointer.into());
+    let pointer = store_function_at_hash("counter_ext", counter_urefs);
+    put_key("counter", &pointer.into());
 }

@@ -1,14 +1,9 @@
-use std::collections::HashMap;
-
-use crate::support::test_support::{
-    self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::Error;
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[derive(Debug)]
 #[repr(u16)]
@@ -19,23 +14,18 @@ enum GetArgContractError {
     InvalidArgument1,
 }
 
+const CONTRACT_GET_ARG: &str = "get_arg.wasm";
 const ARG0_VALUE: &str = "Hello, world!";
 const ARG1_VALUE: u64 = 42;
 
 /// Calls get_arg contract and returns Ok(()) in case no error, or String which is the error message
 /// returned by the engine
 fn call_get_arg(args: impl ArgsParser) -> Result<(), String> {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GET_ARG, args).build();
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "get_arg.wasm",
-            args,
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
         .commit()
         .finish();
 

@@ -265,6 +265,7 @@ dependencies = [
  "base16 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "casperlabs-contract-ffi 0.16.0",
+ "casperlabs-engine-wasm-prep 0.1.0",
  "chrono 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -309,7 +310,9 @@ dependencies = [
  "grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lmdb 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -580,6 +583,28 @@ name = "do-nothing"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "do-nothing-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "do-nothing-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "do-nothing-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "create-purse-01 0.1.0",
 ]
 
 [[package]]
@@ -1003,13 +1028,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "known-urefs"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.16.0",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1049,6 +1067,37 @@ name = "local-state"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "local-state-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state 0.1.0",
+]
+
+[[package]]
+name = "local-state-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "local-state-stored-upgraded"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state 0.1.0",
+]
+
+[[package]]
+name = "local-state-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "local-state-stored-upgraded 0.1.0",
 ]
 
 [[package]]
@@ -1172,6 +1221,36 @@ dependencies = [
  "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ws2_32-sys 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "modified-mint"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "mint-token 0.1.0",
+]
+
+[[package]]
+name = "modified-mint-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "modified-mint-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+ "modified-mint 0.1.0",
+]
+
+[[package]]
+name = "named-keys"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
 ]
 
 [[package]]
@@ -1459,6 +1538,27 @@ dependencies = [
  "protoc 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "protoc-rust 2.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "purse-holder-stored"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "purse-holder-stored-caller"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
+name = "purse-holder-stored-upgrader"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
 ]
 
 [[package]]

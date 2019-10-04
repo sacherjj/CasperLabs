@@ -1,4 +1,4 @@
-# Do not support:
+# Does not support:
 #   * Nested tables
 #   * Arrays
 
@@ -17,11 +17,11 @@ data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
 chunk-size = 1
-use-gossiping = true
 relay-factor = 1
 relay-saturation = 1
 approval-relay-factor = 1
 approval-poll-interval = "1second"
+alive-peers-cache-expiration-period = "1second"
 sync-max-possible-depth = 1
 sync-min-block-count-to-check-width = 1
 sync-max-bonding-rate = 1.0
@@ -41,12 +41,6 @@ relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
-[lmdb]
-block-storage-size = 1
-max-dbs = 1
-max-readers = 1
-use-tls = false
-
 [grpc]
 socket = "/tmp/test"
 port-external = 1
@@ -65,31 +59,18 @@ validator-public-key-path = "/tmp/test"
 validator-private-key = "test"
 validator-private-key-path = "/tmp/test"
 validator-sig-algorithm = "test"
-bonds-file = "/tmp/test"
 known-validators-file = "/tmp/test"
-num-validators = 1
-wallets-file = "/tmp/test"
-minimum-bond = 1
-maximum-bond = 1
 required-sigs = 1
 genesis-account-public-key-path = "/tmp/test"
-initial-motes = 1
-mint-code-path = "/tmp/test"
-pos-code-path = "/tmp/test"
-shard-id = "test"
+chain-spec-path = "/tmp/test"
 standalone = false
-approve-genesis = false
-approve-genesis-interval = "1second"
-approve-genesis-duration = "1second"
-deploy-timestamp = 1
 auto-propose-enabled = false
 auto-propose-check-interval = "1second"
-auto-propose-max-interval = "1second"
-auto-propose-max-count = 1
+auto-propose-acc-interval = "1second"
+auto-propose-acc-count = 1
 max-block-size-bytes = 1
 
 [blockstorage]
-latest-messages-log-max-size-factor = 1
 cache-max-size-bytes = 1
 
 [metrics]

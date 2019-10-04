@@ -1,22 +1,20 @@
-use std::collections::HashMap;
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
-
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+const CONTRACT_EE_536_REGRESSION: &str = "ee_536_regression.wasm";
 
 #[ignore]
 #[test]
 fn should_run_ee_536_get_uref_regression_test() {
     // This test runs a contract that's after every call extends the same key with
     // more data
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_536_REGRESSION, ())
+            .build();
+
     let _result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(
-            GENESIS_ADDR,
-            "ee_536_regression.wasm",
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();

@@ -153,7 +153,7 @@ object DeployRuntime {
               .whenA(!value.value.isAccount)
         account = value.getAccount
         mintPublic <- Sync[F].fromOption(
-                       account.knownUrefs.find(_.name == "mint").flatMap(_.key),
+                       account.namedKeys.find(_.name == "mint").flatMap(_.key),
                        new IllegalStateException(
                          "Account's known_urefs map did not contain Mint contract address."
                        )
@@ -361,6 +361,8 @@ object DeployRuntime {
           .withTimestamp(System.currentTimeMillis)
           .withAccountPublicKey(from)
           .withGasPrice(deployConfig.gasPrice)
+          .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
+          .withDependencies(deployConfig.dependencies)
       )
       .withBody(
         consensus.Deploy
