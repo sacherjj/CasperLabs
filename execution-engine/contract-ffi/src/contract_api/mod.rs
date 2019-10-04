@@ -1,6 +1,13 @@
 mod alloc_util;
 pub mod argsparser;
+mod error;
 pub mod pointers;
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::{From, TryFrom, TryInto};
+use core::fmt::Debug;
 
 use self::alloc_util::*;
 use self::pointers::*;
@@ -14,172 +21,11 @@ use crate::value::account::{
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
 use crate::value::{Contract, Value, U512};
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
 use argsparser::ArgsParser;
-use core::convert::{From, TryFrom, TryInto};
-use core::fmt::{self, Debug, Formatter};
-use core::u16;
+pub use error::{i32_from, result_from, Error};
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
-
-/// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
-/// value less than or equal to `RESERVED_ERROR_MAX`.
-const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
-
-/// Variants to be passed to `contract_api::revert()`.
-///
-/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
-/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
-///
-/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
-/// e.g.
-/// ```
-/// use casperlabs_contract_ffi::contract_api::Error;
-///
-/// #[repr(u16)]
-/// enum FailureCode {
-///     Zero = 0,  // 65,536 as an Error::User
-///     One,       // 65,537 as an Error::User
-///     Two        // 65,538 as an Error::User
-/// }
-///
-/// impl From<FailureCode> for Error {
-///     fn from(code: FailureCode) -> Self {
-///         Error::User(code as u16)
-///     }
-/// }
-///
-/// assert_eq!(Error::User(1), FailureCode::One.into());
-/// assert_eq!(65_536, u32::from(Error::from(FailureCode::Zero)));
-/// assert_eq!(65_538, u32::from(Error::from(FailureCode::Two)));
-/// ```
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// A call to `get_uref()` returned a failure.
-    GetURef,
-    /// Failed to deserialize a value.
-    Deserialize,
-    /// Failed to find a specified contract.
-    ContractNotFound,
-    /// The `Key` variant was not as expected.
-    UnexpectedKeyVariant,
-    /// The `Value` variant was not as expected.
-    UnexpectedValueVariant,
-    /// The `ContractPointer` variant was not as expected.
-    UnexpectedContractPointerVariant,
-    /// `read` returned an error.
-    Read,
-    /// The given key returned a `None` value.
-    ValueNotFound,
-    /// Failed to initialize a mint purse.
-    MintFailure,
-    /// Invalid purse name given.
-    InvalidPurseName,
-    /// Invalid purse retrieved.
-    InvalidPurse,
-    /// Specified argument not provided.
-    MissingArgument,
-    /// Argument not of correct type.
-    InvalidArgument,
-    /// Failed to upgrade contract at URef.
-    UpgradeContractAtURef,
-    /// Failed to transfer motes.
-    Transfer,
-    /// No access rights.
-    NoAccessRights,
-    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
-    /// `Error::User` is converted to a `u32`.
-    User(u16),
-}
-
-impl From<Error> for u32 {
-    fn from(error: Error) -> Self {
-        match error {
-            Error::GetURef => 1,
-            Error::Deserialize => 2,
-            Error::ContractNotFound => 3,
-            Error::UnexpectedKeyVariant => 4,
-            Error::UnexpectedValueVariant => 5,
-            Error::UnexpectedContractPointerVariant => 6,
-            Error::Read => 7,
-            Error::ValueNotFound => 8,
-            Error::MintFailure => 9,
-            Error::InvalidPurseName => 10,
-            Error::InvalidPurse => 11,
-            Error::MissingArgument => 12,
-            Error::InvalidArgument => 13,
-            Error::UpgradeContractAtURef => 14,
-            Error::Transfer => 15,
-            Error::NoAccessRights => 16,
-            Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
-        }
-    }
-}
-
-impl Debug for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Error::GetURef => write!(f, "Error::GetURef")?,
-            Error::Deserialize => write!(f, "Error::Deserialize")?,
-            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
-            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
-            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
-            Error::UnexpectedContractPointerVariant => {
-                write!(f, "Error::UnexpectedContractPointerVariant")?
-            }
-            Error::Read => write!(f, "Error::Read")?,
-            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
-            Error::MintFailure => write!(f, "Error::MintFailure")?,
-            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
-            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
-            Error::MissingArgument => write!(f, "Error::MissingArgument")?,
-            Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
-            Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
-            Error::Transfer => write!(f, "Error::Transfer")?,
-            Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
-            Error::User(value) => write!(f, "Error::User({})", value)?,
-        }
-        write!(f, " [{}]", u32::from(*self))
-    }
-}
-
-pub fn i32_from(result: Result<(), Error>) -> i32 {
-    match result {
-        Ok(()) => 0,
-        Err(error) => u32::from(error) as i32,
-    }
-}
-
-pub fn result_from(value: i32) -> Result<(), Error> {
-    match value {
-        0 => Ok(()),
-        1 => Err(Error::GetURef),
-        2 => Err(Error::Deserialize),
-        3 => Err(Error::ContractNotFound),
-        4 => Err(Error::UnexpectedKeyVariant),
-        5 => Err(Error::UnexpectedValueVariant),
-        6 => Err(Error::Read),
-        7 => Err(Error::ValueNotFound),
-        8 => Err(Error::MintFailure),
-        9 => Err(Error::InvalidPurseName),
-        10 => Err(Error::InvalidPurse),
-        11 => Err(Error::MissingArgument),
-        12 => Err(Error::InvalidArgument),
-        13 => Err(Error::UpgradeContractAtURef),
-        14 => Err(Error::Transfer),
-        15 => Err(Error::NoAccessRights),
-        _ => {
-            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
-                Err(Error::User(value as u16))
-            } else {
-                unreachable!()
-            }
-        }
-    }
-}
 
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
