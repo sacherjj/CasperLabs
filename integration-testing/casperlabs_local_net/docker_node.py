@@ -83,6 +83,7 @@ class DockerNode(LoggingDockerBase):
                 os.environ.get("TAG_NAME") and self.container_name or "localhost"
             )
             self.proxy_server = grpc_proxy.proxy_server(
+                self,
                 node_port=self.GRPC_SERVER_PORT + 10000,
                 node_host=node_host,
                 proxy_port=self.server_proxy_port,
@@ -92,6 +93,7 @@ class DockerNode(LoggingDockerBase):
                 client_key_file=server_key_path,
             )
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
+                self,
                 node_port=self.KADEMLIA_PORT + 10000,
                 node_host=node_host,
                 proxy_port=self.kademlia_proxy_port,
@@ -100,6 +102,14 @@ class DockerNode(LoggingDockerBase):
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+
+    @property
+    def proxy_host(self):
+        return (
+            os.environ.get("TAG_NAME")
+            and f"test-{os.environ.get('TAG_NAME')}"
+            or "172.17.0.1"
+        )
 
     @property
     def server_proxy_port(self) -> int:
@@ -474,19 +484,13 @@ class DockerNode(LoggingDockerBase):
     @property
     def address(self) -> str:
         if self.config.behind_proxy:
-            if not os.environ.get("TAG_NAME"):
-                # Local run
-                host_name = "172.17.0.1"  # this works locally
-            else:
-                # Test suite is in a docker container if in CI
-                host_name = f"test-{os.environ.get('TAG_NAME')}"
 
             certificate_path = self.config.tls_certificate_local_path()
             logging.info(f"certificate_path: {certificate_path}")
             node_id = extract_common_name(certificate_path)
             protocol_port = self.server_proxy_port
             discovery_port = self.kademlia_proxy_port
-            addr = f"casperlabs://{node_id}@{host_name}?protocol={protocol_port}&discovery={discovery_port}"
+            addr = f"casperlabs://{node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
 

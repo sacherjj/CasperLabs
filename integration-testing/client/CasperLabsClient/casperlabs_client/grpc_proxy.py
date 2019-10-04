@@ -26,6 +26,9 @@ def stub_name(o):
 
 
 class Interceptor:
+    def __init__(self, node):
+        self.node = node
+
     def __str__(self):
         return "logging_interceptor"
 
@@ -42,7 +45,79 @@ class Interceptor:
         yield from response
 
 
-logging_interceptor = Interceptor()
+class KademliaInterceptor(Interceptor):
+    def __str__(self):
+        return "kademlia_interceptor"
+
+    def pre_request(self, name, request):
+        logging.info(f"KADEMLIA PRE REQUEST: {name}({hexify(request)})")
+
+        """
+         sender {
+           id: "4c191022c23629572e317c986498a7c054cc9038"
+           host: "node-1-eiaqe-test"
+           protocol_port: 50400
+           discovery_port: 50404
+         }
+
+        """
+
+        return request
+
+    def post_request(self, name, request, response):
+        logging.info(
+            f"KADEMLIA POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
+        )
+        return response
+
+    def post_request_stream(self, name, request, response):
+        logging.info(
+            f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
+        )
+        yield from response
+
+
+class GossipInterceptor(Interceptor):
+    def __str__(self):
+        return "gossip_interceptor"
+
+    def pre_request(self, name, request):
+        logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
+
+        if name == "NewBlocks":
+            """
+            NewBlocks(sender {
+               id: "4c191022c23629572e317c986498a7c054cc9038"
+               host: "node-1-kxtcw-test"
+               protocol_port: 50400
+               discovery_port: 50404
+            }
+            block_hashes: "0f449d2ae52139bda1a201a22d6f142ca4ae616b92867b301f1c6244f08defbb"
+            )
+            """
+            request.sender.id = bytes.fromhex(
+                casperlabs_client.extract_common_name(
+                    self.node.proxy_server.client_certificate_file
+                )
+            )
+            request.sender.host = self.node.proxy_host
+            request.sender.protocol_port = self.node.server_proxy_port
+            request.sender.discovery_port = self.node.kademlia_proxy_port
+            logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
+
+        return request
+
+    def post_request(self, name, request, response):
+        logging.info(
+            f"GOSSIP POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
+        )
+        return response
+
+    def post_request_stream(self, name, request, response):
+        logging.info(
+            f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
+        )
+        yield from response
 
 
 class ProxyServicer:
@@ -56,7 +131,7 @@ class ProxyServicer:
         key_file: str = None,
         node_id: str = None,
         service_stub=None,
-        interceptor: Interceptor = Interceptor(),
+        interceptor: Interceptor = None,
     ):
         self.node_host = node_host
         self.node_port = node_port
@@ -135,7 +210,7 @@ class ProxyThread(Thread):
         server_key_file: str = None,
         client_certificate_file: str = None,
         client_key_file: str = None,
-        interceptor: Interceptor = None,
+        interceptor=None,
     ):
         super().__init__()
         self.service_stub = service_stub
@@ -197,6 +272,7 @@ class ProxyThread(Thread):
 
 
 def proxy_client(
+    node,
     node_port=40401,
     node_host="casperlabs",
     proxy_port=50401,
@@ -204,7 +280,7 @@ def proxy_client(
     server_key_file: str = None,
     client_certificate_file: str = None,
     client_key_file: str = None,
-    interceptor: Interceptor = logging_interceptor,
+    interceptor_class=Interceptor,
 ):
     t = ProxyThread(
         casper_pb2_grpc.CasperServiceStub,
@@ -216,13 +292,14 @@ def proxy_client(
         server_key_file=server_key_file,
         client_certificate_file=client_certificate_file,
         client_key_file=client_key_file,
-        interceptor=interceptor,
+        interceptor=interceptor_class(node),
     )
     t.start()
     return t
 
 
 def proxy_server(
+    node,
     node_port=50400,
     node_host="localhost",
     proxy_port=40400,
@@ -230,7 +307,7 @@ def proxy_server(
     server_key_file=None,
     client_certificate_file=None,
     client_key_file=None,
-    interceptor: Interceptor = logging_interceptor,
+    interceptor_class=GossipInterceptor,
 ):
     t = ProxyThread(
         gossiping_pb2_grpc.GossipServiceStub,
@@ -242,17 +319,18 @@ def proxy_server(
         server_key_file=server_key_file,
         client_certificate_file=client_certificate_file,
         client_key_file=client_key_file,
-        interceptor=interceptor,
+        interceptor=interceptor_class(node),
     )
     t.start()
     return t
 
 
 def proxy_kademlia(
+    node,
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    interceptor: Interceptor = logging_interceptor,
+    interceptor_class=KademliaInterceptor,
 ):
     t = ProxyThread(
         kademlia_pb2_grpc.KademliaServiceStub,
@@ -261,7 +339,7 @@ def proxy_kademlia(
         node_host=node_host,
         node_port=node_port,
         encrypted_connection=False,
-        interceptor=interceptor,
+        interceptor=interceptor_class(node),
     )
     t.start()
     return t
