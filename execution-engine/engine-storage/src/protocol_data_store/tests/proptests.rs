@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 use std::ops::RangeInclusive;
 
+use contract_ffi::gens as gens_ext;
 use contract_ffi::value::ProtocolVersion;
 use lmdb::DatabaseFlags;
 use proptest::collection;
-use proptest::num;
 use proptest::prelude::proptest;
-use proptest::strategy::Strategy;
 use tempfile;
 
 use crate::protocol_data::{gens, ProtocolData};
@@ -50,14 +49,14 @@ fn lmdb_roundtrip_succeeds(inputs: BTreeMap<ProtocolVersion, ProtocolData>) -> b
 proptest! {
     #[test]
     fn prop_in_memory_roundtrip_succeeds(
-        m in collection::btree_map(num::u64::ANY.prop_map(ProtocolVersion::new), gens::protocol_data_arb(), get_range())
+        m in collection::btree_map(gens_ext::protocol_version_arb(), gens::protocol_data_arb(), get_range())
     ) {
         assert!(in_memory_roundtrip_succeeds(m))
     }
 
     #[test]
     fn prop_lmdb_roundtrip_succeeds(
-        m in collection::btree_map(num::u64::ANY.prop_map(ProtocolVersion::new), gens::protocol_data_arb(), get_range())
+        m in collection::btree_map(gens_ext::protocol_version_arb(), gens::protocol_data_arb(), get_range())
     ) {
         assert!(lmdb_roundtrip_succeeds(m))
     }

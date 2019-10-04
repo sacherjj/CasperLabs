@@ -637,7 +637,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = 1_000_000_000;
+    let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
     let stored_transforms = {
