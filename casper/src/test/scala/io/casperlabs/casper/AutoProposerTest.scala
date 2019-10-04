@@ -34,9 +34,9 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 
   val waitForCheck = Timer[Task].sleep(10 * DefaultCheckInterval)
 
-  it should "propose if more than max-count deploys are accumulated within max-interval" in TestFixture(
-    maxInterval = 5.seconds,
-    maxCount = 2
+  it should "propose if more than acc-count deploys are accumulated within acc-interval" in TestFixture(
+    accInterval = 5.seconds,
+    accCount = 2
   ) { _ => implicit casperRef => implicit deployStorage =>
     for {
       casper <- MockMultiParentCasper[Task]
@@ -49,9 +49,9 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     } yield ()
   }
 
-  it should "propose if less than max-count deploys are accumulated after max-interval" in TestFixture(
-    maxInterval = 250.millis,
-    maxCount = 10
+  it should "propose if less than acc-count deploys are accumulated after acc-interval" in TestFixture(
+    accInterval = 250.millis,
+    accCount = 10
   ) { _ => implicit casperRef => implicit deployStorage =>
     for {
       casper <- MockMultiParentCasper[Task]
@@ -64,8 +64,8 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   }
 
   it should "not propose if none of the thresholds are reached" in TestFixture(
-    maxInterval = 1.second,
-    maxCount = 2
+    accInterval = 1.second,
+    accCount = 2
   ) { _ => implicit casperRef => implicit deployStorage =>
     for {
       casper <- MockMultiParentCasper[Task]
@@ -76,8 +76,8 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   }
 
   it should "not propose if there are no new deploys" in TestFixture(
-    maxInterval = 1.second,
-    maxCount = 1
+    accInterval = 1.second,
+    accCount = 1
   ) { _ => implicit casperRef => implicit deployStorage =>
     for {
       casper <- MockMultiParentCasper[Task]
@@ -96,8 +96,8 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   }
 
   it should "not stop if the proposal fails" in TestFixture(
-    maxInterval = 1.second,
-    maxCount = 1
+    accInterval = 1.second,
+    accCount = 1
   ) { _ => implicit casperRef => implicit deployStorage =>
     val defectiveCasper = new MockMultiParentCasper[Task]() {
       override def createBlock: Task[CreateBlockStatus] =
@@ -134,8 +134,8 @@ object AutoProposerTest {
   object TestFixture {
     def apply(
         checkInterval: FiniteDuration = DefaultCheckInterval,
-        maxInterval: FiniteDuration,
-        maxCount: Int
+        accInterval: FiniteDuration,
+        accCount: Int
     )(
         f: AutoProposer[Task] => MultiParentCasperRef[Task] => DeployStorage[Task] => Task[Unit]
     ): Unit = {
@@ -147,8 +147,8 @@ object AutoProposerTest {
         blockApiLock                                    <- Resource.liftF(Semaphore[Task](1))
         proposer <- AutoProposer[Task](
                      checkInterval = checkInterval,
-                     maxInterval = maxInterval,
-                     maxCount = maxCount,
+                     accInterval = accInterval,
+                     accCount = accCount,
                      blockApiLock = blockApiLock
                    )
       } yield (proposer, emptyRef, deployStorage)
