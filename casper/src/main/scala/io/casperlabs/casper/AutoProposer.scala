@@ -17,13 +17,13 @@ import scala.util.control.NonFatal
   * we have more than a certain number of new deploys in the buffer. */
 class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
     checkInterval: FiniteDuration,
-    maxInterval: FiniteDuration,
-    maxCount: Int,
+    accInterval: FiniteDuration,
+    accCount: Int,
     blockApiLock: Semaphore[F]
 ) {
 
   private def run(): F[Unit] = {
-    val maxElapsedMillis = maxInterval.toMillis
+    val accElapsedMillis = accInterval.toMillis
 
     def loop(
         // Deploys we tried to propose last time.
@@ -45,7 +45,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
         case (_, elapsedMillis, deploys)
             if deploys.nonEmpty
               && deploys != prevDeploys
-              && (elapsedMillis >= maxElapsedMillis || deploys.size >= maxCount) =>
+              && (elapsedMillis >= accElapsedMillis || deploys.size >= accCount) =>
           Log[F].info(
             s"Proposing block after ${elapsedMillis} ms with ${deploys.size} pending deploys."
           ) *>
@@ -77,13 +77,13 @@ object AutoProposer {
   /** Start the proposal loop in the background. */
   def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
       checkInterval: FiniteDuration,
-      maxInterval: FiniteDuration,
-      maxCount: Int,
+      accInterval: FiniteDuration,
+      accCount: Int,
       blockApiLock: Semaphore[F]
   ): Resource[F, AutoProposer[F]] =
     Resource[F, AutoProposer[F]] {
       for {
-        ap    <- Sync[F].delay(new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock))
+        ap    <- Sync[F].delay(new AutoProposer(checkInterval, accInterval, accCount, blockApiLock))
         fiber <- Concurrent[F].start(ap.run())
       } yield ap -> fiber.cancel
     }
