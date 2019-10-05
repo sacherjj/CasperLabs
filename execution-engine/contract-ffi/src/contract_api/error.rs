@@ -158,7 +158,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
-            } else if value > POS_ERROR_OFFSET as i32 {
+            } else if value >= POS_ERROR_OFFSET as i32 {
                 Err(Error::ProofOfStake(value as u8))
             } else {
                 unreachable!()
