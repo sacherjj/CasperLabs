@@ -26,7 +26,6 @@ use crate::support::test_support::{self, WasmTestBuilder};
 use crate::test::DEFAULT_WASM_COSTS;
 
 const INIT_FN_STORE_ID: u32 = 0;
-const INIT_PROTOCOL_VERSION: u64 = 1;
 
 /// This function allows executing the contract stored in the given `wasm_file`, while capturing the
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of

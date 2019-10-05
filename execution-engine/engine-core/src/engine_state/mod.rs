@@ -22,7 +22,7 @@ use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, SemVer, Value, U512};
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -108,7 +108,7 @@ where
     ) -> Result<GenesisResult, Error> {
         assert_eq!(
             protocol_version.value(),
-            1,
+            SemVer::V1_0_0,
             "legacy genesis only supports protocol version 1"
         );
 
@@ -485,7 +485,7 @@ where
         // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
         let new_protocol_version = upgrade_config.new_protocol_version();
         // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
-        if new_protocol_version.value() != current_protocol_version.value() + 1 {
+        if new_protocol_version.value().major != current_protocol_version.value().major + 1 {
             return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
@@ -557,7 +557,7 @@ where
                 let bytes: Vec<u8> = upgrade_config
                     .new_protocol_version()
                     .value()
-                    .to_le_bytes()
+                    .to_bytes()?
                     .to_vec();
                 Blake2bHash::new(&bytes).into()
             };

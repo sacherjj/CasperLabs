@@ -384,7 +384,7 @@ proptest! {
         let correlation_id = CorrelationId::new();
         let mut named_keys = BTreeMap::new();
         named_keys.insert(name.clone(), k);
-        let contract: Value = Contract::new(body, named_keys, ProtocolVersion::new(1)).into();
+        let contract: Value = Contract::new(body, named_keys, ProtocolVersion::V1_0_0).into();
         let contract_key = Key::Hash(hash);
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
@@ -464,7 +464,7 @@ proptest! {
         // create contract which knows about value
         let mut contract_named_keys = BTreeMap::new();
         contract_named_keys.insert(state_name.clone(), k);
-        let contract: Value = Contract::new(body, contract_named_keys, ProtocolVersion::new(1)).into();
+        let contract: Value = Contract::new(body, contract_named_keys, ProtocolVersion::V1_0_0).into();
         let contract_key = Key::Hash(hash);
 
         // create account which knows about contract
