@@ -985,12 +985,7 @@ where
         let exec_response = self
             .get_exec_response(index)
             .expect("should have exec response");
-        let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-        deploy_results
-            .iter()
-            .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
-            .collect()
+        get_exec_costs(exec_response)
     }
 
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
@@ -1088,7 +1083,14 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 
     deploy_results
         .iter()
-        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+        .map(|deploy_result| {
+            let execution_result = deploy_result.get_execution_result();
+            let cost = execution_result
+                .get_cost()
+                .try_into()
+                .expect("cost should map to U512");
+            Gas::new(cost)
+        })
         .collect()
 }
 
