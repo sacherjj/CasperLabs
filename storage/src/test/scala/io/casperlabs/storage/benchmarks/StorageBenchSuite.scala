@@ -4,7 +4,7 @@ import java.util.Properties
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.state.Key
+import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.ipc.Transform.TransformInstance
 import io.casperlabs.ipc._
@@ -110,7 +110,7 @@ object StorageBenchSuite {
           .Header()
           .withParentHashes(parents)
           .withJustifications(justifications)
-          .withProtocolVersion(version)
+          .withProtocolVersion(ProtocolVersion(version.toInt))
           .withTimestamp(timestamp)
           .withValidatorPublicKey(validator)
       )

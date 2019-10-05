@@ -11,6 +11,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
@@ -82,6 +83,16 @@ trait ArbitraryConsensus {
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
   protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
 
+  implicit val arbProtocolVersion: Arbitrary[ProtocolVersion] = Arbitrary {
+    for {
+      major <- Gen.choose(0, 3)
+      minor <- Gen.choose(0, 15)
+      patch <- Gen.choose(0, 9)
+    } yield {
+      ProtocolVersion(major, minor, patch)
+    }
+  }
+
   implicit val arbSignature: Arbitrary[Signature] = Arbitrary {
     for {
       alg <- Gen.oneOf("ed25519", "secp256k1")
@@ -130,6 +141,7 @@ trait ArbitraryConsensus {
       preStateHash       <- genHash
       postStateHash      <- genHash
       validatorPublicKey <- Gen.oneOf(randomValidators)
+      protocolVersion    <- arbitrary[ProtocolVersion]
     } yield {
       Block
         .Header()
@@ -138,6 +150,7 @@ trait ArbitraryConsensus {
         .withDeployCount(deployCount)
         .withValidatorPublicKey(validatorPublicKey)
         .withBodyHash(bodyHash)
+        .withProtocolVersion(protocolVersion)
         .withJustifications(justifications)
     }
   }
