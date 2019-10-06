@@ -79,6 +79,9 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
+    def lookup_node(self, node_id):
+        return next(node for node in self.docker_nodes if node.node_id == node_id)
+
     def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
         if not name:

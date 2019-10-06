@@ -482,15 +482,15 @@ class DockerNode(LoggingDockerBase):
         return self.exec_run(f"{self.CL_NODE_BINARY} show-blocks")
 
     @property
+    def node_id(self) -> str:
+        return extract_common_name(self.config.tls_certificate_local_path())
+
+    @property
     def address(self) -> str:
         if self.config.behind_proxy:
-
-            certificate_path = self.config.tls_certificate_local_path()
-            logging.info(f"certificate_path: {certificate_path}")
-            node_id = extract_common_name(certificate_path)
             protocol_port = self.server_proxy_port
             discovery_port = self.kademlia_proxy_port
-            addr = f"casperlabs://{node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
+            addr = f"casperlabs://{self.node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
 

@@ -46,11 +46,13 @@ class Interceptor:
 
 
 class KademliaInterceptor(Interceptor):
+    """ ~/CasperLabs/protobuf/io/casperlabs/comm/discovery/kademlia.proto """
+
     def __str__(self):
         return "kademlia_interceptor"
 
     def pre_request(self, name, request):
-        logging.info(f"KADEMLIA PRE REQUEST: {name}({hexify(request)})")
+        logging.info(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
 
         """
          sender {
@@ -62,6 +64,12 @@ class KademliaInterceptor(Interceptor):
 
         """
 
+        # sender = self.node.cl_network.lookup_node(request.sender.id.hex())
+        # request.sender.host = sender.proxy_host
+        # request.sender.protocol_port = sender.server_proxy_port
+        # request.sender.discovery_port = sender.kademlia_proxy_port
+
+        logging.info(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
         return request
 
     def post_request(self, name, request, response):
@@ -75,6 +83,16 @@ class KademliaInterceptor(Interceptor):
             f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
         )
         yield from response
+        """
+        for r in response:
+            #if r.id.hex() != self.node.node_id:
+            node = self.node.cl_network.lookup_node(r.id.hex())
+            r.host = node.proxy_host
+            r.protocol_port = node.server_proxy_port
+            r.discovery_port = node.kademlia_proxy_port
+            logging.info( f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
+            yield r
+        """
 
 
 class GossipInterceptor(Interceptor):
@@ -82,6 +100,8 @@ class GossipInterceptor(Interceptor):
         return "gossip_interceptor"
 
     def pre_request(self, name, request):
+        """ ~/CasperLabs/protobuf/io/casperlabs/comm/gossiping/gossiping.proto """
+
         logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
 
         if name == "NewBlocks":
@@ -95,14 +115,11 @@ class GossipInterceptor(Interceptor):
             block_hashes: "0f449d2ae52139bda1a201a22d6f142ca4ae616b92867b301f1c6244f08defbb"
             )
             """
-            request.sender.id = bytes.fromhex(
-                casperlabs_client.extract_common_name(
-                    self.node.proxy_server.client_certificate_file
-                )
-            )
-            request.sender.host = self.node.proxy_host
-            request.sender.protocol_port = self.node.server_proxy_port
-            request.sender.discovery_port = self.node.kademlia_proxy_port
+            sender = self.node.cl_network.lookup_node(request.sender.id.hex())
+            request.sender.host = sender.proxy_host
+            request.sender.protocol_port = sender.server_proxy_port
+            request.sender.discovery_port = sender.kademlia_proxy_port
+
             logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
 
         return request
@@ -114,10 +131,11 @@ class GossipInterceptor(Interceptor):
         return response
 
     def post_request_stream(self, name, request, response):
-        logging.info(
-            f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
-        )
-        yield from response
+        logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
+        # yield from response
+        for r in response:
+            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
+            yield r
 
 
 class ProxyServicer:
