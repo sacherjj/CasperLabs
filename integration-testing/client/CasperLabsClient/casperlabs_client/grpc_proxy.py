@@ -30,6 +30,29 @@ class Interceptor:
         self.node = node
 
     def __str__(self):
+        return "interceptor"
+
+    def pre_request(self, name, request):
+        """
+        Preprocess request received by the proxy.
+        """
+        return request
+
+    def post_request(self, name, request, response):
+        """
+        Postprocess response from node received by the proxy before sending it back to the requesting node.
+        """
+        return response
+
+    def post_request_stream(self, name, request, response):
+        """
+        Postprocess stream response from node received by the proxy before sending it back to the requesting node.
+        """
+        yield from response
+
+
+class LoggingInterceptor(Interceptor):
+    def __str__(self):
         return "logging_interceptor"
 
     def pre_request(self, name, request):
@@ -55,6 +78,8 @@ class KademliaInterceptor(Interceptor):
         logging.info(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
 
         """
+        Patch node address to point to proxy.
+
          sender {
            id: "4c191022c23629572e317c986498a7c054cc9038"
            host: "node-1-eiaqe-test"
@@ -63,11 +88,10 @@ class KademliaInterceptor(Interceptor):
          }
 
         """
-
-        # sender = self.node.cl_network.lookup_node(request.sender.id.hex())
-        # request.sender.host = sender.proxy_host
-        # request.sender.protocol_port = sender.server_proxy_port
-        # request.sender.discovery_port = sender.kademlia_proxy_port
+        node = self.node.cl_network.lookup_node(request.sender.id.hex())
+        request.sender.host = node.proxy_host
+        request.sender.protocol_port = node.server_proxy_port
+        request.sender.discovery_port = node.kademlia_proxy_port
 
         logging.info(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
         return request
@@ -82,17 +106,15 @@ class KademliaInterceptor(Interceptor):
         logging.info(
             f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
         )
-        yield from response
-        """
+        # yield from response
         for r in response:
-            #if r.id.hex() != self.node.node_id:
+            # if r.id.hex() != self.node.node_id:
             node = self.node.cl_network.lookup_node(r.id.hex())
             r.host = node.proxy_host
             r.protocol_port = node.server_proxy_port
             r.discovery_port = node.kademlia_proxy_port
-            logging.info( f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
+            logging.info(f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
             yield r
-        """
 
 
 class GossipInterceptor(Interceptor):
@@ -149,7 +171,7 @@ class ProxyServicer:
         key_file: str = None,
         node_id: str = None,
         service_stub=None,
-        interceptor: Interceptor = None,
+        interceptor: LoggingInterceptor = None,
     ):
         self.node_host = node_host
         self.node_port = node_port
@@ -192,6 +214,8 @@ class ProxyServicer:
         return method_name.startswith("Stream") or method_name.endswith("Chunked")
 
     def __getattr__(self, name):
+        """ Implement the gRPC Server's Servicer interface. """
+
         def unary_unary(request, context):
             logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
@@ -213,6 +237,12 @@ class ProxyServicer:
                 )
 
         return unary_stream if self.is_unary_stream(name) else unary_unary
+
+    @property
+    def service(self):
+        """ Provide client API for the service behind proxy. """
+        with self.channel() as channel:
+            yield self.service_stub(channel)
 
 
 class ProxyThread(Thread):
@@ -288,6 +318,10 @@ class ProxyThread(Thread):
         )
         self.server.stop(0)
 
+    @property
+    def service(self):
+        return next(self.servicer.service)
+
 
 def proxy_client(
     node,
@@ -298,7 +332,7 @@ def proxy_client(
     server_key_file: str = None,
     client_certificate_file: str = None,
     client_key_file: str = None,
-    interceptor_class=Interceptor,
+    interceptor_class=LoggingInterceptor,
 ):
     t = ProxyThread(
         casper_pb2_grpc.CasperServiceStub,
@@ -348,7 +382,7 @@ def proxy_kademlia(
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    interceptor_class=KademliaInterceptor,
+    interceptor_class=LoggingInterceptor,  # TODO: KademliaInterceptor,
 ):
     t = ProxyThread(
         kademlia_pb2_grpc.KademliaServiceStub,
