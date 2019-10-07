@@ -37,17 +37,21 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
-# - name: markdown-link-check
-#   commands:
-#   - "ci/markdown-link-check.sh"
-#   image: "casperlabs/buildenv:latest"
-#   when:
-#     event:
-#     - pull_request
-#    changeset:
-#      includes:
-#      - "**/.drone.yml"
-#      - "**/**.md"
+
+#NOTE: allowing failures here since we've seen site temporarily go down and cause
+# our pipeline to fail.
+ - name: markdown-link-check
+   commands:
+   - "ci/markdown-link-check.sh"
+   image: "casperlabs/buildenv:latest"
+   failure: ignore
+   when:
+     event:
+     - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.md"
 
 - name: sbt-compile-test-pr
   commands:
@@ -165,18 +169,22 @@ steps:
       - "integration-testing/**"
 
 # This section is for bors' branches only
-# - name: markdown-link-check-bors
-#   commands:
-#   - "ci/markdown-link-check.sh"
-#   image: "casperlabs/buildenv:latest"
-#   when:
-#     branch:
-#     - staging
-#     - trying
-#    changeset:
-#      includes:
-#      - "**/.drone.yml"
-#      - "**/**.md"
+
+#NOTE: allowing failures here since we've seen site temporarily go down and cause
+# our pipeline to fail.
+ - name: markdown-link-check-bors
+   commands:
+   - "ci/markdown-link-check.sh"
+   image: "casperlabs/buildenv:latest"
+   failure: ignore
+   when:
+     branch:
+     - staging
+     - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.md"
 
 - name: sbt-test-docker-bors
   commands:
