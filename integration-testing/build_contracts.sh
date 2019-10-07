@@ -4,14 +4,14 @@ set -o errexit
 
 ARCH="wasm32-unknown-unknown"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DEST_DIR="${DIR}/../resources"
+DEST_DIR="${DIR}/resources"
 CARGO_FLAGS="-Z unstable-options"
 
 # This is necessary for CI
 source "${HOME}/.cargo/env"
 
 # Path to execution engine relative to this script
-EE_DIR="${DIR}/../../execution-engine"
+EE_DIR="${DIR}/../execution-engine"
 
 # Rust toolchain file
 RUST_TOOLCHAIN="$(<${EE_DIR}/rust-toolchain)"
