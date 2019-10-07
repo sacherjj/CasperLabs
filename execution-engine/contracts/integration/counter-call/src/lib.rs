@@ -22,8 +22,8 @@ pub extern "C" fn call() {
         call_contract::<_, ()>(pointer.clone(), &(arg,), &Vec::new())
     }
 
-    {
+    let _result: i32 = {
         let arg = "get";
-        call_contract::<_, ()>(pointer, &(arg,), &Vec::new())
-    }
+        call_contract(pointer, &(arg,), &Vec::new())
+    };
 }
