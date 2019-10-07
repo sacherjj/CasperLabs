@@ -197,12 +197,13 @@ package object gossiping {
                               conf,
                               stashingSynchronizer,
                               downloadManager,
-                              genesisApprover,
-                              rateLimiter
+                              genesisApprover
                             )
 
       _ <- startGrpcServer(
             gossipServiceServer,
+            rateLimiter,
+            NodeDiscovery[F],
             serverSslContext,
             conf,
             port,
@@ -390,7 +391,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: NodeAsk](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -625,8 +626,7 @@ package object gossiping {
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
-      genesisApprover: GenesisApprover[F],
-      rateLimiter: RateLimiter[F, ByteString]
+      genesisApprover: GenesisApprover[F]
   ): Resource[F, GossipServiceServer[F]] =
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
@@ -660,7 +660,6 @@ package object gossiping {
                    synchronizer,
                    downloadManager,
                    genesisApprover,
-                   rateLimiter,
                    maxChunkSize = conf.server.chunkSize,
                    maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
                  )
@@ -776,6 +775,8 @@ package object gossiping {
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
+      rateLimiter: RateLimiter[F, ByteString],
+      nodeDiscovery: NodeDiscovery[F],
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,
@@ -790,6 +791,8 @@ package object gossiping {
           Sync[F].delay {
             val svc = GrpcGossipService.fromGossipService(
               server,
+              rateLimiter,
+              nodeDiscovery,
               blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
             )
             GossipingGrpcMonix.bindService(svc, scheduler)

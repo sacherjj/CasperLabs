@@ -111,7 +111,7 @@ relay-block-chunk-consumer-timeout = "10second"
 # Use this flag to clear the blockStorage and dagStorage
 clean-block-storage = false
 
-# Maximum number of block download requests per (peer, block) in period (see below),
+# Maximum number of block download requests per peer in period (see below),
 # if 0 then rate limiting will be disabled.
 block-upload-rate-max-requests = 0
 
@@ -119,7 +119,7 @@ block-upload-rate-max-requests = 0
 # if 0 then rate limiting will be disabled.
 block-upload-rate-period = "0s"
 
-# Maximum number of in-flight throttled block download requests per (peer, block),
+# Maximum number of in-flight throttled block download requests per peer,
 # if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response.
 block-upload-rate-max-throttled = 0
 

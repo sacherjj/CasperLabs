@@ -6,7 +6,6 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
-import cats.mtl.ApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
@@ -116,7 +115,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer: Metrics: ApplicativeAsk[?[_], Node]](
+  def apply[F[_]: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
@@ -161,7 +160,7 @@ object DownloadManagerImpl {
     summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 }
 
-class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics: ApplicativeAsk[?[_], Node]](
+class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
     isShutdown: Ref[F, Boolean],
     // Keep track of active downloads and dependencies.
     itemsRef: Ref[F, Map[ByteString, DownloadManagerImpl.Item[F]]],
@@ -457,12 +456,10 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics: ApplicativeAsk[
 
     val effect =
       for {
-        stub  <- connectToGossip(source)
-        local <- ApplicativeAsk[F, Node].ask
+        stub <- connectToGossip(source)
         req = GetBlockChunkedRequest(
           blockHash = blockHash,
-          acceptedCompressionAlgorithms = Seq("lz4"),
-          sender = local.some
+          acceptedCompressionAlgorithms = Seq("lz4")
         )
 
         acc <- stub.getBlockChunked(req).foldWhileLeftL(Acc(None, 0, Nil, None)) {

@@ -2,11 +2,12 @@ package io.casperlabs.comm.gossiping
 
 import cats.effect._
 import cats.implicits._
+import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
-import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.shared.ObservableOps._
 import monix.eval.{Task, TaskLift, TaskLike}
@@ -24,31 +25,32 @@ object GrpcGossipService {
     * to be used as the "server side", i.e. to return data to another peer. */
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F],
+      rateLimiter: RateLimiter[F, ByteString],
+      nodeDiscovery: NodeDiscovery[F],
       blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
-      private def verifySender(maybeSender: Option[Node]): Task[Unit] =
-        // Verify that the sender holds the same node identity as the public key
-        // in the client SSL certificate. Alternatively we could drop the sender
-        // altogether and use Kademlia to lookup the Node with that ID the first
-        // time we see it.
-        (maybeSender, Option(ContextKeys.Principal.get)) match {
-          case (None, _) =>
-            Task.raiseError(Unauthenticated("Sender cannot be empty."))
 
-          case (_, None) =>
-            Task.raiseError(Unauthenticated("Cannot verify sender identity."))
-
-          case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>
-            Task.raiseError(Unauthenticated("Sender doesn't match public key."))
-
-          case _ =>
-            Task.unit
-        }
+      // TODO: Too many lookups while we can make only once when see for the first time?
+      // Kademlia will fill peer table on the first lookup and we assume that further reads from in-mem are cheap.
+      // Returns sender id extracted from certificate.
+      private def verifySender() =
+        Option(ContextKeys.Principal.get)
+          .fold(Task.raiseError[ByteString](Unauthenticated("Cannot verify sender identity."))) {
+            case Principal.Peer(id) =>
+              TaskLike[F].apply(nodeDiscovery.lookup(NodeIdentifier(id))).flatMap {
+                case None =>
+                  Task.raiseError[ByteString](
+                    Unauthenticated("Cannot find sender in Kademlia for verifying.")
+                  )
+                case Some(_) =>
+                  Task.now(id)
+              }
+          }
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        verifySender(request.sender) >> TaskLike[F].apply(service.newBlocks(request))
+        verifySender() >> TaskLike[F].apply(service.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
@@ -67,14 +69,20 @@ object GrpcGossipService {
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         Observable
-          .fromTask(verifySender(request.sender)) >> service
-          .getBlockChunked(request)
-          .toObservable
-          .withConsumerTimeout(blockChunkConsumerTimeout)
-          .onErrorRecoverWith {
-            case ex: TimeoutException =>
-              Observable.raiseError(DeadlineExceeded(ex.getMessage))
-          }
+          .fromTask(verifySender()) >>= { sender =>
+          val stream = service
+            .getBlockChunked(request)
+            .toObservable
+            .withConsumerTimeout(blockChunkConsumerTimeout)
+            .onErrorRecoverWith {
+              case ex: TimeoutException =>
+                Observable.raiseError(DeadlineExceeded(ex.getMessage))
+            }
+
+          Observable
+            .fromTask(TaskLike[F].apply(rateLimiter.await(sender, stream.pure[F])))
+            .flatten
+        }
 
       def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
         TaskLike[F].apply(service.getGenesisCandidate(request))

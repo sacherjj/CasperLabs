@@ -35,6 +35,9 @@ trait RateLimiter[F[_], B] {
 object RateLimiter {
   private type Finalizer[F[_]] = F[Unit]
 
+  /* Summoner */
+  def apply[F[_], B](implicit rt: RateLimiter[F, B]): RateLimiter[F, B] = rt
+
   /**
     *
     * @param elementsPerPeriod Maximum number of requests per instance of [[B]] in [[period]].

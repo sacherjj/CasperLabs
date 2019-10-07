@@ -7,11 +7,13 @@ import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted}
+import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated}
+import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
@@ -27,8 +29,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     downloadManager: DownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
-    blockDownloadSemaphore: Semaphore[F],
-    rateLimiter: RateLimiter[F, ByteString]
+    blockDownloadSemaphore: Semaphore[F]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
@@ -199,8 +200,8 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
-  override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] = {
-    val streamBlock: Iterant[F, Chunk] = Iterant.resource(blockDownloadSemaphore.acquire)(
+  override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
+    Iterant.resource(blockDownloadSemaphore.acquire)(
       _ => blockDownloadSemaphore.release
     ) flatMap { _ =>
       Iterant.liftF {
@@ -219,17 +220,6 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
           Iterant.raiseError(NotFound.block(request.blockHash))
       }
     }
-    val rateLimitingGroupingKey =
-      request.getSender.id.concat(request.blockHash)
-    val limited: F[Iterant[F, Chunk]] =
-      rateLimiter.await(rateLimitingGroupingKey, streamBlock.pure[F]).onError {
-        case ResourceExhausted(_) =>
-          Log[F].warn(
-            s"getBlockChunked: Rate exceeded for peer: ${request.getSender.show} and block: ${hex(request.blockHash)}"
-          )
-      }
-    Iterant.liftF(limited).flatMap(identity)
-  }
 
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
@@ -295,7 +285,6 @@ object GossipServiceServer {
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
       genesisApprover: GenesisApprover[F],
-      rateLimiter: RateLimiter[F, ByteString],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
   ): F[GossipServiceServer[F]] =
@@ -307,7 +296,6 @@ object GossipServiceServer {
       downloadManager,
       genesisApprover,
       maxChunkSize,
-      blockDownloadSemaphore,
-      rateLimiter
+      blockDownloadSemaphore
     )
 }

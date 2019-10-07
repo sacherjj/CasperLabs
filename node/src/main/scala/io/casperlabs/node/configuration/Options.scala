@@ -420,7 +420,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverBlockUploadRateMaxRequests = gen[Int](
-      "Maximum number of block download requests per (peer, block) in period (see below), " +
+      "Maximum number of block download requests per peer in period (see below), " +
         "if 0 then rate limiting will be disabled."
     )
 
@@ -432,7 +432,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverBlockUploadRateMaxThrottled = gen[Int](
-      "Maximum number of in-flight throttled block download requests per (peer, block), " +
+      "Maximum number of in-flight throttled block download requests per peer, " +
         "if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response."
     )
 
