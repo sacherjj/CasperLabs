@@ -382,7 +382,7 @@ def proxy_kademlia(
     node_port=50404,
     node_host="127.0.0.1",
     proxy_port=40404,
-    interceptor_class=LoggingInterceptor,  # TODO: KademliaInterceptor,
+    interceptor_class=KademliaInterceptor,
 ):
     t = ProxyThread(
         kademlia_pb2_grpc.KademliaServiceStub,
