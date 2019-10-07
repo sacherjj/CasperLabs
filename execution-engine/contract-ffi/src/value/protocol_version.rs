@@ -1,9 +1,8 @@
-use core::cmp::Ordering;
 use uint::core_::fmt;
 
 use super::SemVer;
 
-#[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Ord)]
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(SemVer);
 
 impl ProtocolVersion {
@@ -31,12 +30,6 @@ impl ProtocolVersion {
 impl fmt::Display for ProtocolVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl PartialOrd for ProtocolVersion {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.value().cmp(&other.value()))
     }
 }
 
