@@ -31,6 +31,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
+  //TODO: Rate limit here as well?
   override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
