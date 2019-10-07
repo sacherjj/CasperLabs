@@ -265,6 +265,65 @@ class ForkchoiceTest
       } yield ()
   }
 
+  "Estimator on DAG with latest messages having secondary parents in the path (NODE-943)" should "propagate 0 scores to secondary parents and choose the right tips" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      val v1 = generateValidator("V1")
+      val v2 = generateValidator("V2")
+      val v3 = generateValidator("V3")
+      val bonds = Seq(
+        Bond(v1, 30),
+        Bond(v2, 80),
+        Bond(v3, 10)
+      )
+
+      // DAG:
+      //    = B1 =
+      //  //      \\
+      // G == B2 ==\\=====
+      //            \\    \\
+      //             B3 -- B4
+      // The bug in NODE-943 was that B4 did not propagate a score to B3,
+      // so we ended up with tips [B4, B1] instead of [B4]
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b1 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v1,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b2 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b3 <- createAndStoreBlock[Task](
+               Seq(b1.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        b4 <- createAndStoreBlock[Task](
+               Seq(b2.blockHash, b3.blockHash),
+               v3,
+               bonds,
+               HashMap(v1 -> b1.blockHash, v2 -> b2.blockHash, v3 -> b3.blockHash)
+             )
+        dag          <- dagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        forkchoice <- Estimator.tips[Task](
+                       dag,
+                       genesis.blockHash,
+                       latestBlocks,
+                       EquivocationsTracker.empty
+                     )
+        _ = forkchoice.head should be(b4.blockHash)
+        _ = forkchoice should have size 1
+      } yield ()
+  }
+
   /**
     * Property-based test for lmdScoring when having equivocation.
     *
