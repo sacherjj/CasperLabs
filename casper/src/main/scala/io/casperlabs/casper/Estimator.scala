@@ -37,38 +37,47 @@ object Estimator {
       equivocationsTracker: EquivocationsTracker
   ): F[List[BlockHash]] = {
 
-    /** Finds children of the block b that have been scored by the LMD algorithm.
-      * If no children exist (block B is the tip) return the block.
-      *
-      * @param b block for which we want to find tips.
-      * @param scores map of the scores from the block hash to a score
-      * @return Children of the block.
-      */
-    def getChildrenOrSelf(
-        b: BlockHash,
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
-      dag
-        .children(b)
-        .map(_.filter(scores.contains))
-        .map(c => if (c.isEmpty) List(b) else c.toList)
-
-    /*
-     * Returns latestMessages except those blocks whose descendant
-     * exists in latestMessages.
-     */
+    /** Eliminate any latest message which has a descendant which is a latest message
+      * of another validator, because in that case those descendants should be the tips. */
     def tipsOfLatestMessages(
-        blocks: List[BlockHash],
-        scores: Map[BlockHash, Long]
-    ): F[List[BlockHash]] =
+        latestMessages: List[BlockHash],
+        stopHash: BlockHash
+    ): F[List[BlockHash]] = {
+      implicit val ord = DagOperations.blockTopoOrderingDesc
       for {
-        children <- blocks.flatTraverse(getChildrenOrSelf(_, scores)).map(_.distinct)
-        result <- if (blocks.toSet == children.toSet) {
-                   children.pure[F]
-                 } else {
-                   tipsOfLatestMessages(children, scores)
-                 }
-      } yield result
+        // Find the rank of the block at which the scoring algorithms stopped.
+        minRank <- dag.lookup(stopHash).map(_.fold(0L)(_.rank))
+        // Start from the higherst latest messages and traverse backwards;
+        latestMessagesMeta <- latestMessages
+                               .traverse(dag.lookup)
+                               .map(_.flatten.sortBy(-_.rank))
+        // any other latest message we visit is an ancestor that cannot be a tip.
+        eliminated <- latestMessagesMeta.foldLeftM(Set.empty[BlockHash]) {
+                       case (eliminated, latestMessageMeta)
+                           if eliminated.contains(latestMessageMeta.messageHash) =>
+                         // This tip has already been eliminated, no need to traverse through it again.
+                         eliminated.pure[F]
+
+                       case (eliminated, latestMessageMeta) =>
+                         // Try going backwards from this message and eliminate what we haven't so far.
+                         DagOperations
+                           .bfToposortTraverseF[F](List(latestMessageMeta)) { blockMeta =>
+                             blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
+                           }
+                           .foldWhileLeft(eliminated) {
+                             case (eliminated, meta)
+                                 if meta.messageHash == latestMessageMeta.messageHash =>
+                               // This is where we are staring from, so it it can stay.
+                               Left(eliminated)
+                             case (eliminated, meta) if meta.rank >= minRank =>
+                               // Anything we traverse through is not a tip.
+                               Left(eliminated + meta.messageHash)
+                             case (eliminated, _) =>
+                               Right(eliminated)
+                           }
+                     }
+      } yield latestMessages.filterNot(eliminated)
+    }
 
     for {
       lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
@@ -81,7 +90,7 @@ object Estimator {
                                )
       scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, scores)
+      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, lca)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
