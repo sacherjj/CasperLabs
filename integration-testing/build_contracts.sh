@@ -22,7 +22,7 @@ if ! rustup toolchain list | grep -q -c "$RUST_TOOLCHAIN"; then
 fi
 
 # This is also necessary for CI
-if ! rustup target list --toolchain "$RUST_TOOLCHAIN" | grep -q -c "$ARCH (installed)"; then
+if ! rustup target list --toolchain "$RUST_TOOLCHAIN" --installed | grep -q -c "$ARCH"; then
     rustup target add --toolchain $RUST_TOOLCHAIN $ARCH
 fi
 
