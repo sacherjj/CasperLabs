@@ -53,7 +53,7 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 #### 2.1.1 gRPC API
 
-Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [casper.proto](protobuf/io/casperlabs/casper/node/api/casper.proto)
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [casper.proto](../protobuf/io/casperlabs/node/api/casper.proto)
 
 #### 2.1.2 Data directory
 
