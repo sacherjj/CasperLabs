@@ -2,8 +2,10 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import cats.Applicative
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
+import cats.mtl.ApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
@@ -523,6 +525,19 @@ class DownloadManagerSpec
 
 object DownloadManagerSpec {
   implicit val metrics = new Metrics.MetricsNOP[Task]
+
+  val local = {
+    val A = new ArbitraryConsensusAndComm {}
+    A.sample(A.arbNode.arbitrary)
+  }
+
+  implicit val askLocal: ApplicativeAsk[Task, Node] = new ApplicativeAsk[Task, Node] {
+    override val applicative: Applicative[Task] = Applicative[Task]
+
+    override def ask: Task[Node] = Task.now(local)
+
+    override def reader[A](f: Node => A): Task[A] = ask.map(f)
+  }
 
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()

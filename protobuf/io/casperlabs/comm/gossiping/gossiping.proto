@@ -73,6 +73,7 @@ message GetBlockChunkedRequest {
     bytes block_hash = 1;
     uint32 chunk_size = 2;
     repeated string accepted_compression_algorithms = 3;
+    io.casperlabs.comm.discovery.Node sender = 4;
 }
 
 message GetGenesisCandidateRequest {}

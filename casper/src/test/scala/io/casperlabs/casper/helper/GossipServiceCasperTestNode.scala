@@ -4,7 +4,7 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.mtl.DefaultApplicativeAsk
+import cats.mtl.{ApplicativeAsk, DefaultApplicativeAsk}
 import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
@@ -270,8 +270,10 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation]()
-      extends GossipService[F] {
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation: ApplicativeAsk[
+    ?[_],
+    Node
+  ]]() extends GossipService[F] {
 
     implicit val metrics  = new Metrics.MetricsNOP[F]
     implicit val versions = HashSetCasperTestNode.protocolVersions[F]
