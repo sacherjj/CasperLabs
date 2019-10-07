@@ -25,11 +25,13 @@ trait RateLimiter[F[_], B] {
     * @param fa Effect to rate limit
     * @param b Serves for grouping [[fa]]'s into rate limiting groups.
     *          Each group rate limited separately from others.
+    * @param priority Job priority to run,
+    *                 jobs are expected to be sorted in desc order if they are in waiting state
     * @tparam A Returning value of effect
     * @return The wrapped effect
     * @throws ResourceExhausted
     */
-  def await[A](b: B, fa: F[A]): F[A]
+  def await[A](b: B, fa: F[A], priority: Int = 0): F[A]
 }
 
 object RateLimiter {
@@ -64,10 +66,10 @@ object RateLimiter {
       limitersRef <- Ref.of[F, Map[B, (Limiter[F], Finalizer[F])]](Map.empty)
     } yield Resource.make[F, RateLimiter[F, B]](acquire = Sync[F].delay {
       new RateLimiter[F, B] {
-        override def await[A](b: B, fa: F[A]): F[A] =
+        override def await[A](b: B, fa: F[A], priority: Int = 0): F[A] =
           for {
             implicit0(limiter: Limiter[F]) <- getOrCreateLimiter(b)
-            a <- Limiter.await(fa).adaptError {
+            a <- Limiter.await(fa, priority).adaptError {
                   case _: LimitReachedException => ResourceExhausted("Rate exceeded")
                 }
           } yield a
@@ -98,6 +100,6 @@ object RateLimiter {
 
   /* Does not apply any rate limiting, immediately returns [[fa]] */
   def noOp[F[_], B]: RateLimiter[F, B] = new RateLimiter[F, B] {
-    override def await[A](b: B, fa: F[A]): F[A] = fa
+    override def await[A](b: B, fa: F[A], priority: Int = 0): F[A] = fa
   }
 }

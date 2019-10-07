@@ -33,7 +33,6 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckCo
 
 import scala.concurrent.duration._
 
-@silent(".*")
 class GrpcGossipServiceSpec
     extends refspec.RefSpecLike
     with Eventually
@@ -72,23 +71,29 @@ class GrpcGossipServiceSpec
   }
 
   override def nestedSuites = Vector(
-    GetBlockChunkedSpec
-//    , StreamBlockSummariesSpec,
-//    StreamAncestorBlockSummariesSpec,
-//    StreamDagTipBlockSummariesSpec,
-//    NewBlocksSpec,
-//    GenesisApprovalSpec
+    GetBlockChunkedSpec,
+    StreamBlockSummariesSpec,
+    StreamAncestorBlockSummariesSpec,
+    StreamDagTipBlockSummariesSpec,
+    NewBlocksSpec,
+    GenesisApprovalSpec
   )
 
   trait AuthSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val listHashGen: Arbitrary[List[ByteString]] = Arbitrary(for {
+      n      <- Gen.choose(1, 5)
+      hashes <- Gen.listOfN(n, genHash)
+    } yield hashes)
     implicit val consensusConfig =
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
     implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
+    val validSenderGen          = arbNode.arbitrary.map(_.withId(stubCert.keyHash))
 
     def rpcName: String
 
-    def query: List[ByteString] => GossipingGrpcMonix.GossipServiceStub => Task[Unit]
+    def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit]
 
     def expectError(
         client: GossipingGrpcMonix.GossipServiceStub,
@@ -103,19 +108,17 @@ class GrpcGossipServiceSpec
 
     rpcName when {
       "called with a problematic sender" when {
-        "recipient cannot find requester in Kademlia" should {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 1, minSize = 1)
+
+        "called with a sender whose ID doesn't match its SSL public key" should {
           "return UNAUTHENTICATED" in {
-            runTestUnsafe(TestData()) {
-              TestEnvironment(
-                testDataRef,
-                nodeDiscovery = TestEnvironment.problematicNodeDiscovery
-              ).use { stub =>
-                expectError(stub, query(List(ByteString.EMPTY))) {
+            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+              runTestUnsafe(TestData()) {
+                expectError(stub, query(sender.some, blockHashes)) {
                   case Unauthenticated(msg) =>
-                    msg shouldBe "Cannot find sender in Kademlia for verifying."
+                    msg shouldBe "Sender doesn't match public key."
                 }
               }
-
             }
           }
         }
@@ -125,10 +128,12 @@ class GrpcGossipServiceSpec
           def expectErrorWithAnonymous(
               clientAuth: ClientAuth
           )(pf: PartialFunction[Throwable, Unit]) =
-            runTestUnsafe(TestData()) {
-              TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
-                anonymousStub =>
-                  expectError(anonymousStub, query(List(ByteString.EMPTY)))(pf)
+            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
+              runTestUnsafe(TestData()) {
+                TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
+                  anonymousStub =>
+                    expectError(anonymousStub, query(sender.some, blockHashes))(pf)
+                }
               }
             }
 
@@ -183,36 +188,37 @@ class GrpcGossipServiceSpec
 
         "rate is exceeded" when {
           "queue is full" should {
-            "return RESOURCE_EXHAUSTED" in forAll { block: Block =>
-              val requestsNum = 10
-              val minFailed   = 5
-              test(block, queueSize = 1) { stub =>
-                for {
-                  errors <- Task
-                             .gatherUnordered(
-                               List.fill(requestsNum)(
-                                 query(List(block.blockHash))(stub)
-                                   .redeem[Option[Throwable]](
-                                     _.some,
-                                     _ => none[Throwable]
-                                   )
+            "return RESOURCE_EXHAUSTED" in forAll(arbitrary[Block], validSenderGen) {
+              (block, sender) =>
+                val requestsNum = 10
+                val minFailed   = 5
+                test(block, queueSize = 1) { stub =>
+                  for {
+                    errors <- Task
+                               .gatherUnordered(
+                                 List.fill(requestsNum)(
+                                   query(sender.some, List(block.blockHash))(stub)
+                                     .redeem[Option[Throwable]](
+                                       _.some,
+                                       _ => none[Throwable]
+                                     )
+                                 )
                                )
-                             )
-                             .map(_.flatten)
-                } yield {
-                  // At least first request occupies the single available place in queue
-                  // and will be successful
-                  // Not comparing with precise number, because it may vary in CI and fail
-                  assert(errors.size >= minFailed && errors.size < requestsNum)
-                  Inspectors.forAll(errors) { e =>
-                    ResourceExhausted.unapply(e) shouldBe Some("Rate exceeded")
+                               .map(_.flatten)
+                  } yield {
+                    // At least first request occupies the single available place in queue
+                    // and will be successful
+                    // Not comparing with precise number, because it may vary in CI and fail
+                    assert(errors.size >= minFailed && errors.size < requestsNum)
+                    Inspectors.forAll(errors) { e =>
+                      ResourceExhausted.unapply(e) shouldBe Some("Rate exceeded")
+                    }
                   }
                 }
-              }
             }
           }
           "queue isn't full" should {
-            "throttle" in forAll { block: Block =>
+            "throttle" in forAll(arbitrary[Block], validSenderGen) { (block, sender) =>
               val requestsNum   = 5
               val queueSize     = 10
               val sleepingTime  = 3.seconds
@@ -223,7 +229,7 @@ class GrpcGossipServiceSpec
                 val errors  = Atomic(0)
                 val runParallelRequests = Task.gatherUnordered(
                   List.fill(requestsNum)(
-                    query(List(block.blockHash))(stub)
+                    query(sender.some, List(block.blockHash))(stub)
                       .redeemWith[Unit](
                         _ => Task(errors.increment()),
                         _ => Task(success.increment())
@@ -259,8 +265,9 @@ class GrpcGossipServiceSpec
 
     override def rpcName: String = "getBlocksChunked"
 
-    override def query: List[ByteString] => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
-      blockHashes =>
+    override def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      (_, blockHashes) =>
         client =>
           client
             .getBlockChunked(
@@ -979,8 +986,10 @@ class GrpcGossipServiceSpec
   object NewBlocksSpec extends WordSpecLike with AuthSpec {
     override def rpcName: String = "newBlocks"
 
-    override def query: List[ByteString] => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
-      blockHashes => client => client.newBlocks(NewBlocksRequest(None, blockHashes)).void
+    override def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      (maybeSender, blockHashes) =>
+        client => client.newBlocks(NewBlocksRequest(maybeSender, blockHashes)).void
 
     def expectError(
         req: NewBlocksRequest,
@@ -1239,19 +1248,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
       def addApproval(blockHash: ByteString, approval: Approval) = ???
       def awaitApproval                                          = ???
     }
-    private val emptyNodeDiscovery = new NodeDiscovery[Task] {
-      def discover: Task[Unit] = ???
-      def lookup(id: NodeIdentifier): Task[Option[Node]] =
-        Task.now(Node(id.asByteString, "localhost", 40400, 40404).some)
-      def recentlyAlivePeersAscendingDistance: Task[List[Node]] = ???
-      def banTemp(node: Node): Task[Unit]                       = ???
-    }
-    val problematicNodeDiscovery = new NodeDiscovery[Task] {
-      def discover: Task[Unit]                                  = ???
-      def lookup(id: NodeIdentifier): Task[Option[Node]]        = Task.now(None)
-      def recentlyAlivePeersAscendingDistance: Task[List[Node]] = ???
-      def banTemp(node: Node): Task[Unit]                       = ???
-    }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
@@ -1275,7 +1271,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
-        nodeDiscovery: NodeDiscovery[Task] = emptyNodeDiscovery,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
         implicit
@@ -1301,7 +1296,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
               val svc = GrpcGossipService
-                .fromGossipService(gss, rateLimiter, nodeDiscovery, blockChunkConsumerTimeout)
+                .fromGossipService(gss, rateLimiter, blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),

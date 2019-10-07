@@ -203,7 +203,6 @@ package object gossiping {
       _ <- startGrpcServer(
             gossipServiceServer,
             rateLimiter,
-            NodeDiscovery[F],
             serverSslContext,
             conf,
             port,
@@ -776,7 +775,6 @@ package object gossiping {
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
       rateLimiter: RateLimiter[F, ByteString],
-      nodeDiscovery: NodeDiscovery[F],
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,
@@ -792,7 +790,6 @@ package object gossiping {
             val svc = GrpcGossipService.fromGossipService(
               server,
               rateLimiter,
-              nodeDiscovery,
               blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
             )
             GossipingGrpcMonix.bindService(svc, scheduler)

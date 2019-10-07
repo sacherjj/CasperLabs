@@ -10,12 +10,13 @@ import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.shared.ObservableOps._
+import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
 
 import scala.concurrent.TimeoutException
-import scala.concurrent.duration.{Duration, FiniteDuration}
+import scala.concurrent.duration._
 
 /** Adapt the GossipService to Monix generated interfaces. */
 object GrpcGossipService {
@@ -26,31 +27,34 @@ object GrpcGossipService {
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F],
       rateLimiter: RateLimiter[F, ByteString],
-      nodeDiscovery: NodeDiscovery[F],
       blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
 
-      // TODO: Too many lookups while we can make only once when see for the first time?
-      // Kademlia will fill peer table on the first lookup and we assume that further reads from in-mem are cheap.
-      // Returns sender id extracted from certificate.
-      private def verifySender() =
-        Option(ContextKeys.Principal.get)
-          .fold(Task.raiseError[ByteString](Unauthenticated("Cannot verify sender identity."))) {
-            case Principal.Peer(id) =>
-              TaskLike[F].apply(nodeDiscovery.lookup(NodeIdentifier(id))).flatMap {
-                case None =>
-                  Task.raiseError[ByteString](
-                    Unauthenticated("Cannot find sender in Kademlia for verifying.")
-                  )
-                case Some(_) =>
-                  Task.now(id)
-              }
-          }
+      /**
+        * Verifies that the sender holds the same node identity as the public key in the client SSL certificate.
+        */
+      private def verifySender(
+          maybeSender: Option[Node]
+      ): Task[NodeIdentifier] =
+        (maybeSender, Option(ContextKeys.Principal.get)) match {
+          case (_, None) =>
+            Task.raiseError[NodeIdentifier](
+              Unauthenticated("Cannot verify sender identity.")
+            )
+
+          case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>
+            Task.raiseError[NodeIdentifier](
+              Unauthenticated("Sender doesn't match public key.")
+            )
+
+          case (_, Some(Principal.Peer(id))) =>
+            Task.now(NodeIdentifier(id))
+        }
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        verifySender() >> TaskLike[F].apply(service.newBlocks(request))
+        verifySender(request.sender) >> TaskLike[F].apply(service.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
@@ -69,7 +73,7 @@ object GrpcGossipService {
 
       def getBlockChunked(request: GetBlockChunkedRequest): Observable[Chunk] =
         Observable
-          .fromTask(verifySender()) >>= { sender =>
+          .fromTask(verifySender(maybeSender = None)) >>= { sender =>
           val stream = service
             .getBlockChunked(request)
             .toObservable
@@ -80,7 +84,10 @@ object GrpcGossipService {
             }
 
           Observable
-            .fromTask(TaskLike[F].apply(rateLimiter.await(sender, stream.pure[F])))
+            .fromTask(
+              TaskLike[F]
+                .apply(rateLimiter.await(sender.asByteString, stream.pure[F]))
+            )
             .flatten
         }
 
