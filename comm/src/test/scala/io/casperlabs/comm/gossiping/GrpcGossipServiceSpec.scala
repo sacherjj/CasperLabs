@@ -175,7 +175,103 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec {
+  trait RateSpec extends WordSpecLike { self: AuthSpec =>
+    def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit]
+
+    val validSenderGen = arbNode.arbitrary.map(_.withId(stubCert.keyHash))
+
+    rpcName when {
+      "called with a valid sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 1, minSize = 1)
+
+        def test(block: Block, queueSize: Int)(
+            test: (GossipingGrpcMonix.GossipServiceStub) => Task[Unit]
+        ): Unit =
+          runTestUnsafe(TestData.fromBlock(block), timeout = 10.seconds) {
+            val resources = for {
+              rateLimiter <- RateLimiter
+                              .create[Task, ByteString](
+                                elementsPerPeriod = 1,
+                                period = 1.second,
+                                maxQueueSize = queueSize
+                              )
+              stub <- TestEnvironment(
+                       testDataRef,
+                       clientCert = Some(stubCert),
+                       rateLimiter = rateLimiter
+                     )
+            } yield stub
+
+            resources.use(test)
+          }
+
+        "rate is exceeded" when {
+          "queue is full" should {
+            "return RESOURCE_EXHAUSTED" in forAll(arbBlock.arbitrary, validSenderGen) {
+              (block, sender) =>
+                val requestsNum = 10
+                test(block, queueSize = 1) { stub =>
+                  for {
+                    errors <- Task
+                               .gatherUnordered(
+                                 List.fill(requestsNum)(
+                                   query(sender.some, List(block.blockHash))(stub)
+                                     .redeem[Option[Throwable]](
+                                       _.some,
+                                       _ => none[Throwable]
+                                     )
+                                 )
+                               )
+                               .map(_.flatten)
+                  } yield {
+                    // First request occupies the single available place in queue
+                    // and will be successful
+                    assert(errors.size == requestsNum - 1)
+                    Inspectors.forAll(errors) { e =>
+                      ResourceExhausted.unapply(e) shouldBe Some("Rate exceeded")
+                    }
+                  }
+                }
+            }
+          }
+          "queue isn't full" should {
+            "throttle" in forAll(arbBlock.arbitrary, validSenderGen) { (block, sender) =>
+              val requestsNum   = 5
+              val queueSize     = 10
+              val sleepingTime  = 3.seconds
+              val minSuccessful = 2
+
+              test(block, queueSize) { stub =>
+                val success = Atomic(0)
+                val errors  = Atomic(0)
+                val runParallelRequests = Task.gatherUnordered(
+                  List.fill(requestsNum)(
+                    query(sender.some, List(block.blockHash))(stub)
+                      .redeemWith[Unit](
+                        _ => Task(errors.increment()),
+                        _ => Task(success.increment())
+                      )
+                  )
+                )
+
+                for {
+                  _ <- runParallelRequests.forkAndForget
+                  _ <- Task.sleep(sleepingTime)
+                } yield {
+                  assert(errors.get() == 0)
+                  // Not comparing with precise number, because it may vary in CI and fail
+                  assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec with RateSpec {
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit override val patienceConfig = PatienceConfig(1.second, 100.millis)
     implicit override val consensusConfig = ConsensusConfig(
@@ -201,7 +297,7 @@ class GrpcGossipServiceSpec
             .toListL
             .void
 
-    override def wrongIdSender
+    override def query
         : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
       (sender, blockHashes) =>
         client =>
@@ -214,24 +310,17 @@ class GrpcGossipServiceSpec
             )
             .toListL
             .void
+
+    override def wrongIdSender
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      query
 
     override def withoutCertificate
         : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
-      (sender, blockHashes) =>
-        client =>
-          client
-            .getBlockChunked(
-              GetBlockChunkedRequest(
-                blockHash = blockHashes.head,
-                sender = sender
-              )
-            )
-            .toListL
-            .void
+      query
 
     "getBlocksChunked" when {
       "called with a valid sender" when {
-        val validSenderGen = arbNode.arbitrary.map(_.withId(stubCert.keyHash))
         "no compression is supported" should {
           "return a stream of uncompressed chunks" in {
             forAll(arbBlock.arbitrary, validSenderGen) { (block: Block, node: Node) =>
