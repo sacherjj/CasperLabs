@@ -263,6 +263,7 @@ class DockerNode(LoggingDockerBase):
 
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self) -> None:
+        bond_amount = self.config.bond_amount
         N = self.NUMBER_OF_BONDS
         # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
         path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
@@ -276,7 +277,7 @@ class DockerNode(LoggingDockerBase):
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
             ):
-                bond = N + 2 * i
+                bond = bond_amount(i, N)
                 f.write(f"{pair.public_key},0,{bond}\n")
 
     def cleanup(self):
