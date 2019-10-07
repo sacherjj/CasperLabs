@@ -44,7 +44,6 @@ steps:
   commands:
   - "ci/markdown-link-check.sh"
   image: "casperlabs/buildenv:latest"
-  failure: ignore
   when:
     event:
     - pull_request
@@ -176,7 +175,6 @@ steps:
   commands:
   - "ci/markdown-link-check.sh"
   image: "casperlabs/buildenv:latest"
-  failure: ignore
   when:
     branch:
     - staging
