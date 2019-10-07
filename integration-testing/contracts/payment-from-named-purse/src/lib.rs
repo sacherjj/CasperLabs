@@ -5,7 +5,7 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::string::String;
-use contract_ffi::contract_api::{self, PurseTransferResult, revert};
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
@@ -13,10 +13,10 @@ use contract_ffi::value::U512;
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
 
+#[repr(u16)]
 enum Error {
     PosNotFound = 1,
     NamedPurseNotFound = 2,
-    Transfer = 3,
 }
 
 enum Arg {
@@ -28,8 +28,8 @@ enum Arg {
 pub extern "C" fn call() {
     let amount: U512 = contract_api::get_arg(Arg::Amount as u32).unwrap().unwrap();
     let name: String = contract_api::get_arg(Arg::Name as u32).unwrap().unwrap();
-    let purse: PurseId =
-        get_named_purse(&name).unwrap_or_else(|| contract_api::revert(Error::PosNotFound as u32));
+    let purse: PurseId = get_named_purse(&name)
+        .unwrap_or_else(|| contract_api::revert(ApiError::User(Error::PosNotFound as u16)));
 
     let pos_pointer = contract_api::get_pos();
     let payment_purse: PurseId =
@@ -41,15 +41,14 @@ pub extern "C" fn call() {
         &vec![Key::URef(purse.value())],
     );
 
-    if let PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(purse, payment_purse, amount)
-    {
-        contract_api::revert(Error::Transfer as u32);
+    if contract_api::transfer_from_purse_to_purse(purse, payment_purse, amount).is_err() {
+        contract_api::revert(ApiError::Transfer);
     }
 }
 
 fn get_named_purse(name: &str) -> Option<PurseId> {
-    let key = contract_api::get_key(name).unwrap_or_else(|| revert(Error::NamedPurseNotFound as u32));
+    let key = contract_api::get_key(name)
+        .unwrap_or_else(|| contract_api::revert(ApiError::User(Error::NamedPurseNotFound as u16)));
     let uref = key.as_uref()?;
 
     Some(PurseId::new(*uref))
