@@ -31,14 +31,14 @@ pub fn delegate() {
     // Read (this should exercise cache)
     let mut res: String = contract_api::read_local(LOCAL_KEY)
         .unwrap_or_else(|_| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::UnableToReadMutatedLocalKey as u16).into(),
-            )
+            contract_api::revert(contract_api::Error::User(
+                CustomError::UnableToReadMutatedLocalKey as u16,
+            ))
         })
         .unwrap_or_else(|| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::LocalKeyReadMutatedBytesRepr as u16).into(),
-            )
+            contract_api::revert(contract_api::Error::User(
+                CustomError::LocalKeyReadMutatedBytesRepr as u16,
+            ))
         });
     // Append
     res.push_str(WORLD_SUFFIX);

@@ -4,14 +4,10 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::string::String;
-use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
-
-enum Error {
-    Transfer = 1,
-}
 
 enum Arg {
     Amount = 0,
@@ -25,10 +21,8 @@ pub extern "C" fn call() {
     let main_purse: PurseId = contract_api::main_purse();
     let new_purse: PurseId = contract_api::create_purse();
 
-    if let PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(main_purse, new_purse, amount)
-    {
-        contract_api::revert(Error::Transfer as u32);
+    if contract_api::transfer_from_purse_to_purse(main_purse, new_purse, amount).is_err() {
+        contract_api::revert(Error::Transfer);
     }
 
     let new_purse_key: Key = new_purse.value().into();

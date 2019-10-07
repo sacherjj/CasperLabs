@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{get_arg, revert, TransferResult};
+use contract_ffi::contract_api::{get_arg, revert, Error};
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -18,7 +18,7 @@ pub extern "C" fn call() {
 
     let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
 
-    if result == TransferResult::TransferError {
-        revert(1);
+    if result.is_err() {
+        revert(Error::User(1));
     }
 }

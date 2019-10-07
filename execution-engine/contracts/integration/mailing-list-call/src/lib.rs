@@ -33,11 +33,11 @@ impl From<Error> for ApiError {
 #[no_mangle]
 pub extern "C" fn call() {
     let mailing_uref =
-        get_key("mailing").unwrap_or_else(|| revert(ApiError::from(Error::GetMailingURef).into()));
+        get_key("mailing").unwrap_or_else(|| revert(ApiError::from(Error::GetMailingURef)));
     let pointer = if let Key::Hash(hash) = mailing_uref {
         ContractPointer::Hash(hash)
     } else {
-        revert(ApiError::from(Error::WrongURefType).into()); // exit code is currently arbitrary
+        revert(ApiError::from(Error::WrongURefType)); // exit code is currently arbitrary
     };
 
     let method = "sub";
@@ -48,10 +48,10 @@ pub extern "C" fn call() {
             let key_name = "mail_feed";
             put_key(key_name, &sub_key);
 
-            let key_name_uref = get_key(key_name)
-                .unwrap_or_else(|| revert(ApiError::from(Error::GetKeyNameURef).into()));
+            let key_name_uref =
+                get_key(key_name).unwrap_or_else(|| revert(ApiError::from(Error::GetKeyNameURef)));
             if sub_key != key_name_uref {
-                revert(ApiError::from(Error::BadSubKey).into());
+                revert(ApiError::from(Error::BadSubKey));
             }
 
             let method = "pub";
@@ -61,15 +61,15 @@ pub extern "C" fn call() {
 
             let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
             let messages = read(turef)
-                .unwrap_or_else(|_| revert(ApiError::from(Error::GetMessagesURef).into()))
-                .unwrap_or_else(|| revert(ApiError::from(Error::FindMessagesURef).into()));
+                .unwrap_or_else(|_| revert(ApiError::from(Error::GetMessagesURef)))
+                .unwrap_or_else(|| revert(ApiError::from(Error::FindMessagesURef)));
 
             if messages.is_empty() {
-                revert(ApiError::from(Error::NoMessages).into());
+                revert(ApiError::from(Error::NoMessages));
             }
         }
         None => {
-            revert(ApiError::from(Error::NoSubKey).into());
+            revert(ApiError::from(Error::NoSubKey));
         }
     }
 }

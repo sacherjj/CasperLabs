@@ -22,10 +22,8 @@ enum CustomError {
 pub extern "C" fn call() {
     let local_state_uref: URef = match contract_api::get_arg(Args::LocalStateURef as u32) {
         Some(Ok(uref)) => uref,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => {
-            contract_api::revert(Error::User(CustomError::MissingLocalStateURefArg as u16).into())
-        }
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::User(CustomError::MissingLocalStateURefArg as u16)),
     };
 
     let local_state_contract_pointer = ContractPointer::URef(TURef::new(

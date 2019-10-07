@@ -20,8 +20,8 @@ pub extern "C" fn call() {
     let unbond_amount: Option<U512> = match contract_api::get_arg::<Option<u64>>(0) {
         Some(Ok(Some(data))) => Some(U512::from(data)),
         Some(Ok(None)) => None,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     contract_api::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])

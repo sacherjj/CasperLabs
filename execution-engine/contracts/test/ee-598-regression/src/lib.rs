@@ -33,8 +33,8 @@ pub extern "C" fn call() {
     let pos_pointer = contract_api::get_pos();
     let amount: U512 = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     bond(pos_pointer.clone(), amount, contract_api::main_purse());
     unbond(pos_pointer, Some(amount + 1));

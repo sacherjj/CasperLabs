@@ -20,7 +20,7 @@ pub extern "C" fn delegate() {
 pub extern "C" fn call() {
     let key = contract_api::store_function(ENTRY_FUNCTION_NAME, Default::default())
         .into_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
         .into();
 
     contract_api::put_key(CONTRACT_NAME, &key);

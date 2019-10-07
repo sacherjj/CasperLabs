@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use contract_ffi::bytesrepr::{self, ToBytes};
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, TransferredTo};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
@@ -344,7 +344,7 @@ where
                     bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_to_account(public_key, amount)?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 
             FunctionIndex::TransferFromPurseToAccountIndex => {
@@ -376,7 +376,7 @@ where
                     bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 
             FunctionIndex::TransferFromPurseToPurseIndex => {
@@ -396,7 +396,7 @@ where
                     amount_ptr,
                     amount_size,
                 )?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::GetBalanceIndex => {

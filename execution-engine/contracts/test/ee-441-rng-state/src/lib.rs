@@ -34,8 +34,8 @@ pub extern "C" fn do_something() {
 pub extern "C" fn call() {
     let flag: String = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let do_nothing: ContractPointer =
         contract_api::store_function_at_hash("do_nothing", BTreeMap::new());

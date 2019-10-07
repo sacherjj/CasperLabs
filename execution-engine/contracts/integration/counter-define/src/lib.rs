@@ -21,8 +21,8 @@ pub extern "C" fn counter_ext() {
         "get" => {
             let result = match read(turef) {
                 Ok(Some(result)) => result,
-                Ok(None) => revert(Error::ValueNotFound.into()),
-                Err(_) => revert(Error::Read.into()),
+                Ok(None) => revert(Error::ValueNotFound),
+                Err(_) => revert(Error::Read),
             };
             ret(&result, &Vec::new());
         }

@@ -19,8 +19,8 @@ pub extern "C" fn check_caller_ext() {
 pub extern "C" fn call() {
     let known_public_key: PublicKey = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let caller_public_key: PublicKey = contract_api::get_caller();
     assert_eq!(

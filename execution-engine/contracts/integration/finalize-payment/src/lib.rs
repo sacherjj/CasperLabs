@@ -7,7 +7,7 @@ extern crate contract_ffi;
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{self, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
@@ -31,10 +31,8 @@ fn get_payment_purse(pos: &ContractPointer) -> PurseId {
 fn submit_payment(pos: &ContractPointer, amount: U512) {
     let payment_purse = get_payment_purse(pos);
     let main_purse = contract_api::main_purse();
-    if let PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
-    {
-        contract_api::revert(99);
+    if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
+        contract_api::revert(Error::User(99));
     }
 }
 

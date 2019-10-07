@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{get_arg, revert};
+use contract_ffi::contract_api::{get_arg, revert, Error};
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -14,5 +14,5 @@ pub extern "C" fn call() {
     let account_sum: u8 = account_number.iter().sum();
     let total_sum: u32 = u32::from(account_sum) + number;
 
-    revert(total_sum);
+    revert(Error::User(total_sum as u16));
 }

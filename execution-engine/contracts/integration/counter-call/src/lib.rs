@@ -5,16 +5,16 @@ use alloc::vec::Vec;
 
 extern crate contract_ffi;
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{call_contract, get_key, revert};
+use contract_ffi::contract_api::{call_contract, get_key, revert, Error};
 use contract_ffi::key::Key;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let counter_uref = get_key("counter").unwrap_or_else(|| revert(100));
+    let counter_uref = get_key("counter").unwrap_or_else(|| revert(Error::User(100)));
     let pointer = if let Key::Hash(hash) = counter_uref {
         ContractPointer::Hash(hash)
     } else {
-        revert(66)
+        revert(Error::User(66))
     };
 
     {

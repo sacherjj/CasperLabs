@@ -114,7 +114,8 @@ def test_invalid_bonding(one_node_network_fn):
 
     r = node1.d_client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 5"
+    # PoS Error::BondTooLarge is 65286
+    assert r.error_message == "Exit code: 65286"
 
     block_ds = parse_show_block(block1)
     public_key = node1.genesis_account.public_key_hex
@@ -239,7 +240,8 @@ def test_invalid_unbonding(one_node_network_fn):
     assert block_hash2 is not None
     r = node1.d_client.show_deploys(block_hash2)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 6"
+    # PoS Error::UnbondTooLarge is 65287
+    assert r.error_message == "Exit code: 65287"
     block2 = node1.d_client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     bonded_list = get_bonded_list(node1, block_ds)
@@ -251,7 +253,7 @@ def test_invalid_unbonding(one_node_network_fn):
     assert block_hash2 is not None
     r = node1.d_client.show_deploys(block_hash2)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 6"
+    assert r.error_message == "Exit code: 65287"
     block2 = node1.d_client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     bonded_list = get_bonded_list(node1, block_ds)
@@ -278,7 +280,8 @@ def test_unbonding_without_bonding(one_node_network_fn):
     assert block_hash is not None
     r = node1.client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 0"
+    # PoS Error::NotBonded is 65280
+    assert r.error_message == "Exit code: 65280"
 
     block2 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block2)

@@ -11,7 +11,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{Error as ApiError, PurseTransferResult, TransferResult};
+use contract_ffi::contract_api::{Error as ApiError, TransferResult, TransferredTo};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint};
 use contract_ffi::uref::{AccessRights, URef};
@@ -779,13 +779,13 @@ where
         // A precondition check that verifies that the transfer can be done
         // as the source purse has enough funds to cover the transfer.
         if amount > self.get_balance(source)?.unwrap_or_default() {
-            return Ok(TransferResult::TransferError);
+            return Ok(Err(ApiError::Transfer));
         }
 
         let target_purse_id = self.mint_create(mint_contract_key)?;
 
         if source == target_purse_id {
-            return Ok(TransferResult::TransferError);
+            return Ok(Err(ApiError::Transfer));
         }
 
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
@@ -805,9 +805,9 @@ where
                 .collect();
                 let account = Account::create(target_addr, named_keys, target_purse_id);
                 self.context.write_account(target_key, account)?;
-                Ok(TransferResult::TransferredToNewAccount)
+                Ok(Ok(TransferredTo::NewAccount))
             }
-            Err(_) => Ok(TransferResult::TransferError),
+            Err(_) => Ok(Err(ApiError::Transfer)),
         }
     }
 
@@ -826,8 +826,8 @@ where
         self.context.insert_uref(target.value());
 
         match self.mint_transfer(mint_contract_key, source, target, amount) {
-            Ok(_) => Ok(TransferResult::TransferredToExistingAccount),
-            Err(_) => Ok(TransferResult::TransferError),
+            Ok(_) => Ok(Ok(TransferredTo::ExistingAccount)),
+            Err(_) => Ok(Err(ApiError::Transfer)),
         }
     }
 
@@ -861,7 +861,7 @@ where
             Some(Value::Account(account)) => {
                 let target = account.purse_id_add_only();
                 if source == target {
-                    return Ok(TransferResult::TransferredToExistingAccount);
+                    return Ok(Ok(TransferredTo::ExistingAccount));
                 }
                 // If an account exists, transfer the amount to its purse
                 self.transfer_to_existing_account(source, target, amount)
@@ -882,7 +882,7 @@ where
         target_size: u32,
         amount_ptr: u32,
         amount_size: u32,
-    ) -> Result<PurseTransferResult, Error> {
+    ) -> Result<Result<(), ApiError>, Error> {
         let source: PurseId = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
             deserialize(&bytes).map_err(Error::BytesRepr)?
@@ -900,9 +900,13 @@ where
 
         let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
 
-        match self.mint_transfer(mint_contract_key, source, target, amount) {
-            Ok(_) => Ok(PurseTransferResult::TransferSuccessful),
-            Err(_) => Ok(PurseTransferResult::TransferError),
+        if self
+            .mint_transfer(mint_contract_key, source, target, amount)
+            .is_ok()
+        {
+            Ok(Ok(()))
+        } else {
+            Ok(Err(ApiError::Transfer))
         }
     }
 
