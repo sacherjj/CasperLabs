@@ -243,7 +243,8 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
         MockDownloadManager,
         MockGenesisApprover,
         0,
-        MockSemaphore
+        MockSemaphore,
+        RateLimiter.noOp
       ) {
     val asked = Atomic(Vector.empty[Node])
 

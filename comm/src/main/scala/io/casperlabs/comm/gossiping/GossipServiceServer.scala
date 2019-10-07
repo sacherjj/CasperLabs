@@ -1,26 +1,23 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Utils._
-import io.casperlabs.shared.{Compression, Log}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
-import scala.xml.PrettyPrinter
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
@@ -29,7 +26,8 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     downloadManager: DownloadManager[F],
     genesisApprover: GenesisApprover[F],
     maxChunkSize: Int,
-    blockDownloadSemaphore: Semaphore[F]
+    blockDownloadSemaphore: Semaphore[F],
+    rateLimiter: RateLimiter[F, ByteString]
 ) extends GossipService[F] {
   import GossipServiceServer._
 
@@ -199,25 +197,32 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
       .mapEval(backend.getBlockSummary(_))
       .flatMap(Iterant.fromIterable(_))
 
-  override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-    Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
-      _ =>
-        Iterant.liftF {
-          backend.getBlock(request.blockHash)
-        } flatMap {
-          case Some(block) =>
-            val it = chunkIt(
-              block.toByteArray,
-              effectiveChunkSize(request.chunkSize),
-              request.acceptedCompressionAlgorithms
-            )
+  override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] = {
+    val streamBlock: Iterant[F, Chunk] = Iterant.resource(blockDownloadSemaphore.acquire)(
+      _ => blockDownloadSemaphore.release
+    ) flatMap { _ =>
+      Iterant.liftF {
+        backend.getBlock(request.blockHash)
+      } flatMap {
+        case Some(block) =>
+          val it = chunkIt(
+            block.toByteArray,
+            effectiveChunkSize(request.chunkSize),
+            request.acceptedCompressionAlgorithms
+          )
 
-            Iterant.fromIterator(it)
+          Iterant.fromIterator(it)
 
-          case None =>
-            Iterant.raiseError(NotFound.block(request.blockHash))
-        }
+        case None =>
+          Iterant.raiseError(NotFound.block(request.blockHash))
+      }
     }
+    val rateLimitingGroupingKey =
+      request.getSender.id.concat(request.blockHash)
+    val limited: F[Iterant[F, Chunk]] =
+      rateLimiter.await(rateLimitingGroupingKey, streamBlock.pure[F])
+    Iterant.liftF(limited).flatMap(identity)
+  }
 
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
     rethrow(genesisApprover.getCandidate)
@@ -283,17 +288,19 @@ object GossipServiceServer {
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
       genesisApprover: GenesisApprover[F],
+      rateLimiter: RateLimiter[F, ByteString],
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
   ): F[GossipServiceServer[F]] =
-    Semaphore[F](maxParallelBlockDownloads.toLong) map { blockDownloadSemaphore =>
-      new GossipServiceServer(
-        backend,
-        synchronizer,
-        downloadManager,
-        genesisApprover,
-        maxChunkSize,
-        blockDownloadSemaphore
-      )
-    }
+    for {
+      blockDownloadSemaphore <- Semaphore[F](maxParallelBlockDownloads.toLong)
+    } yield new GossipServiceServer(
+      backend,
+      synchronizer,
+      downloadManager,
+      genesisApprover,
+      maxChunkSize,
+      blockDownloadSemaphore,
+      rateLimiter
+    )
 }

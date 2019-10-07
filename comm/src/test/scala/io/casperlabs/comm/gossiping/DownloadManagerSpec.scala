@@ -662,6 +662,7 @@ object DownloadManagerSpec {
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
         genesisApprover = emptyGenesisApprover,
+        rateLimiter = RateLimiter.noOp,
         maxChunkSize = 100 * 1024,
         maxParallelBlockDownloads = 100
       )
@@ -690,7 +691,8 @@ object DownloadManagerSpec {
           downloadManager = emptyDownloadManager,
           genesisApprover = emptyGenesisApprover,
           maxChunkSize = 100 * 1024,
-          blockDownloadSemaphore = semaphore
+          blockDownloadSemaphore = semaphore,
+          rateLimiter = RateLimiter.noOp
         ) {
           override def getBlockChunked(request: GetBlockChunkedRequest) =
             rechunker(super.getBlockChunked(request))

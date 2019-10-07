@@ -439,6 +439,7 @@ object GossipServiceCasperTestNodeFactory {
                      )                          = ???
                      override def awaitApproval = ???
                    },
+                   rateLimiter = RateLimiter.noOp,
                    maxChunkSize = 1024 * 1024,
                    maxParallelBlockDownloads = 10
                  )

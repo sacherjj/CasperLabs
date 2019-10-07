@@ -169,11 +169,37 @@ package object gossiping {
                                StashingSynchronizer.wrap(synchronizer, awaitApproval.join)
                              }
 
+      rateLimiter <- {
+        val elementsPerPeriod: Int = 0
+        val period                 = Duration.Zero
+        val queueSize: Int         = 0
+
+        if (elementsPerPeriod == 0 || period == Duration.Zero) {
+          Resource.liftF {
+            for {
+              _ <- Log[F].info("Disable rate limiting")
+            } yield RateLimiter.noOp[F, ByteString]
+          }
+        } else {
+          Resource.liftF[F, Unit](
+            Log[F].info(s"Rate limiting enabled: $elementsPerPeriod requests every $period")
+          ) >>
+            RateLimiter.create[F, ByteString](
+              elementsPerPeriod = elementsPerPeriod,
+              period = period,
+              maxQueueSize =
+                if (queueSize == 0) Int.MaxValue
+                else queueSize
+            )
+        }
+      }
+
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
                               stashingSynchronizer,
                               downloadManager,
-                              genesisApprover
+                              genesisApprover,
+                              rateLimiter
                             )
 
       _ <- startGrpcServer(
@@ -600,7 +626,8 @@ package object gossiping {
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
-      genesisApprover: GenesisApprover[F]
+      genesisApprover: GenesisApprover[F],
+      rateLimiter: RateLimiter[F, ByteString]
   ): Resource[F, GossipServiceServer[F]] =
     for {
       backend <- Resource.pure[F, GossipServiceServer.Backend[F]] {
@@ -634,6 +661,7 @@ package object gossiping {
                    synchronizer,
                    downloadManager,
                    genesisApprover,
+                   rateLimiter,
                    maxChunkSize = conf.server.chunkSize,
                    maxParallelBlockDownloads = conf.server.relayMaxParallelBlocks
                  )
