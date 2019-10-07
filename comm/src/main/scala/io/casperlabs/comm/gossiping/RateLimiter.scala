@@ -73,16 +73,18 @@ object RateLimiter {
           } yield a
 
         private def getOrCreateLimiter(b: B): F[Limiter[F]] =
-          Limiter
-            .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
-            .allocated
-            .flatMap {
-              case (newLimiter, newFinalizer) =>
-                limitersRef.modify { limiters =>
-                  val (limiter, finalizer) = limiters.getOrElse(b, (newLimiter, newFinalizer))
-                  (limiters + (b -> (limiter -> finalizer)), limiter)
-                }
-            }
+          for {
+            (snapshot, updater) <- limitersRef.access
+            (limiter, finalizer) <- snapshot
+                                     .get(b)
+                                     .fold(
+                                       Limiter
+                                         .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
+                                         .allocated
+                                     )(pair => pair.pure[F])
+            success <- updater(snapshot + (b -> (limiter -> finalizer)))
+            l       <- if (success) limiter.pure[F] else getOrCreateLimiter(b)
+          } yield l
       }
     })(
       release = _ =>
