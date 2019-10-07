@@ -9,6 +9,7 @@ from casperlabs_local_net.common import (
     extract_block_hash_from_propose_output,
     Contract,
     MAX_PAYMENT_ABI,
+    USER_ERROR_MIN,
 )
 from casperlabs_local_net.docker_node import DockerNode
 from casperlabs_local_net.errors import NonZeroExitCodeError
@@ -316,7 +317,7 @@ def test_revert_subcall(client, node):
     block_hash = deploy_and_propose_from_genesis(node, "test_subcall_revert_call.wasm")
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
-    assert r.error_message == "Exit code: 2"
+    assert r.error_message == "Exit code: 65538"
 
 
 def test_revert_direct(client, node):
@@ -325,7 +326,7 @@ def test_revert_direct(client, node):
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error
-    assert r.error_message == "Exit code: 1"
+    assert r.error_message == "Exit code: 65537"
 
 
 def test_deploy_with_valid_signature(one_node_network):
@@ -444,8 +445,9 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
             block_hash = response.block_hash.hex()
 
             for deploy_info in client.showDeploys(block_hash):
+                exit_code = number + USER_ERROR_MIN
                 assert deploy_info.is_error is True
-                assert deploy_info.error_message == f"Exit code: {number}"
+                assert deploy_info.error_message == f"Exit code: {exit_code}"
 
     wasm = resources_path() / Contract.ARGS_MULTI
     account_hex = "0101010102020202030303030404040405050505060606060707070708080808"
@@ -468,8 +470,9 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
     block_hash = response.block_hash.hex()
 
     for deploy_info in client.showDeploys(block_hash):
+        exit_code = total_sum + USER_ERROR_MIN
         assert deploy_info.is_error is True
-        assert deploy_info.error_message == f"Exit code: {total_sum}"
+        assert deploy_info.error_message == f"Exit code: {exit_code}"
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
@@ -606,8 +609,9 @@ def check_cli_abi_unsigned(cli, unsigned_type, value, test_contract):
 
         cli('propose')
         deploy_info = cli("show-deploy", deploy_hash)
+        exit_code = number + USER_ERROR_MIN
         assert deploy_info.processing_results[0].is_error is True
-        assert deploy_info.processing_results[0].error_message == f"Exit code: {number}"
+        assert deploy_info.processing_results[0].error_message == f"Exit code: {exit_code}"
 
 
 def test_cli_abi_multiple(cli):
@@ -628,8 +632,9 @@ def test_cli_abi_multiple(cli):
                       '--payment-args', cli.payment_json)
     cli('propose')
     deploy_info = cli("show-deploy", deploy_hash)
+    exit_code = total_sum + USER_ERROR_MIN
     assert deploy_info.processing_results[0].is_error is True
-    assert deploy_info.processing_results[0].error_message == f"Exit code: {total_sum}"
+    assert deploy_info.processing_results[0].error_message == f"Exit code: {exit_code}"
 
 
 def test_cli_scala_help(scala_cli):
@@ -715,7 +720,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     deploys = scala_cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
-        assert deploy_info.error_message == 'Exit code: 2'  # Expected: contract called revert(2)
+        assert deploy_info.error_message == 'Exit code: 65538'  # Expected: contract called revert(2)
 
     # Call by function address
     revert_test_addr = contract_address(first_deploy_hash, 0).hex()  # assume fn_store_id starts from 0
@@ -726,7 +731,7 @@ def check_cli_direct_call_by_hash_and_name(cli, scala_cli):
     deploys = scala_cli("show-deploys", block_hash)
     for deploy_info in deploys:
         assert deploy_info.deploy.deploy_hash == deploy_hash
-        assert deploy_info.error_message == 'Exit code: 2'
+        assert deploy_info.error_message == 'Exit code: 65538'
 
 
 def propose_check_no_errors(cli):

@@ -62,6 +62,7 @@ MAX_PAYMENT_ABI = ABI.args([ABI.big_int("amount", MAX_PAYMENT_COST)])
 DEFAULT_PAYMENT_ABI = ABI.args([ABI.big_int("amount", DEFAULT_PAYMENT_COST)])
 CONV_RATE = 10
 TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
+USER_ERROR_MIN = 65536
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 CHAINSPEC_PATH = "/root/.casperlabs/chainspec"

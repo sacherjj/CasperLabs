@@ -253,7 +253,7 @@ def test_invalid_unbonding(one_node_network_fn):
     assert block_hash2 is not None
     r = node1.d_client.show_deploys(block_hash2)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 6"
+    assert r.error_message == "Exit code: 65287"
     block2 = node1.d_client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     bonded_list = get_bonded_list(node1, block_ds)
