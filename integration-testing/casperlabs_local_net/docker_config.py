@@ -41,6 +41,9 @@ class DockerConfig:
     grpc_encryption: bool = False
     is_read_only: bool = False
     behind_proxy: bool = False
+    # For the genesis test: we want to see what happens if a one node has
+    # different accounts.txt
+    dodgy_accounts_csv: bool = False
 
     def __post_init__(self):
         if self.rand_str is None:

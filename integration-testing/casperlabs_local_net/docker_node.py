@@ -259,10 +259,13 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
-        self.create_genesis_accounts_file()
+        if self.config.dodgy_accounts_csv:
+            self.create_genesis_accounts_file(bonds_amount=lambda i, n: n + 3 * i)
+        else:
+            self.create_genesis_accounts_file()
 
     # TODO: Should be changed to using validator-id from accounts
-    def create_genesis_accounts_file(self) -> None:
+    def create_genesis_accounts_file(self, bonds_amount=lambda i, n: n + 2 * i) -> None:
         N = self.NUMBER_OF_BONDS
         # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
         path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
@@ -276,7 +279,7 @@ class DockerNode(LoggingDockerBase):
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
             ):
-                bond = N + 2 * i
+                bond = bonds_amount(i, N)
                 f.write(f"{pair.public_key},0,{bond}\n")
 
     def cleanup(self):
