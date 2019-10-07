@@ -62,12 +62,17 @@ object Estimator {
                          // Try going backwards from this message and eliminate what we haven't so far.
                          DagOperations
                            .bfToposortTraverseF[F](List(latestMessageMeta)) { blockMeta =>
-                             blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
+                             // Follow all parents, except the ones we already eliminated,
+                             // since their ancestors have already been traversed.
+                             blockMeta.parents.toList
+                               .filterNot(eliminated)
+                               .traverse(dag.lookup)
+                               .map(_.flatten)
                            }
                            .foldWhileLeft(eliminated) {
                              case (eliminated, meta)
                                  if meta.messageHash == latestMessageMeta.messageHash =>
-                               // This is where we are staring from, so it it can stay.
+                               // This is where we are staring from, so it can stay.
                                Left(eliminated)
                              case (eliminated, meta) if meta.rank >= minRank =>
                                // Anything we traverse through is not a tip.
