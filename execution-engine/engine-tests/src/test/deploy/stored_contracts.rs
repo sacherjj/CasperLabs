@@ -5,7 +5,10 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::CONV_RATE;
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
+use std::convert::TryInto;
 
 use crate::support::test_support::{
     self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
@@ -68,9 +71,14 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes = test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes + transferred_amount) + modified_balance;
+    let success_result = test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let tally = motes.value() + U512::from(transferred_amount) + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -134,7 +142,10 @@ fn should_exec_stored_code_by_hash() {
         "stored_payment_contract_hash should exist"
     );
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -177,9 +188,15 @@ fn should_exec_stored_code_by_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -232,7 +249,10 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -276,9 +296,15 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -331,7 +357,10 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -372,9 +401,15 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -427,7 +462,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     // next store transfer contract
     let exec_request_store_transfer = {
@@ -456,7 +494,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -489,7 +530,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_charlie = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -498,7 +542,10 @@ fn should_exec_payment_and_session_stored_code() {
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
-    let tally = U512::from(motes_alpha + motes_bravo + motes_charlie + transferred_amount)
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + motes_charlie.value()
+        + U512::from(transferred_amount)
         + modified_balance;
 
     assert_eq!(
@@ -637,7 +684,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = 1_000_000_000;
+    let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
     let stored_transforms = {

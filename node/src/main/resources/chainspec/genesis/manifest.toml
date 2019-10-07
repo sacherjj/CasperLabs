@@ -10,7 +10,7 @@ name = "casperlabs-devnet"
 timestamp = 0
 
 # Later will be replaced by semver.
-protocol-version = 1
+protocol-version = "1.0.0"
 
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
 mint-code-path = "mint_install.wasm"

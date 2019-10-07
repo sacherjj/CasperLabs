@@ -35,7 +35,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
         .GenesisConfig()
         .withName("casperlabs")
         .withTimestamp(1234567890L)
-        .withProtocolVersion(state.ProtocolVersion(1L))
+        .withProtocolVersion(state.ProtocolVersion(1))
         .withAccounts(accounts map {
           case (key, balance, bond) =>
             ipc.ChainSpec
@@ -66,7 +66,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
         _ = genesis.getHeader.chainId shouldBe "casperlabs"
         _ = genesis.getHeader.timestamp shouldBe 1234567890L
-        _ = genesis.getHeader.protocolVersion shouldBe 1L
+        _ = genesis.getHeader.getProtocolVersion shouldBe state.ProtocolVersion(1)
         _ = genesis.getHeader.getState.bonds should have size 2
 
         stored <- blockStorage.get(genesis.blockHash)

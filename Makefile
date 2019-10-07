@@ -273,18 +273,17 @@ cargo-native-packager/%:
 		-v ${PWD}:/CasperLabs \
 		$(DOCKER_USERNAME)/buildenv:latest \
 		-c "\
-		apt-get install sudo ; \
 		useradd -u $(USERID) -m builder ; \
 		cp -r /root/. /home/builder/ ; \
 		chown -R builder /home/builder ; \
-		sudo -u builder bash -c '\
+		su -s /bin/bash -c '\
 			export HOME=/home/builder ; \
 			cd /CasperLabs/execution-engine ; \
 			make setup ; \
 			make setup-cargo-packagers ; \
 			make rpm ; \
 			make deb \
-		'"
+		' builder"
 	mkdir -p $(dir $@) && touch $@
 
 

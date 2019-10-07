@@ -1,9 +1,8 @@
-use std::fmt;
-use std::hash::{Hash, Hasher};
+use core::cmp::Ordering;
+use core::fmt;
+use core::hash::{Hash, Hasher};
 
-use serde::{Serialize, Serializer};
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, Ord)]
 pub struct SemVer {
     pub major: u32,
     pub minor: u32,
@@ -40,12 +39,20 @@ impl Hash for SemVer {
     }
 }
 
-impl Serialize for SemVer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let s = format!("{}.{}.{}", self.major, self.minor, self.patch);
-        serializer.serialize_str(&s)
+impl Default for SemVer {
+    fn default() -> Self {
+        Self::new(0, 0, 0)
+    }
+}
+
+impl PartialOrd for SemVer {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl PartialEq for SemVer {
+    fn eq(&self, other: &SemVer) -> bool {
+        self.major.eq(&other.major) && self.minor.eq(&other.minor) && self.patch.eq(&other.patch)
     }
 }

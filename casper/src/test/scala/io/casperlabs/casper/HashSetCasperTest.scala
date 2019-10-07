@@ -1235,7 +1235,7 @@ object HashSetCasperTest {
       .GenesisConfig()
       .withName("casperlabs")
       .withTimestamp(timestamp)
-      .withProtocolVersion(state.ProtocolVersion(1L))
+      .withProtocolVersion(state.ProtocolVersion(1))
       .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
         ipc.ChainSpec
           .GenesisAccount()
