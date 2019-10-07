@@ -7,10 +7,11 @@ import cats.implicits._
 import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
@@ -221,7 +222,12 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
     val rateLimitingGroupingKey =
       request.getSender.id.concat(request.blockHash)
     val limited: F[Iterant[F, Chunk]] =
-      rateLimiter.await(rateLimitingGroupingKey, streamBlock.pure[F])
+      rateLimiter.await(rateLimitingGroupingKey, streamBlock.pure[F]).onError {
+        case ResourceExhausted(_) =>
+          Log[F].warn(
+            s"getBlockChunked: Rate exceeded for peer: ${request.getSender.show} and block: ${hex(request.blockHash)}"
+          )
+      }
     Iterant.liftF(limited).flatMap(identity)
   }
 
