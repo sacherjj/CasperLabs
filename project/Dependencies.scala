@@ -5,12 +5,12 @@ object Dependencies {
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
   val circeVersion   = "0.11.1"
-  val http4sVersion  = "0.20.1"
+  val http4sVersion  = "0.20.11"
   val kamonVersion   = "1.1.3"
   val catsVersion    = "1.6.0"
   val catsMtlVersion = "0.5.0"
   val doobieVersion  = "0.7.0"
-  val fs2Version     = "1.0.4"
+  val fs2Version     = "1.0.5"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
@@ -33,11 +33,17 @@ object Dependencies {
   val sangria             = "org.sangria-graphql" %% "sangria"              % "1.4.2"
   val guava               = "com.google.guava"    % "guava"                 % "24.1.1-jre"
   val hasher              = "com.roundeights"     %% "hasher"               % "1.2.0"
-  val http4sBlazeServer   = "org.http4s"          %% "http4s-blaze-server"  % http4sVersion
-  val javaWebsocket       = "org.java-websocket"  % "Java-WebSocket"        % "1.4.0"
-  val http4sCirce         = "org.http4s"          %% "http4s-circe"         % http4sVersion
-  val http4sDSL           = "org.http4s"          %% "http4s-dsl"           % http4sVersion
-  val jaxb                = "javax.xml.bind"      % "jaxb-api"              % "2.3.1"
+  val http4sBlazeServer = ("org.http4s" %% "http4s-blaze-server" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+  val javaWebsocket = "org.java-websocket" % "Java-WebSocket" % "1.4.0"
+  val http4sCirce = ("org.http4s" %% "http4s-circe" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+  val http4sDSL = ("org.http4s" %% "http4s-dsl" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+  val jaxb = "javax.xml.bind" % "jaxb-api" % "2.3.1"
   val jline = ("org.scala-lang" % "jline" % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
   // see https://jitpack.io/#rchain/kalium
@@ -90,10 +96,13 @@ object Dependencies {
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
   val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
   val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
-  val doobieCore    = "org.tpolecat"      %% "doobie-core"   % doobieVersion
-  val doobieHikari  = "org.tpolecat"      %% "doobie-hikari" % doobieVersion
-  val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
-  val fs2           = "co.fs2"            %% "fs2-core"      % fs2Version
+  val doobieCore = ("org.tpolecat" %% "doobie-core" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
+  val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
+  val flyway     = "org.flywaydb" % "flyway-core" % "5.2.4"
+  val fs2        = "co.fs2"       %% "fs2-core"   % fs2Version
+  val upperbound = "org.systemfw" %% "upperbound" % "0.2.0"
 
   val overrides = Seq(
     catsCore,
@@ -113,10 +122,12 @@ object Dependencies {
     "com.thesamet.scalapb"     %% "scalapb-runtime"        % scalapb.compiler.Version.scalapbVersion
   )
 
-  private val kindProjector    = compilerPlugin("org.spire-math" %% "kind-projector"     % "0.9.8")
-  private val betterMonadicFor = compilerPlugin("com.olegpy"     %% "better-monadic-for" % "0.3.0")
+  private val kindProjector = compilerPlugin(
+    "org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full
+  )
+  private val betterMonadicFor = compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
   private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+    "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
@@ -143,8 +154,8 @@ object Dependencies {
 
   val commonDependencies: Seq[ModuleID] =
     Seq(
-      compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
-      "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
+      compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.4" cross CrossVersion.full),
+      "com.github.ghik" %% "silencer-lib" % "1.4.4" % Provided cross CrossVersion.full
     ) ++ logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
