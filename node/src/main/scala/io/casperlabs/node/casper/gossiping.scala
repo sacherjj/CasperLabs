@@ -170,9 +170,9 @@ package object gossiping {
                              }
 
       rateLimiter <- {
-        val elementsPerPeriod: Int = 0
-        val period                 = Duration.Zero
-        val queueSize: Int         = 0
+        val elementsPerPeriod: Int = conf.server.blockUploadRateMaxRequests
+        val period                 = conf.server.blockUploadRatePeriod
+        val queueSize: Int         = conf.server.blockUploadRateMaxThrottled
 
         if (elementsPerPeriod == 0 || period == Duration.Zero) {
           Resource.liftF {
