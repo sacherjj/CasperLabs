@@ -135,7 +135,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     Metrics[F].timer("eeCommit") {
-      sendMessage(CommitRequest(prestate, effects), _.commit) {
+      sendMessage(CommitRequest(prestate, effects, Some(protocolVersion)), _.commit) {
         _.result match {
           case CommitResponse.Result.Success(commitResult) =>
             Right(ExecutionEngineService.CommitResult(commitResult))
@@ -158,7 +158,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       path: Seq[String],
       protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Value]] =
-    sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
+    sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
         case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
