@@ -31,12 +31,12 @@ object GrpcCasperService {
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new CasperGrpcMonix.CasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
           }
 
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI
               .getBlockInfo[F](
                 request.blockHashBase16,
@@ -45,7 +45,7 @@ object GrpcCasperService {
           }
 
         override def streamBlockInfos(request: StreamBlockInfosRequest): Observable[BlockInfo] = {
-          val infos = TaskLike[F].toTask {
+          val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
               maxRank = request.maxRank,
@@ -56,7 +56,7 @@ object GrpcCasperService {
         }
 
         override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI
               .getDeployInfo[F](
                 request.deployHashBase16
@@ -73,7 +73,7 @@ object GrpcCasperService {
         override def streamBlockDeploys(
             request: StreamBlockDeploysRequest
         ): Observable[Block.ProcessedDeploy] = {
-          val deploys = TaskLike[F].toTask {
+          val deploys = TaskLike[F].apply {
             BlockAPI.getBlockDeploys[F](
               request.blockHashBase16
             ) map {
@@ -99,7 +99,7 @@ object GrpcCasperService {
 
         override def batchGetBlockState(
             request: BatchGetBlockStateRequest
-        ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
+        ): Task[BatchGetBlockStateResponse] = TaskLike[F].apply {
           for {
             info            <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
             stateHash       = info.getSummary.state.postStateHash

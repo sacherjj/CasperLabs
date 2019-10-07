@@ -8,7 +8,6 @@ import cats.implicits._
 import cats.effect.implicits._
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.temp.par._
 import com.google.common.cache.{Cache, CacheBuilder}
 import io.casperlabs.catscontrib._
 import Catscontrib._
@@ -24,7 +23,7 @@ import scala.util.Random
 object NodeDiscoveryImpl {
   type Millis = Long
 
-  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Par](
+  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Parallel](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
@@ -155,7 +154,7 @@ object NodeDiscoveryImpl {
 
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Par](
+private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Parallel](
     id: NodeIdentifier,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],

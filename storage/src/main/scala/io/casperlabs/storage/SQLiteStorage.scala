@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
-import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
@@ -14,6 +13,7 @@ import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
+import fs2._
 
 import scala.concurrent.duration.FiniteDuration
 

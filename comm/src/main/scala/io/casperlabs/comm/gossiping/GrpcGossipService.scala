@@ -48,7 +48,7 @@ object GrpcGossipService {
 
       /** Handle notification about some new blocks on the caller. */
       def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] =
-        verifySender(request.sender) >> TaskLike[F].toTask(service.newBlocks(request))
+        verifySender(request.sender) >> TaskLike[F].apply(service.newBlocks(request))
 
       def streamAncestorBlockSummaries(
           request: StreamAncestorBlockSummariesRequest
@@ -77,10 +77,10 @@ object GrpcGossipService {
           }
 
       def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
-        TaskLike[F].toTask(service.getGenesisCandidate(request))
+        TaskLike[F].apply(service.getGenesisCandidate(request))
 
       def addApproval(request: AddApprovalRequest): Task[Empty] =
-        TaskLike[F].toTask(service.addApproval(request).map(_ => Empty()))
+        TaskLike[F].apply(service.addApproval(request).map(_ => Empty()))
     }
 
   /** Create the internal interface from the Monix specific instance,

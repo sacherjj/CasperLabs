@@ -4,7 +4,6 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper._
@@ -127,7 +126,7 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[TestNode[F]]
@@ -143,7 +142,7 @@ trait HashSetCasperTestNodeFactory {
   ): TestNode[Task] =
     standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       Concurrent[Task],
-      Par[Task],
+      Parallel[Task],
       Timer[Task],
       ContextShift[Task]
     ).unsafeRunSync
@@ -158,7 +157,7 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[IndexedSeq[TestNode[F]]]
@@ -180,7 +179,7 @@ trait HashSetCasperTestNodeFactory {
       maybeMakeEE
     )(
       Concurrent[Task],
-      Par[Task],
+      Parallel[Task],
       Timer[Task],
       ContextShift[Task]
     )

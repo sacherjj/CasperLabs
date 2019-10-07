@@ -1,17 +1,18 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.implicits._
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+
 import scala.concurrent.duration._
 
-class StashingSynchronizer[F[_]: Concurrent: Par](
+class StashingSynchronizer[F[_]: Concurrent: Parallel](
     underlying: Synchronizer[F],
     stashedRequestsRef: Ref[F, StashingSynchronizer.Stash[F]],
     transitionedRef: Ref[F, Boolean],
@@ -67,7 +68,7 @@ object StashingSynchronizer {
   type SyncResult  = Either[SyncError, Vector[BlockSummary]]
   type Stash[F[_]] = Map[Node, (Deferred[F, Either[Throwable, SyncResult]], Set[ByteString])]
 
-  def wrap[F[_]: Concurrent: Par](
+  def wrap[F[_]: Concurrent: Parallel](
       underlying: Synchronizer[F],
       awaitApproved: F[Unit]
   ): F[Synchronizer[F]] =

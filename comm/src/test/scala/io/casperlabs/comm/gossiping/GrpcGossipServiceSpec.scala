@@ -258,7 +258,7 @@ class GrpcGossipServiceSpec
                 )
 
                 for {
-                  _ <- runParallelRequests.forkAndForget
+                  _ <- runParallelRequests.startAndForget
                   _ <- Task.sleep(sleepingTime)
                 } yield {
                   assert(errors.get() == 0)

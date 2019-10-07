@@ -1,10 +1,9 @@
 package io.casperlabs.comm.gossiping
 
-import cats.Applicative
+import cats.{Applicative, Parallel}
 import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
-import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -187,7 +186,7 @@ object RelayingSpec {
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(
         Concurrent[Task],
-        Par.fromParallel(CatsParallelForTask),
+        Parallel[Task],
         log,
         metrics,
         ask

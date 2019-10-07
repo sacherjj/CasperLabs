@@ -189,7 +189,7 @@ object DeploySelectionTest {
   }
 
   def toStreamChunked[F[_]: Sync, A](l: List[A], chunkSize: Int = 1): fs2.Stream[F, List[A]] =
-    fs2.Stream.fromIterator[F, A](l.toIterator).chunkLimit(chunkSize).map(_.toList)
+    fs2.Stream.fromIterator[F](l.toIterator).chunkLimit(chunkSize).map(_.toList)
 
   // We need common key to generate conflicts.
   private val key = Key(

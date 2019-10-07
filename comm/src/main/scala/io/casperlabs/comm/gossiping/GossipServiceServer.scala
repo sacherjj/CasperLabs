@@ -1,10 +1,10 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Parallel
 import cats.effect._
 import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
-import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted}
@@ -21,7 +21,7 @@ import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
-class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
+class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
@@ -290,7 +290,7 @@ object GossipServiceServer {
     def listTips: F[Seq[BlockSummary]]
   }
 
-  def apply[F[_]: Concurrent: Par: Log: Metrics](
+  def apply[F[_]: Concurrent: Parallel: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],

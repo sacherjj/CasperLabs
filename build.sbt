@@ -22,7 +22,7 @@ def protobufPathFilter(paths: String*) = { (f: File) =>
 
 lazy val projectSettings = Seq(
   organization := "io.casperlabs",
-  scalaVersion := "2.12.9",
+  scalaVersion := "2.12.10",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -84,11 +84,12 @@ lazy val shared = (project in file("shared"))
       sqlLite,
       fs2,
       catsCore,
-      catsPar,
       catsEffect,
       catsEffectLaws,
       catsMtl,
-      meowMtl,
+      meowMtlCore,
+      meowMtlEffects,
+      meowMtlMonix,
       lz4,
       monix,
       scodecCore,

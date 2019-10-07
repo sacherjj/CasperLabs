@@ -129,7 +129,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          fs2.Stream.fromIterator[Task, consensus.Deploy](deploy.toIterator),
+                          fs2.Stream.fromIterator[Task](deploy.toIterator),
                           blocktime,
                           protocolVersion
                         )
