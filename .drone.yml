@@ -40,14 +40,14 @@ steps:
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
 # our pipeline to fail.
- - name: markdown-link-check
-   commands:
-   - "ci/markdown-link-check.sh"
-   image: "casperlabs/buildenv:latest"
-   failure: ignore
-   when:
-     event:
-     - pull_request
+- name: markdown-link-check
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  failure: ignore
+  when:
+    event:
+    - pull_request
     changeset:
       includes:
       - "**/.drone.yml"
@@ -172,15 +172,15 @@ steps:
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
 # our pipeline to fail.
- - name: markdown-link-check-bors
-   commands:
-   - "ci/markdown-link-check.sh"
-   image: "casperlabs/buildenv:latest"
-   failure: ignore
-   when:
-     branch:
-     - staging
-     - trying
+- name: markdown-link-check-bors
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  failure: ignore
+  when:
+    branch:
+    - staging
+    - trying
     changeset:
       includes:
       - "**/.drone.yml"
