@@ -69,14 +69,14 @@ def nodes(docker_client_fixture):
 
 @pytest.mark.parametrize(
     "contract_paths, expected_number_of_blocks",
-    [([[Contract.HELLONAME], [Contract.HELLOWORLD]], 7)],
+    [([[Contract.HELLO_NAME_DEFINE], [Contract.HELLO_NAME_CALL]], 7)],
 )
 def test_block_propagation(
     nodes, contract_paths: List[List[str]], expected_number_of_blocks
 ):
     """
     Feature file: consensus.feature
-    Scenario: test_helloworld.wasm deploy and propose by all nodes and stored in all nodes blockstorages
+    Scenario: hello_name_call.wasm deploy and propose by all nodes and stored in all nodes blockstorages
     """
 
     account = nodes[0].genesis_account
@@ -142,7 +142,7 @@ def test_blocks_infect_network(not_all_connected_directly_nodes):
         not_all_connected_directly_nodes[-1],
     )
 
-    block_hash = deploy_and_propose(first, "test_helloname.wasm")
+    block_hash = deploy_and_propose(first, Contract.HELLO_NAME_DEFINE)
     wait_for_block_hash_propagated_to_all_nodes([last], block_hash)
 
 
@@ -161,7 +161,7 @@ def four_nodes_network(docker_client_fixture):
         yield network
 
 
-C = [Contract.HELLONAME, Contract.MAILINGLISTDEFINE, Contract.HELLOWORLD]
+C = [Contract.HELLO_NAME_DEFINE, Contract.MAILING_LIST_DEFINE, Contract.HELLO_NAME_CALL]
 
 
 def test_network_partition_and_rejoin(four_nodes_network):

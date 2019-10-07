@@ -1,11 +1,10 @@
 [package]
-name = "test-call-hello-name"
+name = "hello-name-call"
 version = "0.1.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_helloworld"
 crate-type = ["cdylib"]
 
 [dependencies]

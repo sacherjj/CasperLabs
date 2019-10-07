@@ -328,7 +328,7 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract: str = Contract.STANDARD_PAYMENT,
         payment_args: bytes = MAX_PAYMENT_ABI,
         gas_price: int = 1,

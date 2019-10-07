@@ -1,11 +1,10 @@
 [package]
-name = "test_args_multi"
+name = "args-u32"
 version = "0.1.0"
-authors = ["Joe Sacher <joe@casperlabs.io>"]
+authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_args_multi"
 crate-type = ["cdylib"]
 
 [features]
