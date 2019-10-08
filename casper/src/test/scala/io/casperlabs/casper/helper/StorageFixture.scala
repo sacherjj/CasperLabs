@@ -65,7 +65,7 @@ object StorageFixture {
           jdbcUrl,
           "",
           "",
-          ExecutionContexts.synchronous
+          Blocker.liftExecutionContext(ExecutionContexts.synchronous)
         )
 
     for {

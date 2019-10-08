@@ -80,7 +80,7 @@ package object implicits {
   }
 
   implicit def taskLiftEitherT[F[_]: TaskLift: Functor, E] = new TaskLift[EitherT[F, E, ?]] {
-    override def taskLift[A](task: Task[A]): EitherT[F, E, A] =
-      EitherT.liftF(TaskLift[F].taskLift(task))
+    override def apply[A](task: Task[A]): EitherT[F, E, A] =
+      EitherT.liftF[F, E, A](TaskLift[F].apply(task))
   }
 }

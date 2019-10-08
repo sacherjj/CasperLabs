@@ -1,10 +1,9 @@
 package io.casperlabs.comm.gossiping
 
-import cats.Monad
+import cats.{Monad, Parallel}
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
-import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -35,7 +34,7 @@ object RelayingImpl {
       _ <- Metrics[F].incrementCounter("relay_failed", 0)
     } yield ()
 
-  def apply[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
+  def apply[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
       nd: NodeDiscovery[F],
       connectToGossip: GossipService.Connector[F],
       relayFactor: Int,
@@ -54,7 +53,7 @@ object RelayingImpl {
 /**
   * https://techspec.casperlabs.io/technical-details/global-state/communications#picking-nodes-for-gossip
   */
-class RelayingImpl[F[_]: Concurrent: Par: Log: Metrics: NodeAsk](
+class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
     nd: NodeDiscovery[F],
     connectToGossip: Node => F[GossipService[F]],
     relayFactor: Int,

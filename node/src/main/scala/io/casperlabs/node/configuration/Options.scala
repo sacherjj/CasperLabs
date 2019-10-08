@@ -419,6 +419,24 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum number of peers allowed to connect to the node.")
 
     @scallop
+    val serverBlockUploadRateMaxRequests = gen[Int](
+      "Maximum number of block download requests per peer in period (see below), " +
+        "if 0 then rate limiting will be disabled."
+    )
+
+    @scallop
+    val serverBlockUploadRatePeriod = gen[FiniteDuration](
+      "Time window to apply rate limiting (see above), " +
+        "if 0 then rate limiting will be disabled."
+    )
+
+    @scallop
+    val serverBlockUploadRateMaxThrottled = gen[Int](
+      "Maximum number of in-flight throttled block download requests per peer, " +
+        "if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response."
+    )
+
+    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 

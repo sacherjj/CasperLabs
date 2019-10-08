@@ -1,8 +1,8 @@
 package io.casperlabs.comm.discovery
 
+import cats.Parallel
 import cats.effect._
 import cats.implicits._
-import cats.temp.par._
 import io.casperlabs.catscontrib.TaskContrib.ConcurrentOps
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
@@ -19,7 +19,7 @@ import monix.execution._
 
 import scala.concurrent.duration._
 
-class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: NodeAsk: Metrics: Par](
+class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: NodeAsk: Metrics: Parallel](
     port: Int,
     timeout: FiniteDuration,
     ingressScheduler: Scheduler,
@@ -141,13 +141,13 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
 
     def lookup(lookup: LookupRequest): Task[LookupResponse] = {
       val id = NodeIdentifier(lookup.id)
-      TaskLike[F].toTask(
+      TaskLike[F].apply(
         lookupHandler(lookup.sender.get, id)
           .map(peers => LookupResponse().withNodes(peers))
       )
     }
 
     def ping(ping: PingRequest): Task[PingResponse] =
-      TaskLike[F].toTask(pingHandler(ping.sender.get).as(PingResponse()))
+      TaskLike[F].apply(pingHandler(ping.sender.get).as(PingResponse()))
   }
 }

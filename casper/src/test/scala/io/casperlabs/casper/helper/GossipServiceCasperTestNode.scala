@@ -5,7 +5,6 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl.DefaultApplicativeAsk
-import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper
@@ -112,7 +111,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[GossipServiceCasperTestNode[F]] = {
@@ -171,7 +170,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[IndexedSeq[GossipServiceCasperTestNode[F]]] = {
@@ -270,7 +269,7 @@ object GossipServiceCasperTestNodeFactory {
     }
 
   /** Accumulate messages until receive is called by the test. */
-  class TestGossipService[F[_]: Concurrent: Timer: Time: Par: Log: Validation]()
+  class TestGossipService[F[_]: Concurrent: Timer: Time: Parallel: Log: Validation]()
       extends GossipService[F] {
 
     implicit val metrics  = new Metrics.MetricsNOP[F]

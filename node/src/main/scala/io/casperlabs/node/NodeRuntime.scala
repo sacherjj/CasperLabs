@@ -12,7 +12,6 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
-import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef

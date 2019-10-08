@@ -2,6 +2,7 @@ package io.casperlabs.storage
 
 import java.nio.file.{Files, Paths}
 
+import cats.effect.Blocker
 import doobie.util.ExecutionContexts
 import doobie.util.transactor.Transactor
 import io.casperlabs.metrics.Metrics
@@ -21,14 +22,13 @@ trait SQLiteFixture[A] extends BeforeAndAfterEach with BeforeAndAfterAll { self:
   def db: String
   def createTestResource: Task[A]
 
-  protected implicit val xa: Transactor[Task] = Transactor
-    .fromDriverManager[Task](
-      "org.sqlite.JDBC",
-      s"jdbc:sqlite:$db",
-      "",
-      "",
-      ExecutionContexts.synchronous
-    )
+  protected implicit val xa: Transactor[Task] = Transactor.fromDriverManager[Task](
+    "org.sqlite.JDBC",
+    s"jdbc:sqlite:$db",
+    "",
+    "",
+    Blocker.liftExecutionContext(ExecutionContexts.synchronous)
+  )
   protected implicit val metricsNOP: Metrics[Task] = new MetricsNOP[Task]
   protected implicit val time: Time[Task] = new Time[Task] {
     override def currentMillis: Task[Long] = Task(System.currentTimeMillis())

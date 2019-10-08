@@ -3,9 +3,9 @@ package io.casperlabs.client
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
+import cats.Parallel
 import cats.effect.{Sync, Timer}
 import cats.implicits._
-import cats.temp.par._
 import com.google.protobuf.ByteString
 import io.casperlabs.client.configuration._
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -14,6 +14,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
+
 import scala.concurrent.duration._
 
 object Main {
@@ -42,7 +43,7 @@ object Main {
     exec.runSyncUnsafe()
   }
 
-  def program[F[_]: Sync: DeployService: Timer: FilesAPI: Log: Par](
+  def program[F[_]: Sync: DeployService: Timer: FilesAPI: Log: Parallel](
       configuration: Configuration
   ): F[Unit] =
     configuration match {

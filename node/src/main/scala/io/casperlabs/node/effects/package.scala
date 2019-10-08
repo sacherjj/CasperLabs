@@ -100,7 +100,7 @@ package object effects {
       .fromHikariConfig[Task](
         config,
         connectEC,
-        transactEC
+        Blocker.liftExecutionContext(transactEC)
       )
       .map { xa =>
         // Foreign keys support must be enabled explicitly in SQLite

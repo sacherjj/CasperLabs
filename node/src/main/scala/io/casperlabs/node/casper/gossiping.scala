@@ -7,7 +7,6 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.temp.par.Par
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -52,7 +51,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Par: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
       port: Int,
       conf: Configuration,
       ingressScheduler: Scheduler,
@@ -169,6 +168,31 @@ package object gossiping {
                                StashingSynchronizer.wrap(synchronizer, awaitApproval.join)
                              }
 
+      rateLimiter <- {
+        val elementsPerPeriod: Int = conf.server.blockUploadRateMaxRequests
+        val period                 = conf.server.blockUploadRatePeriod
+        val queueSize: Int         = conf.server.blockUploadRateMaxThrottled
+
+        if (elementsPerPeriod == 0 || period == Duration.Zero) {
+          Resource.liftF {
+            for {
+              _ <- Log[F].info("Disable rate limiting")
+            } yield RateLimiter.noOp[F, ByteString]
+          }
+        } else {
+          Resource.liftF[F, Unit](
+            Log[F].info(s"Rate limiting enabled: $elementsPerPeriod requests every $period")
+          ) >>
+            RateLimiter.create[F, ByteString](
+              elementsPerPeriod = elementsPerPeriod,
+              period = period,
+              maxQueueSize =
+                if (queueSize == 0) Int.MaxValue
+                else queueSize
+            )
+        }
+      }
+
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
                               stashingSynchronizer,
@@ -178,6 +202,7 @@ package object gossiping {
 
       _ <- startGrpcServer(
             gossipServiceServer,
+            rateLimiter,
             serverSslContext,
             conf,
             port,
@@ -351,7 +376,7 @@ package object gossiping {
       } yield s.copy(connections = s.connections - peer)
     }
 
-  def makeRelaying[F[_]: Concurrent: Par: Log: Metrics: NodeDiscovery: NodeAsk](
+  def makeRelaying[F[_]: Concurrent: Parallel: Log: Metrics: NodeDiscovery: NodeAsk](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F]
   ): Resource[F, Relaying[F]] =
@@ -551,7 +576,7 @@ package object gossiping {
                  )
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Par: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
+  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       isInitialRef: Ref[F, Boolean],
@@ -596,7 +621,7 @@ package object gossiping {
   }
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: Concurrent: Par: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
+  def makeGossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -642,7 +667,7 @@ package object gossiping {
     } yield server
 
   /** Initially sync with the bootstrap node and/or some others. */
-  private def makeInitialSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+  private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
@@ -674,7 +699,7 @@ package object gossiping {
     } yield ()
 
   /** Periodically sync with a random node. */
-  private def makePeriodicSynchronizer[F[_]: Concurrent: Par: Log: Timer: NodeDiscovery](
+  private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
@@ -749,6 +774,7 @@ package object gossiping {
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
+      rateLimiter: RateLimiter[F, ByteString],
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,
@@ -763,6 +789,7 @@ package object gossiping {
           Sync[F].delay {
             val svc = GrpcGossipService.fromGossipService(
               server,
+              rateLimiter,
               blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
             )
             GossipingGrpcMonix.bindService(svc, scheduler)

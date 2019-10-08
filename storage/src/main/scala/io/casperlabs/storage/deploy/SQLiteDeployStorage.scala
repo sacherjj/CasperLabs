@@ -287,7 +287,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
     NonEmptyList
       .fromList[ByteString](l.toList)
-      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
+      .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
         q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
       })
