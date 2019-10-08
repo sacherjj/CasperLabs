@@ -232,7 +232,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         blockHashes <- deployHashes
                         .traverse { deployHash =>
                           BlockStorage[F]
-                            .findBlockHashesWithDeployhash(deployHash)
+                            .findBlockHashesWithDeployHash(deployHash)
                         }
                         .map(_.flatten.distinct)
 

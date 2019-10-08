@@ -31,20 +31,26 @@ final case class ExecutionSuccessful(deploy: Deploy, effects: ipc.ExecutionEffec
 
 object ProcessedDeployResult {
   def apply(deploy: Deploy, result: ipc.DeployResult): ProcessedDeployResult =
+    // XXX: EE reports costs in BigInt but we turn them to Long. Unlikely to hit limits.
     result match {
       case ipc.DeployResult(ipc.DeployResult.Value.PreconditionFailure(value)) =>
         PreconditionFailure(deploy, value.message)
       case ipc.DeployResult(ipc.DeployResult.Value.ExecutionResult(exec_result)) =>
         exec_result match {
           case ipc.DeployResult.ExecutionResult(Some(effects), Some(error), cost) =>
-            ExecutionError(deploy, error, effects, cost)
+            ExecutionError(deploy, error, effects, cost.fold(0L)(_.value.toLong))
           case ipc.DeployResult.ExecutionResult(None, Some(error), cost) =>
             // Execution error without effects.
             // Once we add payment code execution this will never happen as every
             // correct deploy will at least have effects in the form of payment transfer.
-            ExecutionError(deploy, error, ipc.ExecutionEffect.defaultInstance, cost)
+            ExecutionError(
+              deploy,
+              error,
+              ipc.ExecutionEffect.defaultInstance,
+              cost.fold(0L)(_.value.toLong)
+            )
           case ipc.DeployResult.ExecutionResult(Some(effects), None, cost) =>
-            ExecutionSuccessful(deploy, effects, cost)
+            ExecutionSuccessful(deploy, effects, cost.fold(0L)(_.value.toLong))
           case ipc.DeployResult.ExecutionResult(None, None, _) => ???
         }
       case ipc.DeployResult(ipc.DeployResult.Value.Empty) => ???

@@ -359,7 +359,7 @@ fn make_purse_id() -> PurseId {
 
 fn make_contract() -> Contract {
     let named_keys = make_named_keys();
-    Contract::new(vec![0u8; 1024], named_keys, ProtocolVersion::new(1))
+    Contract::new(vec![0u8; 1024], named_keys, ProtocolVersion::V1_0_0)
 }
 
 fn make_account() -> Account {

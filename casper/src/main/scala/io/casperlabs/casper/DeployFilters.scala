@@ -76,7 +76,7 @@ object DeployFilters {
       deployHashToBlocksMap <- deployHashes
                                 .traverse { deployHash =>
                                   BlockStorage[F]
-                                    .findBlockHashesWithDeployhash(deployHash)
+                                    .findBlockHashesWithDeployHash(deployHash)
                                     .map(deployHash -> _)
                                 }
                                 .map(_.toMap)

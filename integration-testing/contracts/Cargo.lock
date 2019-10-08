@@ -79,6 +79,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-named-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -229,6 +236,13 @@ dependencies = [
 name = "opaque-debug"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "payment-from-named-purse"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.16.0",
+]
 
 [[package]]
 name = "payment-purse"

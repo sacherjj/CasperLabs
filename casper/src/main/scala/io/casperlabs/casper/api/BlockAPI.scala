@@ -140,7 +140,7 @@ object BlockAPI {
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
 
-      BlockStorage[F].findBlockHashesWithDeployhash(deployHash) flatMap {
+      BlockStorage[F].findBlockHashesWithDeployHash(deployHash) flatMap {
         case blockHashes if blockHashes.nonEmpty =>
           for {
             blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))

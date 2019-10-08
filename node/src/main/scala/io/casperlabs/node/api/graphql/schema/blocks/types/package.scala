@@ -7,11 +7,12 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.{Base16, Base64}
+import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.node.api.graphql.schema.utils.DateType
 import sangria.schema._
 
 package object types {
+
   val SignatureType = ObjectType(
     "Signature",
     "Signature used to sign Block or Deploy",
@@ -153,9 +154,9 @@ package object types {
       ),
       Field(
         "protocolVersion",
-        LongType,
+        ProtocolVersionType,
         "Protocol version of CasperLabs blockchain".some,
-        resolve = c => c.value._1.getSummary.protocolVersion
+        resolve = c => c.value._1.getSummary.getHeader.getProtocolVersion
       ),
       Field(
         "deployCount",

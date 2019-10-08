@@ -1,14 +1,15 @@
 use num_traits::Zero;
+use std::collections::HashMap;
 
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 
-use crate::support::test_support::{self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR};
-use std::collections::HashMap;
 
+const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
@@ -39,15 +40,12 @@ fn should_return_bonded_validators() {
 
     let genesis_config = test_support::create_genesis_config(accounts.clone());
 
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
+
     let actual = InMemoryWasmTestBuilder::default()
         .run_genesis(&genesis_config)
-        .exec(
-            DEFAULT_ACCOUNT_ADDR,
-            "local_state.wasm",
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
-        .expect_success()
+        .exec(exec_request)
         .commit()
         .get_bonded_validators()[0]
         .clone();

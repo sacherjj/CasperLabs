@@ -1,35 +1,28 @@
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
-
-use crate::support::test_support::{
-    WasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+const CONTRACT_MINT_PURSE: &str = "mint_purse.wasm";
+const CONTRACT_TRANSFER_TO_ACCOUNT_01: &str = "transfer_to_account_01.wasm";
 const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 
 #[ignore]
 #[test]
 fn should_run_mint_purse_contract() {
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_TO_ACCOUNT_01,
+        (SYSTEM_ADDR,),
+    )
+    .build();
+    let exec_request_2 =
+        ExecuteRequestBuilder::standard(SYSTEM_ADDR, CONTRACT_MINT_PURSE, ()).build();
+
     WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_to_account_01.wasm",
-            (SYSTEM_ADDR,),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .commit()
         .expect_success()
-        .exec(
-            SYSTEM_ADDR,
-            "mint_purse.wasm",
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .commit()
         .expect_success();
 }
@@ -37,14 +30,12 @@ fn should_run_mint_purse_contract() {
 #[ignore]
 #[test]
 fn should_not_allow_non_system_accounts_to_mint() {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_MINT_PURSE, ()).build();
+
     assert!(WasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(
-            DEFAULT_ACCOUNT_ADDR,
-            "mint_purse.wasm",
-            DEFAULT_BLOCK_TIME,
-            [3u8; 32]
-        )
+        .exec(exec_request)
         .commit()
         .is_error());
 }

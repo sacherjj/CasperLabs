@@ -1,54 +1,46 @@
 use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_GET_CALLER: &str = "get_caller.wasm";
+const CONTRACT_GET_CALLER_SUBCALL: &str = "get_caller_subcall.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
-const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT;
 
 #[ignore]
 #[test]
 fn should_run_get_caller_contract() {
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GET_CALLER,
+        (PublicKey::new(DEFAULT_ACCOUNT_ADDR),),
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "get_caller.wasm",
-            (PublicKey::new(DEFAULT_ACCOUNT_ADDR),),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .commit()
         .expect_success();
 
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *DEFAULT_PAYMENT),
+    )
+    .build();
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_GET_CALLER,
+        (PublicKey::new(ACCOUNT_1_ADDR),),
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .commit()
         .expect_success()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "get_caller.wasm",
-            (PublicKey::new(ACCOUNT_1_ADDR),),
-            DEFAULT_BLOCK_TIME,
-            [3u8; 32],
-        )
+        .exec(exec_request_3)
         .commit()
         .expect_success();
 }
@@ -56,42 +48,36 @@ fn should_run_get_caller_contract() {
 #[ignore]
 #[test]
 fn should_run_get_caller_subcall_contract() {
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GET_CALLER_SUBCALL,
+        (PublicKey::new(DEFAULT_ACCOUNT_ADDR),),
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "get_caller_subcall.wasm",
-            (PublicKey::new(DEFAULT_ACCOUNT_ADDR),),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .commit()
         .expect_success();
 
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *DEFAULT_PAYMENT),
+    )
+    .build();
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_GET_CALLER_SUBCALL,
+        (PublicKey::new(ACCOUNT_1_ADDR),),
+    )
+    .build();
     InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .commit()
         .expect_success()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "get_caller_subcall.wasm",
-            (PublicKey::new(ACCOUNT_1_ADDR),),
-            DEFAULT_BLOCK_TIME,
-            [3u8; 32],
-        )
+        .exec(exec_request_3)
         .commit()
         .expect_success();
 }

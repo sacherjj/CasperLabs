@@ -3,6 +3,7 @@ package io.casperlabs.models
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
@@ -17,7 +18,7 @@ object BlockImplicits {
     def state: GlobalState                 = block.getHeader.getState
     def bodyHash: ByteString               = block.getHeader.bodyHash
     def timestamp: Long                    = block.getHeader.timestamp
-    def protocolVersion: Long              = block.getHeader.protocolVersion
+    def protocolVersion: ProtocolVersion   = block.getHeader.getProtocolVersion
     def deployCount: Int                   = block.getHeader.deployCount
     def chainId: String                    = block.getHeader.chainId
     def validatorBlockSeqNum: Int          = block.getHeader.validatorBlockSeqNum
@@ -38,7 +39,7 @@ object BlockImplicits {
     def state: GlobalState                 = summary.getHeader.getState
     def bodyHash: ByteString               = summary.getHeader.bodyHash
     def timestamp: Long                    = summary.getHeader.timestamp
-    def protocolVersion: Long              = summary.getHeader.protocolVersion
+    def protocolVersion: ProtocolVersion   = summary.getHeader.getProtocolVersion
     def deployCount: Int                   = summary.getHeader.deployCount
     def chainId: String                    = summary.getHeader.chainId
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum

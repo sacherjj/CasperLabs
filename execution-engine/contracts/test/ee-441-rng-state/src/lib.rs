@@ -37,9 +37,10 @@ pub extern "C" fn call() {
         Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
         None => contract_api::revert(Error::MissingArgument.into()),
     };
-    let do_nothing: ContractPointer = contract_api::store_function("do_nothing", BTreeMap::new());
+    let do_nothing: ContractPointer =
+        contract_api::store_function_at_hash("do_nothing", BTreeMap::new());
     let do_something: ContractPointer =
-        contract_api::store_function("do_something", BTreeMap::new());
+        contract_api::store_function_at_hash("do_something", BTreeMap::new());
     if flag == "pass1" {
         // Two calls should forward the internal RNG. This pass is a baseline.
         let uref1: URef = new_turef(U512::from(0)).into();

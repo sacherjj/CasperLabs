@@ -152,9 +152,9 @@ trait BlockGenerator {
           postState,
           rank,
           validatorSeqNum,
-          protocolVersion = 1,
-          now,
-          chainId
+          protocolVersion = ProtocolVersion(1),
+          timestamp = now,
+          chainId = chainId
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)

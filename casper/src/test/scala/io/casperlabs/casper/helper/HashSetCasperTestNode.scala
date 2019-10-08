@@ -256,7 +256,10 @@ object HashSetCasperTestNode {
           .map(
             effect =>
               DeployResult(
-                ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+                ExecutionResult(
+                  ipc.DeployResult
+                    .ExecutionResult(Some(effect), None, Some(state.BigInt("10", bitWidth = 512)))
+                )
               )
           )
           .asRight[Throwable]

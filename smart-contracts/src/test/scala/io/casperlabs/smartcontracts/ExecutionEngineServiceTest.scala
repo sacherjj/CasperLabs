@@ -30,7 +30,7 @@ class ExecutionEngineServiceTest
   ) {
     case (deployItems, msgSize) =>
       val baseRequest =
-        ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1L)))
+        ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1)))
       val batches =
         ExecutionEngineService.batchDeploysBySize(baseRequest, msgSize)(deployItems)
       batches.flatMap(_.deploys) should contain theSameElementsInOrderAs deployItems

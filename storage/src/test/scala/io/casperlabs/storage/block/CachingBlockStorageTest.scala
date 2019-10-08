@@ -236,8 +236,8 @@ object CachingBlockStorageTest {
       override def getSummaryByPrefix(blockHashPrefix: String): Task[Option[BlockSummary]] =
         underlyingBlockStorage.getSummaryByPrefix(blockHashPrefix)
 
-      override def findBlockHashesWithDeployhash(deployHash: BlockHash): Task[Seq[BlockHash]] =
-        underlyingBlockStorage.findBlockHashesWithDeployhash(deployHash)
+      override def findBlockHashesWithDeployHash(deployHash: BlockHash): Task[Seq[BlockHash]] =
+        underlyingBlockStorage.findBlockHashesWithDeployHash(deployHash)
 
       override def checkpoint(): Task[Unit] = ???
 

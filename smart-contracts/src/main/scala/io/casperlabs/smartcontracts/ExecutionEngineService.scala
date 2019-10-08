@@ -105,8 +105,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       _ <- result.fold(
             _ => ().pure[F],
             deployResults => {
+              // XXX: EE returns cost as BigInt but metrics are in Long. In practice it will be unlikely exhaust the limits of Long.
               val gasSpent =
-                deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
+                deployResults.foldLeft(0L)(
+                  (a, d) => a + d.value.executionResult.fold(0L)(_.cost.fold(0L)(_.value.toLong))
+                )
               Metrics[F].incrementCounter("gas_spent", gasSpent)
             }
           )
@@ -174,6 +177,7 @@ object ExecutionEngineService {
 
   object CommitResult {
     def apply(ipcCommitResult: io.casperlabs.ipc.CommitResult): CommitResult = {
+      // XXX: EE returns bonds as BigInt but we treat it as Long.
       val validators = ipcCommitResult.bondedValidators.map(
         b => Bond(b.validatorPublicKey, b.getStake.value.toLong)
       )
