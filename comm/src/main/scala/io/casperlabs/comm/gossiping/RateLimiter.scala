@@ -61,40 +61,40 @@ object RateLimiter {
     require(period > Duration.Zero)
     require(maxQueueSize > 0)
 
-    val createRateLimiter = for {
+    val createRateLimiter = Semaphore[F](1L).map { lock =>
       // To group limiters and their finalizers by instances of B
-      limitersRef <- Ref.of[F, Map[B, (Limiter[F], Finalizer[F])]](Map.empty)
-    } yield Resource.make[F, RateLimiter[F, B]](acquire = Sync[F].delay {
-      new RateLimiter[F, B] {
-        override def await[A](b: B, fa: F[A], priority: Int = 0): F[A] =
-          for {
-            implicit0(limiter: Limiter[F]) <- getOrCreateLimiter(b)
-            a <- Limiter.await(fa, priority).adaptError {
-                  case _: LimitReachedException => ResourceExhausted("Rate exceeded")
-                }
-          } yield a
+      val limiters =
+        scala.collection.mutable.Map.empty[B, (Limiter[F], Finalizer[F])]
+      Resource.make[F, RateLimiter[F, B]](acquire = Sync[F].delay {
+        new RateLimiter[F, B] {
+          override def await[A](b: B, fa: F[A], priority: Int): F[A] = getOrCreateLimiter(b) >>= {
+            implicit limiter =>
+              Limiter.await(fa, priority).adaptError {
+                case _: LimitReachedException => ResourceExhausted("Rate exceeded")
+              }
+          }
 
-        private def getOrCreateLimiter(b: B): F[Limiter[F]] =
-          for {
-            (snapshot, updater) <- limitersRef.access
-            (limiter, finalizer) <- snapshot
-                                     .get(b)
-                                     .fold(
-                                       Limiter
-                                         .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
-                                         .allocated
-                                     )(pair => pair.pure[F])
-            success <- updater(snapshot + (b -> (limiter -> finalizer)))
-            l       <- if (success) limiter.pure[F] else getOrCreateLimiter(b)
-          } yield l
-      }
-    })(
-      release = _ =>
-        for {
-          finalizers <- limitersRef.get.map(_.values.map(_._2).toList)
-          _          <- finalizers.traverse(_.attempt.void)
-        } yield ()
-    )
+          private def getOrCreateLimiter(b: B): F[Limiter[F]] = lock.withPermit {
+            limiters
+              .get(b)
+              .fold(
+                Limiter
+                  .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
+                  .allocated
+              )(pair => pair.pure[F]) map {
+              case (limiter, finalizer) =>
+                limiters += (b -> (limiter -> finalizer))
+                limiter
+            }
+          }
+        }
+      })(
+        release = _ =>
+          lock.withPermit {
+            limiters.values.map(_._2).toList.traverse(_.attempt.void).void
+          }
+      )
+    }
     Resource.liftF(createRateLimiter).flatten
   }
 
