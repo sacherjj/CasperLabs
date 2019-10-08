@@ -61,6 +61,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainId: String,
+    upgrades: Seq[ipc.ChainSpec.UpgradePoint],
     blockProcessingLock: Semaphore[F],
     val faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
@@ -498,7 +499,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                        merged,
                        deployStream,
                        timestamp,
-                       protocolVersion
+                       protocolVersion,
+                       rank,
+                       upgrades
                      )
       } yield {
         if (checkpoint.deploysForBlock.isEmpty) {
@@ -637,6 +640,7 @@ object MultiParentCasperImpl {
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       chainId: String,
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
@@ -648,6 +652,7 @@ object MultiParentCasperImpl {
           validatorId,
           genesis,
           chainId,
+          upgrades,
           blockProcessingLock,
           faultToleranceThreshold
         )
@@ -656,7 +661,8 @@ object MultiParentCasperImpl {
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-      chainId: String
+      chainId: String,
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
     //TODO pull out
     implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
@@ -696,7 +702,7 @@ object MultiParentCasperImpl {
                        .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
-          preStateHash <- ExecEngineUtil.computePrestate[F](merged)
+          preStateHash <- ExecEngineUtil.computePrestate[F](merged, block.getHeader.rank, upgrades)
           _            <- Log[F].debug(s"Computing the effects for $hashPrefix")
           blockEffects <- ExecEngineUtil
                            .effectsForBlock[F](block, preStateHash)
@@ -863,11 +869,12 @@ object MultiParentCasperImpl {
     }
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-        chainId: String
+        chainId: String,
+        upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
       for {
         _ <- establishMetrics[F]
-      } yield new StatelessExecutor[F](chainId)
+      } yield new StatelessExecutor[F](chainId, upgrades)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
