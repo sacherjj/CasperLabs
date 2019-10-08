@@ -34,10 +34,15 @@ import io.casperlabs.ipc.ChainSpec.GenesisConfig
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
-  def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
-  def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
+  def query(
+      state: ByteString,
+      baseKey: Key,
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, Value]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
@@ -129,10 +134,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
 
   override def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
     Metrics[F].timer("eeCommit") {
-      sendMessage(CommitRequest(prestate, effects), _.commit) {
+      sendMessage(CommitRequest(prestate, effects, Some(protocolVersion)), _.commit) {
         _.result match {
           case CommitResponse.Result.Success(commitResult) =>
             Right(ExecutionEngineService.CommitResult(commitResult))
@@ -152,29 +158,16 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def query(
       state: ByteString,
       baseKey: Key,
-      path: Seq[String]
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Value]] =
-    sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
+    sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
         case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-
-  override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-    stub.validate(contracts).to[F] >>= (
-      _.result match {
-        case ValidateResponse.Result.Empty =>
-          Sync[F].raiseError(
-            new IllegalStateException("Execution Engine service has sent a corrupted reply")
-          )
-        case ValidateResponse.Result.Success(_) =>
-          ().asRight[String].pure[F]
-        case ValidateResponse.Result.Failure(cause: String) =>
-          cause.asLeft[Unit].pure[F]
-      }
-    )
 }
 
 object ExecutionEngineService {

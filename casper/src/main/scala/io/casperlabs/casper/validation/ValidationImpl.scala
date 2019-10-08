@@ -649,7 +649,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         possibleCommitResult <- ExecutionEngineService[F].commit(
                                  preStateHash,
-                                 effects
+                                 effects,
+                                 block.getHeader.getProtocolVersion
                                )
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possibleCommitResult match {

@@ -52,7 +52,9 @@ object ExecEngineUtil {
       (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
       _                               <- handleInvalidDeploys[F](invalidDeploys)
       (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                    <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      commitResult <- ExecutionEngineService[F]
+                       .commit(preStateHash, transforms.flatten, protocolVersion)
+                       .rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -221,10 +223,11 @@ object ExecEngineUtil {
     case MergeResult.Result(soleParent, _, others) if others.isEmpty =>
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
-      val prestate = ProtoUtil.postStateHash(initParent)
+      val prestate        = ProtoUtil.postStateHash(initParent)
+      val protocolVersion = initParent.getHeader.getProtocolVersion
       MonadError[F, Throwable]
         .rethrow(
-          ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
+          ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect, protocolVersion)
         )
         .map(_.postStateHash)
   }

@@ -16,6 +16,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorageReader
 import sangria.schema._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
 
@@ -81,11 +82,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val blockHashBase16Prefix = c.arg(blocks.arguments.BlockHashPrefix)
 
               val program = for {
-                maybePostStateHash <- BlockAPI
-                                       .getBlockInfoOpt[F](blockHashBase16Prefix)
-                                       .map(_.map(_._1.getSummary.state.postStateHash))
-                values <- maybePostStateHash.fold(List.empty[Option[state.Value]].pure[F]) {
-                           stateHash =>
+                maybeBlockProps <- BlockAPI
+                                    .getBlockInfoOpt[F](blockHashBase16Prefix)
+                                    .map(_.map {
+                                      case (info, _) =>
+                                        info.getSummary.getHeader.getState.postStateHash ->
+                                          info.getSummary.getHeader.getProtocolVersion
+                                    })
+                values <- maybeBlockProps.fold(List.empty[Option[state.Value]].pure[F]) {
+                           case (stateHash, protocolVersion) =>
                              for {
 
                                values <- queries.toList.traverse {
@@ -99,7 +104,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                                    .query(
                                                                      stateHash,
                                                                      key,
-                                                                     query.pathSegments
+                                                                     query.pathSegments,
+                                                                     protocolVersion
                                                                    )
                                               value <- MonadThrowable[F]
                                                         .fromEither(possibleResponse)

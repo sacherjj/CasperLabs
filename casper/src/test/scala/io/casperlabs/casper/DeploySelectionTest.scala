@@ -321,7 +321,6 @@ object DeploySelectionTest {
     (_) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
-    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]],
-    _ => raiseNotImplemented[F, Either[String, Unit]]
+    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]]
   )
 }
