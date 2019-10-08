@@ -216,7 +216,9 @@ def test_get_caller(one_node_network, define_contract, call_contract):
     deploy_and_propose_expect_no_errors(node, call_contract)
 
 
-@pytest.mark.parametrize("wasm", [Contract.HELLO_NAME_DEFINE, "old_wasm/test_helloname.wasm"])
+@pytest.mark.parametrize(
+    "wasm", [Contract.HELLO_NAME_DEFINE, "old_wasm/test_helloname.wasm"]
+)
 def test_multiple_propose(one_node_network, wasm):
     """
     Feature file: propose.feature
@@ -301,9 +303,7 @@ def test_query_state_error(node, client, block_hash, query, expected):
 
 def test_revert_subcall(client, node):
     # This contract calls another contract that calls revert(2)
-    block_hash = deploy_and_propose_from_genesis(
-        node, Contract.SUBCALL_REVERT_DEFINE
-    )
+    block_hash = deploy_and_propose_from_genesis(node, Contract.SUBCALL_REVERT_DEFINE)
 
     r = client.show_deploys(block_hash)[0]
     assert not r.is_error

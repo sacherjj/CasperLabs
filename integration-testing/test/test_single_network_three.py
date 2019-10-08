@@ -71,7 +71,12 @@ test_parameters = [
         "counter/count",
         lambda r: r.int_value == next(expected_counter_result),
     ),
-    (Contract.HELLO_NAME_CALL, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
+    (
+        Contract.HELLO_NAME_CALL,
+        0,
+        "helloworld",
+        lambda r: r.string_value == "Hello, World",
+    ),
 ]
 
 

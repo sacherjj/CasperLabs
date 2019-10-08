@@ -28,7 +28,9 @@ def ignore_test_persistent_dag_storage(two_node_network):
 
     wait_for_connected_to_node(node0, node1.name, timeout, 2)
 
-    hash_string = node0.d_client.deploy_and_propose(session_contract=Contract.HELLO_NAME_DEFINE)
+    hash_string = node0.d_client.deploy_and_propose(
+        session_contract=Contract.HELLO_NAME_DEFINE
+    )
 
     wait_for_sending_approved_block_request(node0, node1.name, timeout)
     wait_for_received_approved_block_request(node0, node1.name, timeout)
