@@ -72,7 +72,7 @@ class DockerNode(LoggingDockerBase):
 
             self.proxy_server = grpc_proxy.proxy_server(
                 self,
-                node_port=self.GRPC_SERVER_PORT + 10000,
+                node_port=self.grpc_server_docker_port,
                 node_host=self.node_host,
                 proxy_port=self.server_proxy_port,
                 server_certificate_file=server_certificate_path,
@@ -82,7 +82,7 @@ class DockerNode(LoggingDockerBase):
             )
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
                 self,
-                node_port=self.KADEMLIA_PORT + 10000,
+                node_port=self.kademlia_docker_port,
                 node_host=self.node_host,
                 proxy_port=self.kademlia_proxy_port,
             )
@@ -105,11 +105,13 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def server_proxy_port(self) -> int:
-        return self.GRPC_SERVER_PORT + self.config.number * 100
+        return (
+            self.GRPC_SERVER_PORT + self.config.number * 100 + self.docker_port_offset
+        )
 
     @property
     def kademlia_proxy_port(self) -> int:
-        return self.KADEMLIA_PORT + self.config.number * 100
+        return self.KADEMLIA_PORT + self.config.number * 100 + self.docker_port_offset
 
     @property
     def docker_port_offset(self) -> int:
@@ -481,16 +483,8 @@ class DockerNode(LoggingDockerBase):
     @property
     def address(self) -> str:
         if self.config.behind_proxy:
-            protocol_port = (
-                os.environ.get("TAG_NAME")
-                and self.server_proxy_port
-                or self.grpc_server_docker_port
-            )
-            discovery_port = (
-                os.environ.get("TAG_NAME")
-                and self.kademlia_proxy_port
-                or self.kademlia_docker_port
-            )
+            protocol_port = self.server_proxy_port
+            discovery_port = self.kademlia_proxy_port
             addr = f"casperlabs://{self.node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
