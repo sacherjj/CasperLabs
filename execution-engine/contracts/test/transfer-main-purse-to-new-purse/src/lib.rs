@@ -13,22 +13,20 @@ use contract_ffi::value::U512;
 pub extern "C" fn call() {
     let amount: U512 = match contract_api::get_arg(1) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     let destination_name: String = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
 
     let source: PurseId = contract_api::main_purse();
     let destination = contract_api::create_purse();
-    if contract_api::transfer_from_purse_to_purse(source, destination, amount)
-        == contract_api::PurseTransferResult::TransferError
-    {
-        contract_api::revert(Error::Transfer.into());
+    if contract_api::transfer_from_purse_to_purse(source, destination, amount).is_err() {
+        contract_api::revert(Error::Transfer);
     }
     contract_api::put_key(&destination_name, &destination.value().into());
 }

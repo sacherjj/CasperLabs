@@ -141,8 +141,8 @@ object SQLiteStorage {
       override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
         dagStorage.lookup(blockHash).map(_.map(_.blockSummary))
 
-      override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
-        blockStorage.findBlockHashesWithDeployhash(deployHash)
+      override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
+        blockStorage.findBlockHashesWithDeployHash(deployHash)
 
       override def children(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.children(blockHash)

@@ -172,8 +172,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => ().asRight[String].pure[Task]
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task]
         )
 
       val failedCommitEEService: ExecutionEngineService[Task] =
@@ -195,15 +194,18 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                   d =>
                     DeployResult(
                       DeployResult.Value.ExecutionResult(
-                        DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                        DeployResult.ExecutionResult(
+                          Some(getExecutionEffect(d)),
+                          None,
+                          Some(state.BigInt("10", bitWidth = 512))
+                        )
                       )
                     )
                 )
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => ().asRight[String].pure[Task]
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task]
         )
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)

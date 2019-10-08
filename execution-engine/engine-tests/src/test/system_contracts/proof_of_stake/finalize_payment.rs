@@ -11,6 +11,8 @@ use crate::support::test_support::{
     self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -94,8 +96,14 @@ fn finalize_payment_should_refund_to_specified_purse() {
         get_named_account_balance(&builder, DEFAULT_ACCOUNT_ADDR, LOCAL_REFUND_PURSE)
             .unwrap_or_else(U512::zero);
 
-    assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always starts unset
-    assert!(payment_pre_balance.is_zero()); // payment purse always starts with zero balance
+    assert!(
+        get_pos_refund_purse(&builder).is_none(),
+        "refund_purse should start unset"
+    );
+    assert!(
+        payment_pre_balance.is_zero(),
+        "payment purse should start with zero balance"
+    );
 
     let exec_request = {
         let genesis_public_key = PublicKey::new(DEFAULT_ACCOUNT_ADDR);
@@ -117,7 +125,14 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .get_exec_response(0)
             .expect("there should be a response");
 
-        (test_support::get_success_result(&response).cost * CONV_RATE).into()
+        let success_result = test_support::get_success_result(response);
+        let cost = success_result
+            .get_cost()
+            .try_into()
+            .expect("should map to U512");
+        Motes::from_gas(Gas::new(cost), CONV_RATE)
+            .expect("should have motes")
+            .value()
     };
 
     let payment_post_balance = get_pos_payment_purse_balance(&builder);
@@ -125,18 +140,28 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let refund_post_balance =
         get_named_account_balance(&builder, DEFAULT_ACCOUNT_ADDR, LOCAL_REFUND_PURSE)
             .expect("should have refund balance");
-
-    assert_eq!(rewards_pre_balance + spent_amount, rewards_post_balance); // validators get paid
+    let expected_amount = rewards_pre_balance + spent_amount;
+    assert_eq!(
+        expected_amount, rewards_post_balance,
+        "validators should get paid; expected: {}, actual: {}",
+        expected_amount, rewards_post_balance
+    );
 
     // user gets refund
     assert_eq!(
         refund_pre_balance + payment_amount - spent_amount,
-        refund_post_balance
+        refund_post_balance,
+        "user should get refund"
     );
 
-    assert!(get_pos_refund_purse(&builder).is_none()); // refund_purse always ends unset
-    assert!(payment_post_balance.is_zero()); // payment purse always ends with
-                                             // zero balance
+    assert!(
+        get_pos_refund_purse(&builder).is_none(),
+        "refund_purse always ends unset"
+    );
+    assert!(
+        payment_post_balance.is_zero(),
+        "payment purse should ends with zero balance"
+    );
 }
 
 // ------------- utility functions -------------------- //

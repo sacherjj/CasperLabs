@@ -1,3 +1,5 @@
+use contract_ffi::contract_api::Error;
+
 use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
@@ -26,6 +28,9 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
         let execution_result = test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::BondTooSmall => 9,
-    assert_eq!(error_message, "Exit code: 9");
+    // Error::BondTooSmall => 5,
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(5)))
+    );
 }

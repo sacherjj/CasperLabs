@@ -15,7 +15,7 @@ use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{Account, PublicKey, PurseId};
 use contract_ffi::value::contract::Contract;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::value::{SemVer, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
 use engine_core::execution::{self, MINT_NAME, POS_NAME};
@@ -29,7 +29,7 @@ use engine_grpc_server::engine_server::ipc::{
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
 use engine_grpc_server::engine_server::state::ProtocolVersion;
-use engine_grpc_server::engine_server::transforms;
+use engine_grpc_server::engine_server::{state, transforms};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::os::get_page_size;
@@ -249,10 +249,15 @@ impl ExecuteRequestBuilder {
         self
     }
 
-    pub fn with_protocol_version(mut self, version: u64) -> Self {
-        let mut protocol_version = ProtocolVersion::new();
-        protocol_version.set_value(version);
-        self.execute_request.set_protocol_version(protocol_version);
+    pub fn with_protocol_version(
+        mut self,
+        protocol_version: contract_ffi::value::ProtocolVersion,
+    ) -> Self {
+        let mut protocol = state::ProtocolVersion::new();
+        protocol.set_major(protocol_version.value().major);
+        protocol.set_minor(protocol_version.value().minor);
+        protocol.set_patch(protocol_version.value().patch);
+        self.execute_request.set_protocol_version(protocol);
         self
     }
 
@@ -286,14 +291,21 @@ impl Default for ExecuteRequestBuilder {
         let deploy_items = vec![];
         let mut execute_request = ExecuteRequest::new();
         execute_request.set_block_time(DEFAULT_BLOCK_TIME);
-        let mut protocol_version = ProtocolVersion::new();
-        protocol_version.set_value(1);
-        execute_request.set_protocol_version(protocol_version);
+        execute_request.set_protocol_version(get_protocol_version());
         ExecuteRequestBuilder {
             deploy_items,
             execute_request,
         }
     }
+}
+
+pub fn get_protocol_version() -> ProtocolVersion {
+    let mut protocol_version: ProtocolVersion = ProtocolVersion::new();
+    let sem_ver = SemVer::V1_0_0;
+    protocol_version.set_major(sem_ver.major);
+    protocol_version.set_minor(sem_ver.minor);
+    protocol_version.set_patch(sem_ver.patch);
+    protocol_version
 }
 
 pub struct UpgradeRequestBuilder {
@@ -315,20 +327,30 @@ impl UpgradeRequestBuilder {
         self
     }
 
-    pub fn with_current_protocol_version(mut self, protocol_version: u64) -> Self {
+    pub fn with_current_protocol_version(
+        mut self,
+        protocol_version: contract_ffi::value::ProtocolVersion,
+    ) -> Self {
         self.current_protocol_version = {
-            let mut ret = ProtocolVersion::new();
-            ret.set_value(protocol_version);
-            ret
+            let mut protocol = ProtocolVersion::new();
+            protocol.set_major(protocol_version.value().major);
+            protocol.set_minor(protocol_version.value().minor);
+            protocol.set_patch(protocol_version.value().patch);
+            protocol
         };
         self
     }
 
-    pub fn with_new_protocol_version(mut self, protocol_version: u64) -> Self {
+    pub fn with_new_protocol_version(
+        mut self,
+        protocol_version: contract_ffi::value::ProtocolVersion,
+    ) -> Self {
         self.new_protocol_version = {
-            let mut ret = ProtocolVersion::new();
-            ret.set_value(protocol_version);
-            ret
+            let mut protocol = ProtocolVersion::new();
+            protocol.set_major(protocol_version.value().major);
+            protocol.set_minor(protocol_version.value().minor);
+            protocol.set_patch(protocol_version.value().patch);
+            protocol
         };
         self
     }
@@ -963,12 +985,7 @@ where
         let exec_response = self
             .get_exec_response(index)
             .expect("should have exec response");
-        let deploy_results: &[DeployResult] = exec_response.get_success().get_deploy_results();
-
-        deploy_results
-            .iter()
-            .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
-            .collect()
+        get_exec_costs(exec_response)
     }
 
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
@@ -1066,7 +1083,14 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 
     deploy_results
         .iter()
-        .map(|deploy_result| Gas::from_u64(deploy_result.get_execution_result().get_cost()))
+        .map(|deploy_result| {
+            let execution_result = deploy_result.get_execution_result();
+            let cost = execution_result
+                .get_cost()
+                .try_into()
+                .expect("cost should map to U512");
+            Gas::new(cost)
+        })
         .collect()
 }
 

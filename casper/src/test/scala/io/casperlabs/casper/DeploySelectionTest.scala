@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.DeploySelectionTest._
 import io.casperlabs.casper.consensus.Deploy
-import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion, Value}
+import io.casperlabs.casper.consensus.state.{BigInt, Key, ProtocolVersion, Value}
 import io.casperlabs.casper.util.execengine.{DeployEffects, ExecutionEngineServiceStub}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -43,7 +43,7 @@ class DeploySelectionTest
 
   val prestate        = ByteString.EMPTY
   val blocktime       = 0L
-  val protocolVersion = ProtocolVersion(1L)
+  val protocolVersion = ProtocolVersion(1)
 
   val smallBlockSizeBytes = 5 * 1024
 
@@ -169,6 +169,8 @@ class DeploySelectionTest
 
 @silent("is never used")
 object DeploySelectionTest {
+  val SomeCost = Some(BigInt("10", bitWidth = 512))
+
   case class CountedStream[F[_], A] private (
       private val counter: AtomicInt,
       private val streamPrivate: fs2.Stream[F, A]
@@ -233,7 +235,9 @@ object DeploySelectionTest {
         } else {
           val (opEntry, transformEntry) = readTransform
           val effect                    = ExecutionEffect(Seq(opEntry), Seq(transformEntry))
-          DeployResult(ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10)))
+          DeployResult(
+            ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, SomeCost))
+          )
         }
       }
       .asRight[Throwable]
@@ -253,7 +257,9 @@ object DeploySelectionTest {
           if (counterValue % 2 == 0) readTransform
           else writeTransform
         val effect = ExecutionEffect(Seq(opEntry), Seq(transformEntry))
-        DeployResult(ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10)))
+        DeployResult(
+          ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, SomeCost))
+        )
       }
       .asRight[Throwable]
       .pure[Task]
@@ -272,7 +278,7 @@ object DeploySelectionTest {
         .map(
           _ =>
             DeployResult(
-              ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+              ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, SomeCost))
             )
         )
         .asRight[Throwable]
@@ -315,7 +321,6 @@ object DeploySelectionTest {
     (_) => raiseNotImplemented[F, Either[Throwable, GenesisResult]],
     execFunc,
     (_, _) => raiseNotImplemented[F, Either[Throwable, CommitResult]],
-    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]],
-    _ => raiseNotImplemented[F, Either[String, Unit]]
+    (_, _, _) => raiseNotImplemented[F, Either[Throwable, Value]]
   )
 }

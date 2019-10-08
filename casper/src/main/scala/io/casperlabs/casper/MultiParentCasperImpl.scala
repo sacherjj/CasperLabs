@@ -232,7 +232,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         blockHashes <- deployHashes
                         .traverse { deployHash =>
                           BlockStorage[F]
-                            .findBlockHashesWithDeployhash(deployHash)
+                            .findBlockHashesWithDeployHash(deployHash)
                         }
                         .map(_.flatten.distinct)
 
@@ -313,31 +313,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             .pure[F]
             .widen
 
-        case (Some(session), Some(payment)) =>
-          List(
-            "session" -> session,
-            "payment" -> payment
-          ).collect {
-              case (name, code) if code.contract.isWasm =>
-                ExecutionEngineService[F]
-                  .verifyWasm(ValidateRequest(code.getWasm))
-                  .map(name -> _)
-            }
-            .sequence
-            .map { results =>
-              results.collect {
-                case (name, Left(message)) => name -> message
-              }
-            }
-            .flatMap {
-              case Nil =>
-                addDeploy(deploy)
-              case errors =>
-                val ex: Throwable = new IllegalArgumentException(
-                  s"Contract verification failed: ${errors.map(e => s"${e._1}: ${e._2}").mkString("; ")}"
-                )
-                ex.asLeft[Unit].pure[F]
-            }
+        case _ =>
+          addDeploy(deploy)
       }
     case None =>
       new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen

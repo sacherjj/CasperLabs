@@ -1,3 +1,4 @@
+use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
@@ -47,7 +48,10 @@ fn should_run_purse_to_purse_transfer() {
         panic!("Purse transfer result is expected to contain Write with String value");
     };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(purse_transfer_result, "TransferSuccessful");
+    assert_eq!(
+        purse_transfer_result,
+        &format!("{:?}", Result::<(), Error>::Ok(()),)
+    );
 
     let main_purse_balance =
         &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
@@ -140,7 +144,10 @@ fn should_run_purse_to_purse_transfer_with_error() {
         panic!("Purse transfer result is expected to contain Write with String value");
     };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(purse_transfer_result, "TransferError");
+    assert_eq!(
+        purse_transfer_result,
+        &format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+    );
 
     // Obtain main purse's balance
     let main_purse_balance =

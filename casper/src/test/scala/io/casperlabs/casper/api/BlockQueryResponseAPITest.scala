@@ -29,6 +29,7 @@ import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 //TODO: Remove
 @silent("deprecated")
@@ -36,9 +37,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   implicit val timeEff = new LogicalTime[Task]
   val badTestHashQuery = "No such a hash"
 
-  val version = 1L
+  val version = ProtocolVersion(1)
 
-  def genesisBlock(version: Long): Block = {
+  def genesisBlock(version: ProtocolVersion): Block = {
     val ps = Block
       .GlobalState()
       .withBonds(Seq(Bond(ByteString.copyFromUtf8("random"), 1)))
@@ -106,6 +107,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
+
         blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, full = true)(
                       Sync[Task],
                       logEff,
@@ -116,7 +118,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _      = blockInfo.getSummary.blockHash should be(blockHash)
         _      = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
         _      = blockInfo.getSummary.getHeader.rank should be(blockNumber)
-        _      = blockInfo.getSummary.getHeader.protocolVersion should be(version)
+        _      = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
         _      = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
         _      = blockInfo.getStatus.faultTolerance should be(faultTolerance)
         _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)

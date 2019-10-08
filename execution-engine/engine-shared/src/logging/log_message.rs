@@ -4,11 +4,11 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Serialize;
+use contract_ffi::value::SemVer;
+use serde::{Serialize, Serializer};
 
 use crate::logging::log_level::{LogLevel, LogPriority};
 use crate::logging::log_settings::{HostName, LogSettingsProvider, ProcessId, ProcessName};
-use crate::semver::SemVer;
 
 const MESSAGE_TYPE: &str = "ee-structured";
 
@@ -22,7 +22,7 @@ pub struct LogMessage {
     pub log_level: LogLevel,
     pub priority: LogPriority,
     pub message_type: MessageType,
-    pub message_type_version: SemVer,
+    pub message_type_version: MessageTypeVersion,
     pub message_id: MessageId,
     pub description: String,
     pub properties: MessageProperties,
@@ -43,7 +43,7 @@ impl LogMessage {
             .entry(MESSAGE_TEMPLATE_KEY.to_string())
             .or_insert_with(|| message_template.clone());
         let message_type = MessageType::new(MESSAGE_TYPE.to_string());
-        let message_type_version = SemVer::V1_0_0;
+        let message_type_version: MessageTypeVersion = Default::default();
         let process_id = log_settings_provider.get_process_id();
         let process_name = log_settings_provider.get_process_name();
         let host_name = log_settings_provider.get_host_name();
@@ -114,6 +114,43 @@ impl fmt::Display for LogMessage {
             level = self.log_level,
             description = self.description
         )
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct MessageTypeVersion(SemVer);
+
+impl MessageTypeVersion {
+    pub fn new(major: u32, minor: u32, patch: u32) -> MessageTypeVersion {
+        MessageTypeVersion(SemVer::new(major, minor, patch))
+    }
+}
+
+impl fmt::Display for MessageTypeVersion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Hash for MessageTypeVersion {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl Default for MessageTypeVersion {
+    fn default() -> Self {
+        MessageTypeVersion(SemVer::V1_0_0)
+    }
+}
+
+impl Serialize for MessageTypeVersion {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = format!("{}.{}.{}", self.0.major, self.0.minor, self.0.patch);
+        serializer.serialize_str(&s)
     }
 }
 

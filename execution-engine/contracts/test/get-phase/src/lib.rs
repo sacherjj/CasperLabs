@@ -9,8 +9,8 @@ use contract_ffi::execution::Phase;
 pub extern "C" fn call() {
     let known_phase: Phase = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let get_phase = contract_api::get_phase();
     assert_eq!(

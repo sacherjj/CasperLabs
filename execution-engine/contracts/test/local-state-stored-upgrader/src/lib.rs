@@ -30,16 +30,13 @@ pub extern "C" fn call() {
     let uref: URef = match contract_api::get_arg(Args::LocalStateURef as u32) {
         Some(Ok(data)) => data,
         Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidLocalStateURefArg as u16).into())
+            contract_api::revert(Error::User(CustomError::InvalidLocalStateURefArg as u16))
         }
-        None => {
-            contract_api::revert(Error::User(CustomError::MissingLocalStateURefArg as u16).into())
-        }
+        None => contract_api::revert(Error::User(CustomError::MissingLocalStateURefArg as u16)),
     };
 
-    let turef = contract_api::pointers::TURef::from_uref(uref).unwrap_or_else(|_| {
-        contract_api::revert(Error::User(CustomError::InvalidTURef as u16).into())
-    });
+    let turef = contract_api::pointers::TURef::from_uref(uref)
+        .unwrap_or_else(|_| contract_api::revert(Error::User(CustomError::InvalidTURef as u16)));
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     contract_api::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);

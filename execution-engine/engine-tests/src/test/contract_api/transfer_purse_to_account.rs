@@ -1,3 +1,4 @@
+use contract_ffi::contract_api::{Error, TransferResult, TransferredTo};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
@@ -79,7 +80,10 @@ fn should_run_purse_to_account_transfer() {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(transfer_result_string, "TransferredToNewAccount");
+    assert_eq!(
+        transfer_result_string,
+        &format!("{:?}", TransferResult::Ok(TransferredTo::NewAccount))
+    );
 
     // Get transforms output for new account
     let new_account_transforms = transform
@@ -161,7 +165,10 @@ fn should_run_purse_to_account_transfer() {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(transfer_result_string, "TransferredToExistingAccount");
+    assert_eq!(
+        transfer_result_string,
+        &format!("{:?}", TransferResult::Ok(TransferredTo::ExistingAccount))
+    );
 
     // Get transforms output for genesis
     let genesis_transforms = transform
@@ -246,7 +253,8 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
 
     // Main assertion for the result of `transfer_from_purse_to_purse`
     assert_eq!(
-        transfer_result_string, "TransferError",
+        transfer_result_string,
+        &format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
         "TransferError incorrect"
     );
 }

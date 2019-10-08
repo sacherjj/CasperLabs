@@ -38,10 +38,8 @@ enum CustomError {
 fn purse_name() -> String {
     match contract_api::get_arg(Args::PurseName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidPurseNameArg as u16).into())
-        }
-        None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16).into()),
+        Some(Err(_)) => contract_api::revert(Error::User(CustomError::InvalidPurseNameArg as u16)),
+        None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16)),
     }
 }
 
@@ -49,10 +47,8 @@ fn purse_name() -> String {
 pub extern "C" fn apply_method() {
     let method_name: String = match contract_api::get_arg(Args::MethodName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidMethodNameArg as u16).into())
-        }
-        None => contract_api::revert(Error::User(CustomError::MissingMethodNameArg as u16).into()),
+        Some(Err(_)) => contract_api::revert(Error::User(CustomError::InvalidMethodNameArg as u16)),
+        None => contract_api::revert(Error::User(CustomError::MissingMethodNameArg as u16)),
     };
     match method_name.as_str() {
         METHOD_ADD => {
@@ -61,7 +57,7 @@ pub extern "C" fn apply_method() {
             contract_api::put_key(&purse_name, &purse_id.value().into());
         }
         METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
-        _ => contract_api::revert(Error::User(CustomError::UnknownMethodName as u16).into()),
+        _ => contract_api::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }
 
@@ -69,9 +65,7 @@ pub extern "C" fn apply_method() {
 #[no_mangle]
 pub extern "C" fn call() {
     let mint_uref = match contract_api::get_mint() {
-        ContractPointer::Hash(_) => {
-            contract_api::revert(Error::User(CustomError::MintHash as u16).into())
-        }
+        ContractPointer::Hash(_) => contract_api::revert(Error::User(CustomError::MintHash as u16)),
         ContractPointer::URef(turef) => turef.into(),
     };
 
@@ -83,7 +77,7 @@ pub extern "C" fn call() {
 
     let key = contract_api::store_function(ENTRY_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant.into()))
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
         .into();
 
     contract_api::put_key(CONTRACT_NAME, &key);

@@ -11,8 +11,8 @@ use contract_ffi::value::account::BlockTime;
 pub extern "C" fn call() {
     let known_block_time: u64 = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let actual_block_time: BlockTime = contract_api::get_blocktime();
 

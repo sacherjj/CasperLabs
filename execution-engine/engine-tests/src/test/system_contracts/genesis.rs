@@ -15,7 +15,6 @@ const BAD_INSTALL: &str = "standard_payment.wasm";
 
 const CHAIN_NAME: &str = "Jeremiah";
 const TIMESTAMP: u64 = 0;
-const PROTOCOL_VERSION: u64 = 1;
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
 const ACCOUNT_2_ADDR: [u8; 32] = [2u8; 32];
 const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
@@ -52,7 +51,7 @@ fn should_run_genesis_with_chainspec() {
     let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
     let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
     let accounts = vec![account_1, account_2];
-    let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+    let protocol_version = ProtocolVersion::V1_0_0;
     let wasm_costs = *DEFAULT_WASM_COSTS;
 
     let genesis_config = GenesisConfig::new(
@@ -134,7 +133,7 @@ fn should_fail_if_bad_mint_install_contract_is_provided() {
         let mint_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
         let pos_installer_bytes = test_support::read_wasm_file_bytes(POS_INSTALL);
         let accounts = vec![account_1, account_2];
-        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+        let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
 
         GenesisConfig::new(
@@ -182,7 +181,7 @@ fn should_fail_if_bad_pos_install_contract_is_provided() {
         let mint_installer_bytes = test_support::read_wasm_file_bytes(MINT_INSTALL);
         let pos_installer_bytes = test_support::read_wasm_file_bytes(BAD_INSTALL);
         let accounts = vec![account_1, account_2];
-        let protocol_version = ProtocolVersion::new(PROTOCOL_VERSION);
+        let protocol_version = ProtocolVersion::V1_0_0;
         let wasm_costs = *DEFAULT_WASM_COSTS;
 
         GenesisConfig::new(

@@ -12,6 +12,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.casper.{CasperConf, PrettyPrinter}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -77,7 +78,7 @@ object Genesis {
         state = state,
         rank = 0,
         validatorSeqNum = 0,
-        protocolVersion = genesisConfig.getProtocolVersion.value,
+        protocolVersion = genesisConfig.getProtocolVersion,
         timestamp = genesisConfig.timestamp,
         chainId = genesisConfig.name
       )

@@ -295,9 +295,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       m: BlockHeight => F[state.ProtocolVersion]
   ): F[Boolean] = {
-    val blockVersion = b.protocolVersion
-    val blockHeight  = b.rank
-    m(blockHeight).map(_.value).flatMap { version =>
+
+    val blockVersion = b.getHeader.getProtocolVersion
+    val blockHeight  = b.getHeader.rank
+    m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
       } else {
@@ -648,7 +649,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         possibleCommitResult <- ExecutionEngineService[F].commit(
                                  preStateHash,
-                                 effects
+                                 effects,
+                                 block.getHeader.getProtocolVersion
                                )
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possibleCommitResult match {
@@ -748,7 +750,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         for {
           deployToBlocksMap <- deploys
                                 .traverse { deploy =>
-                                  bs.findBlockHashesWithDeployhash(deploy.deployHash).map {
+                                  bs.findBlockHashesWithDeployHash(deploy.deployHash).map {
                                     blockHashes =>
                                       deploy -> blockHashes.filterNot(_ == block.blockHash)
                                   }

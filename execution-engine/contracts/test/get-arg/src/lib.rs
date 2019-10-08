@@ -19,15 +19,15 @@ enum Error {
 pub extern "C" fn call() {
     let value0: String = match contract_api::get_arg(0) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::User(Error::InvalidArgument0 as u16).into()),
-        None => contract_api::revert(ApiError::User(Error::MissingArgument0 as u16).into()),
+        Some(Err(_)) => contract_api::revert(ApiError::User(Error::InvalidArgument0 as u16)),
+        None => contract_api::revert(ApiError::User(Error::MissingArgument0 as u16)),
     };
     assert_eq!(value0, "Hello, world!");
 
     let value1: U512 = match contract_api::get_arg(1) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::User(Error::InvalidArgument1 as u16).into()),
-        None => contract_api::revert(ApiError::User(Error::MissingArgument1 as u16).into()),
+        Some(Err(_)) => contract_api::revert(ApiError::User(Error::InvalidArgument1 as u16)),
+        None => contract_api::revert(ApiError::User(Error::MissingArgument1 as u16)),
     };
     assert_eq!(value1, U512::from(42));
 }

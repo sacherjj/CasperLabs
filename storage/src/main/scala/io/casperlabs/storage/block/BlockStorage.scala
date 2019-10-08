@@ -45,7 +45,7 @@ trait BlockStorage[F[_]] {
 
   def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]]
 
-  def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]]
+  def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
 
   def checkpoint(): F[Unit]
 
@@ -93,6 +93,12 @@ object BlockStorage {
         blockHash: BlockHash
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
+
+    abstract override def findBlockHashesWithDeployHash(deployHash: BlockHash): F[Seq[BlockHash]] =
+      incAndMeasure(
+        "findBlockHashesWithDeployHash",
+        super.findBlockHashesWithDeployHash(deployHash)
+      )
   }
 
   implicit class RichBlockStorage[F[_]](blockStorage: BlockStorage[F]) {

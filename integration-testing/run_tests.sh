@@ -8,7 +8,7 @@ if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
     PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3 --tb=short"
 else
     # We want to compile contracts if run locally
-    ./contracts/build_contracts.sh
+    ./build_contracts.sh
 fi
 
 if [[ "$TEST_RUN_ARGS" == "" ]]; then

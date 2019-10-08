@@ -1,3 +1,4 @@
+use contract_ffi::contract_api::Error;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -74,6 +75,9 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         let execution_result = test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::UnbondTooLarge => 6,
-    assert_eq!(error_message, "Exit code: 6");
+    // Error::UnbondTooLarge => 7,
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(7)))
+    );
 }

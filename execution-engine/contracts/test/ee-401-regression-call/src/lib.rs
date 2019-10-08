@@ -13,11 +13,11 @@ use contract_ffi::uref::URef;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key: Key = contract_api::get_key("hello_ext")
-        .unwrap_or_else(|| contract_api::revert(Error::GetURef.into()));
+    let contract_key: Key =
+        contract_api::get_key("hello_ext").unwrap_or_else(|| contract_api::revert(Error::GetURef));
     let contract_pointer: ContractPointer = match contract_key {
         Key::Hash(hash) => ContractPointer::Hash(hash),
-        _ => contract_api::revert(Error::UnexpectedKeyVariant.into()),
+        _ => contract_api::revert(Error::UnexpectedKeyVariant),
     };
 
     let extra_urefs = [].to_vec();

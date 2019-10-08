@@ -256,7 +256,10 @@ object HashSetCasperTestNode {
           .map(
             effect =>
               DeployResult(
-                ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+                ExecutionResult(
+                  ipc.DeployResult
+                    .ExecutionResult(Some(effect), None, Some(state.BigInt("10", bitWidth = 512)))
+                )
               )
           )
           .asRight[Throwable]
@@ -265,13 +268,14 @@ object HashSetCasperTestNode {
       override def runGenesis(
           genesisConfig: ipc.ChainSpec.GenesisConfig
       ): F[Either[Throwable, GenesisResult]] =
-        commit(emptyStateHash, Seq.empty).map {
+        commit(emptyStateHash, Seq.empty, genesisConfig.getProtocolVersion).map {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
       override def commit(
           prestate: ByteString,
-          effects: Seq[TransformEntry]
+          effects: Seq[TransformEntry],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
@@ -288,14 +292,12 @@ object HashSetCasperTestNode {
       override def query(
           state: ByteString,
           baseKey: Key,
-          path: Seq[String]
+          path: Seq[String],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Value]] =
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =
