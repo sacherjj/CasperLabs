@@ -149,16 +149,17 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         3 => Err(Error::ContractNotFound),
         4 => Err(Error::UnexpectedKeyVariant),
         5 => Err(Error::UnexpectedValueVariant),
-        6 => Err(Error::Read),
-        7 => Err(Error::ValueNotFound),
-        8 => Err(Error::MintFailure),
-        9 => Err(Error::InvalidPurseName),
-        10 => Err(Error::InvalidPurse),
-        11 => Err(Error::MissingArgument),
-        12 => Err(Error::InvalidArgument),
-        13 => Err(Error::UpgradeContractAtURef),
-        14 => Err(Error::Transfer),
-        15 => Err(Error::NoAccessRights),
+        6 => Err(Error::UnexpectedContractPointerVariant),
+        7 => Err(Error::Read),
+        8 => Err(Error::ValueNotFound),
+        9 => Err(Error::MintFailure),
+        10 => Err(Error::InvalidPurseName),
+        11 => Err(Error::InvalidPurse),
+        12 => Err(Error::MissingArgument),
+        13 => Err(Error::InvalidArgument),
+        14 => Err(Error::UpgradeContractAtURef),
+        15 => Err(Error::Transfer),
+        16 => Err(Error::NoAccessRights),
         17 => Err(Error::None),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
@@ -174,8 +175,13 @@ pub fn result_from(value: i32) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
+    use super::*;
     use core::{u16, u8};
+
+    fn round_trip(result: Result<(), Error>) {
+        let code = i32_from(result);
+        assert_eq!(result, result_from(code));
+    }
 
     #[test]
     fn error() {
@@ -198,5 +204,28 @@ mod tests {
             "Error::User(65535) [131071]",
             &format!("{:?}", Error::User(u16::MAX))
         );
+
+        round_trip(Ok(()));
+        round_trip(Err(Error::GetURef));
+        round_trip(Err(Error::Deserialize));
+        round_trip(Err(Error::ContractNotFound));
+        round_trip(Err(Error::UnexpectedKeyVariant));
+        round_trip(Err(Error::UnexpectedValueVariant));
+        round_trip(Err(Error::UnexpectedContractPointerVariant));
+        round_trip(Err(Error::Read));
+        round_trip(Err(Error::ValueNotFound));
+        round_trip(Err(Error::MintFailure));
+        round_trip(Err(Error::InvalidPurseName));
+        round_trip(Err(Error::InvalidPurse));
+        round_trip(Err(Error::MissingArgument));
+        round_trip(Err(Error::InvalidArgument));
+        round_trip(Err(Error::UpgradeContractAtURef));
+        round_trip(Err(Error::Transfer));
+        round_trip(Err(Error::NoAccessRights));
+        round_trip(Err(Error::None));
+        round_trip(Err(Error::ProofOfStake(0)));
+        round_trip(Err(Error::ProofOfStake(u8::MAX)));
+        round_trip(Err(Error::User(0)));
+        round_trip(Err(Error::User(u16::MAX)));
     }
 }
