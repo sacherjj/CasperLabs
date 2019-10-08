@@ -121,6 +121,19 @@ class GrpcGossipServiceSpec
               }
             }
           }
+
+          "called with a sender whose chain ID doesn't match expected" should {
+            "return UNAUTHENTICATED" in {
+              forAll { (block: Block, sender: Node, chainId: String) =>
+                runTestUnsafe(TestData.fromBlock(block)) {
+                  expectError(stub, query(sender.withChainId(chainId).some, List(block.blockHash))) {
+                    case Unauthenticated(msg) =>
+                      msg shouldBe s"Sender doesn't match chain id, expected: ${TestEnvironment.chainId}, received: $chainId"
+                  }
+                }
+              }
+            }
+          }
         }
 
         "called without an SSL certificate" when {
@@ -1265,6 +1278,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
           Task.delay(testDataRef.get.tips)
       }
 
+    val chainId: String = "casperlabs"
+
     def apply(
         testDataRef: AtomicReference[TestData],
         clientCert: Option[TestCert] = Some(TestCert.generate),
@@ -1300,7 +1315,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
               val svc = GrpcGossipService
-                .fromGossipService(gss, rateLimiter, "casperlabs", blockChunkConsumerTimeout)
+                .fromGossipService(gss, rateLimiter, chainId, blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),
