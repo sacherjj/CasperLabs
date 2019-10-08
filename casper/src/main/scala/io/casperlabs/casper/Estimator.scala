@@ -43,45 +43,23 @@ object Estimator {
         latestMessages: List[BlockHash],
         stopHash: BlockHash
     ): F[List[BlockHash]] = {
+      // Start from the highest latest messages and traverse backwards
       implicit val ord = DagOperations.blockTopoOrderingDesc
       for {
-        // Find the rank of the block at which the scoring algorithms stopped.
-        minRank <- dag.lookup(stopHash).map(_.fold(0L)(_.rank))
-        // Start from the higherst latest messages and traverse backwards;
-        latestMessagesMeta <- latestMessages
-                               .traverse(dag.lookup)
-                               .map(_.flatten.sortBy(-_.rank))
-        // any other latest message we visit is an ancestor that cannot be a tip.
-        eliminated <- latestMessagesMeta.foldLeftM(Set.empty[BlockHash]) {
-                       case (eliminated, latestMessageMeta)
-                           if eliminated.contains(latestMessageMeta.messageHash) =>
-                         // This tip has already been eliminated, no need to traverse through it again.
-                         eliminated.pure[F]
-
-                       case (eliminated, latestMessageMeta) =>
-                         // Try going backwards from this message and eliminate what we haven't so far.
-                         DagOperations
-                           .bfToposortTraverseF[F](List(latestMessageMeta)) { blockMeta =>
-                             // Follow all parents, except the ones we already eliminated,
-                             // since their ancestors have already been traversed.
-                             blockMeta.parents.toList
-                               .filterNot(eliminated)
-                               .traverse(dag.lookup)
-                               .map(_.flatten)
-                           }
-                           .foldWhileLeft(eliminated) {
-                             case (eliminated, meta)
-                                 if meta.messageHash == latestMessageMeta.messageHash =>
-                               // This is where we are staring from, so it can stay.
-                               Left(eliminated)
-                             case (eliminated, meta) if meta.rank >= minRank =>
-                               // Anything we traverse through is not a tip.
-                               Left(eliminated + meta.messageHash)
-                             case (eliminated, _) =>
-                               Right(eliminated)
-                           }
-                     }
-      } yield latestMessages.filterNot(eliminated)
+        latestMessagesMeta <- latestMessages.traverse(dag.lookup).map(_.flatten)
+        tips <- DagOperations
+                 .bfToposortTraverseF[F](latestMessagesMeta)(
+                   _.parents.toList.traverse(dag.lookup(_)).map(_.flatten)
+                 )
+                 .takeUntil(_.messageHash == stopHash)
+                 // We start with the tips and remove any message
+                 // that is reachable through the parent-child link from other tips.
+                 // This should leave us only with the tips that cannot be reached from others.
+                 .foldLeft(latestMessagesMeta.map(_.messageHash).toSet) {
+                   case (tips, message) =>
+                     tips -- message.parents
+                 }
+      } yield tips.toList
     }
 
     for {
