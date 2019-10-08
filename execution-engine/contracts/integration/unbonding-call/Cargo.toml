@@ -1,11 +1,10 @@
 [package]
-name = "test-subcall-revert-call"
+name = "unbonding-call"
 version = "0.1.0"
-authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
+authors = ["Srinivas Reddy Thatiparthy <srini@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_subcall_revert_call"
 crate-type = ["cdylib"]
 
 [dependencies]

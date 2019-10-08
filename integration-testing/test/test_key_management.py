@@ -16,11 +16,6 @@ Accounts have two threshold values:
 Both are initialized at 1.
 """
 
-ADD_KEY_CONTRACT = "add_associated_key.wasm"  # ABI: Account - Weight
-REMOVE_KEY_CONTRACT = "remove_associated_key.wasm"  # ABI: Account
-UPDATE_KEY_CONTRACT = "update_associated_key.wasm"  # ABI: Account - Weight
-SET_THRESHOLDS_CONTRACT = "set_key_thresholds.wasm"  # ABI: KeyWeight - DeployWeight
-
 IDENTITY_KEY = Account(1)  # 9d39
 DEPLOY_KEY = Account(2)  # 4e74
 DEPLOY_KEY_WEIGHT = 10
@@ -112,7 +107,7 @@ def hello_name_deploy(node, weight_key: Account) -> str:
     """ Simple deploy to test deploy permissions """
     return node.p_client.deploy_and_propose(
         from_address=IDENTITY_KEY.public_key_hex,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
         public_key=weight_key.public_key_path,
         private_key=weight_key.private_key_path,
         session_args=None,
@@ -242,7 +237,7 @@ def test_key_cannot_manage_with_weight_below_threshold(account_setup):
 
     # Remove key should fail
     block_hash = remove_associated_key(node, KEY_MGMT_KEY, DEPLOY_KEY)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65537")
+    assert_deploy_is_error(node, block_hash, "Exit code: 65536")
 
     # Add key should fail
     block_hash = add_associated_key(node, KEY_MGMT_KEY, IDENTITY_KEY, 10)

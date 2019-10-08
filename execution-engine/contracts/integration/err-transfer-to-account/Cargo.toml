@@ -5,7 +5,6 @@ authors = ["Joe Sacher <joe@casperlabs.io>", "Srinivas Reddy <srini@casperlabs.i
 edition = "2018"
 
 [lib]
-name = "err_transfer_to_account"
 crate-type = ["cdylib"]
 
 [features]

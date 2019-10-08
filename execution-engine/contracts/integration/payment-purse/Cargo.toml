@@ -6,7 +6,6 @@ authors = ["Michael Birch <birchmd@casperlabs.io>",
 edition = "2018"
 
 [lib]
-name = "test_payment_purse"
 crate-type = ["cdylib"]
 
 [features]

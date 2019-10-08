@@ -5,7 +5,6 @@ authors = ["Srinivas Reddy Thatiparthy <srini@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_combinedcontractsdefine"
 crate-type = ["cdylib"]
 
 [dependencies]

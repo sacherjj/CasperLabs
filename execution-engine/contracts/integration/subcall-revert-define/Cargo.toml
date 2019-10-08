@@ -1,11 +1,10 @@
 [package]
-name = "test-direct-revert-define"
+name = "subcall-revert-define"
 version = "0.1.0"
 authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_direct_revert_define"
 crate-type = ["cdylib"]
 
 [dependencies]

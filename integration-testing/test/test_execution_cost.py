@@ -108,7 +108,7 @@ def test_error_in_payment_contract(payment_node_network):
 
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract=Contract.ERR_STANDARD_PAYMENT,
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
@@ -272,7 +272,7 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
     )
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract=Contract.STANDARD_PAYMENT,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,

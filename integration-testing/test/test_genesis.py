@@ -1,4 +1,6 @@
 from pytest import raises
+
+from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
 
 
@@ -13,7 +15,7 @@ def test(two_node_with_different_accounts_csv_network):
     account = nodes[0].genesis_account
 
     nodes[0].client.deploy(
-        session_contract="test_helloname.wasm",
+        session_contract=Contract.HELLO_NAME_DEFINE,
         from_address=account.public_key_hex,
         public_key=account.public_key_path,
         private_key=account.private_key_path,

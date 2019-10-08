@@ -27,6 +27,6 @@ def test_gossip_proxy(intercepted_two_node_network):
         "--payment-args",
         cli.payment_json,
     )
-    cli("deploy", "--session", cli.resource("test_helloname.wasm"))
+    cli("deploy", "--session", cli.resource(Contract.HELLO_NAME_DEFINE))
     block_hash = cli("propose")
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)

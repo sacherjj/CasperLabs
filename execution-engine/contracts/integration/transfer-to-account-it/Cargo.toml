@@ -1,11 +1,10 @@
 [package]
-name = "test_args_u512"
+name = "transfer-to-account-it"
 version = "0.1.0"
-authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
+authors = ["Joe Sacher <joe@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "test_args_u512"
 crate-type = ["cdylib"]
 
 [features]
