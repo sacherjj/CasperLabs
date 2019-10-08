@@ -80,7 +80,8 @@ class CasperLabsNetwork:
         return GENESIS_ACCOUNT
 
     def lookup_node(self, node_id):
-        return next(node for node in self.docker_nodes if node.node_id == node_id)
+        m = {node.node_id: node for node in self.docker_nodes}
+        return m[node_id]
 
     def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
@@ -361,7 +362,19 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
             behind_proxy=True,
         )
         self.add_bootstrap(config)
-        self.add_new_node_to_network()
+        self.add_new_node_to_network(
+            (
+                lambda kp: DockerConfig(
+                    self.docker_client,
+                    node_private_key=kp.private_key,
+                    node_public_key=kp.public_key,
+                    network=self.create_docker_network(),
+                    node_account=kp,
+                    grpc_encryption=self.grpc_encryption,
+                    behind_proxy=True,
+                )
+            )
+        )
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):

@@ -93,7 +93,7 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def node_host(self):
-        return os.environ.get("TAG_NAME") and self.container_name or "localhost"
+        return os.environ.get("TAG_NAME") and self.container_name or "172.17.0.1"
 
     @property
     def proxy_host(self):
@@ -481,8 +481,16 @@ class DockerNode(LoggingDockerBase):
     @property
     def address(self) -> str:
         if self.config.behind_proxy:
-            protocol_port = self.server_proxy_port
-            discovery_port = self.kademlia_proxy_port
+            protocol_port = (
+                os.environ.get("TAG_NAME")
+                and self.server_proxy_port
+                or self.grpc_server_docker_port
+            )
+            discovery_port = (
+                os.environ.get("TAG_NAME")
+                and self.kademlia_proxy_port
+                or self.kademlia_docker_port
+            )
             addr = f"casperlabs://{self.node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
