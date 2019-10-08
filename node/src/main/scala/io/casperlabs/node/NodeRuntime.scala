@@ -49,11 +49,13 @@ import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
 import com.github.ghik.silencer.silent
+import io.casperlabs.ipc.ChainSpec
+
 import scala.concurrent.duration._
 
-@silent("is never used")
 class NodeRuntime private[node] (
     conf: Configuration,
+    chainSpec: ChainSpec,
     id: NodeIdentifier,
     mainScheduler: Scheduler
 )(
@@ -96,11 +98,11 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    val rpConfState = (for {
-      local      <- localPeerNode[Task]
+    val rpConfState = for {
+      local      <- localPeerNode[Task](chainSpec.getGenesis.name)
       bootstraps <- initPeers[Task]
       conf       <- rpConf[Task](local, bootstraps)
-    } yield conf)
+    } yield conf
 
     implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
@@ -177,6 +179,7 @@ class NodeRuntime private[node] (
 
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
+                                                          chainSpec.getGenesis.name,
                                                           kademliaPort,
                                                           conf.server.defaultTimeout,
                                                           conf.server.alivePeersCacheExpirationPeriod,
@@ -250,6 +253,7 @@ class NodeRuntime private[node] (
         _ <- casper.gossiping.apply[Task](
               port,
               conf,
+              chainSpec,
               ingressScheduler,
               egressScheduler
             )
@@ -371,14 +375,15 @@ class NodeRuntime private[node] (
       )
     )
 
-  private def localPeerNode[F[_]: Sync: Log] =
+  private def localPeerNode[F[_]: Sync: Log](chainId: String) =
     WhoAmI
       .fetchLocalPeerNode[F](
         conf.server.host,
         conf.server.port,
         conf.server.kademliaPort,
         conf.server.noUpnp,
-        id
+        id,
+        chainId
       )
 
   private def initPeers[F[_]: MonadThrowable]: F[List[Node]] =
@@ -397,7 +402,8 @@ class NodeRuntime private[node] (
 
 object NodeRuntime {
   def apply(
-      conf: Configuration
+      conf: Configuration,
+      chainSpec: ChainSpec
   )(
       implicit
       scheduler: Scheduler,
@@ -406,6 +412,6 @@ object NodeRuntime {
   ): Task[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler))
+      runtime <- Task.delay(new NodeRuntime(conf, chainSpec, id, scheduler))
     } yield runtime
 }

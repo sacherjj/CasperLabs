@@ -53,13 +53,15 @@ class ConfigurationSpec
           NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
           "52.119.8.109",
           1,
-          1
+          1,
+          "casperlabs"
         ),
         Node(
           NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
           "127.0.0.1",
           1,
-          1
+          1,
+          "test"
         )
       ),
       dataDir = Paths.get("/tmp"),

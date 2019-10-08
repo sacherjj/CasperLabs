@@ -30,6 +30,7 @@ package object effects {
 
   def nodeDiscovery(
       id: NodeIdentifier,
+      chainId: String,
       port: Int,
       timeout: FiniteDuration,
       alivePeersCacheExpirationPeriod: FiniteDuration,
@@ -46,6 +47,7 @@ package object effects {
     NodeDiscoveryImpl
       .create[Task](
         id,
+        chainId,
         port,
         timeout,
         gossipingRelayFactor,

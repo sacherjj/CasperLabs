@@ -25,6 +25,7 @@ object NodeDiscoveryImpl {
 
   def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Parallel](
       id: NodeIdentifier,
+      chainId: String,
       port: Int,
       timeout: FiniteDuration,
       gossipingRelayFactor: Int,
@@ -88,6 +89,7 @@ object NodeDiscoveryImpl {
                             }
                           new NodeDiscoveryImpl[F](
                             id = id,
+                            chainId = chainId,
                             table = table,
                             recentlyAlivePeersRef = recentlyAlivePeers,
                             temporaryBans = temporaryBans,
@@ -154,8 +156,9 @@ object NodeDiscoveryImpl {
 
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Parallel](
+private[discovery] class NodeDiscoveryImpl[F[_]: MonadThrowable: Log: Timer: Metrics: KademliaService: Parallel](
     id: NodeIdentifier,
+    chainId: String,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
     temporaryBans: NodeDiscoveryImpl.NodeCache[F],
@@ -184,11 +187,20 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _     <- Metrics[F].setGauge("peers_all_known", peers.length.toLong)
     } yield ()
 
+  private def verifyChain(peer: Node, handlerName: String): F[Unit] =
+    (Metrics[F].incrementCounter(s"handle.$handlerName.wrong_chain") >>
+      MonadThrowable[F].raiseError[Unit](
+        new IllegalArgumentException(
+          s"Wrong chain id, expected: $chainId, received: ${peer.chainId}"
+        )
+      )).whenA(peer.chainId != chainId)
+
   private def pingHandler(peer: Node): F[Unit] =
-    addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
+    verifyChain(peer, "ping") >> addNode(peer) >> Metrics[F].incrementCounter("handle.ping")
 
   private def lookupHandler(peer: Node, id: NodeIdentifier): F[Seq[Node]] =
     for {
+      _     <- verifyChain(peer, "lookup")
       peers <- table.lookup(id)
       _     <- Metrics[F].incrementCounter("handle.lookup")
       _     <- addNode(peer)

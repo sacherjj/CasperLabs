@@ -245,7 +245,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         }
       "skip itself" in forAll(genSetPeerNodes) { peers: Set[Node] =>
         val target              = peers.head
-        val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404)
+        val itself              = Node(NodeDiscoverySpec.id, "localhost", 40400, 40404, "casperlabs")
         val allPointingToItself = peers.tail.map(p => (p, List(itself))).toMap
         TextFixture.prefilledTable(
           connections = allPointingToItself,
@@ -580,6 +580,7 @@ object NodeDiscoverySpec {
         _ <- tableInitial.toList.traverse(table.updateLastSeen)
         nd = new NodeDiscoveryImpl[Task](
           id,
+          "casperlabs",
           table,
           recentlyAlivePeersRef,
           temporaryBans,

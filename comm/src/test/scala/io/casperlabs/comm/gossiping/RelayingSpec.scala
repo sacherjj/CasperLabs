@@ -127,7 +127,7 @@ class RelayingSpec
 }
 
 object RelayingSpec {
-  private val local = Node(NodeIdentifier("0000"), "localhost", 40400, 40404)
+  private val local = Node(NodeIdentifier("0000"), "localhost", 40400, 40404, "casperlabs")
 
   private val ask: NodeAsk[Task] = new DefaultApplicativeAsk[Task, Node] {
     val applicative: Applicative[Task] = Applicative[Task]

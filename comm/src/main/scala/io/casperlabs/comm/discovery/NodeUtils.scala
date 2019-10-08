@@ -25,13 +25,19 @@ object NodeIdentifier {
 object NodeUtils {
   implicit val showNode: Show[Node] = Show.show(
     node =>
-      s"casperlabs://${NodeIdentifier(node.id)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
+      s"${node.chainId}://${NodeIdentifier(node.id)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
   )
 
   implicit class NodeCompanionOps(val nodeCompanion: Node.type) {
 
-    def apply(id: NodeIdentifier, host: String, protocol: Int, discovery: Int): Node =
-      Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery)
+    def apply(
+        id: NodeIdentifier,
+        host: String,
+        protocol: Int,
+        discovery: Int,
+        chainId: String
+    ): Node =
+      Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery, chainId)
 
     def fromAddress(str: String): Either[String, Node] = {
       // TODO toInt, not URL, scheme not casperlabs, renameflag to discovery-port
@@ -40,12 +46,12 @@ object NodeUtils {
       val maybePeer = maybeUrl flatMap (
           url =>
             for {
-              _         <- url.schemeOption
+              chainId   <- url.schemeOption
               id        <- url.user
               host      <- url.hostOption
               discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
               protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
-            } yield apply(NodeIdentifier(id), host.value, protocol, discovery)
+            } yield apply(NodeIdentifier(id), host.value, protocol, discovery, chainId)
         )
       maybePeer.fold[Either[String, Node]](
         Left(s"bad address: $str")

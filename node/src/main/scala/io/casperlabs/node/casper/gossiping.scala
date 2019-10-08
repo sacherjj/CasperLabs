@@ -27,6 +27,7 @@ import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.{ChainSpecReader, Configuration}
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
@@ -54,6 +55,7 @@ package object gossiping {
   def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
       port: Int,
       conf: Configuration,
+      chainSpec: ChainSpec,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
@@ -69,16 +71,14 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
-      spec <- makeChainSpec[F](conf)
-
-      genesis <- makeGenesis[F](spec)
+      genesis <- makeGenesis[F](chainSpec)
 
       implicit0(protocolVersions: CasperLabsProtocolVersions[F]) <- Resource.liftF[
                                                                      F,
                                                                      CasperLabsProtocolVersions[F]
                                                                    ](
                                                                      CasperLabsProtocolVersions
-                                                                       .fromChainSpec[F](spec)
+                                                                       .fromChainSpec[F](chainSpec)
                                                                    )
 
       cachedConnections <- makeConnectionsCache(
@@ -169,30 +169,7 @@ package object gossiping {
                                StashingSynchronizer.wrap(synchronizer, awaitApproval.join)
                              }
 
-      rateLimiter <- {
-        val elementsPerPeriod: Int = conf.server.blockUploadRateMaxRequests
-        val period                 = conf.server.blockUploadRatePeriod
-        val queueSize: Int         = conf.server.blockUploadRateMaxThrottled
-
-        if (elementsPerPeriod == 0 || period == Duration.Zero) {
-          Resource.liftF {
-            for {
-              _ <- Log[F].info("Disable rate limiting")
-            } yield RateLimiter.noOp[F, ByteString]
-          }
-        } else {
-          Resource.liftF[F, Unit](
-            Log[F].info(s"Rate limiting enabled: $elementsPerPeriod requests every $period")
-          ) >>
-            RateLimiter.create[F, ByteString](
-              elementsPerPeriod = elementsPerPeriod,
-              period = period,
-              maxQueueSize =
-                if (queueSize == 0) Int.MaxValue
-                else queueSize
-            )
-        }
-      }
+      rateLimiter <- makeRateLimiter[F](conf)
 
       gossipServiceServer <- makeGossipServiceServer(
                               conf,
@@ -204,6 +181,7 @@ package object gossiping {
       _ <- startGrpcServer(
             gossipServiceServer,
             rateLimiter,
+            chainSpec.getGenesis.name,
             serverSslContext,
             conf,
             port,
@@ -237,21 +215,6 @@ package object gossiping {
 
     } yield ()
   }
-
-  private def makeChainSpec[F[_]: MonadThrowable](conf: Configuration): Resource[F, ipc.ChainSpec] =
-    Resource.liftF[F, ipc.ChainSpec] {
-      ChainSpecReader
-        .fromConf(conf)
-        .fold(
-          errors =>
-            MonadThrowable[F].raiseError(
-              new IllegalArgumentException(
-                errors.toList.mkString(", ")
-              )
-            ),
-          _.pure[F]
-        )
-    }
 
   private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
       spec: ipc.ChainSpec
@@ -772,12 +735,40 @@ package object gossiping {
       }
     }
 
+  private def makeRateLimiter[F[_]: Concurrent: Timer: Log](
+      conf: Configuration
+  ): Resource[F, RateLimiter[F, ByteString]] = {
+    val elementsPerPeriod: Int = conf.server.blockUploadRateMaxRequests
+    val period                 = conf.server.blockUploadRatePeriod
+    val queueSize: Int         = conf.server.blockUploadRateMaxThrottled
+
+    if (elementsPerPeriod == 0 || period == Duration.Zero) {
+      Resource.liftF {
+        for {
+          _ <- Log[F].info("Disable rate limiting")
+        } yield RateLimiter.noOp[F, ByteString]
+      }
+    } else {
+      Resource.liftF[F, Unit](
+        Log[F].info(s"Rate limiting enabled: $elementsPerPeriod requests every $period")
+      ) >>
+        RateLimiter.create[F, ByteString](
+          elementsPerPeriod = elementsPerPeriod,
+          period = period,
+          maxQueueSize =
+            if (queueSize == 0) Int.MaxValue
+            else queueSize
+        )
+    }
+  }
+
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
-  def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
+  private def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
       rateLimiter: RateLimiter[F, ByteString],
+      chainId: String,
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,
@@ -793,6 +784,7 @@ package object gossiping {
             val svc = GrpcGossipService.fromGossipService(
               server,
               rateLimiter,
+              chainId,
               blockChunkConsumerTimeout = conf.server.relayBlockChunkConsumerTimeout
             )
             GossipingGrpcMonix.bindService(svc, scheduler)

@@ -10,7 +10,7 @@ trait ArbitraryConsensusAndComm extends ArbitraryConsensus {
       id   <- genHash
       host <- Gen.listOfN(4, Gen.choose(0, 255)).map(xs => xs.mkString("."))
     } yield {
-      Node(id, host, 40400, 40404)
+      Node(id, host, 40400, 40404, "casperlabs")
     }
   }
 }

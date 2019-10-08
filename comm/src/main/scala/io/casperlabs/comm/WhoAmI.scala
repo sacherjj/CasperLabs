@@ -20,12 +20,13 @@ object WhoAmI {
       protocolPort: Int,
       discoveryPort: Int,
       noUpnp: Boolean,
-      id: NodeIdentifier
+      id: NodeIdentifier,
+      chainId: String
   ): F[Node] =
     for {
       externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
       host            <- fetchHost(host, externalAddress)
-      peerNode        = Node(id, host, protocolPort, discoveryPort)
+      peerNode        = Node(id, host, protocolPort, discoveryPort, chainId)
     } yield peerNode
 
   def checkLocalPeerNode[F[_]: Sync: Log](

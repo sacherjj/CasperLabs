@@ -27,6 +27,7 @@ object GrpcGossipService {
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F],
       rateLimiter: RateLimiter[F, ByteString],
+      chainId: String,
       blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
@@ -41,6 +42,13 @@ object GrpcGossipService {
           case (_, None) =>
             Task.raiseError[NodeIdentifier](
               Unauthenticated("Cannot verify sender identity.")
+            )
+
+          case (Some(sender), _) if sender.chainId != chainId =>
+            Task.raiseError[NodeIdentifier](
+              Unauthenticated(
+                s"Sender doesn't match chain id, expected: $chainId, received: ${sender.chainId}"
+              )
             )
 
           case (Some(sender), Some(Principal.Peer(id))) if sender.id != id =>

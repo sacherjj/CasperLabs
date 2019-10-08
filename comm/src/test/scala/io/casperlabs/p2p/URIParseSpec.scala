@@ -18,7 +18,8 @@ class URIParseSpec extends FlatSpec with Matchers {
           ByteString.copyFrom(Array(0xAB.toByte, 0xCD.toByte, 0xEF.toByte)),
           "localhost",
           12345,
-          12346
+          12346,
+          "casperlabs"
         )
       )
     )

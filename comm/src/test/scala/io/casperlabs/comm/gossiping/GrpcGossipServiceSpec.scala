@@ -1300,7 +1300,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
               val svc = GrpcGossipService
-                .fromGossipService(gss, rateLimiter, blockChunkConsumerTimeout)
+                .fromGossipService(gss, rateLimiter, "casperlabs", blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),

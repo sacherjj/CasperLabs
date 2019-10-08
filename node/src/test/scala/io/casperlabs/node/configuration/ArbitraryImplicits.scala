@@ -45,7 +45,8 @@ trait ArbitraryImplicits {
       host    <- Gen.listOfN(n, Gen.alphaNumChar)
       tcpPort <- Gen.posNum[Int]
       udpPort <- Gen.posNum[Int]
-    } yield Node(id, host.mkString(""), tcpPort, udpPort)
+      chainId <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+    } yield Node(id, host.mkString(""), tcpPort, udpPort, chainId)
   }
 
   // There are some comparison problems with default generator
