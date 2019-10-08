@@ -1,11 +1,10 @@
 #![no_std]
-#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
+extern crate core;
 
 extern crate contract_ffi;
-extern crate core;
 
 use alloc::collections::btree_map::BTreeMap;
 use alloc::vec::Vec;

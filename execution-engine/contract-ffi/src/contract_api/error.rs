@@ -70,6 +70,8 @@ pub enum Error {
     Transfer,
     /// No access rights.
     NoAccessRights,
+    /// Optional data was unexpectedly `None`.
+    None,
     /// Error specific to Proof of Stake contract.
     ProofOfStake(u8),
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
@@ -96,6 +98,7 @@ impl From<Error> for u32 {
             Error::UpgradeContractAtURef => 14,
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
+            Error::None => 17,
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
@@ -123,6 +126,7 @@ impl Debug for Error {
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
+            Error::None => write!(f, "Error::None")?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
@@ -145,16 +149,18 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         3 => Err(Error::ContractNotFound),
         4 => Err(Error::UnexpectedKeyVariant),
         5 => Err(Error::UnexpectedValueVariant),
-        6 => Err(Error::Read),
-        7 => Err(Error::ValueNotFound),
-        8 => Err(Error::MintFailure),
-        9 => Err(Error::InvalidPurseName),
-        10 => Err(Error::InvalidPurse),
-        11 => Err(Error::MissingArgument),
-        12 => Err(Error::InvalidArgument),
-        13 => Err(Error::UpgradeContractAtURef),
-        14 => Err(Error::Transfer),
-        15 => Err(Error::NoAccessRights),
+        6 => Err(Error::UnexpectedContractPointerVariant),
+        7 => Err(Error::Read),
+        8 => Err(Error::ValueNotFound),
+        9 => Err(Error::MintFailure),
+        10 => Err(Error::InvalidPurseName),
+        11 => Err(Error::InvalidPurse),
+        12 => Err(Error::MissingArgument),
+        13 => Err(Error::InvalidArgument),
+        14 => Err(Error::UpgradeContractAtURef),
+        15 => Err(Error::Transfer),
+        16 => Err(Error::NoAccessRights),
+        17 => Err(Error::None),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -169,11 +175,18 @@ pub fn result_from(value: i32) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
+    use super::*;
     use core::{u16, u8};
+
+    fn round_trip(result: Result<(), Error>) {
+        let code = i32_from(result);
+        assert_eq!(result, result_from(code));
+    }
 
     #[test]
     fn error() {
+        assert_eq!(65_280_u32, Error::ProofOfStake(0).into()); // POS_ERROR_OFFSET == 65,280
+        assert_eq!(65_535_u32, Error::ProofOfStake(u8::MAX).into());
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
@@ -191,5 +204,28 @@ mod tests {
             "Error::User(65535) [131071]",
             &format!("{:?}", Error::User(u16::MAX))
         );
+
+        round_trip(Ok(()));
+        round_trip(Err(Error::GetURef));
+        round_trip(Err(Error::Deserialize));
+        round_trip(Err(Error::ContractNotFound));
+        round_trip(Err(Error::UnexpectedKeyVariant));
+        round_trip(Err(Error::UnexpectedValueVariant));
+        round_trip(Err(Error::UnexpectedContractPointerVariant));
+        round_trip(Err(Error::Read));
+        round_trip(Err(Error::ValueNotFound));
+        round_trip(Err(Error::MintFailure));
+        round_trip(Err(Error::InvalidPurseName));
+        round_trip(Err(Error::InvalidPurse));
+        round_trip(Err(Error::MissingArgument));
+        round_trip(Err(Error::InvalidArgument));
+        round_trip(Err(Error::UpgradeContractAtURef));
+        round_trip(Err(Error::Transfer));
+        round_trip(Err(Error::NoAccessRights));
+        round_trip(Err(Error::None));
+        round_trip(Err(Error::ProofOfStake(0)));
+        round_trip(Err(Error::ProofOfStake(u8::MAX)));
+        round_trip(Err(Error::User(0)));
+        round_trip(Err(Error::User(u16::MAX)));
     }
 }

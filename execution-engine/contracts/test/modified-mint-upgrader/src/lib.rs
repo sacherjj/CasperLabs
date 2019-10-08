@@ -1,6 +1,5 @@
 #![no_std]
 
-extern crate alloc;
 extern crate contract_ffi;
 extern crate modified_mint;
 

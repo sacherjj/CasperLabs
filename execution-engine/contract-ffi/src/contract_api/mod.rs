@@ -8,6 +8,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::{From, TryFrom, TryInto};
 use core::fmt::Debug;
+use core::u8;
 
 use self::alloc_util::*;
 use self::pointers::*;

@@ -1,7 +1,7 @@
 #![no_std]
-#![feature(cell_update)]
 
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::string::ToString;
@@ -9,12 +9,13 @@ use alloc::string::ToString;
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key: Key =
-        contract_api::get_key("hello_ext").unwrap_or_else(|| contract_api::revert(Error::GetURef));
+        contract_api::get_key("hello_ext").unwrap_or_revert_with(Error::GetURef);
     let contract_pointer: ContractPointer = match contract_key {
         Key::Hash(hash) => ContractPointer::Hash(hash),
         _ => contract_api::revert(Error::UnexpectedKeyVariant),

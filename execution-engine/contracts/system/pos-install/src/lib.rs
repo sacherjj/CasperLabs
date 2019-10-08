@@ -2,19 +2,22 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 extern crate pos;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use core::fmt::Write;
+
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
-use core::fmt::Write;
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
@@ -36,19 +39,15 @@ pub extern "C" fn pos_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_uref: URef = match contract_api::get_arg(Args::MintURef as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
-        None => contract_api::revert(Error::MissingArgument),
-    };
+    let mint_uref: URef = contract_api::get_arg(Args::MintURef as u32)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
     let mint = ContractPointer::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
-        match contract_api::get_arg(Args::GenesisValidators as u32) {
-            Some(Ok(data)) => data,
-            Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
-            None => contract_api::revert(Error::MissingArgument),
-        };
+        contract_api::get_arg(Args::GenesisValidators as u32)
+            .unwrap_or_revert_with(Error::MissingArgument)
+            .unwrap_or_revert_with(Error::InvalidArgument);
 
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
@@ -92,7 +91,7 @@ pub extern "C" fn call() {
 
     let uref = contract_api::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
+        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
     contract_api::ret(&uref, &vec![uref]);

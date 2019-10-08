@@ -1,6 +1,6 @@
 use core::result;
 
-use contract_ffi::contract_api::{self, Error as ApiError};
+use contract_ffi::contract_api::Error as ApiError;
 
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
@@ -45,23 +45,13 @@ pub enum Error {
     SetRefundPurseCalledOutsidePayment,
 }
 
-pub type Result<T> = result::Result<T, Error>;
-
 impl From<Error> for ApiError {
     fn from(error: Error) -> Self {
         ApiError::ProofOfStake(error as u8)
     }
 }
 
-pub trait ResultExt<T> {
-    fn unwrap_or_revert(self) -> T;
-}
-
-impl<T> ResultExt<T> for Result<T> {
-    fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|err| contract_api::revert(ApiError::from(err)))
-    }
-}
+pub type Result<T> = result::Result<T, Error>;
 
 pub enum PurseLookupError {
     KeyNotFound,

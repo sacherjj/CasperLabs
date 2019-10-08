@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 mod capabilities;
@@ -20,6 +21,7 @@ use core::convert::TryInto;
 use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::KEY_SIZE;
 use contract_ffi::value::U512;
@@ -81,21 +83,17 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
 
 pub fn delegate() {
     let mint = CLMint;
-    let method_name: String = match contract_api::get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-        None => contract_api::revert(ApiError::MissingArgument),
-    };
+    let method_name: String = contract_api::get_arg(0)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
         // argument: U512
         // return: Result<URef, mint::error::Error>
         "mint" => {
-            let amount: U512 = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-                None => contract_api::revert(ApiError::MissingArgument),
-            };
+            let amount: U512 = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
 
             let maybe_purse_key = mint
                 .mint(amount)
@@ -115,11 +113,9 @@ pub fn delegate() {
         }
 
         "balance" => {
-            let key: URef = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-                None => contract_api::revert(ApiError::MissingArgument),
-            };
+            let key: URef = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
             let balance: Option<U512> =
@@ -128,21 +124,15 @@ pub fn delegate() {
         }
 
         "transfer" => {
-            let source: URef = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-                None => contract_api::revert(ApiError::MissingArgument),
-            };
-            let target: URef = match contract_api::get_arg(2) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-                None => contract_api::revert(ApiError::MissingArgument),
-            };
-            let amount: U512 = match contract_api::get_arg(3) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-                None => contract_api::revert(ApiError::MissingArgument),
-            };
+            let source: URef = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
+            let target: URef = contract_api::get_arg(2)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
+            let amount: U512 = contract_api::get_arg(3)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {
                 Ok(withdraw_id) => withdraw_id,

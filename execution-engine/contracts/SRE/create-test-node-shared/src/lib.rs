@@ -1,10 +1,12 @@
 #![no_std]
 
-extern crate alloc;
+extern crate binascii;
 extern crate contract_ffi;
 
 use binascii::ConvertError;
+
 use contract_ffi::contract_api::{self, Error, TransferredTo};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::uint::U512;
 
@@ -21,9 +23,10 @@ pub fn create_account(account_addr: &[u8; 64], initial_amount: u64) {
     };
     let amount: U512 = U512::from(initial_amount);
 
-    match contract_api::transfer_to_account(public_key, amount) {
-        Ok(TransferredTo::NewAccount) => (),
-        Ok(TransferredTo::ExistingAccount) => contract_api::revert(Error::User(10)),
-        Err(_) => contract_api::revert(Error::User(11)),
+    match contract_api::transfer_to_account(public_key, amount)
+        .unwrap_or_revert_with(Error::User(11))
+    {
+        TransferredTo::NewAccount => (),
+        TransferredTo::ExistingAccount => contract_api::revert(Error::User(10)),
     }
 }

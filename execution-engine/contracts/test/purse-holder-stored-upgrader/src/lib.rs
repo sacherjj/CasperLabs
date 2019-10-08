@@ -2,10 +2,13 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
+
 use contract_ffi::contract_api::{self, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -44,20 +47,16 @@ impl From<CustomError> for Error {
 }
 
 fn purse_name() -> String {
-    match contract_api::get_arg(ApplyArgs::PurseName as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(CustomError::InvalidPurseNameArg),
-        None => contract_api::revert(CustomError::MissingPurseNameArg),
-    }
+    contract_api::get_arg(ApplyArgs::PurseName as u32)
+        .unwrap_or_revert_with(CustomError::MissingPurseNameArg)
+        .unwrap_or_revert_with(CustomError::InvalidPurseNameArg)
 }
 
 #[no_mangle]
 pub extern "C" fn apply_method() {
-    let method_name: String = match contract_api::get_arg(ApplyArgs::MethodName as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(CustomError::InvalidMethodNameArg),
-        None => contract_api::revert(CustomError::MissingMethodNameArg),
-    };
+    let method_name: String = contract_api::get_arg(ApplyArgs::MethodName as u32)
+        .unwrap_or_revert_with(CustomError::MissingMethodNameArg)
+        .unwrap_or_revert_with(CustomError::InvalidMethodNameArg);
     match method_name.as_str() {
         METHOD_ADD => {
             let purse_name = purse_name();
@@ -75,11 +74,9 @@ pub extern "C" fn apply_method() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let uref: URef = match contract_api::get_arg(CallArgs::PurseHolderURef as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(CustomError::InvalidPurseHolderURefArg),
-        None => contract_api::revert(CustomError::MissingPurseHolderURefArg),
-    };
+    let uref: URef = contract_api::get_arg(CallArgs::PurseHolderURef as u32)
+        .unwrap_or_revert_with(CustomError::MissingPurseHolderURefArg)
+        .unwrap_or_revert_with(CustomError::InvalidPurseHolderURefArg);
 
     let turef = contract_api::pointers::TURef::from_uref(uref)
         .unwrap_or_else(|_| contract_api::revert(CustomError::InvalidTURef));

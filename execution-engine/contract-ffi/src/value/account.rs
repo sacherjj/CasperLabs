@@ -1,5 +1,7 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
+use crate::contract_api::{self, Error as ApiError};
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
+use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use alloc::string::String;
@@ -18,6 +20,16 @@ pub struct TryFromIntError(());
 
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
+
+impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
+    fn unwrap_or_revert(self) -> T {
+        self.unwrap_or_else(|_| contract_api::revert(ApiError::Deserialize))
+    }
+
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
+        self.unwrap_or_else(|_| contract_api::revert(error.into()))
+    }
+}
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);

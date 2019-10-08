@@ -1,13 +1,16 @@
 #![no_std]
 
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 const MINT_NAME: &str = "mint";
 const ENTRY_FUNCTION_NAME: &str = "delegate";
@@ -36,7 +39,7 @@ pub extern "C" fn call() {
 
     let key = contract_api::store_function(ENTRY_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
+        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
     contract_api::put_key(CONTRACT_NAME, &key);
