@@ -3,10 +3,12 @@ use super::alloc::collections::TryReserveError;
 use super::alloc::string::{String, ToString};
 use super::alloc::vec::Vec;
 
-use crate::value::ProtocolVersion;
 use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
+
+use crate::value::ProtocolVersion;
+use crate::value::SemVer;
 
 pub const I32_SIZE: usize = size_of::<i32>();
 pub const U8_SIZE: usize = size_of::<u8>();
@@ -17,6 +19,7 @@ pub const U128_SIZE: usize = size_of::<u128>();
 pub const U256_SIZE: usize = U128_SIZE * 2;
 pub const U512_SIZE: usize = U256_SIZE * 2;
 pub const OPTION_SIZE: usize = 1;
+pub const SEM_VER_SIZE: usize = 12;
 
 pub const N32: usize = 32;
 const N256: usize = 256;
@@ -491,18 +494,36 @@ impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
     }
 }
 
+impl ToBytes for SemVer {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut ret: Vec<u8> = Vec::with_capacity(SEM_VER_SIZE);
+        ret.append(&mut self.major.to_bytes()?);
+        ret.append(&mut self.minor.to_bytes()?);
+        ret.append(&mut self.patch.to_bytes()?);
+        Ok(ret)
+    }
+}
+
+impl FromBytes for SemVer {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (major, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (minor, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (patch, rem): (u32, &[u8]) = FromBytes::from_bytes(rem)?;
+        Ok((SemVer::new(major, minor, patch), rem))
+    }
+}
+
 impl ToBytes for ProtocolVersion {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.value().to_le_bytes().to_vec())
+        let value_bytes = self.value().to_bytes()?;
+        Ok(value_bytes.to_vec())
     }
 }
 
 impl FromBytes for ProtocolVersion {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut result: [u8; 8] = [0u8; 8];
-        let (bytes, rem) = safe_split_at(bytes, 8)?;
-        result.copy_from_slice(bytes);
-        let protocol_version = ProtocolVersion::new(u64::from_le_bytes(result));
+        let (version, rem): (SemVer, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let protocol_version = ProtocolVersion::new(version);
         Ok((protocol_version, rem))
     }
 }
@@ -635,6 +656,11 @@ mod proptests {
         #[test]
         fn test_protocol_version(protocol_version in protocol_version_arb()) {
             assert!(test_serialization_roundtrip(&protocol_version))
+        }
+
+        #[test]
+        fn test_sem_ver(sem_ver in sem_ver_arb()) {
+            assert!(test_serialization_roundtrip(&sem_ver))
         }
     }
 }

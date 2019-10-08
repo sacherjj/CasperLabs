@@ -14,8 +14,8 @@ enum Args {
 pub fn delegate() {
     let purse_name: String = match contract_api::get_arg(Args::PurseName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
+        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
+        None => contract_api::revert(Error::MissingArgument),
     };
     let purse_id = contract_api::create_purse();
     contract_api::put_key(&purse_name, &purse_id.value().into());

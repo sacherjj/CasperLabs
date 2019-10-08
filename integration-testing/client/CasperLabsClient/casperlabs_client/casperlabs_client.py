@@ -36,7 +36,7 @@ base64_b64decode = base64.b64decode
 
 def _hex(text, as_utf8):
     try:
-        return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+        return (len(text) in (32, 64, 20)) and text.hex() or CEscape(text, as_utf8)
     except TypeError:
         return CEscape(text, as_utf8)
 
@@ -104,6 +104,10 @@ class ABI:
         return Arg(
             name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
         )
+
+    @staticmethod
+    def string_value(name, a):
+        return Arg(name=name, value=Value(string_value=a))
 
     @staticmethod
     def args(l: list):
@@ -282,7 +286,7 @@ class SecureGRPCService:
     def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
-        self.node_id = node_id  # or extract_common_name(certificate_file)
+        self.node_id = node_id or extract_common_name(certificate_file)
         self.certificate_file = certificate_file
         with open(self.certificate_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
@@ -450,7 +454,7 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
-            timestamp=int(time.time()),
+            timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=_hash(_serialize(body)),
         )

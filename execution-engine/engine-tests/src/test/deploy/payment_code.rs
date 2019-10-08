@@ -5,74 +5,60 @@ use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
-use engine_core::engine_state::{EngineConfig, CONV_RATE, MAX_PAYMENT};
+use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
 use crate::support::test_support::{
     self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    GENESIS_INITIAL_BALANCE,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
+use crate::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
+    DEFAULT_GENESIS_CONFIG,
+};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
+const CONTRACT_REVERT: &str = "revert.wasm";
 
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
+    )
+    .build();
 
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code(
-                "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
-            )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT),))
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
-
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .get_exec_response(0)
         .expect("there should be a response")
         .to_owned();
 
-    let account_1_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(ACCOUNT_1_ADDR)
-            .with_deploy_hash([1; 32])
-            .with_session_code("revert.wasm", ())
-            .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(MAX_PAYMENT - 1),))
-            .with_authorization_keys(&[account_1_public_key])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let account_1_request =
+        ExecuteRequestBuilder::standard(ACCOUNT_1_ADDR, CONTRACT_REVERT, ()).build();
 
     let account_1_response = builder
-        .exec_with_exec_request(account_1_request)
+        .exec(account_1_request)
         .commit()
         .get_exec_response(1)
         .expect("there should be a response")
         .to_owned();
 
     let error_message = {
-        let execution_result =
-            crate::support::test_support::get_success_result(&account_1_response);
+        let execution_result = test_support::get_success_result(&account_1_response);
         test_support::get_error_message(execution_result)
     };
 
@@ -97,8 +83,6 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -114,11 +98,11 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let _response = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .get_exec_response(0)
         .expect("there should be a response")
@@ -140,7 +124,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     }
 
     let modified_balance = modified_balance.expect("modified balance should be present");
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
 
     assert_eq!(
@@ -167,8 +151,8 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = crate::support::test_support::get_success_result(&response);
-    let error_message = crate::support::test_support::get_error_message(execution_result);
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -183,8 +167,6 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     let payment_purse_amount: U512 = U512::from(1_000_000);
     let transferred_amount = U512::from(1);
     let expected_transfers_count = 2;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -201,9 +183,9 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = InMemoryWasmTestBuilder::new(engine_config)
+    let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -216,7 +198,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         "unexpected forced transfer transforms count"
     );
 
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
     let expected_reward_balance: U512 = U512::from(MAX_PAYMENT);
     let mut modified_balance: Option<U512> = None;
     let mut reward_balance: Option<U512> = None;
@@ -257,8 +239,8 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = crate::support::test_support::get_success_result(&response);
-    let error_message = crate::support::test_support::get_error_message(execution_result);
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
 
     assert_eq!(
         error_message, "Insufficient payment",
@@ -272,8 +254,6 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -290,11 +270,11 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -304,8 +284,8 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         .expect("there should be a response")
         .clone();
 
-    let execution_result = crate::support::test_support::get_success_result(&response);
-    let error_message = crate::support::test_support::get_error_message(execution_result);
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
 
     assert_eq!(error_message, "GasLimit", "expected gas limit");
 }
@@ -314,8 +294,6 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
 #[test]
 fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let payment_purse_amount = 10_000_000;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -329,11 +307,11 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -344,7 +322,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -357,17 +335,23 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
+    let success_result = test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes) + modified_balance;
+    let tally = motes.value() + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
         "no net resources should be gained or lost post-distribution"
     );
 
-    let execution_result = crate::support::test_support::get_success_result(&response);
-    let error_message = crate::support::test_support::get_error_message(execution_result);
+    let execution_result = test_support::get_success_result(&response);
+    let error_message = test_support::get_error_message(execution_result);
 
     assert_eq!(error_message, "GasLimit", "expected gas limit");
 }
@@ -378,8 +362,6 @@ fn should_correctly_charge_when_session_code_fails() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -396,11 +378,11 @@ fn should_correctly_charge_when_session_code_fails() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -411,7 +393,7 @@ fn should_correctly_charge_when_session_code_fails() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -424,9 +406,14 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes) + modified_balance;
+    let success_result = test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let tally = motes.value() + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -440,8 +427,6 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -458,11 +443,11 @@ fn should_correctly_charge_when_session_code_succeeds() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(exec_request)
+        .exec(exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -474,7 +459,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
     let modified_balance: U512 = transfer_result
         .builder()
         .get_purse_balance(default_account.purse_id());
-    let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
+    let initial_balance: U512 = U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE);
 
     assert_ne!(
         modified_balance, initial_balance,
@@ -487,9 +472,15 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes + transferred_amount) + modified_balance;
+    let success_result = test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let total = motes.value() + U512::from(transferred_amount);
+    let tally = total + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -527,8 +518,6 @@ fn should_finalize_to_rewards_purse() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -544,17 +533,14 @@ fn should_finalize_to_rewards_purse() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG);
 
     let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
     assert!(rewards_purse_balance.is_zero());
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success()
-        .commit();
+    builder.exec(exec_request).expect_success().commit();
 
     let rewards_purse_balance = get_pos_rewards_purse_balance(&builder);
     assert!(!rewards_purse_balance.is_zero());
@@ -566,9 +552,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     let setup_exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -588,7 +572,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
     // create another account via transfer
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(setup_exec_request)
+        .exec(setup_exec_request)
         .expect_success()
         .commit();
 
@@ -618,10 +602,10 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
 
     // run two independent deploys
     builder
-        .exec_with_exec_request(exec_request_from_genesis)
+        .exec(exec_request_from_genesis)
         .expect_success()
         .commit()
-        .exec_with_exec_request(exec_request_from_account_1)
+        .exec(exec_request_from_account_1)
         .expect_success()
         .commit();
 
@@ -655,8 +639,7 @@ fn should_charge_non_main_purse() {
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
 
     // arrange
     let setup_exec_request = {
@@ -691,10 +674,10 @@ fn should_charge_non_main_purse() {
 
     let transfer_result = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_exec_request(setup_exec_request)
+        .exec(setup_exec_request)
         .expect_success()
         .commit()
-        .exec_with_exec_request(create_purse_exec_request)
+        .exec(create_purse_exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -752,7 +735,7 @@ fn should_charge_non_main_purse() {
     };
 
     let transfer_result = builder
-        .exec_with_exec_request(account_payment_exec_request)
+        .exec(account_payment_exec_request)
         .expect_success()
         .commit()
         .finish();
@@ -763,9 +746,12 @@ fn should_charge_non_main_purse() {
         .expect("there should be a response")
         .clone();
 
-    let motes = crate::support::test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let expected_resting_balance = account_1_purse_funding_amount - motes;
+    let expected_resting_balance = account_1_purse_funding_amount - motes.value();
 
     let purse_final_balance = {
         let purse_bytes = purse_id

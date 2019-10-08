@@ -112,29 +112,10 @@ relay-block-chunk-consumer-timeout = "10second"
 clean-block-storage = false
 
 
-# io.casperlabs.blockstorage.LMDBBlockStorage.Config
-[lmdb]
-
-# LMDB blockstorage  map size (in bytes).
-block-storage-size = 1073741824
-
-# LMDB blockstorage max databases.
-max-dbs = 1
-
-# LMDB blockstorage max readers.
-max-readers = 126
-
-# LMDB blockstorage use TLS.
-use-tls = false
-
-
-# io.casperlabs.blockstorage.FileDagStorage.Config
+# io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 
-# Size factor for squashing block storage latest messages.
-latest-messages-log-max-size-factor = 10
-
-# Maximum size of the in-memory block cache in bytes.
+# Maximum size of each of in-memory block/dag/justifications caches in bytes.
 cache-max-size-bytes = 262144000
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
@@ -218,10 +199,10 @@ auto-propose-enabled = false
 auto-propose-check-interval = "1second"
 
 # Time to accumulate deploys before proposing.
-auto-propose-max-interval = "5seconds"
+auto-propose-acc-interval = "5seconds"
 
 # Number of deploys to accumulate before proposing.
-auto-propose-max-count = 10
+auto-propose-acc-count = 10
 
 # Maximum block size in bytes
 max-block-size-bytes = 10485760

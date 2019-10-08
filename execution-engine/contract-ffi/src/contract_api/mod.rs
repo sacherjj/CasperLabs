@@ -1,6 +1,14 @@
 mod alloc_util;
 pub mod argsparser;
+mod error;
 pub mod pointers;
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::{From, TryFrom, TryInto};
+use core::fmt::Debug;
+use core::u8;
 
 use self::alloc_util::*;
 use self::pointers::*;
@@ -8,187 +16,19 @@ use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::uref::{AccessRights, URef};
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::{Contract, ProtocolVersion, Value, U512};
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use crate::value::{Contract, Value, U512};
 use argsparser::ArgsParser;
-use core::convert::{From, TryFrom, TryInto};
-use core::fmt::{self, Debug, Formatter};
-use core::{u16, u8};
+pub use error::{i32_from, result_from, Error};
+
+pub type TransferResult = Result<TransferredTo, Error>;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
-
-/// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
-/// value less than or equal to `RESERVED_ERROR_MAX`.
-const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
-
-/// Proof of Stake errors (defined in "contracts/system/pos/src/error.rs") will have this value
-/// added to them when being converted to a `u32`.
-const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32;
-
-/// Variants to be passed to `contract_api::revert()`.
-///
-/// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
-/// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
-///
-/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
-/// e.g.
-/// ```
-/// use casperlabs_contract_ffi::contract_api::Error;
-///
-/// #[repr(u16)]
-/// enum FailureCode {
-///     Zero = 0,  // 65,536 as an Error::User
-///     One,       // 65,537 as an Error::User
-///     Two        // 65,538 as an Error::User
-/// }
-///
-/// impl From<FailureCode> for Error {
-///     fn from(code: FailureCode) -> Self {
-///         Error::User(code as u16)
-///     }
-/// }
-///
-/// assert_eq!(Error::User(1), FailureCode::One.into());
-/// assert_eq!(65_536, u32::from(Error::from(FailureCode::Zero)));
-/// assert_eq!(65_538, u32::from(Error::from(FailureCode::Two)));
-/// ```
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum Error {
-    /// A call to `get_uref()` returned a failure.
-    GetURef,
-    /// Failed to deserialize a value.
-    Deserialize,
-    /// Failed to find a specified contract.
-    ContractNotFound,
-    /// The `Key` variant was not as expected.
-    UnexpectedKeyVariant,
-    /// The `Value` variant was not as expected.
-    UnexpectedValueVariant,
-    /// `read` returned an error.
-    Read,
-    /// The given key returned a `None` value.
-    ValueNotFound,
-    /// Failed to initialize a mint purse.
-    MintFailure,
-    /// Invalid purse name given.
-    InvalidPurseName,
-    /// Invalid purse retrieved.
-    InvalidPurse,
-    /// Specified argument not provided.
-    MissingArgument,
-    /// Argument not of correct type.
-    InvalidArgument,
-    /// Failed to upgrade contract at URef.
-    UpgradeContractAtURef,
-    /// Failed to transfer motes.
-    Transfer,
-    /// No access rights.
-    NoAccessRights,
-    /// Optional data was unexpectedly `None`.
-    None,
-    /// Error specific to Proof of Stake contract.
-    ProofOfStake(u8),
-    /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
-    /// `Error::User` is converted to a `u32`.
-    User(u16),
-}
-
-impl From<Error> for u32 {
-    fn from(error: Error) -> Self {
-        match error {
-            Error::GetURef => 1,
-            Error::Deserialize => 2,
-            Error::ContractNotFound => 3,
-            Error::UnexpectedKeyVariant => 4,
-            Error::UnexpectedValueVariant => 5,
-            Error::Read => 6,
-            Error::ValueNotFound => 7,
-            Error::MintFailure => 8,
-            Error::InvalidPurseName => 9,
-            Error::InvalidPurse => 10,
-            Error::MissingArgument => 11,
-            Error::InvalidArgument => 12,
-            Error::UpgradeContractAtURef => 13,
-            Error::Transfer => 14,
-            Error::NoAccessRights => 15,
-            Error::None => 16,
-            Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
-            Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
-        }
-    }
-}
-
-impl Debug for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Error::GetURef => write!(f, "Error::GetURef")?,
-            Error::Deserialize => write!(f, "Error::Deserialize")?,
-            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
-            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
-            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
-            Error::Read => write!(f, "Error::Read")?,
-            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
-            Error::MintFailure => write!(f, "Error::MintFailure")?,
-            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
-            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
-            Error::MissingArgument => write!(f, "Error::MissingArgument")?,
-            Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
-            Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
-            Error::Transfer => write!(f, "Error::Transfer")?,
-            Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
-            Error::None => write!(f, "Error::None")?,
-            Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
-            Error::User(value) => write!(f, "Error::User({})", value)?,
-        }
-        write!(f, " [{}]", u32::from(*self))
-    }
-}
-
-pub fn i32_from(result: Result<(), Error>) -> i32 {
-    match result {
-        Ok(()) => 0,
-        Err(error) => u32::from(error) as i32,
-    }
-}
-
-pub fn result_from(value: i32) -> Result<(), Error> {
-    match value {
-        0 => Ok(()),
-        1 => Err(Error::GetURef),
-        2 => Err(Error::Deserialize),
-        3 => Err(Error::ContractNotFound),
-        4 => Err(Error::UnexpectedKeyVariant),
-        5 => Err(Error::UnexpectedValueVariant),
-        6 => Err(Error::Read),
-        7 => Err(Error::ValueNotFound),
-        8 => Err(Error::MintFailure),
-        9 => Err(Error::InvalidPurseName),
-        10 => Err(Error::InvalidPurse),
-        11 => Err(Error::MissingArgument),
-        12 => Err(Error::InvalidArgument),
-        13 => Err(Error::UpgradeContractAtURef),
-        14 => Err(Error::Transfer),
-        15 => Err(Error::NoAccessRights),
-        16 => Err(Error::None),
-        _ => {
-            if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
-                Err(Error::User(value as u16))
-            } else if value > POS_ERROR_OFFSET as i32 {
-                Err(Error::ProofOfStake(value as u8))
-            } else {
-                unreachable!()
-            }
-        }
-    }
-}
 
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
@@ -329,16 +169,6 @@ where
     }
 }
 
-fn fn_bytes_by_name(name: &str) -> Vec<u8> {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let fn_size = unsafe { ext_ffi::serialize_function(name_ptr, name_size) };
-    let fn_ptr = alloc_bytes(fn_size);
-    unsafe {
-        ext_ffi::get_function(fn_ptr);
-        Vec::from_raw_parts(fn_ptr, fn_size, fn_size)
-    }
-}
-
 pub fn list_named_keys() -> BTreeMap<String, Key> {
     let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
     let dest_ptr = alloc_bytes(bytes_size);
@@ -349,40 +179,27 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
     deserialize(&bytes).unwrap()
 }
 
-// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be
-// removed. Functions shouldn't be serialized and returned back to the contract
-// because they're never used there. Host should read the function pointer (and
-// correct number of bytes) and persist it on the host side.
-
-/// Returns the serialized bytes of a function which is exported in the current
-/// module. Note that the function is wrapped up in a new module and re-exported
-/// under the name "call". `fn_bytes_by_name` is meant to be used when storing a
-/// contract on-chain at an unforgable reference.
-pub fn fn_by_name(name: &str, named_keys: BTreeMap<String, Key>) -> Contract {
-    let bytes = fn_bytes_by_name(name);
-    let protocol_version = unsafe { ext_ffi::protocol_version() };
-    let protocol_version = ProtocolVersion::new(protocol_version);
-    Contract::new(bytes, named_keys, protocol_version)
-}
-
-/// Gets the serialized bytes of an exported function (see `fn_by_name`), then
-/// computes gets the address from the host to produce a key where the contract
-/// is then stored in the global state. This key is returned.
+/// Stores the serialized bytes of an exported function under a URef generated by the host.
 pub fn store_function(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
     let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&named_keys);
-    let mut tmp = [0u8; 32];
-    let tmp_ptr = tmp.as_mut_ptr();
+    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let mut addr = [0u8; 32];
     unsafe {
-        ext_ffi::store_function(fn_ptr, fn_size, urefs_ptr, urefs_size, tmp_ptr);
+        ext_ffi::store_function(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
     }
-    ContractPointer::Hash(tmp)
+    ContractPointer::URef(TURef::<Contract>::new(addr, AccessRights::READ_ADD_WRITE))
 }
 
-/// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, named_keys: BTreeMap<String, Key>, uref: TURef<Contract>) {
-    let contract = fn_by_name(name, named_keys);
-    write(uref, contract);
+/// Stores the serialized bytes of an exported function at an immutable address generated by the
+/// host.
+pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
+    let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
+    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let mut addr = [0u8; 32];
+    unsafe {
+        ext_ffi::store_function_at_hash(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
+    }
+    ContractPointer::Hash(addr)
 }
 
 fn load_arg(index: u32) -> Option<usize> {
@@ -508,17 +325,9 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 }
 
 /// Stops execution of a contract and reverts execution effects with a given reason.
-pub fn revert_with_error<T: Into<Error>>(error: T) -> ! {
+pub fn revert<T: Into<Error>>(error: T) -> ! {
     unsafe {
         ext_ffi::revert(error.into().into());
-    }
-}
-
-/// Stops execution of a contract and reverts execution effects
-/// with a given reason.
-pub fn revert(status: u32) -> ! {
-    unsafe {
-        ext_ffi::revert(status);
     }
 }
 
@@ -615,8 +424,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 =
-        deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize.into()));
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize));
 
     Some(balance)
 }
@@ -635,31 +443,25 @@ pub fn main_purse() -> PurseId {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransferResult {
-    TransferredToExistingAccount,
-    TransferredToNewAccount,
-    TransferError,
+#[repr(i32)]
+pub enum TransferredTo {
+    ExistingAccount = 0,
+    NewAccount = 1,
 }
 
-impl TryFrom<i32> for TransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
+impl TransferredTo {
+    fn result_from(value: i32) -> TransferResult {
         match value {
-            0 => Ok(TransferResult::TransferredToExistingAccount),
-            1 => Ok(TransferResult::TransferredToNewAccount),
-            2 => Ok(TransferResult::TransferError),
-            _ => Err(()),
+            x if x == TransferredTo::ExistingAccount as i32 => Ok(TransferredTo::ExistingAccount),
+            x if x == TransferredTo::NewAccount as i32 => Ok(TransferredTo::NewAccount),
+            _ => Err(Error::Transfer),
         }
     }
-}
 
-impl From<TransferResult> for i32 {
-    fn from(result: TransferResult) -> Self {
+    pub fn i32_from(result: TransferResult) -> i32 {
         match result {
-            TransferResult::TransferredToExistingAccount => 0,
-            TransferResult::TransferredToNewAccount => 1,
-            TransferResult::TransferError => 2,
+            Ok(transferred_to) => transferred_to as i32,
+            Err(_) => 2,
         }
     }
 }
@@ -669,9 +471,9 @@ impl From<TransferResult> for i32 {
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
-        .try_into()
-        .expect("should parse result")
+    let return_code =
+        unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` account.
@@ -684,7 +486,7 @@ pub fn transfer_from_purse_to_account(
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let return_code = unsafe {
         ext_ffi::transfer_from_purse_to_account(
             source_ptr,
             source_size,
@@ -693,37 +495,8 @@ pub fn transfer_from_purse_to_account(
             amount_ptr,
             amount_size,
         )
-    }
-    .try_into()
-    .expect("should parse result")
-}
-
-// TODO: Improve returned result type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum PurseTransferResult {
-    TransferSuccessful,
-    TransferError,
-}
-
-impl TryFrom<i32> for PurseTransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(PurseTransferResult::TransferSuccessful),
-            1 => Ok(PurseTransferResult::TransferError),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<PurseTransferResult> for i32 {
-    fn from(result: PurseTransferResult) -> Self {
-        match result {
-            PurseTransferResult::TransferSuccessful => 0,
-            PurseTransferResult::TransferError => 1,
-        }
-    }
+    };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` purse.
@@ -731,11 +504,11 @@ pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,
     amount: U512,
-) -> PurseTransferResult {
+) -> Result<(), Error> {
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let result = unsafe {
         ext_ffi::transfer_from_purse_to_purse(
             source_ptr,
             source_size,
@@ -744,20 +517,22 @@ pub fn transfer_from_purse_to_purse(
             amount_ptr,
             amount_size,
         )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(Error::Transfer)
     }
-    .try_into()
-    .expect("Should parse result")
 }
 
 fn get_system_contract(name: &str) -> ContractPointer {
-    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef.into()));
+    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
 
     if let Key::URef(uref) = key {
-        let reference =
-            TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights.into()));
+        let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
         ContractPointer::URef(reference)
     } else {
-        revert(Error::UnexpectedKeyVariant.into())
+        revert(Error::UnexpectedKeyVariant)
     }
 }
 
@@ -791,35 +566,6 @@ pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
         unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
     match result_from(result_value) {
         Ok(()) => (),
-        Err(error) => revert_with_error(error),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Error;
-    use core::{u16, u8};
-
-    #[test]
-    fn error() {
-        assert_eq!(65_280_u32, Error::ProofOfStake(0).into()); // POS_ERROR_OFFSET == 65,280
-        assert_eq!(65_535_u32, Error::ProofOfStake(u8::MAX).into());
-        assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
-        assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
-
-        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
-        assert_eq!(
-            "Error::ProofOfStake(0) [65280]",
-            &format!("{:?}", Error::ProofOfStake(0))
-        );
-        assert_eq!(
-            "Error::ProofOfStake(255) [65535]",
-            &format!("{:?}", Error::ProofOfStake(u8::MAX))
-        );
-        assert_eq!("Error::User(0) [65536]", &format!("{:?}", Error::User(0)));
-        assert_eq!(
-            "Error::User(65535) [131071]",
-            &format!("{:?}", Error::User(u16::MAX))
-        );
+        Err(error) => revert(error),
     }
 }

@@ -22,7 +22,7 @@ use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, SemVer, Value, U512};
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -108,7 +108,7 @@ where
     ) -> Result<GenesisResult, Error> {
         assert_eq!(
             protocol_version.value(),
-            1,
+            SemVer::V1_0_0,
             "legacy genesis only supports protocol version 1"
         );
 
@@ -485,7 +485,7 @@ where
         // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
         let new_protocol_version = upgrade_config.new_protocol_version();
         // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
-        if new_protocol_version.value() != current_protocol_version.value() + 1 {
+        if new_protocol_version.value().major != current_protocol_version.value().major + 1 {
             return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
@@ -557,7 +557,7 @@ where
                 let bytes: Vec<u8> = upgrade_config
                     .new_protocol_version()
                     .value()
-                    .to_le_bytes()
+                    .to_bytes()?
                     .to_vec();
                 Blake2bHash::new(&bytes).into()
             };
@@ -805,7 +805,7 @@ where
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
 
-            let session_motes = Motes::from_u64(DEFAULT_SESSION_MOTES);
+            let session_motes = Motes::new(U512::from(DEFAULT_SESSION_MOTES));
 
             let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
 
@@ -830,7 +830,7 @@ where
 
         // --- REMOVE ABOVE --- //
 
-        let max_payment_cost: Motes = Motes::from_u64(MAX_PAYMENT);
+        let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -1125,7 +1125,7 @@ where
                 .clone();
 
             let base_key = proof_of_stake_info.key();
-            let gas_limit = Gas::from_u64(std::u64::MAX);
+            let gas_limit = Gas::new(U512::from(std::u64::MAX));
 
             executor.exec_direct(
                 proof_of_stake_module,

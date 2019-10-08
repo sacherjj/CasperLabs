@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.deploybuffer.DeployBuffer
+import io.casperlabs.storage.deploy.DeployStorageReader
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
 
@@ -15,15 +15,15 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployBuffer](
+class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
     checkInterval: FiniteDuration,
-    maxInterval: FiniteDuration,
-    maxCount: Int,
+    accInterval: FiniteDuration,
+    accCount: Int,
     blockApiLock: Semaphore[F]
 ) {
 
   private def run(): F[Unit] = {
-    val maxElapsedMillis = maxInterval.toMillis
+    val accElapsedMillis = accInterval.toMillis
 
     def loop(
         // Deploys we tried to propose last time.
@@ -34,7 +34,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 
       val snapshot = for {
         currentMillis <- Time[F].currentMillis
-        deploys       <- DeployBuffer[F].readPendingHashes.map(_.toSet)
+        deploys       <- DeployStorageReader[F].readPendingHashes.map(_.toSet)
       } yield (currentMillis, currentMillis - startMillis, deploys)
 
       snapshot flatMap {
@@ -45,7 +45,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
         case (_, elapsedMillis, deploys)
             if deploys.nonEmpty
               && deploys != prevDeploys
-              && (elapsedMillis >= maxElapsedMillis || deploys.size >= maxCount) =>
+              && (elapsedMillis >= accElapsedMillis || deploys.size >= accCount) =>
           Log[F].info(
             s"Proposing block after ${elapsedMillis} ms with ${deploys.size} pending deploys."
           ) *>
@@ -75,15 +75,15 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployBuffer](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
       checkInterval: FiniteDuration,
-      maxInterval: FiniteDuration,
-      maxCount: Int,
+      accInterval: FiniteDuration,
+      accCount: Int,
       blockApiLock: Semaphore[F]
   ): Resource[F, AutoProposer[F]] =
     Resource[F, AutoProposer[F]] {
       for {
-        ap    <- Sync[F].delay(new AutoProposer(checkInterval, maxInterval, maxCount, blockApiLock))
+        ap    <- Sync[F].delay(new AutoProposer(checkInterval, accInterval, accCount, blockApiLock))
         fiber <- Concurrent[F].start(ap.run())
       } yield ap -> fiber.cancel
     }

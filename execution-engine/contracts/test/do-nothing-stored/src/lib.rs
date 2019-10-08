@@ -24,17 +24,20 @@ pub extern "C" fn delegate() {}
 #[no_mangle]
 pub extern "C" fn call() {
     let mint_uref = match contract_api::get_mint() {
-        ContractPointer::Hash(_) => {
-            contract_api::revert(Error::User(CustomError::MintHash as u16).into())
-        }
+        ContractPointer::Hash(_) => contract_api::revert(Error::User(CustomError::MintHash as u16)),
         ContractPointer::URef(turef) => turef.into(),
     };
 
-    let mint_key = Key::URef(mint_uref);
+    let named_keys = {
+        let mut tmp = BTreeMap::new();
+        tmp.insert(String::from(MINT_NAME), Key::URef(mint_uref));
+        tmp
+    };
 
-    let mut named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    named_keys.insert(String::from(MINT_NAME), mint_key);
-    let contract = contract_api::fn_by_name(ENTRY_FUNCTION_NAME, named_keys);
-    let key = contract_api::new_turef(contract).into();
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, named_keys)
+        .into_turef()
+        .unwrap_or_else(|| contract_api::revert(Error::UnexpectedContractPointerVariant))
+        .into();
+
     contract_api::put_key(CONTRACT_NAME, &key);
 }

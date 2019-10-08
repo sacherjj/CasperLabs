@@ -2,7 +2,7 @@ package io.casperlabs.client
 
 import java.io.Closeable
 import java.security.KeyStore
-import java.util.concurrent.{ThreadFactory, TimeUnit}
+import java.util.concurrent.TimeUnit
 
 import cats.Id
 import cats.data.StateT
@@ -15,11 +15,11 @@ import io.casperlabs.client.configuration.ConnectOptions
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.HostnameTrustManager
 import io.casperlabs.graphz
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.node.api.casper._
 import io.casperlabs.node.api.control.{ControlGrpcMonix, ProposeRequest}
 import io.grpc.ManagedChannel
 import io.grpc.netty.{GrpcSslContexts, NegotiationType, NettyChannelBuilder}
-import io.netty.channel.DefaultEventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import javax.net.ssl._
@@ -205,7 +205,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .map { bi =>
         s"""
-         |------------- block @ ${bi.getSummary.getHeader.rank} ---------------
+         |------------- block @ ${bi.getSummary.rank} ---------------
          |${Printer.printToUnicodeString(bi)}
          |-----------------------------------------------------
          |""".stripMargin

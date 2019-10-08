@@ -4,8 +4,11 @@ use std::collections::{BTreeMap, HashMap};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::{EngineConfig, CONV_RATE};
+use engine_core::engine_state::CONV_RATE;
+use engine_shared::gas::Gas;
+use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
+use std::convert::TryInto;
 
 use crate::support::test_support::{
     self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
@@ -27,8 +30,6 @@ fn should_exec_non_stored_code() {
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -47,7 +48,7 @@ fn should_exec_non_stored_code() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -70,9 +71,14 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes = test_support::get_success_result(&response).cost * CONV_RATE;
-
-    let tally = U512::from(motes + transferred_amount) + modified_balance;
+    let success_result = test_support::get_success_result(&response);
+    let cost = success_result
+        .get_cost()
+        .try_into()
+        .expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
+    let tally = motes.value() + U512::from(transferred_amount) + modified_balance;
 
     assert_eq!(
         initial_balance, tally,
@@ -84,8 +90,6 @@ fn should_exec_non_stored_code() {
 #[test]
 fn should_exec_stored_code_by_hash() {
     let payment_purse_amount = 10_000_000;
-
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
 
     // first, store standard payment contract
     let exec_request = {
@@ -106,7 +110,7 @@ fn should_exec_stored_code_by_hash() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -138,7 +142,10 @@ fn should_exec_stored_code_by_hash() {
         "stored_payment_contract_hash should exist"
     );
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -181,9 +188,15 @@ fn should_exec_stored_code_by_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -206,8 +219,6 @@ fn should_exec_stored_code_by_hash() {
 fn should_exec_stored_code_by_named_hash() {
     let payment_purse_amount = 10_000_000;
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -227,7 +238,7 @@ fn should_exec_stored_code_by_named_hash() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -238,7 +249,10 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -282,9 +296,15 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -307,8 +327,6 @@ fn should_exec_stored_code_by_named_hash() {
 fn should_exec_stored_code_by_named_uref() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store transfer contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -328,7 +346,7 @@ fn should_exec_stored_code_by_named_uref() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -339,7 +357,10 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -380,9 +401,15 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let tally = U512::from(motes_alpha + motes_bravo + transferred_amount) + modified_balance_bravo;
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + U512::from(transferred_amount)
+        + modified_balance_bravo;
 
     assert!(
         modified_balance_alpha < initial_balance,
@@ -405,8 +432,6 @@ fn should_exec_stored_code_by_named_uref() {
 fn should_exec_payment_and_session_stored_code() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-
     // first, store standard payment contract
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -426,7 +451,7 @@ fn should_exec_payment_and_session_stored_code() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder.exec_commit_finish(exec_request);
@@ -437,7 +462,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_alpha = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     // next store transfer contract
     let exec_request_store_transfer = {
@@ -466,7 +494,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_bravo = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let transferred_amount = 1;
@@ -499,7 +530,10 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let motes_charlie = test_support::get_success_result(&response).cost * CONV_RATE;
+    let result = test_support::get_success_result(&response);
+    let cost = result.get_cost().try_into().expect("should map to U512");
+    let gas = Gas::new(cost);
+    let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
@@ -508,7 +542,10 @@ fn should_exec_payment_and_session_stored_code() {
 
     let initial_balance: U512 = U512::from(GENESIS_INITIAL_BALANCE);
 
-    let tally = U512::from(motes_alpha + motes_bravo + motes_charlie + transferred_amount)
+    let tally = motes_alpha.value()
+        + motes_bravo.value()
+        + motes_charlie.value()
+        + U512::from(transferred_amount)
         + modified_balance;
 
     assert_eq!(
@@ -545,8 +582,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder_by_uref = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder_by_uref = InMemoryWasmTestBuilder::default();
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
@@ -612,8 +648,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     let test_result = builder_by_uref.exec_commit_finish(exec_request_by_uref);
     let direct_uref_transforms = &test_result.builder().get_transforms()[1];
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
-    let mut builder_by_named_uref = InMemoryWasmTestBuilder::new(engine_config);
+    let mut builder_by_named_uref = InMemoryWasmTestBuilder::default();
     builder_by_named_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
     let _ = builder_by_named_uref.exec_commit_finish(exec_request_genesis);
 
@@ -649,14 +684,10 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = 1_000_000_000;
+    let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
-    let config = EngineConfig::new().set_use_payment_code(true);
-
     let stored_transforms = {
-        let config = config.clone();
-
         let store_request = |name: &str, deploy_hash: [u8; 32]| {
             let store_transfer = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -674,17 +705,17 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .build()
         };
 
-        let mut builder = InMemoryWasmTestBuilder::new(config);
+        let mut builder = InMemoryWasmTestBuilder::default();
 
         let store_transforms = builder
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(store_request(
+            .exec(store_request(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
                 [1; 32],
             ))
             .expect_success()
             .commit()
-            .exec_with_exec_request(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
+            .exec(store_request(STANDARD_PAYMENT_CONTRACT_NAME, [2; 32]))
             .expect_success()
             .commit()
             .get_transforms()[1]
@@ -721,7 +752,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         };
 
         builder
-            .exec_with_exec_request(call_stored_request)
+            .exec(call_stored_request)
             .expect_success()
             .commit()
             .get_transforms()[2]
@@ -729,8 +760,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     };
 
     let provided_transforms = {
-        let config = config.clone();
-
         let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -764,15 +793,15 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             ExecuteRequestBuilder::new().push_deploy(deploy).build()
         };
 
-        InMemoryWasmTestBuilder::new(config)
+        InMemoryWasmTestBuilder::default()
             .run_genesis(&*DEFAULT_GENESIS_CONFIG)
-            .exec_with_exec_request(do_nothing_request([1; 32]))
+            .exec(do_nothing_request([1; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(do_nothing_request([2; 32]))
+            .exec(do_nothing_request([2; 32]))
             .expect_success()
             .commit()
-            .exec_with_exec_request(provided_request)
+            .exec(provided_request)
             .expect_success()
             .get_transforms()[2]
             .to_owned()

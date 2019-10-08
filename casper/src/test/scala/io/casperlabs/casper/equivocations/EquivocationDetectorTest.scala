@@ -2,17 +2,18 @@ package io.casperlabs.casper.equivocations
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.{BlockStorage, IndexedDagStorage}
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.helper.{BlockGenerator, DagStorageFixture}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Cell
+import io.casperlabs.storage.block.BlockStorage
+import io.casperlabs.storage.dag.IndexedDagStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -22,7 +23,7 @@ class EquivocationDetectorTest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with DagStorageFixture {
+    with StorageFixture {
 
   implicit val raiseValidateErr = validation.raiseValidateErrorThroughApplicativeError[Task]
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.
@@ -58,6 +59,7 @@ class EquivocationDetectorTest
         case Some(_) =>
           blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       }
+      _     <- blockStorage.put(b.blockHash, b, Seq.empty)
       state <- Cell[Task, CasperState].read
       _     = state.equivocationsTracker.get(b.getHeader.validatorPublicKey) shouldBe rankOfLowestBaseBlockExpect
     } yield b
@@ -86,14 +88,14 @@ class EquivocationDetectorTest
       state          <- casperState.read
       _ <- EquivocationDetector.detectVisibleFromJustifications(
             dag,
-            latestMessages.mapValues(f => f.blockHash),
+            latestMessages.mapValues(_.messageHash),
             state.equivocationsTracker
           ) shouldBeF visibleEquivocatorExpected
     } yield block
 
   "EquivocationDetector" should "detect simple equivocation" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /*
          * The Dag looks like
          *
@@ -111,7 +113,7 @@ class EquivocationDetectorTest
         val v0                             = generateValidator("V0")
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
@@ -137,8 +139,8 @@ class EquivocationDetectorTest
   }
 
   it should "not report equivocation when reference a message creating an equivocation that was created by other validator" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /*
          * The Dag looks like
          *
@@ -169,7 +171,7 @@ class EquivocationDetectorTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b0 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v1,
@@ -216,8 +218,8 @@ class EquivocationDetectorTest
   }
 
   "EquivocationDetector" should "not report equivocation when block indirectly references previous creator's block" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /*
          * The Dag looks like
          *
@@ -245,7 +247,7 @@ class EquivocationDetectorTest
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v1,
@@ -280,8 +282,8 @@ class EquivocationDetectorTest
   }
 
   it should "should detect equivocation when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /*
          * The Dag looks like
          *
@@ -302,7 +304,7 @@ class EquivocationDetectorTest
         val v0                             = generateValidator("V0")
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
@@ -334,8 +336,8 @@ class EquivocationDetectorTest
   }
 
   it should "detect equivocation and update the rank of lowest base block correctly when receiving a block created by a validator who has been detected equivocating" in withStorage {
-    implicit blockStorage =>
-      implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
         /*
          * The Dag looks like
          *
@@ -358,7 +360,7 @@ class EquivocationDetectorTest
         val v0                             = generateValidator("V0")
 
         for {
-          genesis <- createBlock[Task](Seq(), ByteString.EMPTY)
+          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                               CasperState()
                                                             )
@@ -398,9 +400,9 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  // See [[casper/src/test/resources/casper/tipsHavingEquivocating.png]]
+  // See [[casper/src/test/resources/casper/tipsHavingEquivocations.png]]
   "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       implicit val logEff: LogStub[Task] = new LogStub[Task]()
       val v1                             = generateValidator("V1")
       val v2                             = generateValidator("V2")
@@ -436,6 +438,8 @@ class EquivocationDetectorTest
               rankOfLowestBaseBlockExpect = None,
               visibleEquivocatorExpected = Set.empty
             )
+        _ <- Task.delay(println("Dupa1"))
+
         c <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(b.blockHash),
               v1,
@@ -443,7 +447,8 @@ class EquivocationDetectorTest
               rankOfLowestBaseBlockExpect = 0L.some,
               visibleEquivocatorExpected = Set(v1)
             )
-        // this block doesn't show in the diagram
+        _ <- Task.delay(println("Dupa2"))
+        // this block isn't shown in the diagram
         _ <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(c.blockHash),
               v1,

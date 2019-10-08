@@ -57,13 +57,18 @@ mod ext_ffi {
         );
         pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
         pub fn new_uref(key_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
-        pub fn serialize_function(name_ptr: *const u8, name_size: usize) -> usize;
-        pub fn get_function(dest_ptr: *mut u8); //can only be called after `serialize_function`
         pub fn store_function(
-            value_ptr: *const u8,
-            value_size: usize,
-            extra_urefs_ptr: *const u8,
-            extra_urefs_size: usize,
+            function_name_ptr: *const u8,
+            function_name_size: usize,
+            named_keys_ptr: *const u8,
+            named_keys_size: usize,
+            uref_addr_ptr: *const u8,
+        );
+        pub fn store_function_at_hash(
+            function_name_ptr: *const u8,
+            function_name_size: usize,
+            named_keys_ptr: *const u8,
+            named_keys_size: usize,
             hash_ptr: *const u8,
         );
         pub fn serialize_named_keys() -> usize;
@@ -91,7 +96,6 @@ mod ext_ffi {
         pub fn get_key(name_ptr: *const u8, name_size: usize) -> usize;
         pub fn has_key(name_ptr: *const u8, name_size: usize) -> i32;
         pub fn put_key(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
-        pub fn protocol_version() -> u64;
         pub fn revert(status: u32) -> !;
         pub fn is_valid(value_ptr: *const u8, value_size: usize) -> i32;
         pub fn add_associated_key(public_key_ptr: *const u8, weight: i32) -> i32;

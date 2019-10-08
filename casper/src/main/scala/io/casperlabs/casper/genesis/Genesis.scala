@@ -5,29 +5,28 @@ import java.nio.file.Path
 import java.util.Base64
 
 import cats.data.EitherT
-import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Monad, MonadError}
+import cats.{Applicative, MonadError}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage
+import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.casper.{CasperConf, PrettyPrinter}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
-import io.casperlabs.casper.util.Sorting._
-import io.casperlabs.casper.util.{ProtoUtil, Sorting}
+import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.shared.{FilesAPI, Log, LogSource}
+import io.casperlabs.shared.Sorting._
+import io.casperlabs.shared.{FilesAPI, Log, LogSource, Sorting}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
 
-import scala.io.Source
-import scala.util.control.NoStackTrace
 import scala.util._
+import scala.util.control.NoStackTrace
 
 object Genesis {
   import Sorting.byteArrayOrdering
@@ -73,11 +72,13 @@ object Genesis {
 
       header = blockHeader(
         body,
+        creator = Keys.PublicKey(Array.emptyByteArray), // Genesis has no creator
         parentHashes = Nil,
         justifications = Nil,
         state = state,
         rank = 0,
-        protocolVersion = genesisConfig.getProtocolVersion.value,
+        validatorSeqNum = 0,
+        protocolVersion = genesisConfig.getProtocolVersion,
         timestamp = genesisConfig.timestamp,
         chainId = genesisConfig.name
       )

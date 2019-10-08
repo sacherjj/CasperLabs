@@ -1,4 +1,4 @@
-# Do not support:
+# Does not support:
 #   * Nested tables
 #   * Arrays
 
@@ -41,12 +41,6 @@ relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
 clean-block-storage = false
 
-[lmdb]
-block-storage-size = 1
-max-dbs = 1
-max-readers = 1
-use-tls = false
-
 [grpc]
 socket = "/tmp/test"
 port-external = 1
@@ -72,12 +66,11 @@ chain-spec-path = "/tmp/test"
 standalone = false
 auto-propose-enabled = false
 auto-propose-check-interval = "1second"
-auto-propose-max-interval = "1second"
-auto-propose-max-count = 1
+auto-propose-acc-interval = "1second"
+auto-propose-acc-count = 1
 max-block-size-bytes = 1
 
 [blockstorage]
-latest-messages-log-max-size-factor = 1
 cache-max-size-bytes = 1
 
 [metrics]

@@ -1,15 +1,18 @@
 package io.casperlabs.casper.finality.votingmatrix
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.{DefaultMonadState, MonadState}
-import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -41,7 +44,18 @@ object VotingMatrix {
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
-      weights    <- dag.lookup(newFinalizedBlock).map(_.get.weightMap)
+      message <- dag.lookup(newFinalizedBlock)
+      block <- message.get match {
+                case b: Message.Block => b.pure[F]
+                case ballot: Message.Ballot =>
+                  MonadThrowable[F].raiseError[Message.Block](
+                    new IllegalArgumentException(
+                      s"Cannot create an instance of VotingMatrix from a ballot ${PrettyPrinter
+                        .buildString(ballot.messageHash)}"
+                    )
+                  )
+              }
+      weights    = block.weightMap
       validators = weights.keySet.toArray
       n          = validators.size
       // Assigns numeric identifiers 0, ..., N-1 to all validators
@@ -55,7 +69,7 @@ object VotingMatrix {
                                              .votedBranch[F](
                                                dag,
                                                newFinalizedBlock,
-                                               b.blockHash
+                                               b.messageHash
                                              )
                                              .map {
                                                _.map(

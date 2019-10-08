@@ -50,7 +50,7 @@ const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 const TAG_RESPONSE_UPGRADE: &str = "upgrade_response";
 
-const DEFAULT_PROTOCOL_VERSION: u64 = 1;
+const DEFAULT_PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 
 // Idea is that Engine will represent the core of the execution engine project.
 // It will act as an entry point for execution of Wasm binaries.
@@ -224,10 +224,11 @@ where
 
         // TODO
         let protocol_version = {
-            if commit_request.get_protocol_version().value < DEFAULT_PROTOCOL_VERSION {
-                ProtocolVersion::new(DEFAULT_PROTOCOL_VERSION)
+            let protocol_version = commit_request.get_protocol_version().into();
+            if protocol_version < DEFAULT_PROTOCOL_VERSION {
+                DEFAULT_PROTOCOL_VERSION
             } else {
-                ProtocolVersion::new(commit_request.get_protocol_version().value)
+                protocol_version
             }
         };
 

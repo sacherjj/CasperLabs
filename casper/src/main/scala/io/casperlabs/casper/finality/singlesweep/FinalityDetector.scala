@@ -1,7 +1,7 @@
 package io.casperlabs.casper.finality.singlesweep
 
-import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.storage.dag.DagRepresentation
 
 trait FinalityDetector[F[_]] {
 

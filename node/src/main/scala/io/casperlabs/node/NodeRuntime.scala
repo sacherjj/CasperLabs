@@ -15,18 +15,8 @@ import cats.syntax.show._
 import cats.temp.par.Par
 import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
-import io.casperlabs.blockstorage.util.fileIO.IOError
-import io.casperlabs.blockstorage.util.fileIO.IOError.RaiseIOError
-import io.casperlabs.blockstorage.{
-  BlockStorage,
-  CachingBlockStorage,
-  DagStorage,
-  FileDagStorage,
-  FileLMDBIndexBlockStorage
-}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, DeployBufferImpl}
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -48,14 +38,21 @@ import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
+import io.casperlabs.storage.SQLiteStorage
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
+import io.casperlabs.storage.util.fileIO.IOError._
+import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
-
+import com.github.ghik.silencer.silent
 import scala.concurrent.duration._
 
+@silent("is never used")
 class NodeRuntime private[node] (
     conf: Configuration,
     id: NodeIdentifier,
@@ -88,10 +85,8 @@ class NodeRuntime private[node] (
   }
 
   // intra-node gossiping port.
-  private val port             = conf.server.port
-  private val kademliaPort     = conf.server.kademliaPort
-  private val blockStoragePath = conf.server.dataDir.resolve("blockstorage")
-  private val dagStoragePath   = conf.server.dataDir.resolve("dagstorage")
+  private val port         = conf.server.port
+  private val kademliaPort = conf.server.kademliaPort
 
   /**
     * Main node entry. It will:
@@ -137,12 +132,43 @@ class NodeRuntime private[node] (
                                                           transactEC = dbIOScheduler,
                                                           conf.server.dataDir
                                                         )
-        deployBufferChunkSize = 20 //TODO: Move to config
-        implicit0(deployBuffer: DeployBuffer[Task]) <- Resource
-                                                        .liftF(
-                                                          DeployBufferImpl
-                                                            .create[Task](deployBufferChunkSize)
-                                                        )
+        deployStorageChunkSize = 20 //TODO: Move to config
+
+        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
+
+        implicit0(
+          storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
+        ) <- Resource.liftF(
+              SQLiteStorage.create[Task](
+                deployStorageChunkSize = deployStorageChunkSize,
+                wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
+                  CachingBlockStorage[Task](
+                    underlyingBlockStorage,
+                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                  ),
+                wrapDagStorage =
+                  (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
+                    CachingDagStorage[Task](
+                      underlyingDagStorage,
+                      maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                    ).map(
+                      cache =>
+                        // Compiler fails to infer the proper type without this
+                        cache: DagStorage[Task] with DagRepresentation[Task]
+                    )
+              )
+            )
+
+        _ <- Resource.liftF {
+              Task
+                .delay {
+                  log.info("Cleaning storage ...")
+                  storage.clear()
+                }
+                .whenA(conf.server.cleanBlockStorage)
+
+            }
+
         bootstraps <- Resource.liftF(initPeers[Task])
 
         implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
@@ -166,48 +192,6 @@ class NodeRuntime private[node] (
                                                           log,
                                                           metrics
                                                         )
-        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
-
-        implicit0(blockStorage: BlockStorage[Task]) <- FileLMDBIndexBlockStorage[Task](
-                                                        conf.server.dataDir,
-                                                        blockStoragePath,
-                                                        100L * 1024L * 1024L * 4096L
-                                                      )(
-                                                        Concurrent[Task],
-                                                        log,
-                                                        raiseIOError,
-                                                        metrics
-                                                      ) evalMap { underlying =>
-                                                        CachingBlockStorage[Task](
-                                                          underlying,
-                                                          maxSizeBytes =
-                                                            conf.blockstorage.cacheMaxSizeBytes
-                                                        )(
-                                                          Sync[Task],
-                                                          metrics
-                                                        )
-                                                      }
-
-        implicit0(dagStorage: DagStorage[Task]) <- FileDagStorage[Task](
-                                                    dagStoragePath,
-                                                    conf.blockstorage.latestMessagesLogMaxSizeFactor,
-                                                    blockStorage
-                                                  )(
-                                                    Concurrent[Task],
-                                                    log,
-                                                    raiseIOError,
-                                                    metrics
-                                                  )
-
-        _ <- Resource.liftF {
-              Task
-                .delay {
-                  log.info("Cleaning block storage ...")
-                  blockStorage.clear() *> dagStorage.clear()
-                }
-                .whenA(conf.server.cleanBlockStorage)
-
-            }
 
         implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
           .raiseValidateErrorThroughApplicativeError[Task]
@@ -227,10 +211,7 @@ class NodeRuntime private[node] (
 
         implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
           Task
-        ]()(
-          Monad[Task],
-          log
-        )
+        ]()
 
         blockApiLock <- Resource.liftF(Semaphore[Task](1))
 
@@ -239,8 +220,8 @@ class NodeRuntime private[node] (
         // so that the operator can turn it on/off on the fly.
         _ <- AutoProposer[Task](
               checkInterval = conf.casper.autoProposeCheckInterval,
-              maxInterval = conf.casper.autoProposeMaxInterval,
-              maxCount = conf.casper.autoProposeMaxCount,
+              accInterval = conf.casper.autoProposeAccInterval,
+              accCount = conf.casper.autoProposeAccCount,
               blockApiLock = blockApiLock
             ).whenA(conf.casper.autoProposeEnabled)
 
@@ -273,12 +254,12 @@ class NodeRuntime private[node] (
               ingressScheduler,
               egressScheduler
             )
-      } yield (nodeDiscovery, deployBuffer)
+      } yield (nodeDiscovery, storage)
 
       resources.allocated flatMap {
-        case ((nodeDiscovery, deployBuffer), release) =>
+        case ((nodeDiscovery, deployStorage), release) =>
           handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, deployBuffer, release)
+            nodeProgram(state, nodeDiscovery, deployStorage, release)
           }
       }
     })
@@ -291,7 +272,7 @@ class NodeRuntime private[node] (
         Flyway
           .configure()
           .dataSource(s"jdbc:sqlite:$db", "", "")
-          .locations(new Location("classpath:db/migration"))
+          .locations(new Location("classpath:/db/migration"))
       val flyway = conf.load()
       flyway.migrate()
       ()
@@ -302,7 +283,7 @@ class NodeRuntime private[node] (
       implicit
       rpConfState: RPConfState[Task],
       nodeDiscovery: NodeDiscovery[Task],
-      deployBuffer: DeployBuffer[Task],
+      deployStorageWriter: DeployStorageWriter[Task],
       release: Task[Unit]
   ): Task[Unit] = {
 
@@ -318,12 +299,12 @@ class NodeRuntime private[node] (
         )
 
     val cleanupDiscardedDeploysLoop: Task[Unit] = for {
-      _ <- deployBuffer.cleanupDiscarded(1.hour)
+      _ <- deployStorageWriter.cleanupDiscarded(1.hour)
       _ <- time.sleep(1.minute)
     } yield ()
 
     val checkPendingDeploysExpirationLoop: Task[Unit] = for {
-      _ <- deployBuffer.markAsDiscarded(12.hours)
+      _ <- deployStorageWriter.markAsDiscarded(24.hours)
       _ <- time.sleep(1.minute)
     } yield ()
 

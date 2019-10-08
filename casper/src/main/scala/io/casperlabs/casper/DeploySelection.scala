@@ -1,25 +1,18 @@
 package io.casperlabs.casper
 
-import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{state, Deploy}
 import io.casperlabs.casper.consensus.state.{Key, ProtocolVersion}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{
-  handleInvalidDeploys,
-  processDeploys,
-  zipDeploysResults
-}
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.casper.consensus.{state, Deploy}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{processDeploys, zipDeploysResults}
+import io.casperlabs.casper.util.execengine.Op.OpMap
 import io.casperlabs.casper.util.execengine.{
   DeployEffects,
   NoEffectsFailure,
   Op,
   ProcessedDeployResult
 }
-import io.casperlabs.casper.util.execengine.Op.OpMap
-import io.casperlabs.shared.Log
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 trait Select[F[_]] {

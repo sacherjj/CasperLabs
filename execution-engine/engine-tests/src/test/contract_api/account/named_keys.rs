@@ -2,22 +2,22 @@ use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+
+const CONTRACT_NAMED_KEYS: &str = "named_keys.wasm";
 const EXPECTED_UREF_VALUE: u64 = 123_456_789u64;
 
 #[ignore]
 #[test]
 fn should_run_named_keys_contract() {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAMED_KEYS, ()).build();
+
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(
-            DEFAULT_ACCOUNT_ADDR,
-            "named_keys.wasm",
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request)
         .commit()
         .expect_success()
         .finish();

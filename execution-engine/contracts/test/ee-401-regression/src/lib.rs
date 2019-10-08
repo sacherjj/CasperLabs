@@ -22,6 +22,7 @@ pub extern "C" fn hello_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let named_keys = BTreeMap::new();
-    let contract_pointer: ContractPointer = contract_api::store_function("hello_ext", named_keys);
+    let contract_pointer: ContractPointer =
+        contract_api::store_function_at_hash("hello_ext", named_keys);
     contract_api::put_key("hello_ext", &contract_pointer.into());
 }

@@ -19,7 +19,7 @@ def ignore_test_persistent_dag_storage(two_node_network):
     """
     node0, node1 = two_node_network.docker_nodes
     for node in two_node_network.docker_nodes:
-        node.d_client.deploy_and_propose(session_contract=Contract.HELLONAME)
+        node.d_client.deploy_and_propose(session_contract=Contract.HELLO_NAME_DEFINE)
 
     two_node_network.stop_cl_node(1)
     two_node_network.start_cl_node(1)
@@ -28,7 +28,9 @@ def ignore_test_persistent_dag_storage(two_node_network):
 
     wait_for_connected_to_node(node0, node1.name, timeout, 2)
 
-    hash_string = node0.d_client.deploy_and_propose(session_contract=Contract.HELLONAME)
+    hash_string = node0.d_client.deploy_and_propose(
+        session_contract=Contract.HELLO_NAME_DEFINE
+    )
 
     wait_for_sending_approved_block_request(node0, node1.name, timeout)
     wait_for_received_approved_block_request(node0, node1.name, timeout)
@@ -53,7 +55,7 @@ def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_networ
             from_address=GENESIS_ACCOUNT.public_key_hex,
             public_key=GENESIS_ACCOUNT.public_key_path,
             private_key=GENESIS_ACCOUNT.private_key_path,
-            session_contract=Contract.HELLONAME,
+            session_contract=Contract.HELLO_NAME_DEFINE,
         )
         for node in (node0, node1)
     ]

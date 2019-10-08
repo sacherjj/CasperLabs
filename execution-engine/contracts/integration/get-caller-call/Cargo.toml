@@ -1,0 +1,11 @@
+[package]
+name = "get-caller-call"
+version = "0.1.0"
+authors = ["Mateusz Górski <mateusz@casperlabs.io>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../../execution-engine/contract-ffi" }

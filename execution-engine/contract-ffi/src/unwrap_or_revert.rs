@@ -16,7 +16,7 @@ impl<T, E: Into<Error>> UnwrapOrRevert for Result<T, E> {
     type Wrapped = T;
 
     fn unwrap_or_revert(self) -> Self::Wrapped {
-        self.unwrap_or_else(|error| contract_api::revert_with_error(error.into()))
+        self.unwrap_or_else(|error| contract_api::revert(error.into()))
     }
 }
 
@@ -24,7 +24,7 @@ impl<T> UnwrapOrRevert for Result<T, bytesrepr::Error> {
     type Wrapped = T;
 
     fn unwrap_or_revert(self) -> Self::Wrapped {
-        self.unwrap_or_else(|_| contract_api::revert_with_error(Error::Deserialize))
+        self.unwrap_or_else(|_| contract_api::revert(Error::Deserialize))
     }
 }
 
@@ -32,6 +32,6 @@ impl<T> UnwrapOrRevert for Option<T> {
     type Wrapped = T;
 
     fn unwrap_or_revert(self) -> Self::Wrapped {
-        self.unwrap_or_else(|| contract_api::revert(Error::None.into()))
+        self.unwrap_or_else(|| contract_api::revert(Error::None))
     }
 }

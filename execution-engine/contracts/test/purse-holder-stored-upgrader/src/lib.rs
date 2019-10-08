@@ -46,8 +46,8 @@ impl From<CustomError> for Error {
 fn purse_name() -> String {
     match contract_api::get_arg(ApplyArgs::PurseName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidPurseNameArg),
-        None => contract_api::revert_with_error(CustomError::MissingPurseNameArg),
+        Some(Err(_)) => contract_api::revert(CustomError::InvalidPurseNameArg),
+        None => contract_api::revert(CustomError::MissingPurseNameArg),
     }
 }
 
@@ -55,8 +55,8 @@ fn purse_name() -> String {
 pub extern "C" fn apply_method() {
     let method_name: String = match contract_api::get_arg(ApplyArgs::MethodName as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidMethodNameArg),
-        None => contract_api::revert_with_error(CustomError::MissingMethodNameArg),
+        Some(Err(_)) => contract_api::revert(CustomError::InvalidMethodNameArg),
+        None => contract_api::revert(CustomError::MissingMethodNameArg),
     };
     match method_name.as_str() {
         METHOD_ADD => {
@@ -69,7 +69,7 @@ pub extern "C" fn apply_method() {
             contract_api::remove_key(&purse_name);
         }
         METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
-        _ => contract_api::revert_with_error(CustomError::UnknownMethodName),
+        _ => contract_api::revert(CustomError::UnknownMethodName),
     }
 }
 
@@ -77,12 +77,12 @@ pub extern "C" fn apply_method() {
 pub extern "C" fn call() {
     let uref: URef = match contract_api::get_arg(CallArgs::PurseHolderURef as u32) {
         Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidPurseHolderURefArg),
-        None => contract_api::revert_with_error(CustomError::MissingPurseHolderURefArg),
+        Some(Err(_)) => contract_api::revert(CustomError::InvalidPurseHolderURefArg),
+        None => contract_api::revert(CustomError::MissingPurseHolderURefArg),
     };
 
     let turef = contract_api::pointers::TURef::from_uref(uref)
-        .unwrap_or_else(|_| contract_api::revert_with_error(CustomError::InvalidTURef));
+        .unwrap_or_else(|_| contract_api::revert(CustomError::InvalidTURef));
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     contract_api::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);

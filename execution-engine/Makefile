@@ -4,14 +4,18 @@ RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
+EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+IT_RES_DIR = $(realpath $(EE_DIR)/../integration-testing/resources)
+
 # Directory names should match crate names
-BENCH_CONTRACTS     = $(shell find ./contracts/bench     -mindepth 1 -maxdepth 1 -exec basename {} \;)
-CLIENT_CONTRACTS    = $(shell find ./contracts/client    -mindepth 1 -maxdepth 1 -exec basename {} \;)
-EXPLORER_CONTRACTS  = $(shell find ./contracts/explorer  -mindepth 1 -maxdepth 1 -exec basename {} \;)
-PROFILING_CONTRACTS = $(shell find ./contracts/profiling -mindepth 1 -maxdepth 1 -exec basename {} \;)
-SRE_CONTRACTS       = $(shell find ./contracts/SRE       -mindepth 1 -maxdepth 1 -exec basename {} \;)
-SYSTEM_CONTRACTS    = $(shell find ./contracts/system    -mindepth 1 -maxdepth 1 -exec basename {} \;)
-TEST_CONTRACTS      = $(shell find ./contracts/test      -mindepth 1 -maxdepth 1 -exec basename {} \;)
+BENCH_CONTRACTS       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -exec basename {} \;)
+CLIENT_CONTRACTS      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -exec basename {} \;)
+EXPLORER_CONTRACTS    = $(shell find ./contracts/explorer    -mindepth 1 -maxdepth 1 -exec basename {} \;)
+INTEGRATION_CONTRACTS = $(shell find ./contracts/integration -mindepth 1 -maxdepth 1 -exec basename {} \;)
+PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdepth 1 -exec basename {} \;)
+SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -exec basename {} \;)
+SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -exec basename {} \;)
+TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
 BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
 CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
@@ -20,6 +24,9 @@ PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
 SRE_CONTRACTS       := $(patsubst %, build-contract/%, $(SRE_CONTRACTS))
 SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+
+INTEGRATION_CONTRACTS += endless-loop pos-bonding remove-associated-key standard-payment
+INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
 PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
@@ -32,17 +39,32 @@ build: $(SYSTEM_CONTRACTS)
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract/%:
-	$(CARGO) build $(filter-out --release, $(CARGO_FLAGS)) -p $* --release --target wasm32-unknown-unknown
+	$(CARGO) build \
+		--release $(filter-out --release, $(CARGO_FLAGS)) \
+		--package $* \
+		--target wasm32-unknown-unknown
+
+build-integration-contract/%:
+	$(CARGO) build \
+		-Z unstable-options \
+		--release $(filter-out --release, $(CARGO_FLAGS)) \
+		--package $* \
+		--target wasm32-unknown-unknown \
+		--out-dir $(IT_RES_DIR)
 
 .PHONY: build-contracts
 build-contracts: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
+	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS)
+
+.PHONY: build-integration-contracts
+build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: test
 test: $(SYSTEM_CONTRACTS)

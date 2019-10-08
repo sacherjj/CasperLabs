@@ -7,10 +7,12 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.crypto.codec.{Base16, Base64}
-import io.casperlabs.node.api.graphql.schema.utils.DateType
+import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
+import io.casperlabs.models.BlockImplicits._
 import sangria.schema._
 
 package object types {
+
   val SignatureType = ObjectType(
     "Signature",
     "Signature used to sign Block or Deploy",
@@ -134,58 +136,57 @@ package object types {
         "parentHashes",
         ListType(StringType),
         "Hashes of parent blocks".some,
-        resolve =
-          c => c.value._1.getSummary.getHeader.parentHashes.map(p => Base16.encode(p.toByteArray))
+        resolve = c => c.value._1.getSummary.parents.map(p => Base16.encode(p.toByteArray))
       ),
       Field(
         "justificationHashes",
         ListType(StringType),
         "Hashes of justification blocks".some,
         resolve = c =>
-          c.value._1.getSummary.getHeader.justifications
+          c.value._1.getSummary.justifications
             .map(j => Base16.encode(j.latestBlockHash.toByteArray))
       ),
       Field(
         "timestamp",
         DateType,
         "Timestamp when the block was created".some,
-        resolve = c => c.value._1.getSummary.getHeader.timestamp
+        resolve = c => c.value._1.getSummary.timestamp
       ),
       Field(
         "protocolVersion",
-        LongType,
+        ProtocolVersionType,
         "Protocol version of CasperLabs blockchain".some,
-        resolve = c => c.value._1.getSummary.getHeader.protocolVersion
+        resolve = c => c.value._1.getSummary.getHeader.getProtocolVersion
       ),
       Field(
         "deployCount",
         IntType,
         "Amount of deploys in the block".some,
-        resolve = c => c.value._1.getSummary.getHeader.deployCount
+        resolve = c => c.value._1.getSummary.deployCount
       ),
       Field(
         "rank",
         LongType,
         "Amount of hops needed to reach a genesis from the block".some,
-        resolve = c => c.value._1.getSummary.getHeader.rank
+        resolve = c => c.value._1.getSummary.rank
       ),
       Field(
         "validatorPublicKey",
         StringType,
         "Base-64 encoded public key of a validator created the block".some,
-        resolve = c => Base64.encode(c.value._1.getSummary.getHeader.validatorPublicKey.toByteArray)
+        resolve = c => Base64.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
       ),
       Field(
         "validatorBlockSeqNum",
         IntType,
         "The block's number by the validator".some,
-        resolve = c => c.value._1.getSummary.getHeader.validatorBlockSeqNum
+        resolve = c => c.value._1.getSummary.validatorBlockSeqNum
       ),
       Field(
         "chainId",
         StringType,
         "Chain id of where the block was created".some,
-        resolve = c => c.value._1.getSummary.getHeader.chainId
+        resolve = c => c.value._1.getSummary.chainId
       ),
       Field(
         "signature",

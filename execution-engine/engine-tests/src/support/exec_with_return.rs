@@ -1,10 +1,14 @@
-use crate::support::test_support::{self, WasmTestBuilder};
+use std::cell::RefCell;
+use std::collections::BTreeSet;
+use std::convert::TryInto;
+use std::rc::Rc;
+
 use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::BlockTime;
-use contract_ffi::value::ProtocolVersion;
+use contract_ffi::value::{ProtocolVersion, U512};
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::EngineState;
@@ -16,15 +20,12 @@ use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
 use engine_wasm_prep::WasmiPreprocessor;
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::convert::TryInto;
-use std::rc::Rc;
+
+use crate::support::test_support::{self, WasmTestBuilder};
 
 use crate::test::DEFAULT_WASM_COSTS;
 
 const INIT_FN_STORE_ID: u32 = 0;
-const INIT_PROTOCOL_VERSION: u64 = 1;
 
 /// This function allows executing the contract stored in the given `wasm_file`, while capturing the
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of
@@ -65,8 +66,8 @@ where
     };
     let gas_counter = Gas::default();
     let fn_store_id = INIT_FN_STORE_ID;
-    let gas_limit = Gas::from_u64(std::u64::MAX);
-    let protocol_version = ProtocolVersion::new(INIT_PROTOCOL_VERSION);
+    let gas_limit = Gas::new(U512::from(std::u64::MAX));
+    let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
     let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
     let base_key = Key::Account(address);
