@@ -1,14 +1,19 @@
-import logging
-
 from casperlabs_local_net.cli import DockerCLI
 from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
 from casperlabs_client import extract_common_name
+from pytest import raises
 
 # fmt: off
 
 
-def test_gossip_proxy(intercepted_two_node_network):
+def test_check_deploy_signatures(intercepted_two_node_network):
+    """
+    This tests uses an interceptor that modifies block retrieved
+    by node-1 from node-0 with GetBlockChunked method of the gossip service
+    and removes approvals from deploys in the block.
+    node-1 should not accept this block.
+    """
     nodes = intercepted_two_node_network.docker_nodes
     node = nodes[0]
     account = node.genesis_account
@@ -29,8 +34,8 @@ def test_gossip_proxy(intercepted_two_node_network):
     )
     cli("deploy", "--session", cli.resource(Contract.HELLO_NAME_DEFINE))
     block_hash = cli("propose")
-    wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
-    deployInfos = cli("show-deploys", block_hash)
-    logging.info(f"=======================================================")
-    for deployInfo in deployInfos:
-        logging.info(f"{deployInfo}")
+
+    with raises(Exception):
+        wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+
+    assert 'InvalidDeploySignature' in nodes[1].logs()
