@@ -224,7 +224,7 @@ object ExecEngineUtil {
       ProtoUtil.postStateHash(soleParent).pure[F] //single parent
     case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
       val prestate        = ProtoUtil.postStateHash(initParent)
-      val protocolVersion = state.ProtocolVersion(initParent.getHeader.protocolVersion)
+      val protocolVersion = initParent.getHeader.getProtocolVersion
       MonadError[F, Throwable]
         .rethrow(
           ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect, protocolVersion)
