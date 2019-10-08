@@ -103,7 +103,7 @@ object GrpcCasperService {
           for {
             info            <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
             stateHash       = info.getSummary.state.postStateHash
-            protocolVersion = state.ProtocolVersion(info.getSummary.getHeader.protocolVersion)
+            protocolVersion = info.getSummary.getHeader.getProtocolVersion
             values          <- request.queries.toList.traverse(getState(stateHash, _, protocolVersion))
           } yield BatchGetBlockStateResponse(values)
         }

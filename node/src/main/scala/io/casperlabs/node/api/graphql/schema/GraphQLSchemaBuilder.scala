@@ -87,7 +87,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                     .map(_.map {
                                       case (info, _) =>
                                         info.getSummary.getHeader.getState.postStateHash ->
-                                          info.getSummary.getHeader.protocolVersion
+                                          info.getSummary.getHeader.getProtocolVersion
                                     })
                 values <- maybeBlockProps.fold(List.empty[Option[state.Value]].pure[F]) {
                            case (stateHash, protocolVersion) =>
@@ -105,9 +105,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                                      stateHash,
                                                                      key,
                                                                      query.pathSegments,
-                                                                     ProtocolVersion(
-                                                                       protocolVersion
-                                                                     )
+                                                                     protocolVersion
                                                                    )
                                               value <- MonadThrowable[F]
                                                         .fromEither(possibleResponse)
