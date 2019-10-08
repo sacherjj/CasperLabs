@@ -81,10 +81,6 @@ class GrpcGossipServiceSpec
 
   trait AuthSpec extends WordSpecLike {
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
-    implicit val listHashGen: Arbitrary[List[ByteString]] = Arbitrary(for {
-      n      <- Gen.choose(1, 5)
-      hashes <- Gen.listOfN(n, genHash)
-    } yield hashes)
     implicit val consensusConfig =
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
     implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
@@ -94,6 +90,8 @@ class GrpcGossipServiceSpec
 
     def query
         : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit]
+
+    def ignoreSender: Boolean
 
     def expectError(
         client: GossipingGrpcMonix.GossipServiceStub,
@@ -110,13 +108,15 @@ class GrpcGossipServiceSpec
       "called with a problematic sender" when {
         implicit val config = PropertyCheckConfiguration(minSuccessful = 1, minSize = 1)
 
-        "called with a sender whose ID doesn't match its SSL public key" should {
-          "return UNAUTHENTICATED" in {
-            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-              runTestUnsafe(TestData()) {
-                expectError(stub, query(sender.some, blockHashes)) {
-                  case Unauthenticated(msg) =>
-                    msg shouldBe "Sender doesn't match public key."
+        if (!ignoreSender) {
+          "called with a sender whose ID doesn't match its SSL public key" should {
+            "return UNAUTHENTICATED" in {
+              forAll { (block: Block, sender: Node) =>
+                runTestUnsafe(TestData.fromBlock(block)) {
+                  expectError(stub, query(sender.some, List(block.blockHash))) {
+                    case Unauthenticated(msg) =>
+                      msg shouldBe "Sender doesn't match public key."
+                  }
                 }
               }
             }
@@ -128,11 +128,11 @@ class GrpcGossipServiceSpec
           def expectErrorWithAnonymous(
               clientAuth: ClientAuth
           )(pf: PartialFunction[Throwable, Unit]) =
-            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-              runTestUnsafe(TestData()) {
+            forAll { (block: Block, sender: Node) =>
+              runTestUnsafe(TestData.fromBlock(block)) {
                 TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
                   anonymousStub =>
-                    expectError(anonymousStub, query(sender.some, blockHashes))(pf)
+                    expectError(anonymousStub, query(sender.some, List(block.blockHash)))(pf)
                 }
               }
             }
@@ -253,7 +253,7 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec with RateSpec {
+  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec {
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit override val patienceConfig = PatienceConfig(1.second, 100.millis)
     implicit override val consensusConfig = ConsensusConfig(
@@ -275,6 +275,8 @@ class GrpcGossipServiceSpec
             )
             .toListL
             .void
+
+    override def ignoreSender: Boolean = true
 
     "getBlocksChunked" when {
       "called with a valid sender" when {
@@ -990,6 +992,8 @@ class GrpcGossipServiceSpec
         : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
       (maybeSender, blockHashes) =>
         client => client.newBlocks(NewBlocksRequest(maybeSender, blockHashes)).void
+
+    override def ignoreSender: Boolean = false
 
     def expectError(
         req: NewBlocksRequest,
