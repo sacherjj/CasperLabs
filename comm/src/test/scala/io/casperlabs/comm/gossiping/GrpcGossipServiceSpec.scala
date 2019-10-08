@@ -253,7 +253,7 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec {
+  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec with RateSpec {
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit override val patienceConfig = PatienceConfig(1.second, 100.millis)
     implicit override val consensusConfig = ConsensusConfig(

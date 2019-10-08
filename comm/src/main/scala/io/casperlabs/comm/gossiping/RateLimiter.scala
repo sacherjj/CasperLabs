@@ -75,23 +75,23 @@ object RateLimiter {
           }
 
           private def getOrCreateLimiter(b: B): F[Limiter[F]] = lock.withPermit {
-            limiters
-              .get(b)
-              .fold(
-                Limiter
-                  .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
-                  .allocated
-              )(pair => pair.pure[F]) map {
-              case (limiter, finalizer) =>
-                limiters += (b -> (limiter -> finalizer))
-                limiter
-            }
+            for {
+              maybeLimiter <- Sync[F].delay(limiters.get(b))
+              (limiter, finalizer) <- maybeLimiter.fold(
+                                       Limiter
+                                         .start[F](Rate(elementsPerPeriod, period), maxQueueSize)
+                                         .allocated
+                                     )(_.pure[F])
+              _ <- Sync[F].delay(limiters += (b -> (limiter -> finalizer)))
+            } yield limiter
           }
         }
       })(
         release = _ =>
           lock.withPermit {
-            limiters.values.map(_._2).toList.traverse(_.attempt.void).void
+            Sync[F].delay(limiters.values.map(_._2).toList) >>= {
+              _.traverse(_.attempt.void).void
+            }
           }
       )
     }
