@@ -237,7 +237,7 @@ def test_key_cannot_manage_with_weight_below_threshold(account_setup):
 
     # Remove key should fail
     block_hash = remove_associated_key(node, KEY_MGMT_KEY, DEPLOY_KEY)
-    assert_deploy_is_error(node, block_hash, "Exit code: 65537")
+    assert_deploy_is_error(node, block_hash, "Exit code: 65536")
 
     # Add key should fail
     block_hash = add_associated_key(node, KEY_MGMT_KEY, IDENTITY_KEY, 10)
