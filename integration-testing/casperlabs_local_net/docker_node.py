@@ -70,22 +70,10 @@ class DockerNode(LoggingDockerBase):
             server_certificate_path = local_path(config.tls_certificate_path())
             server_key_path = local_path(config.tls_key_path())
 
-            client_certificate_path = server_certificate_path.replace("0", "1")
-            client_key_path = server_key_path.replace("0", "1")
-
-            logging.info(
-                f"SETUP PROXIES: client_certificate_path {client_certificate_path} client_key_path {client_key_path}"
-            )
-            logging.info(
-                f"SETUP PROXIES: server_certificate_path {server_certificate_path} server_key_path {server_key_path}"
-            )
-            node_host = (
-                os.environ.get("TAG_NAME") and self.container_name or "localhost"
-            )
             self.proxy_server = grpc_proxy.proxy_server(
                 self,
                 node_port=self.GRPC_SERVER_PORT + 10000,
-                node_host=node_host,
+                node_host=self.node_host,
                 proxy_port=self.server_proxy_port,
                 server_certificate_file=server_certificate_path,
                 server_key_file=server_key_path,
@@ -95,13 +83,17 @@ class DockerNode(LoggingDockerBase):
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
                 self,
                 node_port=self.KADEMLIA_PORT + 10000,
-                node_host=node_host,
+                node_host=self.node_host,
                 proxy_port=self.kademlia_proxy_port,
             )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+
+    @property
+    def node_host(self):
+        return os.environ.get("TAG_NAME") and self.container_name or "localhost"
 
     @property
     def proxy_host(self):

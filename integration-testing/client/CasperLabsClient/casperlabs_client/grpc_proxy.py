@@ -308,13 +308,13 @@ class ProxyThread(Thread):
                 ),
             )
         logging.info(
-            f"STARTING PROXY: node_port={self.node_port} proxy_port={self.proxy_port}"
+            f"STARTING PROXY: node={self.node_host}:{self.node_port} proxy_port={self.proxy_port}"
         )
         self.server.start()
 
     def stop(self):
         logging.info(
-            f"STOPPING PROXY: node_port={self.node_port} proxy_port={self.proxy_port}"
+            f"STOPPING PROXY: node={self.node_host}:{self.node_port} proxy_port={self.proxy_port}"
         )
         self.server.stop(0)
 
