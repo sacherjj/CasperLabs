@@ -16,11 +16,6 @@ Accounts have two threshold values:
 Both are initialized at 1.
 """
 
-ADD_KEY_CONTRACT = Contract.ADD_ASSOCIATED_KEY  # ABI: Account - Weight
-REMOVE_KEY_CONTRACT = Contract.REMOVE_ASSOCIATED_KEY  # ABI: Account
-UPDATE_KEY_CONTRACT = Contract.UPDATE_ASSOCIATED_KEY  # ABI: Account - Weight
-SET_THRESHOLDS_CONTRACT = Contract.SET_KEY_THRESHOLDS  # ABI: KeyWeight - DeployWeight
-
 IDENTITY_KEY = Account(1)  # 9d39
 DEPLOY_KEY = Account(2)  # 4e74
 DEPLOY_KEY_WEIGHT = 10
