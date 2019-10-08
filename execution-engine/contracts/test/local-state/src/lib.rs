@@ -1,9 +1,11 @@
 #![no_std]
-#![feature(cell_update)]
 
 extern crate alloc;
+
 extern crate contract_ffi;
+
 use alloc::string::{String, ToString};
+
 use contract_ffi::contract_api;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 

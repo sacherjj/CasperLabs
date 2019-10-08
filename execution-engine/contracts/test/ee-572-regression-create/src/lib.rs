@@ -1,8 +1,8 @@
 #![no_std]
-#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::string::{String, ToString};

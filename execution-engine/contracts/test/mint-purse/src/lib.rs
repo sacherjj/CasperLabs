@@ -2,6 +2,7 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{self, Error as ApiError};
@@ -43,9 +44,7 @@ pub extern "C" fn call() {
 
     match balance {
         None => contract_api::revert(ApiError::User(Error::BalanceNotFound as u16)),
-
         Some(balance) if balance == amount => (),
-
         _ => contract_api::revert(ApiError::User(Error::BalanceMismatch as u16)),
     }
 }

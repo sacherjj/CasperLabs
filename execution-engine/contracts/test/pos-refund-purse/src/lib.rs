@@ -2,12 +2,15 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
+
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
@@ -42,9 +45,7 @@ fn get_payment_purse(pos: &ContractPointer) -> PurseId {
 fn submit_payment(pos: &ContractPointer, amount: U512) {
     let payment_purse = get_payment_purse(pos);
     let main_purse = contract_api::main_purse();
-    if contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).is_err() {
-        contract_api::revert(ApiError::Transfer);
-    }
+    contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }
 
 #[no_mangle]
@@ -81,11 +82,9 @@ pub extern "C" fn call() {
         Some(_) => contract_api::revert(ApiError::User(Error::Invalid as u16)),
     }
 
-    let payment_amount: U512 = match contract_api::get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument),
-        None => contract_api::revert(ApiError::MissingArgument),
-    };
+    let payment_amount: U512 = contract_api::get_arg(0)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     submit_payment(&pos_pointer, payment_amount);
 }

@@ -1,13 +1,14 @@
 #![no_std]
-#![feature(cell_update)]
 
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
 
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::U512;
 
 #[no_mangle]
@@ -47,9 +48,7 @@ pub extern "C" fn call() {
     // Read data through dedicated FFI function
     let uref1 = contract_api::get_key("hello-world")
         .unwrap_or_else(|| contract_api::revert(Error::User(100)));
-    let turef = uref1
-        .to_turef()
-        .unwrap_or_else(|| contract_api::revert(Error::User(101)));
+    let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
     let hello_world = contract_api::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
 

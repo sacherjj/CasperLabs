@@ -1,12 +1,13 @@
 #![no_std]
-#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 
@@ -16,16 +17,12 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 #[no_mangle]
 pub extern "C" fn call() {
     let source: PurseId = contract_api::main_purse();
-    let destination: PublicKey = match contract_api::get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
-        None => contract_api::revert(Error::MissingArgument),
-    };
-    let amount: U512 = match contract_api::get_arg(1) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument),
-        None => contract_api::revert(Error::MissingArgument),
-    };
+    let destination: PublicKey = contract_api::get_arg(0)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
+    let amount: U512 = contract_api::get_arg(1)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
 
     let transfer_result = contract_api::transfer_from_purse_to_account(source, destination, amount);
 

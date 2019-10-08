@@ -2,11 +2,14 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 use alloc::string::String;
+
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{self, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
 pub const METHOD_VERSION: &str = "version";
@@ -31,18 +34,12 @@ enum CustomError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let purse_holder_uref: URef = match contract_api::get_arg(Args::PurseHolderURef as u32) {
-        Some(Ok(uref)) => uref,
-        Some(Err(_)) => {
-            contract_api::revert(Error::User(CustomError::InvalidPurseHolderURefArg as u16))
-        }
-        None => contract_api::revert(Error::User(CustomError::MissingPurseHolderURefArg as u16)),
-    };
-    let method_name: String = match contract_api::get_arg(Args::MethodName as u32) {
-        Some(Ok(method)) => method,
-        Some(Err(_)) => contract_api::revert(Error::User(CustomError::InvalidMethodNameArg as u16)),
-        None => contract_api::revert(Error::User(CustomError::MissingMethodNameArg as u16)),
-    };
+    let purse_holder_uref: URef = contract_api::get_arg(Args::PurseHolderURef as u32)
+        .unwrap_or_revert_with(Error::User(CustomError::MissingPurseHolderURefArg as u16))
+        .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseHolderURefArg as u16));
+    let method_name: String = contract_api::get_arg(Args::MethodName as u32)
+        .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
+        .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
 
     let purse_holder_contract_pointer = ContractPointer::URef(TURef::new(
         purse_holder_uref.addr(),
@@ -60,13 +57,9 @@ pub extern "C" fn call() {
             contract_api::put_key(METHOD_VERSION, &version_key);
         }
         _ => {
-            let purse_name: String = match contract_api::get_arg(Args::PurseName as u32) {
-                Some(Ok(purse)) => purse,
-                Some(Err(_)) => {
-                    contract_api::revert(Error::User(CustomError::InvalidPurseNameArg as u16))
-                }
-                None => contract_api::revert(Error::User(CustomError::MissingPurseNameArg as u16)),
-            };
+            let purse_name: String = contract_api::get_arg(Args::PurseName as u32)
+                .unwrap_or_revert_with(Error::User(CustomError::MissingPurseNameArg as u16))
+                .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseNameArg as u16));
 
             contract_api::call_contract::<_, ()>(
                 purse_holder_contract_pointer.clone(),

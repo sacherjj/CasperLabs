@@ -1,9 +1,10 @@
 #![no_std]
-#![feature(cell_update)]
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
+
 use contract_ffi::contract_api;
 
 const SET_REFUND_PURSE: &str = "set_refund_purse";
