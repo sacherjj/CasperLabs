@@ -17,7 +17,9 @@ pub extern "C" fn call() {
         Ok(_) => {}
     };
 
-    let key_management_threshold: Weight = get_arg(0).unwrap_or_revert().unwrap_or_revert();
+    let key_management_threshold: Weight = get_arg(0)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
     let deploy_threshold: Weight = match get_arg(1) {
         Some(Ok(data)) => data,
         Some(Err(_)) => revert(Error::InvalidArgument),
