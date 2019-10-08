@@ -277,11 +277,11 @@ class ForkchoiceTest
       )
 
       // DAG:
-      //    = B1 =
-      //  //      \\
-      // G == B2 ==\\=====
-      //            \\    \\
-      //             B3 -- B4
+      //    B1
+      //  //  \\
+      // G      B3 -- B4
+      //  \\         //
+      //    B2 ======
       // The bug in NODE-943 was that B4 did not propagate a score to B3,
       // so we ended up with tips [B4, B1] instead of [B4]
 
@@ -319,8 +319,7 @@ class ForkchoiceTest
                        latestBlocks,
                        EquivocationsTracker.empty
                      )
-        _ = forkchoice.head should be(b4.blockHash)
-        _ = forkchoice should have size 1
+        _ = forkchoice shouldBe List(b4.blockHash)
       } yield ()
   }
 
