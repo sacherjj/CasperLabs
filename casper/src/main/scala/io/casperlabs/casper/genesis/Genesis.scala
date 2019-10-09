@@ -48,12 +48,14 @@ object Genesis {
 
       // Sorted list of bonded validators.
       bonds = genesisConfig.accounts
+        .sortBy { x =>
+          x.publicKey -> x.getBondedAmount.value
+        }
         .collect {
           case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-            PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
+            PublicKey(account.publicKey.toByteArray) -> account.bondedAmount
         }
         .toSeq
-        .sorted
         .map {
           case (pk, stake) =>
             val validator = ByteString.copyFrom(pk)

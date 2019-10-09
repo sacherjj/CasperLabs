@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.{ArbitraryConsensus, Weight}
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.storage.deploy.{
   DeployStorage,
@@ -194,10 +194,10 @@ object AutoProposerTest {
     override def estimator(
         dag: DagRepresentation[F],
         lm: Map[ByteString, ByteString]
-    ): F[List[ByteString]]                                                        = ???
-    override def dag: F[DagRepresentation[F]]                                     = ???
-    override def normalizedInitialFault(weights: Map[ByteString, Long]): F[Float] = ???
-    override def lastFinalizedBlock: F[Block]                                     = ???
-    override def faultToleranceThreshold                                          = 0f
+    ): F[List[ByteString]]                                                          = ???
+    override def dag: F[DagRepresentation[F]]                                       = ???
+    override def normalizedInitialFault(weights: Map[ByteString, Weight]): F[Float] = ???
+    override def lastFinalizedBlock: F[Block]                                       = ???
+    override def faultToleranceThreshold                                            = 0f
   }
 }

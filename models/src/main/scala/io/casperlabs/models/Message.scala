@@ -55,8 +55,9 @@ object Message {
     lazy val secondaryParents =
       if (blockSummary.getHeader.parentHashes.isEmpty) Seq.empty
       else blockSummary.getHeader.parentHashes.tail
-    lazy val weightMap = blockSummary.getHeader.getState.bonds.map {
-      case Bond(validatorPk, stake) => validatorPk -> stake
+
+    lazy val weightMap: Map[ByteString, Weight] = blockSummary.getHeader.getState.bonds.map {
+      case Bond(validatorPk, stake) => validatorPk -> Weight(stake)
     }.toMap
   }
 

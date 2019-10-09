@@ -19,6 +19,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -671,7 +672,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       val slashedValidatorBond =
         bonds(block).find(_.validatorPublicKey == justification.validatorPublicKey)
       slashedValidatorBond match {
-        case Some(bond) => bond.stake > 0
+        case Some(bond) => Weight(bond.stake) > 0
         case None       => false
       }
     }

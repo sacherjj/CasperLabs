@@ -16,6 +16,7 @@ import io.casperlabs.casper.finality.singlesweep.{
 }
 import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.Keys

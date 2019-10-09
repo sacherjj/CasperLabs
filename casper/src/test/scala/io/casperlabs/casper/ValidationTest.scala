@@ -12,6 +12,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
 import io.casperlabs.casper.util.execengine.{
@@ -556,7 +557,7 @@ class ValidationTest
         generateValidator("V3")
       )
       val bonds = validators.zipWithIndex.map {
-        case (v, i) => Bond(v, 2L * i.toLong + 1L)
+        case (v, i) => Bond(v, 2 * i + 1)
       }
 
       val emptyEquivocationsTracker = EquivocationsTracker.empty

@@ -69,7 +69,7 @@ object FinalityDetectorUtil {
       blockDag: DagRepresentation[F],
       block: Message,
       validators: Set[Validator]
-  ): F[Map[Validator, Long]] =
+  ): F[Map[Validator, Level]] =
     panoramaOfBlockByValidators(blockDag, block, validators)
       .map(_.mapValues(_.rank))
 
@@ -142,7 +142,7 @@ object FinalityDetectorUtil {
       validatorsToIndex: Map[Validator, Int],
       blockSummary: Message,
       equivocationsTracker: EquivocationsTracker
-  ): F[MutableSeq[Long]] =
+  ): F[MutableSeq[Level]] =
     FinalityDetectorUtil
       .panoramaDagLevelsOfBlock(
         dag,
