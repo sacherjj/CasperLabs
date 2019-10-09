@@ -4,9 +4,8 @@ use alloc::vec::Vec;
 use core::convert::{From, TryFrom, TryInto};
 use core::u8;
 
-use super::alloc_util::{alloc_bytes, str_ref_to_ptr, to_ptr};
+use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::{self, deserialize, ToBytes};
-use crate::contract_api::{ContractRef, TURef};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::uref::AccessRights;

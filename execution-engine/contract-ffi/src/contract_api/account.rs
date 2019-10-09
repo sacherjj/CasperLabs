@@ -2,7 +2,7 @@ use core::convert::{TryFrom, TryInto};
 
 use super::runtime::get_caller;
 use super::storage::read_untyped;
-use crate::contract_api::alloc_util::to_ptr;
+use super::to_ptr;
 use crate::ext_ffi;
 use crate::key::Key;
 pub use crate::value::account::PublicKey;

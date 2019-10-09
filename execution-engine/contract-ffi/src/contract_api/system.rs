@@ -2,11 +2,10 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::u8;
 
-use super::alloc_util::{alloc_bytes, to_ptr};
 use super::error::Error;
 use super::runtime::get_key;
 use super::runtime::revert;
-use super::{ContractRef, TURef};
+use super::{alloc_bytes, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::deserialize;
 use crate::ext_ffi;
 use crate::key::Key;
