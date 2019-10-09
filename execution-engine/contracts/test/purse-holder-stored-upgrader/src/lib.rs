@@ -6,7 +6,7 @@ extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::pointers::TURef;
+use contract_ffi::contract_api::TURef;
 use contract_ffi::contract_api::{runtime, storage, system, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;

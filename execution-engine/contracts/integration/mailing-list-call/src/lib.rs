@@ -7,8 +7,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::From;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
+use contract_ffi::contract_api::{ContractRef, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
@@ -34,7 +34,7 @@ impl From<Error> for ApiError {
 pub extern "C" fn call() {
     let mailing_uref = runtime::get_key("mailing").unwrap_or_revert_with(Error::GetMailingURef);
     let pointer = if let Key::Hash(hash) = mailing_uref {
-        ContractPointer::Hash(hash)
+        ContractRef::Hash(hash)
     } else {
         runtime::revert(Error::WrongURefType); // exit code is currently arbitrary
     };

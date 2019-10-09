@@ -5,8 +5,7 @@ extern crate contract_ffi;
 
 use alloc::string::ToString;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
-use contract_ffi::contract_api::{runtime, storage, Error};
+use contract_ffi::contract_api::{runtime, storage, ContractRef, Error, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
@@ -14,8 +13,8 @@ use contract_ffi::uref::URef;
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(Error::GetURef);
-    let contract_pointer: ContractPointer = match contract_key {
-        Key::Hash(hash) => ContractPointer::Hash(hash),
+    let contract_pointer: ContractRef = match contract_key {
+        Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 

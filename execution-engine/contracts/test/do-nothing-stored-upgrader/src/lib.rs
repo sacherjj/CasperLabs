@@ -3,8 +3,7 @@
 extern crate contract_ffi;
 extern crate create_purse_01;
 
-use contract_ffi::contract_api::pointers::TURef;
-use contract_ffi::contract_api::{runtime, Error};
+use contract_ffi::contract_api::{runtime, Error, TURef};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 

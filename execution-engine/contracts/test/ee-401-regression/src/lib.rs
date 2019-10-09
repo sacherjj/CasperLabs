@@ -6,8 +6,7 @@ extern crate contract_ffi;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 
-use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{runtime, storage};
+use contract_ffi::contract_api::{runtime, storage, ContractRef};
 
 #[no_mangle]
 pub extern "C" fn hello_ext() {
@@ -20,7 +19,6 @@ pub extern "C" fn hello_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let named_keys = BTreeMap::new();
-    let contract_pointer: ContractPointer =
-        storage::store_function_at_hash("hello_ext", named_keys);
+    let contract_pointer: ContractRef = storage::store_function_at_hash("hello_ext", named_keys);
     runtime::put_key("hello_ext", &contract_pointer.into());
 }

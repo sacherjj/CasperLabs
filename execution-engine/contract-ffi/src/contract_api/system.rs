@@ -4,9 +4,9 @@ use core::u8;
 
 use super::alloc_util::{alloc_bytes, to_ptr};
 use super::error::Error;
-use super::pointers::*;
 use super::runtime::get_key;
 use super::runtime::revert;
+use super::{ContractRef, TURef};
 use crate::bytesrepr::deserialize;
 use crate::ext_ffi;
 use crate::key::Key;
@@ -18,12 +18,12 @@ pub type TransferResult = Result<TransferredTo, Error>;
 pub const MINT_NAME: &str = "mint";
 pub const POS_NAME: &str = "pos";
 
-fn get_system_contract(name: &str) -> ContractPointer {
+fn get_system_contract(name: &str) -> ContractRef {
     let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
 
     if let Key::URef(uref) = key {
         let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-        ContractPointer::URef(reference)
+        ContractRef::URef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant)
     }
@@ -31,13 +31,13 @@ fn get_system_contract(name: &str) -> ContractPointer {
 
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
 /// `contract_api::Error`.
-pub fn get_mint() -> ContractPointer {
+pub fn get_mint() -> ContractRef {
     get_system_contract(MINT_NAME)
 }
 
 /// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
 /// with a `contract_api::Error`.
-pub fn get_proof_of_stake() -> ContractPointer {
+pub fn get_proof_of_stake() -> ContractRef {
     get_system_contract(POS_NAME)
 }
 

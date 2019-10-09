@@ -5,7 +5,7 @@ use alloc::vec::Vec;
 use super::alloc_util::{alloc_bytes, str_ref_to_ptr, to_ptr};
 use super::argsparser::ArgsParser;
 use super::error::{result_from, Error};
-use super::pointers::*;
+use super::{ContractRef, TURef};
 use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
@@ -40,7 +40,7 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
 pub fn call_contract<A: ArgsParser, T: FromBytes>(
-    c_ptr: ContractPointer,
+    c_ptr: ContractRef,
     args: &A,
     extra_urefs: &Vec<Key>,
 ) -> T {

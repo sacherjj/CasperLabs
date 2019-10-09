@@ -8,8 +8,7 @@ extern crate contract_ffi;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 
-use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{runtime, storage, Error};
+use contract_ffi::contract_api::{runtime, storage, ContractRef, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
@@ -35,9 +34,8 @@ pub extern "C" fn call() {
     let flag: String = runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let do_nothing: ContractPointer =
-        storage::store_function_at_hash("do_nothing", BTreeMap::new());
-    let do_something: ContractPointer =
+    let do_nothing: ContractRef = storage::store_function_at_hash("do_nothing", BTreeMap::new());
+    let do_something: ContractRef =
         storage::store_function_at_hash("do_something", BTreeMap::new());
     if flag == "pass1" {
         // Two calls should forward the internal RNG. This pass is a baseline.

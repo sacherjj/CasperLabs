@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 
 use contract_api::storage;
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::TURef;
+use contract_ffi::contract_api::TURef;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::Value;

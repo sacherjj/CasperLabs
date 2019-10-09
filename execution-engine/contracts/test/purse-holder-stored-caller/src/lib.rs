@@ -6,8 +6,8 @@ extern crate contract_ffi;
 
 use alloc::string::String;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
 use contract_ffi::contract_api::{runtime, storage, Error};
+use contract_ffi::contract_api::{ContractRef, TURef};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
@@ -40,7 +40,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
 
-    let purse_holder_contract_pointer = ContractPointer::URef(TURef::new(
+    let purse_holder_contract_pointer = ContractRef::URef(TURef::new(
         purse_holder_uref.addr(),
         contract_ffi::uref::AccessRights::READ,
     ));

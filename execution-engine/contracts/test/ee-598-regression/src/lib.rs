@@ -4,7 +4,7 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{account, runtime, system, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
@@ -18,7 +18,7 @@ fn purse_to_key(p: PurseId) -> Key {
 const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
 
-fn bond(pos: ContractPointer, amount: U512, source: PurseId) {
+fn bond(pos: ContractRef, amount: U512, source: PurseId) {
     runtime::call_contract::<_, ()>(
         pos,
         &(POS_BOND, amount, source),
@@ -26,7 +26,7 @@ fn bond(pos: ContractPointer, amount: U512, source: PurseId) {
     );
 }
 
-fn unbond(pos: ContractPointer, amount: Option<U512>) {
+fn unbond(pos: ContractRef, amount: Option<U512>) {
     runtime::call_contract::<_, ()>(pos, &(POS_UNBOND, amount), &vec![]);
 }
 

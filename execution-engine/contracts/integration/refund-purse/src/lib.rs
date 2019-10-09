@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use contract_api::runtime;
 use contract_api::system;
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PurseId;
@@ -17,7 +17,7 @@ fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
 }
 
-fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
+fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
     runtime::call_contract::<_, ()>(
         pos.clone(),
         &("set_refund_purse", *p),
@@ -25,7 +25,7 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
     );
 }
 
-fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
+fn get_refund_purse(pos: &ContractRef) -> Option<PurseId> {
     runtime::call_contract(pos.clone(), &("get_refund_purse",), &Vec::new())
 }
 

@@ -10,8 +10,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::From;
 
-use contract_ffi::contract_api::pointers::TURef;
-use contract_ffi::contract_api::{runtime, storage, Error};
+use contract_ffi::contract_api::{runtime, storage, Error, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;

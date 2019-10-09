@@ -6,8 +6,7 @@ extern crate contract_ffi;
 
 use alloc::prelude::v1::{String, Vec};
 
-use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{account, runtime, system, Error as ApiError};
+use contract_ffi::contract_api::{account, runtime, system, ContractRef, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::{PublicKey, PurseId};
@@ -23,7 +22,7 @@ fn purse_to_key(p: PurseId) -> Key {
     Key::URef(p.value())
 }
 
-fn bond(pos: &ContractPointer, amount: &U512, source: PurseId) {
+fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
     runtime::call_contract::<_, ()>(
         pos.clone(),
         &(POS_BOND, *amount, source),
@@ -31,7 +30,7 @@ fn bond(pos: &ContractPointer, amount: &U512, source: PurseId) {
     );
 }
 
-fn unbond(pos: &ContractPointer, amount: Option<U512>) {
+fn unbond(pos: &ContractRef, amount: Option<U512>) {
     runtime::call_contract::<_, ()>(pos.clone(), &(POS_UNBOND, amount), &Vec::<Key>::new());
 }
 

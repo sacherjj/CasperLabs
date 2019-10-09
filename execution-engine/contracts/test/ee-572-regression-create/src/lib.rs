@@ -9,8 +9,7 @@ use alloc::string::{String, ToString};
 use core::clone::Clone;
 use core::convert::Into;
 
-use contract_ffi::contract_api::pointers::TURef;
-use contract_ffi::contract_api::{runtime, storage};
+use contract_ffi::contract_api::{runtime, storage, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 

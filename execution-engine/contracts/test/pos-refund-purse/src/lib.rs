@@ -6,7 +6,7 @@ extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{account, runtime, system, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
@@ -25,7 +25,7 @@ fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())
 }
 
-fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
+fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
     runtime::call_contract::<_, ()>(
         pos.clone(),
         &("set_refund_purse", *p),
@@ -33,15 +33,15 @@ fn set_refund_purse(pos: &ContractPointer, p: &PurseId) {
     );
 }
 
-fn get_refund_purse(pos: &ContractPointer) -> Option<PurseId> {
+fn get_refund_purse(pos: &ContractRef) -> Option<PurseId> {
     runtime::call_contract(pos.clone(), &("get_refund_purse",), &Vec::new())
 }
 
-fn get_payment_purse(pos: &ContractPointer) -> PurseId {
+fn get_payment_purse(pos: &ContractRef) -> PurseId {
     runtime::call_contract(pos.clone(), &("get_payment_purse",), &Vec::new())
 }
 
-fn submit_payment(pos: &ContractPointer, amount: U512) {
+fn submit_payment(pos: &ContractRef, amount: U512) {
     let payment_purse = get_payment_purse(pos);
     let main_purse = account::get_main_purse();
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()

@@ -8,7 +8,7 @@ extern crate contract_ffi;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{runtime, storage, system, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
@@ -62,8 +62,8 @@ pub extern "C" fn apply_method() {
 #[no_mangle]
 pub extern "C" fn call() {
     let mint_uref = match system::get_mint() {
-        ContractPointer::Hash(_) => runtime::revert(Error::User(CustomError::MintHash as u16)),
-        ContractPointer::URef(turef) => turef.into(),
+        ContractRef::Hash(_) => runtime::revert(Error::User(CustomError::MintHash as u16)),
+        ContractRef::URef(turef) => turef.into(),
     };
 
     let named_keys = {

@@ -6,7 +6,7 @@ extern crate contract_ffi;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
@@ -16,7 +16,7 @@ use contract_ffi::value::Value;
 pub extern "C" fn call() {
     let hello_name_uref = runtime::get_key("hello_name").unwrap_or_revert_with(Error::User(100));
     let pointer = if let Key::Hash(hash) = hello_name_uref {
-        ContractPointer::Hash(hash)
+        ContractRef::Hash(hash)
     } else {
         runtime::revert(Error::User(66)); // exit code is currently arbitrary
     };

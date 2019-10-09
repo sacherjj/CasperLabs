@@ -10,8 +10,7 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use core::fmt::Write;
 
-use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
-use contract_ffi::contract_api::{runtime, storage, Error};
+use contract_ffi::contract_api::{runtime, storage, ContractRef, Error, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
@@ -42,7 +41,7 @@ pub extern "C" fn call() {
     let mint_uref: URef = runtime::get_arg(Args::MintURef as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let mint = ContractPointer::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
+    let mint = ContractRef::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
@@ -97,7 +96,7 @@ pub extern "C" fn call() {
     runtime::ret(&uref, &vec![uref]);
 }
 
-fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
+fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
     let result: Result<URef, mint::Error> =
         runtime::call_contract(mint.clone(), &("mint", amount), &vec![]);
 
