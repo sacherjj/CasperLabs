@@ -23,7 +23,7 @@ trait ArbitraryImplicits {
   implicit val nonEmptyStringGen: Arbitrary[String] = Arbitrary {
     for {
       n   <- Gen.choose(1, 100)
-      seq <- Gen.listOfN(n, Gen.alphaNumChar)
+      seq <- Gen.listOfN(n, Gen.alphaLowerChar)
     } yield seq.mkString("")
   }
 
