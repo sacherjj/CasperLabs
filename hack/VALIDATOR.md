@@ -144,7 +144,7 @@ We'll have use the same socket to start the node as the one we used with the exe
 
 You can start the node in two modes:
 * `-s` puts it in standalone mode, which means it will generate a genesis block on its own
-* Without `-s` you have to use the `--server-bootstrap` option and give it the address of another node to get the blocks from and to start discovering other nodes with. The address is in the form of `casperlabs://<bootstrap-node-id>@$<bootstrap-node-ip-address>?protocol=40400&discovery=40404`, but the ports can be different, based on what the operator of the node configured.
+* Without `-s` you have to use the `--server-bootstrap` option and give it the address of another node to get the blocks from and to start discovering other nodes with. The address is in the form of `casperlabs://<bootstrap-node-id>:<chain id>@$<bootstrap-node-ip-address>?protocol=40400&discovery=40404`, but the ports can be different, based on what the operator of the node configured.
 
 ```console
 casperlabs-node \

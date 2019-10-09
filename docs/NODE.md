@@ -74,7 +74,7 @@ casperlabs-node run \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
     --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
+    --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125:113852ab4be08eea72c9dd528faa18e7b30ee2bfcae29ea4a0ec42297f23e4e5@100.24.117.48?protocol=40400&discovery=40404"
 ```
 
 ##### Stopping a bonded validator
