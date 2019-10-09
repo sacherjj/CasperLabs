@@ -139,8 +139,8 @@ where
     let access_rights = {
         let mut keys: Vec<Key> = named_keys.values().cloned().collect();
         keys.extend(extra_urefs);
-        keys.push(current_runtime.get_mint_contract_uref_key()?);
-        keys.push(current_runtime.get_pos_contract_uref_key()?);
+        keys.push(current_runtime.get_mint_contract_uref().into());
+        keys.push(current_runtime.get_pos_contract_uref().into());
         extract_access_rights_from_keys(keys)
     };
 
@@ -695,22 +695,14 @@ where
         }
     }
 
-    /// looks up the public mint contract key in the caller's `named_keys` map.
-    fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
-        let mint = self.context.protocol_data().mint();
-        Ok(Key::from(mint))
+    /// Looks up the public mint contract key in the context's protocol data
+    pub fn get_mint_contract_uref(&mut self) -> URef {
+        self.context.protocol_data().mint()
     }
 
-    fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
-        let pos = self.context.protocol_data().proof_of_stake();
-        Ok(Key::from(pos))
-    }
-
-    fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
-        let key = self.get_mint_contract_uref_key()?;
-        // unwrap is safe here because get_mint_contract_uref_key checks that the key is a URef
-        let reference = *key.as_uref().unwrap();
-        Ok(reference)
+    /// Looks up the public PoS contract key in the context's protocol data
+    pub fn get_pos_contract_uref(&mut self) -> URef {
+        self.context.protocol_data().proof_of_stake()
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -731,7 +723,7 @@ where
     }
 
     fn create_purse(&mut self) -> Result<PurseId, Error> {
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key: Key = self.get_mint_contract_uref().into();
         self.mint_create(mint_contract_key)
     }
 
@@ -772,8 +764,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_uref = self.get_mint_contract_uref()?;
-        let mint_contract_key = Key::URef(mint_contract_uref);
+        let mint_contract_key: Key = self.get_mint_contract_uref().into();
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -792,8 +783,14 @@ where
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
                 let named_keys = vec![
-                    (String::from(MINT_NAME), self.get_mint_contract_uref_key()?),
-                    (String::from(POS_NAME), self.get_pos_contract_uref_key()?),
+                    (
+                        String::from(MINT_NAME),
+                        Key::from(self.get_mint_contract_uref()),
+                    ),
+                    (
+                        String::from(POS_NAME),
+                        Key::from(self.get_pos_contract_uref()),
+                    ),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -821,7 +818,7 @@ where
         target: PurseId,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key: Key = self.get_mint_contract_uref().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
@@ -899,7 +896,7 @@ where
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key: Key = self.get_mint_contract_uref().into();
 
         if self
             .mint_transfer(mint_contract_key, source, target, amount)
@@ -912,7 +909,7 @@ where
     }
 
     fn get_balance(&mut self, purse_id: PurseId) -> Result<Option<U512>, Error> {
-        let seed = self.get_mint_contract_uref()?.addr();
+        let seed = self.get_mint_contract_uref().addr();
 
         let key = purse_id.value().addr().to_bytes()?;
 
