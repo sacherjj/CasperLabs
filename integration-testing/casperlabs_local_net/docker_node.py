@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, testing_root_path
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -19,7 +19,8 @@ from casperlabs_local_net.casperlabs_accounts import (
     GENESIS_ACCOUNT,
 )
 from casperlabs_local_net.graphql import GraphQL
-from casperlabs_client import grpc_proxy, extract_common_name, ABI
+from casperlabs_client import extract_common_name, ABI
+from casperlabs_local_net import grpc_proxy
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -54,37 +55,18 @@ class DockerNode(LoggingDockerBase):
         super().__init__(config)
         self.graphql = GraphQL(self)
 
-        def local_path(p):
-            return str(
-                testing_root_path()
-                / "resources"
-                / "bootstrap_certificate"
-                / p.split("/")[-1]
-            )
-
         self.proxy_server = None
         self.proxy_kademlia = None
         if config.behind_proxy:
 
             # Set up proxy of incoming connections: this node is server, the other one client.
-            server_certificate_path = local_path(config.tls_certificate_path())
-            server_key_path = local_path(config.tls_key_path())
+            server_certificate_path = config.tls_certificate_local_path()
+            server_key_path = config.tls_key_local_path()
 
-            client_certificate_path = server_certificate_path.replace("0", "1")
-            client_key_path = server_key_path.replace("0", "1")
-
-            logging.info(
-                f"SETUP PROXIES: client_certificate_path {client_certificate_path} client_key_path {client_key_path}"
-            )
-            logging.info(
-                f"SETUP PROXIES: server_certificate_path {server_certificate_path} server_key_path {server_key_path}"
-            )
-            node_host = (
-                os.environ.get("TAG_NAME") and self.container_name or "localhost"
-            )
             self.proxy_server = grpc_proxy.proxy_server(
-                node_port=self.GRPC_SERVER_PORT + 10000,
-                node_host=node_host,
+                self,
+                node_port=self.grpc_server_docker_port,
+                node_host=self.node_host,
                 proxy_port=self.server_proxy_port,
                 server_certificate_file=server_certificate_path,
                 server_key_file=server_key_path,
@@ -92,8 +74,9 @@ class DockerNode(LoggingDockerBase):
                 client_key_file=server_key_path,
             )
             self.proxy_kademlia = grpc_proxy.proxy_kademlia(
-                node_port=self.KADEMLIA_PORT + 10000,
-                node_host=node_host,
+                self,
+                node_port=self.kademlia_docker_port,
+                node_host=self.node_host,
                 proxy_port=self.kademlia_proxy_port,
             )
         self._client = self.DOCKER_CLIENT
@@ -102,12 +85,26 @@ class DockerNode(LoggingDockerBase):
         self.join_client_network()
 
     @property
+    def node_host(self):
+        return os.environ.get("TAG_NAME") and self.container_name or "172.17.0.1"
+
+    @property
+    def proxy_host(self):
+        return (
+            os.environ.get("TAG_NAME")
+            and f"test-{os.environ.get('TAG_NAME')}"
+            or "172.17.0.1"
+        )
+
+    @property
     def server_proxy_port(self) -> int:
-        return self.GRPC_SERVER_PORT + self.config.number * 100
+        return (
+            self.GRPC_SERVER_PORT + self.config.number * 100 + self.docker_port_offset
+        )
 
     @property
     def kademlia_proxy_port(self) -> int:
-        return self.KADEMLIA_PORT + self.config.number * 100
+        return self.KADEMLIA_PORT + self.config.number * 100 + self.docker_port_offset
 
     @property
     def docker_port_offset(self) -> int:
@@ -473,21 +470,15 @@ class DockerNode(LoggingDockerBase):
         return self.exec_run(f"{self.CL_NODE_BINARY} show-blocks")
 
     @property
+    def node_id(self) -> str:
+        return extract_common_name(self.config.tls_certificate_local_path())
+
+    @property
     def address(self) -> str:
         if self.config.behind_proxy:
-            if not os.environ.get("TAG_NAME"):
-                # Local run
-                host_name = "172.17.0.1"  # this works locally
-            else:
-                # Test suite is in a docker container if in CI
-                host_name = f"test-{os.environ.get('TAG_NAME')}"
-
-            certificate_path = self.config.tls_certificate_local_path()
-            logging.info(f"certificate_path: {certificate_path}")
-            node_id = extract_common_name(certificate_path)
             protocol_port = self.server_proxy_port
             discovery_port = self.kademlia_proxy_port
-            addr = f"casperlabs://{node_id}@{host_name}?protocol={protocol_port}&discovery={discovery_port}"
+            addr = f"casperlabs://{self.node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
             logging.info(f"Address of the proxy: {addr}")
             return addr
 

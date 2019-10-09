@@ -26,10 +26,7 @@ Responses from the node can also be modified or censored by the proxy.
 
 ### gRPC Proxy
 
-The generic gRPC proxy, in module `grpc_proxy.py`,
-is part of the `casperlabs_client` Python package.
-This is because it uses the generated gRPC and protobuf libraries
-that handle CasperLabs' gRPC APIs and that are part of the package.
+The generic gRPC Python proxy `grpc_proxy.py` is a submodule of `casperlabs_local_net`.
 
 Instantiating a proxy can be done by calling one of the following functions in `grpc_proxy.py`:
 - `proxy_server`, for the Gossip (a.k.a. "protocol") service proxy,
