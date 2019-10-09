@@ -72,6 +72,8 @@ pub enum Error {
     NoAccessRights,
     /// Optional data was unexpectedly `None`.
     None,
+    /// Returns when contract tries to obtain URef to a system contract that does not exist.
+    InvalidSystemContract,
     /// Error specific to Proof of Stake contract.
     ProofOfStake(u8),
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
@@ -99,6 +101,7 @@ impl From<Error> for u32 {
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
             Error::None => 17,
+            Error::InvalidSystemContract => 18,
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
@@ -127,6 +130,7 @@ impl Debug for Error {
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::None => write!(f, "Error::None")?,
+            Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }

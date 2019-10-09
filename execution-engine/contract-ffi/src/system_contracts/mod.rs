@@ -7,3 +7,6 @@
 //! the supporting code i.e. mint.
 pub mod error;
 pub mod mint;
+pub mod system_contract;
+
+pub use system_contract::SystemContract;
