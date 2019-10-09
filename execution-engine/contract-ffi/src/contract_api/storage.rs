@@ -41,7 +41,7 @@ where
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
 where
-    T: TryFrom<Value>,
+    T: Into<Value> + TryFrom<Value>,
 {
     let key: Key = turef.into();
     let maybe_value = read_untyped(&key)?;
@@ -73,10 +73,7 @@ fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Erro
 }
 
 /// Write the value under the key in the global state
-pub fn write<T>(turef: TURef<T>, t: T)
-where
-    Value: From<T>,
-{
+pub fn write<T: Into<Value>>(turef: TURef<T>, t: T) {
     let key = turef.into();
     let value = t.into();
     write_untyped(&key, &value)
@@ -154,10 +151,7 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 }
 
 /// Returns a new unforgable pointer, where value is initialized to `init`
-pub fn new_turef<T>(init: T) -> TURef<T>
-where
-    Value: From<T>,
-{
+pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
     let key_ptr = alloc_bytes(UREF_SIZE);
     let value: Value = init.into();
     let (value_ptr, value_size, _bytes2) = to_ptr(&value);

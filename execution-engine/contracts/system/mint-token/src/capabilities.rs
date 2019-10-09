@@ -20,7 +20,7 @@ macro_rules! readable_impl {
     ($type:ty) => {
         impl<T> Readable<T> for $type
         where
-            T: TryFrom<Value> + Clone,
+            T: Into<Value> + TryFrom<Value> + Clone,
         {
             fn read(&self) -> T {
                 let turef: TURef<T> = self.clone().into();
@@ -77,7 +77,7 @@ macro_rules! addable_impl {
 /// Macro for deriving conversion traits to/from TURef
 macro_rules! into_try_from_turef_impl {
     ($type:ident, $min_access:expr) => {
-        impl<T> TryFrom<TURef<T>> for $type<T> {
+        impl<T: Into<Value>> TryFrom<TURef<T>> for $type<T> {
             type Error = ();
 
             fn try_from(u: TURef<T>) -> Result<Self, Self::Error> {
@@ -91,7 +91,7 @@ macro_rules! into_try_from_turef_impl {
 
         // Can't implement From<$type<T>> for TURef<T> because of the
         // type parameter on TURef and TURef is not part of this crate.
-        impl<T> Into<TURef<T>> for $type<T> {
+        impl<T: Into<Value>> Into<TURef<T>> for $type<T> {
             fn into(self) -> TURef<T> {
                 let access = $min_access;
                 TURef::new(self.0, access)
