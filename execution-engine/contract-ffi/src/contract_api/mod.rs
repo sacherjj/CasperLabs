@@ -1,6 +1,5 @@
 pub mod account;
 mod alloc_util;
-pub mod argsparser;
 pub mod contract_ref;
 mod error;
 pub mod runtime;

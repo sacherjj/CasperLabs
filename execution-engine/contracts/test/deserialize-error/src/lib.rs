@@ -9,8 +9,8 @@ extern crate contract_ffi;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::vec::Vec;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::storage;
 use contract_ffi::contract_api::ContractRef;
 use contract_ffi::key::Key;

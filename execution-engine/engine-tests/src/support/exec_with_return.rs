@@ -37,7 +37,7 @@ pub fn exec<S, T>(
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
-    args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    args: impl contract_ffi::args_parser::ArgsParser,
     extra_urefs: Vec<URef>,
 ) -> Option<(T, Vec<URef>, ExecutionEffect)>
 where

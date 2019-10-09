@@ -29,6 +29,7 @@ extern crate proptest;
 #[global_allocator]
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+pub mod args_parser;
 pub mod base16;
 pub mod bytesrepr;
 pub mod contract_api;
