@@ -31,6 +31,7 @@ class RelayingSpec
     with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
   import RelayingSpec._
+  private implicit val chainId: ByteString = sample(genHash)
   private val genListNode: Gen[List[Node]] =
     for {
       n     <- Gen.choose(2, 10)
@@ -127,7 +128,7 @@ class RelayingSpec
 }
 
 object RelayingSpec {
-  private val local = Node(NodeIdentifier("0000"), "localhost", 40400, 40404, "casperlabs")
+  private val local = Node(NodeIdentifier("0000"), "localhost", 40400, 40404, ByteString.EMPTY)
 
   private val ask: NodeAsk[Task] = new DefaultApplicativeAsk[Task, Node] {
     val applicative: Applicative[Task] = Applicative[Task]

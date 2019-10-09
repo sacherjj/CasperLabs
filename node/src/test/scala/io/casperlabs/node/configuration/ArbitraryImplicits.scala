@@ -45,7 +45,9 @@ trait ArbitraryImplicits {
       host    <- Gen.listOfN(n, Gen.alphaNumChar)
       tcpPort <- Gen.posNum[Int]
       udpPort <- Gen.posNum[Int]
-      chainId <- Gen.alphaNumStr.suchThat(_.nonEmpty)
+      chainId <- Gen
+                  .listOfN(32, Gen.choose(Byte.MinValue, Byte.MaxValue))
+                  .map(bs => ByteString.copyFrom(bs.toArray))
     } yield Node(id, host.mkString(""), tcpPort, udpPort, chainId)
   }
 

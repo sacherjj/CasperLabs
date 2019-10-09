@@ -16,8 +16,11 @@ import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import java.util.concurrent.TimeUnit
+
+import com.google.protobuf.ByteString
 import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
+
 import scala.util.Random
 
 object NodeDiscoveryImpl {
@@ -25,7 +28,6 @@ object NodeDiscoveryImpl {
 
   def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Parallel](
       id: NodeIdentifier,
-      chainId: String,
       port: Int,
       timeout: FiniteDuration,
       gossipingRelayFactor: Int,
@@ -78,6 +80,7 @@ object NodeDiscoveryImpl {
     ): Resource[F, NodeDiscoveryImpl[F]] =
       Resource.liftF(for {
         table              <- PeerTable[F](id)
+        chainId            <- NodeAsk[F].ask.map(_.chainId)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
         temporaryBans      <- NodeCache(alivePeersCacheExpirationPeriod)
         nodeDiscovery <- Sync[F].delay {
@@ -158,7 +161,7 @@ object NodeDiscoveryImpl {
 
 private[discovery] class NodeDiscoveryImpl[F[_]: MonadThrowable: Log: Timer: Metrics: KademliaService: Parallel](
     id: NodeIdentifier,
-    chainId: String,
+    chainId: ByteString,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
     temporaryBans: NodeDiscoveryImpl.NodeCache[F],

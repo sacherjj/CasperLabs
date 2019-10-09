@@ -1,9 +1,9 @@
 package io.casperlabs.p2p
 
 import com.google.protobuf.ByteString
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._
+import io.casperlabs.crypto.codec.Base16
 import org.scalatest._
 
 class URIParseSpec extends FlatSpec with Matchers {
@@ -11,7 +11,9 @@ class URIParseSpec extends FlatSpec with Matchers {
     Left(s"bad address: $s")
 
   "A well formed casperlabs URI" should "parse into a PeerNode" in {
-    val uri = "casperlabs://abcdef@localhost?protocol=12345&discovery=12346"
+    val uri =
+      "casperlabs://abcdef:6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510@localhost?protocol=12345&discovery=12346"
+
     Node.fromAddress(uri) should be(
       Right(
         Node(
@@ -19,10 +21,18 @@ class URIParseSpec extends FlatSpec with Matchers {
           "localhost",
           12345,
           12346,
-          "casperlabs"
+          ByteString.copyFrom(
+            Base16.decode("6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510")
+          )
         )
       )
     )
+  }
+
+  "A URI with unparseable chain id" should "parse as an error" in {
+    val uri =
+      "casperlabs://abcdef:de6eed5d00cf080fc587eeb412cb31a75fd1035+@localhost?protocol=12345&discovery=12346"
+    Node.fromAddress(uri) should be(badAddressError(uri))
   }
 
   "A non-casperlabs URI" should "parse as an error" in {

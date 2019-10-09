@@ -6,6 +6,7 @@ import cats._
 import cats.effect._
 import cats.implicits._
 import cats.mtl._
+import com.google.protobuf.ByteString
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
@@ -30,7 +31,6 @@ package object effects {
 
   def nodeDiscovery(
       id: NodeIdentifier,
-      chainId: String,
       port: Int,
       timeout: FiniteDuration,
       alivePeersCacheExpirationPeriod: FiniteDuration,
@@ -47,7 +47,6 @@ package object effects {
     NodeDiscoveryImpl
       .create[Task](
         id,
-        chainId,
         port,
         timeout,
         gossipingRelayFactor,

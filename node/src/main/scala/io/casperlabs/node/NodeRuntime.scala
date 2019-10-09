@@ -49,6 +49,7 @@ import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
 import com.github.ghik.silencer.silent
+import com.google.protobuf.ByteString
 import io.casperlabs.ipc.ChainSpec
 
 import scala.concurrent.duration._
@@ -99,7 +100,7 @@ class NodeRuntime private[node] (
 
   val main: Task[Unit] = {
     val rpConfState = for {
-      local      <- localPeerNode[Task](chainSpec.getGenesis.name)
+      local      <- localPeerNode[Task]()
       bootstraps <- initPeers[Task]
       conf       <- rpConf[Task](local, bootstraps)
     } yield conf
@@ -179,7 +180,6 @@ class NodeRuntime private[node] (
 
         implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                           id,
-                                                          chainSpec.getGenesis.name,
                                                           kademliaPort,
                                                           conf.server.defaultTimeout,
                                                           conf.server.alivePeersCacheExpirationPeriod,
@@ -324,9 +324,8 @@ class NodeRuntime private[node] (
             .executeOn(loopScheduler)
             .start
 
-      host    <- peerNodeAsk.ask.map(_.host)
-      address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
-      _       <- Log[Task].info(s"Listening for traffic on $address.")
+      localNode <- peerNodeAsk.ask
+      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show}.")
       // This loop will keep the program from exiting until shutdown is initiated.
       _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler)
     } yield ()
@@ -375,15 +374,14 @@ class NodeRuntime private[node] (
       )
     )
 
-  private def localPeerNode[F[_]: Sync: Log](chainId: String) =
+  private def localPeerNode[F[_]: Sync: Log]() =
     WhoAmI
       .fetchLocalPeerNode[F](
         conf.server.host,
         conf.server.port,
         conf.server.kademliaPort,
         conf.server.noUpnp,
-        id,
-        chainId
+        id
       )
 
   private def initPeers[F[_]: MonadThrowable]: F[List[Node]] =

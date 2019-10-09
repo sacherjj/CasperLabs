@@ -32,6 +32,10 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
       minSuccessful = 500
     )
 
+  val genHash: Gen[ByteString] = for {
+    bytes <- Gen.listOfN(32, Gen.choose[Byte](Byte.MinValue, Byte.MaxValue))
+  } yield ByteString.copyFrom(bytes.toArray)
+
   val genPeerNode: Gen[Node] =
     for {
       hash <- Gen.listOfN(20, Gen.choose(0, 255)).map(_.map(_.toByte))
@@ -513,7 +517,7 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
     "discover" should {
       "instruct KademliaService to ignore peers with wrong chainId" in {
         val peers: Map[Node, List[Node]] = sample(genFullyConnectedPeers)
-        val wrongChainIdPeer             = sample(genPeerNode).withChainId(sample(arbitrary[String]))
+        val wrongChainIdPeer             = sample(genPeerNode).withChainId(sample(genHash))
         TestFixture.prefilledTable(
           connections = peers,
           k = totalN(peers),
@@ -608,7 +612,11 @@ object NodeDiscoverySpec {
   }
   implicit val metricsNOP: Metrics[Task] = new MetricsNOP[Task]
   val id                                 = NodeIdentifier(List.fill(20)(0.toByte))
-  val chainId                            = "casperlabs"
+  val chainId: ByteString = {
+    val array = Array.ofDim[Byte](32)
+    util.Random.nextBytes(array)
+    ByteString.copyFrom(array)
+  }
 
   object TestFixture {
     def customInitialWithFailures(

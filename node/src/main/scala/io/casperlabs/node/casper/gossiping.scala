@@ -7,6 +7,7 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
+import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -23,6 +24,7 @@ import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
+import io.casperlabs.comm.rp.RPConf
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
@@ -52,7 +54,10 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: MonadState[
+    *[_],
+    RPConf
+  ]](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
@@ -187,7 +192,7 @@ package object gossiping {
       _ <- startGrpcServer(
             gossipServiceServer,
             rateLimiter,
-            chainSpec.getGenesis.name,
+            genesis.blockHash,
             serverSslContext,
             conf,
             port,
@@ -222,14 +227,21 @@ package object gossiping {
     } yield ()
   }
 
-  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService](
+  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService: MonadState[
+    *[_],
+    RPConf
+  ]](
       spec: ipc.ChainSpec
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
         _       <- Log[F].info("Constructing Genesis block...")
         genesis <- Genesis.fromChainSpec[F](spec.getGenesis)
-        _       <- Log[F].info(s"Genesis hash is ${show(genesis.getBlockMessage.blockHash)}")
+        _ <- MonadState[F, RPConf]
+              .modify(
+                c => c.copy(local = c.local.copy(chainId = genesis.getBlockMessage.blockHash))
+              )
+        _ <- Log[F].info(s"Genesis hash is ${show(genesis.getBlockMessage.blockHash)}")
       } yield genesis.getBlockMessage
     }
 
@@ -774,7 +786,7 @@ package object gossiping {
   private def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
       rateLimiter: RateLimiter[F, ByteString],
-      chainId: String,
+      chainId: ByteString,
       serverSslContext: SslContext,
       conf: Configuration,
       port: Int,

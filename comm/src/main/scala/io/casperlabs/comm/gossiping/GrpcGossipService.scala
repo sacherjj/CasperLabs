@@ -7,10 +7,10 @@ import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.shared.ObservableOps._
-import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import monix.eval.{Task, TaskLift, TaskLike}
 import monix.reactive.Observable
 import monix.tail.Iterant
@@ -27,7 +27,7 @@ object GrpcGossipService {
   def fromGossipService[F[_]: Sync: TaskLike: ObservableIterant](
       service: GossipService[F],
       rateLimiter: RateLimiter[F, ByteString],
-      chainId: String,
+      chainId: ByteString,
       blockChunkConsumerTimeout: FiniteDuration
   ): GossipingGrpcMonix.GossipService =
     new GossipingGrpcMonix.GossipService {
@@ -47,7 +47,7 @@ object GrpcGossipService {
           case (Some(sender), _) if sender.chainId != chainId =>
             Task.raiseError[NodeIdentifier](
               Unauthenticated(
-                s"Sender doesn't match chain id, expected: $chainId, received: ${sender.chainId}"
+                s"Sender doesn't match chain id, expected: ${hex(chainId)}, received: ${hex(sender.chainId)}"
               )
             )
 

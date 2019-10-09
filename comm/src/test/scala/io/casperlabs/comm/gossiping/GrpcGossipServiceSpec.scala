@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCan
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.comm.{ServiceError, TestRuntime}
 import io.casperlabs.crypto.codec.Base16
@@ -42,6 +43,7 @@ class GrpcGossipServiceSpec
     with ArbitraryConsensusAndComm { self =>
 
   import GrpcGossipServiceSpec._
+  import GrpcGossipServiceSpec.TestEnvironment.chainId
   import Scheduler.Implicits.global
 
   // Test data that we can set in each test.
@@ -124,11 +126,13 @@ class GrpcGossipServiceSpec
 
           "called with a sender whose chain ID doesn't match expected" should {
             "return UNAUTHENTICATED" in {
-              forAll { (block: Block, sender: Node, chainId: String) =>
+              forAll { (block: Block, sender: Node, chainId: ByteString) =>
                 runTestUnsafe(TestData.fromBlock(block)) {
                   expectError(stub, query(sender.withChainId(chainId).some, List(block.blockHash))) {
                     case Unauthenticated(msg) =>
-                      msg shouldBe s"Sender doesn't match chain id, expected: ${TestEnvironment.chainId}, received: $chainId"
+                      msg shouldBe s"Sender doesn't match chain id, expected: ${hex(
+                        TestEnvironment.chainId
+                      )}, received: ${hex(chainId)}"
                   }
                 }
               }
@@ -1210,7 +1214,7 @@ class GrpcGossipServiceSpec
   }
 }
 
-object GrpcGossipServiceSpec extends TestRuntime {
+object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm {
   // Specify small enough chunks so we see lots of messages and can tell that it terminated early.
   val DefaultMaxChunkSize = 10 * 1024
 
@@ -1278,7 +1282,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
           Task.delay(testDataRef.get.tips)
       }
 
-    val chainId: String = "casperlabs"
+    implicit val chainId: ByteString = sample(genHash)
 
     def apply(
         testDataRef: AtomicReference[TestData],

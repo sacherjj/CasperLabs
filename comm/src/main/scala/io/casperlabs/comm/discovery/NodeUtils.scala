@@ -1,6 +1,6 @@
 package io.casperlabs.comm.discovery
 
-import cats.{Eq, Show}
+import cats.Show
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.lemonlabs.uri.Url
@@ -25,7 +25,8 @@ object NodeIdentifier {
 object NodeUtils {
   implicit val showNode: Show[Node] = Show.show(
     node =>
-      s"${node.chainId}://${NodeIdentifier(node.id)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
+      s"casperlabs://${NodeIdentifier(node.id)}:${Base16
+        .encode(node.chainId.toByteArray)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
   )
 
   implicit class NodeCompanionOps(val nodeCompanion: Node.type) {
@@ -35,7 +36,7 @@ object NodeUtils {
         host: String,
         protocol: Int,
         discovery: Int,
-        chainId: String
+        chainId: ByteString
     ): Node =
       Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery, chainId)
 
@@ -46,7 +47,11 @@ object NodeUtils {
       val maybePeer = maybeUrl flatMap (
           url =>
             for {
-              chainId   <- url.schemeOption
+              _ <- url.schemeOption.filter(_ == "casperlabs")
+              chainId <- url.password
+                          .flatMap(Base16.tryDecode)
+                          .map(ByteString.copyFrom)
+                          .flatMap(bs => if (bs.size() == 32) Option(bs) else None)
               id        <- url.user
               host      <- url.hostOption
               discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)

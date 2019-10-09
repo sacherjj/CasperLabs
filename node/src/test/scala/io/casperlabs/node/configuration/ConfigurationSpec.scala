@@ -6,12 +6,14 @@ import java.util.concurrent.TimeUnit
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
+import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.node.configuration.Utils._
 import org.scalacheck.Shrink
 import org.scalacheck.ScalacheckShapeless._
@@ -54,14 +56,18 @@ class ConfigurationSpec
           "52.119.8.109",
           1,
           1,
-          "casperlabs"
+          ByteString.copyFrom(
+            Base16.decode("6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510")
+          )
         ),
         Node(
           NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
           "127.0.0.1",
           1,
           1,
-          "test"
+          ByteString.copyFrom(
+            Base16.decode("6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510")
+          )
         )
       ),
       dataDir = Paths.get("/tmp"),
