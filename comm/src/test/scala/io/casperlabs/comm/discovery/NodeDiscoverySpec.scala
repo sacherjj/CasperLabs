@@ -4,6 +4,7 @@ import cats.effect.Timer
 import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.comm.ServiceError.{StatusError, Unauthenticated}
 import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.comm.discovery.NodeDiscoverySpec.TestFixture
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -11,6 +12,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.shared.Log.NOPLog
 import io.casperlabs.shared.{Log, Time}
+import io.grpc.Status
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.Atomic
@@ -523,11 +525,21 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
             _ <- pingHandler(wrongChainIdPeer).attempt.foreachL { either =>
                   either.isLeft shouldBe true
                   either.left.get shouldBe an[IllegalArgumentException]
+                  val errorMessage =
+                    either.left.get.asInstanceOf[IllegalArgumentException].getMessage
+                  assert(
+                    errorMessage == s"Wrong chain id, expected: ${NodeDiscoverySpec.chainId}, received: ${wrongChainIdPeer.chainId}"
+                  )
                 }
             _ <- lookupHandler(wrongChainIdPeer, NodeIdentifier(wrongChainIdPeer.id)).attempt
                   .foreachL { either =>
                     either.isLeft shouldBe true
                     either.left.get shouldBe an[IllegalArgumentException]
+                    val errorMessage =
+                      either.left.get.asInstanceOf[IllegalArgumentException].getMessage
+                    assert(
+                      errorMessage == s"Wrong chain id, expected: ${NodeDiscoverySpec.chainId}, received: ${wrongChainIdPeer.chainId}"
+                    )
                   }
           } yield ()
         }

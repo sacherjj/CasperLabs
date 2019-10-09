@@ -124,10 +124,16 @@ package object gossiping {
                           relaying,
                           synchronizer,
                           validatorId,
-                          spec
+                          chainSpec
                         )
 
-      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis, spec)
+      genesisApprover <- makeGenesisApprover(
+                          conf,
+                          connectToGossip,
+                          downloadManager,
+                          genesis,
+                          chainSpec
+                        )
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
@@ -156,7 +162,7 @@ package object gossiping {
                                        prestate,
                                        transforms,
                                        genesis.getHeader.chainName,
-                                       spec.upgrades,
+                                       chainSpec.upgrades,
                                        relaying
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
