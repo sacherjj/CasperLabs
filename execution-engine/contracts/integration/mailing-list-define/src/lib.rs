@@ -65,9 +65,9 @@ pub extern "C" fn mailing_list_ext() {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
-                runtime::ret(&Some(Key::from(turef)), &extra_urefs);
+                runtime::ret(Some(Key::from(turef)), extra_urefs);
             }
-            _ => runtime::ret(&Option::<Key>::None, &Vec::new()),
+            _ => runtime::ret(Option::<Key>::None, Vec::new()),
         },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an

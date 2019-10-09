@@ -93,7 +93,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
-    runtime::ret(&uref, &vec![uref]);
+    runtime::ret(uref, vec![uref]);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {

@@ -18,9 +18,9 @@ use crate::value::{Contract, Value};
 /// return a value to their caller. The return value of a directly deployed
 /// contract is never looked at.
 #[allow(clippy::ptr_arg)]
-pub fn ret<T: ToBytes>(t: &T, extra_urefs: &Vec<URef>) -> ! {
-    let (ptr, size, _bytes) = to_ptr(t);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(extra_urefs);
+pub fn ret<T: ToBytes>(t: T, extra_urefs: Vec<URef>) -> ! {
+    let (ptr, size, _bytes) = to_ptr(&t);
+    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&extra_urefs);
     unsafe {
         ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
     }

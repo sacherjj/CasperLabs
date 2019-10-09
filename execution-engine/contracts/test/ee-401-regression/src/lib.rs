@@ -13,7 +13,7 @@ pub extern "C" fn hello_ext() {
     let test_string = String::from("Hello, world!");
     let test_uref = storage::new_turef(test_string).into();
     let extra_urefs = [test_uref].to_vec();
-    runtime::ret(&test_uref, &extra_urefs)
+    runtime::ret(test_uref, extra_urefs)
 }
 
 #[no_mangle]
