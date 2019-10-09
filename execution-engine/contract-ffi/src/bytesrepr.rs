@@ -530,11 +530,26 @@ impl FromBytes for ProtocolVersion {
 
 #[cfg(test)]
 mod proptests {
-    // Bring the macros and other important things into scope.
-    use crate::gens::*;
-    use crate::test_utils::test_serialization_roundtrip;
     use proptest::collection::vec;
     use proptest::prelude::*;
+
+    use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+    use crate::gens::*;
+
+    /// Returns `true` if a we can serialize and then deserialize a value
+    fn test_serialization_roundtrip<T>(t: &T) -> bool
+    where
+        T: ToBytes + FromBytes + PartialEq,
+    {
+        match deserialize::<T>(&ToBytes::to_bytes(t).expect("Unable to serialize data"))
+            .map(|r| r == *t)
+            .ok()
+        {
+            Some(true) => true,
+            Some(false) => false,
+            None => false,
+        }
+    }
 
     proptest! {
 
@@ -636,6 +651,11 @@ mod proptests {
         #[test]
         fn test_access_rights(access_right in access_rights_arb()) {
             assert!(test_serialization_roundtrip(&access_right))
+        }
+
+        #[test]
+        fn test_uref(uref in uref_arb()) {
+            assert!(test_serialization_roundtrip(&uref));
         }
 
         #[test]
