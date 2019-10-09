@@ -5,7 +5,6 @@ extern crate alloc;
 
 extern crate contract_ffi;
 
-mod error;
 mod queue;
 mod stakes;
 
@@ -15,12 +14,12 @@ use alloc::vec::Vec;
 use contract_ffi::contract_api;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
+use contract_ffi::system_contracts::pos::{Error, PurseLookupError, Result};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::U512;
 
-use crate::error::{Error, PurseLookupError, Result};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
@@ -366,12 +365,12 @@ mod tests {
     use std::cell::RefCell;
     use std::iter;
 
+    use contract_ffi::system_contracts::pos::Result;
     use contract_ffi::value::{
         account::{BlockTime, PublicKey},
         U512,
     };
 
-    use crate::error::Result;
     use crate::queue::{Queue, QueueProvider};
     use crate::stakes::{Stakes, StakesProvider};
     use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};

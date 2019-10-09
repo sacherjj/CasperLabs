@@ -1,7 +1,7 @@
+use contract_ffi::system_contracts::mint::Error;
 use contract_ffi::value::U512;
 
 use crate::capabilities::{Addable, Readable, Writable};
-use contract_ffi::system_contracts::mint::error::Error;
 
 pub trait Mint<A, RW>
 where

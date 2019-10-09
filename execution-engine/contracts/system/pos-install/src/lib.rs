@@ -98,10 +98,8 @@ pub extern "C" fn call() {
 }
 
 fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
-    let result: Result<URef, mint::error::Error> =
+    let result: Result<URef, mint::Error> =
         contract_api::call_contract(mint.clone(), &("mint", amount), &vec![]);
 
-    result
-        .map(PurseId::new)
-        .unwrap_or_else(|_| contract_api::revert(Error::MintFailure))
+    result.map(PurseId::new).unwrap_or_revert()
 }

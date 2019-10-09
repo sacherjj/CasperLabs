@@ -757,10 +757,10 @@ where
 
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
-        let result: Result<(), mint::error::Error> = deserialize(&self.host_buf)?;
+        let result: Result<(), mint::Error> = deserialize(&self.host_buf)?;
         // Wraps mint error into a more general error type through an aggregate
         // system contracts Error.
-        Ok(result.map_err(system_contracts::error::Error::from)?)
+        Ok(result.map_err(system_contracts::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount
