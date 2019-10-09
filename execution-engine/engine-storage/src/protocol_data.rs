@@ -1,17 +1,31 @@
 use contract_ffi::bytesrepr;
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use contract_ffi::uref::{URef, UREF_SIZE_SERIALIZED};
+use contract_ffi::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SIZE_SERIALIZED};
 
 const PROTOCOL_DATA_SIZE_SERIALIZED: usize =
     WASM_COSTS_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED;
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ProtocolData {
     wasm_costs: WasmCosts,
     mint: URef,
     proof_of_stake: URef,
+}
+
+/// Provides a default instance with non existing urefs and empty costs table.
+///
+/// Used in contexts where PoS or Mint contract is not ready yet, and pos, and
+/// mint installers are ran. For use with caution.
+impl Default for ProtocolData {
+    fn default() -> ProtocolData {
+        ProtocolData {
+            wasm_costs: WasmCosts::default(),
+            mint: URef::new([0; 32], AccessRights::READ),
+            proof_of_stake: URef::new([0; 32], AccessRights::READ),
+        }
+    }
 }
 
 impl ProtocolData {

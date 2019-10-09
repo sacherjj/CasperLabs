@@ -19,6 +19,7 @@ use contract_ffi::value::{Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
+use engine_storage::protocol_data::ProtocolData;
 
 use crate::engine_state::execution_effect::ExecutionEffect;
 use crate::execution::{AddressGenerator, Error};
@@ -51,6 +52,7 @@ pub struct RuntimeContext<'a, R> {
     protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
     phase: Phase,
+    protocol_data: ProtocolData,
 }
 
 impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
@@ -75,6 +77,7 @@ where
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> Self {
         RuntimeContext {
             state,
@@ -93,6 +96,7 @@ where
             protocol_version,
             correlation_id,
             phase,
+            protocol_data,
         }
     }
 
@@ -820,5 +824,9 @@ where
             .borrow_mut()
             .write(validated_key, validated_value);
         Ok(())
+    }
+
+    pub fn protocol_data(&self) -> ProtocolData {
+        self.protocol_data
     }
 }

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use parity_wasm::elements::Module;
@@ -7,12 +7,12 @@ use parity_wasm::elements::Module;
 use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
-use contract_ffi::uref::AccessRights;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Account, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
+use engine_storage::protocol_data::ProtocolData;
 
 use super::Error;
 use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
@@ -21,7 +21,6 @@ use crate::execution::address_generator::AddressGenerator;
 use crate::execution::FN_STORE_ID_INITIAL;
 use crate::runtime_context::RuntimeContext;
 use crate::tracking_copy::TrackingCopy;
-use crate::Address;
 
 pub trait Executor<A> {
     #[allow(clippy::too_many_arguments)]
@@ -39,6 +38,7 @@ pub trait Executor<A> {
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -59,6 +59,7 @@ pub trait Executor<A> {
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>;
@@ -80,6 +81,7 @@ pub trait Executor<A> {
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> Result<T, Error>
     where
         R::Error: Into<Error>,
@@ -141,6 +143,7 @@ impl Executor<Module> for WasmiExecutor {
         correlation_id: CorrelationId,
         tc: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
@@ -149,7 +152,14 @@ impl Executor<Module> for WasmiExecutor {
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
         let mut named_keys = account.named_keys().clone();
-        let access_rights = extract_access_rights_from_keys(named_keys.values().cloned());
+
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.push(protocol_data.mint().into());
+            keys.push(protocol_data.proof_of_stake().into());
+            extract_access_rights_from_keys(keys)
+        };
+
         let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
@@ -186,6 +196,7 @@ impl Executor<Module> for WasmiExecutor {
             protocol_version,
             correlation_id,
             phase,
+            protocol_data,
         );
 
         let mut runtime = Runtime::new(memory, parity_module, context);
@@ -216,13 +227,18 @@ impl Executor<Module> for WasmiExecutor {
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> ExecutionResult
     where
         R::Error: Into<Error>,
     {
         let mut named_keys = named_keys.clone();
-        let access_rights: HashMap<Address, HashSet<AccessRights>> =
-            extract_access_rights_from_keys(named_keys.values().cloned());
+        let access_rights = {
+            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+            keys.push(protocol_data.mint().into());
+            keys.push(protocol_data.proof_of_stake().into());
+            extract_access_rights_from_keys(keys)
+        };
 
         let address_generator = {
             let address_generator = AddressGenerator::new(deploy_hash, phase);
@@ -261,6 +277,7 @@ impl Executor<Module> for WasmiExecutor {
             protocol_version,
             correlation_id,
             phase,
+            protocol_data,
         );
 
         let (instance, memory) =
@@ -328,12 +345,18 @@ impl Executor<Module> for WasmiExecutor {
         correlation_id: CorrelationId,
         state: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> Result<T, Error>
     where
         R::Error: Into<Error>,
         T: FromBytes,
     {
-        let named_keys = extract_access_rights_from_keys(keys.values().cloned());
+        let access_rights = {
+            let mut keys: Vec<Key> = keys.values().cloned().collect();
+            keys.push(protocol_data.mint().into());
+            keys.push(protocol_data.proof_of_stake().into());
+            extract_access_rights_from_keys(keys)
+        };
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
@@ -346,7 +369,7 @@ impl Executor<Module> for WasmiExecutor {
         let runtime_context = RuntimeContext::new(
             state,
             keys,
-            named_keys.clone(),
+            access_rights.clone(),
             args,
             authorization_keys.clone(),
             account,
@@ -360,6 +383,7 @@ impl Executor<Module> for WasmiExecutor {
             protocol_version,
             correlation_id,
             phase,
+            protocol_data,
         );
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;

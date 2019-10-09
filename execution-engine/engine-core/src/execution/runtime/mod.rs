@@ -21,7 +21,6 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::execution::Error::URefNotFound;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -137,8 +136,13 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let access_rights =
-        extract_access_rights_from_keys(named_keys.values().cloned().chain(extra_urefs));
+    let access_rights = {
+        let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+        keys.extend(extra_urefs);
+        keys.push(current_runtime.get_mint_contract_uref_key()?);
+        keys.push(current_runtime.get_pos_contract_uref_key()?);
+        extract_access_rights_from_keys(keys)
+    };
 
     let mut runtime = Runtime {
         memory,
@@ -162,6 +166,7 @@ where
             protocol_version,
             current_runtime.context.correlation_id(),
             current_runtime.context.phase(),
+            current_runtime.context.protocol_data(),
         ),
     };
 
@@ -692,17 +697,13 @@ where
 
     /// looks up the public mint contract key in the caller's `named_keys` map.
     fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.named_keys_get(MINT_NAME) {
-            Some(key @ Key::URef(_)) => Ok(*key),
-            _ => Err(URefNotFound(String::from(MINT_NAME))),
-        }
+        let mint = self.context.protocol_data().mint();
+        Ok(Key::from(mint))
     }
 
     fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.named_keys_get(POS_NAME) {
-            Some(key @ Key::URef(_)) => Ok(*key),
-            _ => Err(URefNotFound(String::from(POS_NAME))),
-        }
+        let pos = self.context.protocol_data().proof_of_stake();
+        Ok(Key::from(pos))
     }
 
     fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {

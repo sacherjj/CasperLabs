@@ -122,6 +122,7 @@ fn mock_runtime_context<'a>(
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         Phase::Session,
+        Default::default(),
     )
 }
 
@@ -435,6 +436,7 @@ fn contract_key_addable_valid() {
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         PHASE,
+        Default::default(),
     );
 
     let uref_name = "NewURef".to_owned();
@@ -496,6 +498,7 @@ fn contract_key_addable_invalid() {
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         PHASE,
+        Default::default(),
     );
 
     let uref_name = "NewURef".to_owned();

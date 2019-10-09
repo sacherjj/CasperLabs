@@ -5,7 +5,7 @@ const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
 
 // Taken (partially) from parity-ethereum
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct WasmCosts {
     /// Default opcode cost
     pub regular: u32,

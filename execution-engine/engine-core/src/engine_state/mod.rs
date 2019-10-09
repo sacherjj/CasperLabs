@@ -258,6 +258,7 @@ where
                 correlation_id,
                 tracking_copy,
                 phase,
+                ProtocolData::default(),
             )?
         };
 
@@ -305,17 +306,16 @@ where
                 correlation_id,
                 tracking_copy,
                 phase,
+                ProtocolData::default(),
             )?
         };
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
-        {
-            let protocol_data =
-                ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
-            self.state
-                .put_protocol_data(protocol_version, &protocol_data)
-                .map_err(Into::into)?
-        }
+        let protocol_data = ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
+
+        self.state
+            .put_protocol_data(protocol_version, &protocol_data)
+            .map_err(Into::into)?;
 
         //
         // NOTE: The following stanzas deviate from the implementation strategy described in the
@@ -413,6 +413,7 @@ where
                     correlation_id,
                     tracking_copy_exec,
                     phase,
+                    protocol_data,
                 )?;
 
                 // ...and write that account to global state...
@@ -586,6 +587,7 @@ where
                 correlation_id,
                 state,
                 phase,
+                new_protocol_data,
             )?
         };
 
@@ -799,8 +801,21 @@ where
             }
         };
 
-        // --- REMOVE BELOW --- //
+        // Obtain current protocol data for given version
+        let protocol_data = match self.state.get_protocol_data(protocol_version) {
+            Ok(Some(protocol_data)) => protocol_data,
+            Ok(None) => {
+                let error = Error::InvalidProtocolVersion(protocol_version);
+                return Ok(ExecutionResult::precondition_failure(error));
+            }
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(Error::ExecError(
+                    error.into(),
+                )));
+            }
+        };
 
+        // --- REMOVE BELOW --- //
         // If payment logic is turned off, execute only session code
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
@@ -823,6 +838,7 @@ where
                 correlation_id,
                 Rc::clone(&tracking_copy),
                 Phase::Session,
+                protocol_data,
             );
 
             return Ok(session_result);
@@ -838,14 +854,7 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = match account.named_keys().get(MINT_NAME) {
-                Some(uref) => uref.normalize(),
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(
-                        Error::MissingSystemContractError(MINT_NAME.to_string()),
-                    ));
-                }
-            };
+            let mint_public_uref: Key = Key::from(protocol_data.mint()).normalize();
 
             // FIXME: This is inefficient; we don't need to get the entire contract.
             let mint_info = match tracking_copy
@@ -866,14 +875,7 @@ where
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.named_keys().get(POS_NAME) {
-            Some(uref) => uref.normalize(),
-            None => {
-                return Ok(ExecutionResult::precondition_failure(
-                    Error::MissingSystemContractError(POS_NAME.to_string()),
-                ));
-            }
-        };
+        let proof_of_stake_public_uref: Key = Key::from(protocol_data.proof_of_stake()).normalize();
 
         // Get proof of stake system contract details
         // payment_code_spec_6: system contract validity
@@ -998,6 +1000,7 @@ where
                 correlation_id,
                 Rc::clone(&tracking_copy),
                 Phase::Payment,
+                protocol_data,
             )
         };
 
@@ -1078,6 +1081,7 @@ where
                 correlation_id,
                 Rc::clone(&session_tc),
                 Phase::Session,
+                protocol_data,
             )
         };
 
@@ -1141,6 +1145,7 @@ where
                 correlation_id,
                 finalization_tc,
                 Phase::FinalizePayment,
+                protocol_data,
             )
         };
 

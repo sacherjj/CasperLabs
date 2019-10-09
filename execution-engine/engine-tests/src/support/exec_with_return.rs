@@ -19,6 +19,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
+use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::WasmiPreprocessor;
 
 use crate::support::test_support::{self, WasmTestBuilder};
@@ -100,6 +101,7 @@ where
         protocol_version,
         correlation_id,
         phase,
+        ProtocolData::default(),
     );
 
     let wasm_bytes = test_support::read_wasm_file_bytes(wasm_file);
