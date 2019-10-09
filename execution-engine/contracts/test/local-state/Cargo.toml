@@ -5,8 +5,10 @@ authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "local_state"
-crate-type = ["cdylib", "lib"]
+crate-type = ["lib", "cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []
