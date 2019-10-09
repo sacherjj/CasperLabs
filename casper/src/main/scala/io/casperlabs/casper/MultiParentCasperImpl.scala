@@ -872,9 +872,7 @@ object MultiParentCasperImpl {
         chainId: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
-      for {
-        _ <- establishMetrics[F]
-      } yield new StatelessExecutor[F](chainId, upgrades)
+      establishMetrics[F] as new StatelessExecutor[F](chainId, upgrades)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
