@@ -25,7 +25,7 @@ const REPLACEMENT_DATA: &str = "bawitdaba";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let arg: Key = contract_api::get_arg(CONTRACT_POINTER)
+    let arg: Key = contract_api::runtime::get_arg(CONTRACT_POINTER)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -33,13 +33,14 @@ pub extern "C" fn call() {
         .to_c_ptr()
         .unwrap_or_revert_with(ApiError::User(Error::GetArgument as u16));
 
-    let reference: URef = contract_api::call_contract(contract_pointer, &(), &Vec::new());
+    let reference: URef = contract_api::runtime::call_contract(contract_pointer, &(), &Vec::new());
 
     let forged_reference: TURef<String> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
-        TURef::from_uref(ret)
-            .unwrap_or_else(|_| contract_api::revert(ApiError::User(Error::CreateTURef as u16)))
+        TURef::from_uref(ret).unwrap_or_else(|_| {
+            contract_api::runtime::revert(ApiError::User(Error::CreateTURef as u16))
+        })
     };
 
-    contract_api::write(forged_reference, REPLACEMENT_DATA.to_string())
+    contract_api::storage::write(forged_reference, REPLACEMENT_DATA.to_string())
 }

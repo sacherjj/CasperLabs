@@ -9,15 +9,16 @@ use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account_addr: [u8; 32] = contract_api::get_arg(0)
+    let account_addr: [u8; 32] = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let transfer_amount: u32 = contract_api::get_arg(1)
+    let transfer_amount: u32 = contract_api::runtime::get_arg(1)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
 
     let public_key = PublicKey::new(account_addr);
     let amount = U512::from(transfer_amount);
 
-    contract_api::transfer_to_account(public_key, amount).unwrap_or_revert_with(Error::User(1));
+    contract_api::system::transfer_to_account(public_key, amount)
+        .unwrap_or_revert_with(Error::User(1));
 }

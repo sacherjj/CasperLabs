@@ -15,18 +15,18 @@ use contract_ffi::value::U512;
 #[no_mangle]
 pub extern "C" fn call() {
     let accounts: Vec<PublicKey> = {
-        let data: Vec<Vec<u8>> = contract_api::get_arg(0)
+        let data: Vec<Vec<u8>> = contract_api::runtime::get_arg(0)
             .unwrap_or_revert_with(Error::MissingArgument)
             .unwrap_or_revert_with(Error::InvalidArgument);
         data.into_iter()
             .map(|bytes| PublicKey::try_from(bytes.as_slice()).unwrap_or_revert())
             .collect()
     };
-    let seed_amount: U512 = contract_api::get_arg(1)
+    let seed_amount: U512 = contract_api::runtime::get_arg(1)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     for public_key in accounts {
-        contract_ffi::contract_api::transfer_to_account(public_key, seed_amount)
+        contract_ffi::contract_api::system::transfer_to_account(public_key, seed_amount)
             .unwrap_or_revert_with(Error::Transfer);
     }
 }

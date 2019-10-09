@@ -18,20 +18,20 @@ const TRANSFER_AMOUNT: u32 = 10_000_000;
 /// 1 - requested transfer to already funded public key.
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = contract_api::get_arg(0)
+    let public_key: PublicKey = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
 
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = contract_api::read_local::<PublicKey, U512>(public_key)
+    let already_funded = contract_api::storage::read_local::<PublicKey, U512>(public_key)
         .unwrap_or_default()
         .is_some();
     if already_funded {
-        contract_api::revert(Error::User(1));
+        contract_api::runtime::revert(Error::User(1));
     } else {
         let u512_tokens = U512::from(TRANSFER_AMOUNT);
-        contract_api::transfer_to_account(public_key, u512_tokens).unwrap_or_revert();
+        contract_api::system::transfer_to_account(public_key, u512_tokens).unwrap_or_revert();
         // Transfer successful; Store the fact of funding in the local state.
-        contract_api::write_local(public_key, u512_tokens);
+        contract_api::storage::write_local(public_key, u512_tokens);
     }
 }

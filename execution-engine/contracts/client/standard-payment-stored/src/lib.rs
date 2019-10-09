@@ -24,22 +24,23 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn pay() {
-    let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
+    let amount: U512 = contract_api::runtime::get_arg(Arg::Amount as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let main_purse: PurseId = contract_api::main_purse();
+    let main_purse: PurseId = contract_api::account::get_main_purse();
 
-    let pos_pointer = contract_api::get_pos();
+    let pos_pointer = contract_api::system::get_proof_of_stake();
 
     let payment_purse: PurseId =
-        contract_api::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
+        contract_api::runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
-    contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
+    contract_api::system::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
+        .unwrap_or_revert()
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    let pointer = contract_api::store_function_at_hash(PAY_FUNCTION_NAME, named_keys);
-    contract_api::put_key(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
+    let pointer = contract_api::storage::store_function_at_hash(PAY_FUNCTION_NAME, named_keys);
+    contract_api::runtime::put_key(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
 }

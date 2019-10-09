@@ -19,7 +19,7 @@ const CONTRACT_NAME: &str = "create";
 
 #[no_mangle]
 pub extern "C" fn create() {
-    let reference: TURef<String> = contract_api::new_turef(DATA.to_string());
+    let reference: TURef<String> = contract_api::storage::new_turef(DATA.to_string());
 
     let read_only_reference: URef = {
         let mut ret: TURef<String> = reference.clone();
@@ -29,12 +29,12 @@ pub extern "C" fn create() {
 
     let extra_urefs = vec![read_only_reference];
 
-    contract_api::ret(&read_only_reference, &extra_urefs)
+    contract_api::runtime::ret(&read_only_reference, &extra_urefs)
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let contract: Key =
-        contract_api::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
-    contract_api::put_key(CONTRACT_NAME, &contract)
+        contract_api::storage::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
+    contract_api::runtime::put_key(CONTRACT_NAME, &contract)
 }

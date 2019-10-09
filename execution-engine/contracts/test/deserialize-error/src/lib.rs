@@ -43,7 +43,7 @@ mod malicious_ffi {
     }
 }
 
-// This is half-baked contract_api::call_contract with changed `extra_urefs`
+// This is half-baked contract_api::runtime::call_contract with changed `extra_urefs`
 // parameter with a desired payload that's supposed to bring the node down.
 fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
     let contract_key: Key = c_ptr.into();
@@ -66,6 +66,6 @@ fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
 #[no_mangle]
 pub extern "C" fn call() {
     let do_nothing: ContractPointer =
-        contract_api::store_function_at_hash("do_nothing", BTreeMap::new());
+        contract_api::storage::store_function_at_hash("do_nothing", BTreeMap::new());
     my_call_contract(do_nothing.clone(), &());
 }

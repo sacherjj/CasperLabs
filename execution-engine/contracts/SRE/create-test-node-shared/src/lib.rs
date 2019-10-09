@@ -5,7 +5,8 @@ extern crate contract_ffi;
 
 use binascii::ConvertError;
 
-use contract_ffi::contract_api::{self, Error, TransferredTo};
+use contract_ffi::contract_api::system::TransferredTo;
+use contract_ffi::contract_api::{self, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::uint::U512;
@@ -19,14 +20,14 @@ fn parse_public_key(hex: &[u8]) -> Result<PublicKey, ConvertError> {
 pub fn create_account(account_addr: &[u8; 64], initial_amount: u64) {
     let public_key: PublicKey = match parse_public_key(account_addr) {
         Ok(public_key) => public_key,
-        Err(_) => contract_api::revert(Error::User(12)),
+        Err(_) => contract_api::runtime::revert(Error::User(12)),
     };
     let amount: U512 = U512::from(initial_amount);
 
-    match contract_api::transfer_to_account(public_key, amount)
+    match contract_api::system::transfer_to_account(public_key, amount)
         .unwrap_or_revert_with(Error::User(11))
     {
         TransferredTo::NewAccount => (),
-        TransferredTo::ExistingAccount => contract_api::revert(Error::User(10)),
+        TransferredTo::ExistingAccount => contract_api::runtime::revert(Error::User(10)),
     }
 }

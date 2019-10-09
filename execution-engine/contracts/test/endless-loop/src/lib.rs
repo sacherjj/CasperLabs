@@ -7,6 +7,6 @@ use contract_ffi::contract_api;
 #[no_mangle]
 pub extern "C" fn call() {
     loop {
-        let _main_purse = contract_api::main_purse();
+        let _main_purse = contract_api::account::get_main_purse();
     }
 }

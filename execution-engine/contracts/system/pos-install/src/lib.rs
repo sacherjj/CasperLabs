@@ -39,13 +39,13 @@ pub extern "C" fn pos_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_uref: URef = contract_api::get_arg(Args::MintURef as u32)
+    let mint_uref: URef = contract_api::runtime::get_arg(Args::MintURef as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let mint = ContractPointer::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
-        contract_api::get_arg(Args::GenesisValidators as u32)
+        contract_api::runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(Error::MissingArgument)
             .unwrap_or_revert_with(Error::InvalidArgument);
 
@@ -89,17 +89,17 @@ pub extern "C" fn call() {
         named_keys.insert(String::from(*name), Key::URef(*uref));
     });
 
-    let uref = contract_api::store_function(POS_FUNCTION_NAME, named_keys)
+    let uref = contract_api::storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
-    contract_api::ret(&uref, &vec![uref]);
+    contract_api::runtime::ret(&uref, &vec![uref]);
 }
 
 fn mint_purse(mint: &ContractPointer, amount: U512) -> PurseId {
     let result: Result<URef, mint::Error> =
-        contract_api::call_contract(mint.clone(), &("mint", amount), &vec![]);
+        contract_api::runtime::call_contract(mint.clone(), &("mint", amount), &vec![]);
 
     result.map(PurseId::new).unwrap_or_revert()
 }

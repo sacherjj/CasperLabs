@@ -15,17 +15,17 @@ use contract_ffi::uref::URef;
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key: Key =
-        contract_api::get_key("hello_ext").unwrap_or_revert_with(Error::GetURef);
+        contract_api::runtime::get_key("hello_ext").unwrap_or_revert_with(Error::GetURef);
     let contract_pointer: ContractPointer = match contract_key {
         Key::Hash(hash) => ContractPointer::Hash(hash),
-        _ => contract_api::revert(Error::UnexpectedKeyVariant),
+        _ => contract_api::runtime::revert(Error::UnexpectedKeyVariant),
     };
 
     let extra_urefs = [].to_vec();
 
-    let result: URef = contract_api::call_contract(contract_pointer, &(), &extra_urefs);
+    let result: URef = contract_api::runtime::call_contract(contract_pointer, &(), &extra_urefs);
 
-    let value = contract_api::read(TURef::from_uref(result).unwrap());
+    let value = contract_api::storage::read(TURef::from_uref(result).unwrap());
 
     assert_eq!(Ok(Some("Hello, world!".to_string())), value);
 }

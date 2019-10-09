@@ -34,43 +34,43 @@ impl From<Error> for ApiError {
 #[no_mangle]
 pub extern "C" fn call() {
     let mailing_uref =
-        contract_api::get_key("mailing").unwrap_or_revert_with(Error::GetMailingURef);
+        contract_api::runtime::get_key("mailing").unwrap_or_revert_with(Error::GetMailingURef);
     let pointer = if let Key::Hash(hash) = mailing_uref {
         ContractPointer::Hash(hash)
     } else {
-        contract_api::revert(Error::WrongURefType); // exit code is currently arbitrary
+        contract_api::runtime::revert(Error::WrongURefType); // exit code is currently arbitrary
     };
 
     let method = "sub";
     let name = "CasperLabs";
     let args = (method, name);
-    match contract_api::call_contract(pointer.clone(), &args, &Vec::new()) {
+    match contract_api::runtime::call_contract(pointer.clone(), &args, &Vec::new()) {
         Some(sub_key) => {
             let key_name = "mail_feed";
-            contract_api::put_key(key_name, &sub_key);
+            contract_api::runtime::put_key(key_name, &sub_key);
 
-            let key_name_uref =
-                contract_api::get_key(key_name).unwrap_or_revert_with(Error::GetKeyNameURef);
+            let key_name_uref = contract_api::runtime::get_key(key_name)
+                .unwrap_or_revert_with(Error::GetKeyNameURef);
             if sub_key != key_name_uref {
-                contract_api::revert(Error::BadSubKey);
+                contract_api::runtime::revert(Error::BadSubKey);
             }
 
             let method = "pub";
             let message = "Hello, World!";
             let args = (method, message);
-            contract_api::call_contract::<_, ()>(pointer, &args, &Vec::new());
+            contract_api::runtime::call_contract::<_, ()>(pointer, &args, &Vec::new());
 
             let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
-            let messages = contract_api::read(turef)
+            let messages = contract_api::storage::read(turef)
                 .unwrap_or_revert_with(Error::GetMessagesURef)
                 .unwrap_or_revert_with(Error::FindMessagesURef);
 
             if messages.is_empty() {
-                contract_api::revert(Error::NoMessages);
+                contract_api::runtime::revert(Error::NoMessages);
             }
         }
         None => {
-            contract_api::revert(Error::NoSubKey);
+            contract_api::runtime::revert(Error::NoSubKey);
         }
     }
 }

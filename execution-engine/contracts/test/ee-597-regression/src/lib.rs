@@ -18,7 +18,7 @@ fn purse_to_key(p: PurseId) -> Key {
 const POS_BOND: &str = "bond";
 
 fn bond(pos: ContractPointer, amount: &U512, source: PurseId) {
-    contract_api::call_contract::<_, ()>(
+    contract_api::runtime::call_contract::<_, ()>(
         pos,
         &(POS_BOND, *amount, source),
         &vec![purse_to_key(source)],
@@ -28,8 +28,8 @@ fn bond(pos: ContractPointer, amount: &U512, source: PurseId) {
 #[no_mangle]
 pub extern "C" fn call() {
     bond(
-        contract_api::get_pos(),
+        contract_api::system::get_proof_of_stake(),
         &U512::from(0),
-        contract_api::main_purse(),
+        contract_api::account::get_main_purse(),
     );
 }

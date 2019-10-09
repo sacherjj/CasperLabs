@@ -10,6 +10,6 @@ use contract_ffi::contract_api::{self, Error};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let _ = contract_api::new_turef(String::from("Hello, World!"));
-    contract_api::revert(Error::User(999))
+    let _ = contract_api::storage::new_turef(String::from("Hello, World!"));
+    contract_api::runtime::revert(Error::User(999))
 }

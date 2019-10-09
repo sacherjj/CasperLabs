@@ -34,10 +34,10 @@ enum CustomError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let purse_holder_uref: URef = contract_api::get_arg(Args::PurseHolderURef as u32)
+    let purse_holder_uref: URef = contract_api::runtime::get_arg(Args::PurseHolderURef as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingPurseHolderURefArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseHolderURefArg as u16));
-    let method_name: String = contract_api::get_arg(Args::MethodName as u32)
+    let method_name: String = contract_api::runtime::get_arg(Args::MethodName as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
 
@@ -48,20 +48,20 @@ pub extern "C" fn call() {
 
     match method_name.as_str() {
         METHOD_VERSION => {
-            let version: String = contract_api::call_contract(
+            let version: String = contract_api::runtime::call_contract(
                 purse_holder_contract_pointer.clone(),
                 &(method_name,),
                 &vec![],
             );
-            let version_key = contract_api::new_turef(version).into();
-            contract_api::put_key(METHOD_VERSION, &version_key);
+            let version_key = contract_api::storage::new_turef(version).into();
+            contract_api::runtime::put_key(METHOD_VERSION, &version_key);
         }
         _ => {
-            let purse_name: String = contract_api::get_arg(Args::PurseName as u32)
+            let purse_name: String = contract_api::runtime::get_arg(Args::PurseName as u32)
                 .unwrap_or_revert_with(Error::User(CustomError::MissingPurseNameArg as u16))
                 .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseNameArg as u16));
 
-            contract_api::call_contract::<_, ()>(
+            contract_api::runtime::call_contract::<_, ()>(
                 purse_holder_contract_pointer.clone(),
                 &(method_name, purse_name),
                 &vec![],

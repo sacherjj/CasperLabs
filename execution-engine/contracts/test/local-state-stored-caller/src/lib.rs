@@ -22,7 +22,7 @@ enum CustomError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let local_state_uref: URef = contract_api::get_arg(Args::LocalStateURef as u32)
+    let local_state_uref: URef = contract_api::runtime::get_arg(Args::LocalStateURef as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingLocalStateURefArg as u16))
         .unwrap_or_revert_with(Error::InvalidArgument);
 
@@ -32,5 +32,9 @@ pub extern "C" fn call() {
     ));
 
     // call do_nothing_stored
-    contract_api::call_contract::<_, ()>(local_state_contract_pointer.clone(), &(), &vec![]);
+    contract_api::runtime::call_contract::<_, ()>(
+        local_state_contract_pointer.clone(),
+        &(),
+        &vec![],
+    );
 }

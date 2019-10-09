@@ -39,20 +39,20 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type DepOnlyId = DepositId;
 
     fn mint(&self, initial_balance: U512) -> Result<Self::PurseId, Error> {
-        let caller = contract_api::get_caller();
+        let caller = contract_api::runtime::get_caller();
         if !initial_balance.is_zero() && caller.value() != SYSTEM_ACCOUNT {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
-        let balance_uref: Key = contract_api::new_turef(initial_balance).into();
+        let balance_uref: Key = contract_api::storage::new_turef(initial_balance).into();
 
-        let purse_key: URef = contract_api::new_turef(()).into();
+        let purse_key: URef = contract_api::storage::new_turef(()).into();
         let purse_uref_name = purse_key.remove_access_rights().as_string();
 
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
-        contract_api::put_key(&purse_uref_name, &balance_uref);
+        contract_api::runtime::put_key(&purse_uref_name, &balance_uref);
 
         // store association between purse id and balance uref
         //
@@ -63,19 +63,19 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         // performed in the "owner" context   so it aligns with other semantics
         // of write but I would prefer if were able to enforce   uniqueness
         // somehow.
-        contract_api::write_local(purse_id.raw_id(), balance_uref);
+        contract_api::storage::write_local(purse_id.raw_id(), balance_uref);
 
         Ok(purse_id)
     }
 
     fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
-        contract_api::read_local(p.raw_id())
+        contract_api::storage::read_local(p.raw_id())
             .ok()?
             .and_then(|key: Key| key.try_into().ok())
     }
 
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<ARef<U512>> {
-        contract_api::read_local(p.raw_id())
+        contract_api::storage::read_local(p.raw_id())
             .ok()?
             .and_then(|key: Key| key.try_into().ok())
     }
@@ -83,7 +83,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
 
 pub fn delegate() {
     let mint = CLMint;
-    let method_name: String = contract_api::get_arg(0)
+    let method_name: String = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -91,7 +91,7 @@ pub fn delegate() {
         // argument: U512
         // return: Result<URef, mint::error::Error>
         "mint" => {
-            let amount: U512 = contract_api::get_arg(1)
+            let amount: U512 = contract_api::runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -100,37 +100,37 @@ pub fn delegate() {
                 .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
 
             if let Ok(purse_key) = maybe_purse_key {
-                contract_api::ret(&maybe_purse_key, &vec![purse_key])
+                contract_api::runtime::ret(&maybe_purse_key, &vec![purse_key])
             } else {
-                contract_api::ret(&maybe_purse_key, &vec![])
+                contract_api::runtime::ret(&maybe_purse_key, &vec![])
             }
         }
 
         "create" => {
             let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
-            contract_api::ret(&purse_key, &vec![purse_key])
+            contract_api::runtime::ret(&purse_key, &vec![purse_key])
         }
 
         "balance" => {
-            let key: URef = contract_api::get_arg(1)
+            let key: URef = contract_api::runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
-            let balance: Option<U512> =
-                balance_uref.and_then(|uref| contract_api::read(uref.into()).unwrap_or_default());
-            contract_api::ret(&balance, &vec![])
+            let balance: Option<U512> = balance_uref
+                .and_then(|uref| contract_api::storage::read(uref.into()).unwrap_or_default());
+            contract_api::runtime::ret(&balance, &vec![])
         }
 
         "transfer" => {
-            let source: URef = contract_api::get_arg(1)
+            let source: URef = contract_api::runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let target: URef = contract_api::get_arg(2)
+            let target: URef = contract_api::runtime::get_arg(2)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let amount: U512 = contract_api::get_arg(3)
+            let amount: U512 = contract_api::runtime::get_arg(3)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -138,7 +138,7 @@ pub fn delegate() {
                 Ok(withdraw_id) => withdraw_id,
                 Err(error) => {
                     let transfer_result: Result<(), Error> = Err(error.into());
-                    contract_api::ret(&transfer_result, &vec![])
+                    contract_api::runtime::ret(&transfer_result, &vec![])
                 }
             };
 
@@ -146,12 +146,12 @@ pub fn delegate() {
                 Ok(deposit_id) => deposit_id,
                 Err(error) => {
                     let transfer_result: Result<(), Error> = Err(error.into());
-                    contract_api::ret(&transfer_result, &vec![])
+                    contract_api::runtime::ret(&transfer_result, &vec![])
                 }
             };
 
             let transfer_result = mint.transfer(source, target, amount);
-            contract_api::ret(&transfer_result, &vec![]);
+            contract_api::runtime::ret(&transfer_result, &vec![]);
         }
         _ => panic!("Unknown method name!"),
     }

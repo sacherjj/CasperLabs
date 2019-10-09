@@ -15,9 +15,10 @@ const RESULT_TUREF_NAME: &str = "output_version";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_pointer = contract_api::get_mint();
-    let value: String = contract_api::call_contract(mint_pointer, &(NEW_ENDPOINT_NAME,), &vec![]);
-    let value_turef = contract_api::new_turef(value);
+    let mint_pointer = contract_api::system::get_mint();
+    let value: String =
+        contract_api::runtime::call_contract(mint_pointer, &(NEW_ENDPOINT_NAME,), &vec![]);
+    let value_turef = contract_api::storage::new_turef(value);
     let key = Key::URef(value_turef.into());
-    contract_api::put_key(RESULT_TUREF_NAME, &key);
+    contract_api::runtime::put_key(RESULT_TUREF_NAME, &key);
 }

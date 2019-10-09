@@ -18,12 +18,12 @@ const UNBOND_METHOD_NAME: &str = "unbond";
 // Otherwise (`Some<u64>`) unbonds with part of the bonded stakes.
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contract_api::get_pos();
+    let pos_pointer = contract_api::system::get_proof_of_stake();
 
-    let arg_0: Option<u64> = contract_api::get_arg(0)
+    let arg_0: Option<u64> = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let unbond_amount: Option<U512> = arg_0.map(Into::into);
 
-    contract_api::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
+    contract_api::runtime::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
 }

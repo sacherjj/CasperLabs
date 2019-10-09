@@ -6,7 +6,7 @@ pub struct WithdrawId([u8; 32]);
 
 impl WithdrawId {
     pub fn from_uref(uref: URef) -> Result<Self, PurseIdError> {
-        if !contract_api::is_valid(uref) {
+        if !contract_api::runtime::is_valid(uref) {
             return Err(PurseIdError::InvalidURef);
         }
 
@@ -26,7 +26,7 @@ pub struct DepositId([u8; 32]);
 
 impl DepositId {
     pub fn from_uref(uref: URef) -> Result<Self, PurseIdError> {
-        if !contract_api::is_valid(uref) {
+        if !contract_api::runtime::is_valid(uref) {
             return Err(PurseIdError::InvalidURef);
         }
 

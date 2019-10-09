@@ -18,17 +18,17 @@ const BOND_METHOD_NAME: &str = "bond";
 // Issues bonding request to the PoS contract.
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = contract_api::get_pos();
-    let source_purse = contract_api::main_purse();
-    let bonding_purse = contract_api::create_purse();
-    let bond_amount: U512 = contract_api::get_arg::<u64>(0)
+    let pos_pointer = contract_api::system::get_proof_of_stake();
+    let source_purse = contract_api::account::get_main_purse();
+    let bonding_purse = contract_api::system::create_purse();
+    let bond_amount: U512 = contract_api::runtime::get_arg::<u64>(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument)
         .into();
 
-    contract_api::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount)
+    contract_api::system::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount)
         .unwrap_or_revert();
-    contract_api::call_contract(
+    contract_api::runtime::call_contract(
         pos_pointer,
         &(BOND_METHOD_NAME, bond_amount, bonding_purse),
         &vec![Key::URef(bonding_purse.value())],

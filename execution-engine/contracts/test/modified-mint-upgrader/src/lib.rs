@@ -22,14 +22,14 @@ pub extern "C" fn modified_mint_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_pointer = contract_api::get_mint();
+    let mint_pointer = contract_api::system::get_mint();
 
     let mint_turef = match mint_pointer {
         ContractPointer::Hash(_) => {
-            contract_api::revert(Error::User(CustomError::ContractPointerHash as u16))
+            contract_api::runtime::revert(Error::User(CustomError::ContractPointerHash as u16))
         }
         ContractPointer::URef(turef) => turef,
     };
 
-    contract_api::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);
+    contract_api::runtime::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);
 }

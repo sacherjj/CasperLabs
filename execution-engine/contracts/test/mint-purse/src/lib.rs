@@ -20,10 +20,10 @@ enum Error {
 }
 
 fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
-    let mint = contract_api::get_mint();
+    let mint = contract_api::system::get_mint();
 
     let result: Result<URef, mint::Error> =
-        contract_api::call_contract(mint, &("mint", amount), &vec![]);
+        contract_api::runtime::call_contract(mint, &("mint", amount), &vec![]);
 
     result.map(PurseId::new)
 }
@@ -31,20 +31,21 @@ fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
 #[no_mangle]
 pub extern "C" fn call() {
     let amount: U512 = 12345.into();
-    let new_purse = mint_purse(amount)
-        .unwrap_or_else(|_| contract_api::revert(ApiError::User(Error::PurseNotCreated as u16)));
+    let new_purse = mint_purse(amount).unwrap_or_else(|_| {
+        contract_api::runtime::revert(ApiError::User(Error::PurseNotCreated as u16))
+    });
 
-    let mint = contract_api::get_mint();
+    let mint = contract_api::system::get_mint();
 
-    let balance: Option<U512> = contract_api::call_contract(
+    let balance: Option<U512> = contract_api::runtime::call_contract(
         mint,
         &("balance", new_purse),
         &vec![Key::URef(new_purse.value())],
     );
 
     match balance {
-        None => contract_api::revert(ApiError::User(Error::BalanceNotFound as u16)),
+        None => contract_api::runtime::revert(ApiError::User(Error::BalanceNotFound as u16)),
         Some(balance) if balance == amount => (),
-        _ => contract_api::revert(ApiError::User(Error::BalanceMismatch as u16)),
+        _ => contract_api::runtime::revert(ApiError::User(Error::BalanceMismatch as u16)),
     }
 }

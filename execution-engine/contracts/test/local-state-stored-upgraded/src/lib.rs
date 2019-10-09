@@ -24,16 +24,16 @@ enum CustomError {
 pub extern "C" fn delegate() {
     local_state::delegate();
     // read from local state
-    let mut res: String = contract_api::read_local(local_state::LOCAL_KEY)
+    let mut res: String = contract_api::storage::read_local(local_state::LOCAL_KEY)
         .unwrap_or_default()
         .unwrap_or_default();
 
     res.push_str(SNIPPET);
     // Write "Hello, "
-    contract_api::write_local(local_state::LOCAL_KEY, res);
+    contract_api::storage::write_local(local_state::LOCAL_KEY, res);
 
     // Read back
-    let res: String = contract_api::read_local(local_state::LOCAL_KEY)
+    let res: String = contract_api::storage::read_local(local_state::LOCAL_KEY)
         .unwrap_or_revert_with(Error::User(CustomError::UnableToReadMutatedLocalKey as u16))
         .unwrap_or_revert_with(Error::User(
             CustomError::LocalKeyReadMutatedBytesRepr as u16,
@@ -49,10 +49,10 @@ pub extern "C" fn delegate() {
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, Default::default())
+    let key = contract_api::storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
-    contract_api::put_key(CONTRACT_NAME, &key);
+    contract_api::runtime::put_key(CONTRACT_NAME, &key);
 }

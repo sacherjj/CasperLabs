@@ -8,10 +8,10 @@ use contract_ffi::value::account::PublicKey;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_public_key: PublicKey = contract_api::get_arg(0)
+    let known_public_key: PublicKey = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let caller_public_key: PublicKey = contract_api::get_caller();
+    let caller_public_key: PublicKey = contract_api::runtime::get_caller();
     assert_eq!(
         caller_public_key, known_public_key,
         "caller public key was not known public key"

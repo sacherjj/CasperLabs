@@ -23,11 +23,11 @@ pub struct TryFromSliceForPublicKeyError(());
 
 impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
     fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|_| contract_api::revert(ApiError::Deserialize))
+        self.unwrap_or_else(|_| contract_api::runtime::revert(ApiError::Deserialize))
     }
 
     fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
-        self.unwrap_or_else(|_| contract_api::revert(error.into()))
+        self.unwrap_or_else(|_| contract_api::runtime::revert(error.into()))
     }
 }
 

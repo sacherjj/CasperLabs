@@ -3,7 +3,8 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use contract_ffi::bytesrepr::{self, ToBytes};
-use contract_ffi::contract_api::{self, TransferredTo};
+use contract_ffi::contract_api;
+use contract_ffi::contract_api::system::TransferredTo;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};

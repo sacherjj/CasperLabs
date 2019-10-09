@@ -14,11 +14,11 @@ enum Args {
 }
 
 pub fn delegate() {
-    let purse_name: String = contract_api::get_arg(Args::PurseName as u32)
+    let purse_name: String = contract_api::runtime::get_arg(Args::PurseName as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let purse_id = contract_api::create_purse();
-    contract_api::put_key(&purse_name, &purse_id.value().into());
+    let purse_id = contract_api::system::create_purse();
+    contract_api::runtime::put_key(&purse_name, &purse_id.value().into());
 }
 
 #[cfg(not(feature = "lib"))]

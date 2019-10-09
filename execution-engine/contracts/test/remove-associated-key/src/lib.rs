@@ -13,10 +13,10 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = contract_api::get_arg(0)
+    let account: PublicKey = contract_api::runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    contract_api::remove_associated_key(account).unwrap_or_else(|_| {
-        contract_api::revert(ApiError::User(Error::RemoveAssociatedKey as u16))
+    contract_api::account::remove_associated_key(account).unwrap_or_else(|_| {
+        contract_api::runtime::revert(ApiError::User(Error::RemoveAssociatedKey as u16))
     });
 }

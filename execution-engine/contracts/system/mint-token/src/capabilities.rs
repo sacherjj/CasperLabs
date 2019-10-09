@@ -23,7 +23,7 @@ macro_rules! readable_impl {
         {
             fn read(&self) -> T {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::read(turef)
+                contract_api::storage::read(turef)
                     .expect("value should deserialize")
                     .expect("should find value")
             }
@@ -46,7 +46,7 @@ macro_rules! writeable_impl {
         {
             fn write(&self, t: T) {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::write(turef, t);
+                contract_api::storage::write(turef, t);
             }
         }
     };
@@ -67,7 +67,7 @@ macro_rules! addable_impl {
         {
             fn add(&self, t: T) {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::add(turef, t);
+                contract_api::storage::add(turef, t);
             }
         }
     };
