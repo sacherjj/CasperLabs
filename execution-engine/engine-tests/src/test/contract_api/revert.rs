@@ -1,17 +1,16 @@
-use std::collections::HashMap;
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-use crate::support::test_support::InMemoryWasmTestBuilder;
-
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
 const REVERT_WASM: &str = "revert.wasm";
-const BLOCK_TIME: u64 = 42;
 
 #[ignore]
 #[test]
 fn should_revert() {
+    let exec_request =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, REVERT_WASM, ()).build();
     InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec(GENESIS_ADDR, REVERT_WASM, BLOCK_TIME, [1u8; 32])
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
         .commit()
         .is_error();
 }

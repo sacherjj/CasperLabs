@@ -1,27 +1,20 @@
-use std::collections::HashMap;
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
-
-const GENESIS_ADDR: [u8; 32] = [7u8; 32];
+const CONTRACT_DESERIALIZE_ERROR: &str = "deserialize_error.wasm";
 
 #[ignore]
 #[test]
 fn should_not_fail_deserializing() {
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_DESERIALIZE_ERROR,
+        (DEFAULT_ACCOUNT_ADDR,),
+    )
+    .build();
     let is_error = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, HashMap::new())
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "deserialize_error.wasm",
-            (GENESIS_ADDR,),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .run_genesis(&DEFAULT_GENESIS_CONFIG)
+        .exec(exec_request)
         .commit()
         .is_error();
 

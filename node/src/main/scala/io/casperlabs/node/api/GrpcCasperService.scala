@@ -4,37 +4,39 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.{state, Block}
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new CasperGrpcMonix.CasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
           }
 
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI
               .getBlockInfo[F](
                 request.blockHashBase16,
@@ -43,7 +45,7 @@ object GrpcCasperService {
           }
 
         override def streamBlockInfos(request: StreamBlockInfosRequest): Observable[BlockInfo] = {
-          val infos = TaskLike[F].toTask {
+          val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
               maxRank = request.maxRank,
@@ -54,7 +56,7 @@ object GrpcCasperService {
         }
 
         override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI
               .getDeployInfo[F](
                 request.deployHashBase16
@@ -71,7 +73,7 @@ object GrpcCasperService {
         override def streamBlockDeploys(
             request: StreamBlockDeploysRequest
         ): Observable[Block.ProcessedDeploy] = {
-          val deploys = TaskLike[F].toTask {
+          val deploys = TaskLike[F].apply {
             BlockAPI.getBlockDeploys[F](
               request.blockHashBase16
             ) map {
@@ -97,21 +99,27 @@ object GrpcCasperService {
 
         override def batchGetBlockState(
             request: BatchGetBlockStateRequest
-        ): Task[BatchGetBlockStateResponse] = TaskLike[F].toTask {
+        ): Task[BatchGetBlockStateResponse] = TaskLike[F].apply {
           for {
-            info      <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
-            stateHash = info.getSummary.getHeader.getState.postStateHash
-            values    <- request.queries.toList.traverse(getState(stateHash, _))
+            info            <- BlockAPI.getBlockInfo[F](request.blockHashBase16)
+            stateHash       = info.getSummary.state.postStateHash
+            protocolVersion = info.getSummary.getHeader.getProtocolVersion
+            values          <- request.queries.toList.traverse(getState(stateHash, _, protocolVersion))
           } yield BatchGetBlockStateResponse(values)
         }
 
-        private def getState(stateHash: ByteString, query: StateQuery): F[state.Value] =
+        private def getState(
+            stateHash: ByteString,
+            query: StateQuery,
+            protocolVersion: ProtocolVersion
+        ): F[state.Value] =
           for {
             key <- toKey[F](query.keyVariant, query.keyBase16)
             possibleResponse <- ExecutionEngineService[F].query(
                                  stateHash,
                                  key,
-                                 query.pathSegments
+                                 query.pathSegments,
+                                 protocolVersion
                                )
             value <- Concurrent[F].fromEither(possibleResponse).handleErrorWith {
                       case SmartContractEngineError(msg) =>

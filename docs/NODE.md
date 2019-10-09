@@ -1,10 +1,5 @@
 # Running the CasperLabs Node
 ---
-## Known Issues
-
-Currently there is a known issue with building and running the execution-engine binaries on a Mac. We recommend using docker for now until a fix is made.
----
-
 The CasperLabs node consists of two components:
 * `casperlabs-engine-grpc-server`, which executes smart contracts and persists the effects of these executions.
 * `casperlabs-node`, which handles peer-to-peer communication, consensus, and block storage.
@@ -13,7 +8,6 @@ The CasperLabs node consists of two components:
 
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Download and unzip the [Mint and Proof-of-Stake Contracts](http://repo.casperlabs.io/casperlabs/repo/dev/system-contracts.tar.gz).
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
 #### Building from source:
@@ -56,13 +50,22 @@ Note: `--payment-amount` is used in the standard payment code to pay for the exe
 For now, the value is not used, but payment code will be enabled on the DEVNET
 in an upcoming release.
 
-##### Step 4: Start the Execution Engine
+##### Step 4: Download the ChainSpec
+
+The node comes with a ChainSpec that should allow you to connect to DevNet. To connect elsewhere,
+you need to obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
+option pointed to the directory.
+
+The ChainSpec contains the system contracts, but if you downloaded or built them separately you need to copy them. You can override the defaults packaged in the node by copying the system contracts to
+`~/.casperlabs/chainspec/genesis/`, or wherever the `--server-data-dir` is pointing, which by default is `~/.casperlabs`.
+
+##### Step 5: Start the Execution Engine
 
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 5: Start the Node
+##### Step 6: Start the Node
 
 In a separate terminal, run:
 ```
@@ -99,11 +102,17 @@ pkill casperlabs-engine-grpc-server
 
 You can run a single Node in standalone mode for testing purposes.
 
-##### Step 1: Create a `bonds.txt` file
+##### Step 1: Create an `accounts.csv` file
+
+Add your validator key as the single bonded validator to the accounts in the ChainSpec.
+You can override the default accounts that come with the node by shadowing the file
+under your `--server-data-dir` directory, by default `~/.casperlabs`. For example the
+following code would cause your validator to have an initial balance of 50 million and
+a 1 million in bonds.
 
 ```
-mkdir -p ~/.casperlabs/genesis
-(cat keys/validator-id; echo " 100") >> ~/.casperlabs/genesis/bonds.txt
+mkdir -p ~/.casperlabs/chainspec/genesis
+(cat keys/validator-id; echo ",50000000,1000000") > ~/.casperlabs/chainspec/genesis/accounts.csv
 ```
 
 ##### Step 2: Start the Execution Engine

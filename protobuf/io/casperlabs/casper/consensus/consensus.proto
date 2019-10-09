@@ -43,6 +43,14 @@ message Deploy {
         uint64 gas_price = 4;
         // Hash of the body structure as a whole.
         bytes body_hash = 5;
+        // Time to live of the deploy, in milliseconds. A deploy can only be
+        // included in a block between Header.timestamp and
+        // Header.timestamp + Header.ttl_millis. A value of 0 is interpreted as
+        // 'not present' and a default value will be assigned instead.
+        uint32 ttl_millis = 6;
+        // List of `Deploy.deploy_hash`s  that must be executed in past blocks
+        // before this deploy can be executed.
+        repeated bytes dependencies = 7;
     }
 
     message Body {
@@ -117,23 +125,24 @@ message Block {
     Signature signature = 4;
 
     message Header {
+        reserved 6; // old u64 protocol version.
         repeated bytes parent_hashes = 1;
         repeated Justification justifications = 2;
         GlobalState state = 3;
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
         uint64 timestamp = 5;
-        uint64 protocol_version = 6;
+        state.ProtocolVersion protocol_version = 13;
         uint32 deploy_count = 7;
         string chain_id = 8;
         uint32 validator_block_seq_num = 9;
         bytes validator_public_key = 10;
         // Distance from Genesis.
         uint64 rank = 11;
-        Role role_type = 12;
+        MessageType message_type = 12;
     }
 
-    enum Role {
+    enum MessageType {
         // Regular block (with deploys, multiple parents etc).
         BLOCK  = 0;
         // A message that doesn't have any deploys,

@@ -1,10 +1,18 @@
 mod alloc_util;
 pub mod argsparser;
+mod error;
 pub mod pointers;
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::convert::{From, TryFrom, TryInto};
+use core::fmt::Debug;
+use core::u8;
 
 use self::alloc_util::*;
 use self::pointers::*;
-use crate::bytesrepr::{deserialize, FromBytes, ToBytes};
+use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
@@ -13,31 +21,26 @@ use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::{Contract, ProtocolVersion, Value, U512};
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use crate::value::{Contract, Value, U512};
 use argsparser::ArgsParser;
-use core::convert::{TryFrom, TryInto};
+pub use error::{i32_from, result_from, Error};
+
+pub type TransferResult = Result<TransferredTo, Error>;
 
 const MINT_NAME: &str = "mint";
 const POS_NAME: &str = "pos";
 
 /// Read value under the key in the global state
-pub fn read<T>(turef: TURef<T>) -> T
+pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
 where
     T: TryFrom<Value>,
 {
     let key: Key = turef.into();
-    let value = read_untyped(&key);
-    value
-        .unwrap() // TODO: return an Option instead of unwrapping (https://casperlabs.atlassian.net/browse/EE-349)
-        .try_into()
-        .map_err(|_| "T could not be derived from Value")
-        .unwrap()
+    let maybe_value = read_untyped(&key)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped(key: &Key) -> Option<Value> {
+fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
     //      dropped then key_ptr becomes invalid.
 
@@ -48,25 +51,22 @@ fn read_untyped(key: &Key) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
 }
 
 /// Reads the value at the given key in the context-local partition of global
 /// state
-pub fn read_local<K, V>(key: K) -> Option<V>
+pub fn read_local<K, V>(key: K) -> Result<Option<V>, bytesrepr::Error>
 where
     K: ToBytes,
     V: TryFrom<Value>,
 {
-    let key_bytes = key.to_bytes().unwrap();
-    read_untyped_local(&key_bytes).map(|v| {
-        v.try_into()
-            .map_err(|_| "T could not be derived from Value")
-            .unwrap()
-    })
+    let key_bytes = key.to_bytes()?;
+    let maybe_value = read_untyped_local(&key_bytes)?;
+    try_into(maybe_value)
 }
 
-fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
+fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
     let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
@@ -75,7 +75,20 @@ fn read_untyped_local(key_bytes: &[u8]) -> Option<Value> {
         ext_ffi::get_read(value_ptr);
         Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    deserialize(&value_bytes).unwrap()
+    deserialize(&value_bytes)
+}
+
+fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
+where
+    T: TryFrom<Value>,
+{
+    match maybe_value {
+        None => Ok(None),
+        Some(value) => value
+            .try_into()
+            .map(Some)
+            .map_err(|_| bytesrepr::Error::custom("T could not be derived from Value")),
+    }
 }
 
 /// Write the value under the key in the global state
@@ -156,82 +169,69 @@ where
     }
 }
 
-fn fn_bytes_by_name(name: &str) -> Vec<u8> {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let fn_size = unsafe { ext_ffi::serialize_function(name_ptr, name_size) };
-    let fn_ptr = alloc_bytes(fn_size);
-    unsafe {
-        ext_ffi::get_function(fn_ptr);
-        Vec::from_raw_parts(fn_ptr, fn_size, fn_size)
-    }
-}
-
-pub fn list_known_urefs() -> BTreeMap<String, Key> {
-    let bytes_size = unsafe { ext_ffi::serialize_known_urefs() };
+pub fn list_named_keys() -> BTreeMap<String, Key> {
+    let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
     let dest_ptr = alloc_bytes(bytes_size);
     let bytes = unsafe {
-        ext_ffi::list_known_urefs(dest_ptr);
+        ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
     deserialize(&bytes).unwrap()
 }
 
-// TODO: fn_by_name, fn_bytes_by_name and ext_ffi::serialize_function should be
-// removed. Functions shouldn't be serialized and returned back to the contract
-// because they're never used there. Host should read the function pointer (and
-// correct number of bytes) and persist it on the host side.
-
-/// Returns the serialized bytes of a function which is exported in the current
-/// module. Note that the function is wrapped up in a new module and re-exported
-/// under the name "call". `fn_bytes_by_name` is meant to be used when storing a
-/// contract on-chain at an unforgable reference.
-pub fn fn_by_name(name: &str, known_urefs: BTreeMap<String, Key>) -> Contract {
-    let bytes = fn_bytes_by_name(name);
-    let protocol_version = unsafe { ext_ffi::protocol_version() };
-    let protocol_version = ProtocolVersion::new(protocol_version);
-    Contract::new(bytes, known_urefs, protocol_version)
-}
-
-/// Gets the serialized bytes of an exported function (see `fn_by_name`), then
-/// computes gets the address from the host to produce a key where the contract
-/// is then stored in the global state. This key is returned.
-pub fn store_function(name: &str, known_urefs: BTreeMap<String, Key>) -> ContractPointer {
+/// Stores the serialized bytes of an exported function under a URef generated by the host.
+pub fn store_function(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
     let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&known_urefs);
-    let mut tmp = [0u8; 32];
-    let tmp_ptr = tmp.as_mut_ptr();
+    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let mut addr = [0u8; 32];
     unsafe {
-        ext_ffi::store_function(fn_ptr, fn_size, urefs_ptr, urefs_size, tmp_ptr);
+        ext_ffi::store_function(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
     }
-    ContractPointer::Hash(tmp)
+    ContractPointer::URef(TURef::<Contract>::new(addr, AccessRights::READ_ADD_WRITE))
 }
 
-/// Finds function by the name and stores it at the unforgable name.
-pub fn store_function_at(name: &str, known_urefs: BTreeMap<String, Key>, uref: TURef<Contract>) {
-    let contract = fn_by_name(name, known_urefs);
-    write(uref, contract);
+/// Stores the serialized bytes of an exported function at an immutable address generated by the
+/// host.
+pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> ContractPointer {
+    let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
+    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let mut addr = [0u8; 32];
+    unsafe {
+        ext_ffi::store_function_at_hash(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
+    }
+    ContractPointer::Hash(addr)
+}
+
+fn load_arg(index: u32) -> Option<usize> {
+    let arg_size = unsafe { ext_ffi::load_arg(index) };
+    if arg_size >= 0 {
+        Some(arg_size as usize)
+    } else {
+        None
+    }
 }
 
 /// Return the i-th argument passed to the host for the current module
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
-pub fn get_arg<T: FromBytes>(i: u32) -> T {
-    let arg_size = unsafe { ext_ffi::load_arg(i) };
-    let dest_ptr = alloc_bytes(arg_size);
-    let arg_bytes = unsafe {
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
+    let arg_size = load_arg(i)?;
+    let arg_bytes = {
+        let dest_ptr = alloc_bytes(arg_size);
+        unsafe {
+            ext_ffi::get_arg(dest_ptr);
+            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
+        }
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&arg_bytes).unwrap()
+    Some(deserialize(&arg_bytes))
 }
 
 /// Return the unforgable reference known by the current module under the given
-/// name. This either comes from the known_urefs of the account or contract,
+/// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
-pub fn get_uref(name: &str) -> Option<Key> {
+pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_uref(name_ptr, name_size) };
+    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
     let dest_ptr = alloc_bytes(key_size);
     let key_bytes = unsafe {
         // TODO: unify FFIs that just copy from the host buffer
@@ -244,23 +244,23 @@ pub fn get_uref(name: &str) -> Option<Key> {
 }
 
 /// Check if the given name corresponds to a known unforgable reference
-pub fn has_uref(name: &str) -> bool {
+pub fn has_key(name: &str) -> bool {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let result = unsafe { ext_ffi::has_uref_name(name_ptr, name_size) };
+    let result = unsafe { ext_ffi::has_key(name_ptr, name_size) };
     result == 0
 }
 
-/// Add the given key to the known_urefs map under the given name
-pub fn add_uref(name: &str, key: &Key) {
+/// Put the given key to the named_keys map under the given name
+pub fn put_key(name: &str, key: &Key) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
-    unsafe { ext_ffi::add_uref(name_ptr, name_size, key_ptr, key_size) };
+    unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
 /// Removes Key persisted under [name] in the current context's map.
-pub fn remove_uref(name: &str) {
+pub fn remove_key(name: &str) {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    unsafe { ext_ffi::remove_uref(name_ptr, name_size) }
+    unsafe { ext_ffi::remove_key(name_ptr, name_size) }
 }
 
 /// Returns caller of current context.
@@ -324,11 +324,10 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
     deserialize(&res_bytes).unwrap()
 }
 
-/// Stops execution of a contract and reverts execution effects
-/// with a given reason.
-pub fn revert(status: u32) -> ! {
+/// Stops execution of a contract and reverts execution effects with a given reason.
+pub fn revert<T: Into<Error>>(error: T) -> ! {
     unsafe {
-        ext_ffi::revert(status);
+        ext_ffi::revert(error.into().into());
     }
 }
 
@@ -425,7 +424,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(100));
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize));
 
     Some(balance)
 }
@@ -439,36 +438,30 @@ pub fn main_purse() -> PurseId {
     // https://casperlabs.atlassian.net/browse/EE-439
     let account_pk = get_caller();
     let key = Key::Account(account_pk.value());
-    let account: Account = read_untyped(&key).unwrap().try_into().unwrap();
+    let account: Account = read_untyped(&key).unwrap().unwrap().try_into().unwrap();
     account.purse_id()
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransferResult {
-    TransferredToExistingAccount,
-    TransferredToNewAccount,
-    TransferError,
+#[repr(i32)]
+pub enum TransferredTo {
+    ExistingAccount = 0,
+    NewAccount = 1,
 }
 
-impl TryFrom<i32> for TransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
+impl TransferredTo {
+    fn result_from(value: i32) -> TransferResult {
         match value {
-            0 => Ok(TransferResult::TransferredToExistingAccount),
-            1 => Ok(TransferResult::TransferredToNewAccount),
-            2 => Ok(TransferResult::TransferError),
-            _ => Err(()),
+            x if x == TransferredTo::ExistingAccount as i32 => Ok(TransferredTo::ExistingAccount),
+            x if x == TransferredTo::NewAccount as i32 => Ok(TransferredTo::NewAccount),
+            _ => Err(Error::Transfer),
         }
     }
-}
 
-impl From<TransferResult> for i32 {
-    fn from(result: TransferResult) -> Self {
+    pub fn i32_from(result: TransferResult) -> i32 {
         match result {
-            TransferResult::TransferredToExistingAccount => 0,
-            TransferResult::TransferredToNewAccount => 1,
-            TransferResult::TransferError => 2,
+            Ok(transferred_to) => transferred_to as i32,
+            Err(_) => 2,
         }
     }
 }
@@ -478,9 +471,9 @@ impl From<TransferResult> for i32 {
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) }
-        .try_into()
-        .expect("should parse result")
+    let return_code =
+        unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` account.
@@ -493,7 +486,7 @@ pub fn transfer_from_purse_to_account(
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let return_code = unsafe {
         ext_ffi::transfer_from_purse_to_account(
             source_ptr,
             source_size,
@@ -502,37 +495,8 @@ pub fn transfer_from_purse_to_account(
             amount_ptr,
             amount_size,
         )
-    }
-    .try_into()
-    .expect("should parse result")
-}
-
-// TODO: Improve returned result type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum PurseTransferResult {
-    TransferSuccessful,
-    TransferError,
-}
-
-impl TryFrom<i32> for PurseTransferResult {
-    type Error = ();
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(PurseTransferResult::TransferSuccessful),
-            1 => Ok(PurseTransferResult::TransferError),
-            _ => Err(()),
-        }
-    }
-}
-
-impl From<PurseTransferResult> for i32 {
-    fn from(result: PurseTransferResult) -> Self {
-        match result {
-            PurseTransferResult::TransferSuccessful => 0,
-            PurseTransferResult::TransferError => 1,
-        }
-    }
+    };
+    TransferredTo::result_from(return_code)
 }
 
 /// Transfers `amount` of motes from `source` purse to `target` purse.
@@ -540,11 +504,11 @@ pub fn transfer_from_purse_to_purse(
     source: PurseId,
     target: PurseId,
     amount: U512,
-) -> PurseTransferResult {
+) -> Result<(), Error> {
     let (source_ptr, source_size, _bytes) = to_ptr(&source);
     let (target_ptr, target_size, _bytes) = to_ptr(&target);
     let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
-    unsafe {
+    let result = unsafe {
         ext_ffi::transfer_from_purse_to_purse(
             source_ptr,
             source_size,
@@ -553,27 +517,34 @@ pub fn transfer_from_purse_to_purse(
             amount_ptr,
             amount_size,
         )
-    }
-    .try_into()
-    .expect("Should parse result")
-}
-
-fn get_system_contract(name: &str) -> Option<ContractPointer> {
-    let public_uref = get_uref(name)?;
-
-    if let Some(Value::Key(Key::URef(private_uref))) = read_untyped(&public_uref) {
-        let pointer = pointers::TURef::new(private_uref.addr(), AccessRights::READ);
-        Some(ContractPointer::URef(pointer))
+    };
+    if result == 0 {
+        Ok(())
     } else {
-        None
+        Err(Error::Transfer)
     }
 }
 
-pub fn get_mint() -> Option<ContractPointer> {
+fn get_system_contract(name: &str) -> ContractPointer {
+    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
+
+    if let Key::URef(uref) = key {
+        let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
+        ContractPointer::URef(reference)
+    } else {
+        revert(Error::UnexpectedKeyVariant)
+    }
+}
+
+/// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
+/// `contract_api::Error`.
+pub fn get_mint() -> ContractPointer {
     get_system_contract(MINT_NAME)
 }
 
-pub fn get_pos() -> Option<ContractPointer> {
+/// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
+/// with a `contract_api::Error`.
+pub fn get_pos() -> ContractPointer {
     get_system_contract(POS_NAME)
 }
 
@@ -582,4 +553,19 @@ pub fn get_phase() -> Phase {
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
     deserialize(&bytes).unwrap()
+}
+
+/// Takes the name of a function to store and a contract URef, and overwrites the value under
+/// that URef with a new Contract instance containing the original contract's named_keys, the
+/// current protocol version, and the newly created bytes of the stored function.
+pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let key: Key = uref.into();
+    let (key_ptr, key_size, _bytes) = to_ptr(&key);
+    let result_value =
+        unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
+    match result_from(result_value) {
+        Ok(()) => (),
+        Err(error) => revert(error),
+    }
 }

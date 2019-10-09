@@ -42,7 +42,7 @@ def test_bonding(one_node_network_fn):
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     node0, node1 = one_node_network_fn.docker_nodes
     assert block_hash is not None
@@ -72,12 +72,12 @@ def test_double_bonding(one_node_network_fn):
     stakes = [1, 2]
     assert_pre_state_of_network(one_node_network_fn, stakes)
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     block_hash = node1.bond(
-        session_contract=Contract.BONDINGCALL, amount=bonding_amount
+        session_contract=Contract.BONDING_CALL, amount=bonding_amount
     )
     assert block_hash is not None
     r = node1.client.show_deploys(block_hash)[0]
@@ -106,7 +106,7 @@ def test_invalid_bonding(one_node_network_fn):
     # 190 is current total staked amount.
     bonding_amount = (190 * 1000) + 1
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
@@ -114,7 +114,8 @@ def test_invalid_bonding(one_node_network_fn):
 
     r = node1.d_client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 5"
+    # PoS Error::BondTooLarge is 65286
+    assert r.error_message == "Exit code: 65286"
 
     block_ds = parse_show_block(block1)
     public_key = node1.genesis_account.public_key_hex
@@ -136,13 +137,13 @@ def test_unbonding(one_node_network_fn):
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     public_key = node1.genesis_account.public_key_hex
     block_hash2 = node1.unbond(
-        session_contract=Contract.UNBONDINGCALL, maybe_amount=None
+        session_contract=Contract.UNBONDING_CALL, maybe_amount=None
     )
 
     assert block_hash2 is not None
@@ -174,13 +175,13 @@ def test_partial_amount_unbonding(one_node_network_fn):
         [bonding_amount, unbond_amount, bonding_amount - unbond_amount],
     )
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     assert block_hash is not None
     node1 = one_node_network_fn.docker_nodes[1]
     public_key = node1.genesis_account.public_key_hex
     block_hash2 = node1.unbond(
-        session_contract=Contract.UNBONDINGCALL, maybe_amount=unbond_amount
+        session_contract=Contract.UNBONDING_CALL, maybe_amount=unbond_amount
     )
 
     r = node1.client.show_deploys(block_hash2)[0]
@@ -218,7 +219,7 @@ def test_invalid_unbonding(one_node_network_fn):
     bonding_amount = 2000
     assert_pre_state_of_network(one_node_network_fn, [bonding_amount])
     block_hash = bond_to_the_network(
-        one_node_network_fn, Contract.BONDINGCALL, bonding_amount
+        one_node_network_fn, Contract.BONDING_CALL, bonding_amount
     )
     assert block_hash is not None
     node0 = one_node_network_fn.docker_nodes[0]
@@ -232,26 +233,27 @@ def test_invalid_unbonding(one_node_network_fn):
 
     node1 = one_node_network_fn.docker_nodes[1]
     block_hash2 = node1.unbond(
-        session_contract=Contract.UNBONDINGCALL,
+        session_contract=Contract.UNBONDING_CALL,
         maybe_amount=1985,  # 1985 > (2000+190) * 0.9
     )
 
     assert block_hash2 is not None
     r = node1.d_client.show_deploys(block_hash2)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 6"
+    # PoS Error::UnbondTooLarge is 65287
+    assert r.error_message == "Exit code: 65287"
     block2 = node1.d_client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     bonded_list = get_bonded_list(node1, block_ds)
     assert len(bonded_list) == 1
 
     block_hash2 = node1.unbond(
-        session_contract=Contract.UNBONDINGCALL, maybe_amount=None
+        session_contract=Contract.UNBONDING_CALL, maybe_amount=None
     )
     assert block_hash2 is not None
     r = node1.d_client.show_deploys(block_hash2)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 6"
+    assert r.error_message == "Exit code: 65287"
     block2 = node1.d_client.show_block(block_hash2)
     block_ds = parse_show_block(block2)
     bonded_list = get_bonded_list(node1, block_ds)
@@ -272,13 +274,14 @@ def test_unbonding_without_bonding(one_node_network_fn):
     node0, node1 = one_node_network_fn.docker_nodes[:2]
     public_key = node1.genesis_account.public_key_hex
     block_hash = node1.unbond(
-        session_contract=Contract.UNBONDINGCALL, maybe_amount=None
+        session_contract=Contract.UNBONDING_CALL, maybe_amount=None
     )
 
     assert block_hash is not None
     r = node1.client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 0"
+    # PoS Error::NotBonded is 65280
+    assert r.error_message == "Exit code: 65280"
 
     block2 = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block2)
@@ -307,10 +310,12 @@ def transfer_to_account(
     public_key: str,
     private_key: str,
     gas_price: int = 1,
-    session_contract=Contract.TRANSFER_TO_ACCOUNT,
+    session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
 ):
 
-    session_args = ABI.args([ABI.account(bytes.fromhex(to_address)), ABI.u32(amount)])
+    session_args = ABI.args(
+        [ABI.account("account", to_address), ABI.u32("amount", amount)]
+    )
 
     _, deploy_hash_bytes = node.p_client.deploy(
         from_address=from_address,
@@ -356,12 +361,16 @@ def _call_pos_bonding(
     method: bytes = b"bond",
 ):
     if method == b"bond":
-        session_args = ABI.args([ABI.byte_array(method), ABI.u512(amount)])
+        session_args = ABI.args(
+            [ABI.byte_array("method", method), ABI.u512("amount", amount)]
+        )
     elif method == b"unbond":
         session_args = ABI.args(
             [
-                ABI.byte_array(method),
-                ABI.option(ABI.u512(amount) if amount is not None else None),
+                ABI.byte_array("method", method),
+                ABI.optional_value(
+                    "amount", ABI.u512("amount", amount) if amount is not None else None
+                ),
             ]
         )
     else:
@@ -456,7 +465,7 @@ def test_unbonding_then_creating_block(payment_node_network):
         from_address=bonding_account.public_key_hex,
         public_key=bonding_account.public_key_path,
         private_key=bonding_account.private_key_path,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
     )
     first_block_hash_after_bonding = nodes[1].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[1], first_block_hash_after_bonding)
@@ -483,7 +492,7 @@ def test_unbonding_then_creating_block(payment_node_network):
         from_address=genesis_account.public_key_hex,
         public_key=genesis_account.public_key_path,
         private_key=genesis_account.private_key_path,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
     )
     with pytest.raises(InternalError) as excinfo:
         nodes[1].p_client.propose().block_hash.hex()
@@ -507,7 +516,7 @@ def test_unbonding_then_creating_block(payment_node_network):
         from_address=bonding_account.public_key_hex,
         public_key=bonding_account.public_key_path,
         private_key=bonding_account.private_key_path,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
     )
     block_hash = nodes[1].p_client.propose().block_hash.hex()
     check_no_errors_in_deploys(nodes[1], block_hash)

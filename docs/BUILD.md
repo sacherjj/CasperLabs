@@ -15,7 +15,7 @@ The following commands should be run from the root directory of the CasperLabs r
 #### Build the node
 
 ```
-sbt node/universal:stage
+make build-node
 ```
 
 The `casperlabs-node` executable will be found here:
@@ -27,7 +27,7 @@ The `casperlabs-node` executable will be found here:
 #### Build the client
 
 ```
-sbt client/universal:stage
+make build-client
 ```
 
 The `casperlabs-client` executable will be found here:
@@ -40,7 +40,7 @@ The `casperlabs-client` executable will be found here:
 
 ```
 cd execution-engine
-cargo build --release
+CARGO_FLAGS=--release make build
 ```
 
 The `casperlabs-engine-grpc-server` executable will be found here:
@@ -52,14 +52,16 @@ The `casperlabs-engine-grpc-server` executable will be found here:
 
 #### Build the Mint and Proof-of-stake Contracts
 
+This step is optional, the node will have the compiled wasm files packaged with it.
+
 ```
 cd execution-engine
-cargo build -p pos --release --target wasm32-unknown-unknown
-cargo build -p mint-token --release --target wasm32-unknown-unknown
+cargo build -p pos-install --release --target wasm32-unknown-unknown
+cargo build -p mint-install --release --target wasm32-unknown-unknown
 ```
 
 The compiled contracts will be found here:
 ```
-./target/wasm32-unknown-unknown/release/pos.wasm
-./target/wasm32-unknown-unknown/release/mint_token.wasm
+./target/wasm32-unknown-unknown/release/pos_install.wasm
+./target/wasm32-unknown-unknown/release/mint_install.wasm
 ```

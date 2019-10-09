@@ -21,7 +21,12 @@ def test_deploy_buffer_persistence(trillion_payment_node_network):
         """ Add associated key of acct_num + 1 to acct_num account """
         acct = Account(acct_num)
         associated_acct = Account(acct_num + 1)
-        args = ABI.args([ABI.account(associated_acct.public_key_binary), ABI.u32(1)])
+        args = ABI.args(
+            [
+                ABI.account("account", associated_acct.public_key_binary),
+                ABI.u32("amount", 1),
+            ]
+        )
         _, deploy_hash_bytes = node.p_client.deploy(
             from_address=acct.public_key_hex,
             session_contract=Contract.ADD_ASSOCIATED_KEY,

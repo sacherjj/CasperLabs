@@ -2,7 +2,6 @@ package io.casperlabs.casper
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.state.Key.URef.AccessRights
-import io.casperlabs.casper.protocol._
 import io.casperlabs.crypto.codec._
 import io.casperlabs.ipc._
 import io.casperlabs.casper.consensus.state._
@@ -78,9 +77,6 @@ object PrettyPrinter {
     case Value.Value.Unit(_)                      => "Unit"
   }
 
-  def buildString(b: BlockMessage): String =
-    buildString(LegacyConversions.toBlock(b))
-
   def buildString(b: consensus.Block): String = {
     val blockString = for {
       header     <- b.header
@@ -138,7 +134,4 @@ object PrettyPrinter {
 
   def buildString(d: consensus.Deploy): String =
     s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)})"
-
-  def buildString(d: DeployData): String =
-    s"Deploy #${d.timestamp}"
 }

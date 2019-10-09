@@ -1,32 +1,35 @@
 package io.casperlabs.comm.gossiping
 
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 import cats.Id
-import cats.implicits._
 import cats.effect._
+import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
+import io.casperlabs.comm.{ServiceError, TestRuntime}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
-import io.casperlabs.comm.ServiceError
-import ServiceError.{NotFound, Unauthenticated, Unavailable}
-import io.casperlabs.comm.TestRuntime
-import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
-import io.netty.handler.ssl.{ClientAuth, SslContext}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
+import monix.execution.atomic.Atomic
 import monix.execution.{ExecutionModel, Scheduler}
 import monix.reactive.Observable
 import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest._
 import org.scalatest.concurrent._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll, PropertyCheckConfiguration}
-import org.scalacheck.{Arbitrary, Gen}
-import Arbitrary.arbitrary
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 
 import scala.concurrent.duration._
 
@@ -36,7 +39,7 @@ class GrpcGossipServiceSpec
     with Matchers
     with BeforeAndAfterAll
     with SequentialNestedSuiteExecution
-    with ArbitraryConsensus {
+    with ArbitraryConsensusAndComm { self =>
 
   import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
@@ -48,7 +51,9 @@ class GrpcGossipServiceSpec
   var stub: GossipingGrpcMonix.GossipServiceStub = _
   var shutdown: Task[Unit]                       = _
 
-  override def beforeAll() =
+  implicit val noShrinkInt: Shrink[Int] = Shrink.shrinkAny
+
+  override def beforeAll(): Unit =
     TestEnvironment(testDataRef, clientCert = Some(stubCert)).allocated.foreach {
       case (stub, shutdown) =>
         this.stub = stub
@@ -74,211 +79,415 @@ class GrpcGossipServiceSpec
     GenesisApprovalSpec
   )
 
-  object GetBlockChunkedSpec extends WordSpecLike {
-    implicit val propCheckConfig = PropertyCheckConfiguration(minSuccessful = 1)
-    implicit val patienceConfig  = PatienceConfig(1.second, 100.millis)
-    implicit val consensusConfig = ConsensusConfig(
+  trait AuthSpec extends WordSpecLike {
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val consensusConfig =
+      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
+    implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
+    val validSenderGen          = arbNode.arbitrary.map(_.withId(stubCert.keyHash))
+
+    def rpcName: String
+
+    def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit]
+
+    def ignoreSender: Boolean
+
+    def expectError(
+        client: GossipingGrpcMonix.GossipServiceStub,
+        request: GossipingGrpcMonix.GossipServiceStub => Task[Unit]
+    )(pf: PartialFunction[Throwable, Unit]): Task[Unit] =
+      request(client).attempt.map { res =>
+        res.isLeft shouldBe true
+        pf.lift(res.left.get) getOrElse {
+          fail(s"Unexpected error: ${res.left.get}")
+        }
+      }
+
+    rpcName when {
+      "called with a problematic sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 1, minSize = 1)
+
+        if (!ignoreSender) {
+          "called with a sender whose ID doesn't match its SSL public key" should {
+            "return UNAUTHENTICATED" in {
+              forAll { (block: Block, sender: Node) =>
+                runTestUnsafe(TestData.fromBlock(block)) {
+                  expectError(stub, query(sender.some, List(block.blockHash))) {
+                    case Unauthenticated(msg) =>
+                      msg shouldBe "Sender doesn't match public key."
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        "called without an SSL certificate" when {
+
+          def expectErrorWithAnonymous(
+              clientAuth: ClientAuth
+          )(pf: PartialFunction[Throwable, Unit]) =
+            forAll { (block: Block, sender: Node) =>
+              runTestUnsafe(TestData.fromBlock(block)) {
+                TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
+                  anonymousStub =>
+                    expectError(anonymousStub, query(sender.some, List(block.blockHash)))(pf)
+                }
+              }
+            }
+
+          "client auth is required" should {
+            "return UNAVAILABLE" in {
+              expectErrorWithAnonymous(ClientAuth.REQUIRE) {
+                case ex: io.grpc.StatusRuntimeException =>
+                  // Becuase the server requires client auth this will be rejected straight away.
+                  ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
+              }
+            }
+          }
+
+          "client auth is not required (due to misconfiguration)" should {
+            "return UNAUTHENTICATED" in {
+              expectErrorWithAnonymous(ClientAuth.NONE) {
+                case Unauthenticated(msg) =>
+                  msg shouldBe "Cannot verify sender identity."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  trait RateSpec extends WordSpecLike { self: AuthSpec =>
+    rpcName when {
+      "called with a valid sender" when {
+        implicit val config = PropertyCheckConfiguration(minSuccessful = 1, minSize = 1)
+
+        def test(block: Block, queueSize: Int)(
+            test: (GossipingGrpcMonix.GossipServiceStub) => Task[Unit]
+        ): Unit =
+          runTestUnsafe(TestData.fromBlock(block), timeout = 10.seconds) {
+            val resources = for {
+              rateLimiter <- RateLimiter
+                              .create[Task, ByteString](
+                                elementsPerPeriod = 1,
+                                period = 1.second,
+                                maxQueueSize = queueSize
+                              )
+              stub <- TestEnvironment(
+                       testDataRef,
+                       clientCert = Some(stubCert),
+                       rateLimiter = rateLimiter
+                     )
+            } yield stub
+
+            resources.use(test)
+          }
+
+        "rate is exceeded" when {
+          "queue is full" should {
+            "return RESOURCE_EXHAUSTED" in forAll(arbitrary[Block], validSenderGen) {
+              (block, sender) =>
+                val requestsNum = 10
+                val minFailed   = 5
+                test(block, queueSize = 1) { stub =>
+                  for {
+                    errors <- Task
+                               .gatherUnordered(
+                                 List.fill(requestsNum)(
+                                   query(sender.some, List(block.blockHash))(stub)
+                                     .redeem[Option[Throwable]](
+                                       _.some,
+                                       _ => none[Throwable]
+                                     )
+                                 )
+                               )
+                               .map(_.flatten)
+                  } yield {
+                    // At least first request occupies the single available place in queue
+                    // and will be successful
+                    // Not comparing with precise number, because it may vary in CI and fail
+                    assert(errors.size >= minFailed && errors.size < requestsNum)
+                    Inspectors.forAll(errors) { e =>
+                      ResourceExhausted.unapply(e) shouldBe Some("Rate exceeded")
+                    }
+                  }
+                }
+            }
+          }
+          "queue isn't full" should {
+            "throttle" in forAll(arbitrary[Block], validSenderGen) { (block, sender) =>
+              val requestsNum   = 5
+              val queueSize     = 10
+              val sleepingTime  = 3.seconds
+              val minSuccessful = 2
+
+              test(block, queueSize) { stub =>
+                val success = Atomic(0)
+                val errors  = Atomic(0)
+                val runParallelRequests = Task.gatherUnordered(
+                  List.fill(requestsNum)(
+                    query(sender.some, List(block.blockHash))(stub)
+                      .redeemWith[Unit](
+                        _ => Task(errors.increment()),
+                        _ => Task(success.increment())
+                      )
+                  )
+                )
+
+                for {
+                  _ <- runParallelRequests.startAndForget
+                  _ <- Task.sleep(sleepingTime)
+                } yield {
+                  assert(errors.get() == 0)
+                  // Not comparing with precise number, because it may vary in CI and fail
+                  assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  object GetBlockChunkedSpec extends WordSpecLike with AuthSpec with RateSpec {
+    implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
+    implicit override val patienceConfig = PatienceConfig(1.second, 100.millis)
+    implicit override val consensusConfig = ConsensusConfig(
       maxSessionCodeBytes = 500 * 1024,
       minSessionCodeBytes = 400 * 1024,
       maxPaymentCodeBytes = 300 * 1024,
       minPaymentCodeBytes = 200 * 1024
     )
 
+    override def rpcName: String = "getBlocksChunked"
+
+    override def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      (_, blockHashes) =>
+        client =>
+          client
+            .getBlockChunked(
+              GetBlockChunkedRequest(blockHash = blockHashes.head)
+            )
+            .toListL
+            .void
+
+    override def ignoreSender: Boolean = true
+
     "getBlocksChunked" when {
-      "no compression is supported" should {
-        "return a stream of uncompressed chunks" in {
-          forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
-              val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-              stub.getBlockChunked(req).toListL.map { chunks =>
-                chunks.head.content.isHeader shouldBe true
-                val header = chunks.head.getHeader
-                header.compressionAlgorithm shouldBe ""
-                chunks.size should be > 1
-
-                Inspectors.forAll(chunks.tail) { chunk =>
-                  chunk.content.isData shouldBe true
-                  chunk.getData.size should be <= DefaultMaxChunkSize
-                }
-
-                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                val original = block.toByteArray
-                header.contentLength shouldBe content.length
-                header.originalContentLength shouldBe original.length
-                md5(content) shouldBe md5(original)
-              }
-            }
-          }
-        }
-      }
-
-      "compression is supported" should {
-        "return a stream of compressed chunks" in {
-          forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
-              val req = GetBlockChunkedRequest(
-                blockHash = block.blockHash,
-                acceptedCompressionAlgorithms = Seq("lz4")
-              )
-
-              stub.getBlockChunked(req).toListL.map { chunks =>
-                chunks.head.content.isHeader shouldBe true
-                val header = chunks.head.getHeader
-                header.compressionAlgorithm shouldBe "lz4"
-
-                val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
-                val original = block.toByteArray
-                header.contentLength shouldBe content.length
-                header.originalContentLength shouldBe original.length
-
-                val decompressed = Compression
-                  .decompress(content, header.originalContentLength)
-                  .get
-
-                md5(decompressed) shouldBe md5(original)
-              }
-            }
-          }
-        }
-      }
-
-      "chunk size is specified" when {
-        def testChunkSize(block: Block, requestedChunkSize: Int, expectedChunkSize: Int): Unit =
-          runTestUnsafe(TestData.fromBlock(block)) {
-            val req =
-              GetBlockChunkedRequest(blockHash = block.blockHash, chunkSize = requestedChunkSize)
-            stub.getBlockChunked(req).toListL.map { chunks =>
-              Inspectors.forAll(chunks.tail.init) { chunk =>
-                chunk.getData.size shouldBe expectedChunkSize
-              }
-              chunks.last.getData.size should be <= expectedChunkSize
-            }
-          }
-
-        "it is less then the maximum" should {
-          "use the requested chunk size" in {
-            forAll { (block: Block) =>
-              val smallChunkSize = DefaultMaxChunkSize / 2
-              testChunkSize(block, smallChunkSize, smallChunkSize)
-            }
-          }
-        }
-
-        "bigger than the maximum" should {
-          "use the default chunk size" in {
-            forAll { (block: Block) =>
-              val bigChunkSize = DefaultMaxChunkSize * 2
-              testChunkSize(block, bigChunkSize, DefaultMaxChunkSize)
-            }
-          }
-        }
-      }
-
-      "block cannot be found" should {
-        "return NOT_FOUND" in {
-          forAll(genHash) { (hash: ByteString) =>
-            runTestUnsafe(TestData.empty) {
-              val req = GetBlockChunkedRequest(blockHash = hash)
-              stub.getBlockChunked(req).toListL.attempt.map { res =>
-                res.isLeft shouldBe true
-                res.left.get match {
-                  case NotFound(msg) =>
-                    msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
-                  case ex =>
-                    fail(s"Unexpected error: $ex")
-                }
-              }
-            }
-          }
-        }
-      }
-
-      "iteration is abandoned" should {
-        "cancel the source" in {
-          forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
-              // Capture the event when the Observable created from the Iterant is canceled.
-              var stopCount     = 0
-              var nextCount     = 0
-              var completeCount = 0
-
-              val oi = new ObservableIterant[Task] {
-                // This should count on the server side.
-                def toObservable[A](it: Iterant[Task, A]) =
-                  Observable
-                    .fromReactivePublisher(it.toReactivePublisher)
-                    .doOnNext(_ => Task.delay(nextCount += 1))
-                    .doOnEarlyStop(Task.delay(stopCount += 1))
-                    .doOnComplete(Task.delay(completeCount += 1))
-                // This should limit how much data the client is asking.
-                // Except the code generated by GrpcMonix is using an independent buffer size.
-                def toIterant[A](obs: Observable[A]) =
-                  Iterant.fromReactivePublisher[Task, A](
-                    obs.toReactivePublisher,
-                    requestCount = 1,
-                    eagerBuffer = false
-                  )
-              }
-
-              // Restrict the client to request 1 item at a time.
-              val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
-
-              TestEnvironment(testDataRef)(oi, scheduler).use { stub =>
-                // Turn the stub (using Observables) back to the internal interface (using Iterant).
-                val svc = GrpcGossipService.toGossipService[Task](stub)
+      "called with a valid sender" when {
+        "no compression is supported" should {
+          "return a stream of uncompressed chunks" in {
+            forAll { block: Block =>
+              runTestUnsafe(TestData.fromBlock(block)) {
                 val req = GetBlockChunkedRequest(blockHash = block.blockHash)
-                for {
-                  // Consume just the head, cancel the rest. This could be used to keep track of total content size.
-                  maybeHeader <- svc
-                                  .getBlockChunked(req)
-                                  .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
-                                    case (None, chunk) if chunk.content.isHeader =>
-                                      Task.now(Right(Some(chunk.getHeader)))
-                                    case _ =>
-                                      Task.now(Left(None))
-                                  }
-                  firstCount <- Task.delay(nextCount)
-                  all        <- svc.getBlockChunked(req).toListL
-                } yield {
-                  maybeHeader should not be empty
+                stub.getBlockChunked(req).toListL.map { chunks =>
+                  chunks.head.content.isHeader shouldBe true
+                  val header = chunks.head.getHeader
+                  header.compressionAlgorithm shouldBe ""
+                  chunks.size should be > 1
 
-                  // The abandoned stream should be completed.
-                  eventually {
-                    completeCount shouldBe 2
+                  Inspectors.forAll(chunks.tail) { chunk =>
+                    chunk.content.isData shouldBe true
+                    chunk.getData.size should be <= DefaultMaxChunkSize
                   }
 
-                  // We should stop early, and with the batch restriction just after a few items pulled.
-                  firstCount should be < all.size
-
-                  // This worked when we weren't going over gRPC, just using the abstractions.
-                  // I'll leave it as a reminder, but the assertion on completion and message count should indicate early stop.
-                  // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
-                  //stopCount shouldBe 1
+                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                  val original = block.toByteArray
+                  header.contentLength shouldBe content.length
+                  header.originalContentLength shouldBe original.length
+                  md5(content) shouldBe md5(original)
                 }
               }
             }
           }
         }
-      }
 
-      "many downloads are attempted at once" should {
-        "only allow them up to the limit" in {
-          val maxParallelBlockDownloads = 2
-          forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
-              TestEnvironment(testDataRef, maxParallelBlockDownloads = maxParallelBlockDownloads)
-                .use { stub =>
+        "compression is supported" should {
+          "return a stream of compressed chunks" in {
+            forAll { block: Block =>
+              runTestUnsafe(TestData.fromBlock(block)) {
+                val req = GetBlockChunkedRequest(
+                  blockHash = block.blockHash,
+                  acceptedCompressionAlgorithms = Seq("lz4")
+                )
+
+                stub.getBlockChunked(req).toListL.map { chunks =>
+                  chunks.head.content.isHeader shouldBe true
+                  val header = chunks.head.getHeader
+                  header.compressionAlgorithm shouldBe "lz4"
+
+                  val content  = chunks.tail.flatMap(_.getData.toByteArray).toArray
+                  val original = block.toByteArray
+                  header.contentLength shouldBe content.length
+                  header.originalContentLength shouldBe original.length
+
+                  val decompressed = Compression
+                    .decompress(content, header.originalContentLength)
+                    .get
+
+                  md5(decompressed) shouldBe md5(original)
+                }
+              }
+            }
+          }
+        }
+
+        "chunk size is specified" when {
+          def testChunkSize(
+              block: Block,
+              requestedChunkSize: Int,
+              expectedChunkSize: Int
+          ): Unit =
+            runTestUnsafe(TestData.fromBlock(block)) {
+              val req =
+                GetBlockChunkedRequest(
+                  blockHash = block.blockHash,
+                  chunkSize = requestedChunkSize
+                )
+              stub.getBlockChunked(req).toListL.map { chunks =>
+                Inspectors.forAll(chunks.tail.init) { chunk =>
+                  chunk.getData.size shouldBe expectedChunkSize
+                }
+                chunks.last.getData.size should be <= expectedChunkSize
+              }
+            }
+
+          "it is less then the maximum" should {
+            "use the requested chunk size" in {
+              forAll { block: Block =>
+                val smallChunkSize = DefaultMaxChunkSize / 2
+                testChunkSize(block, smallChunkSize, smallChunkSize)
+              }
+            }
+          }
+
+          "bigger than the maximum" should {
+            "use the default chunk size" in {
+              forAll { block: Block =>
+                val bigChunkSize = DefaultMaxChunkSize * 2
+                testChunkSize(block, bigChunkSize, DefaultMaxChunkSize)
+              }
+            }
+          }
+        }
+
+        "block cannot be found" should {
+          "return NOT_FOUND" in {
+            forAll { hash: ByteString =>
+              runTestUnsafe(TestData.empty) {
+                val req = GetBlockChunkedRequest(blockHash = hash)
+                stub.getBlockChunked(req).toListL.attempt.map { res =>
+                  res.isLeft shouldBe true
+                  res.left.get match {
+                    case NotFound(msg) =>
+                      msg shouldBe s"Block ${Base16.encode(hash.toByteArray)} could not be found."
+                    case ex =>
+                      fail(s"Unexpected error: $ex")
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        "iteration is abandoned" should {
+          "cancel the source" in {
+            forAll { block: Block =>
+              runTestUnsafe(TestData.fromBlock(block), timeout = 1.minute) {
+                // Capture the event when the Observable created from the Iterant is canceled.
+                var stopCount     = 0
+                var nextCount     = 0
+                var completeCount = 0
+
+                val oi = new ObservableIterant[Task] {
+                  // This should count on the server side.
+                  def toObservable[A](it: Iterant[Task, A]) =
+                    Observable
+                      .fromReactivePublisher(it.toReactivePublisher)
+                      .doOnNext(_ => Task.delay(nextCount += 1))
+                      .doOnEarlyStop(Task.delay(stopCount += 1))
+                      .doOnComplete(Task.delay(completeCount += 1))
+                  // This should limit how much data the client is asking.
+                  // Except the code generated by GrpcMonix is using an independent buffer size.
+                  def toIterant[A](obs: Observable[A]) =
+                    Iterant.fromReactivePublisher[Task, A](
+                      obs.toReactivePublisher,
+                      requestCount = 1,
+                      eagerBuffer = false
+                    )
+                }
+
+                // Restrict the client to request 1 item at a time.
+                val scheduler = Scheduler(ExecutionModel.BatchedExecution(1))
+
+                TestEnvironment(testDataRef, clientCert = stubCert.some)(oi, scheduler).use {
+                  stub =>
+                    // Turn the stub (using Observables) back to the internal interface (using Iterant).
+                    val svc = GrpcGossipService.toGossipService[Task](stub)
+                    val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                    for {
+                      // Consume just the head, cancel the rest. This could be used to keep track of total content size.
+                      maybeHeader <- svc
+                                      .getBlockChunked(req)
+                                      .foldWhileLeftEvalL(Task.now(none[Chunk.Header])) {
+                                        case (None, chunk) if chunk.content.isHeader =>
+                                          Task.now(Right(Some(chunk.getHeader)))
+                                        case _ =>
+                                          Task.now(Left(None))
+                                      }
+                      firstCount <- Task.delay(nextCount)
+                      all        <- svc.getBlockChunked(req).toListL
+                    } yield {
+                      maybeHeader should not be empty
+
+                      // The abandoned stream should be completed.
+                      eventually {
+                        completeCount shouldBe 2
+                      }
+
+                      // We should stop early, and with the batch restriction just after a few items pulled.
+                      firstCount should be < all.size
+
+                      // This worked when we weren't going over gRPC, just using the abstractions.
+                      // I'll leave it as a reminder, but the assertion on completion and message count should indicate early stop.
+                      // To be fair doOnEarlyStop didn't seem to trigger with simple Observable(1,2,3) either.
+                      //stopCount shouldBe 1
+                    }
+                }
+              }
+            }
+          }
+        }
+
+        "many downloads are attempted at once" should {
+          "only allow them up to the limit" in {
+            val maxParallelBlockDownloads = 2
+            forAll { block: Block =>
+              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
+                TestEnvironment(
+                  testDataRef,
+                  maxParallelBlockDownloads = maxParallelBlockDownloads,
+                  clientCert = stubCert.some
+                ).use { stub =>
                   val parallelNow = new AtomicInteger(0)
                   val parallelMax = new AtomicInteger(0)
 
-                  val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+                  val req =
+                    GetBlockChunkedRequest(blockHash = block.blockHash)
                   val fetchers = List.fill(maxParallelBlockDownloads * 5) {
                     stub
                       .getBlockChunked(req)
                       .doOnStart(_ => Task.delay { parallelNow.incrementAndGet() })
                       .doOnNext(
                         _ =>
-                          Task.delay { parallelMax.set(math.max(parallelMax.get, parallelNow.get)) }
+                          Task.delay {
+                            parallelMax.set(math.max(parallelMax.get, parallelNow.get))
+                          }
                       )
                       .doOnComplete(Task.delay { parallelNow.decrementAndGet() })
                       .toListL
@@ -292,72 +501,78 @@ class GrpcGossipServiceSpec
                     parallelMax.get should be >= maxParallelBlockDownloads
                   }
                 }
+              }
             }
           }
         }
-      }
 
-      "a download is not consumed" should {
-        "cancel the idle stream" in {
-          // Tried to test this with short timeouts and delays but it looks like underlying gRPC
-          // reactive subscriber machinery will eagerly pull all the data from the server regardless
-          // of the backpressure applied in the subsequent processing. Nevertheless the timeout is
-          // applied so if someone tries to go deeper we should be covered.
-          forAll { (block: Block) =>
-            runTestUnsafe(TestData.fromBlock(block)) {
-              TestEnvironment(
-                testDataRef,
-                maxParallelBlockDownloads = 1,
-                blockChunkConsumerTimeout = Duration.Zero
-              ).use { stub =>
-                val req = GetBlockChunkedRequest(blockHash = block.blockHash)
+        "a download is not consumed" should {
+          "cancel the idle stream" in {
+            // Tried to test this with short timeouts and delays but it looks like underlying gRPC
+            // reactive subscriber machinery will eagerly pull all the data from the server regardless
+            // of the backpressure applied in the subsequent processing. Nevertheless the timeout is
+            // applied so if someone tries to go deeper we should be covered.
+            forAll { block: Block =>
+              runTestUnsafe(TestData.fromBlock(block)) {
+                TestEnvironment(
+                  testDataRef,
+                  maxParallelBlockDownloads = 1,
+                  blockChunkConsumerTimeout = Duration.Zero,
+                  clientCert = stubCert.some
+                ).use { stub =>
+                  val req = GetBlockChunkedRequest(blockHash = block.blockHash)
 
-                for {
-                  r <- stub.getBlockChunked(req).toListL.attempt
-                  _ = {
-                    r.isLeft shouldBe true
-                    r.left.get match {
-                      case ex: io.grpc.StatusRuntimeException =>
-                        ex.getStatus.getCode shouldBe io.grpc.Status.Code.DEADLINE_EXCEEDED
-                      case other =>
-                        fail(s"Unexpected error: $other")
+                  for {
+                    r <- stub.getBlockChunked(req).toListL.attempt
+                    _ = {
+                      r.isLeft shouldBe true
+                      r.left.get match {
+                        case ex: io.grpc.StatusRuntimeException =>
+                          ex.getStatus.getCode shouldBe io.grpc.Status.Code.DEADLINE_EXCEEDED
+                        case other =>
+                          fail(s"Unexpected error: $other")
+                      }
+                    }
+                    // The semaphore should be free for the next query. Otherwise the test will time out.
+                    _ <- stub.getBlockChunked(req).headL
+                  } yield ()
+                }
+              }
+            }
+          }
+        }
+
+        "an error is thrown" should {
+          "release the download semaphore" in {
+            forAll { hash: ByteString =>
+              @volatile var cnt = 0
+
+              val faultyBackend = (_: AtomicReference[TestData]) => {
+                new GossipServiceServer.Backend[Task] {
+                  def getBlock(blockHash: ByteString) = {
+                    cnt = cnt + 1
+                    cnt match {
+                      case 1 =>
+                        Task.raiseError[Option[Block]](new RuntimeException("Delayed Boom!"))
+                      case 2 =>
+                        sys.error("Immediate Boom!")
+                      case _ =>
+                        Task.now(None)
                     }
                   }
-                  // The semaphore should be free for the next query. Otherwise the test will time out.
-                  _ <- stub.getBlockChunked(req).headL
-                } yield ()
-              }
-            }
-          }
-        }
-      }
-
-      "an error is thrown" should {
-        "release the download semaphore" in {
-          forAll(genHash) { (hash: ByteString) =>
-            @volatile var cnt = 0
-
-            val faultyBackend = (_: AtomicReference[TestData]) => {
-              new GossipServiceServer.Backend[Task] {
-                def getBlock(blockHash: ByteString) = {
-                  cnt = cnt + 1
-                  cnt match {
-                    case 1 =>
-                      Task.raiseError[Option[Block]](new RuntimeException("Delayed Boom!"))
-                    case 2 =>
-                      sys.error("Immediate Boom!")
-                    case _ =>
-                      Task.now(None)
-                  }
+                  def hasBlock(blockHash: ByteString)        = ???
+                  def getBlockSummary(blockHash: ByteString) = ???
+                  def listTips                               = ???
                 }
-                def hasBlock(blockHash: ByteString)        = ???
-                def getBlockSummary(blockHash: ByteString) = ???
               }
-            }
 
-            runTestUnsafe(TestData()) {
-              TestEnvironment(testDataRef, maxParallelBlockDownloads = 1, mkBackend = faultyBackend)
-                .use { stub =>
+              runTestUnsafe(TestData()) {
+                TestEnvironment(
+                  testDataRef,
+                  maxParallelBlockDownloads = 1,
+                  mkBackend = faultyBackend,
+                  clientCert = stubCert.some
+                ).use { stub =>
                   val req = GetBlockChunkedRequest(blockHash = hash)
                   for {
                     r1 <- stub.getBlockChunked(req).toListL.attempt
@@ -382,6 +597,7 @@ class GrpcGossipServiceSpec
                     }
                   }
                 }
+              }
             }
           }
         }
@@ -427,8 +643,8 @@ class GrpcGossipServiceSpec
     implicit val consensusConfig                = ConsensusConfig()
 
     def elders(summary: BlockSummary): Seq[ByteString] =
-      summary.getHeader.parentHashes ++
-        summary.getHeader.justifications.map(_.latestBlockHash)
+      summary.parentHashes ++
+        summary.justifications.map(_.latestBlockHash)
 
     /** Collect the ancestors of a hash and return their minimum distance to the target. */
     def collectAncestors(
@@ -753,16 +969,11 @@ class GrpcGossipServiceSpec
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
             dag.exists { child =>
-              child.getHeader.parentHashes.contains(parent.blockHash)
+              child.parentHashes.contains(parent.blockHash)
             }
           }
-          val consensus = new GossipServiceServer.Consensus[Task] {
-            def onPending(dag: Vector[BlockSummary]) = ???
-            def onDownloaded(blockHash: ByteString)  = ???
-            def listTips                             = Task.delay(tips)
-          }
-          runTestUnsafe(TestData(summaries = dag)) {
-            TestEnvironment(testDataRef, consensus = consensus).use { stub =>
+          runTestUnsafe(TestData(summaries = dag, tips = tips)) {
+            TestEnvironment(testDataRef).use { stub =>
               stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
                 res =>
                   res should contain theSameElementsInOrderAs tips
@@ -774,11 +985,15 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object NewBlocksSpec extends WordSpecLike {
-    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
-    implicit val consensusConfig =
-      ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
-    implicit val patienceConfig = PatienceConfig(3.second, 100.millis)
+  object NewBlocksSpec extends WordSpecLike with AuthSpec {
+    override def rpcName: String = "newBlocks"
+
+    override def query
+        : (Option[Node], List[ByteString]) => GossipingGrpcMonix.GossipServiceStub => Task[Unit] =
+      (maybeSender, blockHashes) =>
+        client => client.newBlocks(NewBlocksRequest(maybeSender, blockHashes)).void
+
+    override def ignoreSender: Boolean = false
 
     def expectError(
         req: NewBlocksRequest,
@@ -792,77 +1007,6 @@ class GrpcGossipServiceSpec
       }
 
     "newBlocks" when {
-      "called with a problematic sender" when {
-        implicit val config = PropertyCheckConfiguration(minSuccessful = 1)
-
-        "called without a sender" should {
-          "return UNAUTHENTICATED" in {
-            forAll(arbitrary[List[ByteString]]) { blockHashes =>
-              runTestUnsafe(TestData()) {
-                expectError(
-                  NewBlocksRequest(sender = None, blockHashes = blockHashes)
-                ) {
-                  case Unauthenticated(msg) =>
-                    msg shouldBe "Sender cannot be empty."
-                }
-              }
-            }
-          }
-        }
-
-        "called with a sender whose ID doesn't match its SSL public key" should {
-          "return UNAUTHENTICATED" in {
-            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-              runTestUnsafe(TestData()) {
-                expectError(
-                  NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes)
-                ) {
-                  case Unauthenticated(msg) =>
-                    msg shouldBe "Sender doesn't match public key."
-                }
-              }
-            }
-          }
-        }
-
-        "called without an SSL certificate" when {
-
-          def expectErrorWithAnonymous(
-              clientAuth: ClientAuth
-          )(pf: PartialFunction[Throwable, Unit]) =
-            forAll(arbitrary[List[ByteString]], arbitrary[Node]) { (blockHashes, sender) =>
-              runTestUnsafe(TestData()) {
-                TestEnvironment(testDataRef, clientCert = None, clientAuth = clientAuth).use {
-                  anonymousStub =>
-                    expectError(
-                      NewBlocksRequest(sender = Some(sender), blockHashes = blockHashes),
-                      client = anonymousStub
-                    )(pf)
-                }
-              }
-            }
-
-          "client auth is required" should {
-            "return UNAVAILABLE" in {
-              expectErrorWithAnonymous(ClientAuth.REQUIRE) {
-                case ex: io.grpc.StatusRuntimeException =>
-                  // Becuase the server requires client auth this will be rejected straight away.
-                  ex.getStatus.getCode shouldBe io.grpc.Status.Code.UNAVAILABLE
-              }
-            }
-          }
-
-          "client auth is not required (due to misconfiguration)" should {
-            "return UNAUTHENTICATED" in {
-              expectErrorWithAnonymous(ClientAuth.NONE) {
-                case Unauthenticated(msg) =>
-                  msg shouldBe "Cannot verify sender identity."
-              }
-            }
-          }
-        }
-      }
-
       "called with a valid sender" when {
         implicit val config = PropertyCheckConfiguration(minSuccessful = 5)
 
@@ -946,36 +1090,17 @@ class GrpcGossipServiceSpec
                     }
                   }
 
-                  val consensus = new GossipServiceServer.Consensus[Task] {
-                    @volatile var downloaded = Vector.empty[ByteString]
-                    def onPending(dag: Vector[BlockSummary]) = Task.now {
-                      dag.map(_.blockHash) shouldBe unknownBlocks.map(_.blockHash)
-                    }
-                    def onDownloaded(blockHash: ByteString) = Task.now {
-                      synchronized {
-                        downloaded = downloaded :+ blockHash
-                      }
-                    }
-                    def listTips = ???
-                  }
-
                   TestEnvironment(
                     testDataRef,
                     clientCert = Some(stubCert),
                     synchronizer = synchronizer,
-                    downloadManager = downloadManager,
-                    consensus = consensus
+                    downloadManager = downloadManager
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
                       val unknownHashes = unknownBlocks.map(_.blockHash)
                       res.isNew shouldBe true
-                      // Downloading should happen asynchronously.
-                      consensus.downloaded.size should be < unknownHashes.size
                       eventually {
                         downloadManager.scheduled should contain theSameElementsInOrderAs unknownHashes
-                      }
-                      eventually {
-                        consensus.downloaded should contain theSameElementsAs unknownHashes
                       }
                     }
                   }
@@ -1090,6 +1215,7 @@ object GrpcGossipServiceSpec extends TestRuntime {
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
     def blocks: Map[ByteString, Block]
+    def tips: Seq[BlockSummary]
   }
 
   object TestData {
@@ -1099,13 +1225,16 @@ object GrpcGossipServiceSpec extends TestRuntime {
 
     def apply(
         summaries: Seq[BlockSummary] = Seq.empty,
-        blocks: Seq[Block] = Seq.empty
+        blocks: Seq[Block] = Seq.empty,
+        tips: Seq[BlockSummary] = Seq.empty
     ): TestData = {
       val ss = summaries
       val bs = blocks
+      val ts = tips
       new TestData {
         val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
         val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
+        val tips      = ts
       }
     }
   }
@@ -1117,11 +1246,6 @@ object GrpcGossipServiceSpec extends TestRuntime {
     }
     private val emptyDownloadManager = new DownloadManager[Task] {
       def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-    }
-    private val emptyConsensus = new GossipServiceServer.Consensus[Task] {
-      def onPending(dag: Vector[BlockSummary]) = ???
-      def onDownloaded(blockHash: ByteString)  = ???
-      def listTips                             = ???
     }
     private val emptyGenesisApprover = new GenesisApprover[Task] {
       def getCandidate                                           = ???
@@ -1137,6 +1261,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
+        def listTips =
+          Task.delay(testDataRef.get.tips)
       }
 
     def apply(
@@ -1147,8 +1273,8 @@ object GrpcGossipServiceSpec extends TestRuntime {
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         downloadManager: DownloadManager[Task] = emptyDownloadManager,
-        consensus: GossipServiceServer.Consensus[Task] = emptyConsensus,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
+        rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
     )(
         implicit
@@ -1169,12 +1295,12 @@ object GrpcGossipServiceSpec extends TestRuntime {
               backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
               downloadManager = downloadManager,
-              consensus = consensus,
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads
             ) map { gss =>
-              val svc = GrpcGossipService.fromGossipService(gss, blockChunkConsumerTimeout)
+              val svc = GrpcGossipService
+                .fromGossipService(gss, rateLimiter, blockChunkConsumerTimeout)
               GossipingGrpcMonix.bindService(svc, scheduler)
             }
         ),

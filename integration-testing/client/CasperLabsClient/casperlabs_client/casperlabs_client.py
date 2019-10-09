@@ -21,11 +21,8 @@ import functools
 from pyblake2 import blake2b
 import ed25519
 import base64
-import struct
 import json
-from operator import add
-from functools import reduce
-from itertools import dropwhile
+import struct
 import logging
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
@@ -34,10 +31,12 @@ import google.protobuf.text_format
 
 CEscape = google.protobuf.text_format.text_encoding.CEscape
 
+base64_b64decode = base64.b64decode
+
 
 def _hex(text, as_utf8):
     try:
-        return (len(text) in (32, 64)) and text.hex() or CEscape(text, as_utf8)
+        return (len(text) in (32, 64, 20)) and text.hex() or CEscape(text, as_utf8)
     except TypeError:
         return CEscape(text, as_utf8)
 
@@ -53,7 +52,7 @@ from . import casper_pb2 as casper
 from .casper_pb2_grpc import CasperServiceStub
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-from . import consensus_pb2 as consensus
+from . import consensus_pb2 as consensus, state_pb2 as state
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
@@ -63,153 +62,120 @@ DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
 
+from google.protobuf import json_format
+
+Arg = consensus.Deploy.Arg
+Value = consensus.Deploy.Arg.Value
+
+
 class ABI:
     """
-    Encode (serialize) deploy args.
-
-    Currently supported ABI types:
-    - unsigned integers: u32, u64, u512
-    - byte_array, an array of bytes of arbitrary length,
-    - account, 32 bytes long byte_array, used for encoding of public keys.
-
-    There are two ways to serialize a list of deploy arguments:
-
-    1. Using method ABI.args, for example:
-
-        ABI.args([ABI.u32(100), ABI.u64(5000)])
-
-      Arguments are encoded with methods appropriate for their types,
-      and passed in a list to method ABI.args.
-
-      This is the recommended way of serializing ABI arguments in Python code.
-
-    2. By encoding arguments in a JSON format and passing them to method
-      ABI.args_from_json, for example:
-
-        ABI.args_from_json(json_string)
-
-      See documentation of ABI.args_from_json for details of the JSON format.
-
-      This method has been developed to support passing deploy arguments
-      on command line.
+    Serialize deploy arguments.
     """
 
-    INTEGER_TYPES = ("u32", "u64", "u512", "int_value", "long_value", "big_int")
-    BYTE_ARRAY_TYPES = ("byte_array", "account", "bytes_value")
-    OPTIONAL_TYPES = ("option", "optional_value")
-
-    ALL_TYPES = INTEGER_TYPES + BYTE_ARRAY_TYPES + OPTIONAL_TYPES
+    @staticmethod
+    def optional_value(name, a):
+        if a is None:
+            return Arg(name=name, value=Value(optional_value=Value()))
+        return Arg(name=name, value=Value(optional_value=a))
 
     @staticmethod
-    def option(o: bytes) -> bytes:
-        if o is None:
-            return bytes([0])
-        return bytes([1]) + o
+    def bytes_value(name, a: bytes):
+        return Arg(name=name, value=Value(bytes_value=a))
 
     @staticmethod
-    def optional_value(o: bytes) -> bytes:
-        return ABI.option(o)
+    def account(name, a):
+        if type(a) == bytes and len(a) == 32:
+            return ABI.byte_array(name, a)
+        if type(a) == str and len(a) == 64:
+            return ABI.byte_array(name, bytes.fromhex(a))
+        raise Exception("account must be 32 bytes or 64 characters long string")
 
     @staticmethod
-    def u32(n: int) -> bytes:
-        return struct.pack("<I", n)
+    def int_value(name, a: int):
+        return Arg(name=name, value=Value(int_value=a))
 
     @staticmethod
-    def u64(n: int) -> bytes:
-        return struct.pack("<Q", n)
+    def long_value(name, a: int):
+        return Arg(name=name, value=Value(long_value=a))
 
     @staticmethod
-    def u512(n: int) -> bytes:
-        bs = list(
-            dropwhile(
-                lambda b: b == 0,
-                reversed(n.to_bytes(64, byteorder="little", signed=False)),
-            )
-        )
-        return len(bs).to_bytes(1, byteorder="little", signed=False) + bytes(
-            reversed(bs)
+    def big_int(name, a):
+        return Arg(
+            name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
         )
 
     @staticmethod
-    def byte_array(a: bytes) -> bytes:
-        return ABI.u32(len(a)) + a
+    def string_value(name, a):
+        return Arg(name=name, value=Value(string_value=a))
 
     @staticmethod
-    def bytes_value(a: bytes) -> bytes:
-        return ABI.byte_array(a)
+    def args(l: list):
+        c = consensus.Deploy.Code(args=l)
+        return c.args
 
     @staticmethod
-    def account(a: bytes) -> bytes:
-        if len(a) != 32:
-            raise Exception("Account must be 32 bytes long")
-        return ABI.byte_array(a)
-
-    @staticmethod
-    def int_value(a: int) -> bytes:
-        # TODO: should be signed 32 bits
-        return ABI.u32(a)
-
-    def long_value(a: int) -> bytes:
-        # TODO: should be signed 64 bits
-        return ABI.u64(a)
-
-    def big_int(a) -> bytes:
+    def args_from_json(s):
+        base64_b64decode = base64.b64decode
         try:
-            return ABI.u512(int(a["value"]))
-        except TypeError:
-            return ABI.u512(int(a))
-
-    @staticmethod
-    def args(l: list) -> bytes:
-        return ABI.u32(len(l)) + reduce(add, map(ABI.byte_array, l))
-
-    @staticmethod
-    def args_from_json(s: str) -> bytes:
-        """
-        Convert a string with JSON representation of deploy args to binary (ABI).
-
-        The JSON should be a list of dictionaries each representing one arg,
-        for example:
-
-            [
-                {"name": "amount", "value": {"long_value": 123456}},
-                {"name": "account", "value": {"bytes_value": '0000000000000000000000000000000000000000000000000000000000000000'},
-                {"name": "purse_id", "value": {"optional_value": {}}},
+            # Change JSON protobuf format of binary data from base64 to base16
+            base64.b64decode = lambda s: bytes.fromhex(s)
+            parsed_json = json.loads(s)
+            args = [
+                json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json
             ]
+            c = consensus.Deploy.Code(args=args)
+            return c.args
+        finally:
+            base64.b64decode = base64_b64decode
 
-        """
-        args = json.loads(s)
+    @staticmethod
+    def args_to_json(args):
+        base64_b64encode = base64.b64encode
+        try:
+            # We can't just call MessageToDict or MessageToJson on the args object,
+            # which is a 'repeated Arg', because we get:
+            # AttributeError: 'google.protobuf.pyext._message.RepeatedCompositeCo' object has no attribute 'DESCRIPTOR'
+            class Mock:
+                def __init__(self, v):
+                    self.value = v
 
-        def python_value(typ, value):
-            if typ in ("big_int",):
-                try:
-                    # new style proto3 JSON
-                    return int(value["value"])
-                except TypeError:
-                    # compatibility mode
-                    return int(value)
-            if typ in ABI.INTEGER_TYPES:
-                return int(value)
-            elif typ in ABI.BYTE_ARRAY_TYPES:
-                return bytearray.fromhex(value)
-            elif typ in ABI.OPTIONAL_TYPES:
-                if not value:
-                    return None
-                return encode({"value": value})
-            raise ValueError(f"Unknown type {typ}, expected one of {ABI.ALL_TYPES}")
+                def decode(self, s):
+                    return self.value
 
-        def encode(arg) -> bytes:
-            typ, value = list(arg["value"].items())[0]
-            v = python_value(typ, value)
-            return getattr(ABI, typ)(v)
+            base64.b64encode = lambda b: Mock(b.hex())
+            return json.dumps(
+                [
+                    json_format.MessageToDict(arg, preserving_proto_field_name=True)
+                    for arg in args
+                ]
+            )
+        finally:
+            base64.b64encode = base64_b64encode
 
-        return ABI.args([encode(arg) for arg in args])
+    # Below methods for backwards compatibility
+
+    @staticmethod
+    def u32(name, n: int):
+        return ABI.int_value(name, n)
+
+    @staticmethod
+    def u64(name, n: int):
+        return ABI.long_value(name, n)
+
+    @staticmethod
+    def u512(name, n: int):
+        return ABI.big_int(name, n)
+
+    @staticmethod
+    def byte_array(name, a):
+        return Arg(name=name, value=Value(bytes_value=a))
 
 
 def read_pem_key(file_name: str):
     with open(file_name) as f:
         s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
-        r = base64.b64decode(s)
+        r = base64_b64decode(s)
         return len(r) % 32 == 0 and r[:32] or r[-32:]
 
 
@@ -271,13 +237,13 @@ def _encode_contract(contract_options, contract_args):
     file_name, hash, name, uref = contract_options
     C = consensus.Deploy.Code
     if file_name:
-        return C(wasm=_read_binary(file_name), abi_args=contract_args)
+        return C(wasm=_read_binary(file_name), args=contract_args)
     if hash:
-        return C(hash=hash, abi_args=contract_args)
+        return C(hash=hash, args=contract_args)
     if name:
-        return C(name=name, abi_args=contract_args)
+        return C(name=name, args=contract_args)
     if uref:
-        return C(uref=uref, abi_args=contract_args)
+        return C(uref=uref, args=contract_args)
     raise Exception("One of wasm, hash, name or uref is required")
 
 
@@ -320,7 +286,7 @@ class SecureGRPCService:
     def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
-        self.node_id = node_id  # or extract_common_name(certificate_file)
+        self.node_id = node_id or extract_common_name(certificate_file)
         self.certificate_file = certificate_file
         with open(self.certificate_file, "rb") as f:
             self.credentials = grpc.ssl_channel_credentials(f.read())
@@ -488,7 +454,7 @@ class CasperLabsClient:
 
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
-            timestamp=int(time.time()),
+            timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=_hash(_serialize(body)),
         )
@@ -624,21 +590,21 @@ class CasperLabsClient:
                 "balance", f"Expected Account type value under {address}."
             )
 
-        urefs = [u for u in account.known_urefs if u.name == "mint"]
+        urefs = [u for u in account.named_keys if u.name == "mint"]
         if len(urefs) == 0:
             raise InternalError(
                 "balance",
-                "Account's known_urefs map did not contain Mint contract address.",
+                "Account's named_keys map did not contain Mint contract address.",
             )
 
         mintPublic = urefs[0]
-        mintPrivate = self.queryState(
-            block_hash, mintPublic.key.uref.uref.hex(), "", "uref"
-        )
 
-        mintPrivateHex = mintPrivate.key.uref.uref.hex()
-        purseAddrHex = ABI.byte_array(account.purse_id.uref).hex()
-        localKeyValue = f"{mintPrivateHex}:{purseAddrHex}"
+        def abi_byte_array(a: bytes) -> bytes:
+            return struct.pack("<I", len(a)) + a
+
+        mintPublicHex = mintPublic.key.uref.uref.hex()
+        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
         balance = self.queryState(

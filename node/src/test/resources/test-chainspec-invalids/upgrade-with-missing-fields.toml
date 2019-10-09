@@ -1,0 +1,16 @@
+[upgrade]
+
+protocol-version = "1.3"
+# activation-point-rank = 30
+
+[wasm-costs]
+regular = 1
+div-multiplier = 2
+mul-multiplier = 3
+mem-multiplier = 4
+#mem-initial-pages = 5
+#mem-grow-per-page = 6
+#mem-copy-per-byte = 7
+#max-stack-height = 8
+#opcodes-multiplier = 9
+#opcodes-divisor = 10

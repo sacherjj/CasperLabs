@@ -336,21 +336,21 @@ fn deserialize_accessrights_add_write(b: &mut Bencher) {
     b.iter(|| AccessRights::from_bytes(&data));
 }
 
-fn make_known_urefs() -> BTreeMap<String, Key> {
-    let mut urefs = BTreeMap::new();
-    urefs.insert(
+fn make_named_keys() -> BTreeMap<String, Key> {
+    let mut named_keys = BTreeMap::new();
+    named_keys.insert(
         "ref1".to_string(),
         Key::URef(URef::new([0u8; 32], AccessRights::READ)),
     );
-    urefs.insert(
+    named_keys.insert(
         "ref2".to_string(),
         Key::URef(URef::new([1u8; 32], AccessRights::WRITE)),
     );
-    urefs.insert(
+    named_keys.insert(
         "ref3".to_string(),
         Key::URef(URef::new([2u8; 32], AccessRights::ADD)),
     );
-    urefs
+    named_keys
 }
 
 fn make_purse_id() -> PurseId {
@@ -358,19 +358,19 @@ fn make_purse_id() -> PurseId {
 }
 
 fn make_contract() -> Contract {
-    let known_urefs = make_known_urefs();
-    Contract::new(vec![0u8; 1024], known_urefs, ProtocolVersion::new(1))
+    let named_keys = make_named_keys();
+    Contract::new(vec![0u8; 1024], named_keys, ProtocolVersion::V1_0_0)
 }
 
 fn make_account() -> Account {
-    let known_urefs = make_known_urefs();
+    let named_keys = make_named_keys();
     let purse_id = make_purse_id();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
     let action_thresholds = Default::default();
     let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
     Account::new(
         [0u8; 32],
-        known_urefs,
+        named_keys,
         purse_id,
         associated_keys,
         action_thresholds,

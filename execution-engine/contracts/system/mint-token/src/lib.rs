@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
 mod capabilities;
@@ -11,16 +12,16 @@ mod capabilities;
 // so that their constructors are hidden and therefore
 // we must use the conversion methods from Key elsewhere
 // in the code.
-mod internal_purse_id;
-
-mod mint;
+pub mod internal_purse_id;
+pub mod mint;
 
 use alloc::string::String;
 use core::convert::TryInto;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{self, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint::error::Error;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::KEY_SIZE;
 use contract_ffi::value::U512;
@@ -31,7 +32,7 @@ use mint::Mint;
 
 const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
 
-struct CLMint;
+pub struct CLMint;
 
 impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     type PurseId = WithdrawId;
@@ -51,7 +52,7 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
-        contract_api::add_uref(&purse_uref_name, &balance_uref);
+        contract_api::put_key(&purse_uref_name, &balance_uref);
 
         // store association between purse id and balance uref
         //
@@ -68,23 +69,31 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
     }
 
     fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
-        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
+        contract_api::read_local(p.raw_id())
+            .ok()?
+            .and_then(|key: Key| key.try_into().ok())
     }
 
     fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<ARef<U512>> {
-        contract_api::read_local(p.raw_id()).and_then(|key: Key| key.try_into().ok())
+        contract_api::read_local(p.raw_id())
+            .ok()?
+            .and_then(|key: Key| key.try_into().ok())
     }
 }
 
 pub fn delegate() {
     let mint = CLMint;
-    let method_name: String = contract_api::get_arg(0);
+    let method_name: String = contract_api::get_arg(0)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     match method_name.as_str() {
         // argument: U512
         // return: Result<URef, mint::error::Error>
         "mint" => {
-            let amount: U512 = contract_api::get_arg(1);
+            let amount: U512 = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
 
             let maybe_purse_key = mint
                 .mint(amount)
@@ -104,17 +113,26 @@ pub fn delegate() {
         }
 
         "balance" => {
-            let key: URef = contract_api::get_arg(1);
+            let key: URef = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
             let purse_id: WithdrawId = WithdrawId::from_uref(key).unwrap();
             let balance_uref = mint.lookup(purse_id);
-            let balance: Option<U512> = balance_uref.map(|uref| contract_api::read(uref.into()));
+            let balance: Option<U512> =
+                balance_uref.and_then(|uref| contract_api::read(uref.into()).unwrap_or_default());
             contract_api::ret(&balance, &vec![])
         }
 
         "transfer" => {
-            let source: URef = contract_api::get_arg(1);
-            let target: URef = contract_api::get_arg(2);
-            let amount: U512 = contract_api::get_arg(3);
+            let source: URef = contract_api::get_arg(1)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
+            let target: URef = contract_api::get_arg(2)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
+            let amount: U512 = contract_api::get_arg(3)
+                .unwrap_or_revert_with(ApiError::MissingArgument)
+                .unwrap_or_revert_with(ApiError::InvalidArgument);
 
             let source: WithdrawId = match WithdrawId::from_uref(source) {
                 Ok(withdraw_id) => withdraw_id,
@@ -135,7 +153,6 @@ pub fn delegate() {
             let transfer_result = mint.transfer(source, target, amount);
             contract_api::ret(&transfer_result, &vec![]);
         }
-
         _ => panic!("Unknown method name!"),
     }
 }

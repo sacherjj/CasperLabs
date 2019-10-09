@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.crypto.codec.Base16
@@ -116,14 +117,14 @@ object GraphzGenerator {
   private def toDagInfo[G[_]](
       blockInfos: List[BlockInfo]
   ): DagInfo[G] = {
-    val timeseries = blockInfos.map(_.getSummary.getHeader.rank).distinct
+    val timeseries = blockInfos.map(_.getSummary.rank).distinct
 
     val validators = blockInfos.map(_.getSummary).foldMap { b =>
-      val timeEntry       = b.getHeader.rank
+      val timeEntry       = b.rank
       val blockHash       = hexShort(b.blockHash)
-      val blockSenderHash = hexShort(b.getHeader.validatorPublicKey)
-      val parents         = b.getHeader.parentHashes.toList.map(hexShort)
-      val justifications = b.getHeader.justifications
+      val blockSenderHash = hexShort(b.validatorPublicKey)
+      val parents         = b.parentHashes.toList.map(hexShort)
+      val justifications = b.justifications
         .map(_.latestBlockHash)
         .map(hexShort)
         .toSet

@@ -6,17 +6,17 @@ import cats.effect.implicits._
 import cats.implicits._
 import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
 import io.casperlabs.node.api.graphql.schema.GraphQLSchemaBuilder
 import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Json, JsonObject}
@@ -41,7 +41,7 @@ object GraphQL {
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect
@@ -66,7 +66,9 @@ object GraphQL {
       case req @ GET -> Root if requiredHeaders.forall(h => req.headers.exists(_ === h)) =>
         handleWebSocket(executor, keepAlivePeriod)
       case GET -> Root =>
-        StaticFile.fromResource[F]("/graphql-playground.html", ec).getOrElseF(NotFound())
+        StaticFile
+          .fromResource[F]("/graphql-playground.html", Blocker.liftExecutionContext(ec))
+          .getOrElseF(NotFound())
       case req @ POST -> Root =>
         val res: F[Response[F]] = for {
           json  <- req.as[Json]

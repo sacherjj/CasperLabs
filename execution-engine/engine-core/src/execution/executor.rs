@@ -14,10 +14,9 @@ use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateReader;
 
-use crate::engine_state::execution_result::ExecutionResult;
-
 use super::Error;
 use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
+use crate::engine_state::execution_result::ExecutionResult;
 use crate::execution::address_generator::AddressGenerator;
 use crate::execution::FN_STORE_ID_INITIAL;
 use crate::runtime_context::RuntimeContext;
@@ -149,9 +148,8 @@ impl Executor<Module> for WasmiExecutor {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
-        let mut uref_lookup_local = account.urefs_lookup().clone();
-        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
-            extract_access_rights_from_keys(uref_lookup_local.values().cloned());
+        let mut named_keys = account.named_keys().clone();
+        let access_rights = extract_access_rights_from_keys(named_keys.values().cloned());
         let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
@@ -166,15 +164,15 @@ impl Executor<Module> for WasmiExecutor {
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::from_u64(args.len() as u64),
+                Gas::new(args.len().into()),
                 effects_snapshot
             )
         };
 
         let context = RuntimeContext::new(
             tc,
-            &mut uref_lookup_local,
-            known_urefs,
+            &mut named_keys,
+            access_rights,
             arguments,
             authorized_keys,
             &account,
@@ -207,7 +205,7 @@ impl Executor<Module> for WasmiExecutor {
         &self,
         parity_module: Module,
         args: &[u8],
-        keys: &mut BTreeMap<String, Key>,
+        named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
@@ -222,9 +220,9 @@ impl Executor<Module> for WasmiExecutor {
     where
         R::Error: Into<Error>,
     {
-        let mut uref_lookup = keys.clone();
-        let known_urefs: HashMap<Address, HashSet<AccessRights>> =
-            extract_access_rights_from_keys(uref_lookup.values().cloned());
+        let mut named_keys = named_keys.clone();
+        let access_rights: HashMap<Address, HashSet<AccessRights>> =
+            extract_access_rights_from_keys(named_keys.values().cloned());
 
         let address_generator = {
             let address_generator = AddressGenerator::new(deploy_hash, phase);
@@ -241,15 +239,15 @@ impl Executor<Module> for WasmiExecutor {
         } else {
             on_fail_charge!(
                 bytesrepr::deserialize(args),
-                Gas::from_u64(args.len() as u64),
+                Gas::new(args.len().into()),
                 effects_snapshot
             )
         };
 
         let context = RuntimeContext::new(
             state,
-            &mut uref_lookup,
-            known_urefs,
+            &mut named_keys,
+            access_rights,
             args,
             authorization_keys,
             &account,
@@ -335,7 +333,7 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
         T: FromBytes,
     {
-        let known_keys = extract_access_rights_from_keys(keys.values().cloned());
+        let named_keys = extract_access_rights_from_keys(keys.values().cloned());
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
@@ -348,7 +346,7 @@ impl Executor<Module> for WasmiExecutor {
         let runtime_context = RuntimeContext::new(
             state,
             keys,
-            known_keys.clone(),
+            named_keys.clone(),
             args,
             authorization_keys.clone(),
             account,

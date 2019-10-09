@@ -53,7 +53,7 @@ Using flags you can specify which bootstrapping node should be used or if the no
 
 #### 2.1.1 gRPC API
 
-Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [CasperMessage.proto](https://github.com/CasperLabs/CasperLabs/blob/dev/protobuf/io/casperlabs/casper/protocol/CasperMessage.proto)
+Node exposes its API via gRPC services, which are exposed on `grpc-port`. To see the list of all available services, RPC calls, possible requests and responses, please see [casper.proto](../protobuf/io/casperlabs/node/api/casper.proto)
 
 #### 2.1.2 Data directory
 
@@ -239,5 +239,3 @@ To see metrics in action check out the [docker](../hack/docker/README.md) setup.
 ### 3.4 Caveats
 
 This is very much a work in progress. The networking overlay is only known to work when it can avail itself of visible IP addresses, either public or all contained within the same network. It does not yet include any special code for getting around a home firewall or a closed router, though it does contain some uPNP handling. Any port used must be open or mapped through the router. Depending on your setup, it might be necessary to configure port-forwarding on your router. In some cases, it might even be necessary to specify your router's public IP address as the node address if your router's port-forwarding requires it.
-
-

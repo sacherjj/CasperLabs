@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._, Block.Justification
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen.listOfN
@@ -27,7 +28,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
   val blockElementGen: Gen[Block] =
     for {
       hash            <- arbitrary[BlockHash]
-      version         <- arbitrary[Long]
+      version         <- arbitrary[Int]
       timestamp       <- arbitrary[Long]
       parentsHashList <- arbitrary[Seq[BlockHash]]
       justifications  <- arbitrary[Seq[Justification]]
@@ -37,7 +38,7 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
           .Header()
           .withParentHashes(parentsHashList)
           .withJustifications(justifications)
-          .withProtocolVersion(version)
+          .withProtocolVersion(ProtocolVersion(version))
           .withTimestamp(timestamp)
       )
 

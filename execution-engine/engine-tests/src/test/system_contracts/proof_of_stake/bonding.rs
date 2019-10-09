@@ -1,23 +1,34 @@
-use std::collections::HashMap;
-
 use contract_ffi::base16;
+use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::{Value, U512};
 
-use engine_core::engine_state::genesis::POS_BONDING_PURSE;
+use engine_core::engine_state::genesis::{GenesisAccount, POS_BONDING_PURSE};
 use engine_core::engine_state::CONV_RATE;
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    self, InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT};
 
-const GENESIS_ADDR: [u8; 32] = [6u8; 32];
+const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
+const ACCOUNT_1_SEED_AMOUNT: u64 = 100_000_000 * 2;
+const ACCOUNT_1_STAKE: u64 = 42_000;
+const ACCOUNT_1_UNBOND_1: u64 = 22_000;
+const ACCOUNT_1_UNBOND_2: u64 = 20_000;
+
+const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
+const GENESIS_ACCOUNT_STAKE: u64 = 100_000;
+const GENESIS_ACCOUNT_UNBOND_1: u64 = 45_000;
+const GENESIS_ACCOUNT_UNBOND_2: u64 = 55_000;
+
+const TEST_BOND: &str = "bond";
+const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
+const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
+const TEST_UNBOND: &str = "unbond";
 
 fn get_pos_purse_id_by_name(
     builder: &InMemoryWasmTestBuilder,
@@ -26,7 +37,7 @@ fn get_pos_purse_id_by_name(
     let pos_contract = builder.get_pos_contract();
 
     pos_contract
-        .urefs_lookup()
+        .named_keys()
         .get(purse_name)
         .and_then(Key::as_uref)
         .map(|u| PurseId::new(*u))
@@ -38,55 +49,42 @@ fn get_pos_bonding_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
     builder.get_purse_balance(purse_id)
 }
 
-const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
-const ACCOUNT_1_SEED_AMOUNT: u64 = MAX_PAYMENT * 2;
-
-const GENESIS_ACCOUNT_STAKE: u64 = 100_000;
-const ACCOUNT_1_STAKE: u64 = 42_000;
-const ACCOUNT_1_UNBOND_1: u64 = 22_000;
-const ACCOUNT_1_UNBOND_2: u64 = 20_000;
-const GENESIS_ACCOUNT_UNBOND_1: u64 = 45_000;
-const GENESIS_ACCOUNT_UNBOND_2: u64 = 55_000;
-
-const TEST_BOND: &str = "bond";
-const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
-const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
-const TEST_UNBOND: &str = "unbond";
-
 #[ignore]
 #[test]
 fn should_run_successful_bond_and_unbond() {
-    let genesis_account_key = Key::Account(GENESIS_ADDR);
-    let genesis_validators = {
-        let mut result = HashMap::new();
-        result.insert(
+    let accounts = {
+        let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
+        let account = GenesisAccount::new(
             PublicKey::new([42; 32]),
-            U512::from(GENESIS_VALIDATOR_STAKE),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
-        result
+        tmp.push(account);
+        tmp
     };
 
+    let genesis_config = test_support::create_genesis_config(accounts);
+
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, genesis_validators)
+        .run_genesis(&genesis_config)
         .finish();
 
-    let genesis_account = result
+    let default_account = result
         .builder()
-        .get_account(genesis_account_key)
+        .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
 
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
+    )
+    .build();
+
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
@@ -99,7 +97,7 @@ fn should_run_successful_bond_and_unbond() {
 
     let transforms = &result.builder().get_transforms()[0];
 
-    let pos_transform = &transforms[&pos.into()];
+    let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
     let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
@@ -113,10 +111,10 @@ fn should_run_successful_bond_and_unbond() {
 
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&GENESIS_ADDR),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
         GENESIS_ACCOUNT_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -125,40 +123,36 @@ fn should_run_successful_bond_and_unbond() {
         U512::from(GENESIS_VALIDATOR_STAKE + GENESIS_ACCOUNT_STAKE)
     );
 
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_SEED_NEW_ACCOUNT),
+            PublicKey::new(ACCOUNT_1_ADDR),
+            U512::from(ACCOUNT_1_SEED_AMOUNT),
+        ),
+    )
+    .build();
+
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_BOND_FROM_MAIN_PURSE),
+            U512::from(ACCOUNT_1_STAKE),
+        ),
+    )
+    .build();
+
     // Create new account (from genesis funds) and bond with it
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_SEED_NEW_ACCOUNT),
-                PublicKey::new(ACCOUNT_1_ADDR),
-                U512::from(ACCOUNT_1_SEED_AMOUNT),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .expect_success()
         .commit()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_BOND_FROM_MAIN_PURSE),
-                U512::from(ACCOUNT_1_STAKE),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .exec(exec_request_3)
         .expect_success()
         .commit()
         .finish();
-
-    let account_1_key = Key::Account(ACCOUNT_1_ADDR);
 
     let exec_response = result
         .builder()
@@ -168,14 +162,14 @@ fn should_run_successful_bond_and_unbond() {
 
     let account_1 = result
         .builder()
-        .get_account(account_1_key)
+        .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
     let pos = result.builder().get_pos_contract_uref();
 
     let transforms = &result.builder().get_transforms()[1];
 
-    let pos_transform = &transforms[&pos.into()];
+    let pos_transform = &transforms[&Key::from(pos).normalize()];
 
     // Verify that genesis account is in validator queue
     let contract = if let Transform::Write(Value::Contract(contract)) = pos_transform {
@@ -192,7 +186,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(contract.named_keys().contains_key(&lookup_key));
 
     // Gensis validator [42; 32] bonded 50k, and genesis account bonded 100k inside
     // the test contract
@@ -206,21 +200,18 @@ fn should_run_successful_bond_and_unbond() {
     // Stage 2a - Account 1 unbonds by decreasing less than 50% (and is still in the
     // queue)
     //
-
+    let exec_request_4 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_UNBOND),
+            Some(U512::from(ACCOUNT_1_UNBOND_1)),
+        ),
+    )
+    .build();
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_UNBOND),
-                Some(U512::from(ACCOUNT_1_UNBOND_1)),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
+        .exec(exec_request_4)
         .expect_success()
         .commit()
         .finish();
@@ -251,7 +242,7 @@ fn should_run_successful_bond_and_unbond() {
         base16::encode_lower(&ACCOUNT_1_ADDR),
         ACCOUNT_1_STAKE
     );
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     let lookup_key = format!(
         "v_{}_{}",
@@ -260,27 +251,24 @@ fn should_run_successful_bond_and_unbond() {
     );
     // Account 1 is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 2b - Genesis unbonds by decreasing less than 50% (and is still in the
     // queue)
     //
     // Genesis account unbonds less than 50% of his stake
-
+    let exec_request_5 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_UNBOND),
+            Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
+        ),
+    )
+    .build();
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_UNBOND),
-                Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [3; 32],
-        )
+        .exec(exec_request_5)
         .expect_success()
         .commit()
         .finish();
@@ -294,7 +282,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -317,19 +305,18 @@ fn should_run_successful_bond_and_unbond() {
     //
     let account_1_bal_before = result.builder().get_purse_balance(account_1.purse_id());
 
+    let exec_request_6 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_UNBOND),
+            Some(U512::from(ACCOUNT_1_UNBOND_2)),
+        ),
+    )
+    .build();
+
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_UNBOND),
-                Some(U512::from(ACCOUNT_1_UNBOND_2)),
-            ), // <-- rest of accont1's funds
-            DEFAULT_BLOCK_TIME,
-            [3; 32],
-        )
+        .exec(exec_request_6)
         .expect_success()
         .commit()
         .finish();
@@ -362,23 +349,22 @@ fn should_run_successful_bond_and_unbond() {
         ACCOUNT_1_UNBOND_2
     );
     // Account 1 isn't tracked anymore in the bonding queue
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Stage 3b - Fully unbond account1 with Some(TOTAL_AMOUNT)
     //
 
     // Genesis account unbonds less than 50% of his stake
+    let exec_request_7 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (String::from(TEST_UNBOND), None as Option<U512>),
+    )
+    .build();
+
     let result = InMemoryWasmTestBuilder::from_result(result)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (String::from(TEST_UNBOND), None as Option<U512>), // <-- va banque
-            DEFAULT_BLOCK_TIME,
-            [4; 32],
-        )
+        .exec(exec_request_7)
         .expect_success()
         .commit()
         .finish();
@@ -393,7 +379,7 @@ fn should_run_successful_bond_and_unbond() {
     assert_eq!(
         result
             .builder()
-            .get_purse_balance(genesis_account.purse_id()),
+            .get_purse_balance(default_account.purse_id()),
         U512::from(
             test_support::GENESIS_INITIAL_BALANCE
                 - Motes::from_gas(genesis_gas_cost, CONV_RATE)
@@ -413,12 +399,12 @@ fn should_run_successful_bond_and_unbond() {
     let pos_contract = result.builder().get_pos_contract();
     let lookup_key = format!(
         "v_{}_{}",
-        base16::encode_lower(&GENESIS_ADDR),
+        base16::encode_lower(&DEFAULT_ACCOUNT_ADDR),
         GENESIS_ACCOUNT_UNBOND_2
     );
     // Genesis is still tracked anymore in the bonding queue with different uref
     // name
-    assert!(!pos_contract.urefs_lookup().contains_key(&lookup_key));
+    assert!(!pos_contract.named_keys().contains_key(&lookup_key));
 
     //
     // Final checks on validator queue
@@ -428,17 +414,18 @@ fn should_run_successful_bond_and_unbond() {
     // suffix
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
-            .filter(
-                |(key, _)| key.starts_with(&format!("v_{}", base16::encode_lower(&GENESIS_ADDR)))
-            )
+            .filter(|(key, _)| key.starts_with(&format!(
+                "v_{}",
+                base16::encode_lower(&DEFAULT_ACCOUNT_ADDR)
+            )))
             .count(),
         0
     );
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(
                 |(key, _)| key.starts_with(&format!("v_{}", base16::encode_lower(&ACCOUNT_1_ADDR)))
@@ -449,7 +436,7 @@ fn should_run_successful_bond_and_unbond() {
     // only genesis validator is still in the queue
     assert_eq!(
         pos_contract
-            .urefs_lookup()
+            .named_keys()
             .iter()
             .filter(|(key, _)| key.starts_with("v_"))
             .count(),
@@ -460,44 +447,44 @@ fn should_run_successful_bond_and_unbond() {
 #[ignore]
 #[test]
 fn should_fail_bonding_with_insufficient_funds() {
-    let genesis_validators = {
-        let mut result = HashMap::new();
-        result.insert(
+    let accounts = {
+        let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
+        let account = GenesisAccount::new(
             PublicKey::new([42; 32]),
-            U512::from(GENESIS_VALIDATOR_STAKE),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
-        result
+        tmp.push(account);
+        tmp
     };
 
+    let genesis_config = test_support::create_genesis_config(accounts);
+
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_SEED_NEW_ACCOUNT),
+            PublicKey::new(ACCOUNT_1_ADDR),
+            *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
+        ),
+    )
+    .build();
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_POS_BONDING,
+        (
+            String::from(TEST_BOND_FROM_MAIN_PURSE),
+            *DEFAULT_PAYMENT + GENESIS_ACCOUNT_STAKE,
+        ),
+    )
+    .build();
+
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, genesis_validators)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_SEED_NEW_ACCOUNT),
-                PublicKey::new(ACCOUNT_1_ADDR),
-                U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .run_genesis(&genesis_config)
+        .exec(exec_request_1)
         .commit()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (
-                String::from(TEST_BOND_FROM_MAIN_PURSE),
-                // That's already too much assuming non-zero costs of wasm execution
-                U512::from(MAX_PAYMENT + GENESIS_ACCOUNT_STAKE),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [2; 32],
-        )
+        .exec(exec_request_2)
         .commit()
         .finish();
 
@@ -511,33 +498,39 @@ fn should_fail_bonding_with_insufficient_funds() {
         let execution_result = crate::support::test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::BondTransferFailed => 7
-    assert_eq!(error_message, "Exit code: 7");
+    // pos::Error::BondTransferFailed => 8
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(8)))
+    );
 }
 
 #[ignore]
 #[test]
 fn should_fail_unbonding_validator_without_bonding_first() {
-    let genesis_validators = {
-        let mut result = HashMap::new();
-        result.insert(
+    let accounts = {
+        let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
+        let account = GenesisAccount::new(
             PublicKey::new([42; 32]),
-            U512::from(GENESIS_VALIDATOR_STAKE),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
+            Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
-        result
+        tmp.push(account);
+        tmp
     };
 
+    let genesis_config = test_support::create_genesis_config(accounts);
+
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_POS_BONDING,
+        (String::from(TEST_UNBOND), Some(U512::from(42))),
+    )
+    .build();
+
     let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(GENESIS_ADDR, genesis_validators)
-        .exec_with_args(
-            GENESIS_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "pos_bonding.wasm",
-            (String::from(TEST_UNBOND), Some(U512::from(42))),
-            DEFAULT_BLOCK_TIME,
-            [1; 32],
-        )
+        .run_genesis(&genesis_config)
+        .exec(exec_request)
         .commit()
         .finish();
 
@@ -551,6 +544,9 @@ fn should_fail_unbonding_validator_without_bonding_first() {
         let execution_result = crate::support::test_support::get_success_result(&response);
         test_support::get_error_message(execution_result)
     };
-    // Error::NotBonded => 0
-    assert_eq!(error_message, "Exit code: 0");
+    // pos::Error::NotBonded => 0
+    assert_eq!(
+        error_message,
+        format!("Exit code: {}", u32::from(Error::ProofOfStake(0)))
+    );
 }

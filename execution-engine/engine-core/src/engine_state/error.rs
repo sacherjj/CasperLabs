@@ -6,6 +6,7 @@ use contract_ffi::bytesrepr;
 use contract_ffi::system_contracts::mint;
 
 use crate::execution;
+use contract_ffi::value::ProtocolVersion;
 
 #[derive(Fail, Debug)]
 pub enum Error {
@@ -13,6 +14,8 @@ pub enum Error {
     InvalidHashLength { expected: usize, actual: usize },
     #[fail(display = "Invalid public key length: expected {}, actual {}", _0, _1)]
     InvalidPublicKeyLength { expected: usize, actual: usize },
+    #[fail(display = "Invalid protocol version: {}", _0)]
+    InvalidProtocolVersion(ProtocolVersion),
     #[fail(display = "Wasm preprocessing error: {:?}", _0)]
     WasmPreprocessingError(engine_wasm_prep::PreprocessingError),
     #[fail(display = "Wasm serialization error: {:?}", _0)]

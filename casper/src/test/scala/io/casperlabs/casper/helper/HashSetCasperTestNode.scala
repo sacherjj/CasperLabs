@@ -1,69 +1,62 @@
 package io.casperlabs.casper.helper
 
-import java.nio.file.Path
-
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
-import cats.temp.par.Par
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import cats.mtl.FunctorRaise
+import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage._
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
-import io.casperlabs.casper.deploybuffer.{DeployBuffer, MockDeployBuffer}
+import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
+import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm.CommError.ErrorHandler
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
-import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.validation.Validation
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.dag._
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
 
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
-import io.casperlabs.crypto.Keys
-import io.casperlabs.casper.validation.ValidationImpl
 
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
     sk: PrivateKey,
     val genesis: Block,
-    val dagStorageDir: Path,
-    val blockStorageDir: Path,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
     implicit
     concurrentF: Concurrent[F],
     val blockStorage: BlockStorage[F],
     val dagStorage: DagStorage[F],
+    val deployStorage: DeployStorage[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
   implicit val logEff: LogStub[F]
+  implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
-  implicit val deployBufferEff: DeployBuffer[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
   implicit val safetyOracleEff: FinalityDetector[F]
@@ -78,6 +71,8 @@ abstract class HashSetCasperTestNode[F[_]](
     maybeMakeEE.map(_(bonds)) getOrElse
       HashSetCasperTestNode.simpleEEApi[F](bonds)
 
+  implicit val versions = HashSetCasperTestNode.protocolVersions[F]
+
   /** Handle one message. */
   def receive(): F[Unit]
 
@@ -87,7 +82,7 @@ abstract class HashSetCasperTestNode[F[_]](
   /** Put the genesis in the store. */
   def initialize(): F[Unit] =
     // pre-population removed from internals of Casper
-    blockStorage.put(genesis.blockHash, genesis, Seq.empty) *>
+    blockStorage.put(genesis.blockHash, genesis, Seq.empty) >>
       dagStorage.getRepresentation.flatMap { dag =>
         ExecutionEngineServiceStub
           .validateBlockCheckpoint[F](
@@ -99,17 +94,22 @@ abstract class HashSetCasperTestNode[F[_]](
 
   /** Close and delete storage. */
   def tearDown(): F[Unit] =
-    tearDownNode().map { _ =>
-      blockStorageDir.recursivelyDelete()
-      dagStorageDir.recursivelyDelete()
-    }
+    for {
+      _ <- tearDownNode()
+      _ <- blockStorage.clear()
+      _ <- dagStorage.clear()
+      _ <- deployStorage.clear()
+    } yield ()
 
   /** Close storage. */
   def tearDownNode(): F[Unit] =
     for {
       _ <- blockStorage.close()
       _ <- dagStorage.close()
+      _ <- deployStorage.close()
     } yield ()
+
+  def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)
 }
 
 trait HashSetCasperTestNodeFactory {
@@ -125,10 +125,10 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit
-      errorHandler: ErrorHandler[F],
       concurrentF: Concurrent[F],
-      parF: Par[F],
-      timerF: Timer[F]
+      parF: Parallel[F],
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[TestNode[F]]
 
   def standaloneEff(
@@ -139,13 +139,13 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f
   )(
       implicit scheduler: Scheduler
-  ): TestNode[Effect] =
-    standaloneF[Effect](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
-      ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect]
-    ).value.unsafeRunSync.right.get
+  ): TestNode[Task] =
+    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+      Concurrent[Task],
+      Parallel[Task],
+      Timer[Task],
+      ContextShift[Task]
+    ).unsafeRunSync
 
   def networkF[F[_]](
       sks: IndexedSeq[PrivateKey],
@@ -155,10 +155,11 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold: Float = 0f,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
-      implicit errorHandler: ErrorHandler[F],
+      implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
-      timerF: Timer[F]
+      parF: Parallel[F],
+      timerF: Timer[F],
+      contextShift: ContextShift[F]
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
@@ -167,9 +168,9 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Float = 0f,
-      maybeMakeEE: Option[MakeExecutionEngineService[Effect]] = None
-  ): Effect[IndexedSeq[TestNode[Effect]]] =
-    networkF[Effect](
+      maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
+  ): Task[IndexedSeq[TestNode[Task]]] =
+    networkF[Task](
       sks,
       genesis,
       transforms,
@@ -177,90 +178,20 @@ trait HashSetCasperTestNodeFactory {
       faultToleranceThreshold,
       maybeMakeEE
     )(
-      ApplicativeError_[Effect, CommError],
-      Concurrent[Effect],
-      Par[Effect],
-      Timer[Effect]
+      Concurrent[Task],
+      Parallel[Task],
+      Timer[Task],
+      ContextShift[Task]
     )
 
-  protected def initStorage[F[_]: Concurrent: Log: Metrics](genesis: Block) = {
-    val dagStorageDir   = DagStorageTestFixture.dagStorageDir
-    val blockStorageDir = DagStorageTestFixture.blockStorageDir
-    val env             = Context.env(blockStorageDir, DagStorageTestFixture.mapSize)
-    for {
-      blockStorage <- FileLMDBIndexBlockStorage.create[F](env, blockStorageDir).map(_.right.get)
-      dagStorage <- FileDagStorage.createEmptyFromGenesis[F](
-                     FileDagStorage.Config(dagStorageDir),
-                     genesis
-                   )(Concurrent[F], Log[F], blockStorage, Metrics[F])
-    } yield (dagStorageDir, blockStorageDir, dagStorage, blockStorage)
-  }
+  protected def initStorage[F[_]: Concurrent: Log: Metrics: ContextShift: Time]()
+      : F[(BlockStorage[F], IndexedDagStorage[F], DeployStorage[F])] =
+    StorageFixture.createStorages[F]()
 }
 
 object HashSetCasperTestNode {
-  type Effect[A]                        = EitherT[Task, CommError, A]
   type Bonds                            = Map[Keys.PublicKey, Long]
   type MakeExecutionEngineService[F[_]] = Bonds => ExecutionEngineService[F]
-
-  val appErrId = new ApplicativeError[Id, CommError] {
-    def ap[A, B](ff: Id[A => B])(fa: Id[A]): Id[B] = Applicative[Id].ap[A, B](ff)(fa)
-    def pure[A](x: A): Id[A]                       = Applicative[Id].pure[A](x)
-    def raiseError[A](e: CommError): Id[A] = {
-      val errString = e match {
-        case UnknownCommError(msg)                => s"UnknownCommError($msg)"
-        case DatagramSizeError(size)              => s"DatagramSizeError($size)"
-        case DatagramFramingError(ex)             => s"DatagramFramingError($ex)"
-        case DatagramException(ex)                => s"DatagramException($ex)"
-        case HeaderNotAvailable                   => "HeaderNotAvailable"
-        case ProtocolException(th)                => s"ProtocolException($th)"
-        case UnknownProtocolError(msg)            => s"UnknownProtocolError($msg)"
-        case PublicKeyNotAvailable(node)          => s"PublicKeyNotAvailable($node)"
-        case ParseError(msg)                      => s"ParseError($msg)"
-        case EncryptionHandshakeIncorrectlySigned => "EncryptionHandshakeIncorrectlySigned"
-        case BootstrapNotProvided                 => "BootstrapNotProvided"
-        case PeerNodeNotFound(peer)               => s"PeerNodeNotFound($peer)"
-        case PeerUnavailable(peer)                => s"PeerUnavailable($peer)"
-        case MalformedMessage(pm)                 => s"MalformedMessage($pm)"
-        case CouldNotConnectToBootstrap           => "CouldNotConnectToBootstrap"
-        case InternalCommunicationError(msg)      => s"InternalCommunicationError($msg)"
-        case TimeOut                              => "TimeOut"
-        case _                                    => e.toString
-      }
-
-      throw new Exception(errString)
-    }
-
-    def handleErrorWith[A](fa: Id[A])(f: (CommError) => Id[A]): Id[A] = fa
-  }
-
-  implicit val syncEffectInstance = cats.effect.Sync.catsEitherTSync[Task, CommError]
-
-  implicit val parEffectInstance: Par[Effect] = Par.fromParallel(CatsParallelForEffect)
-
-  // We could try figuring this out for a type as follows:
-  // type EffectPar[A] = EitherT[Task.Par, CommError, A]
-  object CatsParallelForEffect extends Parallel[Effect, Task.Par] {
-    override def applicative: Applicative[Task.Par] = CatsParallelForTask.applicative
-    override def monad: Monad[Effect]               = Concurrent[Effect]
-
-    override val sequential: Task.Par ~> Effect = new (Task.Par ~> Effect) {
-      def apply[A](fa: Task.Par[A]): Effect[A] = {
-        val task = Task.Par.unwrap(fa)
-        EitherT.liftF(task)
-      }
-    }
-    override val parallel: Effect ~> Task.Par = new (Effect ~> Task.Par) {
-      def apply[A](fa: Effect[A]): Task.Par[A] = {
-        val task = fa.value.flatMap {
-          case Left(ce) => Task.raiseError(new RuntimeException(ce.toString))
-          case Right(a) => Task.pure(a)
-        }
-        Task.Par.apply(task)
-      }
-    }
-  }
-
-  val errorHandler = ApplicativeError_.applicativeError[Id, CommError](appErrId)
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
 
@@ -324,23 +255,33 @@ object HashSetCasperTestNode {
           .map(
             effect =>
               DeployResult(
-                ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+                ExecutionResult(
+                  ipc.DeployResult
+                    .ExecutionResult(Some(effect), None, Some(state.BigInt("10", bitWidth = 512)))
+                )
               )
           )
           .asRight[Throwable]
           .pure[F]
 
       override def runGenesis(
-          deploys: Seq[ipc.DeployItem],
-          protocolVersion: ProtocolVersion
+          genesisConfig: ipc.ChainSpec.GenesisConfig
       ): F[Either[Throwable, GenesisResult]] =
-        commit(emptyStateHash, Seq.empty).map {
+        commit(emptyStateHash, Seq.empty, genesisConfig.getProtocolVersion).map {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
+      override def upgrade(
+          prestate: ByteString,
+          upgrade: ipc.ChainSpec.UpgradePoint,
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, UpgradeResult]] =
+        UpgradeResult(prestate).withEffect(ExecutionEffect()).asRight[Throwable].pure[F]
+
       override def commit(
           prestate: ByteString,
-          effects: Seq[TransformEntry]
+          effects: Seq[TransformEntry],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
@@ -357,14 +298,12 @@ object HashSetCasperTestNode {
       override def query(
           state: ByteString,
           baseKey: Key,
-          path: Seq[String]
+          path: Seq[String],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Value]] =
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =
@@ -377,4 +316,8 @@ object HashSetCasperTestNode {
       // Tests are not signing the deploys.
       override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
     }
+
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
+    0L -> consensus.state.ProtocolVersion(1)
+  )
 }

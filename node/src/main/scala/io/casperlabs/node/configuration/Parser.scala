@@ -6,7 +6,6 @@ import scala.util.Try
 import cats._
 import cats.implicits._
 import cats.syntax._
-import io.casperlabs.comm.CommError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils._
 import eu.timepit.refined._
@@ -44,7 +43,21 @@ private[configuration] trait ParserImplicits {
       .leftMap(_.getMessage)
 
   implicit val peerNodeParser: Parser[Node] = s => {
-    Node.fromAddress(s).leftMap(CommError.errorMessage)
+    Node.fromAddress(s)
+  }
+
+  implicit val protocolVersionParser: Parser[ChainSpec.ProtocolVersion] = {
+    // Major and minor mandatory, patch optional.
+    val SemVer = """(\d+)\.(\d+)(?:\.(\d+))?""".r
+    s =>
+      s match {
+        case SemVer(major, minor, patch) =>
+          ChainSpec
+            .ProtocolVersion(major.toInt, minor.toInt, Option(patch).fold(0)(_.toInt))
+            .asRight
+        case _ =>
+          s"Unable to parse semver: $s".asLeft
+      }
   }
 
   implicit val positiveIntParser: Parser[Refined[Int, Positive]] =

@@ -1,5 +1,7 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
+use crate::contract_api::{self, Error as ApiError};
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
+use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use alloc::string::String;
@@ -18,6 +20,16 @@ pub struct TryFromIntError(());
 
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
+
+impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
+    fn unwrap_or_revert(self) -> T {
+        self.unwrap_or_else(|_| contract_api::revert(ApiError::Deserialize))
+    }
+
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
+        self.unwrap_or_else(|_| contract_api::revert(error.into()))
+    }
+}
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PurseId(URef);
@@ -313,6 +325,11 @@ impl PublicKey {
     pub fn value(self) -> [u8; KEY_SIZE] {
         self.0
     }
+
+    /// Converts the underlying public key to a `Vec`
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl From<[u8; KEY_SIZE]> for PublicKey {
@@ -558,7 +575,7 @@ impl AssociatedKeys {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: [u8; 32],
-    known_urefs: BTreeMap<String, Key>,
+    named_keys: BTreeMap<String, Key>,
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
@@ -568,7 +585,7 @@ pub struct Account {
 impl Account {
     pub fn new(
         public_key: [u8; 32],
-        known_urefs: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
@@ -576,7 +593,7 @@ impl Account {
     ) -> Self {
         Account {
             public_key,
-            known_urefs,
+            named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -586,7 +603,7 @@ impl Account {
 
     pub fn create(
         account_addr: [u8; 32],
-        known_urefs: BTreeMap<String, Key>,
+        named_keys: BTreeMap<String, Key>,
         purse_id: PurseId,
     ) -> Self {
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
@@ -595,7 +612,7 @@ impl Account {
             AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
         Account::new(
             account_addr,
-            known_urefs,
+            named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
@@ -603,16 +620,16 @@ impl Account {
         )
     }
 
-    pub fn insert_urefs(&mut self, keys: &mut BTreeMap<String, Key>) {
-        self.known_urefs.append(keys);
+    pub fn named_keys_append(&mut self, keys: &mut BTreeMap<String, Key>) {
+        self.named_keys.append(keys);
     }
 
-    pub fn urefs_lookup(&self) -> &BTreeMap<String, Key> {
-        &self.known_urefs
+    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+        &self.named_keys
     }
 
-    pub fn get_urefs_lookup_mut(&mut self) -> &mut BTreeMap<String, Key> {
-        &mut self.known_urefs
+    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+        &mut self.named_keys
     }
 
     pub fn pub_key(&self) -> [u8; 32] {
@@ -885,10 +902,10 @@ impl ToBytes for Account {
         let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
-        let known_urefs_size = UREF_SIZE * self.known_urefs.len() + U32_SIZE;
+        let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
         let purse_id_size = UREF_SIZE;
         let serialized_account_size = KEY_SIZE // pub key
-            + known_urefs_size
+            + named_keys_size
             + purse_id_size
             + associated_keys_size
             + action_thresholds_size
@@ -898,7 +915,7 @@ impl ToBytes for Account {
         }
         let mut result: Vec<u8> = Vec::with_capacity(serialized_account_size);
         result.extend(&self.public_key.to_bytes()?);
-        result.append(&mut self.known_urefs.to_bytes()?);
+        result.append(&mut self.named_keys.to_bytes()?);
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
@@ -910,7 +927,7 @@ impl ToBytes for Account {
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem): ([u8; 32], &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (known_urefs, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (named_keys, rem): (BTreeMap<String, Key>, &[u8]) = FromBytes::from_bytes(rem)?;
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
@@ -919,7 +936,7 @@ impl FromBytes for Account {
         Ok((
             Account {
                 public_key,
-                known_urefs,
+                named_keys,
                 purse_id,
                 associated_keys,
                 action_thresholds,
