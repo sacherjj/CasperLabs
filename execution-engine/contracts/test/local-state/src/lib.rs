@@ -6,7 +6,7 @@ extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::storage;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 pub const LOCAL_KEY: [u8; 32] = [66u8; 32];
@@ -17,22 +17,22 @@ pub fn delegate() {
     // Appends " Hello, world!" to a [66; 32] local key with spaces trimmed.
     // Two runs should yield value "Hello, world! Hello, world!"
     // read from local state
-    let mut res: String = contract_api::storage::read_local(LOCAL_KEY)
+    let mut res: String = storage::read_local(LOCAL_KEY)
         .unwrap_or_default()
         .unwrap_or_default();
 
     res.push_str(HELLO_PREFIX);
     // Write "Hello, "
-    contract_api::storage::write_local(LOCAL_KEY, res);
+    storage::write_local(LOCAL_KEY, res);
 
     // Read (this should exercise cache)
-    let mut res: String = contract_api::storage::read_local(LOCAL_KEY)
+    let mut res: String = storage::read_local(LOCAL_KEY)
         .unwrap_or_revert()
         .unwrap_or_revert();
     // Append
     res.push_str(WORLD_SUFFIX);
     // Write
-    contract_api::storage::write_local(LOCAL_KEY, res.trim().to_string());
+    storage::write_local(LOCAL_KEY, res.trim().to_string());
 }
 
 #[cfg(not(feature = "lib"))]

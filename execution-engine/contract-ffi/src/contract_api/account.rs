@@ -1,3 +1,5 @@
+use core::convert::{TryFrom, TryInto};
+
 use super::runtime::get_caller;
 use super::storage::read_untyped;
 use crate::contract_api::alloc_util::to_ptr;
@@ -9,7 +11,6 @@ use crate::value::account::{
     Weight,
 };
 use crate::value::Account;
-use core::convert::{TryFrom, TryInto};
 
 pub fn get_main_purse() -> PurseId {
     // TODO: this could be more efficient, bringing the entire account

@@ -1,12 +1,11 @@
 #![no_std]
 
 extern crate alloc;
-
 extern crate contract_ffi;
 
 use alloc::string::String;
 
-use contract_ffi::contract_api::{self, Error};
+use contract_ffi::contract_api::{account, runtime, system, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PurseId;
@@ -19,18 +18,17 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = contract_api::runtime::get_arg(Arg::Amount as u32)
+    let amount: U512 = runtime::get_arg(Arg::Amount as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let name: String = contract_api::runtime::get_arg(Arg::Name as u32)
+    let name: String = runtime::get_arg(Arg::Name as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let main_purse: PurseId = contract_api::account::get_main_purse();
-    let new_purse: PurseId = contract_api::system::create_purse();
+    let main_purse: PurseId = account::get_main_purse();
+    let new_purse: PurseId = system::create_purse();
 
-    contract_api::system::transfer_from_purse_to_purse(main_purse, new_purse, amount)
-        .unwrap_or_revert();
+    system::transfer_from_purse_to_purse(main_purse, new_purse, amount).unwrap_or_revert();
 
     let new_purse_key: Key = new_purse.value().into();
-    contract_api::runtime::put_key(&name, &new_purse_key);
+    runtime::put_key(&name, &new_purse_key);
 }

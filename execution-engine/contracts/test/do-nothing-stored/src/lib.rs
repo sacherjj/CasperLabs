@@ -1,14 +1,13 @@
 #![no_std]
 
 extern crate alloc;
-
 extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
 use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::{self, Error};
+use contract_ffi::contract_api::{runtime, storage, system, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
@@ -26,10 +25,8 @@ pub extern "C" fn delegate() {}
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_uref = match contract_api::system::get_mint() {
-        ContractPointer::Hash(_) => {
-            contract_api::runtime::revert(Error::User(CustomError::MintHash as u16))
-        }
+    let mint_uref = match system::get_mint() {
+        ContractPointer::Hash(_) => runtime::revert(Error::User(CustomError::MintHash as u16)),
         ContractPointer::URef(turef) => turef.into(),
     };
 
@@ -39,10 +36,10 @@ pub extern "C" fn call() {
         tmp
     };
 
-    let key = contract_api::storage::store_function(ENTRY_FUNCTION_NAME, named_keys)
+    let key = storage::store_function(ENTRY_FUNCTION_NAME, named_keys)
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
-    contract_api::runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, &key);
 }

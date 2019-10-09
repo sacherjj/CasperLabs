@@ -1,7 +1,6 @@
 #![no_std]
 
 extern crate alloc;
-
 extern crate contract_ffi;
 
 use alloc::string::String;
@@ -9,7 +8,7 @@ use alloc::vec::Vec;
 use core::convert::From;
 
 use contract_ffi::contract_api::pointers::{ContractPointer, TURef};
-use contract_ffi::contract_api::{self, Error as ApiError};
+use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
@@ -33,44 +32,43 @@ impl From<Error> for ApiError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mailing_uref =
-        contract_api::runtime::get_key("mailing").unwrap_or_revert_with(Error::GetMailingURef);
+    let mailing_uref = runtime::get_key("mailing").unwrap_or_revert_with(Error::GetMailingURef);
     let pointer = if let Key::Hash(hash) = mailing_uref {
         ContractPointer::Hash(hash)
     } else {
-        contract_api::runtime::revert(Error::WrongURefType); // exit code is currently arbitrary
+        runtime::revert(Error::WrongURefType); // exit code is currently arbitrary
     };
 
     let method = "sub";
     let name = "CasperLabs";
     let args = (method, name);
-    match contract_api::runtime::call_contract(pointer.clone(), &args, &Vec::new()) {
+    match runtime::call_contract(pointer.clone(), &args, &Vec::new()) {
         Some(sub_key) => {
             let key_name = "mail_feed";
-            contract_api::runtime::put_key(key_name, &sub_key);
+            runtime::put_key(key_name, &sub_key);
 
-            let key_name_uref = contract_api::runtime::get_key(key_name)
-                .unwrap_or_revert_with(Error::GetKeyNameURef);
+            let key_name_uref =
+                runtime::get_key(key_name).unwrap_or_revert_with(Error::GetKeyNameURef);
             if sub_key != key_name_uref {
-                contract_api::runtime::revert(Error::BadSubKey);
+                runtime::revert(Error::BadSubKey);
             }
 
             let method = "pub";
             let message = "Hello, World!";
             let args = (method, message);
-            contract_api::runtime::call_contract::<_, ()>(pointer, &args, &Vec::new());
+            runtime::call_contract::<_, ()>(pointer, &args, &Vec::new());
 
             let turef: TURef<Vec<String>> = sub_key.to_turef().unwrap();
-            let messages = contract_api::storage::read(turef)
+            let messages = storage::read(turef)
                 .unwrap_or_revert_with(Error::GetMessagesURef)
                 .unwrap_or_revert_with(Error::FindMessagesURef);
 
             if messages.is_empty() {
-                contract_api::runtime::revert(Error::NoMessages);
+                runtime::revert(Error::NoMessages);
             }
         }
         None => {
-            contract_api::runtime::revert(Error::NoSubKey);
+            runtime::revert(Error::NoSubKey);
         }
     }
 }

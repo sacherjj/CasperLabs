@@ -1,5 +1,6 @@
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::contract_api::{self, Error as ApiError};
+use crate::contract_api::runtime;
+use crate::contract_api::Error as ApiError;
 use crate::key::{addr_to_hex, Key, UREF_SIZE};
 use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
@@ -23,11 +24,11 @@ pub struct TryFromSliceForPublicKeyError(());
 
 impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
     fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|_| contract_api::runtime::revert(ApiError::Deserialize))
+        self.unwrap_or_else(|_| runtime::revert(ApiError::Deserialize))
     }
 
     fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
-        self.unwrap_or_else(|_| contract_api::runtime::revert(error.into()))
+        self.unwrap_or_else(|_| runtime::revert(error.into()))
     }
 }
 

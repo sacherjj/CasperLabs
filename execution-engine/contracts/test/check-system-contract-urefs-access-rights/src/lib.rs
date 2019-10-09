@@ -2,14 +2,14 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::runtime;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 
 #[allow(clippy::redundant_closure)]
 #[no_mangle]
 pub extern "C" fn call() {
-    let named_keys = contract_api::runtime::list_named_keys();
+    let named_keys = runtime::list_named_keys();
     let mut access_rights_iter = named_keys
         .values()
         .filter_map(Key::as_uref)
