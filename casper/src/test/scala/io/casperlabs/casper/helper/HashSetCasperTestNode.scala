@@ -277,9 +277,7 @@ object HashSetCasperTestNode {
           upgrade: ipc.ChainSpec.UpgradePoint,
           protocolVersion: ProtocolVersion
       ): F[Either[Throwable, UpgradeResult]] =
-        commit(emptyStateHash, Seq.empty, protocolVersion).map {
-          _.map(cr => UpgradeResult(cr.postStateHash).withEffect(ExecutionEffect()))
-        }
+        UpgradeResult(prestate).withEffect(ExecutionEffect()).asRight[Throwable].pure[F]
 
       override def commit(
           prestate: ByteString,
