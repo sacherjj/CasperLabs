@@ -2,6 +2,7 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import cats.Applicative
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString

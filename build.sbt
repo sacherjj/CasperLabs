@@ -13,17 +13,16 @@ Global / dependencyOverrides := Dependencies.overrides
 val protobufDirectory = file("protobuf")
 // Protos can import any other using the full path within `protobuf`. This filter reduces the list
 // for which we actually generate .scala source, so we don't get duplicates between projects.
-def protobufPathFilter(paths: String*) = {
-  (f: File) =>
-    f.getName.endsWith(".proto") && // Not directories or other artifacts.
-      paths.map(protobufDirectory.toPath.resolve).exists { path =>
-        f.toPath == path || f.toPath.startsWith(path)
-      }
+def protobufPathFilter(paths: String*) = { (f: File) =>
+  f.getName.endsWith(".proto") && // Not directories or other artifacts.
+  paths.map(protobufDirectory.toPath.resolve).exists { path =>
+    f.toPath == path || f.toPath.startsWith(path)
+  }
 }
 
 lazy val projectSettings = Seq(
   organization := "io.casperlabs",
-  scalaVersion := "2.12.9",
+  scalaVersion := "2.12.10",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -85,11 +84,12 @@ lazy val shared = (project in file("shared"))
       sqlLite,
       fs2,
       catsCore,
-      catsPar,
       catsEffect,
       catsEffectLaws,
       catsMtl,
-      meowMtl,
+      meowMtlCore,
+      meowMtlEffects,
+      meowMtlMonix,
       lz4,
       monix,
       scodecCore,
@@ -138,6 +138,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      upperbound,
       grpcNetty,
       nettyBoringSsl,
       scalapbRuntimegGrpc,
@@ -214,7 +215,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.7.1"
+val nodeAndClientVersion = "0.8.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)

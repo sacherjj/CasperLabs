@@ -37,17 +37,21 @@ name: build-bors-merge
 
 steps:
 # Below is for pull_request webhooks only
-# - name: markdown-link-check
-#   commands:
-#   - "ci/markdown-link-check.sh"
-#   image: "casperlabs/buildenv:latest"
-#   when:
-#     event:
-#     - pull_request
-#    changeset:
-#      includes:
-#      - "**/.drone.yml"
-#      - "**/**.md"
+
+#NOTE: allowing failures here since we've seen site temporarily go down and cause
+# our pipeline to fail.
+- name: markdown-link-check
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  failure: "ignore"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.md"
 
 - name: sbt-compile-test-pr
   commands:
@@ -165,18 +169,22 @@ steps:
       - "integration-testing/**"
 
 # This section is for bors' branches only
-# - name: markdown-link-check-bors
-#   commands:
-#   - "ci/markdown-link-check.sh"
-#   image: "casperlabs/buildenv:latest"
-#   when:
-#     branch:
-#     - staging
-#     - trying
-#    changeset:
-#      includes:
-#      - "**/.drone.yml"
-#      - "**/**.md"
+
+#NOTE: allowing failures here since we've seen site temporarily go down and cause
+# our pipeline to fail.
+- name: markdown-link-check-bors
+  commands:
+  - "ci/markdown-link-check.sh"
+  image: "casperlabs/buildenv:latest"
+  failure: "ignore"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.md"
 
 - name: sbt-test-docker-bors
   commands:
@@ -326,7 +334,7 @@ steps:
 - name: docker-build-ee-int-bors
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "./integration-testing/contracts/build_contracts.sh"
+  - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine"
   - "make docker-build/integration-testing"
   environment:
@@ -415,7 +423,7 @@ steps:
 - name: run-integration-tests
   commands:
   - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
+  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh"
   environment:
@@ -539,7 +547,7 @@ steps:
 
 - name: package-sbt-artifacts-merge
   commands:
-  - "make build-client-contracts"
+  - "make build-client-contracts build-node-contracts"
   - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
   - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
@@ -792,7 +800,7 @@ name: on-tag
 steps:
 - name: package-sbt-artifacts-tag
   commands:
-  - "make build-client-contracts"
+  - "make build-client-contracts build-node-contracts"
   - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
   - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"

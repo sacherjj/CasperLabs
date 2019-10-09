@@ -112,9 +112,15 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         })
         .void
 
+    val writeToDeployHeadersTable = Update[(ByteString, ByteString, Long, ByteString)](
+      "INSERT OR IGNORE INTO deploy_headers (hash, account, timestamp_millis, header) VALUES (?, ?, ?, ?)"
+    ).updateMany(deploys.map { d =>
+      (d.deployHash, d.getHeader.accountPublicKey, d.getHeader.timestamp, d.getHeader.toByteString)
+    })
+
     for {
       t <- Time[F].currentMillis
-      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
+      _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t) >> writeToDeployHeadersTable)
             .transact(xa)
       _ <- updateMetrics()
     } yield ()
@@ -206,6 +212,30 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def readProcessed: F[List[Deploy]] =
     readByStatus(ProcessedStatusCode)
 
+  override def readPendingHeaders: F[List[Deploy.Header]] =
+    readHeadersByStatus(PendingStatusCode)
+
+  override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+    readHashesAndHeadersByStatus(PendingStatusCode)
+
+  private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
+    sql"""|SELECT header FROM deploy_headers
+          |INNER JOIN buffered_deploys bd on deploy_headers.hash = bd.hash
+          |WHERE bd.status=$status""".stripMargin
+      .query[Deploy.Header]
+      .to[List]
+      .transact(xa)
+
+  private def readHashesAndHeadersByStatus(
+      status: Int
+  ): fs2.Stream[F, (ByteString, Deploy.Header)] =
+    sql"""|SELECT dh.hash, dh.header FROM deploy_headers dh
+          |INNER JOIN buffered_deploys bd on dh.hash = bd.hash
+          |WHERE bd.status=$status""".stripMargin
+      .query[(ByteString, Deploy.Header)]
+      .streamWithChunkSize(chunkSize)
+      .transact(xa)
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     sql"""|SELECT data FROM deploys
           |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
@@ -257,7 +287,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
     NonEmptyList
       .fromList[ByteString](l.toList)
-      .fold(fs2.Stream.fromIterator[F, Deploy](List.empty[Deploy].toIterator))(nel => {
+      .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
         q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
       })

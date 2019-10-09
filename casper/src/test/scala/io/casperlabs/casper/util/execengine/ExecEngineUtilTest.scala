@@ -130,9 +130,11 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
-                          deploy.map(_.deployHash).toSet,
+                          fs2.Stream.fromIterator[Task](deploy.toIterator),
                           blocktime,
-                          protocolVersion
+                          protocolVersion,
+                          rank = 0,
+                          upgrades = Nil
                         )
       DeploysCheckpoint(_, _, _, result, _) = computeResult
     } yield result
@@ -171,15 +173,16 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, _) => new Throwable("failed when run upgrade").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => ().asRight[String].pure[Task]
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task]
         )
 
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, _) => new Throwable("failed when run upgrade").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.DeployItem) = {
@@ -196,15 +199,18 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                   d =>
                     DeployResult(
                       DeployResult.Value.ExecutionResult(
-                        DeployResult.ExecutionResult(Some(getExecutionEffect(d)), None, 10)
+                        DeployResult.ExecutionResult(
+                          Some(getExecutionEffect(d)),
+                          None,
+                          Some(state.BigInt("10", bitWidth = 512))
+                        )
                       )
                     )
                 )
                 .asRight[Throwable]
             },
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
-          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task],
-          _ => ().asRight[String].pure[Task]
+          (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task]
         )
 
       val genesisDeploysWithCost = prepareDeploys(Vector.empty, 1L)

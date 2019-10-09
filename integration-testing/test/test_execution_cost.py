@@ -108,7 +108,7 @@ def test_error_in_payment_contract(payment_node_network):
 
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract=Contract.ERR_STANDARD_PAYMENT,
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
@@ -145,7 +145,7 @@ def test_error_in_session_contract(payment_node_network):
     )
     deploy = node0.d_client.show_deploys(block_hash)[0]
     assert deploy.is_error is True
-    assert deploy.error_message == "Exit code: 1"
+    assert deploy.error_message == "Exit code: 65537"
     cost_of_execution = deploy.cost
     assert cost_of_execution > 0
     genesis_balance_after_transfer = node0.d_client.get_balance(
@@ -272,7 +272,7 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
     )
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract=Contract.STANDARD_PAYMENT,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,

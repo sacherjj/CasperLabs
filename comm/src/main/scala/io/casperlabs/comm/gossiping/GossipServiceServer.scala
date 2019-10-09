@@ -1,29 +1,29 @@
 package io.casperlabs.comm.gossiping
 
-import cats._
+import cats.Parallel
 import cats.effect._
 import cats.effect.concurrent._
 import cats.effect.implicits._
 import cats.implicits._
-import cats.temp.par._
 import com.google.protobuf.ByteString
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.NotFound
+import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated}
+import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Utils._
-import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.{Compression, Log}
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
 import scala.util.control.NonFatal
-import scala.xml.PrettyPrinter
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
-class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
+class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     backend: GossipServiceServer.Backend[F],
     synchronizer: Synchronizer[F],
     downloadManager: DownloadManager[F],
@@ -33,6 +33,7 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
+  //TODO: Rate limit here as well?
   override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
     // Collect the blocks which we don't have yet;
     // reply about those that we are going to download and relay them,
@@ -200,23 +201,24 @@ class GossipServiceServer[F[_]: Concurrent: Par: Log: Metrics](
       .flatMap(Iterant.fromIterable(_))
 
   override def getBlockChunked(request: GetBlockChunkedRequest): Iterant[F, Chunk] =
-    Iterant.resource(blockDownloadSemaphore.acquire)(_ => blockDownloadSemaphore.release) flatMap {
-      _ =>
-        Iterant.liftF {
-          backend.getBlock(request.blockHash)
-        } flatMap {
-          case Some(block) =>
-            val it = chunkIt(
-              block.toByteArray,
-              effectiveChunkSize(request.chunkSize),
-              request.acceptedCompressionAlgorithms
-            )
+    Iterant.resource(blockDownloadSemaphore.acquire)(
+      _ => blockDownloadSemaphore.release
+    ) flatMap { _ =>
+      Iterant.liftF {
+        backend.getBlock(request.blockHash)
+      } flatMap {
+        case Some(block) =>
+          val it = chunkIt(
+            block.toByteArray,
+            effectiveChunkSize(request.chunkSize),
+            request.acceptedCompressionAlgorithms
+          )
 
-            Iterant.fromIterator(it)
+          Iterant.fromIterator(it)
 
-          case None =>
-            Iterant.raiseError(NotFound.block(request.blockHash))
-        }
+        case None =>
+          Iterant.raiseError(NotFound.block(request.blockHash))
+      }
     }
 
   override def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate] =
@@ -278,7 +280,7 @@ object GossipServiceServer {
     def listTips: F[Seq[BlockSummary]]
   }
 
-  def apply[F[_]: Concurrent: Par: Log: Metrics](
+  def apply[F[_]: Concurrent: Parallel: Log: Metrics](
       backend: GossipServiceServer.Backend[F],
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -286,14 +288,14 @@ object GossipServiceServer {
       maxChunkSize: Int,
       maxParallelBlockDownloads: Int
   ): F[GossipServiceServer[F]] =
-    Semaphore[F](maxParallelBlockDownloads.toLong) map { blockDownloadSemaphore =>
-      new GossipServiceServer(
-        backend,
-        synchronizer,
-        downloadManager,
-        genesisApprover,
-        maxChunkSize,
-        blockDownloadSemaphore
-      )
-    }
+    for {
+      blockDownloadSemaphore <- Semaphore[F](maxParallelBlockDownloads.toLong)
+    } yield new GossipServiceServer(
+      backend,
+      synchronizer,
+      downloadManager,
+      genesisApprover,
+      maxChunkSize,
+      blockDownloadSemaphore
+    )
 }

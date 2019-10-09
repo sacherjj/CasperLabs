@@ -1,8 +1,8 @@
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::DEFAULT_GENESIS_CONFIG;
 use engine_core::engine_state::error;
 
-use crate::support::test_support::{InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME};
-use crate::test::DEFAULT_GENESIS_CONFIG;
-
+const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
 const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];
 
 #[ignore]
@@ -10,14 +10,13 @@ const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];
 fn should_run_ee_532_get_uref_regression_test() {
     // This test runs a contract that's after every call extends the same key with
     // more data
+
+    let exec_request =
+        ExecuteRequestBuilder::standard(UNKNOWN_ADDR, CONTRACT_EE_532_REGRESSION, ()).build();
+
     let result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(
-            UNKNOWN_ADDR,
-            "ee_532_regression.wasm",
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request)
         .commit()
         .finish();
 

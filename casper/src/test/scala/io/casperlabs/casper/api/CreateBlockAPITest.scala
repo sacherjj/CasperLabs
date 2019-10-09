@@ -58,7 +58,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     ).map { deploy =>
       ProtoUtil
         .basicDeploy(
-          System.currentTimeMillis(),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           ByteString.copyFromUtf8(deploy)
         )
     }

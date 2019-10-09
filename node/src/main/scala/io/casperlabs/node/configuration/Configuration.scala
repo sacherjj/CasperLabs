@@ -84,7 +84,10 @@ object Configuration extends ParserImplicits {
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
-      cleanBlockStorage: Boolean
+      cleanBlockStorage: Boolean,
+      blockUploadRateMaxRequests: Int Refined NonNegative,
+      blockUploadRatePeriod: FiniteDuration,
+      blockUploadRateMaxThrottled: Int Refined NonNegative
   ) extends SubConfig
 
   case class BlockStorage(

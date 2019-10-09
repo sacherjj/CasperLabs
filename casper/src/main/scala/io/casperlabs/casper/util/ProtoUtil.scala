@@ -6,6 +6,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
@@ -388,7 +389,7 @@ object ProtoUtil {
       postStateHash: ByteString,
       bonds: Seq[Bond],
       chainId: String,
-      protocolVersion: Long,
+      protocolVersion: ProtocolVersion,
       now: Long
   ): Block = {
     val header = Block
@@ -437,7 +438,7 @@ object ProtoUtil {
       justifications = justifications,
       state = postState,
       rank = rank,
-      protocolVersion = protocolVersion.value,
+      protocolVersion = protocolVersion,
       timestamp = now,
       chainId = chainId,
       creator = publicKey,
@@ -481,7 +482,7 @@ object ProtoUtil {
       justifications = justifications,
       state = postState,
       rank = rank,
-      protocolVersion = protocolVersion.value,
+      protocolVersion = protocolVersion,
       timestamp = now,
       chainId = chainId,
       creator = publicKey,
@@ -505,7 +506,7 @@ object ProtoUtil {
       state: Block.GlobalState,
       rank: Long,
       validatorSeqNum: Int,
-      protocolVersion: Long,
+      protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainId: String
   ): Block.Header =
@@ -563,7 +564,10 @@ object ProtoUtil {
 
   def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
     Time[F].currentMillis.map { now =>
-      basicDeploy(now, ByteString.EMPTY)
+      // The timestamp needs to be earlier than the time the node
+      // thinks it is; in the tests we use "logical time", so 0
+      // is the only safe value.
+      basicDeploy(0, ByteString.copyFromUtf8(now.toString))
     }
 
   // This is only used for tests.

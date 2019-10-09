@@ -2,10 +2,13 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
+
 use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{self, Error};
 use contract_ffi::key::Key;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
@@ -31,11 +34,9 @@ fn unbond(pos: ContractPointer, amount: Option<U512>) {
 #[no_mangle]
 pub extern "C" fn call() {
     let pos_pointer = contract_api::get_pos();
-    let amount: U512 = match contract_api::get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
-    };
+    let amount: U512 = contract_api::get_arg(0)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
     bond(pos_pointer.clone(), amount, contract_api::main_purse());
     unbond(pos_pointer, Some(amount + 1));
 }

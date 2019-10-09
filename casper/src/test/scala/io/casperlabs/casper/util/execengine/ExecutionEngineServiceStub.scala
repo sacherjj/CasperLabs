@@ -52,11 +52,12 @@ object ExecutionEngineServiceStub {
     }
     implicit val validation = new ValidationImpl[F]
     (for {
-      parents      <- ProtoUtil.unsafeGetParents[F](b)
-      merged       <- ExecutionEngineServiceStub.merge[F](parents, dag)
-      preStateHash <- ExecEngineUtil.computePrestate[F](merged)
-      effects      <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
-      _            <- Validation[F].transactions(b, preStateHash, effects)
+      parents <- ProtoUtil.unsafeGetParents[F](b)
+      merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
+      preStateHash <- ExecEngineUtil
+                       .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
+      effects <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)
+      _       <- Validation[F].transactions(b, preStateHash, effects)
     } yield ProtoUtil.postStateHash(b)).attempt
   }
 
@@ -64,6 +65,11 @@ object ExecutionEngineServiceStub {
       runGenesisWithChainSpecFunc: (
           ChainSpec.GenesisConfig
       ) => F[Either[Throwable, GenesisResult]],
+      upgradeFunc: (
+          ByteString,
+          ChainSpec.UpgradePoint,
+          ProtocolVersion
+      ) => F[Either[Throwable, UpgradeResult]],
       execFunc: (
           ByteString,
           Long,
@@ -74,14 +80,21 @@ object ExecutionEngineServiceStub {
           ByteString,
           Seq[TransformEntry]
       ) => F[Either[Throwable, ExecutionEngineService.CommitResult]],
-      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]],
-      verifyWasmFunc: ValidateRequest => F[Either[String, Unit]]
+      queryFunc: (ByteString, Key, Seq[String]) => F[Either[Throwable, Value]]
   ): ExecutionEngineService[F] = new ExecutionEngineService[F] {
     override def emptyStateHash: ByteString = ByteString.EMPTY
     override def runGenesis(
         genesisConfig: ChainSpec.GenesisConfig
     ): F[Either[Throwable, GenesisResult]] =
       runGenesisWithChainSpecFunc(genesisConfig)
+
+    override def upgrade(
+        prestate: ByteString,
+        upgrade: ChainSpec.UpgradePoint,
+        protocolVersion: ProtocolVersion
+    ): F[Either[Throwable, UpgradeResult]] =
+      upgradeFunc(prestate, upgrade, protocolVersion)
+
     override def exec(
         prestate: ByteString,
         blocktime: Long,
@@ -91,21 +104,22 @@ object ExecutionEngineServiceStub {
       execFunc(prestate, blocktime, deploys, protocolVersion)
     override def commit(
         prestate: ByteString,
-        effects: Seq[TransformEntry]
+        effects: Seq[TransformEntry],
+        protocolVersion: ProtocolVersion
     ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = commitFunc(prestate, effects)
 
     override def query(
         state: ByteString,
         baseKey: Key,
-        path: Seq[String]
+        path: Seq[String],
+        protocolVersion: ProtocolVersion
     ): F[Either[Throwable, Value]] = queryFunc(state, baseKey, path)
-    override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-      verifyWasmFunc(contracts)
   }
 
   def noOpApi[F[_]: Applicative](): ExecutionEngineService[F] =
     mock[F](
       (_) => GenesisResult().asRight[Throwable].pure[F],
+      (_, _, _) => UpgradeResult().asRight[Throwable].pure[F],
       (_, _, _, _) => Seq.empty[DeployResult].asRight[Throwable].pure[F],
       (_, _) =>
         ExecutionEngineService
@@ -114,8 +128,7 @@ object ExecutionEngineServiceStub {
           .pure[F],
       (_, _, _) =>
         Applicative[F]
-          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented"))),
-      _ => ().asRight[String].pure[F]
+          .pure[Either[Throwable, Value]](Left(new SmartContractEngineError("unimplemented")))
     )
 
 }

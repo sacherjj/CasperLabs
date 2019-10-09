@@ -3,8 +3,6 @@ import re
 import time
 from casperlabs_local_net.errors import NonZeroExitCodeError
 from typing import List
-
-import pytest
 import typing_extensions
 
 from casperlabs_local_net.client_parser import parse_show_blocks
@@ -361,7 +359,7 @@ def wait_on_using_wall_clock_time(
         time.sleep(iteration_duration)
         elapsed = elapsed + iteration_duration
 
-    pytest.fail("Failed to satisfy {} after {}s".format(predicate, elapsed))
+    raise Exception("Failed to satisfy {} after {}s".format(predicate, elapsed))
 
 
 def wait_for_block_contains(
@@ -490,7 +488,7 @@ def wait_using_wall_clock_time_or_fail(
             wait_using_wall_clock_time(predicate, timeout)
             return
         except WaitTimeoutError:
-            pytest.fail("Failed to satisfy {} after {}s".format(predicate, timeout))
+            raise Exception("Failed to satisfy {} after {}s".format(predicate, timeout))
         except NonZeroExitCodeError:
             logging.info("not ready")
 

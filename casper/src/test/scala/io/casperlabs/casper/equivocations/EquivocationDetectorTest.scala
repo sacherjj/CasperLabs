@@ -438,7 +438,6 @@ class EquivocationDetectorTest
               rankOfLowestBaseBlockExpect = None,
               visibleEquivocatorExpected = Set.empty
             )
-        _ <- Task.delay(println("Dupa1"))
 
         c <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(b.blockHash),
@@ -447,7 +446,7 @@ class EquivocationDetectorTest
               rankOfLowestBaseBlockExpect = 0L.some,
               visibleEquivocatorExpected = Set(v1)
             )
-        _ <- Task.delay(println("Dupa2"))
+
         // this block isn't shown in the diagram
         _ <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(c.blockHash),

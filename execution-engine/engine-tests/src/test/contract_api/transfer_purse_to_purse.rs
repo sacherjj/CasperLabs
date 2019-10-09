@@ -1,13 +1,14 @@
+use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;
 use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::MAX_PAYMENT;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, GENESIS_INITIAL_BALANCE, STANDARD_PAYMENT_CONTRACT,
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{
+    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
+const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse.wasm";
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
 
 #[ignore]
@@ -16,17 +17,16 @@ fn should_run_purse_to_purse_transfer() {
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
 
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_PURSE,
+        (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
+    )
+    .build();
+
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_purse.wasm",
-            (source, target, U512::from(PURSE_TO_PURSE_AMOUNT)),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
@@ -48,7 +48,10 @@ fn should_run_purse_to_purse_transfer() {
         panic!("Purse transfer result is expected to contain Write with String value");
     };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(purse_transfer_result, "TransferSuccessful");
+    assert_eq!(
+        purse_transfer_result,
+        &format!("{:?}", Result::<(), Error>::Ok(()),)
+    );
 
     let main_purse_balance =
         &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
@@ -97,10 +100,10 @@ fn should_run_purse_to_purse_transfer() {
     };
 
     // Final balance of the destination purse
-    assert_eq!(purse_secondary_balance, &U512::from(PURSE_TO_PURSE_AMOUNT));
+    assert_eq!(*purse_secondary_balance, U512::from(PURSE_TO_PURSE_AMOUNT));
     assert_eq!(
-        main_purse_balance,
-        &U512::from(GENESIS_INITIAL_BALANCE - MAX_PAYMENT - PURSE_TO_PURSE_AMOUNT)
+        *main_purse_balance,
+        U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - *DEFAULT_PAYMENT - PURSE_TO_PURSE_AMOUNT
     );
 }
 
@@ -111,23 +114,15 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // more data
     let source = "purse:main".to_string();
     let target = "purse:secondary".to_string();
-
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_PURSE,
+        (source, target, U512::from(999_999_999_999i64)),
+    )
+    .build();
     let transfer_result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_purse.wasm",
-            (
-                source,
-                target,
-                // amount
-                U512::from(999_999_999_999i64),
-            ),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .expect_success()
         .commit()
         .finish();
@@ -149,7 +144,10 @@ fn should_run_purse_to_purse_transfer_with_error() {
         panic!("Purse transfer result is expected to contain Write with String value");
     };
     // Main assertion for the result of `transfer_from_purse_to_purse`
-    assert_eq!(purse_transfer_result, "TransferError");
+    assert_eq!(
+        purse_transfer_result,
+        &format!("{:?}", Result::<(), Error>::Err(Error::Transfer)),
+    );
 
     // Obtain main purse's balance
     let main_purse_balance =
@@ -203,7 +201,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     // as new.
     assert_eq!(purse_secondary_balance, &U512::from(0));
     assert_eq!(
-        main_purse_balance,
-        &U512::from(100_000_000_000u64 - MAX_PAYMENT)
+        *main_purse_balance,
+        U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - *DEFAULT_PAYMENT
     );
 }

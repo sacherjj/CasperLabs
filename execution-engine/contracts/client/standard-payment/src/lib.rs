@@ -2,9 +2,11 @@
 
 #[macro_use]
 extern crate alloc;
+
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error, PurseTransferResult};
+use contract_ffi::contract_api::{self, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
@@ -16,11 +18,9 @@ enum Arg {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
-    };
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
 
     let main_purse: PurseId = contract_api::main_purse();
 
@@ -29,9 +29,6 @@ pub extern "C" fn call() {
     let payment_purse: PurseId =
         contract_api::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
-    if let PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
-    {
-        contract_api::revert(Error::Transfer.into());
-    }
+    contract_api::transfer_from_purse_to_purse(main_purse, payment_purse, amount)
+        .unwrap_or_revert();
 }

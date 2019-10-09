@@ -88,9 +88,11 @@ object BlockGenerator {
       _ <- DeployStorage[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
-                 deploys.map(_.deployHash).toSet,
+                 fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
-                 ProtocolVersion(1)
+                 ProtocolVersion(1),
+                 rank = 0,
+                 upgrades = Nil
                )
     } yield result
 
@@ -153,9 +155,9 @@ trait BlockGenerator {
           postState,
           rank,
           validatorSeqNum,
-          protocolVersion = 1,
-          now,
-          chainId
+          protocolVersion = ProtocolVersion(1),
+          timestamp = now,
+          chainId = chainId
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)

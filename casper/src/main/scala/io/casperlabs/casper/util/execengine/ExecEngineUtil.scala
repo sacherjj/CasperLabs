@@ -41,20 +41,23 @@ object ExecEngineUtil {
 
   def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
       merged: MergeResult[TransformMap, Block],
-      hashes: Set[DeployHash],
+      deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
-      protocolVersion: state.ProtocolVersion
+      protocolVersion: state.ProtocolVersion,
+      rank: Long,
+      upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] =
     for {
-      preStateHash <- computePrestate[F](merged)
-      deployStream = DeployStorage[F].getByHashes(hashes)
+      preStateHash <- computePrestate[F](merged, rank, upgrades)
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )
       (invalidDeploys, deployEffects) = ProcessedDeployResult.split(pdr)
       _                               <- handleInvalidDeploys[F](invalidDeploys)
       (deploysForBlock, transforms)   = ExecEngineUtil.unzipEffectsAndDeploys(deployEffects).unzip
-      commitResult                    <- ExecutionEngineService[F].commit(preStateHash, transforms.flatten).rethrow
+      commitResult <- ExecutionEngineService[F]
+                       .commit(preStateHash, transforms.flatten, protocolVersion)
+                       .rethrow
       //TODO: Remove this logging at some point
       msgBody = transforms.flatten
         .map(t => {
@@ -216,19 +219,51 @@ object ExecEngineUtil {
     }
   }
 
+  /** Compute the post state hash of the merged state, which is to be the pre-state
+    * of the block we are creating or validating, by committing all the changes of
+    * the secondary parents they made on top of the main parent. Then apply any
+    * upgrades which were activated at the point we are building the next block on.
+    */
   def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
-      merged: MergeResult[TransformMap, Block]
-  ): F[StateHash] = merged match {
-    case MergeResult.EmptyMerge => ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
-    case MergeResult.Result(soleParent, _, others) if others.isEmpty =>
-      ProtoUtil.postStateHash(soleParent).pure[F] //single parent
-    case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
-      val prestate = ProtoUtil.postStateHash(initParent)
-      MonadError[F, Throwable]
-        .rethrow(
-          ExecutionEngineService[F].commit(prestate, nonFirstParentsCombinedEffect)
-        )
-        .map(_.postStateHash)
+      merged: MergeResult[TransformMap, Block],
+      rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
+      upgrades: Seq[ChainSpec.UpgradePoint]
+  ): F[StateHash] = {
+    val mergedStateHash: F[StateHash] = merged match {
+      case MergeResult.EmptyMerge =>
+        ExecutionEngineService[F].emptyStateHash.pure[F] //no parents
+
+      case MergeResult.Result(soleParent, _, others) if others.isEmpty =>
+        ProtoUtil.postStateHash(soleParent).pure[F] //single parent
+
+      case MergeResult.Result(initParent, nonFirstParentsCombinedEffect, _) => //multiple parents
+        val prestate        = ProtoUtil.postStateHash(initParent)
+        val protocolVersion = initParent.getHeader.getProtocolVersion
+        ExecutionEngineService[F]
+          .commit(prestate, nonFirstParentsCombinedEffect, protocolVersion)
+          .rethrow
+          .map(_.postStateHash)
+    }
+
+    mergedStateHash.flatMap { postStateHash =>
+      if (merged.parents.nonEmpty) {
+        val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
+        val maxRank         = merged.parents.map(_.getHeader.rank).max
+        val activatedUpgrades = upgrades.filter { u =>
+          maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank
+        }
+        activatedUpgrades.toList.foldLeftM(postStateHash) {
+          case (postStateHash, upgrade) =>
+            ExecutionEngineService[F]
+              .upgrade(postStateHash, upgrade, protocolVersion)
+              .rethrow
+              .map(_.postStateHash)
+          // NOTE: We are dropping the effects here, so they won't be part of the block.
+        }
+      } else {
+        postStateHash.pure[F]
+      }
+    }
   }
 
   type TransformMap = Seq[TransformEntry]

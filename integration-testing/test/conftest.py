@@ -17,6 +17,7 @@ from casperlabs_local_net.casperlabs_network import (
     EncryptedTwoNodeNetwork,
     ReadOnlyNodeNetwork,
     InterceptedTwoNodeNetwork,
+    TwoNodeWithDifferentAccountsCSVNetwork,
 )
 from docker.client import DockerClient
 
@@ -90,6 +91,13 @@ def encrypted_one_node_network(docker_client_fixture):
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def two_node_with_different_accounts_csv_network(docker_client_fixture):
+    with TwoNodeWithDifferentAccountsCSVNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
 

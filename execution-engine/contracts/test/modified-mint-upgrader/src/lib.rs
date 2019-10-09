@@ -1,6 +1,5 @@
 #![no_std]
 
-extern crate alloc;
 extern crate contract_ffi;
 extern crate modified_mint;
 
@@ -27,7 +26,7 @@ pub extern "C" fn call() {
 
     let mint_turef = match mint_pointer {
         ContractPointer::Hash(_) => {
-            contract_api::revert(Error::User(CustomError::ContractPointerHash as u16).into())
+            contract_api::revert(Error::User(CustomError::ContractPointerHash as u16))
         }
         ContractPointer::URef(turef) => turef,
     };

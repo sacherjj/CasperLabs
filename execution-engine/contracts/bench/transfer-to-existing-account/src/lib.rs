@@ -1,9 +1,9 @@
 #![no_std]
 
-extern crate alloc;
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{self, Error as ApiError, TransferResult};
+use contract_ffi::contract_api::{self, Error as ApiError, TransferredTo};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::U512;
 
@@ -19,24 +19,20 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = match contract_api::get_arg(Arg::PublicKey as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-        None => contract_api::revert(ApiError::MissingArgument.into()),
-    };
-    let amount: U512 = match contract_api::get_arg(Arg::Amount as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(ApiError::InvalidArgument.into()),
-        None => contract_api::revert(ApiError::MissingArgument.into()),
-    };
-    let result = contract_ffi::contract_api::transfer_to_account(public_key, amount);
+    let public_key: PublicKey = contract_api::get_arg(Arg::PublicKey as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let amount: U512 = contract_api::get_arg(Arg::Amount as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let result =
+        contract_ffi::contract_api::transfer_to_account(public_key, amount).unwrap_or_revert();
     match result {
-        TransferResult::TransferredToExistingAccount => {
+        TransferredTo::ExistingAccount => {
             // This is the expected result, as all accounts have to be initialized beforehand
         }
-        TransferResult::TransferredToNewAccount => {
-            contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16).into())
+        TransferredTo::NewAccount => {
+            contract_api::revert(ApiError::User(Error::TransferredToNewAccount as u16))
         }
-        TransferResult::TransferError => contract_api::revert(ApiError::Transfer.into()),
     }
 }

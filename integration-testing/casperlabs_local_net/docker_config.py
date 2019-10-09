@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Callable
 from docker import DockerClient
 
 
@@ -14,6 +14,13 @@ DEFAULT_NODE_ENV = {
     "CL_SERVER_NO_UPNP": "true",
     "CL_VERSION": "test",
 }
+
+
+def default_bond_amount(i, n):
+    """
+    Default amount for the i-th out of n bonding accounts in accounts.csv.
+    """
+    return n + 2 * i
 
 
 @dataclass
@@ -41,6 +48,8 @@ class DockerConfig:
     grpc_encryption: bool = False
     is_read_only: bool = False
     behind_proxy: bool = False
+    # Function that returns bonds amount for each account to be placed in accounts.csv.
+    bond_amount: Callable = default_bond_amount
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -57,14 +66,11 @@ class DockerConfig:
     def tls_key_path(self):
         return f"{BOOTSTRAP_PATH}/node-{self.number}.key.pem"
 
+    def tls_key_local_path(self):
+        return f"{str(testing_root_path())}/resources/bootstrap_certificate/node-{self.number}.key.pem"
+
     def tls_certificate_local_path(self):
-        root_path = testing_root_path()
-        return (
-            root_path
-            / "resources"
-            / "bootstrap_certificate"
-            / f"node-{self.number}.certificate.pem"
-        )
+        return f"{str(testing_root_path())}/resources/bootstrap_certificate/node-{self.number}.certificate.pem"
 
     def node_command_options(self, server_host: str) -> dict:
         options = {

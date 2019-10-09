@@ -13,6 +13,9 @@ trait DoobieCodecs {
   protected implicit val readDeploy: Read[Deploy] =
     Read[Array[Byte]].map(Deploy.parseFrom)
 
+  protected implicit val readDeployHeader: Read[Deploy.Header] =
+    Read[Array[Byte]].map(Deploy.Header.parseFrom)
+
   protected implicit val readProcessingResult: Read[(ByteString, ProcessedDeploy)] = {
     Read[(Array[Byte], Long, Option[String])].map {
       case (blockHash, cost, maybeError) =>

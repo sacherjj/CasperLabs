@@ -4,7 +4,6 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.temp.par.Par
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper._
@@ -55,6 +54,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val casperState: Cell[F, CasperState]
 ) {
   implicit val logEff: LogStub[F]
+  implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
@@ -126,7 +126,7 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[TestNode[F]]
@@ -142,7 +142,7 @@ trait HashSetCasperTestNodeFactory {
   ): TestNode[Task] =
     standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       Concurrent[Task],
-      Par[Task],
+      Parallel[Task],
       Timer[Task],
       ContextShift[Task]
     ).unsafeRunSync
@@ -157,7 +157,7 @@ trait HashSetCasperTestNodeFactory {
   )(
       implicit
       concurrentF: Concurrent[F],
-      parF: Par[F],
+      parF: Parallel[F],
       timerF: Timer[F],
       contextShift: ContextShift[F]
   ): F[IndexedSeq[TestNode[F]]]
@@ -179,7 +179,7 @@ trait HashSetCasperTestNodeFactory {
       maybeMakeEE
     )(
       Concurrent[Task],
-      Par[Task],
+      Parallel[Task],
       Timer[Task],
       ContextShift[Task]
     )
@@ -255,7 +255,10 @@ object HashSetCasperTestNode {
           .map(
             effect =>
               DeployResult(
-                ExecutionResult(ipc.DeployResult.ExecutionResult(Some(effect), None, 10))
+                ExecutionResult(
+                  ipc.DeployResult
+                    .ExecutionResult(Some(effect), None, Some(state.BigInt("10", bitWidth = 512)))
+                )
               )
           )
           .asRight[Throwable]
@@ -264,13 +267,21 @@ object HashSetCasperTestNode {
       override def runGenesis(
           genesisConfig: ipc.ChainSpec.GenesisConfig
       ): F[Either[Throwable, GenesisResult]] =
-        commit(emptyStateHash, Seq.empty).map {
+        commit(emptyStateHash, Seq.empty, genesisConfig.getProtocolVersion).map {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
+      override def upgrade(
+          prestate: ByteString,
+          upgrade: ipc.ChainSpec.UpgradePoint,
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, UpgradeResult]] =
+        UpgradeResult(prestate).withEffect(ExecutionEffect()).asRight[Throwable].pure[F]
+
       override def commit(
           prestate: ByteString,
-          effects: Seq[TransformEntry]
+          effects: Seq[TransformEntry],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, ExecutionEngineService.CommitResult]] = {
         //This function increments the prestate by interpreting as an integer and adding 1.
         //The purpose of this is simply to have the output post-state be different
@@ -287,14 +298,12 @@ object HashSetCasperTestNode {
       override def query(
           state: ByteString,
           baseKey: Key,
-          path: Seq[String]
+          path: Seq[String],
+          protocolVersion: ProtocolVersion
       ): F[Either[Throwable, Value]] =
         Applicative[F].pure[Either[Throwable, Value]](
           Left(new Exception("Method `query` not implemented on this instance!"))
         )
-
-      override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-        ().asRight[String].pure[F]
     }
 
   private def pad(x: Array[Byte], length: Int): Array[Byte] =

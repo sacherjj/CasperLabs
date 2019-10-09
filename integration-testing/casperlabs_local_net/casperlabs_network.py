@@ -79,6 +79,10 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
+    def lookup_node(self, node_id):
+        m = {node.node_id: node for node in self.docker_nodes}
+        return m[node_id]
+
     def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
         if not name:
@@ -135,14 +139,18 @@ class CasperLabsNetwork:
             cl_node = CasperLabsNode(self, config)
             self.cl_nodes.append(cl_node)
 
-    def add_new_node_to_network(self) -> None:
+    def add_new_node_to_network(self, generate_config=None) -> None:
         kp = self.get_key()
-        config = DockerConfig(
-            self.docker_client,
-            node_private_key=kp.private_key,
-            node_account=kp,
-            grpc_encryption=self.grpc_encryption,
-            behind_proxy=self.behind_proxy,
+        config = (
+            generate_config
+            and generate_config(kp)
+            or DockerConfig(
+                self.docker_client,
+                node_private_key=kp.private_key,
+                node_account=kp,
+                grpc_encryption=self.grpc_encryption,
+                behind_proxy=self.behind_proxy,
+            )
         )
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
@@ -307,6 +315,33 @@ class TwoNodeNetwork(CasperLabsNetwork):
         self.add_new_node_to_network()
 
 
+class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+        )
+        self.add_bootstrap(config)
+        # Create accounts.csv of the second node with different bond amounts.
+        self.add_new_node_to_network(
+            (
+                lambda kp: DockerConfig(
+                    self.docker_client,
+                    node_private_key=kp.private_key,
+                    node_account=kp,
+                    grpc_encryption=self.grpc_encryption,
+                    behind_proxy=self.behind_proxy,
+                    bond_amount=lambda i, n: n + 3 * i,
+                )
+            )
+        )
+
+
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
 
@@ -327,7 +362,19 @@ class InterceptedTwoNodeNetwork(TwoNodeNetwork):
             behind_proxy=True,
         )
         self.add_bootstrap(config)
-        self.add_new_node_to_network()
+        self.add_new_node_to_network(
+            (
+                lambda kp: DockerConfig(
+                    self.docker_client,
+                    node_private_key=kp.private_key,
+                    node_public_key=kp.public_key,
+                    network=self.create_docker_network(),
+                    node_account=kp,
+                    grpc_encryption=self.grpc_encryption,
+                    behind_proxy=True,
+                )
+            )
+        )
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):

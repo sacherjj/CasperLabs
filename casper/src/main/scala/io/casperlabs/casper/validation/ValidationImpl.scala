@@ -33,12 +33,20 @@ object ValidationImpl {
 
   val DRIFT = 15000 // 15 seconds
 
+  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
+  val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
+  val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
+  val MAX_DEPENDENCIES: Int = 10
+
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
     extends Validation[F] {
   import ValidationImpl.DRIFT
+  import ValidationImpl.MAX_TTL
+  import ValidationImpl.MIN_TTL
+  import ValidationImpl.MAX_DEPENDENCIES
   import io.casperlabs.models.BlockImplicits._
 
   type Data        = Array[Byte]
@@ -179,11 +187,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         .map(_.forall(identity))
     }
 
-  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
-  private val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
-  private val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
-  private val MAX_DEPENDENCIES: Int = 10
-
   private def validateTimeToLive(
       ttl: Int,
       deployHash: ByteString
@@ -250,41 +253,23 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       treatAsGenesis: Boolean = false
   ): F[Boolean] =
     if (b.blockHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block hash is empty.")).as(false)
     } else if (b.header.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block header is missing."))
-      } yield false
+      Log[F].warn(ignore(b, s"block header is missing.")).as(false)
     } else if (b.getSignature.sig.isEmpty && !treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature is empty.")).as(false)
     } else if (!b.getSignature.sig.isEmpty && treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is not empty on Genesis."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature is not empty on Genesis.")).as(false)
     } else if (b.getSignature.sigAlgorithm.isEmpty && !treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis.")).as(false)
     } else if (!b.getSignature.sigAlgorithm.isEmpty && treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature algorithm is empty.")).as(false)
     } else if (b.chainId.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block chain identifier is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block chain identifier is empty.")).as(false)
     } else if (b.state.postStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block post state hash is empty.")).as(false)
     } else if (b.bodyHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block new code hash is empty.")).as(false)
     } else {
       true.pure[F]
     }
@@ -294,9 +279,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b: BlockSummary,
       m: BlockHeight => F[state.ProtocolVersion]
   ): F[Boolean] = {
-    val blockVersion = b.protocolVersion
-    val blockHeight  = b.rank
-    m(blockHeight).map(_.value).flatMap { version =>
+
+    val blockVersion = b.getHeader.getProtocolVersion
+    val blockHeight  = b.getHeader.rank
+    m(blockHeight).flatMap { version =>
       if (blockVersion == version) {
         true.pure[F]
       } else {
@@ -647,7 +633,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         possibleCommitResult <- ExecutionEngineService[F].commit(
                                  preStateHash,
-                                 effects
+                                 effects,
+                                 block.getHeader.getProtocolVersion
                                )
         //TODO: distinguish "internal errors" and "user errors"
         _ <- possibleCommitResult match {
@@ -747,7 +734,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         for {
           deployToBlocksMap <- deploys
                                 .traverse { deploy =>
-                                  bs.findBlockHashesWithDeployhash(deploy.deployHash).map {
+                                  bs.findBlockHashesWithDeployHash(deploy.deployHash).map {
                                     blockHashes =>
                                       deploy -> blockHashes.filterNot(_ == block.blockHash)
                                   }

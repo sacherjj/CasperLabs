@@ -5,8 +5,10 @@ authors = ["Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "ee_441_rng_state"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

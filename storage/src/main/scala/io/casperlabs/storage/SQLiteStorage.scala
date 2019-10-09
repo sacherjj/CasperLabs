@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
-import fs2._
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
@@ -14,6 +13,7 @@ import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
+import fs2._
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -78,6 +78,12 @@ object SQLiteStorage {
 
       override def readPendingHashes: F[List[ByteString]] = deployStorage.readPendingHashes
 
+      override def readPendingHeaders: F[List[Deploy.Header]] =
+        deployStorage.readPendingHeaders
+
+      override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+        deployStorage.readPendingHashesAndHeaders
+
       override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
         deployStorage.getPendingOrProcessed(hash)
 
@@ -135,8 +141,8 @@ object SQLiteStorage {
       override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
         dagStorage.lookup(blockHash).map(_.map(_.blockSummary))
 
-      override def findBlockHashesWithDeployhash(deployHash: ByteString): F[Seq[BlockHash]] =
-        blockStorage.findBlockHashesWithDeployhash(deployHash)
+      override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
+        blockStorage.findBlockHashesWithDeployHash(deployHash)
 
       override def children(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.children(blockHash)

@@ -38,7 +38,7 @@ def test_star_network(star_network):
         from_address=GENESIS_ACCOUNT.public_key_hex,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
     )
 
     # validate all nodes get block

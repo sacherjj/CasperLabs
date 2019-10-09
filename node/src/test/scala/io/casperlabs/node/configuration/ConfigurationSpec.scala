@@ -88,7 +88,10 @@ class ConfigurationSpec
       downloadRetryBackoffFactor = 1.0,
       relayMaxParallelBlocks = 1,
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
-      cleanBlockStorage = false
+      cleanBlockStorage = false,
+      blockUploadRateMaxRequests = 0,
+      blockUploadRatePeriod = Duration.Zero,
+      blockUploadRateMaxThrottled = 0
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),

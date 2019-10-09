@@ -5,8 +5,9 @@ authors = ["Andreas Fackler <andreas@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "pos"
 crate-type = ["lib", "cdylib"]
+bench = false
+doctest = false
 
 [features]
 default = []

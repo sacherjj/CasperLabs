@@ -9,19 +9,20 @@ import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
+import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.gossiping
+import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
 
 trait MultiParentCasper[F[_]] {
   //// Brought from Casper trait
@@ -78,6 +79,7 @@ sealed abstract class MultiParentCasperInstances {
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       chainId: String,
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
     for {
@@ -86,13 +88,14 @@ sealed abstract class MultiParentCasperInstances {
                                                                               genesisPreState,
                                                                               genesisEffects
                                                                             )
-      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId, upgrades)
       casper <- MultiParentCasperImpl.create[F](
                  statelessExecutor,
                  MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,
                  genesis,
                  chainId,
+                 upgrades,
                  blockProcessingLock
                )
     } yield casper

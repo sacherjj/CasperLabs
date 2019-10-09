@@ -10,8 +10,7 @@ use crate::support::test_support::{
 };
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS};
 
-const PROTOCOL_VERSION: u64 = 1;
-const NEW_PROTOCOL_VERSION: u64 = 2;
+const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
@@ -39,10 +38,12 @@ fn should_upgrade_only_protocol_version() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
+    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+
     let mut upgrade_request = {
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .build()
     };
@@ -57,7 +58,7 @@ fn should_upgrade_only_protocol_version() {
 
     let upgraded_wasm_costs = builder
         .get_engine_state()
-        .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .wasm_costs(new_protocol_version)
         .expect("should have result")
         .expect("should have costs");
 
@@ -72,6 +73,8 @@ fn should_upgrade_only_protocol_version() {
 fn should_upgrade_system_contract() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
@@ -80,7 +83,7 @@ fn should_upgrade_system_contract() {
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .with_installer_code(installer_code)
             .build()
@@ -92,7 +95,10 @@ fn should_upgrade_system_contract() {
         .get_upgrade_response(0)
         .expect("should have response");
 
-    assert!(upgrade_response.has_success(), "expected success");
+    assert!(
+        upgrade_response.has_success(),
+        "upgrade_response expected success"
+    );
 
     let exec_request = {
         ExecuteRequestBuilder::standard(
@@ -100,13 +106,11 @@ fn should_upgrade_system_contract() {
             &MODIFIED_MINT_CALLER_CONTRACT_NAME,
             (U512::from(PAYMENT_AMOUNT),),
         )
-        .with_protocol_version(NEW_PROTOCOL_VERSION)
+        .with_protocol_version(new_protocol_version)
         .build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success();
+    builder.exec(exec_request).expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];
@@ -146,12 +150,14 @@ fn should_upgrade_wasm_costs() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
+    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .with_new_costs(new_costs)
             .build()
@@ -167,7 +173,7 @@ fn should_upgrade_wasm_costs() {
 
     let upgraded_wasm_costs = builder
         .get_engine_state()
-        .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .wasm_costs(new_protocol_version)
         .expect("should have result")
         .expect("should have upgraded costs");
 
@@ -184,6 +190,8 @@ fn should_upgrade_system_contract_and_wasm_costs() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
+    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
@@ -192,7 +200,7 @@ fn should_upgrade_system_contract_and_wasm_costs() {
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .with_installer_code(installer_code)
             .with_new_costs(new_costs)
@@ -213,13 +221,11 @@ fn should_upgrade_system_contract_and_wasm_costs() {
             &MODIFIED_MINT_CALLER_CONTRACT_NAME,
             (U512::from(PAYMENT_AMOUNT),),
         )
-        .with_protocol_version(NEW_PROTOCOL_VERSION)
+        .with_protocol_version(new_protocol_version)
         .build()
     };
 
-    builder
-        .exec_with_exec_request(exec_request)
-        .expect_success();
+    builder.exec(exec_request).expect_success();
 
     let transforms = builder.get_transforms();
     let transform = &transforms[0];
@@ -253,7 +259,7 @@ fn should_upgrade_system_contract_and_wasm_costs() {
 
     let upgraded_wasm_costs = builder
         .get_engine_state()
-        .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .wasm_costs(new_protocol_version)
         .expect("should have result")
         .expect("should have upgraded costs");
 
@@ -270,10 +276,12 @@ fn should_not_downgrade() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
+    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+
     let mut upgrade_request = {
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .build()
     };
@@ -288,7 +296,7 @@ fn should_not_downgrade() {
 
     let upgraded_wasm_costs = builder
         .get_engine_state()
-        .wasm_costs(ProtocolVersion::new(NEW_PROTOCOL_VERSION))
+        .wasm_costs(new_protocol_version)
         .expect("should have result")
         .expect("should have costs");
 
@@ -299,7 +307,7 @@ fn should_not_downgrade() {
 
     let mut downgrade_request = {
         UpgradeRequestBuilder::new()
-            .with_current_protocol_version(NEW_PROTOCOL_VERSION)
+            .with_current_protocol_version(new_protocol_version)
             .with_new_protocol_version(PROTOCOL_VERSION)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .build()
@@ -321,8 +329,10 @@ fn should_not_skip_major_versions() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    // TODO: when protocol version switches to SemVer, this corresponds to major version
-    let invalid_version = PROTOCOL_VERSION + 2;
+    let sem_ver = PROTOCOL_VERSION.value();
+
+    let invalid_version =
+        ProtocolVersion::from_parts(sem_ver.major + 2, sem_ver.minor, sem_ver.patch);
 
     let mut upgrade_request = {
         UpgradeRequestBuilder::new()

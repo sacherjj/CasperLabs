@@ -1,11 +1,14 @@
 #![no_std]
 
 extern crate alloc;
+
 extern crate contract_ffi;
 extern crate local_state;
 
 use alloc::string::String;
-use contract_ffi::contract_api;
+
+use contract_ffi::contract_api::{self, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 pub const ENTRY_FUNCTION_NAME: &str = "delegate";
 pub const CONTRACT_NAME: &str = "local_state_stored";
@@ -31,16 +34,10 @@ pub extern "C" fn delegate() {
 
     // Read back
     let res: String = contract_api::read_local(local_state::LOCAL_KEY)
-        .unwrap_or_else(|_| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::UnableToReadMutatedLocalKey as u16).into(),
-            )
-        })
-        .unwrap_or_else(|| {
-            contract_api::revert(
-                contract_api::Error::User(CustomError::LocalKeyReadMutatedBytesRepr as u16).into(),
-            )
-        });
+        .unwrap_or_revert_with(Error::User(CustomError::UnableToReadMutatedLocalKey as u16))
+        .unwrap_or_revert_with(Error::User(
+            CustomError::LocalKeyReadMutatedBytesRepr as u16,
+        ));
 
     // local state should be available after upgrade
     assert!(
@@ -52,8 +49,10 @@ pub extern "C" fn delegate() {
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract =
-        contract_api::fn_by_name(ENTRY_FUNCTION_NAME, alloc::collections::BTreeMap::new());
-    let key = contract_api::new_turef(contract).into();
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, Default::default())
+        .into_turef()
+        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .into();
+
     contract_api::put_key(CONTRACT_NAME, &key);
 }

@@ -15,7 +15,7 @@ def test_newly_joined_node_should_not_gossip_blocks(two_node_network):
 
     def propose(node):
         block_hash = node.d_client.deploy_and_propose(
-            session_contract=Contract.HELLONAME,
+            session_contract=Contract.HELLO_NAME_DEFINE,
             from_address=node.genesis_account.public_key_hex,
             public_key=node.genesis_account.public_key_path,
             private_key=node.genesis_account.private_key_path,
