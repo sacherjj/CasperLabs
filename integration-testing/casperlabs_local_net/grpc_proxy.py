@@ -4,13 +4,18 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
-
-from . import casperlabs_client, casper_pb2_grpc, gossiping_pb2_grpc, kademlia_pb2_grpc
-from . import consensus_pb2 as consensus
-from casperlabs_client import hexify, blake2b_hash
 import lz4.block
 import ed25519
 import base64
+from casperlabs_client import (
+    hexify,
+    blake2b_hash,
+    casper_pb2_grpc,
+    gossiping_pb2_grpc,
+    kademlia_pb2_grpc,
+    consensus_pb2 as consensus,
+    extract_common_name,
+)
 
 
 def read_binary(file_name):
@@ -312,9 +317,7 @@ class ProxyThread(Thread):
         self.interceptor = interceptor
         self.node_id = None
         if self.encrypted_connection:
-            self.node_id = casperlabs_client.extract_common_name(
-                self.client_certificate_file
-            )
+            self.node_id = extract_common_name(self.client_certificate_file)
         self.servicer = ProxyServicer(
             node_host=self.node_host,
             node_port=self.node_port,
