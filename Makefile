@@ -184,9 +184,9 @@ cargo-native-packager/%:
 	build-explorer-contracts
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
-	        cd explorer/grpc   && npm install && cd - &&\
-	        cd explorer/sdk    && npm install && npm install --no-save ../grpc && npm run build && cd - &&\
-			cd explorer/ui     && npm install  && CI=false npm run build && cd - && \
+			cd explorer/grpc   && npm install && cd - &&\
+			cd explorer/sdk    && npm install && ../install-sdk-grpc.sh && npm run build && cd - &&\
+			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
 			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
