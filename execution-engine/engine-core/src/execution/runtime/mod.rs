@@ -13,7 +13,7 @@ use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::contract_api::{Error as ApiError, TransferResult, TransferredTo};
 use contract_ffi::key::Key;
-use contract_ffi::system_contracts::{self, mint};
+use contract_ffi::system_contracts::{self, mint, SystemContract};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
 use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
@@ -21,6 +21,7 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
+use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -953,6 +954,35 @@ where
         {
             Ok(_) => Ok(Ok(())),
             Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
+        }
+    }
+
+    fn get_system_contract(
+        &mut self,
+        system_contract_index: u32,
+        dest_ptr: u32,
+        _dest_size: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let uref = match SystemContract::try_from(system_contract_index) {
+            Ok(SystemContract::Mint) => self.get_mint_contract_uref(),
+            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_uref(),
+            Err(error) => return Ok(Err(error)),
+        };
+
+        let access_rights = if self.context.account().pub_key() == SYSTEM_ACCOUNT_ADDR {
+            // If the system account calls this function, it is given READ_ADD_WRITE access.
+            AccessRights::READ_ADD_WRITE
+        } else {
+            // If a user calls this function, they are given READ access.
+            AccessRights::READ
+        };
+        // Create new URef with adjusted access rights based on the context
+        let adjusted_uref = URef::new(uref.addr(), access_rights);
+        // Serialize data that will be written the memory under `dest_ptr`
+        let adjusted_uref_bytes = adjusted_uref.to_bytes().map_err(Error::BytesRepr)?;
+        match self.memory.set(dest_ptr, &adjusted_uref_bytes) {
+            Ok(_) => Ok(Ok(())),
+            Err(error) => Err(Error::Interpreter(error).into()),
         }
     }
 }

@@ -16,7 +16,8 @@ use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
-use crate::uref::{AccessRights, URef};
+use crate::system_contracts::SystemContract;
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use crate::value::account::{
     Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight, BLOCKTIME_SER_SIZE, PURSE_ID_SIZE_SERIALIZED,
@@ -26,9 +27,6 @@ use argsparser::ArgsParser;
 pub use error::{i32_from, result_from, Error};
 
 pub type TransferResult = Result<TransferredTo, Error>;
-
-const MINT_NAME: &str = "mint";
-const POS_NAME: &str = "pos";
 
 /// Read value under the key in the global state
 pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
@@ -525,27 +523,40 @@ pub fn transfer_from_purse_to_purse(
     }
 }
 
-fn get_system_contract(name: &str) -> ContractPointer {
-    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
+fn get_system_contract(system_contract: SystemContract) -> ContractPointer {
+    let system_contract_index = system_contract.into();
+    let uref = {
+        let result = {
+            let mut uref_data_raw = [0u8; UREF_SIZE_SERIALIZED];
+            let value = unsafe {
+                ext_ffi::get_system_contract(
+                    system_contract_index,
+                    uref_data_raw.as_mut_ptr(),
+                    uref_data_raw.len(),
+                )
+            };
+            result_from(value).map(|_| uref_data_raw)
+        };
+        // Revert for any possible error that happened on host side
+        let uref_bytes = result.unwrap_or_else(|e| revert(e));
+        // Deserializes a valid URef passed from the host side
+        deserialize(&uref_bytes).unwrap_or_else(|_| revert(Error::Deserialize))
+    };
 
-    if let Key::URef(uref) = key {
-        let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-        ContractPointer::URef(reference)
-    } else {
-        revert(Error::UnexpectedKeyVariant)
-    }
+    let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
+    ContractPointer::URef(reference)
 }
 
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
 /// `contract_api::Error`.
 pub fn get_mint() -> ContractPointer {
-    get_system_contract(MINT_NAME)
+    get_system_contract(SystemContract::Mint)
 }
 
 /// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
 /// with a `contract_api::Error`.
 pub fn get_pos() -> ContractPointer {
-    get_system_contract(POS_NAME)
+    get_system_contract(SystemContract::ProofOfStake)
 }
 
 pub fn get_phase() -> Phase {

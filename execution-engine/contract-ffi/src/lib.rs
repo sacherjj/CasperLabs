@@ -136,6 +136,11 @@ mod ext_ffi {
             key_ptr: *const u8,
             key_size: usize,
         ) -> i32;
+        pub fn get_system_contract(
+            system_contract_index: u32,
+            dest_ptr: *mut u8,
+            dest_size: usize,
+        ) -> i32;
     }
 }
 
