@@ -19,13 +19,19 @@ import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 import scala.util.{Either, Try}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc.ChainSpec.GenesisConfig
+import io.casperlabs.ipc.ChainSpec.{GenesisConfig, UpgradePoint}
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
   def runGenesis(
       genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]]
+  def upgrade(
+      prestate: ByteString,
+      upgrade: UpgradePoint,
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, UpgradeResult]]
   def exec(
       prestate: ByteString,
       blocktime: Long,
@@ -119,18 +125,35 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def runGenesis(
       genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]] =
-    for {
-      response <- sendMessage(genesisConfig, _.runGenesisWithChainspec) {
-                   _.result match {
-                     case GenesisResponse.Result.Success(result) =>
-                       Right(result)
-                     case GenesisResponse.Result.FailedDeploy(error) =>
-                       Left(new SmartContractEngineError(error.message))
-                     case GenesisResponse.Result.Empty =>
-                       Left(new SmartContractEngineError("empty response"))
-                   }
-                 }
-    } yield response
+    sendMessage(genesisConfig, _.runGenesisWithChainspec) {
+      _.result match {
+        case GenesisResponse.Result.Success(result) =>
+          Right(result)
+        case GenesisResponse.Result.FailedDeploy(error) =>
+          Left(new SmartContractEngineError(error.message))
+        case GenesisResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+      }
+    }
+
+  def upgrade(
+      prestate: ByteString,
+      upgrade: UpgradePoint,
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, UpgradeResult]] =
+    sendMessage(
+      UpgradeRequest(prestate, Some(upgrade), Some(protocolVersion)),
+      _.upgrade
+    ) {
+      _.result match {
+        case UpgradeResponse.Result.Success(result) =>
+          Right(result)
+        case UpgradeResponse.Result.FailedDeploy(error) =>
+          Left(new SmartContractEngineError(error.message))
+        case UpgradeResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+      }
+    }
 
   override def commit(
       prestate: ByteString,

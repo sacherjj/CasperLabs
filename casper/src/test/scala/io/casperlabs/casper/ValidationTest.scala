@@ -992,7 +992,9 @@ class ValidationTest
                               ExecEngineUtil.MergeResult.empty,
                               fs2.Stream.fromIterator[Task](deploys.toIterator),
                               System.currentTimeMillis,
-                              ProtocolVersion(1)
+                              ProtocolVersion(1),
+                              rank = 0,
+                              upgrades = Nil
                             )
         DeploysCheckpoint(
           preStateHash,

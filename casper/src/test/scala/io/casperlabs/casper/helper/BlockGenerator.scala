@@ -89,7 +89,9 @@ object BlockGenerator {
                  merged,
                  fs2.Stream.fromIterator(deploys.toIterator),
                  b.getHeader.timestamp,
-                 ProtocolVersion(1)
+                 ProtocolVersion(1),
+                 rank = 0,
+                 upgrades = Nil
                )
     } yield result
 

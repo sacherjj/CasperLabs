@@ -251,41 +251,23 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       treatAsGenesis: Boolean = false
   ): F[Boolean] =
     if (b.blockHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block hash is empty.")).as(false)
     } else if (b.header.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block header is missing."))
-      } yield false
+      Log[F].warn(ignore(b, s"block header is missing.")).as(false)
     } else if (b.getSignature.sig.isEmpty && !treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature is empty.")).as(false)
     } else if (!b.getSignature.sig.isEmpty && treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature is not empty on Genesis."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature is not empty on Genesis.")).as(false)
     } else if (b.getSignature.sigAlgorithm.isEmpty && !treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis.")).as(false)
     } else if (!b.getSignature.sigAlgorithm.isEmpty && treatAsGenesis) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block signature algorithm is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block signature algorithm is empty.")).as(false)
     } else if (b.chainId.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block chain identifier is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block chain identifier is empty.")).as(false)
     } else if (b.state.postStateHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block post state hash is empty.")).as(false)
     } else if (b.bodyHash.isEmpty) {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block new code hash is empty."))
-      } yield false
+      Log[F].warn(ignore(b, s"block new code hash is empty.")).as(false)
     } else {
       true.pure[F]
     }

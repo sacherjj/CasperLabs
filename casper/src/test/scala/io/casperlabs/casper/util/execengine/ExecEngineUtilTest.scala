@@ -131,7 +131,9 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
                           ExecEngineUtil.MergeResult.empty,
                           fs2.Stream.fromIterator[Task](deploy.toIterator),
                           blocktime,
-                          protocolVersion
+                          protocolVersion,
+                          rank = 0,
+                          upgrades = Nil
                         )
       DeploysCheckpoint(_, _, _, result, _) = computeResult
     } yield result
@@ -170,6 +172,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       val failedExecEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, _) => new Throwable("failed when run upgrade").asLeft.pure[Task],
           (_, _, _, _) => new Throwable("failed when exec deploys").asLeft.pure[Task],
           (_, _) => new Throwable("failed when commit transform").asLeft.pure[Task],
           (_, _, _) => SmartContractEngineError("unimplemented").asLeft.pure[Task]
@@ -178,6 +181,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       val failedCommitEEService: ExecutionEngineService[Task] =
         mock[Task](
           (_) => new Throwable("failed when run genesis").asLeft.pure[Task],
+          (_, _, _) => new Throwable("failed when run upgrade").asLeft.pure[Task],
           (_, _, deploys, _) =>
             Task.now {
               def getExecutionEffect(deploy: ipc.DeployItem) = {

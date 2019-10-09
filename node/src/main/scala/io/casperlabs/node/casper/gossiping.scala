@@ -124,10 +124,10 @@ package object gossiping {
                           relaying,
                           synchronizer,
                           validatorId,
-                          genesis.getHeader.chainId
+                          spec
                         )
 
-      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis)
+      genesisApprover <- makeGenesisApprover(conf, connectToGossip, downloadManager, genesis, spec)
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
                                                          DeploySelection.create[F](
@@ -156,6 +156,7 @@ package object gossiping {
                                        prestate,
                                        transforms,
                                        genesis.getHeader.chainId,
+                                       spec.upgrades,
                                        relaying
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
@@ -272,7 +273,7 @@ package object gossiping {
 
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-      chainId: String,
+      spec: ipc.ChainSpec,
       block: Block
   ): F[Unit] =
     MultiParentCasperRef[F].get
@@ -282,9 +283,10 @@ package object gossiping {
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
-            _           <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
-            state       <- Cell.mvarCell[F, CasperState](CasperState())
-            executor    <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId)
+            _     <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
+            state <- Cell.mvarCell[F, CasperState](CasperState())
+            executor <- MultiParentCasperImpl.StatelessExecutor
+                         .create[F](chainId = spec.getGenesis.name, spec.upgrades)
             dag         <- DagStorage[F].getRepresentation
             (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
@@ -396,7 +398,7 @@ package object gossiping {
       relaying: Relaying[F],
       synchronizer: Synchronizer[F],
       validatorId: Option[ValidatorIdentity],
-      chainId: String
+      spec: ipc.ChainSpec
   ): Resource[F, DownloadManager[F]] =
     for {
       _ <- Resource.liftF(DownloadManagerImpl.establishMetrics[F])
@@ -419,7 +421,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(chainId, block)
+                                validateAndAddBlock(spec, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -470,7 +472,8 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F],
-      genesis: Block
+      genesis: Block,
+      spec: ipc.ChainSpec
   ): Resource[F, GenesisApprover[F]] =
     for {
       validatorId <- Resource.liftF {
@@ -494,7 +497,7 @@ package object gossiping {
                     s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
                   )
               _ <- validateAndAddBlock(
-                    genesis.getHeader.chainId,
+                    spec,
                     genesis
                   )
             } yield ()

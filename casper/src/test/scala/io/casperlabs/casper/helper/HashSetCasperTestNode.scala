@@ -271,6 +271,13 @@ object HashSetCasperTestNode {
           _.map(cr => GenesisResult(cr.postStateHash).withEffect(ExecutionEffect()))
         }
 
+      override def upgrade(
+          prestate: ByteString,
+          upgrade: ipc.ChainSpec.UpgradePoint,
+          protocolVersion: ProtocolVersion
+      ): F[Either[Throwable, UpgradeResult]] =
+        UpgradeResult(prestate).withEffect(ExecutionEffect()).asRight[Throwable].pure[F]
+
       override def commit(
           prestate: ByteString,
           effects: Seq[TransformEntry],
