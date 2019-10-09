@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, testing_root_path
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -19,7 +19,8 @@ from casperlabs_local_net.casperlabs_accounts import (
     GENESIS_ACCOUNT,
 )
 from casperlabs_local_net.graphql import GraphQL
-from casperlabs_client import grpc_proxy, extract_common_name, ABI
+from casperlabs_client import extract_common_name, ABI
+from casperlabs_local_net import grpc_proxy
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -54,21 +55,13 @@ class DockerNode(LoggingDockerBase):
         super().__init__(config)
         self.graphql = GraphQL(self)
 
-        def local_path(p):
-            return str(
-                testing_root_path()
-                / "resources"
-                / "bootstrap_certificate"
-                / p.split("/")[-1]
-            )
-
         self.proxy_server = None
         self.proxy_kademlia = None
         if config.behind_proxy:
 
             # Set up proxy of incoming connections: this node is server, the other one client.
-            server_certificate_path = local_path(config.tls_certificate_path())
-            server_key_path = local_path(config.tls_key_path())
+            server_certificate_path = config.tls_certificate_local_path()
+            server_key_path = config.tls_key_local_path()
 
             self.proxy_server = grpc_proxy.proxy_server(
                 self,

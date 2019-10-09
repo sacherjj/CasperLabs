@@ -115,9 +115,7 @@ class KademliaInterceptor(Interceptor):
         logging.info(
             f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
         )
-        # yield from response
         for r in response:
-            # if r.id.hex() != self.node.node_id:
             node = self.node.cl_network.lookup_node(r.id.hex())
             r.host = node.proxy_host
             r.protocol_port = node.server_proxy_port
@@ -150,6 +148,21 @@ class GossipInterceptor(Interceptor):
             request.sender.host = sender.proxy_host
             request.sender.protocol_port = sender.server_proxy_port
             request.sender.discovery_port = sender.kademlia_proxy_port
+
+            # Update SSL credentials for the proxy connection to server node
+            try:
+                node = self.node.cl_network.lookup_node(request.sender.id.hex())
+                self.node.proxy_server.servicer.update_credentials(
+                    node.config.tls_certificate_local_path(),
+                    node.config.tls_key_local_path(),
+                )
+                logging.info(
+                    f"GOSSIP PRE REQUEST: ({self.node.node_id}, {self.node.container_name})"
+                    f"update_credentials with:"
+                    f" {node.node_id} {node.container_name}"
+                )
+            except Exception as ex:
+                logging.info(f"GOSSIP PRE REQUEST: FAILED UPDATING CREDS: {str(ex)}")
 
             logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
 
@@ -228,21 +241,28 @@ class ProxyServicer:
 
         self.encrypted_connection = encrypted_connection
         if self.encrypted_connection:
-            self.credentials = grpc.ssl_channel_credentials(
-                root_certificates=read_binary(self.certificate_file),
-                private_key=read_binary(self.key_file),
-                certificate_chain=read_binary(self.certificate_file),
-            )
-            self.secure_channel_options = self.node_id and [
-                ("grpc.ssl_target_name_override", self.node_id),
-                ("grpc.default_authority", self.node_id),
-            ]
+            self.update_credentials(certificate_file, key_file, node_id)
+
         self.log_prefix = (
             f"PROXY"
             f" {self.node_host}:{self.node_port} on {self.proxy_port}"
             f" {stub_name(self.service_stub)}"
         )
         logging.info(f"{self.log_prefix}, interceptor: {self.interceptor}")
+
+    def update_credentials(self, certificate_file, key_file, node_id=None):
+        self.node_id = node_id or extract_common_name(certificate_file)
+        self.certificate_file = certificate_file
+        self.key_file = key_file
+        self.credentials = grpc.ssl_channel_credentials(
+            root_certificates=read_binary(certificate_file),
+            private_key=read_binary(key_file),
+            certificate_chain=read_binary(certificate_file),
+        )
+        self.secure_channel_options = self.node_id and [
+            ("grpc.ssl_target_name_override", self.node_id),
+            ("grpc.default_authority", self.node_id),
+        ]
 
     def channel(self):
         return (

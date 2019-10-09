@@ -20,6 +20,8 @@ def test_check_deploy_signatures(intercepted_two_node_network):
 
     tls_certificate_path = node.config.tls_certificate_local_path()
     tls_parameters = {
+        # Currently only Python client requires --certificate-file
+        # It may not need it in the future.
         # "--certificate-file": tls_certificate_path,
         "--node-id": extract_common_name(tls_certificate_path),
     }
