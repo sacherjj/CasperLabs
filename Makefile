@@ -184,10 +184,15 @@ cargo-native-packager/%:
 	build-explorer-contracts
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
-			cd explorer/grpc   && npm install && cd - &&\
-			cd explorer/sdk    && npm install && ../install-sdk-grpc.sh && npm run build && cd - &&\
-			cd explorer/ui     && npm install && CI=false npm run build && cd - && \
-			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
+			cd explorer && \
+			cd grpc   && npm install && cd - && \
+			cd sdk    && npm install && cd - && \
+			cd ui     && npm install && cd - && \
+			cd server && npm install && cd - && \
+			./install-sdk-grpc.sh && \
+			cd sdk    && npm run build && cd - && \
+			cd ui     && CI=false npm run build && cd - && \
+			cd server && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
 
@@ -195,7 +200,7 @@ cargo-native-packager/%:
 # Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
 .make/protoc/explorer: \
 		.make/install/protoc \
-		.make/install/protoc-ts \
+		./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
 	$(eval DIR_OUT = ./explorer/grpc)
@@ -373,11 +378,10 @@ protobuf/google:
 	mkdir -p $(dir $@) && touch $@
 
 # Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
-.make/install/protoc-ts: explorer/grpc/package.json
+./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts:
 	./hack/build/docker-buildenv.sh "\
 		cd explorer/grpc && npm install && npm install ts-protoc-gen --no-bin-links --save-dev \
 	"
-	mkdir -p $(dir $@) && touch $@
 
 .make/install/rpm:
 	if [ -z "$$(which rpmbuild)" ]; then

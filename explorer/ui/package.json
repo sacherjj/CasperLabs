@@ -34,13 +34,12 @@
     "react": "^16.8.6",
     "react-dom": "^16.8.6",
     "react-router-dom": "^5.0.1",
-    "react-scripts": "3.0.1",
+    "react-scripts": "^3.2.0",
     "tweetnacl-ts": "^1.0.3",
     "tweetnacl-util": "^0.15.0",
     "typescript": "3.5.2"
   },
   "scripts": {
-    "postinstall": "../install-sdk-grpc.sh",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
