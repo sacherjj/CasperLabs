@@ -4,16 +4,11 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
-import lz4.block
-import ed25519
-import base64
 from casperlabs_client import (
     hexify,
-    blake2b_hash,
     casper_pb2_grpc,
     gossiping_pb2_grpc,
     kademlia_pb2_grpc,
-    consensus_pb2 as consensus,
     extract_common_name,
 )
 
@@ -176,44 +171,9 @@ class GossipInterceptor(Interceptor):
 
     def post_request_stream(self, name, request, response):
         logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
-
-        if name == "GetBlockChunked":
-            chunk1 = next(response)
-            logging.info(f"GOSSIP POST GetBlockChunked:: => {hexify(chunk1.header)}")
-            chunk2 = next(response)
-            logging.info(f"GOSSIP POST GetBlockChunked:: => {len(chunk2.data)}")
-
-            uncompressed_block_data = lz4.block.decompress(
-                chunk2.data, uncompressed_size=chunk1.header.original_content_length
-            )
-            block = consensus.Block()
-            block.ParseFromString(uncompressed_block_data)
-            # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-
-            # Remove approvals from first deploy in the block.
-            del block.body.deploys[0].deploy.approvals[:]
-            block.header.body_hash = blake2b_hash(block.body.SerializeToString())
-            block_hash = blake2b_hash(block.header.SerializeToString())
-            block.block_hash = block_hash
-
-            block.signature.sig_algorithm = "ed25519"
-            block.signature.sig = ed25519.SigningKey(
-                base64.b64decode(self.node.config.node_private_key)
-            ).sign(block_hash)
-
-            new_data = block.SerializeToString()
-            compressed_new_data = lz4.block.compress(new_data, store_size=False)
-
-            chunk1.header.original_content_length = len(new_data)
-            chunk1.header.content_length = len(compressed_new_data)
-            chunk2.data = compressed_new_data
-
-            yield chunk1
-            yield chunk2
-        else:
-            for r in response:
-                logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
-                yield r
+        for r in response:
+            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
+            yield r
 
 
 class ProxyServicer:
@@ -334,7 +294,6 @@ class ProxyThread(Thread):
         self.client_certificate_file = client_certificate_file
         self.client_key_file = client_key_file
         self.encrypted_connection = encrypted_connection
-        self.interceptor = interceptor
         self.node_id = None
         if self.encrypted_connection:
             self.node_id = extract_common_name(self.client_certificate_file)
@@ -347,8 +306,12 @@ class ProxyThread(Thread):
             key_file=self.client_key_file,
             node_id=self.node_id,
             service_stub=self.service_stub,
-            interceptor=self.interceptor,
+            interceptor=interceptor,
         )
+
+    def set_interceptor(self, interceptor_class):
+        node = self.servicer.interceptor.node
+        self.servicer.interceptor = interceptor_class(node)
 
     def run(self):
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
