@@ -14,8 +14,8 @@ use std::rc::Rc;
 
 use num_traits::Zero;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
 use contract_ffi::system_contracts::mint;

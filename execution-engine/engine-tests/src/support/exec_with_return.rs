@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::rc::Rc;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -37,7 +38,7 @@ pub fn exec<S, T>(
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
-    args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    args: impl ArgsParser,
     extra_urefs: Vec<URef>,
 ) -> Option<(T, Vec<URef>, ExecutionEffect)>
 where

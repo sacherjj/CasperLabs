@@ -2,7 +2,7 @@ use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use core::fmt::Write;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::runtime;
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::pos::{Error, Result};
 use contract_ffi::value::{account::PublicKey, U512};
@@ -22,7 +22,7 @@ impl StakesProvider for ContractStakes {
     /// Reads the current stakes from the contract's known urefs.
     fn read() -> Result<Stakes> {
         let mut stakes = BTreeMap::new();
-        for (name, _) in contract_api::list_named_keys() {
+        for (name, _) in runtime::list_named_keys() {
             let mut split_name = name.split('_');
             if Some("v") != split_name.next() {
                 continue;
@@ -67,13 +67,13 @@ impl StakesProvider for ContractStakes {
             })
             .collect();
         // Remove and add urefs to update the contract's known urefs accordingly.
-        for (name, _) in contract_api::list_named_keys() {
+        for (name, _) in runtime::list_named_keys() {
             if name.starts_with("v_") && !new_urefs.remove(&name) {
-                contract_api::remove_key(&name);
+                runtime::remove_key(&name);
             }
         }
         for name in new_urefs {
-            contract_api::put_key(&name, &Key::Hash([0; 32]));
+            runtime::put_key(&name, &Key::Hash([0; 32]));
         }
     }
 }

@@ -9,8 +9,8 @@ use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 use rand::Rng;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::key::Key;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{Account, PublicKey, PurseId};
