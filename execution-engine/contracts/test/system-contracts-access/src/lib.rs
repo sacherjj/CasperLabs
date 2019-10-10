@@ -46,13 +46,14 @@ fn delegate() {
     // Step 2 - Mint and PoS should be URefs and they should have valid access rights
     let mint_contract = contract_api::system::get_mint();
 
-    let expected_access_rights = if contract_api::runtime::get_caller() == PublicKey::new(SYSTEM_ADDR) {
-        // System account receives read/add/write access
-        AccessRights::READ_ADD_WRITE
-    } else {
-        // User receives read only
-        AccessRights::READ
-    };
+    let expected_access_rights =
+        if contract_api::runtime::get_caller() == PublicKey::new(SYSTEM_ADDR) {
+            // System account receives read/add/write access
+            AccessRights::READ_ADD_WRITE
+        } else {
+            // User receives read only
+            AccessRights::READ
+        };
 
     let pos_contract = contract_api::system::get_proof_of_stake();
 

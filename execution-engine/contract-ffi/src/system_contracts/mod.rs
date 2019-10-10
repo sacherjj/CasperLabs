@@ -10,5 +10,5 @@ pub mod mint;
 pub mod pos;
 pub mod system_contract;
 
-pub use system_contract::SystemContract;
 pub use error::Error;
+pub use system_contract::SystemContract;

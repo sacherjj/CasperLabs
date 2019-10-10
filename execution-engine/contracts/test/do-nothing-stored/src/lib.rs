@@ -5,7 +5,7 @@ extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 
-use contract_ffi::contract_api::{storage, runtime, Error};
+use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";

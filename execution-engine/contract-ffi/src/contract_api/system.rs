@@ -6,12 +6,12 @@ use super::error::Error;
 use super::runtime::revert;
 use super::{alloc_bytes, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::deserialize;
+use crate::contract_api::error::result_from;
 use crate::ext_ffi;
+use crate::system_contracts::SystemContract;
 use crate::uref::UREF_SIZE_SERIALIZED;
 use crate::value::account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED};
 use crate::value::U512;
-use crate::system_contracts::SystemContract;
-use crate::contract_api::error::result_from;
 
 pub type TransferResult = Result<TransferredTo, Error>;
 
