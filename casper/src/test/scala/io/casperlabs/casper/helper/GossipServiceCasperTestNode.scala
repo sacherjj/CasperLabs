@@ -58,8 +58,6 @@ class GossipServiceCasperTestNode[F[_]](
     )(concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
-  //val defaultTimeout = FiniteDuration(1000, MILLISECONDS)
-
   val ownValidatorKey = validatorId match {
     case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
   }
@@ -181,12 +179,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     var gossipServices = Map.empty[Node, TestGossipService[F]]
 
+    // Use common time so if node B creates a block after node B it gets a higher timestamp.
+    implicit val timeEff = new LogicalTime[F]
+
     val nodesF = peers
       .zip(sks)
       .toList
       .traverse {
         case (peer, sk) =>
-          implicit val timeEff   = new LogicalTime[F]
           implicit val log       = new LogStub[F](peer.host, printEnabled = false)
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
