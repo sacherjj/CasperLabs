@@ -63,7 +63,7 @@ pub extern "C" fn apply_method() {
 pub extern "C" fn call() {
     let mint_uref = match system::get_mint() {
         ContractRef::Hash(_) => runtime::revert(Error::User(CustomError::MintHash as u16)),
-        ContractRef::URef(turef) => turef.into(),
+        ContractRef::TURef(turef) => turef.into(),
     };
 
     let named_keys = {

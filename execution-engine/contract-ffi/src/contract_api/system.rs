@@ -22,7 +22,7 @@ fn get_system_contract(name: &str) -> ContractRef {
 
     if let Key::URef(uref) = key {
         let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-        ContractRef::URef(reference)
+        ContractRef::TURef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant)
     }
