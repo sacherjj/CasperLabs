@@ -6,7 +6,7 @@ use blake2::VarBlake2b;
 use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
-use crate::contract_api::pointers::*;
+use crate::contract_api::{ContractRef, TURef};
 use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 
 const ACCOUNT_ID: u8 = 0;
@@ -109,10 +109,10 @@ impl Key {
         }
     }
 
-    pub fn to_c_ptr(self) -> Option<ContractPointer> {
+    pub fn to_c_ptr(self) -> Option<ContractRef> {
         match self {
-            Key::URef(uref) => TURef::from_uref(uref).map(ContractPointer::URef).ok(),
-            Key::Hash(id) => Some(ContractPointer::Hash(id)),
+            Key::URef(uref) => TURef::from_uref(uref).map(ContractRef::URef).ok(),
+            Key::Hash(id) => Some(ContractRef::Hash(id)),
             _ => None,
         }
     }
@@ -185,6 +185,13 @@ impl Key {
 
 impl From<URef> for Key {
     fn from(uref: URef) -> Key {
+        Key::URef(uref)
+    }
+}
+
+impl<T> From<TURef<T>> for Key {
+    fn from(turef: TURef<T>) -> Self {
+        let uref = URef::new(turef.addr(), turef.access_rights());
         Key::URef(uref)
     }
 }

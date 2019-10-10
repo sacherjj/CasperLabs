@@ -5,8 +5,10 @@ authors = ["Mateusz Górski <mateusz@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "deserialize_error"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

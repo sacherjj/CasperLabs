@@ -3,9 +3,7 @@
 extern crate contract_ffi;
 extern crate modified_mint;
 
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::ContractPointer;
-use contract_ffi::contract_api::Error;
+use contract_ffi::contract_api::{runtime, system, ContractRef, Error};
 
 #[repr(u16)]
 enum CustomError {
@@ -21,14 +19,14 @@ pub extern "C" fn modified_mint_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_pointer = contract_api::get_mint();
+    let mint_pointer = system::get_mint();
 
     let mint_turef = match mint_pointer {
-        ContractPointer::Hash(_) => {
-            contract_api::revert(Error::User(CustomError::ContractPointerHash as u16))
+        ContractRef::Hash(_) => {
+            runtime::revert(Error::User(CustomError::ContractPointerHash as u16))
         }
-        ContractPointer::URef(turef) => turef,
+        ContractRef::URef(turef) => turef,
     };
 
-    contract_api::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);
+    runtime::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);
 }

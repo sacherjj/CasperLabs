@@ -14,8 +14,8 @@ use std::rc::Rc;
 
 use num_traits::Zero;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
 use contract_ffi::system_contracts::mint;
@@ -401,7 +401,7 @@ where
                 };
 
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
-                let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
+                let mint_result: Result<URef, mint::Error> = executor.better_exec(
                     module,
                     &args,
                     &mut named_keys_exec,

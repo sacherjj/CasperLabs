@@ -220,7 +220,7 @@ def api(function):
     return wrapper
 
 
-def _hash(data: bytes) -> bytes:
+def blake2b_hash(data: bytes) -> bytes:
     h = blake2b(digest_size=32)
     h.update(data)
     return h.digest()
@@ -247,7 +247,7 @@ def _encode_contract(contract_options, contract_args):
     raise Exception("One of wasm, hash, name or uref is required")
 
 
-def _sign(private_key, data: bytes):
+def signature(private_key, data: bytes):
     return private_key and consensus.Signature(
         sig_algorithm="ed25519",
         sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
@@ -456,17 +456,17 @@ class CasperLabsClient:
             account_public_key=account_public_key,
             timestamp=int(1000 * time.time()),
             gas_price=gas_price,
-            body_hash=_hash(_serialize(body)),
+            body_hash=blake2b_hash(_serialize(body)),
         )
 
-        deploy_hash = _hash(_serialize(header))
+        deploy_hash = blake2b_hash(_serialize(header))
         approvals = (
             []
             if not account_public_key
             else [
                 consensus.Approval(
                     approver_public_key=approval_public_key,
-                    signature=_sign(private_key, deploy_hash),
+                    signature=signature(private_key, deploy_hash),
                 )
             ]
         )

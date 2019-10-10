@@ -68,7 +68,7 @@ build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: test
 test: $(SYSTEM_CONTRACTS)
-	$(CARGO) test $(CARGO_FLAGS) -- --nocapture
+	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-contracts
 test-contracts: build-contracts

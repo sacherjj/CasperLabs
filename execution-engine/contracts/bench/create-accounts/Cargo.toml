@@ -5,8 +5,10 @@ authors = ["Michał Papierski <michal@papierski.net>"]
 edition = "2018"
 
 [lib]
-name = "create_accounts"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

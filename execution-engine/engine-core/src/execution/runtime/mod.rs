@@ -9,9 +9,10 @@ use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
-use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::{Error as ApiError, TransferResult, TransferredTo};
+use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
+use contract_ffi::contract_api::Error as ApiError;
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::{self, mint, SystemContract};
 use contract_ffi::uref::{AccessRights, URef};
@@ -751,10 +752,10 @@ where
 
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
-        let result: Result<(), mint::error::Error> = deserialize(&self.host_buf)?;
+        let result: Result<(), mint::Error> = deserialize(&self.host_buf)?;
         // Wraps mint error into a more general error type through an aggregate
         // system contracts Error.
-        Ok(result.map_err(system_contracts::error::Error::from)?)
+        Ok(result.map_err(system_contracts::Error::from)?)
     }
 
     /// Creates a new account at a given public key, transferring a given amount

@@ -1,21 +1,27 @@
 use core::fmt::{self, Debug, Formatter};
 use core::{u16, u8};
 
+use crate::system_contracts::{mint, pos};
+
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
 /// value less than or equal to `RESERVED_ERROR_MAX`.
-const RESERVED_ERROR_MAX: u32 = u16::MAX as u32;
+const RESERVED_ERROR_MAX: u32 = u16::MAX as u32; // 0..=65535
 
 /// Proof of Stake errors (defined in "contracts/system/pos/src/error.rs") will have this value
 /// added to them when being converted to a `u32`.
-const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32;
+const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65535
 
-/// Variants to be passed to `contract_api::revert()`.
+/// Mint errors (defined in "contracts/system/mint/src/error.rs") will have this value
+/// added to them when being converted to a `u32`.
+const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
+
+/// Variants to be passed to `runtime::revert()`.
 ///
 /// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
 /// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
 ///
-/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
-/// e.g.
+/// Users can specify a C-style enum and implement `From` to ease usage of
+/// `runtime::revert()`, e.g.
 /// ```
 /// use casperlabs_contract_ffi::contract_api::Error;
 ///
@@ -54,8 +60,6 @@ pub enum Error {
     Read,
     /// The given key returned a `None` value.
     ValueNotFound,
-    /// Failed to initialize a mint purse.
-    MintFailure,
     /// Invalid purse name given.
     InvalidPurseName,
     /// Invalid purse retrieved.
@@ -74,11 +78,25 @@ pub enum Error {
     None,
     /// Returns when contract tries to obtain URef to a system contract that does not exist.
     InvalidSystemContract,
+    /// Error specific to Mint contract.
+    Mint(u8),
     /// Error specific to Proof of Stake contract.
     ProofOfStake(u8),
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
+}
+
+impl From<mint::Error> for Error {
+    fn from(error: mint::Error) -> Self {
+        Error::Mint(error as u8)
+    }
+}
+
+impl From<pos::Error> for Error {
+    fn from(error: pos::Error) -> Self {
+        Error::ProofOfStake(error as u8)
+    }
 }
 
 impl From<Error> for u32 {
@@ -92,16 +110,16 @@ impl From<Error> for u32 {
             Error::UnexpectedContractPointerVariant => 6,
             Error::Read => 7,
             Error::ValueNotFound => 8,
-            Error::MintFailure => 9,
-            Error::InvalidPurseName => 10,
-            Error::InvalidPurse => 11,
-            Error::MissingArgument => 12,
-            Error::InvalidArgument => 13,
-            Error::UpgradeContractAtURef => 14,
-            Error::Transfer => 15,
-            Error::NoAccessRights => 16,
-            Error::None => 17,
-            Error::InvalidSystemContract => 18,
+            Error::InvalidPurseName => 9,
+            Error::InvalidPurse => 10,
+            Error::MissingArgument => 11,
+            Error::InvalidArgument => 12,
+            Error::UpgradeContractAtURef => 13,
+            Error::Transfer => 14,
+            Error::NoAccessRights => 15,
+            Error::None => 16,
+            Error::InvalidSystemContract => 17,
+            Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
         }
@@ -121,7 +139,6 @@ impl Debug for Error {
             }
             Error::Read => write!(f, "Error::Read")?,
             Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
-            Error::MintFailure => write!(f, "Error::MintFailure")?,
             Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
             Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
             Error::MissingArgument => write!(f, "Error::MissingArgument")?,
@@ -131,6 +148,7 @@ impl Debug for Error {
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::None => write!(f, "Error::None")?,
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
+            Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
         }
@@ -156,18 +174,19 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         6 => Err(Error::UnexpectedContractPointerVariant),
         7 => Err(Error::Read),
         8 => Err(Error::ValueNotFound),
-        9 => Err(Error::MintFailure),
-        10 => Err(Error::InvalidPurseName),
-        11 => Err(Error::InvalidPurse),
-        12 => Err(Error::MissingArgument),
-        13 => Err(Error::InvalidArgument),
-        14 => Err(Error::UpgradeContractAtURef),
-        15 => Err(Error::Transfer),
-        16 => Err(Error::NoAccessRights),
-        17 => Err(Error::None),
+        9 => Err(Error::InvalidPurseName),
+        10 => Err(Error::InvalidPurse),
+        11 => Err(Error::MissingArgument),
+        12 => Err(Error::InvalidArgument),
+        13 => Err(Error::UpgradeContractAtURef),
+        14 => Err(Error::Transfer),
+        15 => Err(Error::NoAccessRights),
+        16 => Err(Error::None),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
+            } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
+                Err(Error::Mint(value as u8))
             } else if value >= POS_ERROR_OFFSET as i32 {
                 Err(Error::ProofOfStake(value as u8))
             } else {
@@ -189,12 +208,19 @@ mod tests {
 
     #[test]
     fn error() {
+        assert_eq!(65_024_u32, Error::Mint(0).into()); // MINT_ERROR_OFFSET == 65,024
+        assert_eq!(65_279_u32, Error::Mint(u8::MAX).into());
         assert_eq!(65_280_u32, Error::ProofOfStake(0).into()); // POS_ERROR_OFFSET == 65,280
         assert_eq!(65_535_u32, Error::ProofOfStake(u8::MAX).into());
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
         assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!("Error::Mint(0) [65024]", &format!("{:?}", Error::Mint(0)));
+        assert_eq!(
+            "Error::Mint(255) [65279]",
+            &format!("{:?}", Error::Mint(u8::MAX))
+        );
         assert_eq!(
             "Error::ProofOfStake(0) [65280]",
             &format!("{:?}", Error::ProofOfStake(0))
@@ -218,7 +244,6 @@ mod tests {
         round_trip(Err(Error::UnexpectedContractPointerVariant));
         round_trip(Err(Error::Read));
         round_trip(Err(Error::ValueNotFound));
-        round_trip(Err(Error::MintFailure));
         round_trip(Err(Error::InvalidPurseName));
         round_trip(Err(Error::InvalidPurse));
         round_trip(Err(Error::MissingArgument));

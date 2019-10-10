@@ -9,10 +9,10 @@ extern crate contract_ffi;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::vec::Vec;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::argsparser::ArgsParser;
-use contract_ffi::contract_api::pointers::ContractPointer;
+use contract_ffi::contract_api::storage;
+use contract_ffi::contract_api::ContractRef;
 use contract_ffi::key::Key;
 
 #[no_mangle]
@@ -43,9 +43,9 @@ mod malicious_ffi {
     }
 }
 
-// This is half-baked contract_api::call_contract with changed `extra_urefs`
+// This is half-baked runtime::call_contract with changed `extra_urefs`
 // parameter with a desired payload that's supposed to bring the node down.
-fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
+fn my_call_contract<A: ArgsParser>(c_ptr: ContractRef, args: &A) {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args).map(|args| to_ptr(&args)).unwrap();
@@ -65,7 +65,6 @@ fn my_call_contract<A: ArgsParser>(c_ptr: ContractPointer, args: &A) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let do_nothing: ContractPointer =
-        contract_api::store_function_at_hash("do_nothing", BTreeMap::new());
+    let do_nothing: ContractRef = storage::store_function_at_hash("do_nothing", BTreeMap::new());
     my_call_contract(do_nothing.clone(), &());
 }

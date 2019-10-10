@@ -66,14 +66,11 @@ class DockerConfig:
     def tls_key_path(self):
         return f"{BOOTSTRAP_PATH}/node-{self.number}.key.pem"
 
+    def tls_key_local_path(self):
+        return f"{str(testing_root_path())}/resources/bootstrap_certificate/node-{self.number}.key.pem"
+
     def tls_certificate_local_path(self):
-        root_path = testing_root_path()
-        return (
-            root_path
-            / "resources"
-            / "bootstrap_certificate"
-            / f"node-{self.number}.certificate.pem"
-        )
+        return f"{str(testing_root_path())}/resources/bootstrap_certificate/node-{self.number}.certificate.pem"
 
     def node_command_options(self, server_host: str) -> dict:
         options = {

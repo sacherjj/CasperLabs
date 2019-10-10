@@ -1,7 +1,5 @@
 use core::result;
 
-use contract_ffi::contract_api::Error as ApiError;
-
 #[derive(Debug, PartialEq)]
 // TODO: Split this up into user errors vs. system errors.
 #[repr(u8)]
@@ -43,12 +41,6 @@ pub enum Error {
     FailedTransferToRewardsPurse,
     FailedTransferToAccountPurse,
     SetRefundPurseCalledOutsidePayment,
-}
-
-impl From<Error> for ApiError {
-    fn from(error: Error) -> Self {
-        ApiError::ProofOfStake(error as u8)
-    }
 }
 
 pub type Result<T> = result::Result<T, Error>;

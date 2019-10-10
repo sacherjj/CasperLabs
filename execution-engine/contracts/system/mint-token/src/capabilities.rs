@@ -1,8 +1,9 @@
 use core::convert::TryFrom;
 use core::marker::PhantomData;
 
+use contract_api::storage;
 use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::TURef;
+use contract_ffi::contract_api::TURef;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::Value;
@@ -23,7 +24,7 @@ macro_rules! readable_impl {
         {
             fn read(&self) -> T {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::read(turef)
+                storage::read(turef)
                     .expect("value should deserialize")
                     .expect("should find value")
             }
@@ -46,7 +47,7 @@ macro_rules! writeable_impl {
         {
             fn write(&self, t: T) {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::write(turef, t);
+                storage::write(turef, t);
             }
         }
     };
@@ -67,7 +68,7 @@ macro_rules! addable_impl {
         {
             fn add(&self, t: T) {
                 let turef: TURef<T> = self.clone().into();
-                contract_api::add(turef, t);
+                storage::add(turef, t);
             }
         }
     };

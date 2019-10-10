@@ -5,8 +5,10 @@ authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "transfer_purse_to_account"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

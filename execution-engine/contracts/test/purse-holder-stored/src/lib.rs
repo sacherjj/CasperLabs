@@ -2,14 +2,13 @@
 
 #[macro_use]
 extern crate alloc;
-
 extern crate contract_ffi;
 
 #[cfg(not(feature = "lib"))]
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::{self, Error};
+use contract_ffi::contract_api::{runtime, storage, system, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -34,38 +33,38 @@ enum CustomError {
 }
 
 fn purse_name() -> String {
-    contract_api::get_arg(Args::PurseName as u32)
+    runtime::get_arg(Args::PurseName as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingPurseNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseNameArg as u16))
 }
 
 #[no_mangle]
 pub extern "C" fn apply_method() {
-    let method_name: String = contract_api::get_arg(Args::MethodName as u32)
+    let method_name: String = runtime::get_arg(Args::MethodName as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
     match method_name.as_str() {
         METHOD_ADD => {
             let purse_name = purse_name();
-            let purse_id = contract_api::create_purse();
-            contract_api::put_key(&purse_name, &purse_id.value().into());
+            let purse_id = system::create_purse();
+            runtime::put_key(&purse_name, &purse_id.value().into());
         }
-        METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
-        _ => contract_api::revert(Error::User(CustomError::UnknownMethodName as u16)),
+        METHOD_VERSION => runtime::ret(&VERSION.to_string(), &vec![]),
+        _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }
 
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
+    let key = storage::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();
 
-    contract_api::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, &key);
 
     // set version
-    let version_key = contract_api::new_turef(VERSION.to_string()).into();
-    contract_api::put_key(METHOD_VERSION, &version_key);
+    let version_key = storage::new_turef(VERSION.to_string()).into();
+    runtime::put_key(METHOD_VERSION, &version_key);
 }
