@@ -85,9 +85,12 @@ class ValidationTest
   def createChain[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       length: Int,
       bonds: Seq[Bond] = Seq.empty[Bond],
-      creator: Validator = ByteString.EMPTY
+      creator: Validator = ByteString.EMPTY,
+      maybeGenesis: Option[Block] = None
   ): F[Block] =
-    (0 until length).foldLeft(createAndStoreBlock[F](Seq.empty, bonds = bonds)) {
+    (0 until length).foldLeft(
+      maybeGenesis.fold(createAndStoreBlock[F](Seq.empty, bonds = bonds))(_.pure[F])
+    ) {
       case (block, _) =>
         for {
           bprev         <- block
@@ -388,6 +391,30 @@ class ValidationTest
               )
               .attempt shouldBeF Left(InvalidUnslashableBlock)
         _      <- ValidationImpl[Task].timestamp(block).attempt shouldBeF Right(())
+        _      = log.warns.size should be(1)
+        result = log.warns.head.contains("block timestamp") should be(true)
+      } yield result
+  }
+
+  it should "not accept blocks that were published before justification time" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      for {
+        _       <- createChain[Task](3, creator = ByteString.copyFrom(Array[Byte](1)))
+        genesis <- dagStorage.lookupByIdUnsafe(0)
+        // Create a new block on top of genesis which will use the previous ones as justifications.
+        _ <- createChain[Task](
+              1,
+              creator = ByteString.copyFrom(Array[Byte](2)),
+              maybeGenesis = Some(genesis)
+            )
+        block4                  <- dagStorage.lookupByIdUnsafe(4)
+        modifiedTimestampHeader = block4.header.get.withTimestamp(genesis.getHeader.timestamp + 1)
+        _ <- ValidationImpl[Task]
+              .timestamp(
+                block4.withHeader(modifiedTimestampHeader)
+              )
+              .attempt shouldBeF Left(InvalidUnslashableBlock)
+        _      <- ValidationImpl[Task].timestamp(block4).attempt shouldBeF Right(())
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
