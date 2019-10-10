@@ -44,8 +44,8 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// A call to `get_uref()` returned a failure.
-    GetURef,
+    /// A call to `get_key()` returned a failure.
+    GetKey,
     /// Failed to deserialize a value.
     Deserialize,
     /// Failed to find a specified contract.
@@ -100,7 +100,7 @@ impl From<pos::Error> for Error {
 impl From<Error> for u32 {
     fn from(error: Error) -> Self {
         match error {
-            Error::GetURef => 1,
+            Error::GetKey => 1,
             Error::Deserialize => 2,
             Error::ContractNotFound => 3,
             Error::UnexpectedKeyVariant => 4,
@@ -126,7 +126,7 @@ impl From<Error> for u32 {
 impl Debug for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Error::GetURef => write!(f, "Error::GetURef")?,
+            Error::GetKey => write!(f, "Error::GetURef")?,
             Error::Deserialize => write!(f, "Error::Deserialize")?,
             Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
             Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
@@ -162,7 +162,7 @@ pub fn i32_from(result: Result<(), Error>) -> i32 {
 pub fn result_from(value: i32) -> Result<(), Error> {
     match value {
         0 => Ok(()),
-        1 => Err(Error::GetURef),
+        1 => Err(Error::GetKey),
         2 => Err(Error::Deserialize),
         3 => Err(Error::ContractNotFound),
         4 => Err(Error::UnexpectedKeyVariant),
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
-        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetKey));
         assert_eq!("Error::Mint(0) [65024]", &format!("{:?}", Error::Mint(0)));
         assert_eq!(
             "Error::Mint(255) [65279]",
@@ -232,7 +232,7 @@ mod tests {
         );
 
         round_trip(Ok(()));
-        round_trip(Err(Error::GetURef));
+        round_trip(Err(Error::GetKey));
         round_trip(Err(Error::Deserialize));
         round_trip(Err(Error::ContractNotFound));
         round_trip(Err(Error::UnexpectedKeyVariant));
