@@ -29,12 +29,12 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
   override def insert(block: Block): F[DagRepresentation[F]] = {
-    val blockSummary = BlockSummary.fromBlock(block)
-
+    val blockSummary     = BlockSummary.fromBlock(block)
+    val deployErrorCount = block.getBody.deploys.count(_.isError)
     val blockMetadataQuery =
       sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, validator, rank, data)
-            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString})
+            |(block_hash, validator, rank, data, block_size, deploy_error_count)
+            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount)
             |""".stripMargin.update.run
 
     val justificationsQuery =
