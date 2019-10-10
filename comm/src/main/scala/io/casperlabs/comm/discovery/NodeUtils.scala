@@ -26,8 +26,7 @@ object NodeIdentifier {
 object NodeUtils {
   implicit val showNode: Show[Node] = Show.show(
     node =>
-      s"casperlabs://${NodeIdentifier(node.id)}:${Base16
-        .encode(node.chainId.toByteArray)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
+      s"casperlabs://${NodeIdentifier(node.id)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
   )
 
   implicit val showNodeWithoutChainId: Show[NodeWithoutChainId] =
