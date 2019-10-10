@@ -98,13 +98,13 @@ class CachingDagStorage[F[_]: Sync](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockHash]] = underlying.topoSort(startBlockNumber, endBlockNumber)
+  ): fs2.Stream[F, Vector[BlockSummary]] = underlying.topoSort(startBlockNumber, endBlockNumber)
 
   /** Return ranks of blocks in the DAG from a start index to the end. */
-  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
+  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
     underlying.topoSort(startBlockNumber)
 
-  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] =
+  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]] =
     underlying.topoSortTail(tailLength)
 
   override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
