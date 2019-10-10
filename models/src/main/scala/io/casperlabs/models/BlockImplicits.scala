@@ -20,7 +20,7 @@ object BlockImplicits {
     def timestamp: Long                    = block.getHeader.timestamp
     def protocolVersion: ProtocolVersion   = block.getHeader.getProtocolVersion
     def deployCount: Int                   = block.getHeader.deployCount
-    def chainId: String                    = block.getHeader.chainId
+    def chainName: String                  = block.getHeader.chainName
     def validatorBlockSeqNum: Int          = block.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = block.getHeader.validatorPublicKey
     def rank: Long                         = block.getHeader.rank
@@ -41,7 +41,7 @@ object BlockImplicits {
     def timestamp: Long                    = summary.getHeader.timestamp
     def protocolVersion: ProtocolVersion   = summary.getHeader.getProtocolVersion
     def deployCount: Int                   = summary.getHeader.deployCount
-    def chainId: String                    = summary.getHeader.chainId
+    def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
     def rank: Long                         = summary.getHeader.rank

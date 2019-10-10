@@ -52,7 +52,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       rank = 0,
       protocolVersion = version,
       timestamp = 1527191663,
-      chainId = "casperlabs",
+      chainName = "casperlabs",
       creator = Keys.PublicKey(Array.emptyByteArray),
       validatorSeqNum = 0
     )
@@ -70,11 +70,11 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     (0L until deployCount).toList
       .traverse(_ => ProtoUtil.basicProcessedDeploy[Task]())
       .unsafeRunSync(scheduler)
-  val body            = Block.Body().withDeploys(randomDeploys)
-  val parentsString   = List(genesisHashString)
-  val parentsHashList = List(genesisHash)
-  val justifications  = Seq(Justification().withLatestBlockHash(genesisBlock.blockHash))
-  val chainId: String = "abcdefgh"
+  val body              = Block.Body().withDeploys(randomDeploys)
+  val parentsString     = List(genesisHashString)
+  val parentsHashList   = List(genesisHash)
+  val justifications    = Seq(Justification().withLatestBlockHash(genesisBlock.blockHash))
+  val chainName: String = "abcdefgh"
   val secondBlockSenderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192"
   val secondBlockSender: ByteString = ProtoUtil.stringToByteString(secondBlockSenderString)
@@ -87,7 +87,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     ProtocolVersion(1),
     Seq(genesisBlock.blockHash),
     1,
-    chainId,
+    chainName,
     timestamp,
     1,
     Keys.PublicKey(secondBlockSender.toByteArray),
@@ -124,7 +124,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
         _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
         _      = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
-        result = blockInfo.getSummary.getHeader.chainId should be(chainId)
+        result = blockInfo.getSummary.getHeader.chainName should be(chainName)
       } yield result
   }
 
