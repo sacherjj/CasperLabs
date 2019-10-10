@@ -131,12 +131,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
+    // If the block timstamp is in the future, wait some time before adding it,
+    // so we won't include it as a justification from the future.
     Validation[F].preTimestamp(block).attempt.flatMap {
-      case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
+      case Right(None) =>
+        addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
-        Time[F].sleep(delay) >> Log[F].info(
+        Log[F].info(
           s"Block ${PrettyPrinter.buildString(block)} is ahead for $delay from now, will retry adding later"
-        ) >> addBlock(statelessExecutor.validateAndAddBlock)
+        ) >> Time[F].sleep(delay) >> addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
         Log[F].warn(validation.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
           handleInvalidTimestamp
@@ -384,6 +387,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
           timestamp        <- Time[F].currentMillis
+          _                <- ensureJustificationsInThePast(timestamp, latestMessages)
           remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp) // TODO: Should be streaming all the way down
           bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
           //We ensure that only the justifications given in the block are those
@@ -420,6 +424,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
+
+  // Sanity check, this should never happen because we delay messages from the future.
+  private def ensureJustificationsInThePast(
+      timestamp: Long,
+      latestMessages: Map[DagRepresentation.Validator, Message]
+  ): F[Unit] =
+    latestMessages.values
+      .find {
+        _.timestamp > timestamp
+      }
+      .fold(().pure[F]) { msg =>
+        Log[F].warn(
+          s"Justification is in the future: ${PrettyPrinter
+            .buildString(msg.messageHash)}; ${msg.timestamp} > $timestamp"
+        ) *>
+          functorRaiseInvalidBlock.raise[Unit](InvalidUnslashableBlock)
+      }
 
   def lastFinalizedBlock: F[Block] =
     for {
