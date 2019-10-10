@@ -13,7 +13,7 @@ use contract_ffi::value::U512;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let initi_uref_num = 2; // TODO: this is very brittle as it breaks whenever we add another default uref
+    let initi_uref_num = 0; // TODO: this is very brittle as it breaks whenever we add another default uref
 
     // Account starts with two known urefs: mint uref & pos uref
     if contract_api::list_named_keys().len() != initi_uref_num {

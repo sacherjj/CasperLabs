@@ -18,7 +18,7 @@ use contract_ffi::value::contract::Contract;
 use contract_ffi::value::{SemVer, Value, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
-use engine_core::execution::{self, MINT_NAME, POS_NAME};
+use engine_core::execution;
 use engine_grpc_server::engine_server::ipc::{
     ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
     CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
@@ -632,14 +632,14 @@ where
 
     pub fn run_genesis(&mut self, genesis_config: &GenesisConfig) -> &mut Self {
         let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
-        let genesis_config = genesis_config
+        let genesis_config_proto = genesis_config
             .to_owned()
             .try_into()
             .expect("could not parse");
 
         let genesis_response = self
             .engine_state
-            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config)
+            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config_proto)
             .wait_drop_metadata()
             .expect("Unable to get genesis response");
 
@@ -661,24 +661,16 @@ where
         let genesis_account =
             get_account(&transforms, &system_account).expect("Unable to get system account");
 
-        let named_keys = genesis_account.named_keys();
-
-        let mint_contract_uref = named_keys
-            .get(MINT_NAME)
-            .and_then(Key::as_uref)
-            .cloned()
-            .expect("Unable to get mint contract URef");
-
-        let pos_contract_uref = named_keys
-            .get(POS_NAME)
-            .and_then(Key::as_uref)
-            .cloned()
-            .expect("Unable to get pos contract URef");
+        let maybe_protocol_data = self
+            .engine_state
+            .get_protocol_data(genesis_config.protocol_version())
+            .expect("should read protocol data");
+        let protocol_data = maybe_protocol_data.expect("should have protocol data stored");
 
         self.genesis_hash = Some(state_root_hash.to_vec());
         self.post_state_hash = Some(state_root_hash.to_vec());
-        self.mint_contract_uref = Some(mint_contract_uref);
-        self.pos_contract_uref = Some(pos_contract_uref);
+        self.mint_contract_uref = Some(protocol_data.mint());
+        self.pos_contract_uref = Some(protocol_data.proof_of_stake());
         self.genesis_account = Some(genesis_account);
         self.genesis_transforms = Some(transforms);
         self
@@ -935,8 +927,11 @@ where
     }
 
     pub fn get_pos_contract(&self) -> Contract {
-        let system_account = Key::Account(SYSTEM_ACCOUNT_ADDR);
-        self.query(None, system_account, &[POS_NAME])
+        let pos_contract: Key = self
+            .pos_contract_uref
+            .expect("should have pos contract uref")
+            .into();
+        self.query(None, pos_contract, &[])
             .and_then(|v| v.try_into().ok())
             .expect("should find PoS URef")
     }

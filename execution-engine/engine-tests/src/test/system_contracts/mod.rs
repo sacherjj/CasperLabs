@@ -11,3 +11,6 @@ mod upgrade;
 
 #[cfg(test)]
 pub mod proof_of_stake;
+
+#[cfg(test)]
+pub mod system_contracts_access;

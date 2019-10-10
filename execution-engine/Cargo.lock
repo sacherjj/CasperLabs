@@ -2247,6 +2247,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-contracts-access"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.17.0",
+]
+
+[[package]]
 name = "tempdir"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

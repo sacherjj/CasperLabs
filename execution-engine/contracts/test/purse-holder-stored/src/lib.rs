@@ -9,12 +9,9 @@ extern crate contract_ffi;
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::pointers::ContractPointer;
 use contract_ffi::contract_api::{self, Error};
-use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
-const MINT_NAME: &str = "mint";
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
 const CONTRACT_NAME: &str = "purse_holder_stored";
 pub const METHOD_ADD: &str = "add";
@@ -29,12 +26,11 @@ enum Args {
 
 #[repr(u16)]
 enum CustomError {
-    MintHash = 0,
-    MissingMethodNameArg = 1,
-    InvalidMethodNameArg = 2,
-    MissingPurseNameArg = 3,
-    InvalidPurseNameArg = 4,
-    UnknownMethodName = 5,
+    MissingMethodNameArg = 0,
+    InvalidMethodNameArg = 1,
+    MissingPurseNameArg = 2,
+    InvalidPurseNameArg = 3,
+    UnknownMethodName = 4,
 }
 
 fn purse_name() -> String {
@@ -62,18 +58,7 @@ pub extern "C" fn apply_method() {
 #[cfg(not(feature = "lib"))]
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint_uref = match contract_api::get_mint() {
-        ContractPointer::Hash(_) => contract_api::revert(Error::User(CustomError::MintHash as u16)),
-        ContractPointer::URef(turef) => turef.into(),
-    };
-
-    let named_keys = {
-        let mut tmp = BTreeMap::new();
-        tmp.insert(String::from(MINT_NAME), Key::URef(mint_uref));
-        tmp
-    };
-
-    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, named_keys)
+    let key = contract_api::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
         .into();

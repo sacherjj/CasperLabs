@@ -23,7 +23,6 @@ const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
-const MINT_NAME: &str = "mint";
 const POS_FUNCTION_NAME: &str = "pos_ext";
 
 #[repr(u32)]
@@ -68,9 +67,6 @@ pub extern "C" fn call() {
         })
         .map(|key| (key, PLACEHOLDER_KEY))
         .collect();
-
-    // Include the mint contract in its named_keys
-    named_keys.insert(String::from(MINT_NAME), Key::URef(mint_uref));
 
     let total_bonds: U512 = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
 

@@ -20,7 +20,7 @@ use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
 use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
-use super::{Error, MINT_NAME, POS_NAME};
+use super::Error;
 use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
@@ -783,25 +783,7 @@ where
 
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
-                let named_keys = vec![
-                    (
-                        String::from(MINT_NAME),
-                        Key::from(self.get_mint_contract_uref()),
-                    ),
-                    (
-                        String::from(POS_NAME),
-                        Key::from(self.get_pos_contract_uref()),
-                    ),
-                ]
-                .into_iter()
-                .map(|(name, key)| {
-                    if let Some(uref) = key.as_uref() {
-                        (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
-                    } else {
-                        (name, key)
-                    }
-                })
-                .collect();
+                let named_keys = BTreeMap::new();
                 let account = Account::create(target_addr, named_keys, target_purse_id);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
