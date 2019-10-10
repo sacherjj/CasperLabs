@@ -37,6 +37,8 @@ pub mod execution;
 pub mod ext_ffi;
 #[cfg(any(test, feature = "gens"))]
 pub mod gens;
+#[cfg(not(feature = "std"))]
+pub mod handlers;
 pub mod key;
 pub mod system_contracts;
 #[cfg(any(test, feature = "gens"))]
@@ -44,6 +46,3 @@ pub mod test_utils;
 pub mod unwrap_or_revert;
 pub mod uref;
 pub mod value;
-
-#[cfg(not(feature = "std"))]
-pub mod handlers;

@@ -189,6 +189,13 @@ impl From<URef> for Key {
     }
 }
 
+impl<T> From<TURef<T>> for Key {
+    fn from(turef: TURef<T>) -> Self {
+        let uref = URef::new(turef.addr(), turef.access_rights());
+        Key::URef(uref)
+    }
+}
+
 impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {

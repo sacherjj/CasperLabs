@@ -2,7 +2,7 @@ use core::any::type_name;
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::key::{addr_to_hex, Key};
+use crate::key::addr_to_hex;
 use crate::uref::AccessRights;
 use crate::uref::URef;
 
@@ -58,13 +58,6 @@ impl<T> TURef<T> {
 
     pub fn set_access_rights(&mut self, access_rights: AccessRights) {
         self.access_rights = access_rights;
-    }
-}
-
-impl<T> From<TURef<T>> for Key {
-    fn from(turef: TURef<T>) -> Self {
-        let uref = URef::new(turef.addr(), turef.access_rights());
-        Key::URef(uref)
     }
 }
 
