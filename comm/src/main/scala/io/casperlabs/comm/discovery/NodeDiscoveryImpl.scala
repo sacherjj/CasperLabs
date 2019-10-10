@@ -3,7 +3,6 @@ package io.casperlabs.comm.discovery
 import scala.collection.mutable
 import scala.concurrent.duration._
 import cats._
-import cats.syntax._
 import cats.implicits._
 import cats.effect.implicits._
 import cats.effect._
@@ -26,7 +25,7 @@ import scala.util.Random
 object NodeDiscoveryImpl {
   type Millis = Long
 
-  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Parallel](
+  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: BootstrapsAsk: Timer: Parallel](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
@@ -42,8 +41,6 @@ object NodeDiscoveryImpl {
       alivePeersCacheUpdatePeriod: FiniteDuration = 15.seconds,
       /* Batches pinged in parallel */
       alivePeersCachePingsBatchSize: Int = 10
-  )(
-      init: List[Node]
   ): Resource[F, NodeDiscovery[F]] = {
 
     def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
@@ -103,7 +100,8 @@ object NodeDiscoveryImpl {
                             alivePeersCachePingsBatchSize = alivePeersCachePingsBatchSize
                           )
                         }
-        _ <- init.traverse(nodeDiscovery.addNode)
+        init <- BootstrapsAsk[F].ask
+        _    <- init.traverse(nodeDiscovery.addNode)
       } yield nodeDiscovery)
 
     def scheduleRecentlyAlivePeersCacheUpdate(implicit N: NodeDiscoveryImpl[F]): Resource[F, Unit] =

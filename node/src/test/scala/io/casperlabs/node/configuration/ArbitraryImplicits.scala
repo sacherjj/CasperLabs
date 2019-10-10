@@ -2,11 +2,13 @@ package io.casperlabs.node.configuration
 
 import java.io.File
 import java.nio.file.{Path, Paths}
+
 import eu.timepit.refined._
 import eu.timepit.refined.numeric._
 import eu.timepit.refined.api.Refined
 import com.google.protobuf.ByteString
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import org.scalacheck.{Arbitrary, Gen}
 
 import scala.concurrent.duration._
@@ -37,7 +39,7 @@ trait ArbitraryImplicits {
     Gen.oneOf(0.1, 0.5, 1.0, 1.5, 2.0, 10.0)
   }
 
-  implicit val nodeGen: Arbitrary[Node] = Arbitrary {
+  implicit val nodeGen: Arbitrary[NodeWithoutChainId] = Arbitrary {
     for {
       n       <- Gen.choose(1, 100)
       bytes   <- Gen.listOfN(n, Gen.choose(Byte.MinValue, Byte.MaxValue))
@@ -45,10 +47,7 @@ trait ArbitraryImplicits {
       host    <- Gen.listOfN(n, Gen.alphaNumChar)
       tcpPort <- Gen.posNum[Int]
       udpPort <- Gen.posNum[Int]
-      chainId <- Gen
-                  .listOfN(32, Gen.choose(Byte.MinValue, Byte.MaxValue))
-                  .map(bs => ByteString.copyFrom(bs.toArray))
-    } yield Node(id, host.mkString(""), tcpPort, udpPort, chainId)
+    } yield NodeWithoutChainId(Node(id, host.mkString(""), tcpPort, udpPort, ByteString.EMPTY))
   }
 
   // There are some comparison problems with default generator

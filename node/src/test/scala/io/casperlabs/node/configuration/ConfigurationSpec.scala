@@ -51,22 +51,22 @@ class ConfigurationSpec
       noUpnp = false,
       defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = List(
-        Node(
-          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-          "52.119.8.109",
-          1,
-          1,
-          ByteString.copyFrom(
-            Base16.decode("6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510")
+        NodeWithoutChainId(
+          Node(
+            NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+            "52.119.8.109",
+            1,
+            1,
+            ByteString.EMPTY
           )
         ),
-        Node(
-          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-          "127.0.0.1",
-          1,
-          1,
-          ByteString.copyFrom(
-            Base16.decode("6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510")
+        NodeWithoutChainId(
+          Node(
+            NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+            "127.0.0.1",
+            1,
+            1,
+            ByteString.EMPTY
           )
         )
       ),
@@ -332,7 +332,7 @@ class ConfigurationSpec
     val tables = reduce(conf, Map.empty[String, Map[String, String]]) {
       case s: String             => s""""$s""""
       case d: FiniteDuration     => s""""${d.toString.replace(" ", "")}""""
-      case p: Node               => s""""${p.show}""""
+      case p: NodeWithoutChainId => s""""${p.show}""""
       case p: java.nio.file.Path => s""""${p.toString}""""
       case x                     => x.toString
     } {
@@ -378,8 +378,8 @@ class ConfigurationSpec
     val mapper = (_: String).replace(" ", "")
 
     reduce(conf, Map.empty[String, String])({
-      case n: Node => mapper(n.show)
-      case x       => mapper(x.toString)
+      case n: NodeWithoutChainId => mapper(n.show)
+      case x                     => mapper(x.toString)
     }) {
       case (envVars, _, "") =>
         envVars
@@ -415,10 +415,10 @@ class ConfigurationSpec
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 
-      implicit val peerNode: Flattener[Node] =
+      implicit val peerNode: Flattener[NodeWithoutChainId] =
         (path, a) => List((path, innerFieldsMapper(a)))
 
-      implicit val peerNodes: Flattener[List[Node]] =
+      implicit val peerNodes: Flattener[List[NodeWithoutChainId]] =
         (path, xs) => List((path, xs.map(innerFieldsMapper).mkString(" ")))
 
       implicit def default[A: NotSubConfig]: Flattener[A] =

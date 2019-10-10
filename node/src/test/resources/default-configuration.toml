@@ -12,7 +12,7 @@ no-upnp = false
 default-timeout = "1second"
 standalone = false
 map-size = 1
-bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358:6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510@52.119.8.109?protocol=1&discovery=1 casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358:6b161719bc68c3e7812c06c4df49335ea1b888154b06b4b499bc719491207510@127.0.0.1?protocol=1&discovery=1"
+bootstrap = "casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=1&discovery=1 casperlabs://de6eed5d00cf080fc587eeb412cb31a75fd10358@127.0.0.1?protocol=1&discovery=1"
 data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1

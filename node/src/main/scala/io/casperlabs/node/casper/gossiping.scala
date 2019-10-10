@@ -7,31 +7,28 @@ import cats.data.NonEmptyList
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
-import cats.mtl.MonadState
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
-import io.casperlabs.comm.rp.RPConf
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.configuration.{ChainSpecReader, Configuration}
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -49,18 +46,15 @@ import scala.util.control.NoStackTrace
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
-  import protocbridge.gens
 
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: MonadState[
-    *[_],
-    RPConf
-  ]](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: FinalityDetector: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
+      genesis: Block,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
@@ -76,8 +70,6 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
-      genesis <- makeGenesis[F](chainSpec)
-
       implicit0(protocolVersions: CasperLabsProtocolVersions[F]) <- Resource.liftF[
                                                                      F,
                                                                      CasperLabsProtocolVersions[F]
@@ -226,24 +218,6 @@ package object gossiping {
 
     } yield ()
   }
-
-  private def makeGenesis[F[_]: MonadThrowable: Log: BlockStorage: ExecutionEngineService: MonadState[
-    *[_],
-    RPConf
-  ]](
-      spec: ipc.ChainSpec
-  ): Resource[F, Block] =
-    Resource.liftF[F, Block] {
-      for {
-        _       <- Log[F].info("Constructing Genesis block...")
-        genesis <- Genesis.fromChainSpec[F](spec.getGenesis)
-        _ <- MonadState[F, RPConf]
-              .modify(
-                c => c.copy(local = c.local.copy(chainId = genesis.getBlockMessage.blockHash))
-              )
-        _ <- Log[F].info(s"Genesis hash is ${show(genesis.getBlockMessage.blockHash)}")
-      } yield genesis.getBlockMessage
-    }
 
   /** Check if we have a block yet. */
   private def isInDag[F[_]: Sync: DagStorage](blockHash: ByteString): F[Boolean] =
@@ -547,13 +521,14 @@ package object gossiping {
                    NodeDiscovery[F],
                    connectToGossip,
                    relayFactor = conf.server.approvalRelayFactor,
-                   maybeBootstrapParams = NonEmptyList.fromList(conf.server.bootstrap) map {
-                     bootstraps =>
-                       GenesisApproverImpl.BootstrapParams(
-                         bootstraps,
-                         conf.server.approvalPollInterval,
-                         downloadManager
-                       )
+                   maybeBootstrapParams = NonEmptyList.fromList(
+                     conf.server.bootstrap.map(_.withChainId(genesis.blockHash))
+                   ) map { bootstraps =>
+                     GenesisApproverImpl.BootstrapParams(
+                       bootstraps,
+                       conf.server.approvalPollInterval,
+                       downloadManager
+                     )
                    },
                    maybeGenesis = Some(genesis),
                    maybeApproval = maybeApproveBlock(genesis)
