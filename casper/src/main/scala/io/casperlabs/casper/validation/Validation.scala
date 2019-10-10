@@ -22,7 +22,7 @@ trait Validation[F[_]] {
 
   def blockSender(block: BlockSummary)(implicit bs: BlockStorage[F]): F[Boolean]
 
-  def blockSummary(summary: BlockSummary, chainId: String)(
+  def blockSummary(summary: BlockSummary, chainName: String)(
       implicit versions: CasperLabsProtocolVersions[F]
   ): F[Unit]
 
@@ -58,7 +58,7 @@ trait Validation[F[_]] {
   def blockFull(
       block: Block,
       dag: DagRepresentation[F],
-      chainId: String,
+      chainName: String,
       maybeGenesis: Option[Block]
   )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit]
 

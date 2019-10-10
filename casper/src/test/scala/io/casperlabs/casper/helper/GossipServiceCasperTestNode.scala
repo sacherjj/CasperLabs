@@ -37,7 +37,7 @@ class GossipServiceCasperTestNode[F[_]](
     blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
-    chainId: String = "casperlabs",
+    chainName: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
 )(
@@ -75,11 +75,11 @@ class GossipServiceCasperTestNode[F[_]](
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
-      new MultiParentCasperImpl.StatelessExecutor[F](chainId, upgrades = Nil),
+      new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
-      chainId,
+      chainName,
       upgrades = Nil,
       blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
