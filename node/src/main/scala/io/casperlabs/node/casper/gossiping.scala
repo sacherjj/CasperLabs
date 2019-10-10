@@ -758,7 +758,7 @@ package object gossiping {
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
 
-  private def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
+  def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],
       rateLimiter: RateLimiter[F, ByteString],
       chainId: ByteString,
