@@ -131,7 +131,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
-    // If the block timstamp is in the future, wait some time before adding it,
+    // If the block timestamp is in the future, wait some time before adding it,
     // so we won't include it as a justification from the future.
     Validation[F].preTimestamp(block).attempt.flatMap {
       case Right(None) =>
