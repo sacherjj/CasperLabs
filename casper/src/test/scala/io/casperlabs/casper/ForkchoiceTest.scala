@@ -319,7 +319,7 @@ class ForkchoiceTest
                        latestBlocks,
                        EquivocationsTracker.empty
                      )
-        _ = forkchoice shouldBe List(b4.blockHash)
+        _ = forkchoice.toList shouldBe List(b4.blockHash)
       } yield ()
   }
 
