@@ -435,7 +435,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         _.timestamp > timestamp
       }
       .fold(().pure[F]) { msg =>
-        Log[F].warn(
+        Log[F].error(
           s"Justification is in the future: ${PrettyPrinter
             .buildString(msg.messageHash)}; ${msg.timestamp} > $timestamp"
         ) *>
