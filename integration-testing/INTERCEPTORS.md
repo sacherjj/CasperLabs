@@ -87,11 +87,11 @@ with hostname of the Docker container where the test framework runs (when run in
 and `protocol` and `discovery` pointing to ports of the respective proxies,
 for example: 
 
-`casperlabs://4d802045c3e4d2e031f25878517bc8e2c9710ee7:9dc600995054eb3abe43dd5a27cf5b4eb7026e8ebd57c229ca95dfd365a51489@test-test-DRONE-1?protocol=40400&discovery=40404`
+`casperlabs://4d802045c3e4d2e031f25878517bc8e2c9710ee7@test-test-DRONE-1?protocol=40400&discovery=40404`
 
 where the real address of the node behind the proxy is:
 
-`casperlabs://4d802045c3e4d2e031f25878517bc8e2c9710ee7:9dc600995054eb3abe43dd5a27cf5b4eb7026e8ebd57c229ca95dfd365a51489@node-0-ftvoq-test-DRONE-1?protocol=50400&discovery=50404`
+`casperlabs://4d802045c3e4d2e031f25878517bc8e2c9710ee7@node-0-ftvoq-test-DRONE-1?protocol=50400&discovery=50404`
 
 #### Running locally vs running in CI
 
