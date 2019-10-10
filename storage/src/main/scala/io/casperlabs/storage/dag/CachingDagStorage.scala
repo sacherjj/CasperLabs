@@ -14,9 +14,9 @@ import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
-import scala.collection.JavaConverters._
-
 class CachingDagStorage[F[_]: Sync](
+    // How far to go to the past (by ranks) for caching parents and justifications of looked up block
+    neighbourhoodRangeToCacheOnLookup: Int,
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
@@ -36,6 +36,31 @@ class CachingDagStorage[F[_]: Sync](
       case s @ Some(_) => (s: Option[A]).pure[F]
     }
 
+  private def cacheMessage(message: Message): F[Unit] = Sync[F].delay {
+    val parents        = message.parents
+    val justifications = message.justifications.map(_.latestBlockHash)
+    parents.foreach { parent =>
+      val newChildren = Option(childrenCache.getIfPresent(parent))
+        .getOrElse(Set.empty[BlockHash]) + message.messageHash
+      childrenCache.put(parent, newChildren)
+    }
+    justifications.foreach { justification =>
+      val newBlockHashes = Option(justificationCache.getIfPresent(justification))
+        .getOrElse(Set.empty[BlockHash]) + message.messageHash
+      justificationCache.put(justification, newBlockHashes)
+    }
+    messagesCache.put(message.messageHash, message)
+  }
+
+  private def cacheSummary(summary: BlockSummary): F[Unit] =
+    Sync[F].fromTry(Message.fromBlockSummary(summary)).flatMap(cacheMessage)
+
+  private def cacheNeighbourhood(message: Message): F[Unit] =
+    topoSort(
+      startBlockNumber = message.rank - neighbourhoodRangeToCacheOnLookup,
+      endBlockNumber = message.rank
+    ).evalMap(summaries => semaphore.withPermit(summaries.traverse_(cacheSummary))).compile.drain
+
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     cacheOrUnderlying(
       Option(childrenCache.getIfPresent(blockHash)),
@@ -53,25 +78,11 @@ class CachingDagStorage[F[_]: Sync](
     (this: DagRepresentation[F]).pure[F]
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
-    semaphore.withPermit(
-      Sync[F].delay {
-        val parents        = block.parentHashes
-        val justifications = block.justifications.map(_.latestBlockHash)
-
-        parents.foreach { parent =>
-          val newChildren = Option(childrenCache.getIfPresent(parent))
-            .getOrElse(Set.empty[BlockHash]) + block.blockHash
-          childrenCache.put(parent, newChildren)
-        }
-        justifications.foreach { justification =>
-          val newBlockHashes = Option(justificationCache.getIfPresent(justification))
-            .getOrElse(Set.empty[BlockHash]) + block.blockHash
-          justificationCache.put(justification, newBlockHashes)
-        }
-      } >> Sync[F]
-        .fromTry(Message.fromBlock(block))
-        .map(messagesCache.put(block.blockHash, _))
-    ) >> underlying.insert(block)
+    for {
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- semaphore.withPermit(cacheMessage(message))
+      dag     <- underlying.insert(block)
+    } yield dag
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
 
@@ -86,7 +97,11 @@ class CachingDagStorage[F[_]: Sync](
   override def lookup(blockHash: BlockHash): F[Option[Message]] =
     cacheOrUnderlyingOpt(
       Option(messagesCache.getIfPresent(blockHash)),
-      underlying.lookup(blockHash)
+      underlying
+        .lookup(blockHash)
+        .flatMap(
+          maybeMessage => maybeMessage.traverse_(cacheNeighbourhood) >> maybeMessage.pure[F]
+        )
     )
 
   override def contains(blockHash: BlockHash): F[Boolean] =
@@ -122,7 +137,9 @@ object CachingDagStorage {
   def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
-      name: String = "cache"
+      name: String = "cache",
+      // How far to go to the past (by ranks) for caching parents and justifications of looked up block
+      neighbourhoodRangeToCacheOnLookup: Int = 10
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
     val createBlockHashesSetCache = Sync[F].delay {
@@ -148,6 +165,7 @@ object CachingDagStorage {
       messagesCache      <- createMessagesCache
       semaphore          <- Semaphore[F](1)
       store = new CachingDagStorage[F](
+        neighbourhoodRangeToCacheOnLookup,
         underlying,
         childrenCache,
         justificationCache,
