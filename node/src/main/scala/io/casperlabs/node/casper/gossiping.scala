@@ -115,7 +115,7 @@ package object gossiping {
                        conf,
                        connectToGossip,
                        isInitialRef,
-                       genesis.getHeader.chainId
+                       genesis.getHeader.chainName
                      )
 
       downloadManager <- makeDownloadManager(
@@ -155,7 +155,7 @@ package object gossiping {
                                        genesis,
                                        prestate,
                                        transforms,
-                                       genesis.getHeader.chainId,
+                                       genesis.getHeader.chainName,
                                        spec.upgrades,
                                        relaying
                                      )
@@ -286,7 +286,7 @@ package object gossiping {
             _     <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state <- Cell.mvarCell[F, CasperState](CasperState())
             executor <- MultiParentCasperImpl.StatelessExecutor
-                         .create[F](chainId = spec.getGenesis.name, spec.upgrades)
+                         .create[F](chainName = spec.getGenesis.name, spec.upgrades)
             dag         <- DagStorage[F].getRepresentation
             (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
@@ -583,7 +583,7 @@ package object gossiping {
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       isInitialRef: Ref[F, Boolean],
-      chainId: String
+      chainName: String
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
       _         <- SynchronizerImpl.establishMetrics[F]
@@ -608,7 +608,7 @@ package object gossiping {
                            } yield latest.values.toList
 
                          override def validate(blockSummary: BlockSummary): F[Unit] =
-                           Validation[F].blockSummary(blockSummary, chainId)
+                           Validation[F].blockSummary(blockSummary, chainName)
 
                          override def notInDag(blockHash: ByteString): F[Boolean] =
                            isInDag(blockHash).map(!_)

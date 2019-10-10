@@ -78,7 +78,7 @@ sealed abstract class MultiParentCasperInstances {
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
@@ -88,13 +88,13 @@ sealed abstract class MultiParentCasperInstances {
                                                                               genesisPreState,
                                                                               genesisEffects
                                                                             )
-      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId, upgrades)
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainName, upgrades)
       casper <- MultiParentCasperImpl.create[F](
                  statelessExecutor,
                  MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,
                  genesis,
-                 chainId,
+                 chainName,
                  upgrades,
                  blockProcessingLock
                )

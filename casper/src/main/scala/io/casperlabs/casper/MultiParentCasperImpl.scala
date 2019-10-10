@@ -60,7 +60,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
-    chainId: String,
+    chainName: String,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
     blockProcessingLock: Semaphore[F],
     val faultToleranceThreshold: Float = 0f
@@ -540,7 +540,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             protocolVersion,
             merged.parents.map(_.blockHash),
             validatorSeqNum,
-            chainId,
+            chainName,
             timestamp,
             rank,
             validatorId,
@@ -660,7 +660,7 @@ object MultiParentCasperImpl {
       broadcaster: Broadcaster[F],
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
@@ -672,7 +672,7 @@ object MultiParentCasperImpl {
           broadcaster,
           validatorId,
           genesis,
-          chainId,
+          chainName,
           upgrades,
           blockProcessingLock,
           faultToleranceThreshold
@@ -682,7 +682,7 @@ object MultiParentCasperImpl {
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
     //TODO pull out
@@ -707,7 +707,7 @@ object MultiParentCasperImpl {
           _ <- Validation[F].blockFull(
                 block,
                 dag,
-                chainId,
+                chainName,
                 maybeContext.map(_.genesis)
               )
           casperState <- Cell[F, CasperState].read
@@ -818,7 +818,7 @@ object MultiParentCasperImpl {
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
-            InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
+            InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
             InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
             InvalidTargetHash =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
@@ -890,10 +890,10 @@ object MultiParentCasperImpl {
     }
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-        chainId: String,
+        chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
-      establishMetrics[F] as new StatelessExecutor[F](chainId, upgrades)
+      establishMetrics[F] as new StatelessExecutor[F](chainName, upgrades)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
@@ -938,7 +938,7 @@ object MultiParentCasperImpl {
 
           case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
               InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
-              InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
+              InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
               InvalidTargetHash =>
