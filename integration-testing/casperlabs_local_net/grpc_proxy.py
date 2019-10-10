@@ -264,8 +264,30 @@ class ProxyServicer:
     @property
     def service(self):
         """ Provide client API for the service behind proxy. """
-        with self.channel() as channel:
-            yield self.service_stub(channel)
+
+        class Service:
+            def __init__(self, servicer):
+                self.servicer = servicer
+
+            def __getattr__(self, name):
+                def is_unary_stream(method_name):
+                    return method_name.startswith("Stream") or method_name.endswith(
+                        "Chunked"
+                    )
+
+                def unary_stream(*args, **kwargs):
+                    with self.servicer.channel() as channel:
+                        method = getattr(self.servicer.service_stub(channel), name)
+                        yield from method(*args, *kwargs)
+
+                def unary_unary(*args, **kwargs):
+                    with self.servicer.channel() as channel:
+                        method = getattr(self.servicer.service_stub(channel), name)
+                        return method(*args, *kwargs)
+
+                return is_unary_stream(name) and unary_stream or unary_unary
+
+        return Service(self)
 
 
 class ProxyThread(Thread):
@@ -313,6 +335,10 @@ class ProxyThread(Thread):
         node = self.servicer.interceptor.node
         self.servicer.interceptor = interceptor_class(node)
 
+    @property
+    def interceptor(self):
+        return self.servicer.interceptor
+
     def run(self):
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
         self.add_servicer_to_server(self.servicer, self.server)
@@ -344,7 +370,8 @@ class ProxyThread(Thread):
 
     @property
     def service(self):
-        return next(self.servicer.service)
+        """"Gives access to the gRPC API of the node behind proxy."""
+        return self.servicer.service
 
 
 def proxy_client(
