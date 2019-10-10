@@ -19,7 +19,7 @@ pub extern "C" fn mint_ext() {
 pub extern "C" fn call() {
     let uref = storage::store_function(MINT_FUNCTION_NAME, Default::default())
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::ret(uref, vec![uref]);

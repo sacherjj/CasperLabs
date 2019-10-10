@@ -64,8 +64,8 @@ pub enum Error {
     UnexpectedKeyVariant,
     /// The `Value` variant was not as expected.
     UnexpectedValueVariant,
-    /// The `ContractPointer` variant was not as expected.
-    UnexpectedContractPointerVariant,
+    /// The `ContractRef` variant was not as expected.
+    UnexpectedContractRefVariant,
     /// Invalid purse name given.
     InvalidPurseName,
     /// Invalid purse retrieved.
@@ -110,7 +110,7 @@ impl From<Error> for u32 {
             Error::GetKey => 8,
             Error::UnexpectedKeyVariant => 9,
             Error::UnexpectedValueVariant => 10,
-            Error::UnexpectedContractPointerVariant => 11,
+            Error::UnexpectedContractRefVariant => 11,
             Error::InvalidPurseName => 12,
             Error::InvalidPurse => 13,
             Error::UpgradeContractAtURef => 14,
@@ -136,8 +136,8 @@ impl Debug for Error {
             Error::GetKey => write!(f, "Error::GetURef")?,
             Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
             Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
-            Error::UnexpectedContractPointerVariant => {
-                write!(f, "Error::UnexpectedContractPointerVariant")?
+            Error::UnexpectedContractRefVariant => {
+                write!(f, "Error::UnexpectedContractRefVariant")?
             }
             Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
             Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
@@ -172,7 +172,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         8 => Err(Error::GetKey),
         9 => Err(Error::UnexpectedKeyVariant),
         10 => Err(Error::UnexpectedValueVariant),
-        11 => Err(Error::UnexpectedContractPointerVariant),
+        11 => Err(Error::UnexpectedContractRefVariant),
         12 => Err(Error::InvalidPurseName),
         13 => Err(Error::InvalidPurse),
         14 => Err(Error::UpgradeContractAtURef),
@@ -243,7 +243,7 @@ mod tests {
         round_trip(Err(Error::GetKey));
         round_trip(Err(Error::UnexpectedKeyVariant));
         round_trip(Err(Error::UnexpectedValueVariant));
-        round_trip(Err(Error::UnexpectedContractPointerVariant));
+        round_trip(Err(Error::UnexpectedContractRefVariant));
         round_trip(Err(Error::InvalidPurseName));
         round_trip(Err(Error::InvalidPurse));
         round_trip(Err(Error::UpgradeContractAtURef));

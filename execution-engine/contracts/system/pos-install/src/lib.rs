@@ -90,7 +90,7 @@ pub extern "C" fn call() {
 
     let uref = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::ret(uref, vec![uref]);

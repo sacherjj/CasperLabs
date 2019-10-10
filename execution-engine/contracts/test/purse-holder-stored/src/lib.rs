@@ -74,7 +74,7 @@ pub extern "C" fn call() {
 
     let key = storage::store_function(ENTRY_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::put_key(CONTRACT_NAME, &key);
