@@ -139,41 +139,40 @@ object BlockAPI {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-
-      BlockStorage[F].findBlockHashesWithDeployHash(deployHash) flatMap {
-        case blockHashes if blockHashes.nonEmpty =>
+      DeployStorageReader[F].getByHash(deployHash) flatMap {
+        case None =>
+          none.pure[F]
+        case Some(deploy) =>
           for {
-            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-            blockInfos = blocks.map { block =>
-              val summary =
-                BlockSummary(block.blockHash, block.header, block.signature)
-              makeBlockInfo(summary, block.some)
-            }
-            results = (blocks zip blockInfos).flatMap {
-              case (block, info) =>
-                block.getBody.deploys
-                  .find(_.getDeploy.deployHash == deployHash)
-                  .map(_ -> info)
-            }
-            info = DeployInfo(
-              deploy = results.headOption.flatMap(_._1.deploy),
-              processingResults = results.map {
-                case (processedDeploy, blockInfo) =>
-                  DeployInfo
-                    .ProcessingResult(
-                      cost = processedDeploy.cost,
-                      isError = processedDeploy.isError,
-                      errorMessage = processedDeploy.errorMessage
-                    )
-                    .withBlockInfo(blockInfo)
-              }
-            )
+            maybeStatus       <- DeployStorageReader[F].getBufferedStatus(deployHash)
+            processingResults <- DeployStorageReader[F].getProcessingResults(deployHash)
+            info <- if (processingResults.nonEmpty) {
+                     processingResults.toList.traverse(
+                       x => BlockStorage[F].getBlockSummary(x._1)
+                     ) map { blockSummaries =>
+                       DeployInfo()
+                         .withDeploy(deploy)
+                         .withStatus(
+                           maybeStatus getOrElse DeployInfo
+                             .Status(DeployInfo.State.FINALIZED)
+                         )
+                         .withProcessingResults(
+                           (processingResults zip blockSummaries).collect {
+                             case ((_, result), maybeSummary) =>
+                               DeployInfo
+                                 .ProcessingResult(
+                                   cost = result.cost,
+                                   isError = result.isError,
+                                   errorMessage = result.errorMessage,
+                                   blockInfo = maybeSummary.map(makeBlockInfo(_, None))
+                                 )
+                           }
+                         )
+                     }
+                   } else {
+                     DeployInfo(status = maybeStatus).withDeploy(deploy).pure[F]
+                   }
           } yield info.some
-
-        case _ =>
-          DeployStorageReader[F]
-            .getPendingOrProcessed(deployHash)
-            .map(_.map(DeployInfo().withDeploy))
       }
     }
 

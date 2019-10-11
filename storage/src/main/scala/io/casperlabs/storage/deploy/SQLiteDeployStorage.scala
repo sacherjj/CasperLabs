@@ -9,6 +9,7 @@ import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -30,6 +31,12 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
   private val ProcessedStatusCode = 1
   // Deploys that have been discarded for some reason and should be deleted after a while
   private val DiscardedStatusCode = 2
+
+  private val StatusCodeToState = Map(
+    PendingStatusCode   -> DeployInfo.State.PENDING,
+    ProcessedStatusCode -> DeployInfo.State.PROCESSED,
+    DiscardedStatusCode -> DeployInfo.State.DISCARDED
+  ).withDefaultValue(DeployInfo.State.UNDEFINED)
 
   private val StatusMessageTtlExpired = "TTL expired"
 
@@ -189,7 +196,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     for {
       now       <- Time[F].currentMillis
       threshold = now - expirationPeriod.toMillis
-      _ <- sql"""|UPDATE buffered_deploys 
+      _ <- sql"""|UPDATE buffered_deploys
                  |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
                  |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
             .transact(xa)
@@ -284,13 +291,16 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       .option
       .transact(xa)
 
-  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] =
+  override def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy] =
     NonEmptyList
-      .fromList[ByteString](l.toList)
+      .fromList[ByteString](hashes.toList)
       .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
         val q = fr"SELECT data FROM deploys WHERE " ++ Fragments.in(fr"hash", nel) // "hash IN (…)"
         q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
       })
+
+  def getByHash(hash: ByteString): F[Option[Deploy]] =
+    getByHashes(Set(hash)).compile.last
 
   override def getProcessingResults(
       hash: ByteString
@@ -299,9 +309,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       sql"SELECT data FROM deploys WHERE hash=$hash".query[Deploy].unique.transact(xa)
 
     val readProcessingResults =
-      sql"""|SELECT block_hash, cost, execution_error_message 
-            |FROM deploy_process_results 
-            |WHERE deploy_hash=$hash 
+      sql"""|SELECT block_hash, cost, execution_error_message
+            |FROM deploy_process_results
+            |WHERE deploy_hash=$hash
             |ORDER BY execute_time_millis DESC""".stripMargin
         .query[(ByteString, ProcessedDeploy)]
         .to[List]
@@ -320,6 +330,21 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               )
     } yield res
   }
+
+  override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+    sql"""|SELECT status, status_message
+          |FROM buffered_deploys
+          |WHERE hash=$hash """.stripMargin
+      .query[(Int, Option[String])]
+      .option
+      .transact(xa)
+      .map(_.map {
+        case (status, maybeMessage) =>
+          DeployInfo.Status(
+            state = StatusCodeToState(status),
+            message = maybeMessage.getOrElse("")
+          )
+      })
 
   override def clear(): F[Unit] =
     (for {

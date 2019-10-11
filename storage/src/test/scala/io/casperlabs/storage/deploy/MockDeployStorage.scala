@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
@@ -174,6 +175,9 @@ class MockDeployStorage[F[_]: Sync: Log](
       .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
   }
 
+  def getByHash(hash: ByteString): F[Option[Deploy]] =
+    getByHashes(Set(hash)).compile.last
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(_.collect {
       case (deploy, Metadata(`status`, _, _, _)) => deploy
@@ -187,6 +191,19 @@ class MockDeployStorage[F[_]: Sync: Log](
       case (d, Metadata(`PendingStatusCode` | `ProcessedStatusCode`, _, _, _))
           if d.deployHash == hash =>
         d
+    })
+
+  override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+    deploysWithMetadataRef.get.map(_.collectFirst {
+      case (d, Metadata(status, _, _, _)) if d.deployHash == hash =>
+        DeployInfo.Status(
+          state = status match {
+            case `PendingStatusCode`   => DeployInfo.State.PENDING
+            case `ProcessedStatusCode` => DeployInfo.State.PROCESSED
+            case `DiscardedStatusCode` => DeployInfo.State.DISCARDED
+            case _                     => DeployInfo.State.UNDEFINED
+          }
+        )
     })
 
   override def clear(): F[Unit] = ().pure[F]

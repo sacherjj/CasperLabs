@@ -30,6 +30,7 @@ message BlockStatus {
 message DeployInfo {
     io.casperlabs.casper.consensus.Deploy deploy = 1;
     repeated ProcessingResult processing_results = 2;
+    Status status = 3;
 
     message ProcessingResult {
         BlockInfo block_info = 1;
@@ -43,5 +44,18 @@ message DeployInfo {
         BASIC = 0;
         // Includes the body with the code.
         FULL = 1;
+    }
+
+    enum State {
+        UNDEFINED = 0;
+        PENDING = 1;
+        PROCESSED = 2;
+        FINALIZED = 3;
+        DISCARDED = 4;
+    }
+
+    message Status {
+        State state = 1;
+        string message = 2;
     }
 }
