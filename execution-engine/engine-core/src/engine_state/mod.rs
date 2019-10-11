@@ -42,7 +42,7 @@ use self::genesis::{
 use crate::engine_state::error::Error::MissingSystemContractError;
 use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
-use crate::execution::{self, Executor, WasmiExecutor};
+use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use crate::KnownKeys;
 
@@ -344,10 +344,22 @@ where
         //
 
         // Create known keys for chainspec accounts
-        let account_named_keys = BTreeMap::new();
+        let account_named_keys = {
+            let mut ret = BTreeMap::new();
+            let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
+            let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
+            ret.insert(MINT_NAME.to_string(), Key::URef(m_attenuated));
+            ret.insert(POS_NAME.to_string(), Key::URef(p_attenuated));
+            ret
+        };
 
         // Create known keys for system account
-        let system_account_named_keys = BTreeMap::new();
+        let system_account_named_keys = {
+            let mut ret = BTreeMap::new();
+            ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
+            ret.insert(POS_NAME.to_string(), Key::URef(proof_of_stake_reference));
+            ret
+        };
 
         // Create accounts
         {

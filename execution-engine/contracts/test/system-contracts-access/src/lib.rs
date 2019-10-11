@@ -9,7 +9,7 @@ use contract_ffi::value::account::PublicKey;
 
 #[repr(u16)]
 enum Error {
-    NonEmptyNamedKeys = 100,
+    TooManyDefaultNamedKeys = 100,
     MintContractIsNotURef = 101,
     PosContractIsNotURef = 102,
     InvalidMintAccessRights = 103,
@@ -25,6 +25,7 @@ impl Into<ApiError> for Error {
 }
 
 const SYSTEM_ADDR: [u8; 32] = [0; 32];
+const DEFAULT_UREFS_COUNT: usize = 2;
 
 /// Extracts URef from ContractRef for the purpose of further validation
 fn extract_uref_from_contract_pointer(contract_pointer: ContractRef) -> Option<URef> {
@@ -39,8 +40,8 @@ fn delegate() {
 
     // Step 1 - Named keys should be empty regardless of the context (system/genesis/user)
     let named_keys = contract_api::runtime::list_named_keys();
-    if !named_keys.is_empty() {
-        contract_api::runtime::revert(Error::NonEmptyNamedKeys);
+    if named_keys.len() > DEFAULT_UREFS_COUNT {
+        contract_api::runtime::revert(Error::TooManyDefaultNamedKeys);
     }
 
     // Step 2 - Mint and PoS should be URefs and they should have valid access rights

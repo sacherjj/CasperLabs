@@ -13,4 +13,7 @@ pub use self::runtime::{
     extract_access_rights_from_keys, extract_access_rights_from_urefs, instance_and_memory, Runtime,
 };
 
+pub const MINT_NAME: &str = "mint";
+pub const POS_NAME: &str = "pos";
+
 pub(crate) const FN_STORE_ID_INITIAL: u32 = 0;
