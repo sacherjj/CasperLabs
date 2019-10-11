@@ -5,7 +5,7 @@ import "io/casperlabs/casper/consensus/consensus.proto";
 
 message BlockInfo {
     io.casperlabs.casper.consensus.BlockSummary summary = 1;
-    BlockStatus status = 2;
+    Status status = 2;
 
     enum View {
         // Only includes information which is based on the header.
@@ -14,18 +14,19 @@ message BlockInfo {
         // for example the size, number of errors in deploys, etc.
         FULL = 1;
     }
-}
 
-message BlockStatus {
-    float fault_tolerance = 1;
-    Stats stats = 2;
+    message Status {
+        float fault_tolerance = 1;
+        Stats stats = 2;
 
-    // Statistics derived from the full block.
-    message Stats {
-        uint32 block_size_bytes = 1;
-        uint32 deploy_error_count = 2;
+        // Statistics derived from the full block.
+        message Stats {
+            uint32 block_size_bytes = 1;
+            uint32 deploy_error_count = 2;
+        }
     }
 }
+
 
 message DeployInfo {
     io.casperlabs.casper.consensus.Deploy deploy = 1;
@@ -48,14 +49,22 @@ message DeployInfo {
 
     enum State {
         UNDEFINED = 0;
+        // Waiting to be included in a block. Deploys can go back to pending
+        // if the block it was included in got orphaned.
         PENDING = 1;
+        // Included in one or more blocks, waiting to be finalized, or potentially
+        // orphaned and re-queued.
         PROCESSED = 2;
+        // The block the deploy was included has been finalized along with all the deploys in it.
         FINALIZED = 3;
+        // Deploys get discarded if their account doesn't exist, or their TTL expires.
+        // They will be removed after a grace period to free up space.
         DISCARDED = 4;
     }
 
     message Status {
         State state = 1;
+        // Potential explanation for the current state of the deploy, e.g. the reason it got discarded.
         string message = 2;
     }
 }
