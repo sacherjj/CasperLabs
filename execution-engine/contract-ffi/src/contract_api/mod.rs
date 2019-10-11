@@ -1,5 +1,5 @@
 pub mod account;
-pub mod contract_ref;
+mod contract_ref;
 mod error;
 pub mod runtime;
 pub mod storage;

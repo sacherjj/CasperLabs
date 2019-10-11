@@ -18,11 +18,11 @@ pub const MINT_NAME: &str = "mint";
 pub const POS_NAME: &str = "pos";
 
 fn get_system_contract(name: &str) -> ContractRef {
-    let key = get_key(name).unwrap_or_else(|| revert(Error::GetURef));
+    let key = get_key(name).unwrap_or_else(|| revert(Error::GetKey));
 
     if let Key::URef(uref) = key {
         let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-        ContractRef::URef(reference)
+        ContractRef::TURef(reference)
     } else {
         revert(Error::UnexpectedKeyVariant)
     }

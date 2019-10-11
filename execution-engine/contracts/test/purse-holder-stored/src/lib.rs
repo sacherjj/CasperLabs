@@ -53,7 +53,7 @@ pub extern "C" fn apply_method() {
             let purse_id = system::create_purse();
             runtime::put_key(&purse_name, &purse_id.value().into());
         }
-        METHOD_VERSION => runtime::ret(&VERSION.to_string(), &vec![]),
+        METHOD_VERSION => runtime::ret(VERSION.to_string(), vec![]),
         _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }
@@ -63,7 +63,7 @@ pub extern "C" fn apply_method() {
 pub extern "C" fn call() {
     let mint_uref = match system::get_mint() {
         ContractRef::Hash(_) => runtime::revert(Error::User(CustomError::MintHash as u16)),
-        ContractRef::URef(turef) => turef.into(),
+        ContractRef::TURef(turef) => turef.into(),
     };
 
     let named_keys = {
@@ -74,7 +74,7 @@ pub extern "C" fn call() {
 
     let key = storage::store_function(ENTRY_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::put_key(CONTRACT_NAME, &key);

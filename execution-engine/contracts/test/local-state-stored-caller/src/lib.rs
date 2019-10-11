@@ -25,7 +25,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::User(CustomError::MissingLocalStateURefArg as u16))
         .unwrap_or_revert_with(Error::InvalidArgument);
 
-    let local_state_contract_pointer = ContractRef::URef(TURef::new(
+    let local_state_contract_pointer = ContractRef::TURef(TURef::new(
         local_state_uref.addr(),
         contract_ffi::uref::AccessRights::READ,
     ));

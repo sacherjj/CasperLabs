@@ -13,7 +13,7 @@ use contract_ffi::value::account::PublicKey;
 #[no_mangle]
 pub extern "C" fn check_caller_ext() {
     let caller_public_key: PublicKey = runtime::get_caller();
-    runtime::ret(&caller_public_key, &Vec::new())
+    runtime::ret(caller_public_key, Vec::new())
 }
 
 #[no_mangle]

@@ -26,7 +26,7 @@ pub extern "C" fn call() {
         ContractRef::Hash(_) => {
             runtime::revert(Error::User(CustomError::ContractPointerHash as u16))
         }
-        ContractRef::URef(turef) => turef,
+        ContractRef::TURef(turef) => turef,
     };
 
     runtime::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);

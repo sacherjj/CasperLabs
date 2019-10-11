@@ -41,7 +41,7 @@ pub extern "C" fn call() {
     let mint_uref: URef = runtime::get_arg(Args::MintURef as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let mint = ContractRef::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
+    let mint = ContractRef::TURef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
@@ -90,10 +90,10 @@ pub extern "C" fn call() {
 
     let uref = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::ret(&uref, &vec![uref]);
+    runtime::ret(uref, vec![uref]);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
