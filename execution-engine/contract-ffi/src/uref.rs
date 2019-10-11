@@ -136,6 +136,14 @@ impl URef {
         }
     }
 
+    pub fn into_read(self) -> URef {
+        URef(self.0, Some(AccessRights::READ))
+    }
+
+    pub fn into_read_add_write(self) -> URef {
+        URef(self.0, Some(AccessRights::READ_ADD_WRITE))
+    }
+
     pub fn is_writeable(self) -> bool {
         if let Some(access_rights) = self.1 {
             access_rights.is_writeable()

@@ -19,7 +19,7 @@ use super::{extract_access_rights_from_keys, instance_and_memory, Runtime};
 use crate::engine_state::execution_result::ExecutionResult;
 use crate::execution::address_generator::AddressGenerator;
 use crate::execution::FN_STORE_ID_INITIAL;
-use crate::runtime_context::RuntimeContext;
+use crate::runtime_context::{self, RuntimeContext};
 use crate::tracking_copy::TrackingCopy;
 
 pub trait Executor<A> {
@@ -153,12 +153,14 @@ impl Executor<Module> for WasmiExecutor {
 
         let mut named_keys = account.named_keys().clone();
 
-        let access_rights = {
-            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-            keys.push(protocol_data.mint().into());
-            keys.push(protocol_data.proof_of_stake().into());
-            extract_access_rights_from_keys(keys)
-        };
+        let access_rights =
+            {
+                let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+                }));
+                extract_access_rights_from_keys(keys)
+            };
 
         let address_generator = AddressGenerator::new(deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
@@ -233,12 +235,14 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
     {
         let mut named_keys = named_keys.clone();
-        let access_rights = {
-            let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-            keys.push(protocol_data.mint().into());
-            keys.push(protocol_data.proof_of_stake().into());
-            extract_access_rights_from_keys(keys)
-        };
+        let access_rights =
+            {
+                let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+                }));
+                extract_access_rights_from_keys(keys)
+            };
 
         let address_generator = {
             let address_generator = AddressGenerator::new(deploy_hash, phase);
@@ -351,12 +355,14 @@ impl Executor<Module> for WasmiExecutor {
         R::Error: Into<Error>,
         T: FromBytes,
     {
-        let access_rights = {
-            let mut keys: Vec<Key> = keys.values().cloned().collect();
-            keys.push(protocol_data.mint().into());
-            keys.push(protocol_data.proof_of_stake().into());
-            extract_access_rights_from_keys(keys)
-        };
+        let access_rights =
+            {
+                let mut keys: Vec<Key> = keys.values().cloned().collect();
+                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+                }));
+                extract_access_rights_from_keys(keys)
+            };
 
         let args: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()

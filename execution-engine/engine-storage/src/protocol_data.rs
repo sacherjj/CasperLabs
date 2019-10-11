@@ -50,6 +50,18 @@ impl ProtocolData {
     pub fn proof_of_stake(&self) -> URef {
         self.proof_of_stake
     }
+
+    /// Retrieves all valid system contracts stored in protocol version
+    pub fn system_contracts(&self) -> Vec<URef> {
+        let mut vec = Vec::with_capacity(2);
+        if self.mint.addr() != [0; 32] {
+            vec.push(self.mint)
+        }
+        if self.proof_of_stake.addr() != [0; 32] {
+            vec.push(self.proof_of_stake)
+        }
+        vec
+    }
 }
 
 impl ToBytes for ProtocolData {
@@ -127,6 +139,47 @@ mod tests {
         };
         assert!(test_utils::test_serialization_roundtrip(&v1));
         assert!(test_utils::test_serialization_roundtrip(&free));
+    }
+
+    #[test]
+    fn should_return_all_system_contracts() {
+        let mint_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let proof_of_stake_reference = URef::new([198u8; 32], AccessRights::READ_ADD_WRITE);
+        let protocol_data = {
+            let costs = test_utils::wasm_costs_mock();
+            ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
+        };
+
+        let actual = {
+            let mut items = protocol_data.system_contracts();
+            items.sort();
+            items
+        };
+
+        assert_eq!(actual.len(), 2);
+        assert_eq!(actual[0], mint_reference);
+        assert_eq!(actual[1], proof_of_stake_reference);
+    }
+
+    #[test]
+    fn should_return_only_valid_system_contracts() {
+        assert_eq!(ProtocolData::default().system_contracts(), &[]);
+
+        let mint_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let proof_of_stake_reference = URef::new([0u8; 32], AccessRights::READ);
+        let protocol_data = {
+            let costs = test_utils::wasm_costs_mock();
+            ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
+        };
+
+        let actual = {
+            let mut items = protocol_data.system_contracts();
+            items.sort();
+            items
+        };
+
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0], mint_reference);
     }
 
     proptest! {
