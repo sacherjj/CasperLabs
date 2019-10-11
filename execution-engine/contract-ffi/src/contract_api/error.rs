@@ -76,6 +76,8 @@ pub enum Error {
     Transfer,
     /// No access rights.
     NoAccessRights,
+    /// A given type could be derived from a `Value`.
+    ValueConversion,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -116,6 +118,7 @@ impl From<Error> for u32 {
             Error::UpgradeContractAtURef => 14,
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
+            Error::ValueConversion => 17,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -144,6 +147,7 @@ impl Debug for Error {
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
+            Error::ValueConversion => write!(f, "Error::ValueConversion")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -178,6 +182,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         14 => Err(Error::UpgradeContractAtURef),
         15 => Err(Error::Transfer),
         16 => Err(Error::NoAccessRights),
+        17 => Err(Error::ValueConversion),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -249,6 +254,7 @@ mod tests {
         round_trip(Err(Error::UpgradeContractAtURef));
         round_trip(Err(Error::Transfer));
         round_trip(Err(Error::NoAccessRights));
+        round_trip(Err(Error::ValueConversion));
         round_trip(Err(Error::ProofOfStake(0)));
         round_trip(Err(Error::ProofOfStake(u8::MAX)));
         round_trip(Err(Error::User(0)));

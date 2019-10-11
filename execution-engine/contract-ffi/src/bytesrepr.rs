@@ -1,9 +1,8 @@
 use super::alloc::collections::BTreeMap;
 use super::alloc::collections::TryReserveError;
-use super::alloc::string::{String, ToString};
+use super::alloc::string::String;
 use super::alloc::vec::Vec;
 
-use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
 
@@ -33,9 +32,10 @@ pub trait FromBytes: Sized {
 }
 
 #[derive(Debug, Fail, PartialEq, Eq, Clone)]
+#[repr(u8)]
 pub enum Error {
     #[fail(display = "Deserialization error: early end of stream")]
-    EarlyEndOfStream,
+    EarlyEndOfStream = 0,
 
     #[fail(display = "Deserialization error: formatting error")]
     FormattingError,
@@ -45,20 +45,11 @@ pub enum Error {
 
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
-
-    #[fail(display = "Serialization error: {}", _0)]
-    CustomError(String),
 }
 
 impl From<TryReserveError> for Error {
     fn from(_: TryReserveError) -> Error {
         Error::OutOfMemoryError
-    }
-}
-
-impl Error {
-    pub fn custom<T: Display>(msg: T) -> Error {
-        Error::CustomError(msg.to_string())
     }
 }
 
