@@ -820,6 +820,7 @@ steps:
 - name: package-ee-tag
   commands:
   - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make setup -C ./execution-engine"
   - "make cargo-package-all"
   - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
   - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
