@@ -738,7 +738,7 @@ class ValidationTest
               genesis.withSignature(genesis.getSignature.withSigAlgorithm(""))
             ) shouldBeF false
         _ <- Validation[Task].formatOfFields(
-              genesis.withHeader(genesis.getHeader.withChainId(""))
+              genesis.withHeader(genesis.getHeader.withChainName(""))
             ) shouldBeF false
         _ <- Validation[Task].formatOfFields(genesis.withHeader(genesis.getHeader.clearState)) shouldBeF false
         _ <- Validation[Task].formatOfFields(
@@ -1025,26 +1025,26 @@ class ValidationTest
   ignore should "return InvalidTargetHash for a message of type ballot that has invalid number of parents" in withStorage {
     _ => implicit dagStorage => _ =>
       import io.casperlabs.models.BlockImplicits._
-      val chainId = "test"
+      val chainName = "test"
       for {
         blockA <- createBlock[Task](
                    parentsHashList = Seq.empty,
                    messageType = MessageType.BALLOT,
-                   chainId = chainId
+                   chainName = chainName
                  )
         blockB <- createBlock[Task](
                    parentsHashList =
                      Seq(ByteString.EMPTY, ByteString.copyFrom(Array.ofDim[Byte](32))),
                    messageType = MessageType.BALLOT,
-                   chainId = chainId
+                   chainName = chainName
                  )
         _ <- ValidationImpl[Task]
-              .blockSummary(BlockSummary.fromBlock(blockA), chainId)
+              .blockSummary(BlockSummary.fromBlock(blockA), chainName)
               .attempt shouldBeF Left(
               ValidateErrorWrapper(InvalidTargetHash)
             )
         _ <- ValidationImpl[Task]
-              .blockSummary(BlockSummary.fromBlock(blockB), chainId)
+              .blockSummary(BlockSummary.fromBlock(blockB), chainName)
               .attempt shouldBeF Left(
               ValidateErrorWrapper(InvalidTargetHash)
             )

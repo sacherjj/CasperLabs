@@ -86,7 +86,7 @@ object PrettyPrinter {
       s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
       s"-- Contents ${buildString(postState.postStateHash)}" +
-      s"-- Chain ID ${limit(header.chainId, 10)}"
+      s"-- Chain Name ${limit(header.chainName, 10)}"
     blockString match {
       case Some(str) => str
       case None      => s"Block with missing elements (${buildString(b.blockHash)})"

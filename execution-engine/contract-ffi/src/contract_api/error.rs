@@ -15,13 +15,13 @@ const POS_ERROR_OFFSET: u32 = RESERVED_ERROR_MAX - u8::MAX as u32; // 65280..=65
 /// added to them when being converted to a `u32`.
 const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024..=65279
 
-/// Variants to be passed to `contract_api::revert()`.
+/// Variants to be passed to `runtime::revert()`.
 ///
 /// Variants other than `Error::User` will represent a `u32` in the range `(0, u16::MAX]`, while
 /// `Error::User` will represent a `u32` in the range `(u16::MAX, 2 * u16::MAX + 1]`.
 ///
-/// Users can specify a C-style enum and implement `From` to ease usage of `contract_api::revert()`,
-/// e.g.
+/// Users can specify a C-style enum and implement `From` to ease usage of
+/// `runtime::revert()`, e.g.
 /// ```
 /// use casperlabs_contract_ffi::contract_api::Error;
 ///

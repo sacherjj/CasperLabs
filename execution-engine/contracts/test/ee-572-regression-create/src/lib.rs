@@ -9,8 +9,7 @@ use alloc::string::{String, ToString};
 use core::clone::Clone;
 use core::convert::Into;
 
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::pointers::TURef;
+use contract_ffi::contract_api::{runtime, storage, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 
@@ -19,7 +18,7 @@ const CONTRACT_NAME: &str = "create";
 
 #[no_mangle]
 pub extern "C" fn create() {
-    let reference: TURef<String> = contract_api::new_turef(DATA.to_string());
+    let reference: TURef<String> = storage::new_turef(DATA.to_string());
 
     let read_only_reference: URef = {
         let mut ret: TURef<String> = reference.clone();
@@ -29,12 +28,11 @@ pub extern "C" fn create() {
 
     let extra_urefs = vec![read_only_reference];
 
-    contract_api::ret(&read_only_reference, &extra_urefs)
+    runtime::ret(&read_only_reference, &extra_urefs)
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract: Key =
-        contract_api::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
-    contract_api::put_key(CONTRACT_NAME, &contract)
+    let contract: Key = storage::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
+    runtime::put_key(CONTRACT_NAME, &contract)
 }

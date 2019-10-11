@@ -388,7 +388,7 @@ object ProtoUtil {
       preStateHash: ByteString,
       postStateHash: ByteString,
       bonds: Seq[Bond],
-      chainId: String,
+      chainName: String,
       protocolVersion: ProtocolVersion,
       now: Long
   ): Block = {
@@ -397,7 +397,7 @@ object ProtoUtil {
       .withMessageType(MessageType.BLOCK)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(now)
-      .withChainId(chainId)
+      .withChainName(chainName)
       .withState(
         GlobalState()
           .withPreStateHash(preStateHash)
@@ -418,7 +418,7 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parents: Seq[ByteString],
       validatorSeqNum: Int,
-      chainId: String,
+      chainName: String,
       now: Long,
       rank: Long,
       publicKey: Keys.PublicKey,
@@ -440,7 +440,7 @@ object ProtoUtil {
       rank = rank,
       protocolVersion = protocolVersion,
       timestamp = now,
-      chainId = chainId,
+      chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum
     )
@@ -461,7 +461,7 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parent: ByteString,
       validatorSeqNum: Int,
-      chainId: String,
+      chainName: String,
       now: Long,
       rank: Long,
       publicKey: Keys.PublicKey,
@@ -484,7 +484,7 @@ object ProtoUtil {
       rank = rank,
       protocolVersion = protocolVersion,
       timestamp = now,
-      chainId = chainId,
+      chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum
     ).withMessageType(Block.MessageType.BALLOT)
@@ -508,7 +508,7 @@ object ProtoUtil {
       validatorSeqNum: Int,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
-      chainId: String
+      chainName: String
   ): Block.Header =
     Block
       .Header()
@@ -521,7 +521,7 @@ object ProtoUtil {
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
-      .withChainId(chainId)
+      .withChainName(chainName)
       .withBodyHash(protoHash(body))
 
   def unsignedBlockProto(
