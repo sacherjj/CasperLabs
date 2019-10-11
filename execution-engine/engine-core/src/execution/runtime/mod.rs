@@ -790,6 +790,8 @@ where
 
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
+                // After merging in EE-704 system contracts lookup internally uses protocol data and
+                // this is used for backwards compatibility with explorer to query mint/pos urefs.
                 let named_keys = vec![
                     (
                         String::from(MINT_NAME),

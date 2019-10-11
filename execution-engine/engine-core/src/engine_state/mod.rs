@@ -345,6 +345,8 @@ where
 
         // Create known keys for chainspec accounts
         let account_named_keys = {
+            // After merging in EE-704 system contracts lookup internally uses protocol data and
+            // this is used for backwards compatibility with explorer to query mint/pos urefs.
             let mut ret = BTreeMap::new();
             let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
             let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
