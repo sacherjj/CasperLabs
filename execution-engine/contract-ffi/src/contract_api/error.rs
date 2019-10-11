@@ -1,6 +1,7 @@
 use core::fmt::{self, Debug, Formatter};
 use core::{u16, u8};
 
+use crate::bytesrepr;
 use crate::system_contracts::{mint, pos};
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
@@ -78,6 +79,14 @@ pub enum Error {
     NoAccessRights,
     /// A given type could be derived from a `Value`.
     ValueConversion,
+    /// Early end of stream when deserializing.
+    EarlyEndOfStream,
+    /// Formatting error.
+    FormattingError,
+    /// Leftover bytes.
+    LeftOverBytes,
+    /// Out of memory error.
+    OutOfMemoryError,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -85,6 +94,17 @@ pub enum Error {
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
+}
+
+impl From<bytesrepr::Error> for Error {
+    fn from(error: bytesrepr::Error) -> Self {
+        match error {
+            bytesrepr::Error::EarlyEndOfStream => Error::EarlyEndOfStream,
+            bytesrepr::Error::FormattingError => Error::FormattingError,
+            bytesrepr::Error::LeftOverBytes => Error::LeftOverBytes,
+            bytesrepr::Error::OutOfMemoryError => Error::OutOfMemoryError,
+        }
+    }
 }
 
 impl From<mint::Error> for Error {
@@ -119,6 +139,10 @@ impl From<Error> for u32 {
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
             Error::ValueConversion => 17,
+            Error::EarlyEndOfStream => 18,
+            Error::FormattingError => 19,
+            Error::LeftOverBytes => 20,
+            Error::OutOfMemoryError => 21,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -148,6 +172,10 @@ impl Debug for Error {
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::ValueConversion => write!(f, "Error::ValueConversion")?,
+            Error::EarlyEndOfStream => write!(f, "Error::EarlyEndOfStream")?,
+            Error::FormattingError => write!(f, "Error::FormattingError")?,
+            Error::LeftOverBytes => write!(f, "Error::LeftOverBytes")?,
+            Error::OutOfMemoryError => write!(f, "Error::OutOfMemoryError")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -183,6 +211,10 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         15 => Err(Error::Transfer),
         16 => Err(Error::NoAccessRights),
         17 => Err(Error::ValueConversion),
+        18 => Err(Error::EarlyEndOfStream),
+        19 => Err(Error::FormattingError),
+        20 => Err(Error::LeftOverBytes),
+        21 => Err(Error::OutOfMemoryError),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -255,6 +287,10 @@ mod tests {
         round_trip(Err(Error::Transfer));
         round_trip(Err(Error::NoAccessRights));
         round_trip(Err(Error::ValueConversion));
+        round_trip(Err(Error::EarlyEndOfStream));
+        round_trip(Err(Error::FormattingError));
+        round_trip(Err(Error::LeftOverBytes));
+        round_trip(Err(Error::OutOfMemoryError));
         round_trip(Err(Error::ProofOfStake(0)));
         round_trip(Err(Error::ProofOfStake(u8::MAX)));
         round_trip(Err(Error::User(0)));
