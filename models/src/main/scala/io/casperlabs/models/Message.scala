@@ -21,6 +21,7 @@ trait Message {
   type Id = ByteString
   val messageHash: Id
   val validatorId: ByteString
+  val timestamp: Long
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
   val rank: Long
@@ -40,6 +41,7 @@ object Message {
   case class Block private (
       messageHash: Message#Id,
       validatorId: ByteString,
+      timestamp: Long,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -63,6 +65,7 @@ object Message {
   case class Ballot private (
       messageHash: Message#Id,
       validatorId: ByteString,
+      timestamp: Long,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -77,6 +80,7 @@ object Message {
     try {
       val messageHash        = b.blockHash
       val header             = b.getHeader
+      val timestamp          = header.timestamp
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
@@ -91,6 +95,7 @@ object Message {
             Ballot(
               messageHash,
               validatorId,
+              timestamp,
               parentBlock,
               justifications,
               rank,
@@ -104,6 +109,7 @@ object Message {
             Block(
               messageHash,
               validatorId,
+              timestamp,
               parentBlock,
               justifications,
               rank,

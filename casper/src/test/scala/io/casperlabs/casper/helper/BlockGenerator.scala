@@ -105,7 +105,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
-      chainId: String = "casperlabs",
+      chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
       messageType: Block.MessageType = Block.MessageType.BLOCK
   ): F[Block] =
@@ -156,7 +156,7 @@ trait BlockGenerator {
           validatorSeqNum,
           protocolVersion = ProtocolVersion(1),
           timestamp = now,
-          chainId = chainId
+          chainName = chainName
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)
@@ -170,7 +170,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
-      chainId: String = "casperlabs",
+      chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY
   ): F[Block] =
     for {
@@ -181,7 +181,7 @@ trait BlockGenerator {
                 justifications = justifications,
                 deploys = deploys,
                 postStateHash = postStateHash,
-                chainId = chainId,
+                chainName = chainName,
                 preStateHash = preStateHash
               )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)

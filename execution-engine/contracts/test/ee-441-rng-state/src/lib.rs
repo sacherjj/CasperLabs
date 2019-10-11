@@ -17,7 +17,7 @@ use contract_ffi::value::U512;
 #[no_mangle]
 pub extern "C" fn do_nothing() {
     // Doesn't advance RNG of the runtime
-    runtime::ret(&String::from("Hello, world!"), &vec![])
+    runtime::ret(String::from("Hello, world!"), vec![])
 }
 
 #[no_mangle]
@@ -26,7 +26,7 @@ pub extern "C" fn do_something() {
     let test_string = String::from("Hello, world!");
 
     let test_uref = storage::new_turef(test_string).into();
-    runtime::ret(&test_uref, &vec![test_uref])
+    runtime::ret(test_uref, vec![test_uref])
 }
 
 #[no_mangle]

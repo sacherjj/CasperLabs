@@ -16,7 +16,7 @@ const Size: Serializer<number> = size => {
 //
 // So for `[1,2,3,4,5,6]` it serializes to`[6, 0, 0, 0, 1, 2, 3, 4, 5, 6]`
 export const ByteArrayArg: Serializer<ByteArray> = bytes => {
-  return Buffer.concat([Size(bytes.length), bytes]);
+  return Buffer.concat([Size(bytes.length), bytes].map(Buffer.from));
 };
 
 // A public key is the same as array but its' expected to be 32 bytes long exactly.
@@ -50,5 +50,6 @@ export const UInt64Arg: Serializer<bigint> = value => {
 // That was serialized `u64` (`[1, 2, 3, 4, 0, 0, 0, 0]`)
 // `1, 2, 3, 4, 0, 0, 0, 0]`
 export function Args(...args: ByteArray[]): ByteArray {
-  return Buffer.concat([Size(args.length)].concat(args.map(ByteArrayArg)));
+  const arrays = [Size(args.length)].concat(args.map(ByteArrayArg));
+  return Buffer.concat(arrays.map(Buffer.from));
 }

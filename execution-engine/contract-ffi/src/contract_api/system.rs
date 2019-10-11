@@ -38,7 +38,7 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
         deserialize(&uref_bytes).unwrap_or_else(|_| revert(Error::Deserialize))
     };
     let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-    ContractRef::URef(reference)
+    ContractRef::TURef(reference)
 }
 
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a

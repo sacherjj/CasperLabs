@@ -44,7 +44,7 @@ pub extern "C" fn transfer() {
 pub extern "C" fn call() {
     let key = storage::store_function(TRANSFER_FUNCTION_NAME, Default::default())
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::put_key(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &key);

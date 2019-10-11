@@ -28,7 +28,7 @@ pub extern "C" fn create() {
 
     let extra_urefs = vec![read_only_reference];
 
-    runtime::ret(&read_only_reference, &extra_urefs)
+    runtime::ret(read_only_reference, extra_urefs)
 }
 
 #[no_mangle]

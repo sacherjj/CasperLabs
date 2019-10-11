@@ -118,6 +118,7 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
+    use contract_ffi::bytesrepr;
     use contract_ffi::uref::{AccessRights, URef};
     use engine_shared::test_utils;
 
@@ -125,7 +126,7 @@ mod tests {
 
     #[test]
     fn should_serialize_and_deserialize() {
-        let v1 = {
+        let mock = {
             let costs = test_utils::wasm_costs_mock();
             let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
@@ -137,8 +138,8 @@ mod tests {
             let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
             ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
         };
-        assert!(test_utils::test_serialization_roundtrip(&v1));
-        assert!(test_utils::test_serialization_roundtrip(&free));
+        bytesrepr::test_serialization_roundtrip(&mock);
+        bytesrepr::test_serialization_roundtrip(&free);
     }
 
     #[test]
@@ -187,7 +188,7 @@ mod tests {
         fn should_serialize_and_deserialize_with_arbitrary_values(
             protocol_data in gens::protocol_data_arb()
         ) {
-            assert!(test_utils::test_serialization_roundtrip(&protocol_data));
+            bytesrepr::test_serialization_roundtrip(&protocol_data);
         }
     }
 }

@@ -191,14 +191,8 @@ export default class CasperService {
         .getNamedKeysList()
         .find(x => x.getName() === 'mint')!;
 
-      const mintQuery = QueryUref(mintPublic.getKey()!.getUref()!);
-
-      const mintPrivate = await this.getBlockState(blockHash, mintQuery).then(
-        res => res.getKey()!.getUref()!
-      );
-
       const localKeyQuery = QueryLocalKey(
-        mintPrivate.getUref_asU8(),
+        mintPublic.getKey()!.getUref()!.getUref_asU8(),
         ByteArrayArg(account.getPurseId()!.getUref_asU8())
       );
 

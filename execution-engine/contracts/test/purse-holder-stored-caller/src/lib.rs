@@ -40,7 +40,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
 
-    let purse_holder_contract_pointer = ContractRef::URef(TURef::new(
+    let purse_holder_contract_pointer = ContractRef::TURef(TURef::new(
         purse_holder_uref.addr(),
         contract_ffi::uref::AccessRights::READ,
     ));

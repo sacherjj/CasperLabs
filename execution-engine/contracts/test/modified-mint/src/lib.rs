@@ -38,16 +38,16 @@ pub fn delegate() {
                 .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
 
             if let Ok(purse_key) = maybe_purse_key {
-                runtime::ret(&maybe_purse_key, &vec![purse_key])
+                runtime::ret(maybe_purse_key, vec![purse_key])
             } else {
-                runtime::ret(&maybe_purse_key, &vec![])
+                runtime::ret(maybe_purse_key, vec![])
             }
         }
 
         "create" => {
             let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
-            runtime::ret(&purse_key, &vec![purse_key])
+            runtime::ret(purse_key, vec![purse_key])
         }
 
         "balance" => {
@@ -58,7 +58,7 @@ pub fn delegate() {
             let balance_uref = mint.lookup(purse_id);
             let balance: Option<U512> =
                 balance_uref.and_then(|uref| storage::read(uref.into()).unwrap_or_default());
-            runtime::ret(&balance, &vec![])
+            runtime::ret(balance, vec![])
         }
 
         "transfer" => {
@@ -76,7 +76,7 @@ pub fn delegate() {
                 Ok(withdraw_id) => withdraw_id,
                 Err(error) => {
                     let transfer_result: Result<(), Error> = Err(error.into());
-                    runtime::ret(&transfer_result, &vec![])
+                    runtime::ret(transfer_result, vec![])
                 }
             };
 
@@ -84,15 +84,15 @@ pub fn delegate() {
                 Ok(deposit_id) => deposit_id,
                 Err(error) => {
                     let transfer_result: Result<(), Error> = Err(error.into());
-                    runtime::ret(&transfer_result, &vec![])
+                    runtime::ret(transfer_result, vec![])
                 }
             };
 
             let transfer_result = mint.transfer(source, target, amount);
-            runtime::ret(&transfer_result, &vec![]);
+            runtime::ret(transfer_result, vec![]);
         }
         "version" => {
-            runtime::ret(&VERSION.to_string(), &vec![]);
+            runtime::ret(VERSION.to_string(), vec![]);
         }
 
         _ => panic!("Unknown method name!"),

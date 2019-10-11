@@ -4,27 +4,11 @@ use std::collections::btree_map::BTreeMap;
 use parity_wasm::builder::ModuleBuilder;
 use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::{Account, Value};
 use engine_wasm_prep::wasm_costs::WasmCosts;
-
-/// Returns `true` if a we can serialize and then deserialize a value
-pub fn test_serialization_roundtrip<T>(t: &T) -> bool
-where
-    T: ToBytes + FromBytes + PartialEq + std::fmt::Debug,
-{
-    match bytesrepr::deserialize::<T>(&ToBytes::to_bytes(t).expect("Unable to serialize data"))
-        .map(|r| r == *t)
-        .ok()
-    {
-        Some(true) => true,
-        Some(false) => false,
-        None => false,
-    }
-}
 
 /// Returns the serialized form of an empty Wasm Module
 pub fn create_empty_wasm_module_bytes() -> Vec<u8> {

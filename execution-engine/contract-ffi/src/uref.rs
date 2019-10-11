@@ -235,10 +235,6 @@ impl<T> From<TURef<T>> for URef {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use proptest::proptest;
-
-    use crate::gens;
-    use crate::test_utils;
     use crate::uref::{AccessRights, URef};
 
     fn test_readable(right: AccessRights, is_true: bool) {
@@ -284,13 +280,6 @@ mod tests {
         test_addable(AccessRights::READ, false);
         test_addable(AccessRights::WRITE, false);
         test_addable(AccessRights::READ_ADD_WRITE, true);
-    }
-
-    proptest! {
-        #[test]
-        fn test_uref(uref in gens::uref_arb()) {
-            assert!(test_utils::test_serialization_roundtrip(&uref));
-        }
     }
 
     #[test]

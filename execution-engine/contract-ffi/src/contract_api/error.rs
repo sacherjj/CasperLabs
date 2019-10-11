@@ -44,38 +44,38 @@ const MINT_ERROR_OFFSET: u32 = (POS_ERROR_OFFSET - 1) - u8::MAX as u32; // 65024
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// A call to `get_uref()` returned a failure.
-    GetURef,
-    /// Failed to deserialize a value.
-    Deserialize,
-    /// Failed to find a specified contract.
-    ContractNotFound,
-    /// The `Key` variant was not as expected.
-    UnexpectedKeyVariant,
-    /// The `Value` variant was not as expected.
-    UnexpectedValueVariant,
-    /// The `ContractPointer` variant was not as expected.
-    UnexpectedContractPointerVariant,
-    /// `read` returned an error.
-    Read,
-    /// The given key returned a `None` value.
-    ValueNotFound,
-    /// Invalid purse name given.
-    InvalidPurseName,
-    /// Invalid purse retrieved.
-    InvalidPurse,
+    /// Optional data was unexpectedly `None`.
+    None,
     /// Specified argument not provided.
     MissingArgument,
     /// Argument not of correct type.
     InvalidArgument,
+    /// Failed to deserialize a value.
+    Deserialize,
+    /// `read` returned an error.
+    Read,
+    /// The given key returned a `None` value.
+    ValueNotFound,
+    /// Failed to find a specified contract.
+    ContractNotFound,
+    /// A call to `get_key()` returned a failure.
+    GetKey,
+    /// The `Key` variant was not as expected.
+    UnexpectedKeyVariant,
+    /// The `Value` variant was not as expected.
+    UnexpectedValueVariant,
+    /// The `ContractRef` variant was not as expected.
+    UnexpectedContractRefVariant,
+    /// Invalid purse name given.
+    InvalidPurseName,
+    /// Invalid purse retrieved.
+    InvalidPurse,
     /// Failed to upgrade contract at URef.
     UpgradeContractAtURef,
     /// Failed to transfer motes.
     Transfer,
     /// No access rights.
     NoAccessRights,
-    /// Optional data was unexpectedly `None`.
-    None,
     /// Returns when contract tries to obtain URef to a system contract that does not exist.
     InvalidSystemContract,
     /// Error specific to Mint contract.
@@ -102,22 +102,22 @@ impl From<pos::Error> for Error {
 impl From<Error> for u32 {
     fn from(error: Error) -> Self {
         match error {
-            Error::GetURef => 1,
-            Error::Deserialize => 2,
-            Error::ContractNotFound => 3,
-            Error::UnexpectedKeyVariant => 4,
-            Error::UnexpectedValueVariant => 5,
-            Error::UnexpectedContractPointerVariant => 6,
-            Error::Read => 7,
-            Error::ValueNotFound => 8,
-            Error::InvalidPurseName => 9,
-            Error::InvalidPurse => 10,
-            Error::MissingArgument => 11,
-            Error::InvalidArgument => 12,
-            Error::UpgradeContractAtURef => 13,
-            Error::Transfer => 14,
-            Error::NoAccessRights => 15,
-            Error::None => 16,
+            Error::None => 1,
+            Error::MissingArgument => 2,
+            Error::InvalidArgument => 3,
+            Error::Deserialize => 4,
+            Error::Read => 5,
+            Error::ValueNotFound => 6,
+            Error::ContractNotFound => 7,
+            Error::GetKey => 8,
+            Error::UnexpectedKeyVariant => 9,
+            Error::UnexpectedValueVariant => 10,
+            Error::UnexpectedContractRefVariant => 11,
+            Error::InvalidPurseName => 12,
+            Error::InvalidPurse => 13,
+            Error::UpgradeContractAtURef => 14,
+            Error::Transfer => 15,
+            Error::NoAccessRights => 16,
             Error::InvalidSystemContract => 17,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
@@ -129,24 +129,24 @@ impl From<Error> for u32 {
 impl Debug for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Error::GetURef => write!(f, "Error::GetURef")?,
-            Error::Deserialize => write!(f, "Error::Deserialize")?,
-            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
-            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
-            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
-            Error::UnexpectedContractPointerVariant => {
-                write!(f, "Error::UnexpectedContractPointerVariant")?
-            }
-            Error::Read => write!(f, "Error::Read")?,
-            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
-            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
-            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
+            Error::None => write!(f, "Error::None")?,
             Error::MissingArgument => write!(f, "Error::MissingArgument")?,
             Error::InvalidArgument => write!(f, "Error::InvalidArgument")?,
+            Error::Deserialize => write!(f, "Error::Deserialize")?,
+            Error::Read => write!(f, "Error::Read")?,
+            Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
+            Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
+            Error::GetKey => write!(f, "Error::GetURef")?,
+            Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
+            Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
+            Error::UnexpectedContractRefVariant => {
+                write!(f, "Error::UnexpectedContractRefVariant")?
+            }
+            Error::InvalidPurseName => write!(f, "Error::InvalidPurseName")?,
+            Error::InvalidPurse => write!(f, "Error::InvalidPurse")?,
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
-            Error::None => write!(f, "Error::None")?,
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
@@ -166,22 +166,22 @@ pub fn i32_from(result: Result<(), Error>) -> i32 {
 pub fn result_from(value: i32) -> Result<(), Error> {
     match value {
         0 => Ok(()),
-        1 => Err(Error::GetURef),
-        2 => Err(Error::Deserialize),
-        3 => Err(Error::ContractNotFound),
-        4 => Err(Error::UnexpectedKeyVariant),
-        5 => Err(Error::UnexpectedValueVariant),
-        6 => Err(Error::UnexpectedContractPointerVariant),
-        7 => Err(Error::Read),
-        8 => Err(Error::ValueNotFound),
-        9 => Err(Error::InvalidPurseName),
-        10 => Err(Error::InvalidPurse),
-        11 => Err(Error::MissingArgument),
-        12 => Err(Error::InvalidArgument),
-        13 => Err(Error::UpgradeContractAtURef),
-        14 => Err(Error::Transfer),
-        15 => Err(Error::NoAccessRights),
-        16 => Err(Error::None),
+        1 => Err(Error::None),
+        2 => Err(Error::MissingArgument),
+        3 => Err(Error::InvalidArgument),
+        4 => Err(Error::Deserialize),
+        5 => Err(Error::Read),
+        6 => Err(Error::ValueNotFound),
+        7 => Err(Error::ContractNotFound),
+        8 => Err(Error::GetKey),
+        9 => Err(Error::UnexpectedKeyVariant),
+        10 => Err(Error::UnexpectedValueVariant),
+        11 => Err(Error::UnexpectedContractRefVariant),
+        12 => Err(Error::InvalidPurseName),
+        13 => Err(Error::InvalidPurse),
+        14 => Err(Error::UpgradeContractAtURef),
+        15 => Err(Error::Transfer),
+        16 => Err(Error::NoAccessRights),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -190,6 +190,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
             } else if value >= POS_ERROR_OFFSET as i32 {
                 Err(Error::ProofOfStake(value as u8))
             } else {
+                // TODO: this is not unreachable
                 unreachable!()
             }
         }
@@ -215,7 +216,7 @@ mod tests {
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
-        assert_eq!("Error::GetURef [1]", &format!("{:?}", Error::GetURef));
+        assert_eq!("Error::GetURef [8]", &format!("{:?}", Error::GetKey));
         assert_eq!("Error::Mint(0) [65024]", &format!("{:?}", Error::Mint(0)));
         assert_eq!(
             "Error::Mint(255) [65279]",
@@ -236,22 +237,22 @@ mod tests {
         );
 
         round_trip(Ok(()));
-        round_trip(Err(Error::GetURef));
-        round_trip(Err(Error::Deserialize));
-        round_trip(Err(Error::ContractNotFound));
-        round_trip(Err(Error::UnexpectedKeyVariant));
-        round_trip(Err(Error::UnexpectedValueVariant));
-        round_trip(Err(Error::UnexpectedContractPointerVariant));
-        round_trip(Err(Error::Read));
-        round_trip(Err(Error::ValueNotFound));
-        round_trip(Err(Error::InvalidPurseName));
-        round_trip(Err(Error::InvalidPurse));
+        round_trip(Err(Error::None));
         round_trip(Err(Error::MissingArgument));
         round_trip(Err(Error::InvalidArgument));
+        round_trip(Err(Error::Deserialize));
+        round_trip(Err(Error::Read));
+        round_trip(Err(Error::ValueNotFound));
+        round_trip(Err(Error::ContractNotFound));
+        round_trip(Err(Error::GetKey));
+        round_trip(Err(Error::UnexpectedKeyVariant));
+        round_trip(Err(Error::UnexpectedValueVariant));
+        round_trip(Err(Error::UnexpectedContractRefVariant));
+        round_trip(Err(Error::InvalidPurseName));
+        round_trip(Err(Error::InvalidPurse));
         round_trip(Err(Error::UpgradeContractAtURef));
         round_trip(Err(Error::Transfer));
         round_trip(Err(Error::NoAccessRights));
-        round_trip(Err(Error::None));
         round_trip(Err(Error::ProofOfStake(0)));
         round_trip(Err(Error::ProofOfStake(u8::MAX)));
         round_trip(Err(Error::User(0)));
