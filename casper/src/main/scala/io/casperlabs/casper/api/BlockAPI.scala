@@ -139,42 +139,7 @@ object BlockAPI {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-
-      BlockStorage[F].findBlockHashesWithDeployHash(deployHash) flatMap {
-        case blockHashes if blockHashes.nonEmpty =>
-          for {
-            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-            blockInfos = blocks.map { block =>
-              val summary =
-                BlockSummary(block.blockHash, block.header, block.signature)
-              makeBlockInfo(summary, block.some)
-            }
-            results = (blocks zip blockInfos).flatMap {
-              case (block, info) =>
-                block.getBody.deploys
-                  .find(_.getDeploy.deployHash == deployHash)
-                  .map(_ -> info)
-            }
-            info = DeployInfo(
-              deploy = results.headOption.flatMap(_._1.deploy),
-              processingResults = results.map {
-                case (processedDeploy, blockInfo) =>
-                  DeployInfo
-                    .ProcessingResult(
-                      cost = processedDeploy.cost,
-                      isError = processedDeploy.isError,
-                      errorMessage = processedDeploy.errorMessage
-                    )
-                    .withBlockInfo(blockInfo)
-              }
-            )
-          } yield info.some
-
-        case _ =>
-          DeployStorageReader[F]
-            .getPendingOrProcessed(deployHash)
-            .map(_.map(DeployInfo().withDeploy))
-      }
+      DeployStorageReader[F].getDeployInfo(deployHash)
     }
 
   def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
