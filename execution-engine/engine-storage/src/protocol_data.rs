@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn should_return_all_system_contracts() {
-        let mint_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let mint_reference = URef::new([197u8; 32], AccessRights::READ_ADD_WRITE);
         let proof_of_stake_reference = URef::new([198u8; 32], AccessRights::READ_ADD_WRITE);
         let protocol_data = {
             let costs = test_utils::wasm_costs_mock();
