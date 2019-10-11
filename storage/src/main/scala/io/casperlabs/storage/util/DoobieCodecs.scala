@@ -4,6 +4,9 @@ import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.{BlockInfo, BlockStatus}
+import io.casperlabs.casper.consensus.info.BlockStatus.Stats
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.ipc.TransformEntry
 
 trait DoobieCodecs {
@@ -28,6 +31,28 @@ trait DoobieCodecs {
             errorMessage = maybeError.getOrElse("")
           )
         )
+    }
+  }
+
+  protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
+    Read[(Long, Option[String], Array[Byte], Option[Int], Option[Int])].map {
+      case (cost, maybeError, blockSummaryData, maybeBlockSize, maybeDeployErrorCount) =>
+        val blockSummary = BlockSummary.parseFrom(blockSummaryData)
+        val blockStatus = BlockStatus().withStats(
+          BlockStatus
+            .Stats()
+            .withBlockSizeBytes(maybeBlockSize.getOrElse(0))
+            .withDeployErrorCount(maybeDeployErrorCount.getOrElse(0))
+        )
+        val blockInfo = BlockInfo()
+          .withSummary(blockSummary)
+          .withStatus(blockStatus)
+
+        ProcessingResult(
+          cost = cost,
+          isError = maybeError.nonEmpty,
+          errorMessage = maybeError.getOrElse("")
+        ).withBlockInfo(blockInfo)
     }
   }
 

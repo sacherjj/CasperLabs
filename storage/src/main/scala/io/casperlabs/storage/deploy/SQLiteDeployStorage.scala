@@ -8,7 +8,9 @@ import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -319,6 +321,30 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                   }
               )
     } yield res
+  }
+
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] = {
+    val getDeploy =
+      sql"SELECT data FROM deploys WHERE hash=$deployHash".query[Deploy].option.transact(xa)
+
+    val processingResults =
+      sql"""|SELECT dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count
+            |FROM deploy_process_results dpr 
+            |LEFT OUTER JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
+            |WHERE dpr.deploy_hash = $deployHash""".stripMargin
+        .query[ProcessingResult]
+        .to[List]
+        .transact(xa)
+
+    for {
+      deploy <- getDeploy
+      deployInfo <- deploy match {
+                     case None =>
+                       none[DeployInfo].pure[F]
+                     case Some(d) =>
+                       processingResults.map(p => DeployInfo(d.some, p).some)
+                   }
+    } yield deployInfo
   }
 
   override def clear(): F[Unit] =

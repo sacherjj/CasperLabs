@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
@@ -245,6 +246,9 @@ class MockDeployStorage[F[_]: Sync: Log](
     b.getBody.deploys.map(pd => deployToString(pd.getDeploy)).mkString(", ")
 
   private def now = System.currentTimeMillis()
+
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+    none[DeployInfo].pure[F]
 }
 
 object MockDeployStorage {

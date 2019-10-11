@@ -3,6 +3,7 @@ package io.casperlabs.storage.deploy
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
@@ -88,6 +89,8 @@ import scala.concurrent.duration._
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
+
+  def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -156,8 +159,12 @@ object DeployStorage {
     override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
       reader.getProcessingResults(hash)
 
+    override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+      reader.getDeployInfo(deployHash)
+
     override def clear(): F[Unit] = writer.clear()
 
     override def close(): F[Unit] = writer.close()
+
   }
 }
