@@ -49,7 +49,7 @@ class CachingDagStorageTest
       cache <- CachingDagStorage[Task](
                 dagStorage,
                 cacheSize,
-                neighbourhoodRangeToCacheOnLookup = neighbourhoodRange
+                neighbourhoodRadiusToCacheOnLookup = neighbourhoodRange
               )
     } yield CachingDagStorageTestData(
       underlying = dagStorage,
@@ -221,10 +221,13 @@ class CachingDagStorageTest
               .update(_.header.parentHashes := List(parent.blockHash))
               .update(_.blockHash := sample(genHash))
 
-          val grandParent =
+          val grandGrandParent =
             sampleBlock
               .update(_.header.parentHashes := Nil)
               .update(_.header.justifications := Nil)
+
+          val grandParent =
+            genChild(grandGrandParent)
 
           val parent        = genChild(grandParent)
           val justification = genChild(grandParent)
@@ -238,16 +241,19 @@ class CachingDagStorageTest
 
           for {
             // Inserting directly bypassing cache
-            _ <- List(grandParent, parent, justification, child).traverse(underlying.insert)
+            _ <- List(grandGrandParent, grandParent, parent, justification, child).traverse(
+                  underlying.insert
+                )
             // Should cache neighbourhood on lookup
-            _ <- cache.lookup(child.blockHash).foreachL { maybeMessage =>
+            _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
                   maybeMessage should not be empty
                 }
           } yield {
             Option(cache.messagesCache.getIfPresent(child.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(parent.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(justification.blockHash)) should not be empty
-            Option(cache.messagesCache.getIfPresent(grandParent.blockHash)) shouldBe None
+            Option(cache.messagesCache.getIfPresent(grandParent.blockHash)) should not be empty
+            Option(cache.messagesCache.getIfPresent(grandGrandParent.blockHash)) shouldBe None
           }
       },
       timeout = 15.seconds

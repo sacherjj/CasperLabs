@@ -15,8 +15,8 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
 class CachingDagStorage[F[_]: Sync](
-    // How far to go to the past (by ranks) for caching parents and justifications of looked up block
-    neighbourhoodRangeToCacheOnLookup: Int,
+    // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
+    neighbourhoodRadiusToCacheOnLookup: Int,
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
@@ -57,8 +57,8 @@ class CachingDagStorage[F[_]: Sync](
 
   private def cacheNeighbourhood(message: Message): F[Unit] =
     topoSort(
-      startBlockNumber = message.rank - neighbourhoodRangeToCacheOnLookup,
-      endBlockNumber = message.rank
+      startBlockNumber = message.rank - neighbourhoodRadiusToCacheOnLookup,
+      endBlockNumber = message.rank + neighbourhoodRadiusToCacheOnLookup
     ).evalMap(summaries => semaphore.withPermit(summaries.traverse_(cacheSummary))).compile.drain
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
@@ -138,8 +138,8 @@ object CachingDagStorage {
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
       name: String = "cache",
-      // How far to go to the past (by ranks) for caching parents and justifications of looked up block
-      neighbourhoodRangeToCacheOnLookup: Int = 10
+      // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
+      neighbourhoodRadiusToCacheOnLookup: Int = 5
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
     val createBlockHashesSetCache = Sync[F].delay {
@@ -165,7 +165,7 @@ object CachingDagStorage {
       messagesCache      <- createMessagesCache
       semaphore          <- Semaphore[F](1)
       store = new CachingDagStorage[F](
-        neighbourhoodRangeToCacheOnLookup,
+        neighbourhoodRadiusToCacheOnLookup,
         underlying,
         childrenCache,
         justificationCache,
