@@ -140,8 +140,8 @@ where
     let access_rights = {
         let mut keys: Vec<Key> = named_keys.values().cloned().collect();
         keys.extend(extra_urefs);
-        keys.push(current_runtime.get_mint_contract_attenuated_uref().into());
-        keys.push(current_runtime.get_pos_contract_attenuated_uref().into());
+        keys.push(current_runtime.get_mint_contract_uref().into());
+        keys.push(current_runtime.get_pos_contract_uref().into());
         extract_access_rights_from_keys(keys)
     };
 
@@ -697,23 +697,17 @@ where
     }
 
     /// Looks up the public mint contract key in the context's protocol data.
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
     pub fn get_mint_contract_uref(&mut self) -> URef {
-        self.context.protocol_data().mint()
-    }
-
-    /// Looks up the public PoS contract key in the context's protocol data
-    pub fn get_pos_contract_uref(&mut self) -> URef {
-        self.context.protocol_data().proof_of_stake()
-    }
-
-    /// Returns attenuated mint contract URef.
-    pub fn get_mint_contract_attenuated_uref(&mut self) -> URef {
         let mint = self.context.protocol_data().mint();
         self.context.attenuate_uref(mint)
     }
 
-    /// Returns attenuated proof of stake contract URef
-    pub fn get_pos_contract_attenuated_uref(&mut self) -> URef {
+    /// Looks up the public PoS contract key in the context's protocol data
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
+    pub fn get_pos_contract_uref(&mut self) -> URef {
         let pos = self.context.protocol_data().proof_of_stake();
         self.context.attenuate_uref(pos)
     }
@@ -736,7 +730,7 @@ where
     }
 
     fn create_purse(&mut self) -> Result<PurseId, Error> {
-        let mint_contract_key = self.get_mint_contract_attenuated_uref().into();
+        let mint_contract_key = self.get_mint_contract_uref().into();
         self.mint_create(mint_contract_key)
     }
 
@@ -777,7 +771,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_attenuated_uref().into();
+        let mint_contract_key = self.get_mint_contract_uref().into();
 
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
@@ -832,7 +826,7 @@ where
         target: PurseId,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_attenuated_uref().into();
+        let mint_contract_key = self.get_mint_contract_uref().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
@@ -910,7 +904,7 @@ where
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let mint_contract_key = self.get_mint_contract_attenuated_uref().into();
+        let mint_contract_key = self.get_mint_contract_uref().into();
 
         if self
             .mint_transfer(mint_contract_key, source, target, amount)
@@ -977,8 +971,8 @@ where
         _dest_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
         let attenuated_uref = match SystemContract::try_from(system_contract_index) {
-            Ok(SystemContract::Mint) => self.get_mint_contract_attenuated_uref(),
-            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_attenuated_uref(),
+            Ok(SystemContract::Mint) => self.get_mint_contract_uref(),
+            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_uref(),
             Err(error) => return Ok(Err(error)),
         };
 
