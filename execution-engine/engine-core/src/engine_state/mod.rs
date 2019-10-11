@@ -1127,13 +1127,15 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or
             // session, so we need to look them up again from the tracking copy
-            let mut proof_of_stake_keys = finalization_tc
+            let proof_of_stake_info = match finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
-                .expect("PoS must be found because we found it earlier")
-                .contract()
-                .named_keys()
-                .clone();
+            {
+                Ok(info) => info,
+                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+            };
+
+            let mut proof_of_stake_keys = proof_of_stake_info.contract().named_keys().clone();
 
             let base_key = proof_of_stake_info.key();
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
