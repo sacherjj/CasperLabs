@@ -297,8 +297,9 @@ object SQLiteDagStorage {
   ): F[DagStorage[F] with DagRepresentation[F]] =
     for {
       dagStorage <- Sync[F].delay(
-                     new SQLiteDagStorage[F](xa) with MeteredDagStorage[F]
-                     with MeteredDagRepresentation[F] {
+                     new SQLiteDagStorage[F](xa)
+                       with MeteredDagStorage[F]
+                       with MeteredDagRepresentation[F] {
                        override implicit val m: Metrics[F] = met
                        override implicit val ms: Source =
                          Metrics.Source(DagStorageMetricsSource, "sqlite")
