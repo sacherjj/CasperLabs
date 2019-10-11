@@ -294,10 +294,8 @@ object BlockAPI {
             MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
           case ex: IllegalArgumentException =>
             MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } map { ranksOfHashes =>
-          ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
-        } flatMap { hashes =>
-          hashes.toList.flatTraverse(getBlockInfoOpt[F](_, full).map(_.toList))
+        } flatMap { summariesByRank =>
+          summariesByRank.flatten.reverse.toList.traverse(makeBlockInfo[F](_, full))
         }
     }
 
