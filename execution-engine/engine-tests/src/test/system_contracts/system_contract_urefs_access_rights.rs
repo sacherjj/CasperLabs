@@ -1,37 +1,41 @@
 use contract_ffi::value::U512;
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS: &str =
+    "check_system_contract_urefs_access_rights.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
-const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
+
+lazy_static! {
+    static ref ACCOUNT_1_INITIAL_BALANCE: U512 = *DEFAULT_PAYMENT;
+}
 
 #[ignore]
 #[test]
 fn should_have_read_only_access_to_system_contract_urefs() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+    )
+    .build();
+
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS,
+        (),
+    )
+    .build();
+
     builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .commit()
-        .exec(
-            ACCOUNT_1_ADDR,
-            "check_system_contract_urefs_access_rights.wasm",
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .commit()
         .expect_success();
 }

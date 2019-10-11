@@ -2,14 +2,13 @@ package io.casperlabs.node.configuration
 import java.nio.file.{Path, Paths}
 
 import cats.data.Validated.{Invalid, Valid}
-import cats.data.{NonEmptyList, ValidatedNel}
+import cats.data.ValidatedNel
 import cats.syntax.either._
 import cats.syntax.validated._
 import com.github.ghik.silencer.silent
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
-import io.casperlabs.blockstorage.LMDBBlockStorage
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.transport.Tls
@@ -28,7 +27,6 @@ final case class Configuration(
     grpc: Configuration.Grpc,
     tls: Tls,
     casper: CasperConf,
-    lmdb: LMDBBlockStorage.Config,
     blockstorage: Configuration.BlockStorage,
     metrics: Configuration.Kamon,
     influx: Option[Configuration.Influx]
@@ -86,11 +84,13 @@ object Configuration extends ParserImplicits {
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
-      cleanBlockStorage: Boolean
+      cleanBlockStorage: Boolean,
+      blockUploadRateMaxRequests: Int Refined NonNegative,
+      blockUploadRatePeriod: FiniteDuration,
+      blockUploadRateMaxThrottled: Int Refined NonNegative
   ) extends SubConfig
 
   case class BlockStorage(
-      latestMessagesLogMaxSizeFactor: Int,
       cacheMaxSizeBytes: Long
   ) extends SubConfig
 

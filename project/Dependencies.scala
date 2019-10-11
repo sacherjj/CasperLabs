@@ -4,27 +4,29 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
-  val circeVersion   = "0.11.1"
-  val http4sVersion  = "0.20.1"
+  val circeVersion   = "0.12.1"
+  val http4sVersion  = "0.21.0-M5"
   val kamonVersion   = "1.1.3"
-  val catsVersion    = "1.6.0"
-  val catsMtlVersion = "0.5.0"
-  val doobieVersion  = "0.7.0"
-  val fs2Version     = "1.0.4"
+  val catsVersion    = "2.0.0"
+  val catsMtlVersion = "0.7.0"
+  val doobieVersion  = "0.8.4"
+  val fs2Version     = "2.0.1"
+  val meowMtlVersion = "0.4.0"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
   val bouncyProvCastle    = "org.bouncycastle"    % "bcprov-jdk15on"        % "1.61"
   val bouncyPkixCastle    = "org.bouncycastle"    % "bcpkix-jdk15on"        % "1.61"
   val catsCore            = "org.typelevel"       %% "cats-core"            % catsVersion
-  val catsPar             = "io.chrisdavenport"   %% "cats-par"             % "0.2.1"
   val catsLawsTest        = "org.typelevel"       %% "cats-laws"            % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"       %% "cats-testkit"         % catsVersion % "test"
-  val catsEffect          = "org.typelevel"       %% "cats-effect"          % "1.3.0"
-  val catsEffectLaws      = "org.typelevel"       %% "cats-effect-laws"     % "1.3.0" % "test"
+  val catsEffect          = "org.typelevel"       %% "cats-effect"          % catsVersion
+  val catsEffectLaws      = "org.typelevel"       %% "cats-effect-laws"     % catsVersion % "test"
   val catsMtl             = "org.typelevel"       %% "cats-mtl-core"        % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"       %% "cats-mtl-laws"        % catsMtlVersion % "test"
-  val meowMtl             = "com.olegpy"          %% "meow-mtl"             % "0.2.1"
+  val meowMtlCore         = "com.olegpy"          %% "meow-mtl-core"        % meowMtlVersion
+  val meowMtlEffects      = "com.olegpy"          %% "meow-mtl-effects"     % meowMtlVersion
+  val meowMtlMonix        = "com.olegpy"          %% "meow-mtl-monix"       % meowMtlVersion
   val circeCore           = "io.circe"            %% "circe-core"           % circeVersion
   val circeGeneric        = "io.circe"            %% "circe-generic"        % circeVersion
   val circeGenericExtras  = "io.circe"            %% "circe-generic-extras" % circeVersion
@@ -33,11 +35,18 @@ object Dependencies {
   val sangria             = "org.sangria-graphql" %% "sangria"              % "1.4.2"
   val guava               = "com.google.guava"    % "guava"                 % "24.1.1-jre"
   val hasher              = "com.roundeights"     %% "hasher"               % "1.2.0"
-  val http4sBlazeServer   = "org.http4s"          %% "http4s-blaze-server"  % http4sVersion
-  val javaWebsocket       = "org.java-websocket"  % "Java-WebSocket"        % "1.4.0"
-  val http4sCirce         = "org.http4s"          %% "http4s-circe"         % http4sVersion
-  val http4sDSL           = "org.http4s"          %% "http4s-dsl"           % http4sVersion
-  val jaxb                = "javax.xml.bind"      % "jaxb-api"              % "2.3.1"
+  val http4sBlazeServer = ("org.http4s" %% "http4s-blaze-server" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+//    .exclude("org.log4s", "log4s_2.12")
+  val javaWebsocket = "org.java-websocket" % "Java-WebSocket" % "1.4.0"
+  val http4sCirce = ("org.http4s" %% "http4s-circe" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+  val http4sDSL = ("org.http4s" %% "http4s-dsl" % http4sVersion)
+    .exclude("co.fs2", "fs2-io_2.12")
+    .exclude("co.fs2", "fs2-core_2.12")
+  val jaxb = "javax.xml.bind" % "jaxb-api" % "2.3.1"
   val jline = ("org.scala-lang" % "jline" % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
   // see https://jitpack.io/#rchain/kalium
@@ -49,11 +58,10 @@ object Dependencies {
   val kamonZipkin        = "io.kamon"          %% "kamon-zipkin"         % "1.0.0"
   val lightningj = ("org.lightningj" % "lightningj" % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val lmdbjava               = "org.lmdbjava"               % "lmdbjava"                        % "0.6.1"
   val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
   val janino                 = "org.codehaus.janino"        % "janino"                          % "3.0.12"
   val lz4                    = "org.lz4"                    % "lz4-java"                        % "1.5.0"
-  val monix                  = "io.monix"                   %% "monix"                          % "3.0.0-RC2"
+  val monix                  = "io.monix"                   %% "monix"                          % "3.0.0"
   val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
@@ -91,10 +99,14 @@ object Dependencies {
   val refinement    = "eu.timepit"        %% "refined"       % "0.9.5"
   val apacheCommons = "commons-io"        % "commons-io"     % "2.6"
   val sqlLite       = "org.xerial"        % "sqlite-jdbc"    % "3.28.0"
-  val doobieCore    = "org.tpolecat"      %% "doobie-core"   % doobieVersion
-  val doobieHikari  = "org.tpolecat"      %% "doobie-hikari" % doobieVersion
-  val flyway        = "org.flywaydb"      % "flyway-core"    % "5.2.4"
-  val fs2           = "co.fs2"            %% "fs2-core"      % fs2Version
+  val doobieCore = ("org.tpolecat" %% "doobie-core" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
+  val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
+    .exclude("co.fs2", s"fs2-core_2.12")
+  val flyway = "org.flywaydb" % "flyway-core" % "5.2.4"
+  val fs2    = "co.fs2"       %% "fs2-io"     % fs2Version
+  val upperbound = ("org.systemfw" %% "upperbound" % "0.3.0")
+    .exclude("co.fs2", "fs2-core_2.12")
 
   val overrides = Seq(
     catsCore,
@@ -114,10 +126,20 @@ object Dependencies {
     "com.thesamet.scalapb"     %% "scalapb-runtime"        % scalapb.compiler.Version.scalapbVersion
   )
 
-  private val kindProjector    = compilerPlugin("org.spire-math" %% "kind-projector"     % "0.9.8")
-  private val betterMonadicFor = compilerPlugin("com.olegpy"     %% "better-monadic-for" % "0.3.0")
+  private val kindProjector = compilerPlugin(
+    "org.typelevel" %% "kind-projector" % "0.11.0" cross CrossVersion.full
+  )
+  private val betterMonadicFor = compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1")
+
   private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+    "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
+  )
+
+  private val simulacrum = "org.typelevel" %% "simulacrum" % "1.0.0"
+
+  private val silencer = Seq(
+    compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.4" cross CrossVersion.full),
+    "com.github.ghik" %% "silencer-lib" % "1.4.4" % Provided cross CrossVersion.full
   )
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
@@ -142,11 +164,13 @@ object Dependencies {
   val apiServerDependencies: Seq[ModuleID] =
     http4sDependencies ++ circeDependencies
 
-  val commonDependencies: Seq[ModuleID] =
-    Seq(
-      compilerPlugin("com.github.ghik" %% "silencer-plugin" % "1.4.1"),
-      "com.github.ghik" %% "silencer-lib" % "1.4.1" % Provided
-    ) ++ logging ++ testing :+ kindProjector :+ macroParadise :+ betterMonadicFor
+  val commonDependencies: Seq[ModuleID] = silencer ++
+    logging ++
+    testing :+
+    kindProjector :+
+    macroParadise :+
+    betterMonadicFor :+
+    simulacrum
 
   val gatlingDependencies: Seq[ModuleID] = Seq(
     gatlingFramework,
@@ -159,17 +183,21 @@ object Dependencies {
 
   //needed because Gatling transitively bring binary incompatible dependencies
   val gatlingOverrides: Seq[ModuleID] = Seq(
-    "com.thesamet.scalapb"       %% "compilerplugin"       % "0.8.2",
-    "com.thesamet.scalapb"       %% "scalapb-runtime"      % "0.8.2",
-    "com.thesamet.scalapb"       %% "scalapb-runtime-grpc" % "0.8.2",
-    "io.grpc"                    % "grpc-netty"            % "1.15.1",
-    "io.netty"                   % "netty-buffer"          % "4.1.33.Final",
-    "io.netty"                   % "netty-handler"         % "4.1.33.Final",
-    "io.netty"                   % "netty-handler-proxy"   % "4.1.33.Final",
-    "io.netty"                   % "netty-codec"           % "4.1.33.Final",
-    "io.netty"                   % "netty-codec-http"      % "4.1.33.Final",
-    "io.netty"                   % "netty-codec-http2"     % "4.1.33.Final",
-    "com.typesafe.scala-logging" %% "scala-logging"        % "3.9.2",
-    "com.google.protobuf"        % "protobuf-java"         % "3.6.1"
+    "com.thesamet.scalapb"       %% "compilerplugin"                 % "0.8.2",
+    "com.thesamet.scalapb"       %% "scalapb-runtime"                % "0.8.2",
+    "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"           % "0.8.2",
+    "io.grpc"                    % "grpc-netty"                      % "1.15.1",
+    "io.netty"                   % "netty-buffer"                    % "4.1.33.Final",
+    "io.netty"                   % "netty-handler"                   % "4.1.33.Final",
+    "io.netty"                   % "netty-handler-proxy"             % "4.1.33.Final",
+    "io.netty"                   % "netty-codec"                     % "4.1.33.Final",
+    "io.netty"                   % "netty-codec-http"                % "4.1.33.Final",
+    "io.netty"                   % "netty-codec-http2"               % "4.1.33.Final",
+    "io.netty"                   % "netty-tcnative-boringssl-static" % "2.0.20.Final",
+    "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.2",
+    "com.google.protobuf"        % "protobuf-java"                   % "3.6.1",
+    "com.typesafe"               % "config"                          % "1.3.3",
+    "org.hdrhistogram"           % "HdrHistogram"                    % "2.1.11",
+    "org.bouncycastle"           % "bcpkix-jdk15on"                  % "1.60"
   )
 }

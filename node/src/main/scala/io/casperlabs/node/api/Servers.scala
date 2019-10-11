@@ -4,12 +4,11 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
@@ -24,6 +23,9 @@ import io.casperlabs.node.diagnostics.effects.diagnosticsService
 import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMetrics}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
 import monix.execution.Scheduler
@@ -32,7 +34,6 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 
 import scala.concurrent.ExecutionContext
-import io.netty.handler.ssl.SslContext
 
 object Servers {
 
@@ -85,7 +86,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployBuffer: Validation](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
@@ -112,7 +113,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployBuffer](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

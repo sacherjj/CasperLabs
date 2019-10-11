@@ -1,14 +1,17 @@
 package io.casperlabs.comm.gossiping
 
-import cats.Monad
+import cats._
+import cats.syntax._
 import cats.effect._
 import cats.effect.concurrent._
+import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
@@ -17,8 +20,6 @@ import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, Log}
-import shapeless.tag
-import shapeless.tag.@@
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -53,18 +54,24 @@ object DownloadManagerImpl {
       _ <- Metrics[F].incrementGauge("fetches_ongoing", 0)
     } yield ()
 
-  type Feedback[F[_]] = Deferred[F, Either[Throwable, Unit]]
-  sealed trait DownloadTag
-  sealed trait ScheduleTag
-  type DownloadFeedback[F[_]] = Feedback[F] @@ DownloadTag
-  type ScheduleFeedback[F[_]] = Feedback[F] @@ ScheduleTag
+  type Feedback[F[_], A] = Deferred[F, Either[Throwable, A]]
+  // Feedback about whether the download eventually succeeded.
+  type DownloadFeedback[F[_]] = Feedback[F, Unit]
+  // Feedback about whether the scheduling itself succeeded.
+  type ScheduleFeedback[F[_]] = Feedback[F, DownloadFeedback[F]]
 
-  /** Interface to the local backend dependencies. */
+  /** Interface to the storage and consensus dependencies and callbacks. */
   trait Backend[F[_]] {
     def hasBlock(blockHash: ByteString): F[Boolean]
     def validateBlock(block: Block): F[Unit]
     def storeBlock(block: Block): F[Unit]
     def storeBlockSummary(summary: BlockSummary): F[Unit]
+
+    /** Notify about new blocks we were told about but haven't acquired yet. */
+    def onScheduled(summary: BlockSummary): F[Unit]
+
+    /** Notify about a new block we downloaded, verified and stored. */
+    def onDownloaded(blockHash: ByteString): F[Unit]
   }
 
   /** Messages the Download Manager uses inside its scheduler "queue". */
@@ -74,10 +81,7 @@ object DownloadManagerImpl {
         summary: BlockSummary,
         source: Node,
         relay: Boolean,
-        // Feedback about whether the scheduling itself succeeded.
-        scheduleFeedback: ScheduleFeedback[F],
-        // Feedback about whether the download eventually succeeded.
-        downloadFeedback: DownloadFeedback[F]
+        scheduleFeedback: ScheduleFeedback[F]
     ) extends Signal[F]
     final case class DownloadSuccess[F[_]](blockHash: ByteString)                extends Signal[F]
     final case class DownloadFailure[F[_]](blockHash: ByteString, ex: Throwable) extends Signal[F]
@@ -94,7 +98,9 @@ object DownloadManagerImpl {
       dependencies: Set[ByteString],
       isDownloading: Boolean = false,
       isError: Boolean = false,
-      watchers: List[DownloadFeedback[F]]
+      // Keep returning the same Deferred until one attempt to download is finished.
+      // The next schedule will create a new Deferred that will be completed anew.
+      maybeWatcher: Option[DownloadFeedback[F]]
   ) {
     val canStart: Boolean = !isDownloading && dependencies.isEmpty
   }
@@ -134,7 +140,7 @@ object DownloadManagerImpl {
           relaying,
           retriesConf
         )
-        managerLoop <- Concurrent[F].start(manager.run)
+        managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
     } {
       case (isShutdown, workersRef, managerLoop, _) =>
@@ -151,7 +157,7 @@ object DownloadManagerImpl {
 
   /** All dependencies that need to be downloaded before a block. */
   private def dependencies(summary: BlockSummary): Seq[ByteString] =
-    summary.getHeader.parentHashes ++ summary.getHeader.justifications.map(_.latestBlockHash)
+    summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
 }
 
 class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
@@ -180,6 +186,12 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       Sync[F].unit
     )
 
+  private def makeDownloadFeedback =
+    Deferred[F, Either[Throwable, Unit]]
+
+  private def makeScheduleFeedback =
+    Deferred[F, Either[Throwable, Deferred[F, Either[Throwable, Unit]]]]
+
   override def scheduleDownload(
       summary: BlockSummary,
       source: Node,
@@ -189,29 +201,32 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       // Fail rather than block forever.
       _ <- ensureNotShutdown
       // Feedback about whether we successfully scheduled the item.
-      sr <- Deferred[F, Either[Throwable, Unit]].map(tag[ScheduleTag][Feedback[F]](_))
-      dr <- Deferred[F, Either[Throwable, Unit]].map(tag[DownloadTag][Feedback[F]](_))
-      _  <- signal.put(Signal.Download(summary, source, relay, sr, dr))
-      _  <- Sync[F].rethrow(sr.get)
-    } yield Sync[F].rethrow(dr.get)
+      sf <- makeScheduleFeedback
+      _  <- signal.put(Signal.Download(summary, source, relay, sf))
+      df <- Sync[F].rethrow(sf.get)
+    } yield Sync[F].rethrow(df.get)
 
   /** Run the manager loop which listens to signals and starts workers when it can. */
   def run: F[Unit] =
     signal.take.flatMap {
-      case Signal.Download(summary, source, relay, scheduleFeedback, downloadFeedback) =>
+      case Signal.Download(summary, source, relay, scheduleFeedback) =>
         // At this point we should have already synced and only scheduled things to which we know how to get.
         val start =
           isDownloaded(summary.blockHash).ifM(
-            downloadFeedback.complete(Right(())),
-            ensureNoMissingDependencies(summary) *> {
-              for {
-                items <- itemsRef.get
-                item  <- mergeItem(items, summary, source, relay, downloadFeedback)
-                _     <- itemsRef.update(_ + (summary.blockHash -> item))
-                _     <- if (item.canStart) startWorker(item) else Sync[F].unit
-                _     <- setScheduledGauge
-              } yield ()
-            }
+            for {
+              downloadFeedback <- makeDownloadFeedback
+              _                <- downloadFeedback.complete(Right(()))
+            } yield downloadFeedback,
+            for {
+              _                        <- ensureNoMissingDependencies(summary)
+              items                    <- itemsRef.get
+              itemAndFeedback          <- mergeItem(items, summary, source, relay)
+              (item, downloadFeedback) = itemAndFeedback
+              _                        <- backend.onScheduled(summary).start.whenA(!items.contains(summary.blockHash))
+              _                        <- itemsRef.update(_ + (summary.blockHash -> item))
+              _                        <- if (item.canStart) startWorker(item) else Sync[F].unit
+              _                        <- setScheduledGauge
+            } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
         start.attempt.flatMap(scheduleFeedback.complete) >> run
@@ -229,10 +244,11 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                    val startables = dependants.collect {
                      case (_, dep) if dep.canStart => dep
                    }
-                   (items ++ dependants - blockHash, item.watchers -> startables.toList)
+                   (items ++ dependants - blockHash, item.maybeWatcher.toList -> startables.toList)
                  }
           (watchers, startables) = next
           _                      <- watchers.traverse(_.complete(Right(())).attempt.void)
+          _                      <- backend.onDownloaded(blockHash).start
           _                      <- startables.traverse(startWorker)
           _                      <- setScheduledGauge
         } yield ()
@@ -248,8 +264,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           watchers <- itemsRef.modify { items =>
                        val item = items(blockHash)
                        val tombstone: Item[F] =
-                         item.copy(isDownloading = false, isError = true, watchers = Nil)
-                       (items + (blockHash -> tombstone), item.watchers)
+                         item.copy(isDownloading = false, isError = true, maybeWatcher = None)
+                       (items + (blockHash -> tombstone), item.maybeWatcher.toList)
                      }
           // Tell whoever scheduled it before that it's over.
           _ <- watchers.traverse(_.complete(Left(ex)).attempt.void)
@@ -266,36 +282,41 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       _     <- Metrics[F].setGauge("downloads_scheduled", items.size.toLong)
     } yield ()
 
-  /** Either create a new item or add the source to an existing one. */
+  /** Either create a new item or add the source to an existing one.
+    * Return the deferred that will eventually signal the completion of the task.
+    */
   private def mergeItem(
       items: Map[ByteString, Item[F]],
       summary: BlockSummary,
       source: Node,
-      relay: Boolean,
-      downloadFeedback: DownloadFeedback[F]
-  ): F[Item[F]] =
-    items.get(summary.blockHash) map { existing =>
-      Sync[F].pure {
-        existing.copy(
-          sources = existing.sources + source,
-          relay = existing.relay || relay,
-          watchers = downloadFeedback :: existing.watchers
-        )
-      }
-    } getOrElse {
-      // Collect which dependencies have already been downloaded.
-      dependencies(summary).toList.traverse { hash =>
-        if (items.contains(hash)) Sync[F].pure(hash -> false)
-        else isDownloaded(hash).map(hash            -> _)
-      } map { deps =>
-        val pending = deps.filterNot(_._2).map(_._1).toSet
-        Item(
-          summary,
-          Set(source),
-          relay,
-          dependencies = pending,
-          watchers = List(downloadFeedback)
-        )
+      relay: Boolean
+  ): F[(Item[F], DownloadFeedback[F])] =
+    makeDownloadFeedback flatMap { freshDownloadFeedback =>
+      items.get(summary.blockHash) map { existing =>
+        Sync[F].pure {
+          // If it was already scheduled we keep the existing Deferred.
+          val downloadFeedback = existing.maybeWatcher getOrElse freshDownloadFeedback
+          existing.copy(
+            sources = existing.sources + source,
+            relay = existing.relay || relay,
+            maybeWatcher = Some(downloadFeedback)
+          ) -> downloadFeedback
+        }
+      } getOrElse {
+        // Collect which dependencies have already been downloaded.
+        dependencies(summary).toList.traverse { hash =>
+          if (items.contains(hash)) Sync[F].pure(hash -> false)
+          else isDownloaded(hash).map(hash            -> _)
+        } map { deps =>
+          val pending = deps.filterNot(_._2).map(_._1).toSet
+          Item(
+            summary,
+            Set(source),
+            relay,
+            dependencies = pending,
+            maybeWatcher = Some(freshDownloadFeedback)
+          ) -> freshDownloadFeedback
+        }
       }
     }
 

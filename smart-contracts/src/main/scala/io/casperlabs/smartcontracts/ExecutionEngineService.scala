@@ -19,13 +19,19 @@ import monix.eval.{Task, TaskLift}
 import simulacrum.typeclass
 import scala.util.{Either, Try}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.ipc.ChainSpec.GenesisConfig
+import io.casperlabs.ipc.ChainSpec.{GenesisConfig, UpgradePoint}
+import io.netty.handler.ssl.ApplicationProtocolConfig.Protocol
 
 @typeclass trait ExecutionEngineService[F[_]] {
   def emptyStateHash: ByteString
   def runGenesis(
       genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]]
+  def upgrade(
+      prestate: ByteString,
+      upgrade: UpgradePoint,
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, UpgradeResult]]
   def exec(
       prestate: ByteString,
       blocktime: Long,
@@ -34,10 +40,15 @@ import io.casperlabs.ipc.ChainSpec.GenesisConfig
   ): F[Either[Throwable, Seq[DeployResult]]]
   def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]]
-  def query(state: ByteString, baseKey: Key, path: Seq[String]): F[Either[Throwable, Value]]
-  def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]]
+  def query(
+      state: ByteString,
+      baseKey: Key,
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, Value]]
 }
 
 class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] private[smartcontracts] (
@@ -73,7 +84,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       blocktime: Long,
       deploys: Seq[DeployItem],
       protocolVersion: ProtocolVersion
-  ): F[Either[Throwable, Seq[DeployResult]]] = {
+  ): F[Either[Throwable, Seq[DeployResult]]] = Metrics[F].timer("eeExec") {
     val baseExecRequest =
       ExecuteRequest(prestate, blocktime, protocolVersion = Some(protocolVersion))
     // Build batches limited by the size of message sent to EE.
@@ -100,8 +111,11 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
       _ <- result.fold(
             _ => ().pure[F],
             deployResults => {
+              // XXX: EE returns cost as BigInt but metrics are in Long. In practice it will be unlikely exhaust the limits of Long.
               val gasSpent =
-                deployResults.foldLeft(0L)((a, d) => a + d.value.executionResult.fold(0L)(_.cost))
+                deployResults.foldLeft(0L)(
+                  (a, d) => a + d.value.executionResult.fold(0L)(_.cost.fold(0L)(_.value.toLong))
+                )
               Metrics[F].incrementCounter("gas_spent", gasSpent)
             }
           )
@@ -111,66 +125,72 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def runGenesis(
       genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]] =
-    for {
-      response <- sendMessage(genesisConfig, _.runGenesisWithChainspec) {
-                   _.result match {
-                     case GenesisResponse.Result.Success(result) =>
-                       Right(result)
-                     case GenesisResponse.Result.FailedDeploy(error) =>
-                       Left(new SmartContractEngineError(error.message))
-                     case GenesisResponse.Result.Empty =>
-                       Left(new SmartContractEngineError("empty response"))
-                   }
-                 }
-    } yield response
+    sendMessage(genesisConfig, _.runGenesisWithChainspec) {
+      _.result match {
+        case GenesisResponse.Result.Success(result) =>
+          Right(result)
+        case GenesisResponse.Result.FailedDeploy(error) =>
+          Left(new SmartContractEngineError(error.message))
+        case GenesisResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+      }
+    }
+
+  def upgrade(
+      prestate: ByteString,
+      upgrade: UpgradePoint,
+      protocolVersion: ProtocolVersion
+  ): F[Either[Throwable, UpgradeResult]] =
+    sendMessage(
+      UpgradeRequest(prestate, Some(upgrade), Some(protocolVersion)),
+      _.upgrade
+    ) {
+      _.result match {
+        case UpgradeResponse.Result.Success(result) =>
+          Right(result)
+        case UpgradeResponse.Result.FailedDeploy(error) =>
+          Left(new SmartContractEngineError(error.message))
+        case UpgradeResponse.Result.Empty =>
+          Left(new SmartContractEngineError("empty response"))
+      }
+    }
 
   override def commit(
       prestate: ByteString,
-      effects: Seq[TransformEntry]
+      effects: Seq[TransformEntry],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, ExecutionEngineService.CommitResult]] =
-    sendMessage(CommitRequest(prestate, effects), _.commit) {
-      _.result match {
-        case CommitResponse.Result.Success(commitResult) =>
-          Right(ExecutionEngineService.CommitResult(commitResult))
-        case CommitResponse.Result.Empty =>
-          Left(SmartContractEngineError("empty response"))
-        case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
-          Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
-        case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
-          Left(SmartContractEngineError(s"Error executing transform: $message"))
-        case CommitResponse.Result.KeyNotFound(value) =>
-          Left(SmartContractEngineError(s"Key not found in global state: $value"))
-        case CommitResponse.Result.TypeMismatch(err) =>
-          Left(SmartContractEngineError(err.toString))
+    Metrics[F].timer("eeCommit") {
+      sendMessage(CommitRequest(prestate, effects, Some(protocolVersion)), _.commit) {
+        _.result match {
+          case CommitResponse.Result.Success(commitResult) =>
+            Right(ExecutionEngineService.CommitResult(commitResult))
+          case CommitResponse.Result.Empty => Left(SmartContractEngineError("empty response"))
+          case CommitResponse.Result.MissingPrestate(RootNotFound(hash)) =>
+            Left(SmartContractEngineError(s"Missing pre-state: ${Base16.encode(hash.toByteArray)}"))
+          case CommitResponse.Result.FailedTransform(PostEffectsError(message)) =>
+            Left(SmartContractEngineError(s"Error executing transform: $message"))
+          case CommitResponse.Result.KeyNotFound(value) =>
+            Left(SmartContractEngineError(s"Key not found in global state: $value"))
+          case CommitResponse.Result.TypeMismatch(err) =>
+            Left(SmartContractEngineError(err.toString))
+        }
       }
     }
 
   override def query(
       state: ByteString,
       baseKey: Key,
-      path: Seq[String]
+      path: Seq[String],
+      protocolVersion: ProtocolVersion
   ): F[Either[Throwable, Value]] =
-    sendMessage(QueryRequest(state, Some(baseKey), path), _.query) {
+    sendMessage(QueryRequest(state, Some(baseKey), path, Some(protocolVersion)), _.query) {
       _.result match {
         case QueryResponse.Result.Success(value) => Right(value)
         case QueryResponse.Result.Empty          => Left(SmartContractEngineError("empty response"))
         case QueryResponse.Result.Failure(err)   => Left(SmartContractEngineError(err))
       }
     }
-
-  override def verifyWasm(contracts: ValidateRequest): F[Either[String, Unit]] =
-    stub.validate(contracts).to[F] >>= (
-      _.result match {
-        case ValidateResponse.Result.Empty =>
-          Sync[F].raiseError(
-            new IllegalStateException("Execution Engine service has sent a corrupted reply")
-          )
-        case ValidateResponse.Result.Success(_) =>
-          ().asRight[String].pure[F]
-        case ValidateResponse.Result.Failure(cause: String) =>
-          cause.asLeft[Unit].pure[F]
-      }
-    )
 }
 
 object ExecutionEngineService {
@@ -180,6 +200,7 @@ object ExecutionEngineService {
 
   object CommitResult {
     def apply(ipcCommitResult: io.casperlabs.ipc.CommitResult): CommitResult = {
+      // XXX: EE returns bonds as BigInt but we treat it as Long.
       val validators = ipcCommitResult.bondedValidators.map(
         b => Bond(b.validatorPublicKey, b.getStake.value.toLong)
       )

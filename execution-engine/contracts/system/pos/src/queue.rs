@@ -3,11 +3,10 @@ use core::convert::TryFrom;
 use core::result;
 
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::storage;
+use contract_ffi::system_contracts::pos::{Error, Result};
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::{Value, U512};
-
-use crate::error::{Error, Result};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -78,26 +77,26 @@ pub struct QueueLocal;
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
     fn read_bonding() -> Queue {
-        contract_api::read_local(BONDING_KEY)
+        storage::read_local(BONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
 
     /// Reads unbonding queue from the local state of the contract.
     fn read_unbonding() -> Queue {
-        contract_api::read_local(UNBONDING_KEY)
+        storage::read_local(UNBONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
 
     /// Writes bonding queue to the local state of the contract.
     fn write_bonding(queue: &Queue) {
-        contract_api::write_local(BONDING_KEY, queue);
+        storage::write_local(BONDING_KEY, queue);
     }
 
     /// Writes unbonding queue to the local state of the contract.
     fn write_unbonding(queue: &Queue) {
-        contract_api::write_local(UNBONDING_KEY, queue);
+        storage::write_local(UNBONDING_KEY, queue);
     }
 }
 
@@ -182,10 +181,10 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
+    use contract_ffi::system_contracts::pos::Error;
     use contract_ffi::value::account::{BlockTime, PublicKey};
     use contract_ffi::value::U512;
 
-    use crate::error::Error;
     use crate::queue::{Queue, QueueEntry};
 
     const KEY1: [u8; 32] = [1; 32];

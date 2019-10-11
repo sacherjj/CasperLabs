@@ -29,7 +29,7 @@ def three_node_network_with_combined_contract(three_node_network):
     bootstrap, node1, node2 = tnn.docker_nodes
     node = bootstrap
     block_hash = bootstrap.p_client.deploy_and_propose(
-        session_contract=Contract.COMBINEDCONTRACTSDEFINE,
+        session_contract=Contract.COMBINED_CONTRACTS_DEFINE,
         from_address=node.genesis_account.public_key_hex,
         public_key=node.genesis_account.public_key_path,
         private_key=node.genesis_account.private_key_path,
@@ -60,18 +60,23 @@ expected_counter_result = count(1)
 
 test_parameters = [
     (
-        Contract.MAILINGLISTCALL,
+        Contract.MAILING_LIST_CALL,
         2,
         "mailing/list",
         lambda r: "CasperLabs" in r.string_list.values,
     ),
     (
-        Contract.COUNTERCALL,
+        Contract.COUNTER_CALL,
         1,
         "counter/count",
         lambda r: r.int_value == next(expected_counter_result),
     ),
-    (Contract.HELLOWORLD, 0, "helloworld", lambda r: r.string_value == "Hello, World"),
+    (
+        Contract.HELLO_NAME_CALL,
+        0,
+        "helloworld",
+        lambda r: r.string_value == "Hello, World",
+    ),
 ]
 
 
@@ -274,7 +279,7 @@ class DeployThread(threading.Thread):
 
 @pytest.mark.parametrize(
     "contract_paths,expected_deploy_counts_in_blocks",
-    [([[Contract.HELLONAME]], [1, 1, 1, 1])],
+    [([[Contract.HELLO_NAME_DEFINE]], [1, 1, 1, 1])],
 )
 # Nodes deploy one or more contracts followed by propose.
 def test_multiple_deploys_at_once(

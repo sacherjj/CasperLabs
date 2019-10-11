@@ -17,7 +17,6 @@ pub mod logging;
 pub mod motes;
 pub mod newtypes;
 pub mod os;
-pub mod semver;
 pub mod socket;
 pub mod test_utils;
 pub mod transform;

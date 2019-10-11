@@ -37,7 +37,7 @@ pub enum Error {
     #[fail(display = "Serialization error: {}", _0)]
     SerializationError(bytesrepr::Error),
     #[fail(display = "Mint error: {}", _0)]
-    MintError(mint::error::Error),
+    MintError(mint::Error),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {
@@ -70,8 +70,8 @@ impl From<bytesrepr::Error> for Error {
     }
 }
 
-impl From<mint::error::Error> for Error {
-    fn from(error: mint::error::Error) -> Self {
+impl From<mint::Error> for Error {
+    fn from(error: mint::Error) -> Self {
         Error::MintError(error)
     }
 }

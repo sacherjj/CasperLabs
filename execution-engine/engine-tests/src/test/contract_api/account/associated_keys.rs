@@ -1,15 +1,18 @@
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, Weight};
 use contract_ffi::value::{Account, U512};
-use engine_core::engine_state::MAX_PAYMENT;
 
-use crate::support::test_support::{
-    InMemoryWasmTestBuilder, DEFAULT_BLOCK_TIME, STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
+const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
+const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key.wasm";
+const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];
-const ACCOUNT_1_INITIAL_BALANCE: u64 = MAX_PAYMENT * 2;
+lazy_static! {
+    static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT * 10;
+}
 
 #[ignore]
 #[test]
@@ -18,28 +21,24 @@ fn should_manage_associated_key() {
     // that key
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
+        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
+    )
+    .build();
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
+        (DEFAULT_ACCOUNT_ADDR,),
+    )
+    .build();
     let builder = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec_with_args(
-            DEFAULT_ACCOUNT_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "transfer_purse_to_account.wasm",
-            (ACCOUNT_1_ADDR, U512::from(ACCOUNT_1_INITIAL_BALANCE)),
-            DEFAULT_BLOCK_TIME,
-            [1u8; 32],
-        )
+        .exec(exec_request_1)
         .expect_success()
         .commit()
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "add_update_associated_key.wasm",
-            (DEFAULT_ACCOUNT_ADDR,),
-            DEFAULT_BLOCK_TIME,
-            [2u8; 32],
-        )
+        .exec(exec_request_2)
         .expect_success()
         .commit();
 
@@ -60,18 +59,14 @@ fn should_manage_associated_key() {
     let expected_weight = Weight::new(2);
     assert_eq!(*gen_weight, expected_weight, "unexpected weight");
 
-    builder
-        .exec_with_args(
-            ACCOUNT_1_ADDR,
-            STANDARD_PAYMENT_CONTRACT,
-            (U512::from(MAX_PAYMENT),),
-            "remove_associated_key.wasm",
-            (DEFAULT_ACCOUNT_ADDR,),
-            DEFAULT_BLOCK_TIME,
-            [3u8; 32],
-        )
-        .expect_success()
-        .commit();
+    let exec_request_3 = ExecuteRequestBuilder::standard(
+        ACCOUNT_1_ADDR,
+        CONTRACT_REMOVE_ASSOCIATED_KEY,
+        (DEFAULT_ACCOUNT_ADDR,),
+    )
+    .build();
+
+    builder.exec(exec_request_3).expect_success().commit();
 
     let account_1: Account = {
         let tmp = builder.clone();

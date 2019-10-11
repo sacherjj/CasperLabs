@@ -5,10 +5,9 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.Base64
 import cats.effect.Sync
 import cats.implicits._
-import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.helper.{DagStorageFixture, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.{HashSetCasperTestNode, StorageFixture}
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
@@ -18,13 +17,14 @@ import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
-class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
+class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
   it should "create a valid genesis block" in withStorage {
-    implicit blockStorage => implicit dagStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val accounts = Seq(
         ("KZZwxShJ8aqC6N/lvocsFrYAvwnMiYPgS5A0ETWPLeY=", 0, 100),
         ("V3dfs7swdXYE68RTvQObGZ6PCadHZKwWkPc25zS33hg=", 0, 200),
@@ -35,7 +35,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
         .GenesisConfig()
         .withName("casperlabs")
         .withTimestamp(1234567890L)
-        .withProtocolVersion(state.ProtocolVersion(1L))
+        .withProtocolVersion(state.ProtocolVersion(1))
         .withAccounts(accounts map {
           case (key, balance, bond) =>
             ipc.ChainSpec
@@ -66,7 +66,7 @@ class GenesisTest extends FlatSpec with Matchers with DagStorageFixture {
 
         _ = genesis.getHeader.chainId shouldBe "casperlabs"
         _ = genesis.getHeader.timestamp shouldBe 1234567890L
-        _ = genesis.getHeader.protocolVersion shouldBe 1L
+        _ = genesis.getHeader.getProtocolVersion shouldBe state.ProtocolVersion(1)
         _ = genesis.getHeader.getState.bonds should have size 2
 
         stored <- blockStorage.get(genesis.blockHash)

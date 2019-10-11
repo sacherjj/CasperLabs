@@ -19,6 +19,8 @@ from casperlabs_local_net.casperlabs_accounts import (
     GENESIS_ACCOUNT,
 )
 from casperlabs_local_net.graphql import GraphQL
+from casperlabs_client import extract_common_name, ABI
+from casperlabs_local_net import grpc_proxy
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -39,7 +41,7 @@ class DockerNode(LoggingDockerBase):
 
     NUMBER_OF_BONDS = 10
 
-    NETWORK_PORT = 40400
+    GRPC_SERVER_PORT = 40400
     GRPC_EXTERNAL_PORT = 40401
     GRPC_INTERNAL_PORT = 40402
     HTTP_PORT = 40403
@@ -52,10 +54,57 @@ class DockerNode(LoggingDockerBase):
         self.cl_network = cl_network
         super().__init__(config)
         self.graphql = GraphQL(self)
+
+        self.proxy_server = None
+        self.proxy_kademlia = None
+        if config.behind_proxy:
+
+            # Set up proxy of incoming connections: this node is server, the other one client.
+            server_certificate_path = config.tls_certificate_local_path()
+            server_key_path = config.tls_key_local_path()
+
+            self.proxy_server = grpc_proxy.proxy_server(
+                self,
+                node_port=self.grpc_server_docker_port,
+                node_host=self.node_host,
+                proxy_port=self.server_proxy_port,
+                server_certificate_file=server_certificate_path,
+                server_key_file=server_key_path,
+                client_certificate_file=server_certificate_path,
+                client_key_file=server_key_path,
+            )
+            self.proxy_kademlia = grpc_proxy.proxy_kademlia(
+                self,
+                node_port=self.kademlia_docker_port,
+                node_host=self.node_host,
+                proxy_port=self.kademlia_proxy_port,
+            )
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+
+    @property
+    def node_host(self):
+        return os.environ.get("TAG_NAME") and self.container_name or "172.17.0.1"
+
+    @property
+    def proxy_host(self):
+        return (
+            os.environ.get("TAG_NAME")
+            and f"test-{os.environ.get('TAG_NAME')}"
+            or "172.17.0.1"
+        )
+
+    @property
+    def server_proxy_port(self) -> int:
+        return (
+            self.GRPC_SERVER_PORT + self.config.number * 100 + self.docker_port_offset
+        )
+
+    @property
+    def kademlia_proxy_port(self) -> int:
+        return self.KADEMLIA_PORT + self.config.number * 100 + self.docker_port_offset
 
     @property
     def docker_port_offset(self) -> int:
@@ -63,6 +112,20 @@ class DockerNode(LoggingDockerBase):
             return 0
         else:
             return self.config.number * 10
+
+    @property
+    def grpc_server_docker_port(self) -> int:
+        n = self.GRPC_SERVER_PORT + self.docker_port_offset
+        if self.config.behind_proxy:
+            return n + 10000  # 50400 + self.docker_port_offset
+        return n
+
+    @property
+    def kademlia_docker_port(self) -> int:
+        n = self.KADEMLIA_PORT + self.docker_port_offset
+        if self.config.behind_proxy:
+            return n + 10000  # 50404 + self.docker_port_offset
+        return n
 
     @property
     def grpc_external_docker_port(self) -> int:
@@ -135,6 +198,14 @@ class DockerNode(LoggingDockerBase):
         :return: dict for use in docker container run to open ports based on node number
         """
         ports = (
+            (
+                self.GRPC_SERVER_PORT + (self.config.behind_proxy and 10000 or 0),
+                self.grpc_server_docker_port,
+            ),
+            (
+                self.KADEMLIA_PORT + (self.config.behind_proxy and 10000 or 0),
+                self.kademlia_docker_port,
+            ),
             (self.GRPC_INTERNAL_PORT, self.grpc_internal_docker_port),
             (self.GRPC_EXTERNAL_PORT, self.grpc_external_docker_port),
             (self.HTTP_PORT, self.http_port),
@@ -163,6 +234,7 @@ class DockerNode(LoggingDockerBase):
         ports = {}
         if not self.is_in_docker:
             ports = self.docker_ports
+        logging.info(f"{self.container_name} ports: {ports}")
 
         container = self.config.docker_client.containers.run(
             self.image_name,
@@ -188,6 +260,7 @@ class DockerNode(LoggingDockerBase):
 
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self) -> None:
+        bond_amount = self.config.bond_amount
         N = self.NUMBER_OF_BONDS
         # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
         path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
@@ -201,11 +274,15 @@ class DockerNode(LoggingDockerBase):
                 Account(i)
                 for i in range(FIRST_VALIDATOR_ACCOUNT, FIRST_VALIDATOR_ACCOUNT + N)
             ):
-                bond = N + 2 * i
+                bond = bond_amount(i, N)
                 f.write(f"{pair.public_key},0,{bond}\n")
 
     def cleanup(self):
         super().cleanup()
+        if self.proxy_server:
+            self.proxy_server.stop()
+        if self.proxy_kademlia:
+            self.proxy_kademlia.stop()
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):
@@ -248,7 +325,7 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT_IT,
         payment_contract: str = Contract.STANDARD_PAYMENT,
         payment_args: bytes = MAX_PAYMENT_ABI,
         gas_price: int = 1,
@@ -280,10 +357,11 @@ class DockerNode(LoggingDockerBase):
         from_account = Account(from_account_id)
         to_account = Account(to_account_id)
 
-        ABI = self.p_client.abi
-
         session_args = ABI.args(
-            [ABI.account(to_account.public_key_binary), ABI.u32(amount)]
+            [
+                ABI.account("account", to_account.public_key_binary),
+                ABI.u32("amount", amount),
+            ]
         )
 
         response, deploy_hash_bytes = self.p_client.deploy(
@@ -392,7 +470,18 @@ class DockerNode(LoggingDockerBase):
         return self.exec_run(f"{self.CL_NODE_BINARY} show-blocks")
 
     @property
+    def node_id(self) -> str:
+        return extract_common_name(self.config.tls_certificate_local_path())
+
+    @property
     def address(self) -> str:
+        if self.config.behind_proxy:
+            protocol_port = self.server_proxy_port
+            discovery_port = self.kademlia_proxy_port
+            addr = f"casperlabs://{self.node_id}@{self.proxy_host}?protocol={protocol_port}&discovery={discovery_port}"
+            logging.info(f"Address of the proxy: {addr}")
+            return addr
+
         m = re.search(
             f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
             self.logs(),

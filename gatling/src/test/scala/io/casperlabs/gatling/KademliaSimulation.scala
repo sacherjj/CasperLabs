@@ -1,7 +1,7 @@
 package io.casperlabs.gatling
 
 import com.github.phisgr.gatling.grpc.Predef._
-import io.casperlabs.comm.discovery.{KademliaRPCServiceGrpc, Lookup, Ping}
+import io.casperlabs.comm.discovery.{KademliaGrpcMonix, LookupRequest, PingRequest}
 import io.gatling.core.Predef._
 import io.gatling.core.session.Expression
 import io.grpc.ManagedChannelBuilder
@@ -26,28 +26,28 @@ class KademliaSimulation extends Simulation {
     else
       randomNode
 
-  def randomPing: Expression[Ping] =
-    buildValidExpr(Ping(Some(randomNode)))
+  def randomPing: Expression[PingRequest] =
+    buildValidExpr(PingRequest(Some(randomNode)))
 
-  def lookupNode: Expression[Lookup] = buildValidExpr {
-    Lookup(knownOrRandomNode.id, Some(knownOrRandomNode))
+  def lookupNode: Expression[LookupRequest] = buildValidExpr {
+    LookupRequest(knownOrRandomNode.id, Some(knownOrRandomNode))
   }
 
-  def pingKnown: Expression[Ping] =
-    buildValidExpr(Ping(Some(randomKnownNode)))
+  def pingKnown: Expression[PingRequest] =
+    buildValidExpr(PingRequest(Some(randomKnownNode)))
 
   val pingSc = scenario("Kademlia ping")
     .repeat(1000) {
       exec(
         grpc("kademlia-ping-flood")
-          .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
+          .rpc(KademliaGrpcMonix.METHOD_PING)
           .payload(randomPing)
       ).exitHereIfFailed
     }
     .repeat(200) {
       exec(
         grpc("kademlia-ping-known")
-          .rpc(KademliaRPCServiceGrpc.METHOD_SEND_PING)
+          .rpc(KademliaGrpcMonix.METHOD_PING)
           .payload(pingKnown)
       )
     }
@@ -56,7 +56,7 @@ class KademliaSimulation extends Simulation {
     .repeat(1000) {
       exec(
         grpc("kademlia-lookup")
-          .rpc(KademliaRPCServiceGrpc.METHOD_SEND_LOOKUP)
+          .rpc(KademliaGrpcMonix.METHOD_LOOKUP)
           .payload(lookupNode)
       )
     }

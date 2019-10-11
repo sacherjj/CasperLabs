@@ -17,7 +17,7 @@ BONDING_ACCT = 295
 def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
     node0 = network.docker_nodes[0]
     prev_number = len(network.docker_nodes)
-    account = network.add_new_node_to_network(Account(account_number))
+    account = network.add_new_node_to_network(account=Account(account_number))
     assert (
         len(network.docker_nodes) == prev_number + 1
     ), f"Total number of nodes should be {prev_number + 1}."

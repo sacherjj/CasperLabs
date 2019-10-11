@@ -4,6 +4,7 @@ use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use contract_ffi::bytesrepr::{self, ToBytes};
 use contract_ffi::contract_api;
+use contract_ffi::contract_api::system::TransferredTo;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::{Value, U512};
@@ -39,14 +40,6 @@ where
                 // args(1) = size of key bytes in Wasm memory
                 let (key_bytes_ptr, key_bytes_size) = Args::parse(args)?;
                 let size = self.read_local(key_bytes_ptr, key_bytes_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
-            }
-
-            FunctionIndex::SerFnFuncIndex => {
-                // args(0) = pointer to name in Wasm memory
-                // args(1) = size of name in Wasm memory
-                let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.serialize_function(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -225,12 +218,33 @@ where
             }
 
             FunctionIndex::GasFuncIndex => {
-                let gas: u32 = Args::parse(args)?;
-                self.gas(Gas::from_u64(gas.into()))?;
+                let gas_arg: u32 = Args::parse(args)?;
+                self.gas(Gas::new(gas_arg.into()))?;
                 Ok(None)
             }
 
             FunctionIndex::StoreFnIndex => {
+                // args(0) = pointer to function name in Wasm memory
+                // args(1) = size of the name
+                // args(2) = pointer to additional unforgable names
+                //           to be saved with the function body
+                // args(3) = size of the additional unforgable names
+                // args(4) = pointer to a Wasm memory where we will save
+                //           uref address of the new function
+                let (name_ptr, name_size, urefs_ptr, urefs_size, hash_ptr) = Args::parse(args)?;
+                let _uref_type: u32 = urefs_size;
+                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
+                let uref_bytes = self
+                    .memory
+                    .get(urefs_ptr, urefs_size as usize)
+                    .map_err(Error::Interpreter)?;
+                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let contract_hash = self.store_function(fn_bytes, urefs)?;
+                self.function_address(contract_hash, hash_ptr)?;
+                Ok(None)
+            }
+
+            FunctionIndex::StoreFnAtHashIndex => {
                 // args(0) = pointer to function name in Wasm memory
                 // args(1) = size of the name
                 // args(2) = pointer to additional unforgable names
@@ -246,13 +260,9 @@ where
                     .get(urefs_ptr, urefs_size as usize)
                     .map_err(Error::Interpreter)?;
                 let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
-                let contract_hash = self.store_function(fn_bytes, urefs)?;
+                let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
-            }
-
-            FunctionIndex::ProtocolVersionFuncIndex => {
-                Ok(Some(self.context.protocol_version().value().into()))
             }
 
             FunctionIndex::IsValidFnIndex => {
@@ -335,7 +345,7 @@ where
                     bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_to_account(public_key, amount)?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 
             FunctionIndex::TransferFromPurseToAccountIndex => {
@@ -367,7 +377,7 @@ where
                     bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 
             FunctionIndex::TransferFromPurseToPurseIndex => {
@@ -387,7 +397,7 @@ where
                     amount_ptr,
                     amount_size,
                 )?;
-                Ok(Some(RuntimeValue::I32(ret.into())))
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::GetBalanceIndex => {

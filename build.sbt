@@ -13,17 +13,16 @@ Global / dependencyOverrides := Dependencies.overrides
 val protobufDirectory = file("protobuf")
 // Protos can import any other using the full path within `protobuf`. This filter reduces the list
 // for which we actually generate .scala source, so we don't get duplicates between projects.
-def protobufPathFilter(paths: String*) = {
-  (f: File) =>
-    f.getName.endsWith(".proto") && // Not directories or other artifacts.
-      paths.map(protobufDirectory.toPath.resolve).exists { path =>
-        f.toPath == path || f.toPath.startsWith(path)
-      }
+def protobufPathFilter(paths: String*) = { (f: File) =>
+  f.getName.endsWith(".proto") && // Not directories or other artifacts.
+  paths.map(protobufDirectory.toPath.resolve).exists { path =>
+    f.toPath == path || f.toPath.startsWith(path)
+  }
 }
 
 lazy val projectSettings = Seq(
   organization := "io.casperlabs",
-  scalaVersion := "2.12.9",
+  scalaVersion := "2.12.10",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -40,12 +39,9 @@ lazy val projectSettings = Seq(
     case None    => Seq()
     case Some(v) => Seq("-source", v, "-target", v)
   }),
-  Test / fork := false, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
+  Test / fork := true, // Forking may cause "Reporter closed abruptly..." messages due to non-serializable exceptions.
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
-  IntegrationTest / fork := true,
-  IntegrationTest / parallelExecution := false,
-  IntegrationTest / testForkedParallel := false,
   Compile / doc / sources := Seq.empty,
   Compile / packageDoc / publishArtifact := false
 )
@@ -85,13 +81,15 @@ lazy val shared = (project in file("shared"))
   .settings(
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
+      sqlLite,
       fs2,
       catsCore,
-      catsPar,
       catsEffect,
       catsEffectLaws,
       catsMtl,
-      meowMtl,
+      meowMtlCore,
+      meowMtlEffects,
+      meowMtlMonix,
       lz4,
       monix,
       scodecCore,
@@ -125,15 +123,13 @@ lazy val casper = (project in file("casper"))
       nettyAll,
       nettyTransNativeEpoll,
       nettyTransNativeKqueue
-    )
+    ),
+    Test / unmanagedClasspath ++= storage.base / "src" / "main" / "resources" :: Nil
   )
   .dependsOn(
     storage        % "compile->compile;test->test",
     comm           % "compile->compile;test->test",
-    shared         % "compile->compile;test->test",
-    smartContracts % "compile->compile;test->test",
-    crypto,
-    models
+    smartContracts % "compile->compile;test->test"
   )
 
 lazy val comm = (project in file("comm"))
@@ -142,6 +138,7 @@ lazy val comm = (project in file("comm"))
     version := "0.1",
     dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      upperbound,
       grpcNetty,
       nettyBoringSsl,
       scalapbRuntimegGrpc,
@@ -167,7 +164,7 @@ lazy val comm = (project in file("comm"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared % "compile->compile;test->test", crypto, models)
+  .dependsOn(models % "compile->compile;test->test")
 
 lazy val crypto = (project in file("crypto"))
   .settings(commonSettings: _*)
@@ -185,7 +182,7 @@ lazy val crypto = (project in file("crypto"))
     ),
     fork := true
   )
-  .dependsOn(shared)
+  .dependsOn(shared % "compile->compile;test->test")
 
 lazy val models = (project in file("models"))
   .settings(commonSettings: _*)
@@ -216,9 +213,9 @@ lazy val models = (project in file("models"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(crypto, shared % "compile->compile;test->test")
+  .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.7.1"
+val nodeAndClientVersion = "0.8.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -354,7 +351,7 @@ lazy val node = (project in file("node"))
     rpmAutoreq := "no",
     Test / fork := true // Config tests errors would quit SBT itself due to Scallops.
   )
-  .dependsOn(casper, comm, crypto)
+  .dependsOn(casper)
 
 lazy val storage = (project in file("storage"))
   .enablePlugins(JmhPlugin)
@@ -364,8 +361,6 @@ lazy val storage = (project in file("storage"))
     name := "storage",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-      lmdbjava,
-      sqlLite,
       doobieCore,
       doobieHikari,
       flyway,
@@ -376,7 +371,8 @@ lazy val storage = (project in file("storage"))
     PB.protoSources in Compile := Seq(protobufDirectory),
     includeFilter in PB.generate := new SimpleFileFilter(
       protobufPathFilter(
-        "io/casperlabs/storage"
+        "io/casperlabs/storage",
+        "io/casperlabs/ipc"
       )
     ),
     PB.targets in Compile := Seq(
@@ -385,7 +381,7 @@ lazy val storage = (project in file("storage"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared, models % "compile->compile;test->test")
+  .dependsOn(models % "compile->compile;test->test")
 
 // Smart contract execution.
 lazy val smartContracts = (project in file("smart-contracts"))
@@ -522,7 +518,7 @@ lazy val client = (project in file("client"))
         .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(crypto, shared, models, graphz)
+  .dependsOn(models, graphz)
 
 lazy val benchmarks = (project in file("benchmarks"))
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
@@ -587,7 +583,7 @@ lazy val gatling = (project in file("gatling"))
       PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf"
     )
   )
-  .dependsOn(shared)
+  .dependsOn(comm)
 
 lazy val casperlabs = (project in file("."))
   .settings(commonSettings: _*)
@@ -602,5 +598,6 @@ lazy val casperlabs = (project in file("."))
     shared,
     smartContracts,
     client,
-    benchmarks
+    benchmarks,
+    gatling
   )

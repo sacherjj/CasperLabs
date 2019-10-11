@@ -2,22 +2,23 @@
 
 #[macro_use]
 extern crate alloc;
+extern crate contract_ffi;
 
-mod error;
 mod queue;
 mod stakes;
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api;
+use contract_ffi::contract_api::{runtime, system};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
+use contract_ffi::system_contracts::pos::{Error, PurseLookupError, Result};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::U512;
 
-use crate::error::{Error, PurseLookupError, Result, ResultExt};
 use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
 use crate::stakes::{ContractStakes, StakesProvider};
 
@@ -139,7 +140,7 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
 
 /// Attempts to look up a purse from the named_keys
 fn get_purse_id(name: &str) -> core::result::Result<PurseId, PurseLookupError> {
-    contract_api::get_key(name)
+    runtime::get_key(name)
         .ok_or(PurseLookupError::KeyNotFound)
         .and_then(|key| match key {
             Key::URef(uref) => Ok(PurseId::new(uref)),
@@ -166,10 +167,10 @@ fn get_rewards_purse() -> Result<PurseId> {
 /// will be sent. Note that if this function is never called, the default
 /// location is the main purse of the deployer's account.
 fn set_refund(purse_id: URef) {
-    if let Phase::Payment = contract_api::get_phase() {
-        contract_api::put_key(REFUND_PURSE_KEY, &Key::URef(purse_id));
+    if let Phase::Payment = runtime::get_phase() {
+        runtime::put_key(REFUND_PURSE_KEY, &Key::URef(purse_id));
     } else {
-        contract_api::revert(Error::SetRefundPurseCalledOutsidePayment.into())
+        runtime::revert(Error::SetRefundPurseCalledOutsidePayment)
     }
 }
 
@@ -179,7 +180,7 @@ fn get_refund_purse() -> Option<PurseId> {
         Ok(purse_id) => Some(purse_id),
         Err(PurseLookupError::KeyNotFound) => None,
         Err(PurseLookupError::KeyUnexpectedType) => {
-            contract_api::revert(Error::RefundPurseKeyUnexpectedType.into())
+            runtime::revert(Error::RefundPurseKeyUnexpectedType)
         }
     }
 }
@@ -191,36 +192,31 @@ fn get_refund_purse() -> Option<PurseId> {
 /// end of each deploy and that the refund purse is unset at the beginning
 /// and end of each deploy.
 fn finalize_payment(amount_spent: U512, account: PublicKey) {
-    let caller = contract_api::get_caller();
+    let caller = runtime::get_caller();
     if caller.value() != SYSTEM_ACCOUNT {
-        contract_api::revert(Error::SystemFunctionCalledByUserAccount.into());
+        runtime::revert(Error::SystemFunctionCalledByUserAccount);
     }
 
     let payment_purse = get_payment_purse().unwrap_or_revert();
-    let total = contract_api::get_balance(payment_purse)
-        .unwrap_or_else(|| contract_api::revert(Error::PaymentPurseBalanceNotFound.into()));
+    let total = system::get_balance(payment_purse)
+        .unwrap_or_revert_with(Error::PaymentPurseBalanceNotFound);
     if total < amount_spent {
-        contract_api::revert(Error::InsufficientPaymentForAmountSpent.into());
+        runtime::revert(Error::InsufficientPaymentForAmountSpent);
     }
     let refund_amount = total - amount_spent;
 
     let rewards_purse = get_rewards_purse().unwrap_or_revert();
     let refund_purse = get_refund_purse();
-    contract_api::remove_key(REFUND_PURSE_KEY); //unset refund purse after reading it
+    runtime::remove_key(REFUND_PURSE_KEY); //unset refund purse after reading it
 
     // pay validators
-    if let contract_api::PurseTransferResult::TransferError =
-        contract_api::transfer_from_purse_to_purse(payment_purse, rewards_purse, amount_spent)
-    {
-        contract_api::revert(Error::FailedTransferToRewardsPurse.into());
-    }
+    system::transfer_from_purse_to_purse(payment_purse, rewards_purse, amount_spent)
+        .unwrap_or_revert_with(Error::FailedTransferToRewardsPurse);
 
     // give refund
     if !refund_amount.is_zero() {
         if let Some(purse) = refund_purse {
-            if let contract_api::PurseTransferResult::TransferError =
-                contract_api::transfer_from_purse_to_purse(payment_purse, purse, refund_amount)
-            {
+            if system::transfer_from_purse_to_purse(payment_purse, purse, refund_amount).is_err() {
                 // on case of failure to transfer to refund purse we fall back on the account's
                 // main purse
                 refund_to_account(payment_purse, account, refund_amount)
@@ -232,55 +228,43 @@ fn finalize_payment(amount_spent: U512, account: PublicKey) {
 }
 
 fn refund_to_account(payment_purse: PurseId, account: PublicKey, amount: U512) {
-    if let contract_api::TransferResult::TransferError =
-        contract_api::transfer_from_purse_to_account(payment_purse, account, amount)
-    {
-        contract_api::revert(Error::FailedTransferToAccountPurse.into());
-    }
+    system::transfer_from_purse_to_account(payment_purse, account, amount)
+        .unwrap_or_revert_with(Error::FailedTransferToAccountPurse);
 }
 
 pub fn delegate() {
-    let method_name: String = match contract_api::get_arg(0) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-        None => contract_api::revert(Error::MissingArgument.into()),
-    };
-    let timestamp = contract_api::get_blocktime();
+    let method_name: String = runtime::get_arg(0)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
+    let timestamp = runtime::get_blocktime();
     let pos_purse = get_bonding_purse().unwrap_or_revert();
 
     match method_name.as_str() {
         // Type of this method: `fn bond(amount: U512, purse: URef)`
         "bond" => {
-            let validator = contract_api::get_caller();
-            let amount: U512 = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
+            let validator = runtime::get_caller();
+            let amount: U512 = runtime::get_arg(1)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
             if amount.is_zero() {
-                contract_api::revert(Error::BondTooSmall.into());
+                runtime::revert(Error::BondTooSmall);
             }
-            let source_uref: URef = match contract_api::get_arg(2) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
+            let source_uref: URef = runtime::get_arg(2)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
             let source = PurseId::new(source_uref);
             // Transfer `amount` from the `source` purse to PoS internal purse.
             // POS_PURSE is a constant, it is the PurseID of the proof-of-stake contract's
             // own purse.
-            if contract_api::PurseTransferResult::TransferError
-                == contract_api::transfer_from_purse_to_purse(source, pos_purse, amount)
-            {
-                contract_api::revert(Error::BondTransferFailed.into());
-            }
+            system::transfer_from_purse_to_purse(source, pos_purse, amount)
+                .unwrap_or_revert_with(Error::BondTransferFailed);
             bond::<QueueLocal, ContractStakes>(amount, validator, timestamp).unwrap_or_revert();
 
             // TODO: Remove this and set nonzero delays once the system calls `step` in each
             // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
-                contract_api::transfer_from_purse_to_account(
+                let _ = system::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,
                     entry.amount,
@@ -289,12 +273,10 @@ pub fn delegate() {
         }
         // Type of this method: `fn unbond(amount: Option<U512>)`
         "unbond" => {
-            let validator = contract_api::get_caller();
-            let maybe_amount = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
+            let validator = runtime::get_caller();
+            let maybe_amount = runtime::get_arg(1)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
             unbond::<QueueLocal, ContractStakes>(maybe_amount, validator, timestamp)
                 .unwrap_or_revert();
 
@@ -302,15 +284,8 @@ pub fn delegate() {
             // block.
             let unbonds = step::<QueueLocal, ContractStakes>(timestamp).unwrap_or_revert();
             for entry in unbonds {
-                if contract_api::TransferResult::TransferError
-                    == contract_api::transfer_from_purse_to_account(
-                        pos_purse,
-                        entry.validator,
-                        entry.amount,
-                    )
-                {
-                    contract_api::revert(Error::UnbondTransferFailed.into());
-                }
+                system::transfer_from_purse_to_account(pos_purse, entry.validator, entry.amount)
+                    .unwrap_or_revert_with(Error::UnbondTransferFailed);
             }
         }
         // Type of this method: `fn step()`
@@ -325,7 +300,7 @@ pub fn delegate() {
                 // can't recover from them and we shouldn't retry indefinitely.
                 // That would mean the contract just keeps the money forever,
                 // though.
-                contract_api::transfer_from_purse_to_account(
+                let _ = system::transfer_from_purse_to_account(
                     pos_purse,
                     entry.validator,
                     entry.amount,
@@ -337,17 +312,15 @@ pub fn delegate() {
             // Limit the access rights so only balance query and deposit are allowed.
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
-            contract_api::ret(
+            runtime::ret(
                 &rights_controlled_purse,
                 &vec![rights_controlled_purse.value()],
             );
         }
         "set_refund_purse" => {
-            let purse_id: PurseId = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
+            let purse_id: PurseId = runtime::get_arg(1)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
             set_refund(purse_id.value());
         }
         "get_refund_purse" => {
@@ -356,22 +329,18 @@ pub fn delegate() {
             // supposed to have it.
             let result = get_refund_purse().map(|p| p.value().remove_access_rights());
             if let Some(uref) = result {
-                contract_api::ret(&Some(PurseId::new(uref)), &vec![uref]);
+                runtime::ret(&Some(PurseId::new(uref)), &vec![uref]);
             } else {
-                contract_api::ret(&result, &Vec::new());
+                runtime::ret(&result, &Vec::new());
             }
         }
         "finalize_payment" => {
-            let amount_spent: U512 = match contract_api::get_arg(1) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
-            let account: PublicKey = match contract_api::get_arg(2) {
-                Some(Ok(data)) => data,
-                Some(Err(_)) => contract_api::revert(Error::InvalidArgument.into()),
-                None => contract_api::revert(Error::MissingArgument.into()),
-            };
+            let amount_spent: U512 = runtime::get_arg(1)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
+            let account: PublicKey = runtime::get_arg(2)
+                .unwrap_or_revert_with(Error::MissingArgument)
+                .unwrap_or_revert_with(Error::InvalidArgument);
             finalize_payment(amount_spent, account);
         }
         _ => {}
@@ -389,12 +358,12 @@ mod tests {
     use std::cell::RefCell;
     use std::iter;
 
+    use contract_ffi::system_contracts::pos::Result;
     use contract_ffi::value::{
         account::{BlockTime, PublicKey},
         U512,
     };
 
-    use crate::error::Result;
     use crate::queue::{Queue, QueueProvider};
     use crate::stakes::{Stakes, StakesProvider};
     use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};

@@ -6,7 +6,6 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import io.casperlabs.blockstorage.DagRepresentation
 import io.casperlabs.casper
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -20,6 +19,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -58,7 +58,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     ).map { deploy =>
       ProtoUtil
         .basicDeploy(
-          System.currentTimeMillis(),
+          0,
+          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
           ByteString.copyFromUtf8(deploy)
         )
     }
@@ -136,8 +137,11 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
   def contains(b: Block): F[Boolean]                = underlying.contains(b)
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
-  def estimator(dag: DagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    underlying.estimator(dag)
+  def estimator(
+      dag: DagRepresentation[F],
+      latestMessagesHashes: Map[ByteString, ByteString]
+  ): F[List[BlockHash]] =
+    underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
     underlying.normalizedInitialFault(weights)

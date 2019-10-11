@@ -1,22 +1,24 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
-import io.casperlabs.blockstorage.BlockStorage
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.deploybuffer.DeployBuffer
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
+import io.casperlabs.storage.block._
+import io.casperlabs.storage.deploy.DeployStorageReader
 import sangria.schema._
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployBuffer] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
 
   val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
 
@@ -80,11 +82,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val blockHashBase16Prefix = c.arg(blocks.arguments.BlockHashPrefix)
 
               val program = for {
-                maybePostStateHash <- BlockAPI
-                                       .getBlockInfoOpt[F](blockHashBase16Prefix)
-                                       .map(_.map(_._1.getSummary.getHeader.getState.postStateHash))
-                values <- maybePostStateHash.fold(List.empty[Option[state.Value]].pure[F]) {
-                           stateHash =>
+                maybeBlockProps <- BlockAPI
+                                    .getBlockInfoOpt[F](blockHashBase16Prefix)
+                                    .map(_.map {
+                                      case (info, _) =>
+                                        info.getSummary.getHeader.getState.postStateHash ->
+                                          info.getSummary.getHeader.getProtocolVersion
+                                    })
+                values <- maybeBlockProps.fold(List.empty[Option[state.Value]].pure[F]) {
+                           case (stateHash, protocolVersion) =>
                              for {
 
                                values <- queries.toList.traverse {
@@ -98,7 +104,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                                    .query(
                                                                      stateHash,
                                                                      key,
-                                                                     query.pathSegments
+                                                                     query.pathSegments,
+                                                                     protocolVersion
                                                                    )
                                               value <- MonadThrowable[F]
                                                         .fromEither(possibleResponse)

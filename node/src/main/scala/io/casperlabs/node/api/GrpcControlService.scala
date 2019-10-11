@@ -17,7 +17,7 @@ object GrpcControlService {
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       new ControlGrpcMonix.ControlService {
         override def propose(request: ProposeRequest): Task[ProposeResponse] =
-          TaskLike[F].toTask {
+          TaskLike[F].apply {
             BlockAPI.propose[F](blockApiLock).map(ProposeResponse().withBlockHash(_))
           }
       }

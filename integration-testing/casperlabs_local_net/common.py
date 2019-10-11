@@ -17,37 +17,39 @@ class Contract:
     """ This is generated with util/generate_contract_class.py """
 
     ADD_ASSOCIATED_KEY = "add_associated_key.wasm"
-    ARGS_MULTI = "test_args_multi.wasm"
-    ARGS_U32 = "test_args_u32.wasm"
-    ARGS_U512 = "test_args_u512.wasm"
-    BONDINGCALL = "test_bondingcall.wasm"
-    COMBINEDCONTRACTSDEFINE = "test_combinedcontractsdefine.wasm"
-    COUNTERCALL = "test_countercall.wasm"
-    COUNTERDEFINE = "test_counterdefine.wasm"
-    DIRECT_REVERT_CALL = "test_direct_revert_call.wasm"
-    DIRECT_REVERT_DEFINE = "test_direct_revert_define.wasm"
+    ARGS_MULTI = "args_multi.wasm"
+    ARGS_U32 = "args_u32.wasm"
+    ARGS_U512 = "args_u512.wasm"
+    BONDING_CALL = "bonding_call.wasm"
+    COMBINED_CONTRACTS_DEFINE = "combined_contracts_define.wasm"
+    COUNTER_CALL = "counter_call.wasm"
+    COUNTER_DEFINE = "counter_define.wasm"
+    CREATE_NAMED_PURSE = "create_named_purse.wasm"
+    DIRECT_REVERT_CALL = "direct_revert_call.wasm"
+    DIRECT_REVERT_DEFINE = "direct_revert_define.wasm"
     ENDLESS_LOOP = "endless_loop.wasm"
     ERR_STANDARD_PAYMENT = "err_standard_payment.wasm"
     ERR_TRANSFER_TO_ACCOUNT = "err_transfer_to_account.wasm"
-    FINALIZE_PAYMENT = "test_finalize_payment.wasm"
-    GETCALLERCALL = "getcallercall.wasm"
-    GETCALLERDEFINE = "getcallerdefine.wasm"
-    HELLONAME = "test_helloname.wasm"
-    HELLOWORLD = "test_helloworld.wasm"
-    LISTKNOWNUREFSCALL = "listknownurefscall.wasm"
-    LISTKNOWNUREFSDEFINE = "listknownurefsdefine.wasm"
-    MAILINGLISTCALL = "test_mailinglistcall.wasm"
-    MAILINGLISTDEFINE = "test_mailinglistdefine.wasm"
-    PAYMENT_PURSE = "test_payment_purse.wasm"
+    FINALIZE_PAYMENT = "finalize_payment.wasm"
+    GET_CALLER_CALL = "get_caller_call.wasm"
+    GET_CALLER_DEFINE = "get_caller_define.wasm"
+    HELLO_NAME_CALL = "hello_name_call.wasm"
+    HELLO_NAME_DEFINE = "hello_name_define.wasm"
+    LIST_KNOWN_UREFS_CALL = "list_known_urefs_call.wasm"
+    LIST_KNOWN_UREFS_DEFINE = "list_known_urefs_define.wasm"
+    MAILING_LIST_CALL = "mailing_list_call.wasm"
+    MAILING_LIST_DEFINE = "mailing_list_define.wasm"
+    PAYMENT_FROM_NAMED_PURSE = "payment_from_named_purse.wasm"
+    PAYMENT_PURSE = "payment_purse.wasm"
     POS_BONDING = "pos_bonding.wasm"
-    REFUND_PURSE = "test_refund_purse.wasm"
+    REFUND_PURSE = "refund_purse.wasm"
     REMOVE_ASSOCIATED_KEY = "remove_associated_key.wasm"
     SET_KEY_THRESHOLDS = "set_key_thresholds.wasm"
     STANDARD_PAYMENT = "standard_payment.wasm"
-    SUBCALL_REVERT_CALL = "test_subcall_revert_call.wasm"
-    SUBCALL_REVERT_DEFINE = "test_subcall_revert_define.wasm"
-    TRANSFER_TO_ACCOUNT = "transfer_to_account.wasm"
-    UNBONDINGCALL = "test_unbondingcall.wasm"
+    SUBCALL_REVERT_CALL = "subcall_revert_call.wasm"
+    SUBCALL_REVERT_DEFINE = "subcall_revert_define.wasm"
+    TRANSFER_TO_ACCOUNT_IT = "transfer_to_account_it.wasm"
+    UNBONDING_CALL = "unbonding_call.wasm"
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
@@ -59,10 +61,11 @@ class Contract:
 MAX_PAYMENT_COST = 10000000
 DEFAULT_PAYMENT_COST = 100000000
 INITIAL_MOTES_AMOUNT = 10 ** 20
-MAX_PAYMENT_ABI = ABI.args([ABI.u512(MAX_PAYMENT_COST)])
-DEFAULT_PAYMENT_ABI = ABI.args([ABI.u512(DEFAULT_PAYMENT_COST)])
+MAX_PAYMENT_ABI = ABI.args([ABI.big_int("amount", MAX_PAYMENT_COST)])
+DEFAULT_PAYMENT_ABI = ABI.args([ABI.big_int("amount", DEFAULT_PAYMENT_COST)])
 CONV_RATE = 10
 TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
+USER_ERROR_MIN = 65536
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 CHAINSPEC_PATH = "/root/.casperlabs/chainspec"

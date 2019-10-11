@@ -44,6 +44,7 @@ class CasperLabsNetwork:
     """
 
     grpc_encryption = False
+    behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
@@ -77,6 +78,10 @@ class CasperLabsNetwork:
     def genesis_account(self):
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
+
+    def lookup_node(self, node_id):
+        m = {node.node_id: node for node in self.docker_nodes}
+        return m[node_id]
 
     def test_account(self, node, amount=TEST_ACCOUNT_INITIAL_BALANCE) -> Account:
         name = test_name()
@@ -134,15 +139,23 @@ class CasperLabsNetwork:
             cl_node = CasperLabsNode(self, config)
             self.cl_nodes.append(cl_node)
 
-    def add_new_node_to_network(self, account: Account = None) -> Account:
+    def add_new_node_to_network(
+        self, generate_config=None, account: Account = None
+    ) -> Account:
         if account is None:
             account = self.get_key()
-        config = DockerConfig(
-            self.docker_client,
-            node_private_key=account.private_key,
-            node_account=account,
-            grpc_encryption=self.grpc_encryption,
-        )
+
+        if generate_config is not None:
+            config = generate_config(account)
+        else:
+            config = DockerConfig(
+                self.docker_client,
+                node_private_key=account.private_key,
+                node_account=account,
+                grpc_encryption=self.grpc_encryption,
+                behind_proxy=self.behind_proxy,
+            )
+
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
         self.wait_for_peers()
@@ -304,13 +317,69 @@ class TwoNodeNetwork(CasperLabsNetwork):
             grpc_encryption=self.grpc_encryption,
         )
         self.add_bootstrap(config)
-
         self.add_new_node_to_network()
-        wait_for_genesis_block(self.docker_nodes[1])
+
+
+class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+        )
+        self.add_bootstrap(config)
+        # Create accounts.csv of the second node with different bond amounts.
+        self.add_new_node_to_network(
+            (
+                lambda kp: DockerConfig(
+                    self.docker_client,
+                    node_private_key=kp.private_key,
+                    node_account=kp,
+                    grpc_encryption=self.grpc_encryption,
+                    behind_proxy=self.behind_proxy,
+                    bond_amount=lambda i, n: n + 3 * i,
+                )
+            )
+        )
 
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+
+
+class InterceptedTwoNodeNetwork(TwoNodeNetwork):
+    grpc_encryption = True
+    behind_proxy = True
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            behind_proxy=True,
+        )
+        self.add_bootstrap(config)
+        self.add_new_node_to_network(
+            (
+                lambda kp: DockerConfig(
+                    self.docker_client,
+                    node_private_key=kp.private_key,
+                    node_public_key=kp.public_key,
+                    network=self.create_docker_network(),
+                    node_account=kp,
+                    grpc_encryption=self.grpc_encryption,
+                    behind_proxy=True,
+                )
+            )
+        )
 
 
 class ThreeNodeNetwork(CasperLabsNetwork):

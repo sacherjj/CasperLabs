@@ -15,7 +15,7 @@ def test_non_account_precondition_failure(trillion_payment_node_network):
         from_address=non_existent_account.public_key_hex,
         public_key=non_existent_account.public_key_path,
         private_key=non_existent_account.private_key_path,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_DEFINE,
     )
 
     # Will have InternalError as no deploys to propose

@@ -1,14 +1,16 @@
 package io.casperlabs.casper.equivocations
 
-import cats.{Applicative, Monad}
+import cats.Monad
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import io.casperlabs.blockstorage.{BlockMetadata, DagRepresentation}
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.{CasperState, EquivocatedBlock, InvalidBlock, PrettyPrinter}
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
+import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable.{Map, Set}
 
@@ -43,7 +45,7 @@ object EquivocationDetector {
     * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
     * we will update the `equivocationsTracker`, setting the value of key v1 to be rank of b1.
     */
-  def checkEquivocationWithUpdate[F[_]: Monad: Log: FunctorRaise[?[_], InvalidBlock]](
+  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
       block: Block
   )(
@@ -60,13 +62,18 @@ object EquivocationDetector {
                       checkEquivocations(dag, block)
                     }
 
-      _ <- rankOfEarlierMessageFromCreator(dag, block)
-            .flatMap { earlierRank =>
-              state.modify { s =>
-                s.copy(equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank))
+      message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+
+      _ <- MonadThrowable[F].whenA(equivocated)(
+            rankOfEarlierMessageFromCreator(dag, message)
+              .flatMap { earlierRank =>
+                state.modify { s =>
+                  s.copy(
+                    equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
+                  )
+                }
               }
-            }
-            .whenA(equivocated)
+          )
       _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
@@ -91,28 +98,27 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  private def checkEquivocations[F[_]: Monad: Log](
+  private def checkEquivocations[F[_]: MonadThrowable: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
     for {
-      maybeLatestMessageOfCreator <- dag.latestMessageHash(block.getHeader.validatorPublicKey)
+      maybeLatestMessageOfCreator <- dag.latestMessage(block.getHeader.validatorPublicKey)
       equivocated <- maybeLatestMessageOfCreator match {
                       case None =>
                         // It is the first block by that validator
                         false.pure[F]
-                      case Some(latestMessageHashOfCreator) =>
-                        val maybeCreatorJustification = creatorJustificationHash(block)
-                        if (maybeCreatorJustification == maybeLatestMessageOfCreator) {
+                      case Some(latestMessageOfCreator) =>
+                        if (creatorJustificationHash(block)
+                              .filter(_ == latestMessageOfCreator.messageHash)
+                              .isDefined) {
                           // Directly reference latestMessage of creator of the block
                           false.pure[F]
                         } else
                           for {
-                            latestMessageOfCreator <- dag
-                                                       .lookup(latestMessageHashOfCreator)
-                                                       .map(_.get)
-                            stream = toposortJDagDesc(dag, block)
-                            // Find whether the block cite latestMessageOfCreator
+                            message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                            stream  = toposortJDagDesc(dag, message)
+                            // Find whether the block cites latestMessageOfCreator
                             decisionPointBlock <- stream.find(
                                                    b =>
                                                      b == latestMessageOfCreator || b.rank < latestMessageOfCreator.rank
@@ -120,9 +126,10 @@ object EquivocationDetector {
                             equivocated = decisionPointBlock != latestMessageOfCreator.some
                             _ <- Log[F]
                                   .warn(
-                                    s"Find equivocation: justifications of block ${PrettyPrinter.buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                                    s"Found equivocation: justifications of block ${PrettyPrinter
+                                      .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
                                       .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                                      .buildString(latestMessageHashOfCreator)}"
+                                      .buildString(latestMessageOfCreator.messageHash)}"
                                   )
                                   .whenA(equivocated)
                           } yield equivocated
@@ -134,13 +141,13 @@ object EquivocationDetector {
 
   private def toposortJDagDesc[F[_]: Monad: Log](
       dag: DagRepresentation[F],
-      block: Block
-  ): StreamT[F, BlockMetadata] = {
-    implicit val blockTopoOrdering: Ordering[BlockMetadata] = DagOperations.blockTopoOrderingDesc
+      msg: Message
+  ): StreamT[F, Message] = {
+    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
     DagOperations.bfToposortTraverseF(
-      List(BlockMetadata.fromBlock(block))
+      List(msg)
     )(
-      _.justifications
+      _.justifications.toList
         .traverse(j => dag.lookup(j.latestBlockHash))
         .map(_.flatten)
     )
@@ -176,16 +183,17 @@ object EquivocationDetector {
           justificationMessages <- justificationMsgHashes.values.toList
                                     .traverse(dag.lookup)
                                     .map(_.flatten)
-          implicit0(blockTopoOrdering: Ordering[BlockMetadata]) = DagOperations.blockTopoOrderingDesc
+          implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
 
           toposortJDagFromBlock = DagOperations.bfToposortTraverseF(justificationMessages)(
-            _.justifications.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+            _.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
           )
+
           acc <- toposortJDagFromBlock
                   .foldWhileLeft(State()) {
                     case (state, b) =>
-                      val creator            = b.validatorPublicKey
-                      val creatorBlockSeqNum = b.validatorBlockSeqNum
+                      val creator            = b.validatorId
+                      val creatorBlockSeqNum = b.validatorMsgSeqNum
                       if (state.alreadyDetected(equivocationsTracker.keySet) || b.rank <= minRank) {
                         // Stop traversal if all known equivocations has been found in j-past-cone
                         // of `b` or we traversed beyond the minimum rank of all equivocations.
@@ -215,21 +223,21 @@ object EquivocationDetector {
   }
 
   /**
-    * Returns rank of last but one block by the same validator, as seen in the j-past-cone of the block.
+    * Returns rank of last but one message by the same validator, as seen in the j-past-cone of the block.
     *
     * This method assumes that the system has removed redundant justifications.
     *
     * @param dag The block dag
-    * @param block Block to run
+    * @param msg Block to run
     * @tparam F Effect type
     * @return
     */
   private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
       dag: DagRepresentation[F],
-      block: Block
+      msg: Message
   ): F[Long] =
-    toposortJDagDesc(dag, block)
-      .filter(b => b.validatorPublicKey == block.getHeader.validatorPublicKey)
+    toposortJDagDesc(dag, msg)
+      .filter(_.validatorId == msg.validatorId)
       .take(2)
       .toList
       .map(

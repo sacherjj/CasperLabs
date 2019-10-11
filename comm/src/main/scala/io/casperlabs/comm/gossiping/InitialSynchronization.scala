@@ -1,9 +1,9 @@
 package io.casperlabs.comm.gossiping
 
+import cats.Parallel
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
-import cats.temp.par._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
@@ -36,7 +36,7 @@ trait InitialSynchronization[F[_]] {
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
   * @param roundPeriod   Delay between synchronisation rounds
   */
-class InitialSynchronizationImpl[F[_]: Concurrent: Par: Log: Timer](
+class InitialSynchronizationImpl[F[_]: Concurrent: Parallel: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],
     selfGossipService: GossipServiceServer[F],
     selectNodes: List[Node] => List[Node],

@@ -5,7 +5,10 @@ extern crate alloc;
 extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
-use contract_ffi::contract_api::{self, Error};
+
+use contract_ffi::contract_api::TURef;
+use contract_ffi::contract_api::{runtime, storage, system, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -44,50 +47,44 @@ impl From<CustomError> for Error {
 }
 
 fn purse_name() -> String {
-    match contract_api::get_arg(ApplyArgs::PurseName as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidPurseNameArg),
-        None => contract_api::revert_with_error(CustomError::MissingPurseNameArg),
-    }
+    runtime::get_arg(ApplyArgs::PurseName as u32)
+        .unwrap_or_revert_with(CustomError::MissingPurseNameArg)
+        .unwrap_or_revert_with(CustomError::InvalidPurseNameArg)
 }
 
 #[no_mangle]
 pub extern "C" fn apply_method() {
-    let method_name: String = match contract_api::get_arg(ApplyArgs::MethodName as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidMethodNameArg),
-        None => contract_api::revert_with_error(CustomError::MissingMethodNameArg),
-    };
+    let method_name: String = runtime::get_arg(ApplyArgs::MethodName as u32)
+        .unwrap_or_revert_with(CustomError::MissingMethodNameArg)
+        .unwrap_or_revert_with(CustomError::InvalidMethodNameArg);
     match method_name.as_str() {
         METHOD_ADD => {
             let purse_name = purse_name();
-            let purse_id = contract_api::create_purse();
-            contract_api::put_key(&purse_name, &purse_id.value().into());
+            let purse_id = system::create_purse();
+            runtime::put_key(&purse_name, &purse_id.value().into());
         }
         METHOD_REMOVE => {
             let purse_name = purse_name();
-            contract_api::remove_key(&purse_name);
+            runtime::remove_key(&purse_name);
         }
-        METHOD_VERSION => contract_api::ret(&VERSION.to_string(), &vec![]),
-        _ => contract_api::revert_with_error(CustomError::UnknownMethodName),
+        METHOD_VERSION => runtime::ret(&VERSION.to_string(), &vec![]),
+        _ => runtime::revert(CustomError::UnknownMethodName),
     }
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let uref: URef = match contract_api::get_arg(CallArgs::PurseHolderURef as u32) {
-        Some(Ok(data)) => data,
-        Some(Err(_)) => contract_api::revert_with_error(CustomError::InvalidPurseHolderURefArg),
-        None => contract_api::revert_with_error(CustomError::MissingPurseHolderURefArg),
-    };
+    let uref: URef = runtime::get_arg(CallArgs::PurseHolderURef as u32)
+        .unwrap_or_revert_with(CustomError::MissingPurseHolderURefArg)
+        .unwrap_or_revert_with(CustomError::InvalidPurseHolderURefArg);
 
-    let turef = contract_api::pointers::TURef::from_uref(uref)
-        .unwrap_or_else(|_| contract_api::revert_with_error(CustomError::InvalidTURef));
+    let turef =
+        TURef::from_uref(uref).unwrap_or_else(|_| runtime::revert(CustomError::InvalidTURef));
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref
-    contract_api::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);
+    runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);
 
     // set new version
-    let version_key = contract_api::new_turef(VERSION.to_string()).into();
-    contract_api::put_key(METHOD_VERSION, &version_key);
+    let version_key = storage::new_turef(VERSION.to_string()).into();
+    runtime::put_key(METHOD_VERSION, &version_key);
 }

@@ -1,13 +1,20 @@
-use crate::system_contracts::mint;
+use super::{mint, pos};
 
 /// An aggregate enum error with variants for each system contract's error.
 #[derive(Debug)]
 pub enum Error {
-    MintError(mint::error::Error),
+    MintError(mint::Error),
+    PosError(pos::Error),
 }
 
-impl From<mint::error::Error> for Error {
-    fn from(error: mint::error::Error) -> Error {
+impl From<mint::Error> for Error {
+    fn from(error: mint::Error) -> Error {
         Error::MintError(error)
+    }
+}
+
+impl From<pos::Error> for Error {
+    fn from(error: pos::Error) -> Error {
+        Error::PosError(error)
     }
 }
