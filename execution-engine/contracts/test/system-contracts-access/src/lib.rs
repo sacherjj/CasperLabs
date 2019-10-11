@@ -3,7 +3,7 @@
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::contract_ref::ContractRef;
-use contract_ffi::contract_api::{self, Error as ApiError};
+use contract_ffi::contract_api::{self, runtime, system, Error as ApiError};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::PublicKey;
 
@@ -39,43 +39,42 @@ fn delegate() {
     // Regardless of the context none of pos/mint contracts should be present
 
     // Step 1 - Named keys should be empty regardless of the context (system/genesis/user)
-    let named_keys = contract_api::runtime::list_named_keys();
+    let named_keys = runtime::list_named_keys();
     if named_keys.len() > DEFAULT_UREFS_COUNT {
-        contract_api::runtime::revert(Error::TooManyDefaultNamedKeys);
+        runtime::revert(Error::TooManyDefaultNamedKeys);
     }
 
     // Step 2 - Mint and PoS should be URefs and they should have valid access rights
-    let mint_contract = contract_api::system::get_mint();
+    let mint_contract = system::get_mint();
 
-    let expected_access_rights =
-        if contract_api::runtime::get_caller() == PublicKey::new(SYSTEM_ADDR) {
-            // System account receives read/add/write access
-            AccessRights::READ_ADD_WRITE
-        } else {
-            // User receives read only
-            AccessRights::READ
-        };
+    let expected_access_rights = if runtime::get_caller() == PublicKey::new(SYSTEM_ADDR) {
+        // System account receives read/add/write access
+        AccessRights::READ_ADD_WRITE
+    } else {
+        // User receives read only
+        AccessRights::READ
+    };
 
-    let pos_contract = contract_api::system::get_proof_of_stake();
+    let pos_contract = system::get_proof_of_stake();
 
     let mint_uref = extract_uref_from_contract_pointer(mint_contract)
-        .unwrap_or_else(|| contract_api::runtime::revert(Error::MintContractIsNotURef));
+        .unwrap_or_else(|| runtime::revert(Error::MintContractIsNotURef));
     match mint_uref.access_rights() {
         Some(access_rights) if access_rights != expected_access_rights => {
-            contract_api::runtime::revert(Error::InvalidMintAccessRights)
+            runtime::revert(Error::InvalidMintAccessRights)
         }
         Some(_) => {}
-        None => contract_api::runtime::revert(Error::MintHasNoAccessRights),
+        None => runtime::revert(Error::MintHasNoAccessRights),
     }
 
     let pos_uref = extract_uref_from_contract_pointer(pos_contract)
-        .unwrap_or_else(|| contract_api::runtime::revert(Error::PosContractIsNotURef));
+        .unwrap_or_else(|| runtime::revert(Error::PosContractIsNotURef));
     match pos_uref.access_rights() {
         Some(access_rights) if access_rights != expected_access_rights => {
-            contract_api::runtime::revert(Error::InvalidPosAccessRights)
+            runtime::revert(Error::InvalidPosAccessRights)
         }
         Some(_) => {}
-        None => contract_api::runtime::revert(Error::PosHasNoAccessRights),
+        None => runtime::revert(Error::PosHasNoAccessRights),
     }
 }
 
