@@ -3,7 +3,7 @@
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::contract_ref::ContractRef;
-use contract_ffi::contract_api::{self, runtime, system, Error as ApiError};
+use contract_ffi::contract_api::{runtime, system, Error as ApiError};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::PublicKey;
 
