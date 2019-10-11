@@ -98,7 +98,6 @@ def two_node_network(docker_client_fixture):
 @pytest.fixture()
 def two_node_with_different_accounts_csv_network(docker_client_fixture):
     with TwoNodeWithDifferentAccountsCSVNetwork(docker_client_fixture) as tnn:
-        tnn.create_cl_network()
         yield tnn
 
 
