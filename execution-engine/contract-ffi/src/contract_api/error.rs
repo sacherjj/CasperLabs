@@ -3,6 +3,9 @@ use core::{u16, u8};
 
 use crate::bytesrepr;
 use crate::system_contracts::{mint, pos};
+use crate::value::account::{
+    AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
+};
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
 /// value less than or equal to `RESERVED_ERROR_MAX`.
@@ -87,6 +90,24 @@ pub enum Error {
     LeftOverBytes,
     /// Out of memory error.
     OutOfMemoryError,
+    /// Unable to add new associated key because maximum amount of keys is reached.
+    MaxKeysLimit,
+    /// Unable to add new associated key because given key already exists.
+    DuplicateKey,
+    /// Unable to add/update/remove new associated key due to insufficient permissions.
+    PermissionDenied,
+    /// Unable to update/remove a key that does exist
+    MissingKey,
+    /// Unable to update/remove a key which would violate action threshold constraints
+    ThresholdViolation,
+    /// New threshold should be lower or equal than deployment threshold.
+    KeyManagmentThresholdError,
+    /// New threshold should be lower or equal than key management threshold.
+    DeploymentThresholdError,
+    /// Unable to set action threshold due to insufficient permissions.
+    PermissionDeniedError,
+    /// New threshold should be lower or equal than total weight of associated keys.
+    InsufficientTotalWeight,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -103,6 +124,47 @@ impl From<bytesrepr::Error> for Error {
             bytesrepr::Error::FormattingError => Error::FormattingError,
             bytesrepr::Error::LeftOverBytes => Error::LeftOverBytes,
             bytesrepr::Error::OutOfMemoryError => Error::OutOfMemoryError,
+        }
+    }
+}
+
+impl From<AddKeyFailure> for Error {
+    fn from(error: AddKeyFailure) -> Self {
+        match error {
+            AddKeyFailure::MaxKeysLimit => Error::MaxKeysLimit,
+            AddKeyFailure::DuplicateKey => Error::DuplicateKey,
+            AddKeyFailure::PermissionDenied => Error::PermissionDenied,
+        }
+    }
+}
+
+impl From<UpdateKeyFailure> for Error {
+    fn from(error: UpdateKeyFailure) -> Self {
+        match error {
+            UpdateKeyFailure::MissingKey => Error::MissingKey,
+            UpdateKeyFailure::PermissionDenied => Error::PermissionDenied,
+            UpdateKeyFailure::ThresholdViolation => Error::ThresholdViolation,
+        }
+    }
+}
+
+impl From<RemoveKeyFailure> for Error {
+    fn from(error: RemoveKeyFailure) -> Self {
+        match error {
+            RemoveKeyFailure::MissingKey => Error::MissingKey,
+            RemoveKeyFailure::PermissionDenied => Error::PermissionDenied,
+            RemoveKeyFailure::ThresholdViolation => Error::ThresholdViolation,
+        }
+    }
+}
+
+impl From<SetThresholdFailure> for Error {
+    fn from(error: SetThresholdFailure) -> Self {
+        match error {
+            SetThresholdFailure::KeyManagementThresholdError => Error::KeyManagmentThresholdError,
+            SetThresholdFailure::DeploymentThresholdError => Error::DeploymentThresholdError,
+            SetThresholdFailure::PermissionDeniedError => Error::PermissionDeniedError,
+            SetThresholdFailure::InsufficientTotalWeight => Error::InsufficientTotalWeight,
         }
     }
 }
@@ -143,6 +205,15 @@ impl From<Error> for u32 {
             Error::FormattingError => 19,
             Error::LeftOverBytes => 20,
             Error::OutOfMemoryError => 21,
+            Error::MaxKeysLimit => 22,
+            Error::DuplicateKey => 23,
+            Error::PermissionDenied => 24,
+            Error::MissingKey => 25,
+            Error::ThresholdViolation => 26,
+            Error::KeyManagmentThresholdError => 27,
+            Error::DeploymentThresholdError => 28,
+            Error::PermissionDeniedError => 29,
+            Error::InsufficientTotalWeight => 30,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -176,6 +247,15 @@ impl Debug for Error {
             Error::FormattingError => write!(f, "Error::FormattingError")?,
             Error::LeftOverBytes => write!(f, "Error::LeftOverBytes")?,
             Error::OutOfMemoryError => write!(f, "Error::OutOfMemoryError")?,
+            Error::MaxKeysLimit => write!(f, "Error::MaxKeysLimit")?,
+            Error::DuplicateKey => write!(f, "Error::DuplicateKey")?,
+            Error::PermissionDenied => write!(f, "Error::PermissionDenied")?,
+            Error::MissingKey => write!(f, "Error::MissingKey")?,
+            Error::ThresholdViolation => write!(f, "Error::ThresholdViolation")?,
+            Error::KeyManagmentThresholdError => write!(f, "Error::KeyManagementThresholdError")?,
+            Error::DeploymentThresholdError => write!(f, "Error::DeploymentThresholdError")?,
+            Error::PermissionDeniedError => write!(f, "Error::PermissionDeniedError")?,
+            Error::InsufficientTotalWeight => write!(f, "Error::InsufficientTotalWeight")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -215,6 +295,15 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         19 => Err(Error::FormattingError),
         20 => Err(Error::LeftOverBytes),
         21 => Err(Error::OutOfMemoryError),
+        22 => Err(Error::MaxKeysLimit),
+        23 => Err(Error::DuplicateKey),
+        24 => Err(Error::PermissionDenied),
+        25 => Err(Error::MissingKey),
+        26 => Err(Error::ThresholdViolation),
+        27 => Err(Error::KeyManagmentThresholdError),
+        28 => Err(Error::DeploymentThresholdError),
+        29 => Err(Error::PermissionDeniedError),
+        30 => Err(Error::InsufficientTotalWeight),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
