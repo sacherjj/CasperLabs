@@ -80,9 +80,9 @@ class CachingDagStorage[F[_]: Sync](
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
     for {
+      dag     <- underlying.insert(block)
       message <- Sync[F].fromTry(Message.fromBlock(block))
       _       <- semaphore.withPermit(cacheMessage(message))
-      dag     <- underlying.insert(block)
     } yield dag
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
