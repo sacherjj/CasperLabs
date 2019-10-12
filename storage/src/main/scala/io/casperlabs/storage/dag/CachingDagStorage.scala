@@ -60,7 +60,7 @@ class CachingDagStorage[F[_]: Sync](
     topoSort(
       startBlockNumber = message.rank - neighbourhoodBefore,
       endBlockNumber = message.rank + neighbourhoodAfter
-    ).evalMap(summaries => semaphore.withPermit(summaries.traverse_(cacheSummary))).compile.drain
+    ).compile.toList.flatMap(summaries => summaries.flatten.traverse_(cacheSummary))
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     cacheOrUnderlying(
