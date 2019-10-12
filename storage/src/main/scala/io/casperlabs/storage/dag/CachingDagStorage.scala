@@ -13,6 +13,8 @@ import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
+import scala.collection.JavaConverters._
+
 class CachingDagStorage[F[_]: Sync](
     // How far to go to the past (by ranks) for caching neighbourhood of looked up block
     neighbourhoodBefore: Int,
@@ -56,11 +58,26 @@ class CachingDagStorage[F[_]: Sync](
   private def cacheSummary(summary: BlockSummary): F[Unit] =
     Sync[F].fromTry(Message.fromBlockSummary(summary)).flatMap(cacheMessage)
 
-  private def cacheNeighbourhood(message: Message): F[Unit] =
+  private def cacheNeighbourhood(message: Message): F[Unit] = {
+    val start = message.rank - neighbourhoodBefore
+    val end   = message.rank + neighbourhoodAfter
+    val range = start.to(end)
+
+    val alreadyCachedNeighbours = messagesCache
+      .asMap()
+      .values()
+      .asScala
+      .collect {
+        case m if range.contains(m.rank) => m.messageHash
+      }
+      .toList
+
     topoSort(
-      startBlockNumber = message.rank - neighbourhoodBefore,
-      endBlockNumber = message.rank + neighbourhoodAfter
+      startBlockNumber = start,
+      endBlockNumber = end,
+      ignored = alreadyCachedNeighbours
     ).compile.toList.flatMap(summaries => summaries.flatten.traverse_(cacheSummary))
+  }
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     cacheOrUnderlying(
@@ -113,8 +130,10 @@ class CachingDagStorage[F[_]: Sync](
   /** Return the ranks of blocks in the DAG between start and end, inclusive. */
   override def topoSort(
       startBlockNumber: Long,
-      endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]] = underlying.topoSort(startBlockNumber, endBlockNumber)
+      endBlockNumber: Long,
+      ignored: List[BlockHash]
+  ): fs2.Stream[F, Vector[BlockSummary]] =
+    underlying.topoSort(startBlockNumber, endBlockNumber, ignored)
 
   /** Return ranks of blocks in the DAG from a start index to the end. */
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =

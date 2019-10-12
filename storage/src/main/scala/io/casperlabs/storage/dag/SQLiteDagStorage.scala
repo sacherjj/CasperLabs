@@ -148,17 +148,20 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def topoSort(
       startBlockNumber: Long,
-      endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]] =
-    sql"""|SELECT rank, data
-          |FROM block_metadata
-          |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
-          |ORDER BY rank
-          |""".stripMargin
-      .query[(Long, BlockSummary)]
+      endBlockNumber: Long,
+      ignored: List[BlockHash]
+  ): fs2.Stream[F, Vector[BlockSummary]] = {
+    import Fragments.{notIn, whereAndOpt}
+
+    val f1 = ignored.toNel.map(notIn(fr"block_hash", _))
+    val f2 = fr"rank>=$startBlockNumber AND rank<=$endBlockNumber".some
+    val q  = fr"SELECT rank, data FROM block_metadata" ++ whereAndOpt(f1, f2) ++ fr"ORDER BY rank"
+
+    q.query[(Long, BlockSummary)]
       .stream
       .transact(xa)
       .groupByRank
+  }
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
     sql"""|SELECT rank, data

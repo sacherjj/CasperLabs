@@ -158,8 +158,10 @@ object SQLiteStorage {
 
       override def topoSort(
           startBlockNumber: Long,
-          endBlockNumber: Long
-      ): Stream[F, Vector[BlockSummary]] = dagStorage.topoSort(startBlockNumber, endBlockNumber)
+          endBlockNumber: Long,
+          ignored: List[BlockHash]
+      ): Stream[F, Vector[BlockSummary]] =
+        dagStorage.topoSort(startBlockNumber, endBlockNumber, ignored)
 
       override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockSummary]] =
         dagStorage.topoSort(startBlockNumber)

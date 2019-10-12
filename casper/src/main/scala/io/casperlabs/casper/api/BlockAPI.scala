@@ -285,7 +285,11 @@ object BlockAPI {
             case 0 => dag.topoSortTail(depth).compile.toVector
             case r =>
               dag
-                .topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+                .topoSort(
+                  endBlockNumber = r,
+                  startBlockNumber = math.max(r - depth + 1, 0),
+                  ignored = Nil
+                )
                 .compile
                 .toVector
           }
