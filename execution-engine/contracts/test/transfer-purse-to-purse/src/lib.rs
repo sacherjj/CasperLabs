@@ -52,8 +52,7 @@ pub extern "C" fn call() {
     let transfer_result = system::transfer_from_purse_to_purse(src_purse, dst_purse, amount);
 
     // Assert is done here
-    let final_balance =
-        system::get_balance(main_purse).unwrap_or_else(|| runtime::revert(Error::User(107)));
+    let final_balance = system::get_balance(main_purse).unwrap_or_revert_with(Error::User(107));
 
     let result = format!("{:?}", transfer_result);
     // Add new urefs

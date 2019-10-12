@@ -2,6 +2,7 @@ use core::fmt::{self, Debug, Formatter};
 use core::{u16, u8};
 
 use crate::bytesrepr;
+use crate::contract_api::turef::AccessRightsError;
 use crate::system_contracts::{mint, pos};
 use crate::value::account::{
     AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
@@ -165,6 +166,14 @@ impl From<SetThresholdFailure> for Error {
             SetThresholdFailure::DeploymentThresholdError => Error::DeploymentThresholdError,
             SetThresholdFailure::PermissionDeniedError => Error::PermissionDeniedError,
             SetThresholdFailure::InsufficientTotalWeight => Error::InsufficientTotalWeight,
+        }
+    }
+}
+
+impl From<AccessRightsError> for Error {
+    fn from(error: AccessRightsError) -> Self {
+        match error {
+            AccessRightsError::NoAccessRights => Error::NoAccessRights,
         }
     }
 }

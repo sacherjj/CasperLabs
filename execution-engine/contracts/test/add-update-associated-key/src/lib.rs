@@ -9,12 +9,6 @@ use contract_ffi::value::account::{PublicKey, Weight};
 const INIT_WEIGHT: u8 = 1;
 const MOD_WEIGHT: u8 = 2;
 
-#[repr(u16)]
-enum Error {
-    AddAssociatedKey,
-    UpdateAssociatedKey,
-}
-
 #[no_mangle]
 pub extern "C" fn call() {
     let account: PublicKey = runtime::get_arg(0)
@@ -22,10 +16,8 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let weight1 = Weight::new(INIT_WEIGHT);
-    account::add_associated_key(account, weight1)
-        .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::AddAssociatedKey as u16)));
+    account::add_associated_key(account, weight1).unwrap_or_revert();
 
     let weight2 = Weight::new(MOD_WEIGHT);
-    account::update_associated_key(account, weight2)
-        .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::UpdateAssociatedKey as u16)));
+    account::update_associated_key(account, weight2).unwrap_or_revert();
 }
