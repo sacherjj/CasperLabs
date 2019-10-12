@@ -49,7 +49,8 @@ class CachingDagStorageTest
       cache <- CachingDagStorage[Task](
                 dagStorage,
                 cacheSize,
-                neighbourhoodRadiusToCacheOnLookup = neighbourhoodRange
+                neighbourhoodBefore = neighbourhoodRange,
+                neighbourhoodAfter = neighbourhoodRange
               )
     } yield CachingDagStorageTestData(
       underlying = dagStorage,

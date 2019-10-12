@@ -141,7 +141,9 @@ class NodeRuntime private[node] (
                 (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
                   CachingDagStorage[Task](
                     underlyingDagStorage,
-                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
+                    neighbourhoodAfter = conf.blockstorage.cacheNeighbourhoodAfter,
+                    neighbourhoodBefore = conf.blockstorage.cacheNeighbourhoodBefore
                   ).map(
                     cache =>
                       // Compiler fails to infer the proper type without this

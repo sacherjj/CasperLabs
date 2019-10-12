@@ -7,7 +7,6 @@ import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
@@ -15,8 +14,10 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
 class CachingDagStorage[F[_]: Sync](
-    // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
-    neighbourhoodRadiusToCacheOnLookup: Int,
+    // How far to go to the past (by ranks) for caching neighbourhood of looked up block
+    neighbourhoodBefore: Int,
+    // How far to go to the future (by ranks) for caching neighbourhood of looked up block
+    neighbourhoodAfter: Int,
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
@@ -57,8 +58,8 @@ class CachingDagStorage[F[_]: Sync](
 
   private def cacheNeighbourhood(message: Message): F[Unit] =
     topoSort(
-      startBlockNumber = message.rank - neighbourhoodRadiusToCacheOnLookup,
-      endBlockNumber = message.rank + neighbourhoodRadiusToCacheOnLookup
+      startBlockNumber = message.rank - neighbourhoodBefore,
+      endBlockNumber = message.rank + neighbourhoodAfter
     ).evalMap(summaries => semaphore.withPermit(summaries.traverse_(cacheSummary))).compile.drain
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
@@ -137,9 +138,11 @@ object CachingDagStorage {
   def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
-      name: String = "cache",
-      // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
-      neighbourhoodRadiusToCacheOnLookup: Int = 5
+      // How far to go to the past (by ranks) for caching neighbourhood of looked up block
+      neighbourhoodBefore: Int,
+      // How far to go to the future (by ranks) for caching neighbourhood of looked up block
+      neighbourhoodAfter: Int,
+      name: String = "cache"
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
     val createBlockHashesSetCache = Sync[F].delay {
@@ -165,7 +168,8 @@ object CachingDagStorage {
       messagesCache      <- createMessagesCache
       semaphore          <- Semaphore[F](1)
       store = new CachingDagStorage[F](
-        neighbourhoodRadiusToCacheOnLookup,
+        neighbourhoodBefore,
+        neighbourhoodAfter,
         underlying,
         childrenCache,
         justificationCache,

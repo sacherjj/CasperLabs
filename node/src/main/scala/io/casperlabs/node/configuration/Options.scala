@@ -443,6 +443,15 @@ private[configuration] final case class Options private (
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 
     @scallop
+    val blockstorageCacheNeighbourhoodBefore =
+      gen[Int]("How far to go to the past (by ranks) for caching neighbourhood of looked up block")
+
+    @scallop
+    val blockstorageCacheNeighbourhoodAfter = gen[Int](
+      "How far to go to the future (by ranks) for caching neighbourhood of looked up block"
+    )
+
+    @scallop
     val casperValidatorPublicKey =
       gen[String](
         "base-64 or PEM encoding of the public key to use for signing a proposed blocks. " +
