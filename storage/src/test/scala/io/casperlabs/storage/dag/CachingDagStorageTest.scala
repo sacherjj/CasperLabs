@@ -269,7 +269,7 @@ class CachingDagStorageTest
     "|+|" should {
       import CachingDagStorage.{rangeOrdering, rangesSemigroup}
 
-      import scala.collection.mutable
+      import scala.collection.mutable.{SortedSet => MutableSortedSet}
 
       val disjointSetGen = for {
         n              <- Gen.choose(1, 5)
@@ -288,7 +288,7 @@ class CachingDagStorageTest
                               } yield start.to(start + rangeSize - 1)
                           }
                           .sequence
-      } yield mutable.SortedSet(disjoinRanges: _*)
+      } yield MutableSortedSet(disjoinRanges: _*)
 
       "create a set with only disjoint ranges" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
         val c = (a |+| b).toList
@@ -302,11 +302,40 @@ class CachingDagStorageTest
         r shouldBe Nil
       }
 
-      "should not mutate parameters" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
+      "not mutate parameters" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
         val (originalA, originalB) = (a.toList, b.toList)
         a |+| b
         a.toList should contain theSameElementsInOrderAs (originalA)
         b.toList should contain theSameElementsInOrderAs (originalB)
+      }
+
+      "ignore if ranges fully overlapping" in {
+        val a   = MutableSortedSet(1L to 10L)
+        val b   = MutableSortedSet(2L to 9L)
+        val c   = MutableSortedSet(1L to 9L)
+        val d   = MutableSortedSet(2L to 10L)
+        val res = a |+| b |+| c |+| d
+        res shouldBe a
+      }
+      "combine ranges if partially overlapping" in {
+        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(11L to 20L)) shouldBe MutableSortedSet(
+          1L to 20L
+        )
+        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(1L to 20L)) shouldBe MutableSortedSet(
+          1L to 20L
+        )
+        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(5L to 20L)) shouldBe MutableSortedSet(
+          1L to 20L
+        )
+        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(0L to 20L)) shouldBe MutableSortedSet(
+          0L to 20L
+        )
+      }
+      "not combine disjoint ranges" in {
+        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(12L to 20L)) shouldBe MutableSortedSet(
+          1L to 20L,
+          12L to 20L
+        )
       }
     }
   }
