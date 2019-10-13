@@ -61,11 +61,10 @@ object DagStorage {
 
     abstract override def topoSort(
         startBlockNumber: Long,
-        endBlockNumber: Long,
-        ignored: List[BlockHash]
+        endBlockNumber: Long
     ): fs2.Stream[F, Vector[BlockSummary]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
-        .topoSort(startBlockNumber, endBlockNumber, ignored)
+        .topoSort(startBlockNumber, endBlockNumber)
 
     abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
@@ -88,8 +87,7 @@ trait DagRepresentation[F[_]] {
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
   def topoSort(
       startBlockNumber: Long,
-      endBlockNumber: Long,
-      ignored: List[BlockHash]
+      endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockSummary]]
 
   /** Return block summaries with ranks of blocks in the DAG from a start index to the end. */

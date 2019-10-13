@@ -287,8 +287,7 @@ object BlockAPI {
               dag
                 .topoSort(
                   endBlockNumber = r,
-                  startBlockNumber = math.max(r - depth + 1, 0),
-                  ignored = Nil
+                  startBlockNumber = math.max(r - depth + 1, 0)
                 )
                 .compile
                 .toVector

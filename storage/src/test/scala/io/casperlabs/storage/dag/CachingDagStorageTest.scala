@@ -1,8 +1,8 @@
 package io.casperlabs.storage.dag
 
 import cats.effect.concurrent.Ref
-import cats.instances.long._
 import cats.instances.list._
+import cats.instances.long._
 import cats.instances.map._
 import cats.instances.set._
 import cats.syntax.semigroup._
@@ -15,7 +15,10 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.dag.CachingDagStorageTest.{CachingDagStorageTestData, MockMetrics}
 import io.casperlabs.storage.{ArbitraryStorageData, SQLiteFixture}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.Gen
 import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.concurrent.duration._
 
@@ -24,7 +27,8 @@ class CachingDagStorageTest
     with SQLiteFixture[CachingDagStorageTestData]
     with WordSpecLike
     with Matchers
-    with ArbitraryStorageData {
+    with ArbitraryStorageData
+    with GeneratorDrivenPropertyChecks {
 
   override def db: String = "/tmp/caching_dag_storage_test.db"
 
@@ -259,6 +263,52 @@ class CachingDagStorageTest
       },
       timeout = 15.seconds
     )
+  }
+
+  "Semigroup[mutable.SortedSet[NumericRange.Inclusive[Long]]]" when {
+    "|+|" should {
+      import CachingDagStorage.{rangeOrdering, rangesSemigroup}
+
+      import scala.collection.mutable
+
+      val disjointSetGen = for {
+        n              <- Gen.choose(1, 5)
+        rangeSizes     <- Gen.listOfN(n, Gen.choose(3, 9))
+        xs             = 1L.to(50L)
+        possibleRanges = xs.grouped(xs.size / n).toList.map(ys => ys.head.to(ys.last))
+        disjoinRanges <- possibleRanges
+                          .zip(rangeSizes)
+                          .map {
+                            case (possibleRange, rangeSize) =>
+                              for {
+                                start <- Gen.choose(
+                                          possibleRange.start,
+                                          possibleRange.end - rangeSize + 1
+                                        )
+                              } yield start.to(start + rangeSize - 1)
+                          }
+                          .sequence
+      } yield mutable.SortedSet(disjoinRanges: _*)
+
+      "create a set with only disjoint ranges" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
+        val c = (a |+| b).toList
+        val r: List[Unit] = for {
+          x <- c
+          y <- c
+          if x != y
+          overlapping = x.start <= (y.end + 1) && x.end >= (y.start - 1)
+          if overlapping
+        } yield ()
+        r shouldBe Nil
+      }
+
+      "should not mutate parameters" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
+        val (originalA, originalB) = (a.toList, b.toList)
+        a |+| b
+        a.toList should contain theSameElementsInOrderAs (originalA)
+        b.toList should contain theSameElementsInOrderAs (originalB)
+      }
+    }
   }
 }
 
