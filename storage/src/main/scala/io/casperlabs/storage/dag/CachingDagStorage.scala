@@ -18,7 +18,7 @@ import scala.collection.immutable.{NumericRange, SortedSet => ImmutableSortedSet
 import scala.collection.mutable.{SortedSet => MutableSortedSet}
 import scala.math.{max, min}
 
-class CachingDagStorage[F[_]: ConcurrentEffect](
+class CachingDagStorage[F[_]: Concurrent](
     // How far to go to the past (by ranks) for caching neighbourhood of looked up block
     neighbourhoodBefore: Int,
     // How far to go to the future (by ranks) for caching neighbourhood of looked up block
@@ -222,7 +222,7 @@ object CachingDagStorage {
       MutableSortedSet(z.toSeq: _*)
     }
 
-  def apply[F[_]: ConcurrentEffect: Metrics](
+  def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
       // How far to go to the past (by ranks) for caching neighbourhood of looked up block
@@ -247,41 +247,34 @@ object CachingDagStorage {
       * Not 100% optimal, because we mark whole rank as uncached,
       * even it's still may contain messages with the same rank. */
     def createMessageRemovalListener(
-        lock: Semaphore[F],
         ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]]
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
-          lock
-            .withPermit(Sync[F].delay {
-              ranksRanges
-                .find(r => m.rank >= r.start && m.rank <= r.end)
-                .foreach {
-                  rangeToDelete =>
-                    val updatedRanges = if (rangeToDelete.size > 1) {
-                      if (m.rank == rangeToDelete.start) {
-                        List((m.rank + 1).to(rangeToDelete.end))
-                      } else if (m.rank == rangeToDelete.end) {
-                        List(rangeToDelete.start.to(m.rank - 1))
-                      } else {
-                        val left  = rangeToDelete.start.to(m.rank - 1)
-                        val right = (m.rank + 1).to(rangeToDelete.end)
-                        List(left, right)
-                      }
-                    } else {
-                      List.empty[NumericRange.Inclusive[Long]]
-                    }
-
-                    ranksRanges -= rangeToDelete
-                    updatedRanges.foreach { r =>
-                      ranksRanges += r
-                    }
+          synchronized {
+            ranksRanges
+              .find(r => m.rank >= r.start && m.rank <= r.end)
+              .foreach { rangeToDelete =>
+                val updatedRanges = if (rangeToDelete.size > 1) {
+                  if (m.rank == rangeToDelete.start) {
+                    List((m.rank + 1).to(rangeToDelete.end))
+                  } else if (m.rank == rangeToDelete.end) {
+                    List(rangeToDelete.start.to(m.rank - 1))
+                  } else {
+                    val left  = rangeToDelete.start.to(m.rank - 1)
+                    val right = (m.rank + 1).to(rangeToDelete.end)
+                    List(left, right)
+                  }
+                } else {
+                  List.empty[NumericRange.Inclusive[Long]]
                 }
-            })
-            .toIO
-            .attempt
-            .void
-            .unsafeRunSync()
+
+                ranksRanges -= rangeToDelete
+                updatedRanges.foreach { r =>
+                  ranksRanges += r
+                }
+              }
+          }
         }
     }
 
@@ -303,7 +296,7 @@ object CachingDagStorage {
       semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
       justificationCache <- createBlockHashesSetCache
-      messagesCache      <- createMessagesCache(createMessageRemovalListener(semaphore, ranksRanges))
+      messagesCache      <- createMessagesCache(createMessageRemovalListener(ranksRanges))
 
       store = new CachingDagStorage[F](
         neighbourhoodBefore,
