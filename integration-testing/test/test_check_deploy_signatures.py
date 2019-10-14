@@ -35,7 +35,7 @@ class RemoveSignatureGossipInterceptor(grpc_proxy.GossipInterceptor):
 
 def test_check_deploy_signatures(intercepted_two_node_network):
     """
-    This tests uses an interceptor that modifies block retrieved
+    This test uses an interceptor that modifies block retrieved
     by node-1 from node-0 with GetBlockChunked method of the gossip service
     and removes approvals from deploys in the block.
     node-1 should not accept this block.

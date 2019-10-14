@@ -11,12 +11,7 @@ from casperlabs_local_net.grpc_proxy import (
     block_summary,
     update_hashes_and_signature,
 )
-from casperlabs_client import (
-    hexify,
-    extract_common_name,
-    node_pb2,
-    gossiping_pb2 as gossiping,
-)
+from casperlabs_client import hexify, extract_common_name
 
 
 class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
@@ -31,8 +26,6 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
             ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
         """
         logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
-        # method = getattr(self, name)
-        # method(request)
 
         if name == "GetBlockChunked":
             """
@@ -116,6 +109,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
 
 def test_equivocation(intercepted_two_node_network):
     """
+    Generate an equivocating block and check the system can detect it.
     """
     nodes = intercepted_two_node_network.docker_nodes
     for node in nodes:
@@ -150,39 +144,9 @@ def test_equivocation(intercepted_two_node_network):
     # Pretend a node is advertising our equivocating block.
     block_hash = None
     if nodes[0].proxy_server.interceptor.equivocating_block:
-        logging.info(f"   =============> ON NODE [0]")
         block_hash = nodes[0].proxy_server.interceptor.equivocating_block.block_hash
-        sender_node = nodes[0]
         receiver_node = nodes[1]
-    if nodes[1].proxy_server.interceptor.equivocating_block:
-        logging.info(f"   =============> ON NODE [1]")
-        block_hash = nodes[1].proxy_server.interceptor.equivocating_block.block_hash
-        sender_node = nodes[1]
-        receiver_node = nodes[0]
-
-    logging.info(
-        f"   =============> EQUIVOCATING BLOCK: {block_hash and block_hash.hex()}"
-    )
-    sender = node_pb2.Node(
-        id=bytes.fromhex(sender_node.node_id),
-        host=sender_node.node_host,
-        protocol_port=sender_node.server_proxy_port,
-        discovery_port=sender_node.kademlia_proxy_port,
-    )
-    new_blocks_request = gossiping.NewBlocksRequest(
-        sender=sender, block_hashes=[block_hash]
-    )
-    try:
-        receiver_node.proxy_server.servicer.update_credentials(
-            sender_node.config.tls_certificate_local_path(),
-            sender_node.config.tls_key_local_path(),
-        )
-        response = receiver_node.proxy_server.service.NewBlocks(new_blocks_request)
-        logging.info(
-            f"   === FAKE NewBlocksRequest({block_hash.hex()}) ==> {hexify(response)}"
-        )
-    except Exception as ex:
-        logging.warning(f"   === EXCEPTION: {str(ex)}")
+        logging.info(f"   =============> EQUIVOCATING BLOCK: {block_hash.hex()}")
 
     wait_for_block_hash_propagated_to_all_nodes([receiver_node], block_hash.hex())
     assert "Found equivocation:" in receiver_node.logs()
