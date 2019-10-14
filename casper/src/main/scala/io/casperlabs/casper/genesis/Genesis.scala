@@ -80,7 +80,7 @@ object Genesis {
         validatorSeqNum = 0,
         protocolVersion = genesisConfig.getProtocolVersion,
         timestamp = genesisConfig.timestamp,
-        chainId = genesisConfig.name
+        chainName = genesisConfig.name
       )
 
       unsignedBlock = unsignedBlockProto(body, header)

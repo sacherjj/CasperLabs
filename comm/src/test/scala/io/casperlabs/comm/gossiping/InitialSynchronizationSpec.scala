@@ -35,6 +35,8 @@ class InitialSynchronizationSpec
     with GeneratorDrivenPropertyChecks {
   private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
+  private implicit val chainId: ByteString = sample(genHash)
+
   def genNodes(min: Int = 1, max: Int = 10) =
     Gen.choose(min, max).flatMap(n => Gen.listOfN(n, arbNode.arbitrary))
 

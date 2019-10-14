@@ -1,6 +1,7 @@
 package io.casperlabs.comm.discovery
 
-import cats.{Eq, Show}
+import cats._
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.lemonlabs.uri.Url
@@ -28,26 +29,46 @@ object NodeUtils {
       s"casperlabs://${NodeIdentifier(node.id)}@${node.host}?protocol=${node.protocolPort}&discovery=${node.discoveryPort}"
   )
 
+  implicit val showNodeWithoutChainId: Show[NodeWithoutChainId] =
+    showNode.contramap(nodeWithoutChainId => nodeWithoutChainId.withChainId(ByteString.EMPTY))
+
+  final case class NodeWithoutChainId(private val node: Node) {
+    def withChainId(chainId: ByteString): Node = node.withChainId(chainId)
+  }
+
   implicit class NodeCompanionOps(val nodeCompanion: Node.type) {
 
-    def apply(id: NodeIdentifier, host: String, protocol: Int, discovery: Int): Node =
-      Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery)
+    def apply(
+        id: NodeIdentifier,
+        host: String,
+        protocol: Int,
+        discovery: Int,
+        chainId: ByteString
+    ): Node =
+      Node(ByteString.copyFrom(id.key.toArray), host, protocol, discovery, chainId)
 
-    def fromAddress(str: String): Either[String, Node] = {
-      // TODO toInt, not URL, scheme not casperlabs, renameflag to discovery-port
+    def fromAddress(str: String): Either[String, NodeWithoutChainId] = {
       val maybeUrl: Option[Url] = Try(Url.parse(str)).toOption
 
       val maybePeer = maybeUrl flatMap (
           url =>
             for {
-              _         <- url.schemeOption
+              _         <- url.schemeOption.filter(_ == "casperlabs")
               id        <- url.user
               host      <- url.hostOption
               discovery <- url.query.param("discovery").flatMap(v => Try(v.toInt).toOption)
               protocol  <- url.query.param("protocol").flatMap(v => Try(v.toInt).toOption)
-            } yield apply(NodeIdentifier(id), host.value, protocol, discovery)
+            } yield NodeWithoutChainId(
+              apply(
+                NodeIdentifier(id),
+                host.value,
+                protocol,
+                discovery,
+                ByteString.EMPTY
+              )
+            )
         )
-      maybePeer.fold[Either[String, Node]](
+      maybePeer.fold[Either[String, NodeWithoutChainId]](
         Left(s"bad address: $str")
       )(Right(_))
     }

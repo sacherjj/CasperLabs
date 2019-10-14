@@ -8,7 +8,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.{BlockStatus => _, _}
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
@@ -164,14 +164,14 @@ object BlockAPI {
       maybeBlock: Option[Block]
   ): BlockInfo = {
     val maybeStats = maybeBlock.map { block =>
-      BlockStatus
+      BlockInfo.Status
         .Stats()
         .withBlockSizeBytes(block.serializedSize)
         .withDeployErrorCount(
           block.getBody.deploys.count(_.isError)
         )
     }
-    val status = BlockStatus(stats = maybeStats)
+    val status = BlockInfo.Status(stats = maybeStats)
     BlockInfo()
       .withSummary(summary)
       .withStatus(status)
@@ -259,10 +259,8 @@ object BlockAPI {
             MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
           case ex: IllegalArgumentException =>
             MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } map { ranksOfHashes =>
-          ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
-        } flatMap { hashes =>
-          hashes.toList.flatTraverse(getBlockInfoOpt[F](_, full).map(_.toList))
+        } flatMap { summariesByRank =>
+          summariesByRank.flatten.reverse.toList.traverse(makeBlockInfo[F](_, full))
         }
     }
 

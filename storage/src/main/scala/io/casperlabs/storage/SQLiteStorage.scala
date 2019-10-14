@@ -90,11 +90,17 @@ object SQLiteStorage {
 
       override def sizePendingOrProcessed(): F[Long] = deployStorage.sizePendingOrProcessed()
 
-      override def getByHashes(l: Set[ByteString]): Stream[F, Deploy] = deployStorage.getByHashes(l)
+      override def getByHash(hash: ByteString): F[Option[Deploy]] = deployStorage.getByHash(hash)
+
+      override def getByHashes(hashes: Set[ByteString]): Stream[F, Deploy] =
+        deployStorage.getByHashes(hashes)
 
       override def getProcessingResults(
           hash: ByteString
       ): F[List[(BlockHash, Block.ProcessedDeploy)]] = deployStorage.getProcessingResults(hash)
+
+      override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+        deployStorage.getBufferedStatus(hash)
 
       override def getRepresentation: F[DagRepresentation[F]] = dagStorage.getRepresentation
 
@@ -160,12 +166,12 @@ object SQLiteStorage {
       override def topoSort(
           startBlockNumber: Long,
           endBlockNumber: Long
-      ): Stream[F, Vector[BlockHash]] = dagStorage.topoSort(startBlockNumber, endBlockNumber)
+      ): Stream[F, Vector[BlockSummary]] = dagStorage.topoSort(startBlockNumber, endBlockNumber)
 
-      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockHash]] =
+      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockSummary]] =
         dagStorage.topoSort(startBlockNumber)
 
-      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockHash]] =
+      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockSummary]] =
         dagStorage.topoSortTail(tailLength)
 
       override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =

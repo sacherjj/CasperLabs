@@ -85,9 +85,12 @@ class ValidationTest
   def createChain[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       length: Int,
       bonds: Seq[Bond] = Seq.empty[Bond],
-      creator: Validator = ByteString.EMPTY
+      creator: Validator = ByteString.EMPTY,
+      maybeGenesis: Option[Block] = None
   ): F[Block] =
-    (0 until length).foldLeft(createAndStoreBlock[F](Seq.empty, bonds = bonds)) {
+    (0 until length).foldLeft(
+      maybeGenesis.fold(createAndStoreBlock[F](Seq.empty, bonds = bonds))(_.pure[F])
+    ) {
       case (block, _) =>
         for {
           bprev         <- block
@@ -388,6 +391,30 @@ class ValidationTest
               )
               .attempt shouldBeF Left(InvalidUnslashableBlock)
         _      <- ValidationImpl[Task].timestamp(block).attempt shouldBeF Right(())
+        _      = log.warns.size should be(1)
+        result = log.warns.head.contains("block timestamp") should be(true)
+      } yield result
+  }
+
+  it should "not accept blocks that were published before justification time" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      for {
+        _       <- createChain[Task](3, creator = ByteString.copyFrom(Array[Byte](1)))
+        genesis <- dagStorage.lookupByIdUnsafe(0)
+        // Create a new block on top of genesis which will use the previous ones as justifications.
+        _ <- createChain[Task](
+              1,
+              creator = ByteString.copyFrom(Array[Byte](2)),
+              maybeGenesis = Some(genesis)
+            )
+        block4                  <- dagStorage.lookupByIdUnsafe(4)
+        modifiedTimestampHeader = block4.header.get.withTimestamp(genesis.getHeader.timestamp + 1)
+        _ <- ValidationImpl[Task]
+              .timestamp(
+                block4.withHeader(modifiedTimestampHeader)
+              )
+              .attempt shouldBeF Left(InvalidUnslashableBlock)
+        _      <- ValidationImpl[Task].timestamp(block4).attempt shouldBeF Right(())
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
@@ -738,7 +765,7 @@ class ValidationTest
               genesis.withSignature(genesis.getSignature.withSigAlgorithm(""))
             ) shouldBeF false
         _ <- Validation[Task].formatOfFields(
-              genesis.withHeader(genesis.getHeader.withChainId(""))
+              genesis.withHeader(genesis.getHeader.withChainName(""))
             ) shouldBeF false
         _ <- Validation[Task].formatOfFields(genesis.withHeader(genesis.getHeader.clearState)) shouldBeF false
         _ <- Validation[Task].formatOfFields(
@@ -1025,26 +1052,26 @@ class ValidationTest
   ignore should "return InvalidTargetHash for a message of type ballot that has invalid number of parents" in withStorage {
     _ => implicit dagStorage => _ =>
       import io.casperlabs.models.BlockImplicits._
-      val chainId = "test"
+      val chainName = "test"
       for {
         blockA <- createBlock[Task](
                    parentsHashList = Seq.empty,
                    messageType = MessageType.BALLOT,
-                   chainId = chainId
+                   chainName = chainName
                  )
         blockB <- createBlock[Task](
                    parentsHashList =
                      Seq(ByteString.EMPTY, ByteString.copyFrom(Array.ofDim[Byte](32))),
                    messageType = MessageType.BALLOT,
-                   chainId = chainId
+                   chainName = chainName
                  )
         _ <- ValidationImpl[Task]
-              .blockSummary(BlockSummary.fromBlock(blockA), chainId)
+              .blockSummary(BlockSummary.fromBlock(blockA), chainName)
               .attempt shouldBeF Left(
               ValidateErrorWrapper(InvalidTargetHash)
             )
         _ <- ValidationImpl[Task]
-              .blockSummary(BlockSummary.fromBlock(blockB), chainId)
+              .blockSummary(BlockSummary.fromBlock(blockB), chainName)
               .attempt shouldBeF Left(
               ValidateErrorWrapper(InvalidTargetHash)
             )

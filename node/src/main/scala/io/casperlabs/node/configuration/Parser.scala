@@ -42,7 +42,7 @@ private[configuration] trait ParserImplicits {
     Try(Paths.get(s.replace("$HOME", sys.props("user.home")))).toEither
       .leftMap(_.getMessage)
 
-  implicit val peerNodeParser: Parser[Node] = s => {
+  implicit val peerNodeParser: Parser[NodeWithoutChainId] = s => {
     Node.fromAddress(s)
   }
 

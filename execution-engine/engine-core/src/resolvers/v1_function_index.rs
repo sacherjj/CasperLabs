@@ -41,6 +41,7 @@ pub enum FunctionIndex {
     GetBalanceIndex = 34,
     GetPhaseIndex = 35,
     UpgradeContractAtURef = 36,
+    GetSystemContractIndex = 37,
 }
 
 impl Into<usize> for FunctionIndex {

@@ -22,7 +22,6 @@ const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
-const MINT_NAME: &str = "mint";
 const POS_FUNCTION_NAME: &str = "pos_ext";
 
 #[repr(u32)]
@@ -41,7 +40,7 @@ pub extern "C" fn call() {
     let mint_uref: URef = runtime::get_arg(Args::MintURef as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let mint = ContractRef::URef(TURef::new(mint_uref.addr(), AccessRights::READ));
+    let mint = ContractRef::TURef(TURef::new(mint_uref.addr(), AccessRights::READ));
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
@@ -68,9 +67,6 @@ pub extern "C" fn call() {
         .map(|key| (key, PLACEHOLDER_KEY))
         .collect();
 
-    // Include the mint contract in its named_keys
-    named_keys.insert(String::from(MINT_NAME), Key::URef(mint_uref));
-
     let total_bonds: U512 = genesis_validators.values().fold(U512::zero(), |x, y| x + y);
 
     let bonding_purse = mint_purse(&mint, total_bonds);
@@ -90,10 +86,10 @@ pub extern "C" fn call() {
 
     let uref = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractPointerVariant)
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::ret(&uref, &vec![uref]);
+    runtime::ret(uref, vec![uref]);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {

@@ -22,7 +22,7 @@ pub extern "C" fn hello_name_ext() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let y = hello_name(&name);
-    runtime::ret(&y, &Vec::new());
+    runtime::ret(y, Vec::new());
 }
 
 #[no_mangle]

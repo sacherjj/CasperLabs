@@ -183,10 +183,10 @@ package object types {
         resolve = c => c.value._1.getSummary.validatorBlockSeqNum
       ),
       Field(
-        "chainId",
+        "chainName",
         StringType,
-        "Chain id of where the block was created".some,
-        resolve = c => c.value._1.getSummary.chainId
+        "Chain name of where the block was created".some,
+        resolve = c => c.value._1.getSummary.chainName
       ),
       Field(
         "signature",
