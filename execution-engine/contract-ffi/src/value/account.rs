@@ -571,6 +571,11 @@ impl AssociatedKeys {
     pub fn total_keys_weight(&self) -> Weight {
         self.calculate_any_keys_weight(self.0.keys())
     }
+
+    /// Calculates total weight of all authorization keys excluding a given key
+    pub fn total_keys_weight_excluding(&self, public_key: PublicKey) -> Weight {
+        self.calculate_any_keys_weight(self.0.keys().filter(|&&element| element != public_key))
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -668,6 +673,16 @@ impl Account {
         self.associated_keys.add_key(public_key, weight)
     }
 
+    /// Checks if removing given key would properly satify thresholds.
+    fn check_thresholds_for_key_removal(&self, public_key: PublicKey) -> bool {
+        let total_weight_without = self.associated_keys.total_keys_weight_excluding(public_key);
+
+        // Returns true if the total weight calculated without given public key would be greater or
+        // equal to all of the thresholds.
+        total_weight_without >= *self.action_thresholds().deployment()
+            && total_weight_without >= *self.action_thresholds().key_management()
+    }
+
     /// Checks if subtracting passed weight from current total would make the
     /// new cumulative weight to fall below any of the thresholds on account.
     fn check_thresholds_for_weight_update(&self, weight: Weight) -> bool {
@@ -683,9 +698,9 @@ impl Account {
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-        if let Some(weight) = self.associated_keys.get(&public_key) {
+        if self.associated_keys.contains_key(&public_key) {
             // Check if removing this weight would fall below thresholds
-            if !self.check_thresholds_for_weight_update(*weight) {
+            if !self.check_thresholds_for_key_removal(public_key) {
                 return Err(RemoveKeyFailure::ThresholdViolation);
             }
         }
@@ -1136,6 +1151,24 @@ mod tests {
         assert_eq!(
             associated_keys.total_keys_weight(),
             Weight::new(1 + 11 + 12 + 13)
+        );
+    }
+
+    #[test]
+    fn associated_keys_total_weight_excluding() {
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
+                .expect("should add key 1");
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(12))
+                .expect("should add key 2");
+            res.add_key(PublicKey::new([4u8; 32]), Weight::new(13))
+                .expect("should add key 3");
+            res
+        };
+        assert_eq!(
+            associated_keys.total_keys_weight_excluding(PublicKey::new([3u8; 32])),
+            Weight::new(1 + 11 + 13)
         );
     }
 
