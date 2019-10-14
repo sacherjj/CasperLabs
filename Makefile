@@ -11,6 +11,7 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' |
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
 RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
+	| grep -v node_modules \
 	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \) | grep -v node_modules)
@@ -215,7 +216,7 @@ cargo-native-packager/%:
 			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 			--ts_out=service=false:$(DIR_OUT) \
 			$(DIR_IN)/google/protobuf/empty.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
+			$(DIR_IN)/io/casperlabs/casper/consensus/consensusa \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
 		protoc \
