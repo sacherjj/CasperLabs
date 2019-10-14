@@ -39,8 +39,10 @@ class Interceptor:
     def pre_request(self, name, request):
         """
         Preprocess request received by the proxy.
+        Returns tuple (response, request). If response is not None it will be returned to the client
+        and the node behind proxy will not be convnected to at all.
         """
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         """
@@ -61,7 +63,7 @@ class LoggingInterceptor(Interceptor):
 
     def pre_request(self, name, request):
         logging.info(f"PRE REQUEST: {name}({hexify(request)})")
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         logging.info(f"POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})")
@@ -98,7 +100,7 @@ class KademliaInterceptor(Interceptor):
         request.sender.discovery_port = node.kademlia_proxy_port
 
         logging.info(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         logging.info(
@@ -139,14 +141,13 @@ class GossipInterceptor(Interceptor):
             block_hashes: "0f449d2ae52139bda1a201a22d6f142ca4ae616b92867b301f1c6244f08defbb"
             )
             """
-            sender = self.node.cl_network.lookup_node(request.sender.id.hex())
-            request.sender.host = sender.proxy_host
-            request.sender.protocol_port = sender.server_proxy_port
-            request.sender.discovery_port = sender.kademlia_proxy_port
+            node = self.node.cl_network.lookup_node(request.sender.id.hex())
+            request.sender.host = node.proxy_host
+            request.sender.protocol_port = node.server_proxy_port
+            request.sender.discovery_port = node.kademlia_proxy_port
 
             # Update SSL credentials for the proxy connection to server node
             try:
-                node = self.node.cl_network.lookup_node(request.sender.id.hex())
                 self.node.proxy_server.servicer.update_credentials(
                     node.config.tls_certificate_local_path(),
                     node.config.tls_key_local_path(),
@@ -161,7 +162,7 @@ class GossipInterceptor(Interceptor):
 
             logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
 
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         logging.info(
@@ -242,7 +243,11 @@ class ProxyServicer:
         def unary_unary(request, context):
             logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.interceptor.pre_request(name, request)
+                response, preprocessed_request = self.interceptor.pre_request(
+                    name, request
+                )
+                if response:
+                    return response
                 service_method = getattr(self.service_stub(channel), name)
                 response = service_method(preprocessed_request)
                 return self.interceptor.post_request(
@@ -252,12 +257,17 @@ class ProxyServicer:
         def unary_stream(request, context):
             logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.interceptor.pre_request(name, request)
-                streaming_service_method = getattr(self.service_stub(channel), name)
-                response_stream = streaming_service_method(preprocessed_request)
-                yield from self.interceptor.post_request_stream(
-                    name, preprocessed_request, response_stream
+                response, preprocessed_request = self.interceptor.pre_request(
+                    name, request
                 )
+                if response:
+                    yield from response
+                else:
+                    streaming_service_method = getattr(self.service_stub(channel), name)
+                    response_stream = streaming_service_method(preprocessed_request)
+                    yield from self.interceptor.post_request_stream(
+                        name, preprocessed_request, response_stream
+                    )
 
         return unary_stream if self.is_unary_stream(name) else unary_unary
 
