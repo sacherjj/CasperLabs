@@ -216,7 +216,7 @@ cargo-native-packager/%:
 			--js_out=import_style=commonjs,binary:$(DIR_OUT) \
 			--ts_out=service=false:$(DIR_OUT) \
 			$(DIR_IN)/google/protobuf/empty.proto \
-			$(DIR_IN)/io/casperlabs/casper/consensus/consensusa \
+			$(DIR_IN)/io/casperlabs/casper/consensus/consensus.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/info.proto \
 			$(DIR_IN)/io/casperlabs/casper/consensus/state.proto ; \
 		protoc \
