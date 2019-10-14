@@ -1,17 +1,31 @@
 use contract_ffi::bytesrepr;
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use contract_ffi::uref::{URef, UREF_SIZE_SERIALIZED};
+use contract_ffi::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SIZE_SERIALIZED};
 
 const PROTOCOL_DATA_SIZE_SERIALIZED: usize =
     WASM_COSTS_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED;
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ProtocolData {
     wasm_costs: WasmCosts,
     mint: URef,
     proof_of_stake: URef,
+}
+
+/// Provides a default instance with non existing urefs and empty costs table.
+///
+/// Used in contexts where PoS or Mint contract is not ready yet, and pos, and
+/// mint installers are ran. For use with caution.
+impl Default for ProtocolData {
+    fn default() -> ProtocolData {
+        ProtocolData {
+            wasm_costs: WasmCosts::default(),
+            mint: URef::new([0; 32], AccessRights::READ),
+            proof_of_stake: URef::new([0; 32], AccessRights::READ),
+        }
+    }
 }
 
 impl ProtocolData {
@@ -35,6 +49,18 @@ impl ProtocolData {
 
     pub fn proof_of_stake(&self) -> URef {
         self.proof_of_stake
+    }
+
+    /// Retrieves all valid system contracts stored in protocol version
+    pub fn system_contracts(&self) -> Vec<URef> {
+        let mut vec = Vec::with_capacity(2);
+        if self.mint.addr() != [0; 32] {
+            vec.push(self.mint)
+        }
+        if self.proof_of_stake.addr() != [0; 32] {
+            vec.push(self.proof_of_stake)
+        }
+        vec
     }
 }
 
@@ -114,6 +140,47 @@ mod tests {
         };
         bytesrepr::test_serialization_roundtrip(&mock);
         bytesrepr::test_serialization_roundtrip(&free);
+    }
+
+    #[test]
+    fn should_return_all_system_contracts() {
+        let mint_reference = URef::new([197u8; 32], AccessRights::READ_ADD_WRITE);
+        let proof_of_stake_reference = URef::new([198u8; 32], AccessRights::READ_ADD_WRITE);
+        let protocol_data = {
+            let costs = test_utils::wasm_costs_mock();
+            ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
+        };
+
+        let actual = {
+            let mut items = protocol_data.system_contracts();
+            items.sort();
+            items
+        };
+
+        assert_eq!(actual.len(), 2);
+        assert_eq!(actual[0], mint_reference);
+        assert_eq!(actual[1], proof_of_stake_reference);
+    }
+
+    #[test]
+    fn should_return_only_valid_system_contracts() {
+        assert_eq!(ProtocolData::default().system_contracts(), &[]);
+
+        let mint_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let proof_of_stake_reference = URef::new([0u8; 32], AccessRights::READ);
+        let protocol_data = {
+            let costs = test_utils::wasm_costs_mock();
+            ProtocolData::new(costs, mint_reference, proof_of_stake_reference)
+        };
+
+        let actual = {
+            let mut items = protocol_data.system_contracts();
+            items.sort();
+            items
+        };
+
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0], mint_reference);
     }
 
     proptest! {

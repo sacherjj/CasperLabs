@@ -10,7 +10,6 @@ enum CustomError {
     ContractPointerHash = 1,
 }
 
-pub const MINT_NAME: &str = "mint";
 pub const EXT_FUNCTION_NAME: &str = "modified_mint_ext";
 
 #[no_mangle]

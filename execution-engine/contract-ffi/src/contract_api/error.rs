@@ -76,6 +76,8 @@ pub enum Error {
     Transfer,
     /// No access rights.
     NoAccessRights,
+    /// Returns when contract tries to obtain URef to a system contract that does not exist.
+    InvalidSystemContract,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -116,6 +118,7 @@ impl From<Error> for u32 {
             Error::UpgradeContractAtURef => 14,
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
+            Error::InvalidSystemContract => 17,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -144,6 +147,7 @@ impl Debug for Error {
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
+            Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,

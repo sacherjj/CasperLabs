@@ -438,6 +438,15 @@ where
                 let ret = self.upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
+
+            FunctionIndex::GetSystemContractIndex => {
+                // args(0) = system contract index
+                // args(1) = dest pointer for storing serialized result
+                // args(2) = dest pointer size
+                let (system_contract_index, dest_ptr, dest_size) = Args::parse(args)?;
+                let ret = self.get_system_contract(system_contract_index, dest_ptr, dest_size)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
         }
     }
 }

@@ -3,12 +3,13 @@ use core::fmt::Debug;
 use core::u8;
 
 use super::error::Error;
-use super::runtime::get_key;
 use super::runtime::revert;
 use super::{alloc_bytes, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::deserialize;
+use crate::contract_api::error::result_from;
 use crate::ext_ffi;
-use crate::key::Key;
+use crate::system_contracts::SystemContract;
+use crate::uref::UREF_SIZE_SERIALIZED;
 use crate::value::account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED};
 use crate::value::U512;
 
@@ -17,27 +18,39 @@ pub type TransferResult = Result<TransferredTo, Error>;
 pub const MINT_NAME: &str = "mint";
 pub const POS_NAME: &str = "pos";
 
-fn get_system_contract(name: &str) -> ContractRef {
-    let key = get_key(name).unwrap_or_else(|| revert(Error::GetKey));
-
-    if let Key::URef(uref) = key {
-        let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-        ContractRef::TURef(reference)
-    } else {
-        revert(Error::UnexpectedKeyVariant)
-    }
+fn get_system_contract(system_contract: SystemContract) -> ContractRef {
+    let system_contract_index = system_contract.into();
+    let uref = {
+        let result = {
+            let mut uref_data_raw = [0u8; UREF_SIZE_SERIALIZED];
+            let value = unsafe {
+                ext_ffi::get_system_contract(
+                    system_contract_index,
+                    uref_data_raw.as_mut_ptr(),
+                    uref_data_raw.len(),
+                )
+            };
+            result_from(value).map(|_| uref_data_raw)
+        };
+        // Revert for any possible error that happened on host side
+        let uref_bytes = result.unwrap_or_else(|e| revert(e));
+        // Deserializes a valid URef passed from the host side
+        deserialize(&uref_bytes).unwrap_or_else(|_| revert(Error::Deserialize))
+    };
+    let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
+    ContractRef::TURef(reference)
 }
 
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
 /// `contract_api::Error`.
 pub fn get_mint() -> ContractRef {
-    get_system_contract(MINT_NAME)
+    get_system_contract(SystemContract::Mint)
 }
 
 /// Returns a read-only pointer to the Proof of Stake Contract.  Any failure will trigger `revert()`
 /// with a `contract_api::Error`.
 pub fn get_proof_of_stake() -> ContractRef {
-    get_system_contract(POS_NAME)
+    get_system_contract(SystemContract::ProofOfStake)
 }
 
 pub fn create_purse() -> PurseId {
