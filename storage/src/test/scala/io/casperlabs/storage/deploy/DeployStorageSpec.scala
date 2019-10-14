@@ -10,6 +10,7 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.Arbitrary.arbBool
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -381,6 +382,46 @@ trait DeployStorageSpec
                         assert(a.toByteArray.sameElements(b.toByteArray))
                     }
                   }
+            } yield ()
+          }
+      }
+    }
+
+    "getDeploysByAccount" should {
+      "return the correct paginated list of deploys for the specified account" in forAll(
+        deploysGen(),
+        Gen.oneOf(randomAccounts),
+        Gen.choose(0, Int.MaxValue)
+      ) {
+        case (deploys, accountKey, limit) =>
+          testFixture { (reader, writer) =>
+            val deploysByAccount = deploys
+              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
+              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+              .reverse
+            val offset = if (deploysByAccount.isEmpty) {
+              0
+            } else {
+              scala.util.Random.nextInt(deploysByAccount.size)
+            }
+
+            val (lastTimeStamp, lastDeployHash) =
+              deploysByAccount
+                .get(offset.toLong)
+                .map(d => (d.getHeader.timestamp, d.deployHash))
+                .getOrElse((Long.MaxValue, ByteString.EMPTY))
+            val expectResult = deploysByAccount.drop(offset + 1).take(limit)
+            printf("%d/%d\n", expectResult.size, deploysByAccount.size)
+
+            for {
+              _ <- writer.addAsPending(deploys)
+              all <- reader.getDeploysByAccount(
+                      accountKey.publicKey,
+                      limit,
+                      lastTimeStamp,
+                      lastDeployHash
+                    )
+              _ = assert(expectResult == all)
             } yield ()
           }
       }

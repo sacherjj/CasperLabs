@@ -16,6 +16,9 @@ class SQLiteDeployStorageSpec
 
   override def db: String = "/tmp/deploy_storage.db"
 
+  override def numAccounts: Int   = 2
+  override def numValidators: Int = 2
+
   override def createTestResource: Task[(DeployStorageReader[Task], DeployStorageWriter[Task])] =
     SQLiteStorage
       .create[Task]()

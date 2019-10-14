@@ -9,6 +9,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
+import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -245,6 +246,29 @@ class MockDeployStorage[F[_]: Sync: Log](
     b.getBody.deploys.map(pd => deployToString(pd.getDeploy)).mkString(", ")
 
   private def now = System.currentTimeMillis()
+
+  override def getDeploysByAccount(
+      account: BlockHash,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: BlockHash
+  ): F[List[Deploy]] =
+    deploysWithMetadataRef.get.map(
+      _.keys
+        .filter { d =>
+          if (d.getHeader.accountPublicKey != account) {
+            false
+          } else {
+            val strictEarlier = d.getHeader.timestamp < lastTimeStamp
+            strictEarlier || d.getHeader.timestamp == lastTimeStamp && byteStringOrdering
+              .lt(d.deployHash, lastDeployHash)
+          }
+        }
+        .toList
+        .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+        .reverse
+        .take(limit)
+    )
 }
 
 object MockDeployStorage {
