@@ -16,7 +16,6 @@ import io.casperlabs.storage.dag.CachingDagStorageTest.{CachingDagStorageTestDat
 import io.casperlabs.storage.{ArbitraryStorageData, SQLiteFixture}
 import monix.eval.Task
 import org.scalatest._
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 import scala.concurrent.duration._
 
@@ -25,8 +24,7 @@ class CachingDagStorageTest
     with SQLiteFixture[CachingDagStorageTestData]
     with WordSpecLike
     with Matchers
-    with ArbitraryStorageData
-    with GeneratorDrivenPropertyChecks {
+    with ArbitraryStorageData {
 
   override def db: String = "/tmp/caching_dag_storage_test.db"
 

@@ -183,10 +183,7 @@ object CachingDagStorage {
     }
 
     /** Updates [[ranksRanges]] when a message is evicted from cache.
-      * Otherwise [[CachingDagStorage]] would think that the message is cached even after its eviction.
-      *
-      * Not 100% optimal, because we mark whole rank as uncached,
-      * even it's still may contain messages with the same rank. */
+      * Otherwise [[CachingDagStorage]] would think that the message is cached even after its eviction. */
     def createMessageRemovalListener(
         ranksRanges: MutableSet[Rank]
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
@@ -205,7 +202,7 @@ object CachingDagStorage {
         CacheBuilder
           .newBuilder()
           .maximumWeight(maxSizeBytes)
-          .weigher((_: BlockHash, msg: Message) => msg.blockSummary.serializedSize) //TODO: Fix the size estimate of a message.
+          .weigher((_: BlockHash, msg: Message) => msg.blockSummary.serializedSize)
           .removalListener(removalListener)
           .build[BlockHash, Message]()
       }
