@@ -3,7 +3,6 @@ package io.casperlabs.storage.dag
 import cats._
 import cats.effect._
 import cats.effect.concurrent._
-import cats.effect.implicits._
 import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -11,12 +10,11 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
-import scala.collection.immutable.{NumericRange, SortedSet => ImmutableSortedSet}
-import scala.collection.mutable.{SortedSet => MutableSortedSet}
-import scala.math.{max, min}
+import scala.collection.mutable.{Set => MutableSet}
 
 class CachingDagStorage[F[_]: Concurrent](
     // How far to go to the past (by ranks) for caching neighborhood of looked up block
@@ -27,16 +25,15 @@ class CachingDagStorage[F[_]: Concurrent](
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
-    // Should contain only disjoint ranges, represents rank ranges of cached neighbors
-    private[dag] var ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]],
+    private[dag] val ranksRanges: MutableSet[Rank],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
-  import CachingDagStorage.{rangeOrdering, rangesSemigroup}
 
   /** Unsafe to be invoked concurrently */
-  private def unsafeUpdateRanges(newRange: NumericRange.Inclusive[Long]): F[Unit] =
-    Sync[F].delay(ranksRanges = ranksRanges |+| MutableSortedSet(newRange))
+  private def unsafeUpdateRanks(start: Rank, end: Rank): F[Unit] = Sync[F].delay {
+    ranksRanges ++= (start to end).toSet
+  }
 
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
     Sync[F].delay(fromCache) flatMap {
@@ -76,37 +73,16 @@ class CachingDagStorage[F[_]: Concurrent](
     * Calculates them using ranks ranges kept in [[ranksRanges]].
     * */
   private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
-    val newRanks: ImmutableSortedSet[Long] = ImmutableSortedSet(
-      (m.rank - neighborhoodBefore).to(m.rank + neighborhoodAfter): _*
-    ).diff(ImmutableSortedSet(ranksRanges.toList.flatMap(_.toList): _*))
-
-    val rangesToQuery: List[NumericRange.Inclusive[Long]] = if (newRanks.nonEmpty) {
-      val (r, start, end) =
-        newRanks.tail.foldLeft(
-          (ImmutableSortedSet.empty[NumericRange.Inclusive[Long]], newRanks.head, newRanks.head)
-        ) {
-          case ((acc, start, prev), next) if next == prev + 1 =>
-            (acc, start, next)
-          case ((acc, start, prev), next) =>
-            (acc + start.to(prev), next, next)
-        }
-      (r + start.to(end)).toList
-    } else {
-      Nil
-    }
-
-    val cacheNeighbors = fs2.Stream
-      .emits[F, NumericRange.Inclusive[Long]](rangesToQuery)
-      .flatMap { range =>
-        topoSort(range.start, range.end)
-      }
-      .compile
-      .toList
-      .flatMap(summaries => summaries.flatten.traverse_(unsafeCacheSummary))
-
-    val updateRanges = rangesToQuery.traverse_(unsafeUpdateRanges)
-
-    cacheNeighbors >> updateRanges
+    val missingRanks =
+      (m.rank - neighborhoodBefore).to(m.rank + neighborhoodAfter).toSet.diff(ranksRanges).toList
+    (for {
+      start <- missingRanks.minimumOption
+      end   <- missingRanks.maximumOption
+    } yield topoSort(start, end).compile.toList
+      .flatMap(summaries => summaries.flatten.traverse_(unsafeCacheSummary)) >> unsafeUpdateRanks(
+      start,
+      end
+    )).getOrElse(().pure[F])
   }
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
@@ -185,42 +161,7 @@ class CachingDagStorage[F[_]: Concurrent](
 }
 
 object CachingDagStorage {
-  /* Should be used only for disjoint ranges */
-  private[dag] implicit val rangeOrdering: Ordering[NumericRange.Inclusive[Long]] =
-    (x: NumericRange.Inclusive[Long], y: NumericRange.Inclusive[Long]) => x.start.compareTo(y.start)
-
-  /** Should be used only for disjoint sets of ranges.
-    * Creates a new mutable sorted set with combined ranges if they are overlapping.
-    * Produced set contains only disjoint ranges. */
-  private[dag] implicit val rangesSemigroup
-      : Semigroup[MutableSortedSet[NumericRange.Inclusive[Long]]] =
-    (
-        x: MutableSortedSet[NumericRange.Inclusive[Long]],
-        y: MutableSortedSet[NumericRange.Inclusive[Long]]
-    ) => {
-      val z       = MutableSortedSet(x.union(y).toSeq: _*)
-      var updated = false
-
-      do {
-        updated = false
-        for {
-          a <- z
-          b <- z
-          if a != b
-        } {
-          val overlapping = b.start <= (a.end + 1) && b.end >= (a.start - 1)
-          if (overlapping) {
-            val c = min(a.start, b.start).to(max(a.end, b.end))
-            z -= a
-            z -= b
-            z += c
-            updated = true
-          }
-        }
-      } while (updated)
-
-      MutableSortedSet(z.toSeq: _*)
-    }
+  type Rank = Long
 
   def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
@@ -247,33 +188,12 @@ object CachingDagStorage {
       * Not 100% optimal, because we mark whole rank as uncached,
       * even it's still may contain messages with the same rank. */
     def createMessageRemovalListener(
-        ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]]
+        ranksRanges: MutableSet[Rank]
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
           synchronized {
-            ranksRanges
-              .find(r => m.rank >= r.start && m.rank <= r.end)
-              .foreach { rangeToDelete =>
-                val updatedRanges = if (rangeToDelete.size > 1) {
-                  if (m.rank == rangeToDelete.start) {
-                    List((m.rank + 1).to(rangeToDelete.end))
-                  } else if (m.rank == rangeToDelete.end) {
-                    List(rangeToDelete.start.to(m.rank - 1))
-                  } else {
-                    val left  = rangeToDelete.start.to(m.rank - 1)
-                    val right = (m.rank + 1).to(rangeToDelete.end)
-                    List(left, right)
-                  }
-                } else {
-                  List.empty[NumericRange.Inclusive[Long]]
-                }
-
-                ranksRanges -= rangeToDelete
-                updatedRanges.foreach { r =>
-                  ranksRanges += r
-                }
-              }
+            ranksRanges -= m.rank
           }
         }
     }
@@ -291,8 +211,7 @@ object CachingDagStorage {
       }
 
     for {
-      // Should contain only disjoint ranges, represents rank ranges of cached neighbors
-      ranksRanges        <- Sync[F].delay(MutableSortedSet.empty[NumericRange.Inclusive[Long]])
+      ranksRanges        <- Sync[F].delay(MutableSet.empty[Rank])
       semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
       justificationCache <- createBlockHashesSetCache

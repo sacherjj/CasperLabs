@@ -15,8 +15,6 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.dag.CachingDagStorageTest.{CachingDagStorageTestData, MockMetrics}
 import io.casperlabs.storage.{ArbitraryStorageData, SQLiteFixture}
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
-import org.scalacheck.Gen
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
@@ -219,7 +217,7 @@ class CachingDagStorageTest
     "cache neighborhood on lookup" in runSQLiteTest(
       resources = prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1),
       test = {
-        case CachingDagStorageTestData(underlying, cache, _) =>
+        case CachingDagStorageTestData(underlying, cache, mockMetrics) =>
           def genChild(parent: Block) =
             parent
               .update(_.header.rank := parent.rank + 1)
@@ -253,91 +251,24 @@ class CachingDagStorageTest
             _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
                   maybeMessage should not be empty
                 }
+            queriesNumBefore <- mockMetrics.counterRef.get.map(_.values.sum)
+            // Should not query underlying storage again
+            _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
+                  maybeMessage should not be empty
+                }
+            queriesNumAfter <- mockMetrics.counterRef.get.map(_.values.sum)
           } yield {
             Option(cache.messagesCache.getIfPresent(child.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(parent.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(justification.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(grandParent.blockHash)) should not be empty
             Option(cache.messagesCache.getIfPresent(grandGrandParent.blockHash)) shouldBe None
+            // 'queriesNumAfter' should count only the 'lookup' on CachingDagStorage itself
+            queriesNumBefore shouldBe (queriesNumAfter - 1)
           }
       },
       timeout = 15.seconds
     )
-  }
-
-  "Semigroup[mutable.SortedSet[NumericRange.Inclusive[Long]]]" when {
-    "|+|" should {
-      import CachingDagStorage.{rangeOrdering, rangesSemigroup}
-
-      import scala.collection.mutable.{SortedSet => MutableSortedSet}
-
-      val disjointSetGen = for {
-        n              <- Gen.choose(1, 5)
-        rangeSizes     <- Gen.listOfN(n, Gen.choose(3, 9))
-        xs             = 1L.to(50L)
-        possibleRanges = xs.grouped(xs.size / n).toList.map(ys => ys.head.to(ys.last))
-        disjoinRanges <- possibleRanges
-                          .zip(rangeSizes)
-                          .map {
-                            case (possibleRange, rangeSize) =>
-                              for {
-                                start <- Gen.choose(
-                                          possibleRange.start,
-                                          possibleRange.end - rangeSize + 1
-                                        )
-                              } yield start.to(start + rangeSize - 1)
-                          }
-                          .sequence
-      } yield MutableSortedSet(disjoinRanges: _*)
-
-      "create a set with only disjoint ranges" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
-        val c = (a |+| b).toList
-        val r: List[Unit] = for {
-          x <- c
-          y <- c
-          if x != y
-          overlapping = x.start <= (y.end + 1) && x.end >= (y.start - 1)
-          if overlapping
-        } yield ()
-        r shouldBe Nil
-      }
-
-      "not mutate parameters" in forAll(disjointSetGen, disjointSetGen) { (a, b) =>
-        val (originalA, originalB) = (a.toList, b.toList)
-        a |+| b
-        a.toList should contain theSameElementsInOrderAs (originalA)
-        b.toList should contain theSameElementsInOrderAs (originalB)
-      }
-
-      "ignore if ranges fully overlapping" in {
-        val a   = MutableSortedSet(1L to 10L)
-        val b   = MutableSortedSet(2L to 9L)
-        val c   = MutableSortedSet(1L to 9L)
-        val d   = MutableSortedSet(2L to 10L)
-        val res = a |+| b |+| c |+| d
-        res shouldBe a
-      }
-      "combine ranges if partially overlapping" in {
-        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(11L to 20L)) shouldBe MutableSortedSet(
-          1L to 20L
-        )
-        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(1L to 20L)) shouldBe MutableSortedSet(
-          1L to 20L
-        )
-        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(5L to 20L)) shouldBe MutableSortedSet(
-          1L to 20L
-        )
-        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(0L to 20L)) shouldBe MutableSortedSet(
-          0L to 20L
-        )
-      }
-      "not combine disjoint ranges" in {
-        (MutableSortedSet(1L to 10L) |+| MutableSortedSet(12L to 20L)) shouldBe MutableSortedSet(
-          1L to 20L,
-          12L to 20L
-        )
-      }
-    }
   }
 }
 
