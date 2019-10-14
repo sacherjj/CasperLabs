@@ -19,15 +19,15 @@ import scala.collection.mutable.{SortedSet => MutableSortedSet}
 import scala.math.{max, min}
 
 class CachingDagStorage[F[_]: Concurrent](
-    // How far to go to the past (by ranks) for caching neighbourhood of looked up block
-    neighbourhoodBefore: Int,
-    // How far to go to the future (by ranks) for caching neighbourhood of looked up block
-    neighbourhoodAfter: Int,
+    // How far to go to the past (by ranks) for caching neighborhood of looked up block
+    neighborhoodBefore: Int,
+    // How far to go to the future (by ranks) for caching neighborhood of looked up block
+    neighborhoodAfter: Int,
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
-    // Should contain only disjoint ranges, represents rank ranges of cached neighbours
+    // Should contain only disjoint ranges, represents rank ranges of cached neighbors
     private[dag] var ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
@@ -72,12 +72,12 @@ class CachingDagStorage[F[_]: Concurrent](
     Sync[F].fromTry(Message.fromBlockSummary(summary)).flatMap(unsafeCacheMessage)
 
   /** Unsafe to be invoked concurrently.
-    * Reads from [[underlying]] only missing neighbours.
+    * Reads from [[underlying]] only missing neighbors.
     * Calculates them using ranks ranges kept in [[ranksRanges]].
     * */
-  private def unsafeCacheNeighbourhood(m: Message): F[Unit] = {
+  private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
     val newRanks: ImmutableSortedSet[Long] = ImmutableSortedSet(
-      (m.rank - neighbourhoodBefore).to(m.rank + neighbourhoodAfter): _*
+      (m.rank - neighborhoodBefore).to(m.rank + neighborhoodAfter): _*
     ).diff(ImmutableSortedSet(ranksRanges.toList.flatMap(_.toList): _*))
 
     val rangesToQuery: List[NumericRange.Inclusive[Long]] = if (newRanks.nonEmpty) {
@@ -95,7 +95,7 @@ class CachingDagStorage[F[_]: Concurrent](
       Nil
     }
 
-    val cacheNeighbours = fs2.Stream
+    val cacheNeighbors = fs2.Stream
       .emits[F, NumericRange.Inclusive[Long]](rangesToQuery)
       .flatMap { range =>
         topoSort(range.start, range.end)
@@ -106,7 +106,7 @@ class CachingDagStorage[F[_]: Concurrent](
 
     val updateRanges = rangesToQuery.traverse_(unsafeUpdateRanges)
 
-    cacheNeighbours >> updateRanges
+    cacheNeighbors >> updateRanges
   }
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
@@ -149,7 +149,7 @@ class CachingDagStorage[F[_]: Concurrent](
         .lookup(blockHash)
         .flatMap(
           maybeMessage =>
-            semaphore.withPermit(maybeMessage.traverse_(unsafeCacheNeighbourhood)) >>
+            semaphore.withPermit(maybeMessage.traverse_(unsafeCacheNeighborhood)) >>
               maybeMessage.pure[F]
         )
     )
@@ -225,10 +225,10 @@ object CachingDagStorage {
   def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
-      // How far to go to the past (by ranks) for caching neighbourhood of looked up block
-      neighbourhoodBefore: Int,
-      // How far to go to the future (by ranks) for caching neighbourhood of looked up block
-      neighbourhoodAfter: Int,
+      // How far to go to the past (by ranks) for caching neighborhood of looked up block
+      neighborhoodBefore: Int,
+      // How far to go to the future (by ranks) for caching neighborhood of looked up block
+      neighborhoodAfter: Int,
       name: String = "cache"
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
@@ -291,7 +291,7 @@ object CachingDagStorage {
       }
 
     for {
-      // Should contain only disjoint ranges, represents rank ranges of cached neighbours
+      // Should contain only disjoint ranges, represents rank ranges of cached neighbors
       ranksRanges        <- Sync[F].delay(MutableSortedSet.empty[NumericRange.Inclusive[Long]])
       semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
@@ -299,8 +299,8 @@ object CachingDagStorage {
       messagesCache      <- createMessagesCache(createMessageRemovalListener(ranksRanges))
 
       store = new CachingDagStorage[F](
-        neighbourhoodBefore,
-        neighbourhoodAfter,
+        neighborhoodBefore,
+        neighborhoodAfter,
         underlying,
         childrenCache,
         justificationCache,

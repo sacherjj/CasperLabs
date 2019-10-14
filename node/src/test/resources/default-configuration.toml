@@ -75,8 +75,8 @@ max-block-size-bytes = 1
 
 [blockstorage]
 cache-max-size-bytes = 1
-cache-neighbourhood-before = 1
-cache-neighbourhood-after = 1
+cache-neighborhood-before = 1
+cache-neighborhood-after = 1
 
 [metrics]
 prometheus = false

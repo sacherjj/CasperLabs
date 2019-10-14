@@ -129,11 +129,11 @@ block-upload-rate-max-throttled = 0
 # Maximum size of each of in-memory block/dag/justifications caches in bytes.
 cache-max-size-bytes = 262144000
 
-# How far to go to the past (by ranks) for caching neighbourhood of looked up block
-cache-neighbourhood-before = 5
+# How far to go to the past (by ranks) for caching neighborhood of looked up block
+cache-neighborhood-before = 5
 
-# How far to go to the future (by ranks) for caching neighbourhood of looked up block
-cache-neighbourhood-after = 6
+# How far to go to the future (by ranks) for caching neighborhood of looked up block
+cache-neighborhood-after = 6
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]

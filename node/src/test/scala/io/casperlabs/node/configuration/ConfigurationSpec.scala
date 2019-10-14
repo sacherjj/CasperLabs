@@ -131,8 +131,8 @@ class ConfigurationSpec
     )
     val blockStorage = Configuration.BlockStorage(
       cacheMaxSizeBytes = 1,
-      cacheNeighbourhoodBefore = 1,
-      cacheNeighbourhoodAfter = 1
+      cacheNeighborhoodBefore = 1,
+      cacheNeighborhoodAfter = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

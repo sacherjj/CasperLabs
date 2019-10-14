@@ -46,15 +46,15 @@ class CachingDagStorageTest
   private val justifications: Seq[ByteString] =
     sampleBlock.justifications.map(_.latestBlockHash).toList
 
-  private def prepareTestEnvironment(cacheSize: Long, neighbourhoodRange: Int) = {
+  private def prepareTestEnvironment(cacheSize: Long, neighborhoodRange: Int) = {
     implicit val metrics: MockMetrics = new MockMetrics()
     for {
       dagStorage <- SQLiteDagStorage.create[Task]
       cache <- CachingDagStorage[Task](
                 dagStorage,
                 cacheSize,
-                neighbourhoodBefore = neighbourhoodRange,
-                neighbourhoodAfter = neighbourhoodRange
+                neighborhoodBefore = neighborhoodRange,
+                neighborhoodAfter = neighborhoodRange
               )
     } yield CachingDagStorageTestData(
       underlying = dagStorage,
@@ -64,7 +64,7 @@ class CachingDagStorageTest
   }
 
   override def createTestResource: Task[CachingDagStorageTestData] =
-    prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighbourhoodRange = 1)
+    prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1)
 
   private def verifyCached[A](
       name: String,
@@ -167,7 +167,7 @@ class CachingDagStorageTest
 
       "evict items if max size threshold is reached" in {
         runSQLiteTest(
-          resources = prepareTestEnvironment(cacheSize = 64L * 10, neighbourhoodRange = 1),
+          resources = prepareTestEnvironment(cacheSize = 64L * 10, neighborhoodRange = 1),
           test = {
             case CachingDagStorageTestData(_, cache, metrics) =>
               // 1 parent and 1 justification will result
@@ -216,8 +216,8 @@ class CachingDagStorageTest
     ) { store =>
       store.justificationToBlocks(justifications.head)
     }
-    "cache neighbourhood on lookup" in runSQLiteTest(
-      resources = prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighbourhoodRange = 1),
+    "cache neighborhood on lookup" in runSQLiteTest(
+      resources = prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1),
       test = {
         case CachingDagStorageTestData(underlying, cache, _) =>
           def genChild(parent: Block) =
@@ -249,7 +249,7 @@ class CachingDagStorageTest
             _ <- List(grandGrandParent, grandParent, parent, justification, child).traverse(
                   underlying.insert
                 )
-            // Should cache neighbourhood on lookup
+            // Should cache neighborhood on lookup
             _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
                   maybeMessage should not be empty
                 }
