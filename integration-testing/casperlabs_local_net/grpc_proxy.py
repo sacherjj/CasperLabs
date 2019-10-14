@@ -10,7 +10,12 @@ from casperlabs_client import (
     gossiping_pb2_grpc,
     kademlia_pb2_grpc,
     extract_common_name,
+    blake2b_hash,
+    consensus_pb2 as consensus,
+    gossiping_pb2 as gossiping,
 )
+import ed25519
+import lz4.block
 
 
 def read_binary(file_name):
@@ -456,3 +461,49 @@ def proxy_kademlia(
     )
     t.start()
     return t
+
+
+def block_from_chunks(chunks):
+    """Builds Block from chunks returned from GetBlockChunked"""
+    # TODO: handle more than one data chunk
+    chunks = list(chunks)
+    header_chunk, data_chunk = chunks
+
+    uncompressed_block_data = lz4.block.decompress(
+        data_chunk.data, uncompressed_size=header_chunk.header.original_content_length
+    )
+    block = consensus.Block()
+    block.ParseFromString(uncompressed_block_data)
+    return block
+
+
+def block_to_chunks(block):
+    data = block.SerializeToString()
+    compressed_data = lz4.block.compress(data, store_size=False)
+
+    header_chunk = gossiping.Chunk(
+        header=gossiping.Chunk.Header(
+            compression_algorithm="lz4",
+            content_length=len(compressed_data),
+            original_content_length=len(data),
+        )
+    )
+    data_chunk = gossiping.Chunk(data=compressed_data)
+    return [header_chunk, data_chunk]
+
+
+def block_summary(block):
+    return consensus.BlockSummary(
+        block_hash=block.block_hash, header=block.header, signature=block.signature
+    )
+
+
+def update_hashes_and_signature(block, private_key):
+    """Updates in-place block.header.body_hash, block.block_hash and block.signature."""
+    block.header.body_hash = blake2b_hash(block.body.SerializeToString())
+    block_hash = blake2b_hash(block.header.SerializeToString())
+    block.block_hash = block_hash
+
+    block.signature.sig_algorithm = "ed25519"
+    block.signature.sig = ed25519.SigningKey(private_key).sign(block_hash)
+    return block
