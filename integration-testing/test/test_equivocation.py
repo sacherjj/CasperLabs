@@ -22,19 +22,9 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
         self.equivocating_block_summary = None
 
     def pre_request(self, name, request):
-        """ ~/CasperLabs/protobuf/io/casperlabs/comm/gossiping/gossiping.proto
-            ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-        """
         logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
 
         if name == "GetBlockChunked":
-            """
-            message GetBlockChunkedRequest {
-                bytes block_hash = 1;
-                uint32 chunk_size = 2;
-                repeated string accepted_compression_algorithms = 3;
-            }
-            """
             if (
                 self.equivocating_block
                 and request.block_hash == self.equivocating_block.block_hash
@@ -101,6 +91,9 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
             yield r
 
     def modify_to_equivocate(self, block):
+        """
+        Create a clone of the given block with just its timestamp modified.
+        """
         private_key = base64.b64decode(self.node.config.node_private_key)
         block.header.timestamp = block.header.timestamp + 1000  # 1 second later
         update_hashes_and_signature(block, private_key)
@@ -140,8 +133,6 @@ def test_equivocation(intercepted_two_node_network):
 
     wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
-    # Inject equivocating block.
-    # Pretend a node is advertising our equivocating block.
     block_hash = None
     if nodes[0].proxy_server.interceptor.equivocating_block:
         block_hash = nodes[0].proxy_server.interceptor.equivocating_block.block_hash

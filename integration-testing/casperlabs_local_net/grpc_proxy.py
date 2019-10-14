@@ -86,7 +86,7 @@ class KademliaInterceptor(Interceptor):
         return "kademlia_interceptor"
 
     def pre_request(self, name, request):
-        logging.info(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
+        logging.debug(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
 
         """
         Patch node address to point to proxy.
@@ -104,17 +104,17 @@ class KademliaInterceptor(Interceptor):
         request.sender.protocol_port = node.server_proxy_port
         request.sender.discovery_port = node.kademlia_proxy_port
 
-        logging.info(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
+        logging.debug(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
         return (None, request)
 
     def post_request(self, name, request, response):
-        logging.info(
+        logging.debug(
             f"KADEMLIA POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
         )
         return response
 
     def post_request_stream(self, name, request, response):
-        logging.info(
+        logging.debug(
             f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
         )
         for r in response:
@@ -122,7 +122,7 @@ class KademliaInterceptor(Interceptor):
             r.host = node.proxy_host
             r.protocol_port = node.server_proxy_port
             r.discovery_port = node.kademlia_proxy_port
-            logging.info(f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
+            logging.debug(f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
             yield r
 
 
