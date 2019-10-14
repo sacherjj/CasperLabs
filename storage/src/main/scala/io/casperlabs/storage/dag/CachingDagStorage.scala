@@ -14,7 +14,7 @@ import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
-import scala.collection.mutable.{Set => MutableSet}
+import scala.collection.concurrent.TrieMap
 
 class CachingDagStorage[F[_]: Concurrent](
     // How far to go to the past (by ranks) for caching neighborhood of looked up block
@@ -25,14 +25,14 @@ class CachingDagStorage[F[_]: Concurrent](
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
-    private[dag] val ranksRanges: MutableSet[Rank],
+    private[dag] val ranksRanges: TrieMap[Rank, Unit],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
 
   /** Unsafe to be invoked concurrently */
   private def unsafeUpdateRanks(start: Rank, end: Rank): F[Unit] = Sync[F].delay {
-    ranksRanges ++= (start to end).toSet
+    ranksRanges ++= (start to end).map((_, ()))
   }
 
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
@@ -74,7 +74,11 @@ class CachingDagStorage[F[_]: Concurrent](
     * */
   private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
     val missingRanks =
-      (m.rank - neighborhoodBefore).to(m.rank + neighborhoodAfter).toSet.diff(ranksRanges).toList
+      (m.rank - neighborhoodBefore)
+        .to(m.rank + neighborhoodAfter)
+        .toSet
+        .diff(ranksRanges.keySet)
+        .toList
     (for {
       start <- missingRanks.minimumOption
       end   <- missingRanks.maximumOption
@@ -185,13 +189,11 @@ object CachingDagStorage {
     /** Updates [[ranksRanges]] when a message is evicted from cache.
       * Otherwise [[CachingDagStorage]] would think that the message is cached even after its eviction. */
     def createMessageRemovalListener(
-        ranksRanges: MutableSet[Rank]
+        ranksRanges: TrieMap[Rank, Unit]
     ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
       Option(n.getValue)
         .foreach { m =>
-          synchronized {
-            ranksRanges -= m.rank
-          }
+          ranksRanges -= m.rank
         }
     }
 
@@ -208,7 +210,7 @@ object CachingDagStorage {
       }
 
     for {
-      ranksRanges        <- Sync[F].delay(MutableSet.empty[Rank])
+      ranksRanges        <- Sync[F].delay(TrieMap.empty[Rank, Unit])
       semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
       justificationCache <- createBlockHashesSetCache
