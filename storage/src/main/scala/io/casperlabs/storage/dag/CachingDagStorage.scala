@@ -28,7 +28,7 @@ class CachingDagStorage[F[_]: Concurrent](
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
     // Should contain only disjoint ranges, represents rank ranges of cached neighbours
-    private[dag] val ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]],
+    private[dag] var ranksRanges: MutableSortedSet[NumericRange.Inclusive[Long]],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
@@ -36,7 +36,7 @@ class CachingDagStorage[F[_]: Concurrent](
 
   /** Unsafe to be invoked concurrently */
   private def unsafeUpdateRanges(newRange: NumericRange.Inclusive[Long]): F[Unit] =
-    Sync[F].delay(ranksRanges |+| MutableSortedSet(newRange))
+    Sync[F].delay(ranksRanges = ranksRanges |+| MutableSortedSet(newRange))
 
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
     Sync[F].delay(fromCache) flatMap {
