@@ -1372,4 +1372,36 @@ mod tests {
             Weight::new(255u8)
         );
     }
+
+    #[test]
+    fn overflowing_should_allow_removal() {
+        let associated_keys = {
+            // Identity
+            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+
+            // Spare key
+            res.add_key(PublicKey::new([2u8; 32]), Weight::new(2))
+                .expect("should add key 1");
+            // Big key
+            res.add_key(PublicKey::new([3u8; 32]), Weight::new(255))
+                .expect("should add key 2");
+
+            res
+        };
+
+        let mut account = Account::new(
+            [0u8; 32],
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            // deploy: 33 (3*11)
+            ActionThresholds::new(Weight::new(1), Weight::new(254))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        account
+            .remove_associated_key(PublicKey::new([2u8; 32]))
+            .expect("should work")
+    }
 }
