@@ -3,7 +3,6 @@ package io.casperlabs.comm.discovery
 import scala.collection.mutable
 import scala.concurrent.duration._
 import cats._
-import cats.syntax._
 import cats.implicits._
 import cats.effect.implicits._
 import cats.effect._
@@ -16,14 +15,17 @@ import io.casperlabs.comm.discovery.NodeDiscoveryImpl.Millis
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import java.util.concurrent.TimeUnit
+
+import com.google.protobuf.ByteString
 import monix.eval.{TaskLift, TaskLike}
 import monix.execution.Scheduler
+
 import scala.util.Random
 
 object NodeDiscoveryImpl {
   type Millis = Long
 
-  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: Timer: Parallel](
+  def create[F[_]: Concurrent: Log: Metrics: TaskLike: TaskLift: NodeAsk: BootstrapsAsk: Timer: Parallel](
       id: NodeIdentifier,
       port: Int,
       timeout: FiniteDuration,
@@ -39,8 +41,6 @@ object NodeDiscoveryImpl {
       alivePeersCacheUpdatePeriod: FiniteDuration = 15.seconds,
       /* Batches pinged in parallel */
       alivePeersCachePingsBatchSize: Int = 10
-  )(
-      init: List[Node]
   ): Resource[F, NodeDiscovery[F]] = {
 
     def makeKademliaRpc: Resource[F, GrpcKademliaService[F]] =
@@ -77,6 +77,7 @@ object NodeDiscoveryImpl {
     ): Resource[F, NodeDiscoveryImpl[F]] =
       Resource.liftF(for {
         table              <- PeerTable[F](id)
+        chainId            <- NodeAsk[F].ask.map(_.chainId)
         recentlyAlivePeers <- Ref.of[F, (Set[Node], Millis)]((Set.empty, 0L))
         temporaryBans      <- NodeCache(alivePeersCacheExpirationPeriod)
         nodeDiscovery <- Sync[F].delay {
@@ -88,6 +89,7 @@ object NodeDiscoveryImpl {
                             }
                           new NodeDiscoveryImpl[F](
                             id = id,
+                            chainId = chainId,
                             table = table,
                             recentlyAlivePeersRef = recentlyAlivePeers,
                             temporaryBans = temporaryBans,
@@ -98,7 +100,8 @@ object NodeDiscoveryImpl {
                             alivePeersCachePingsBatchSize = alivePeersCachePingsBatchSize
                           )
                         }
-        _ <- init.traverse(nodeDiscovery.addNode)
+        init <- BootstrapsAsk[F].ask
+        _    <- init.traverse(nodeDiscovery.addNode)
       } yield nodeDiscovery)
 
     def scheduleRecentlyAlivePeersCacheUpdate(implicit N: NodeDiscoveryImpl[F]): Resource[F, Unit] =
@@ -154,8 +157,9 @@ object NodeDiscoveryImpl {
 
 }
 
-private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: KademliaService: Parallel](
+private[discovery] class NodeDiscoveryImpl[F[_]: MonadThrowable: Log: Timer: Metrics: KademliaService: Parallel](
     id: NodeIdentifier,
+    chainId: ByteString,
     val table: PeerTable[F],
     recentlyAlivePeersRef: Ref[F, (Set[Node], Millis)],
     temporaryBans: NodeDiscoveryImpl.NodeCache[F],
@@ -184,11 +188,20 @@ private[discovery] class NodeDiscoveryImpl[F[_]: Monad: Log: Timer: Metrics: Kad
       _     <- Metrics[F].setGauge("peers_all_known", peers.length.toLong)
     } yield ()
 
+  private def verifyChain(peer: Node, handlerName: String): F[Unit] =
+    (Metrics[F].incrementCounter(s"handle.$handlerName.wrong_chain") >>
+      MonadThrowable[F].raiseError[Unit](
+        new IllegalArgumentException(
+          s"Wrong chain id, expected: $chainId, received: ${peer.chainId}"
+        )
+      )).whenA(peer.chainId != chainId)
+
   private def pingHandler(peer: Node): F[Unit] =
-    addNode(peer) *> Metrics[F].incrementCounter("handle.ping")
+    verifyChain(peer, "ping") >> addNode(peer) >> Metrics[F].incrementCounter("handle.ping")
 
   private def lookupHandler(peer: Node, id: NodeIdentifier): F[Seq[Node]] =
     for {
+      _     <- verifyChain(peer, "lookup")
       peers <- table.lookup(id)
       _     <- Metrics[F].incrementCounter("handle.lookup")
       _     <- addNode(peer)

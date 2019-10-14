@@ -1,0 +1,16 @@
+[package]
+name = "system-contracts-access"
+version = "0.1.0"
+authors = ["Michał Papierski <michal@papierski.net>"]
+edition = "2018"
+
+[lib]
+name = "system_contracts_access"
+crate-type = ["cdylib"]
+
+[features]
+default = []
+std = ["contract-ffi/std" ]
+
+[dependencies]
+contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

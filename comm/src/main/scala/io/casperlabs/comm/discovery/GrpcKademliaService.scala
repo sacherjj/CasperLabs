@@ -6,6 +6,7 @@ import cats.implicits._
 import io.casperlabs.catscontrib.TaskContrib.ConcurrentOps
 import io.casperlabs.catscontrib.ski._
 import io.casperlabs.comm.CachedConnections.ConnectionsCache
+import io.casperlabs.comm.ServiceError.Unauthenticated
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.KademliaGrpcMonix.KademliaServiceStub
 import io.casperlabs.comm.discovery.NodeUtils._
@@ -143,11 +144,22 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
       val id = NodeIdentifier(lookup.id)
       TaskLike[F].apply(
         lookupHandler(lookup.sender.get, id)
+          .adaptError {
+            case e: IllegalArgumentException if e.getMessage.contains("Wrong chain id") =>
+              Unauthenticated(e.getMessage)
+          }
           .map(peers => LookupResponse().withNodes(peers))
       )
     }
 
     def ping(ping: PingRequest): Task[PingResponse] =
-      TaskLike[F].apply(pingHandler(ping.sender.get).as(PingResponse()))
+      TaskLike[F].apply(
+        pingHandler(ping.sender.get)
+          .adaptError {
+            case e: IllegalArgumentException if e.getMessage.contains("Wrong chain id") =>
+              Unauthenticated(e.getMessage)
+          }
+          .as(PingResponse())
+      )
   }
 }

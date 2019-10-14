@@ -25,7 +25,7 @@ pub extern "C" fn counter_ext() {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(Error::Read)
                 .unwrap_or_revert_with(Error::ValueNotFound);
-            runtime::ret(&result, &Vec::new());
+            runtime::ret(result, Vec::new());
         }
         _ => panic!("Unknown method name!"),
     }

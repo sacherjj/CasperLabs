@@ -19,14 +19,30 @@ use contract_ffi::value::{Contract, ProtocolVersion, Value};
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_storage::global_state::StateReader;
+use engine_storage::protocol_data::ProtocolData;
 
 use crate::engine_state::execution_effect::ExecutionEffect;
+use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
 use crate::execution::{AddressGenerator, Error};
 use crate::tracking_copy::{AddResult, TrackingCopy};
 use crate::Address;
 
 #[cfg(test)]
 mod tests;
+
+/// Attenuates given URef for a given account context.
+///
+/// System account transfers given URefs into READ_ADD_WRITE access rights,
+/// and any other URef is transformed into READ only URef.
+pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef {
+    if account.pub_key() == SYSTEM_ACCOUNT_ADDR {
+        // If the system account calls this function, it is given READ_ADD_WRITE access.
+        uref.into_read_add_write()
+    } else {
+        // If a user calls this function, they are given READ access.
+        uref.into_read()
+    }
+}
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -51,6 +67,7 @@ pub struct RuntimeContext<'a, R> {
     protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
     phase: Phase,
+    protocol_data: ProtocolData,
 }
 
 impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
@@ -75,6 +92,7 @@ where
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         phase: Phase,
+        protocol_data: ProtocolData,
     ) -> Self {
         RuntimeContext {
             state,
@@ -93,6 +111,7 @@ where
             protocol_version,
             correlation_id,
             phase,
+            protocol_data,
         }
     }
 
@@ -820,5 +839,17 @@ where
             .borrow_mut()
             .write(validated_key, validated_value);
         Ok(())
+    }
+
+    pub fn protocol_data(&self) -> ProtocolData {
+        self.protocol_data
+    }
+
+    /// Attenuates URef for a given account.
+    ///
+    /// If the account is system account, then given URef receives
+    /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
+    pub(crate) fn attenuate_uref(&mut self, uref: URef) -> URef {
+        attenuate_uref_for_account(&self.account(), uref)
     }
 }

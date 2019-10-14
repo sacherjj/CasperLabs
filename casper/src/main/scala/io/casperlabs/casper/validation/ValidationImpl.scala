@@ -320,25 +320,26 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       currentTime  <- Time[F].currentMillis
       timestamp    = b.timestamp
       beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
-      latestParentTimestamp <- b.parentHashes.toList.foldM(0L) {
-                                case (latestTimestamp, parentHash) =>
-                                  ProtoUtil
-                                    .unsafeGetBlockSummary[F](parentHash)
-                                    .map(parent => {
-                                      val timestamp =
-                                        parent.header.fold(latestTimestamp)(_.timestamp)
-                                      math.max(latestTimestamp, timestamp)
-                                    })
-                              }
-      afterLatestParent = timestamp >= latestParentTimestamp
-      _ <- if (beforeFuture && afterLatestParent) {
+      dependencies = b.parentHashes ++ b.getHeader.justifications.map(_.latestBlockHash)
+      latestDependencyTimestamp <- dependencies.distinct.toList.foldM(0L) {
+                                    case (latestTimestamp, blockHash) =>
+                                      ProtoUtil
+                                        .unsafeGetBlockSummary[F](blockHash)
+                                        .map(block => {
+                                          val timestamp =
+                                            block.header.fold(latestTimestamp)(_.timestamp)
+                                          math.max(latestTimestamp, timestamp)
+                                        })
+                                  }
+      afterLatestDependency = timestamp >= latestDependencyTimestamp
+      _ <- if (beforeFuture && afterLatestDependency) {
             Applicative[F].unit
           } else {
             for {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block timestamp $timestamp is not between latest parent block time and current time."
+                      s"block timestamp $timestamp is not between latest justification block time and current time."
                     )
                   )
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidUnslashableBlock)

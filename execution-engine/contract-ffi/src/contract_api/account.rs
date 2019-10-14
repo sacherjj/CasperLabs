@@ -32,9 +32,10 @@ pub fn set_action_threshold(
     let permission_level = permission_level as u32;
     let threshold = threshold.value().into();
     let result = unsafe { ext_ffi::set_action_threshold(permission_level, threshold) };
-    match result {
-        d if d == 0 => Ok(()),
-        d => Err(SetThresholdFailure::try_from(d).expect("invalid result")),
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(SetThresholdFailure::try_from(result).expect("invalid result"))
     }
 }
 
@@ -43,10 +44,10 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
     let result = unsafe { ext_ffi::add_associated_key(public_key_ptr, weight.value().into()) };
-    // Translates FFI
-    match result {
-        d if d == 0 => Ok(()),
-        d => Err(AddKeyFailure::try_from(d).expect("invalid result")),
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(AddKeyFailure::try_from(result).expect("invalid result"))
     }
 }
 
@@ -54,9 +55,10 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
 pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
     let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
-    match result {
-        d if d == 0 => Ok(()),
-        d => Err(RemoveKeyFailure::try_from(d).expect("invalid result")),
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(RemoveKeyFailure::try_from(result).expect("invalid result"))
     }
 }
 
@@ -68,9 +70,9 @@ pub fn update_associated_key(
     let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
     let result = unsafe { ext_ffi::update_associated_key(public_key_ptr, weight.value().into()) };
-    // Translates FFI
-    match result {
-        d if d == 0 => Ok(()),
-        d => Err(UpdateKeyFailure::try_from(d).expect("invalid result")),
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(UpdateKeyFailure::try_from(result).expect("invalid result"))
     }
 }

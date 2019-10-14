@@ -14,7 +14,7 @@ use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
 use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
 use contract_ffi::contract_api::Error as ApiError;
 use contract_ffi::key::Key;
-use contract_ffi::system_contracts::{self, mint};
+use contract_ffi::system_contracts::{self, mint, SystemContract};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
 use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
@@ -22,7 +22,6 @@ use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::execution::Error::URefNotFound;
 use crate::resolvers::create_module_resolver;
 use crate::resolvers::memory_resolver::MemoryResolver;
 use crate::runtime_context::RuntimeContext;
@@ -138,8 +137,13 @@ where
 {
     let (instance, memory) = instance_and_memory(parity_module.clone(), protocol_version)?;
 
-    let access_rights =
-        extract_access_rights_from_keys(named_keys.values().cloned().chain(extra_urefs));
+    let access_rights = {
+        let mut keys: Vec<Key> = named_keys.values().cloned().collect();
+        keys.extend(extra_urefs);
+        keys.push(current_runtime.get_mint_contract_uref().into());
+        keys.push(current_runtime.get_pos_contract_uref().into());
+        extract_access_rights_from_keys(keys)
+    };
 
     let mut runtime = Runtime {
         memory,
@@ -163,6 +167,7 @@ where
             protocol_version,
             current_runtime.context.correlation_id(),
             current_runtime.context.phase(),
+            current_runtime.context.protocol_data(),
         ),
     };
 
@@ -691,26 +696,20 @@ where
         }
     }
 
-    /// looks up the public mint contract key in the caller's `named_keys` map.
-    fn get_mint_contract_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.named_keys_get(MINT_NAME) {
-            Some(key @ Key::URef(_)) => Ok(*key),
-            _ => Err(URefNotFound(String::from(MINT_NAME))),
-        }
+    /// Looks up the public mint contract key in the context's protocol data.
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
+    pub fn get_mint_contract_uref(&mut self) -> URef {
+        let mint = self.context.protocol_data().mint();
+        self.context.attenuate_uref(mint)
     }
 
-    fn get_pos_contract_uref_key(&mut self) -> Result<Key, Error> {
-        match self.context.named_keys_get(POS_NAME) {
-            Some(key @ Key::URef(_)) => Ok(*key),
-            _ => Err(URefNotFound(String::from(POS_NAME))),
-        }
-    }
-
-    fn get_mint_contract_uref(&mut self) -> Result<URef, Error> {
-        let key = self.get_mint_contract_uref_key()?;
-        // unwrap is safe here because get_mint_contract_uref_key checks that the key is a URef
-        let reference = *key.as_uref().unwrap();
-        Ok(reference)
+    /// Looks up the public PoS contract key in the context's protocol data
+    ///
+    /// Returned URef is already attenuated depending on the calling account.
+    pub fn get_pos_contract_uref(&mut self) -> URef {
+        let pos = self.context.protocol_data().proof_of_stake();
+        self.context.attenuate_uref(pos)
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -731,7 +730,7 @@ where
     }
 
     fn create_purse(&mut self) -> Result<PurseId, Error> {
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key = self.get_mint_contract_uref().into();
         self.mint_create(mint_contract_key)
     }
 
@@ -772,8 +771,8 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_uref = self.get_mint_contract_uref()?;
-        let mint_contract_key = Key::URef(mint_contract_uref);
+        let mint_contract_key = self.get_mint_contract_uref().into();
+
         let target_addr = target.value();
         let target_key = Key::Account(target_addr);
 
@@ -791,9 +790,17 @@ where
 
         match self.mint_transfer(mint_contract_key, source, target_purse_id, amount) {
             Ok(_) => {
+                // After merging in EE-704 system contracts lookup internally uses protocol data and
+                // this is used for backwards compatibility with explorer to query mint/pos urefs.
                 let named_keys = vec![
-                    (String::from(MINT_NAME), self.get_mint_contract_uref_key()?),
-                    (String::from(POS_NAME), self.get_pos_contract_uref_key()?),
+                    (
+                        String::from(MINT_NAME),
+                        Key::from(self.get_mint_contract_uref()),
+                    ),
+                    (
+                        String::from(POS_NAME),
+                        Key::from(self.get_pos_contract_uref()),
+                    ),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -821,7 +828,7 @@ where
         target: PurseId,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key = self.get_mint_contract_uref().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target.value());
@@ -899,7 +906,7 @@ where
             deserialize(&bytes).map_err(Error::BytesRepr)?
         };
 
-        let mint_contract_key = Key::URef(self.get_mint_contract_uref()?);
+        let mint_contract_key = self.get_mint_contract_uref().into();
 
         if self
             .mint_transfer(mint_contract_key, source, target, amount)
@@ -912,7 +919,7 @@ where
     }
 
     fn get_balance(&mut self, purse_id: PurseId) -> Result<Option<U512>, Error> {
-        let seed = self.get_mint_contract_uref()?.addr();
+        let seed = self.get_mint_contract_uref().addr();
 
         let key = purse_id.value().addr().to_bytes()?;
 
@@ -956,6 +963,26 @@ where
         {
             Ok(_) => Ok(Ok(())),
             Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
+        }
+    }
+
+    fn get_system_contract(
+        &mut self,
+        system_contract_index: u32,
+        dest_ptr: u32,
+        _dest_size: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let attenuated_uref = match SystemContract::try_from(system_contract_index) {
+            Ok(SystemContract::Mint) => self.get_mint_contract_uref(),
+            Ok(SystemContract::ProofOfStake) => self.get_pos_contract_uref(),
+            Err(error) => return Ok(Err(error)),
+        };
+
+        // Serialize data that will be written the memory under `dest_ptr`
+        let attenuated_uref_bytes = attenuated_uref.to_bytes().map_err(Error::BytesRepr)?;
+        match self.memory.set(dest_ptr, &attenuated_uref_bytes) {
+            Ok(_) => Ok(Ok(())),
+            Err(error) => Err(Error::Interpreter(error).into()),
         }
     }
 }

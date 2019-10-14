@@ -325,6 +325,7 @@ class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
+            command_timeout=30,
         )
         self.add_bootstrap(config)
         # Create accounts.csv of the second node with different bond amounts.

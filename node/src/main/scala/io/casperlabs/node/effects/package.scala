@@ -9,7 +9,6 @@ import cats.mtl._
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
-import io.casperlabs.comm.CachedConnections.ConnectionsCache
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
@@ -21,7 +20,6 @@ import monix.execution._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.io.Source
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
@@ -37,9 +35,10 @@ package object effects {
       gossipingRelaySaturation: Int,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
-  )(init: List[Node])(
+  )(
       implicit
       peerNodeAsk: NodeAsk[Task],
+      bootstrapsAsk: BootstrapsAsk[Task],
       log: Log[Task],
       metrics: Metrics[Task]
   ): Resource[Task, NodeDiscovery[Task]] =
@@ -53,7 +52,7 @@ package object effects {
         ingressScheduler,
         egressScheduler,
         alivePeersCacheExpirationPeriod = alivePeersCacheExpirationPeriod
-      )(init)
+      )
 
   def time(implicit timer: Timer[Task]): Time[Task] =
     new Time[Task] {
@@ -75,6 +74,12 @@ package object effects {
     new DefaultApplicativeAsk[Task, Node] {
       val applicative: Applicative[Task] = Applicative[Task]
       def ask: Task[Node]                = state.get.map(_.local)
+    }
+
+  def bootstrapsAsk(implicit state: MonadState[Task, RPConf]): ApplicativeAsk[Task, List[Node]] =
+    new DefaultApplicativeAsk[Task, List[Node]] {
+      val applicative: Applicative[Task] = Applicative[Task]
+      def ask: Task[List[Node]]          = state.get.map(_.bootstraps)
     }
 
   // https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading

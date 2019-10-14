@@ -26,6 +26,8 @@ class StashingSynchronizerSpec
   import StashingSynchronizerSpec._
   import cats.implicits._
 
+  private implicit val chainId: ByteString = sample(genHash)
+
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
   val requestsGen: Gen[List[(Node, Set[ByteString])]] = for {
