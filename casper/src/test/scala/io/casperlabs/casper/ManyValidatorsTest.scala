@@ -5,7 +5,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
@@ -13,6 +12,7 @@ import io.casperlabs.casper.finality.singlesweep.{
 }
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.storage.BlockMsgWithTransform
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}

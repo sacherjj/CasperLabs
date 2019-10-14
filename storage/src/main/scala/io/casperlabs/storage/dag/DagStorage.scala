@@ -85,7 +85,10 @@ trait DagRepresentation[F[_]] {
   def contains(blockHash: BlockHash): F[Boolean]
 
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
-  def topoSort(startBlockNumber: Long, endBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]]
+  def topoSort(
+      startBlockNumber: Long,
+      endBlockNumber: Long
+  ): fs2.Stream[F, Vector[BlockSummary]]
 
   /** Return block summaries with ranks of blocks in the DAG from a start index to the end. */
   def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]]

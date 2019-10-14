@@ -26,7 +26,7 @@ def assert_pre_state_of_network(network: OneNodeNetwork, stakes: List[int]):
     genesis_block = blocks[0]
     item = list(
         filter(
-            lambda x: x.stake in stakes
+            lambda x: int(x.stake.value) in stakes
             and x.validator_public_key == node0.from_address,
             genesis_block.summary.header.state.bonds,
         )
@@ -55,7 +55,7 @@ def test_bonding(one_node_network_fn):
     public_key = node1.genesis_account.public_key_hex
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount
+            lambda x: int(x.stake.value) == bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )
@@ -90,7 +90,7 @@ def test_double_bonding(one_node_network_fn):
     public_key = node1.genesis_account.public_key_hex
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount + bonding_amount
+            lambda x: int(x.stake.value) == bonding_amount + bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )
@@ -121,7 +121,7 @@ def test_invalid_bonding(one_node_network_fn):
     public_key = node1.genesis_account.public_key_hex
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount
+            lambda x: int(x.stake.value) == bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )
@@ -155,7 +155,7 @@ def test_unbonding(one_node_network_fn):
     block_ds = parse_show_block(block2)
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount
+            lambda x: int(x.stake.value) == bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )
@@ -193,7 +193,7 @@ def test_partial_amount_unbonding(one_node_network_fn):
     block_ds = parse_show_block(block2)
     item = list(
         filter(
-            lambda x: x.stake == bonding_amount - unbond_amount
+            lambda x: int(x.stake.value) == bonding_amount - unbond_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )
@@ -210,7 +210,7 @@ def test_invalid_unbonding(one_node_network_fn):
     def get_bonded_list(node, block):
         return list(
             filter(
-                lambda x: x.stake == bonding_amount
+                lambda x: int(x.stake.value) == bonding_amount
                 and x.validator_public_key == node.genesis_account.public_key_hex,
                 block.summary.header.state.bonds,
             )

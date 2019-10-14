@@ -5,7 +5,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.Message
+import io.casperlabs.models.{Message, Weight}, Weight.Zero
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -46,8 +46,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[Message]],
-      weightMap: Map[Validator, Long],
-      q: Long,
+      weightMap: Map[Validator, Weight],
+      q: Weight,
       k: Int = 1
   ): F[Option[Committee]] =
     for {
@@ -88,8 +88,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[Message]],
-      weightMap: Map[Validator, Long],
-      q: Long,
+      weightMap: Map[Validator, Weight],
+      q: Weight,
       k: Int = 1,
       qBestCommittee: Option[Committee] = None
   ): F[Option[Committee]] =
@@ -122,9 +122,9 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       dag: DagRepresentation[F],
       committeeApproximation: Set[Validator],
       levelZeroMsgs: Map[Validator, List[Message]],
-      q: Long,
+      q: Weight,
       k: Int,
-      weightMap: Map[Validator, Long]
+      weightMap: Map[Validator, Weight]
   ): F[(Map[BlockHash, BlockScoreAccumulator], Map[Validator, Int])] = {
     val lowestLevelZeroMsgs = committeeApproximation
       .flatMap(v => levelZeroMsgs(v).lastOption)
@@ -148,8 +148,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
     val blockLevelTags =
       lowestLevelZeroMsgs.map(b => b.messageHash -> BlockScoreAccumulator.empty(b)).toMap
 
-    val effectiveWeight: Validator => Long = (vid: Validator) =>
-      if (committeeApproximation.contains(vid)) weightMap(vid) else 0L
+    val effectiveWeight: Validator => Weight = (vid: Validator) =>
+      if (committeeApproximation.contains(vid)) weightMap(vid) else Zero
 
     stream
       .foldLeftF((blockLevelTags, Map.empty[Validator, Int])) {
@@ -202,7 +202,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   def findBestCommittee(
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
+      weights: Map[Validator, Weight]
   ): F[Option[Committee]] =
     for {
       committeeApproximationOpt <- committeeApproximation(
@@ -243,8 +243,8 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   private def committeeApproximation(
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
-  ): F[Option[(List[Validator], Long)]] =
+      weights: Map[Validator, Weight]
+  ): F[Option[(List[Validator], Weight)]] =
     for {
       committee              <- getAgreeingValidators(dag, candidateBlockHash, weights)
       totalWeight            = weights.values.sum
@@ -267,7 +267,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   private def getAgreeingValidators(
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash,
-      weights: Map[Validator, Long]
+      weights: Map[Validator, Weight]
   ): F[List[Validator]] =
     weights.keys.toList.filterA { validator =>
       for {
@@ -297,7 +297,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
 case class BlockScoreAccumulator(
     msg: Message,
     highestLevelBySeenBlocks: Map[Validator, Int],
-    estimateQ: Long,
+    estimateQ: Weight,
     blockLevel: Int,
     highestLevelSoFar: Int = 0
 )
@@ -342,9 +342,9 @@ object BlockScoreAccumulator {
 
   def updateOwnLevel(
       self: BlockScoreAccumulator,
-      q: Long,
+      q: Weight,
       k: Int,
-      effectiveWeight: Validator => Long
+      effectiveWeight: Validator => Weight
   ): BlockScoreAccumulator =
     calculateLevelAndQ(self, math.min(self.highestLevelSoFar + 1, k), q, effectiveWeight)
       .map {
@@ -367,18 +367,18 @@ object BlockScoreAccumulator {
   private def calculateLevelAndQ(
       self: BlockScoreAccumulator,
       k: Int,
-      q: Long,
-      effectiveWeight: Validator => Long
-  ): Option[(Int, Long)] =
+      q: Weight,
+      effectiveWeight: Validator => Weight
+  ): Option[(Int, Weight)] =
     if (k == 0) {
       None
     } else {
-      val totalWeightOfSupporters: Long = (self.highestLevelBySeenBlocks map {
+      val totalWeightOfSupporters: Weight = (self.highestLevelBySeenBlocks map {
         case (vid, level) =>
           if (level >= k - 1)
             effectiveWeight(vid)
           else
-            0L
+            Zero
       }).sum
       if (totalWeightOfSupporters >= q) {
         Some((k, totalWeightOfSupporters))

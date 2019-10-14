@@ -12,6 +12,7 @@ import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
+import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Log}
@@ -48,7 +49,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
       val validatorsMap =
         accounts.collect {
           case (key, _, bond) if bond > 0 =>
-            (Keys.PublicKey(java.util.Base64.getDecoder.decode(key)), bond.toLong)
+            (Keys.PublicKey(java.util.Base64.getDecoder.decode(key)), Weight(bond))
         }.toMap
 
       implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](validatorsMap)

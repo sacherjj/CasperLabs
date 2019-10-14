@@ -8,6 +8,7 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
@@ -149,7 +150,8 @@ class SynchronizerSpec
         }
         val target    = dag.last.blockHash
         val ancestors = collectAncestors(Set(target), target)
-        val bonds     = dag.map(_.validatorPublicKey).distinct.map(Bond(_, 1))
+        val bonds =
+          dag.map(_.validatorPublicKey).distinct.map(Bond(_).withStake(state.BigInt("1", 512)))
         val subdag = dag.filter(x => ancestors(x.blockHash)).map { summary =>
           summary
             .withHeader(summary.getHeader.withState(summary.state.withBonds(bonds)))
