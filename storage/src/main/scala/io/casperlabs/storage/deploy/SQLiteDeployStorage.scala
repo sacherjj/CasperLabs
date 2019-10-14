@@ -165,7 +165,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
   override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit] =
     setStatus(hashesAndReasons.map {
-      case (h, r) => (h, r.some)
+      case (h, r) =>
+        (h, r.some)
     }, DiscardedStatusCode, PendingStatusCode)
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {

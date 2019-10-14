@@ -124,7 +124,7 @@ trait DeployStorageSpec
     }
 
     "getBufferedStatus" should {
-      "return return the status from the buffer" in forAll { (deploy: Deploy) =>
+      "return the status from the buffer" in forAll { (deploy: Deploy) =>
         testFixture { (reader, writer) =>
           def checkSome(state: DeployInfo.State, msg: String = "") =
             reader.getBufferedStatus(deploy.deployHash) map {
