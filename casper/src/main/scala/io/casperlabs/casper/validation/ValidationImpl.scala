@@ -319,18 +319,18 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       timestamp    = b.timestamp
       beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
       dependencies = b.parentHashes ++ b.getHeader.justifications.map(_.latestBlockHash)
-      latestJustificationTimestamp <- dependencies.distinct.toList.foldM(0L) {
-                                       case (latestTimestamp, blockHash) =>
-                                         ProtoUtil
-                                           .unsafeGetBlockSummary[F](blockHash)
-                                           .map(block => {
-                                             val timestamp =
-                                               block.header.fold(latestTimestamp)(_.timestamp)
-                                             math.max(latestTimestamp, timestamp)
-                                           })
-                                     }
-      afterLatestJustification = timestamp >= latestJustificationTimestamp
-      _ <- if (beforeFuture && afterLatestJustification) {
+      latestDependencyTimestamp <- dependencies.distinct.toList.foldM(0L) {
+                                    case (latestTimestamp, blockHash) =>
+                                      ProtoUtil
+                                        .unsafeGetBlockSummary[F](blockHash)
+                                        .map(block => {
+                                          val timestamp =
+                                            block.header.fold(latestTimestamp)(_.timestamp)
+                                          math.max(latestTimestamp, timestamp)
+                                        })
+                                  }
+      afterLatestDependency = timestamp >= latestDependencyTimestamp
+      _ <- if (beforeFuture && afterLatestDependency) {
             Applicative[F].unit
           } else {
             for {
