@@ -10,8 +10,8 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.{BlockInfo, BlockStatus => InfoBlockStatus}
-import io.casperlabs.casper.consensus.info.BlockStatus.Stats
+import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -167,7 +167,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         expectBlockInfo = BlockInfo()
           .withSummary(summary)
           .withStatus(
-            InfoBlockStatus()
+            BlockInfo
+              .Status()
               .withStats(
                 Stats(block.serializedSize, block.getBody.deploys.count(_.isError))
               )

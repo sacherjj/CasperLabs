@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -349,9 +350,6 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       })
 
   override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] = {
-    val getDeploy =
-      sql"SELECT data FROM deploys WHERE hash=$deployHash".query[Deploy].option.transact(xa)
-
     val processingResults =
       sql"""|SELECT dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count
             |FROM deploy_process_results dpr 
@@ -361,15 +359,26 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         .to[List]
         .transact(xa)
 
-    for {
-      deploy <- getDeploy
-      deployInfo <- deploy match {
-                     case None =>
-                       none[DeployInfo].pure[F]
-                     case Some(d) =>
-                       processingResults.map(p => DeployInfo(d.some, p).some)
-                   }
-    } yield deployInfo
+    getByHash(deployHash) flatMap {
+      case None =>
+        none[DeployInfo].pure[F]
+      case Some(deploy) =>
+        for {
+          maybeStatus <- getBufferedStatus(deployHash)
+          prs         <- processingResults
+          info = if (prs.nonEmpty) {
+            DeployInfo()
+              .withDeploy(deploy)
+              .withStatus(
+                maybeStatus getOrElse DeployInfo
+                  .Status(DeployInfo.State.FINALIZED)
+              )
+              .withProcessingResults(prs)
+          } else {
+            DeployInfo(status = maybeStatus).withDeploy(deploy)
+          }
+        } yield info.some
+    }
   }
 
   override def clear(): F[Unit] =

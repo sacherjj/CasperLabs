@@ -4,8 +4,7 @@ import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.info.{BlockInfo, BlockStatus}
-import io.casperlabs.casper.consensus.info.BlockStatus.Stats
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.ipc.TransformEntry
 
@@ -38,12 +37,14 @@ trait DoobieCodecs {
     Read[(Long, Option[String], Array[Byte], Int, Int)].map {
       case (cost, maybeError, blockSummaryData, blockSize, deployErrorCount) =>
         val blockSummary = BlockSummary.parseFrom(blockSummaryData)
-        val blockStatus = BlockStatus().withStats(
-          BlockStatus
-            .Stats()
-            .withBlockSizeBytes(blockSize)
-            .withDeployErrorCount(deployErrorCount)
-        )
+        val blockStatus = BlockInfo
+          .Status()
+          .withStats(
+            BlockInfo.Status
+              .Stats()
+              .withBlockSizeBytes(blockSize)
+              .withDeployErrorCount(deployErrorCount)
+          )
         val blockInfo = BlockInfo()
           .withSummary(blockSummary)
           .withStatus(blockStatus)
