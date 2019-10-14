@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
@@ -89,11 +90,17 @@ object SQLiteStorage {
 
       override def sizePendingOrProcessed(): F[Long] = deployStorage.sizePendingOrProcessed()
 
-      override def getByHashes(l: Set[ByteString]): Stream[F, Deploy] = deployStorage.getByHashes(l)
+      override def getByHash(hash: ByteString): F[Option[Deploy]] = deployStorage.getByHash(hash)
+
+      override def getByHashes(hashes: Set[ByteString]): Stream[F, Deploy] =
+        deployStorage.getByHashes(hashes)
 
       override def getProcessingResults(
           hash: ByteString
       ): F[List[(BlockHash, Block.ProcessedDeploy)]] = deployStorage.getProcessingResults(hash)
+
+      override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+        deployStorage.getBufferedStatus(hash)
 
       override def getRepresentation: F[DagRepresentation[F]] = dagStorage.getRepresentation
 
