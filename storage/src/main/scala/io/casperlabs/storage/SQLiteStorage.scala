@@ -5,13 +5,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
-import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
 import fs2._
 
@@ -178,5 +179,13 @@ object SQLiteStorage {
 
       override def latestMessages: F[Map[Validator, Message]] =
         dagStorage.latestMessages
+
+      override def getDeploysByAccount(
+          account: Validator,
+          limit: Int,
+          lastTimeStamp: Long,
+          lastDeployHash: Validator
+      ): F[List[Deploy]] =
+        deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
     }
 }

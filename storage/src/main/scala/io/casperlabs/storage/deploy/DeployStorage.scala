@@ -88,6 +88,14 @@ import scala.concurrent.duration._
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
+
+  /** @return List of deploys created by specified account*/
+  def getDeploysByAccount(
+      account: ByteString,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: ByteString
+  ): F[List[Deploy]]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -159,5 +167,13 @@ object DeployStorage {
     override def clear(): F[Unit] = writer.clear()
 
     override def close(): F[Unit] = writer.close()
+
+    override def getDeploysByAccount(
+        account: BlockHash,
+        limit: Int,
+        lastTimeStamp: Long,
+        lastDeployHash: BlockHash
+    ): F[List[Deploy]] =
+      reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
   }
 }

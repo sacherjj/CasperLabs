@@ -7,8 +7,10 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -320,6 +322,22 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               )
     } yield res
   }
+
+  override def getDeploysByAccount(
+      account: ByteString,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]] =
+    sql"""|SELECT data FROM deploys
+					|WHERE account = $account
+          | AND (create_time_millis < $lastTimeStamp OR
+          |      create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
+          |ORDER BY create_time_millis DESC, hash DESC
+          |LIMIT $limit""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
 
   override def clear(): F[Unit] =
     (for {
