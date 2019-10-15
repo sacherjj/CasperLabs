@@ -128,7 +128,7 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     logging.info(f"Deploy and propose on bonded node.")
     block_hash = node1.d_client.deploy_and_propose(
         from_address=account.public_key_hex,
-        session_contract=Contract.HELLO_NAME_CALL,
+        session_contract=Contract.HELLO_NAME_DEFINE,
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
@@ -158,7 +158,7 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     logging.info(f"Testing unbonded deploy and propose.")
     node1.d_client.deploy(
         from_address=account.public_key_hex,
-        session_contract=Contract.HELLO_NAME_CALL,
+        session_contract=Contract.HELLO_NAME_DEFINE,
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
