@@ -42,7 +42,9 @@ impl From<RemoveKeyFailure> for Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pass: String = runtime::get_arg(Arg::Pass as u32).unwrap().unwrap();
+    let pass: String = runtime::get_arg(Arg::Pass as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     match pass.as_str() {
         "init" => {
             // Deployed with identity key only
@@ -53,7 +55,6 @@ pub extern "C" fn call() {
             account::set_action_threshold(ActionType::KeyManagement, Weight::new(254))
                 .unwrap_or_else(|_| runtime::revert(Error::SetActionThreshold));
         }
-
         "test" => {
             // Deployed with two keys: 1 and 255 (total 256 which overflows to 255) to satify new
             // threshold
