@@ -12,6 +12,7 @@ import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
 import fs2._
@@ -188,7 +189,7 @@ object SQLiteStorage {
         dagStorage.latestMessages
 
       override def getDeploysByAccount(
-          account: ByteString,
+          account: PublicKeyBS,
           limit: Int,
           lastTimeStamp: Long,
           lastDeployHash: DeployHash

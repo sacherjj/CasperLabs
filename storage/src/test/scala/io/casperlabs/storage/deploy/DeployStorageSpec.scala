@@ -11,6 +11,7 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.Arbitrary.arbBool
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration._
@@ -447,7 +448,7 @@ trait DeployStorageSpec
             for {
               _ <- writer.addAsPending(deploys)
               all <- reader.getDeploysByAccount(
-                      accountKey.publicKey,
+                      PublicKey(accountKey.publicKey),
                       limit,
                       lastTimeStamp,
                       lastDeployHash

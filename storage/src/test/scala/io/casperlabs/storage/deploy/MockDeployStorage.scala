@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
@@ -276,7 +277,7 @@ class MockDeployStorage[F[_]: Sync: Log](
   private def now = System.currentTimeMillis()
 
   override def getDeploysByAccount(
-      account: ByteString,
+      account: PublicKeyBS,
       limit: Int,
       lastTimeStamp: Long,
       lastDeployHash: DeployHash
@@ -284,7 +285,7 @@ class MockDeployStorage[F[_]: Sync: Log](
     deploysWithMetadataRef.get.map(
       _.keys
         .filter { d =>
-          if (d.getHeader.accountPublicKey != account) {
+          if (PublicKey(d.getHeader.accountPublicKey) != account) {
             false
           } else {
             val strictEarlier = d.getHeader.timestamp < lastTimeStamp

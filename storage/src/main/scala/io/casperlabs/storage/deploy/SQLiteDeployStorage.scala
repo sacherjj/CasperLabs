@@ -10,6 +10,7 @@ import doobie.implicits._
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -348,7 +349,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       })
 
   override def getDeploysByAccount(
-      account: ByteString,
+      account: PublicKeyBS,
       limit: Int,
       lastTimeStamp: Long,
       lastDeployHash: DeployHash
