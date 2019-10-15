@@ -5,6 +5,8 @@ import java.io.PrintWriter
 import cats.effect.{Resource, Sync}
 import cats.implicits._
 import com.github.ghik.silencer.silent
+import io.casperlabs.casper.consensus, consensus.state
+import com.google.protobuf.ByteString
 
 object BondingUtil {
   @silent("is never used")
@@ -24,6 +26,16 @@ object BondingUtil {
         pw => Sync[F].delay { pw.close() }
       )
     file.use(pw => Sync[F].delay { pw.println(content) })
+  }
+
+  type Bond = consensus.Bond
+
+  object Bond {
+    def apply(validator: ByteString, stake: Int) =
+      consensus.Bond(validator).withStake(state.BigInt(stake.toString, 512))
+
+    def unapply(bond: consensus.Bond) =
+      consensus.Bond.unapply(bond)
   }
 
 }

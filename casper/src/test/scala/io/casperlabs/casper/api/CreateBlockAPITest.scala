@@ -1,21 +1,26 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
-import cats.data.EitherT
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper
+import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper._
-import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
+import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.util._
 import io.casperlabs.catscontrib.TaskContrib._
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -130,6 +135,72 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       node.tearDown()
     }
   }
+
+  "getDeployInfo" should "return DeployInfo for specified deployHash" in {
+    // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+    val v1 = generateValidator("V1")
+
+    implicit val logEff        = new LogStub[Task]
+    implicit val blockStorage  = node.blockStorage
+    implicit val deployStorage = node.deployStorage
+    implicit val safetyOracle  = node.safetyOracleEff
+
+    val deploy = ProtoUtil.basicDeploy(
+      0,
+      ByteString.EMPTY,
+      v1
+    )
+
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
+      for {
+        _          <- BlockAPI.deploy[Task](deploy)
+        blockHash  <- BlockAPI.propose[Task](blockApiLock)
+        deployInfo <- BlockAPI.getDeployInfo[Task](Base16.encode(deploy.deployHash.toByteArray))
+        block <- blockStorage
+                  .get(blockHash)
+                  .map(_.get.blockMessage.get)
+        summary         = BlockSummary(block.blockHash, block.header, block.signature)
+        processedDeploy = block.getBody.deploys.head
+        expectBlockInfo = BlockInfo()
+          .withSummary(summary)
+          .withStatus(
+            BlockInfo
+              .Status()
+              .withStats(
+                Stats(block.serializedSize, block.getBody.deploys.count(_.isError))
+              )
+          )
+        expectProcessingResult = ProcessingResult(
+          blockInfo = expectBlockInfo.some,
+          cost = processedDeploy.cost,
+          isError = processedDeploy.isError,
+          errorMessage = processedDeploy.errorMessage
+        )
+        _ = deployInfo.processingResults.head shouldBe expectProcessingResult
+        _ = deployInfo.deploy shouldBe deploy.some
+        result <- BlockAPI
+                   .getDeployInfo[Task](
+                     Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray)
+                   )
+                   .attempt
+        _ = result.left.get.getMessage should include("Cannot find deploy")
+      } yield ()
+
+    try {
+      (for {
+        casperRef    <- MultiParentCasperRef.of[Task]
+        _            <- casperRef.set(node.casperEff)
+        blockApiLock <- Semaphore[Task](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).unsafeRunSync
+    } finally {
+      node.tearDown()
+    }
+  }
 }
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
@@ -143,7 +214,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   ): F[List[BlockHash]] =
     underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def faultToleranceThreshold      = underlying.faultToleranceThreshold

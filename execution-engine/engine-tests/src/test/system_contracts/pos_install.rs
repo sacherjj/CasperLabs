@@ -16,8 +16,8 @@ const SYSTEM_ADDR: [u8; 32] = [0u8; 32];
 const DEPLOY_HASH_2: [u8; 32] = [2u8; 32];
 const N_VALIDATORS: u8 = 5;
 
-// one named_key for each validator, one for the mint and three for the purses
-const EXPECTED_KNOWN_KEYS_LEN: usize = (N_VALIDATORS as usize) + 1 + 3;
+// one named_key for each validator and three for the purses
+const EXPECTED_KNOWN_KEYS_LEN: usize = (N_VALIDATORS as usize) + 3;
 
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";

@@ -591,17 +591,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 
     let stored_payment_contract_uref = {
         // get pos contract public key
-        let pos_uref = {
-            let account = builder_by_uref
-                .get_account(DEFAULT_ACCOUNT_ADDR)
-                .expect("genesis account should exist");
-            account
-                .named_keys()
-                .get("pos")
-                .and_then(Key::as_uref)
-                .expect("should have pos uref")
-                .to_owned()
-        };
+        let pos_uref = builder_by_uref.get_pos_contract_uref();
 
         // find the contract write transform, then get the uref from its key
         // the pos contract gets re-written when the refund purse uref is removed from

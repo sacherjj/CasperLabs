@@ -21,6 +21,7 @@ from casperlabs_local_net.casperlabs_accounts import (
 from casperlabs_local_net.graphql import GraphQL
 from casperlabs_client import extract_common_name, ABI
 from casperlabs_local_net import grpc_proxy
+from casperlabs_local_net.grpc_proxy import KademliaInterceptor, GossipInterceptor
 
 FIRST_VALIDATOR_ACCOUNT = 100
 
@@ -58,31 +59,45 @@ class DockerNode(LoggingDockerBase):
         self.proxy_server = None
         self.proxy_kademlia = None
         if config.behind_proxy:
-
             # Set up proxy of incoming connections: this node is server, the other one client.
-            server_certificate_path = config.tls_certificate_local_path()
-            server_key_path = config.tls_key_local_path()
-
-            self.proxy_server = grpc_proxy.proxy_server(
-                self,
-                node_port=self.grpc_server_docker_port,
-                node_host=self.node_host,
-                proxy_port=self.server_proxy_port,
-                server_certificate_file=server_certificate_path,
-                server_key_file=server_key_path,
-                client_certificate_file=server_certificate_path,
-                client_key_file=server_key_path,
-            )
-            self.proxy_kademlia = grpc_proxy.proxy_kademlia(
-                self,
-                node_port=self.kademlia_docker_port,
-                node_host=self.node_host,
-                proxy_port=self.kademlia_proxy_port,
-            )
+            self.server_certificate_path = config.tls_certificate_local_path()
+            self.server_key_path = config.tls_key_local_path()
+            self.set_proxy_server()
+            self.set_kademlia_proxy()
         self._client = self.DOCKER_CLIENT
         self.p_client = PythonClient(self)
         self.d_client = DockerClient(self)
         self.join_client_network()
+
+    def set_proxy_server(self, interceptor_class=GossipInterceptor):
+        if not self.config.behind_proxy:
+            raise Exception("You must set up node with proxy first")
+        if self.proxy_server:
+            raise Exception("You must call this method only once")
+        self.proxy_server = grpc_proxy.proxy_server(
+            self,
+            node_port=self.grpc_server_docker_port,
+            node_host=self.node_host,
+            proxy_port=self.server_proxy_port,
+            server_certificate_file=self.server_certificate_path,
+            server_key_file=self.server_key_path,
+            client_certificate_file=self.server_certificate_path,
+            client_key_file=self.server_key_path,
+            interceptor_class=interceptor_class,
+        )
+
+    def set_kademlia_proxy(self, interceptor_class=KademliaInterceptor):
+        if not self.config.behind_proxy:
+            raise Exception("You must set up node with proxy first")
+        if self.proxy_kademlia:
+            raise Exception("You must call this method only once")
+        self.proxy_kademlia = grpc_proxy.proxy_kademlia(
+            self,
+            node_port=self.kademlia_docker_port,
+            node_host=self.node_host,
+            proxy_port=self.kademlia_proxy_port,
+            interceptor_class=interceptor_class,
+        )
 
     @property
     def node_host(self):

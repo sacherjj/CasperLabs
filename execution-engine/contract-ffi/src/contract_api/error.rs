@@ -109,6 +109,8 @@ pub enum Error {
     PermissionDeniedError,
     /// New threshold should be lower or equal than total weight of associated keys.
     InsufficientTotalWeight,
+    /// Returns when contract tries to obtain URef to a system contract that does not exist.
+    InvalidSystemContract,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -223,6 +225,7 @@ impl From<Error> for u32 {
             Error::DeploymentThresholdError => 28,
             Error::PermissionDeniedError => 29,
             Error::InsufficientTotalWeight => 30,
+            Error::InvalidSystemContract => 31,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -265,6 +268,7 @@ impl Debug for Error {
             Error::DeploymentThresholdError => write!(f, "Error::DeploymentThresholdError")?,
             Error::PermissionDeniedError => write!(f, "Error::PermissionDeniedError")?,
             Error::InsufficientTotalWeight => write!(f, "Error::InsufficientTotalWeight")?,
+            Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -313,6 +317,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         28 => Err(Error::DeploymentThresholdError),
         29 => Err(Error::PermissionDeniedError),
         30 => Err(Error::InsufficientTotalWeight),
+        31 => Err(Error::InvalidSystemContract),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -398,6 +403,7 @@ mod tests {
         round_trip(Err(Error::DeploymentThresholdError));
         round_trip(Err(Error::PermissionDeniedError));
         round_trip(Err(Error::InsufficientTotalWeight));
+        round_trip(Err(Error::InvalidSystemContract));
         round_trip(Err(Error::Mint(0)));
         round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));
