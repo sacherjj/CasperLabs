@@ -321,8 +321,8 @@ pub fn result_from(value: i32) -> Result<(), Error> {
             } else if value >= POS_ERROR_OFFSET as i32 {
                 Err(Error::ProofOfStake(value as u8))
             } else {
-                // TODO: this is not unreachable
-                unreachable!()
+                // TODO: rethink this
+                panic!("unhandled value: {}", value)
             }
         }
     }
@@ -389,6 +389,17 @@ mod tests {
         round_trip(Err(Error::FormattingError));
         round_trip(Err(Error::LeftOverBytes));
         round_trip(Err(Error::OutOfMemoryError));
+        round_trip(Err(Error::MaxKeysLimit));
+        round_trip(Err(Error::DuplicateKey));
+        round_trip(Err(Error::PermissionDenied));
+        round_trip(Err(Error::MissingKey));
+        round_trip(Err(Error::ThresholdViolation));
+        round_trip(Err(Error::KeyManagmentThresholdError));
+        round_trip(Err(Error::DeploymentThresholdError));
+        round_trip(Err(Error::PermissionDeniedError));
+        round_trip(Err(Error::InsufficientTotalWeight));
+        round_trip(Err(Error::Mint(0)));
+        round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));
         round_trip(Err(Error::ProofOfStake(u8::MAX)));
         round_trip(Err(Error::User(0)));
