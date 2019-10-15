@@ -3,6 +3,7 @@ package io.casperlabs.storage.deploy
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.ArbitraryConsensus
 import monix.eval.Task
@@ -96,24 +97,55 @@ trait DeployStorageSpec
               _ <- add2.attempt.foreachL(_ shouldBe an[Right[_, _]])
               _ <- read
                     .foreachL(
-                      _.sortedByHash should contain theSameElementsAs List(d1, d2).sortedByHash
+                      _ should contain theSameElementsAs List(d1, d2)
                     )
             } yield ()
           }
       )
     }
 
-    "addAsPending + addAsProcessed + getByHashes" should {
+    "addAsPending + addAsProcessed + (getByHashes | getByHash)" should {
       "return the same list of deploys" in forAll(deploysGen()) { deploys =>
         testFixture { (reader, writer) =>
           val idx                  = scala.util.Random.nextInt(deploys.size)
           val (pending, processed) = deploys.splitAt(idx)
           val deployHashes         = deploys.map(_.deployHash)
           for {
-            _   <- writer.addAsPending(pending)
-            _   <- writer.addAsProcessed(processed)
-            all <- reader.getByHashes(deployHashes.toSet).compile.toList
-            _   = assert(deploys.sortedByHash == all.sortedByHash)
+            _    <- writer.addAsPending(pending)
+            _    <- writer.addAsProcessed(processed)
+            all1 <- reader.getByHashes(deployHashes.toSet).compile.toList
+            all2 <- deployHashes.toList.traverse(reader.getByHash).map(_.flatten)
+            _    = all1 should contain theSameElementsAs deploys
+            _    = all2 should contain theSameElementsAs deploys
+          } yield ()
+
+        }
+      }
+    }
+
+    "getBufferedStatus" should {
+      "return the status from the buffer" in forAll { (deploy: Deploy) =>
+        testFixture { (reader, writer) =>
+          def checkSome(state: DeployInfo.State, msg: String = "") =
+            reader.getBufferedStatus(deploy.deployHash) map {
+              _ shouldBe Some(DeployInfo.Status(state, msg))
+            }
+          def checkNone() =
+            reader.getBufferedStatus(deploy.deployHash) map {
+              _ shouldBe None
+            }
+
+          for {
+            _ <- checkNone()
+            _ <- writer.addAsPending(List(deploy))
+            _ <- checkSome(DeployInfo.State.PENDING)
+            _ <- writer.markAsProcessedByHashes(List(deploy.deployHash))
+            _ <- checkSome(DeployInfo.State.PROCESSED)
+            _ <- writer.markAsFinalizedByHashes(List(deploy.deployHash))
+            _ <- checkNone()
+            _ <- writer.addAsPending(List(deploy))
+            _ <- writer.markAsDiscardedByHashes(List(deploy.deployHash -> "Testing"))
+            _ <- checkSome(DeployInfo.State.DISCARDED, "Testing")
           } yield ()
 
         }

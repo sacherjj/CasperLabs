@@ -3,10 +3,9 @@ package io.casperlabs.node
 import java.nio.file.Path
 
 import cats._
-import cats.data._
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.mtl.FunctorRaise
+import cats.mtl.{FunctorRaise, MonadState}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -16,22 +15,23 @@ import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
 }
+import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits.{syncId, taskLiftEitherT}
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery.NodeDiscovery._
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.grpc.SslContexts
-import io.casperlabs.comm.rp.Connect.RPConfState
 import io.casperlabs.comm.rp._
+import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
@@ -48,12 +48,12 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.flywaydb.core.Flyway
 import org.flywaydb.core.api.Location
-import com.github.ghik.silencer.silent
+
 import scala.concurrent.duration._
 
-@silent("is never used")
 class NodeRuntime private[node] (
     conf: Configuration,
+    chainSpec: ChainSpec,
     id: NodeIdentifier,
     mainScheduler: Scheduler
 )(
@@ -96,12 +96,6 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    val rpConfState = (for {
-      local      <- localPeerNode[Task]
-      bootstraps <- initPeers[Task]
-      conf       <- rpConf[Task](local, bootstraps)
-    } yield conf)
-
     implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
     implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
@@ -112,156 +106,166 @@ class NodeRuntime private[node] (
       Option(SslContexts.forServer(cert, key, ClientAuth.NONE))
     } else None
 
-    rpConfState >>= (_.runState { implicit state =>
-      implicit val metrics     = diagnostics.effects.metrics[Task]
-      implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
-      implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
-      implicit val nodeAsk     = effects.peerNodeAsk(state)
+    implicit val metrics     = diagnostics.effects.metrics[Task]
+    implicit val nodeMetrics = diagnostics.effects.nodeCoreMetrics[Task]
+    implicit val jvmMetrics  = diagnostics.effects.jvmMetrics[Task]
 
-      val resources = for {
-        implicit0(executionEngineService: ExecutionEngineService[Task]) <- GrpcExecutionEngineService[
-                                                                            Task
-                                                                          ](
-                                                                            conf.grpc.socket,
-                                                                            conf.server.maxMessageSize
-                                                                          )
-        //TODO: We may want to adjust threading model for better performance
-        implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
-                                                          connectEC = dbConnScheduler,
-                                                          transactEC = dbIOScheduler,
-                                                          conf.server.dataDir
-                                                        )
-        deployStorageChunkSize = 20 //TODO: Move to config
-
-        _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
-
-        implicit0(
-          storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
-        ) <- Resource.liftF(
-              SQLiteStorage.create[Task](
-                deployStorageChunkSize = deployStorageChunkSize,
-                wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
-                  CachingBlockStorage[Task](
-                    underlyingBlockStorage,
-                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
-                  ),
-                wrapDagStorage =
-                  (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
-                    CachingDagStorage[Task](
-                      underlyingDagStorage,
-                      maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
-                    ).map(
-                      cache =>
-                        // Compiler fails to infer the proper type without this
-                        cache: DagStorage[Task] with DagRepresentation[Task]
-                    )
-              )
-            )
-
-        _ <- Resource.liftF {
-              Task
-                .delay {
-                  log.info("Cleaning storage ...")
-                  storage.clear()
-                }
-                .whenA(conf.server.cleanBlockStorage)
-
-            }
-
-        bootstraps <- Resource.liftF(initPeers[Task])
-
-        implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
-                                                                          FinalizedBlocksStream
-                                                                            .of[Task]
+    val resources = for {
+      implicit0(executionEngineService: ExecutionEngineService[Task]) <- GrpcExecutionEngineService[
+                                                                          Task
+                                                                        ](
+                                                                          conf.grpc.socket,
+                                                                          conf.server.maxMessageSize
                                                                         )
+      //TODO: We may want to adjust threading model for better performance
+      implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
+                                                        connectEC = dbConnScheduler,
+                                                        transactEC = dbIOScheduler,
+                                                        conf.server.dataDir
+                                                      )
+      deployStorageChunkSize = 20 //TODO: Move to config
 
-        implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
-                                                          id,
-                                                          kademliaPort,
-                                                          conf.server.defaultTimeout,
-                                                          conf.server.alivePeersCacheExpirationPeriod,
-                                                          conf.server.relayFactor,
-                                                          conf.server.relaySaturation,
-                                                          ingressScheduler,
-                                                          egressScheduler
-                                                        )(
-                                                          bootstraps
-                                                        )(
-                                                          effects.peerNodeAsk,
-                                                          log,
-                                                          metrics
-                                                        )
+      _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
-        implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
-          .raiseValidateErrorThroughApplicativeError[Task]
-        implicit0(validationEff: Validation[Task]) = new ValidationImpl[Task]
+      implicit0(
+        storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
+      ) <- Resource.liftF(
+            SQLiteStorage.create[Task](
+              deployStorageChunkSize = deployStorageChunkSize,
+              wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
+                CachingBlockStorage[Task](
+                  underlyingBlockStorage,
+                  maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes
+                ),
+              wrapDagStorage =
+                (underlyingDagStorage: DagStorage[Task] with DagRepresentation[Task]) =>
+                  CachingDagStorage[Task](
+                    underlyingDagStorage,
+                    maxSizeBytes = conf.blockstorage.cacheMaxSizeBytes,
+                    neighborhoodAfter = conf.blockstorage.cacheNeighborhoodAfter,
+                    neighborhoodBefore = conf.blockstorage.cacheNeighborhoodBefore
+                  ).map(
+                    cache =>
+                      // Compiler fails to infer the proper type without this
+                      cache: DagStorage[Task] with DagRepresentation[Task]
+                  )
+            )
+          )
 
-        // TODO: Only a loop started with the TransportLayer keeps filling this up,
-        // so if we use the GossipService it's going to stay empty. The diagnostics
-        // should use NodeDiscovery instead.
-        implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
-                                                                      effects.rpConnections
-                                                                    )
+      _ <- Resource.liftF {
+            Task
+              .delay {
+                log.info("Cleaning storage ...")
+                storage.clear()
+              }
+              .whenA(conf.server.cleanBlockStorage)
+          }
 
-        implicit0(multiParentCasperRef: MultiParentCasperRef[Task]) <- Resource.liftF(
-                                                                        MultiParentCasperRef
+      genesis <- makeGenesis[Task](chainSpec)
+
+      implicit0(state: MonadState[Task, RPConf]) <- Resource
+                                                     .liftF((for {
+                                                       local      <- localPeerNode[Task]()
+                                                       bootstraps <- initPeers[Task]
+                                                       conf <- rpConf[Task](
+                                                                local
+                                                                  .withChainId(genesis.blockHash),
+                                                                bootstraps.map(
+                                                                  _.withChainId(genesis.blockHash)
+                                                                )
+                                                              )
+                                                     } yield conf.stateInstance))
+      implicit0(nodeAsk: NodeAsk[Task])            = effects.peerNodeAsk(state)
+      implicit0(boostrapsAsk: BootstrapsAsk[Task]) = effects.bootstrapsAsk(state)
+
+      implicit0(finalizedBlocksStream: FinalizedBlocksStream[Task]) <- Resource.liftF(
+                                                                        FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
 
-        implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-          Task
-        ]()
+      implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
+                                                        id,
+                                                        kademliaPort,
+                                                        conf.server.defaultTimeout,
+                                                        conf.server.alivePeersCacheExpirationPeriod,
+                                                        conf.server.relayFactor,
+                                                        conf.server.relaySaturation,
+                                                        ingressScheduler,
+                                                        egressScheduler
+                                                      )
 
-        blockApiLock <- Resource.liftF(Semaphore[Task](1))
+      implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
+        .raiseValidateErrorThroughApplicativeError[Task]
+      implicit0(validationEff: Validation[Task]) = new ValidationImpl[Task]
 
-        // For now just either starting the auto-proposer or not, but ostensibly we
-        // could pass it the flag to run or not and also wire it into the ControlService
-        // so that the operator can turn it on/off on the fly.
-        _ <- AutoProposer[Task](
-              checkInterval = conf.casper.autoProposeCheckInterval,
-              accInterval = conf.casper.autoProposeAccInterval,
-              accCount = conf.casper.autoProposeAccCount,
-              blockApiLock = blockApiLock
-            ).whenA(conf.casper.autoProposeEnabled)
+      // TODO: Only a loop started with the TransportLayer keeps filling this up,
+      // so if we use the GossipService it's going to stay empty. The diagnostics
+      // should use NodeDiscovery instead.
+      implicit0(connectionsCell: Connect.ConnectionsCell[Task]) <- Resource.liftF(
+                                                                    effects.rpConnections
+                                                                  )
 
-        _ <- api.Servers
-              .internalServersR(
-                conf.grpc.portInternal,
-                conf.server.maxMessageSize,
-                ingressScheduler,
-                blockApiLock,
-                maybeApiSslContext
-              )
+      implicit0(multiParentCasperRef: MultiParentCasperRef[Task]) <- Resource.liftF(
+                                                                      MultiParentCasperRef
+                                                                        .of[Task]
+                                                                    )
 
-        _ <- api.Servers.externalServersR[Task](
-              conf.grpc.portExternal,
+      implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
+        Task
+      ]()
+
+      blockApiLock <- Resource.liftF(Semaphore[Task](1))
+
+      // For now just either starting the auto-proposer or not, but ostensibly we
+      // could pass it the flag to run or not and also wire it into the ControlService
+      // so that the operator can turn it on/off on the fly.
+      _ <- AutoProposer[Task](
+            checkInterval = conf.casper.autoProposeCheckInterval,
+            accInterval = conf.casper.autoProposeAccInterval,
+            accCount = conf.casper.autoProposeAccCount,
+            blockApiLock = blockApiLock
+          ).whenA(conf.casper.autoProposeEnabled)
+
+      _ <- api.Servers
+            .internalServersR(
+              conf.grpc.portInternal,
               conf.server.maxMessageSize,
               ingressScheduler,
+              blockApiLock,
               maybeApiSslContext
             )
 
-        _ <- api.Servers.httpServerR[Task](
-              conf.server.httpPort,
-              conf,
-              id,
-              ingressScheduler
-            )
+      _ <- api.Servers.externalServersR[Task](
+            conf.grpc.portExternal,
+            conf.server.maxMessageSize,
+            ingressScheduler,
+            maybeApiSslContext
+          )
 
-        _ <- casper.gossiping.apply[Task](
-              port,
-              conf,
-              ingressScheduler,
-              egressScheduler
-            )
-      } yield (nodeDiscovery, storage)
+      _ <- api.Servers.httpServerR[Task](
+            conf.server.httpPort,
+            conf,
+            id,
+            ingressScheduler
+          )
 
-      resources.allocated flatMap {
-        case ((nodeDiscovery, deployStorage), release) =>
-          handleUnrecoverableErrors {
-            nodeProgram(state, nodeDiscovery, deployStorage, release)
-          }
-      }
-    })
+      _ <- casper.gossiping.apply[Task](
+            port,
+            conf,
+            chainSpec,
+            genesis,
+            ingressScheduler,
+            egressScheduler
+          )
+    } yield (nodeAsk, nodeDiscovery, storage)
+
+    resources.allocated flatMap {
+      case ((nodeAsk, nodeDiscovery, deployStorage), release) =>
+        handleUnrecoverableErrors {
+          nodeProgram(nodeAsk, nodeDiscovery, deployStorage, release)
+        }
+    }
+
   }
 
   private def runRdmbsMigrations(serverDataDir: Path): Task[Unit] =
@@ -280,14 +284,13 @@ class NodeRuntime private[node] (
   /** Start periodic tasks as fibers. They'll automatically stop during shutdown. */
   private def nodeProgram(
       implicit
-      rpConfState: RPConfState[Task],
+      localAsk: NodeAsk[Task],
       nodeDiscovery: NodeDiscovery[Task],
       deployStorageWriter: DeployStorageWriter[Task],
       release: Task[Unit]
   ): Task[Unit] = {
 
-    val peerNodeAsk = effects.peerNodeAsk(rpConfState)
-    val time        = effects.time
+    val time = effects.time
 
     val info: Task[Unit] =
       if (conf.casper.standalone)
@@ -320,9 +323,8 @@ class NodeRuntime private[node] (
             .executeOn(loopScheduler)
             .start
 
-      host    <- peerNodeAsk.ask.map(_.host)
-      address = s"casperlabs://$id@$host?protocol=$port&discovery=$kademliaPort"
-      _       <- Log[Task].info(s"Listening for traffic on $address.")
+      localNode <- localAsk.ask
+      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show}.")
       // This loop will keep the program from exiting until shutdown is initiated.
       _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler)
     } yield ()
@@ -371,7 +373,7 @@ class NodeRuntime private[node] (
       )
     )
 
-  private def localPeerNode[F[_]: Sync: Log] =
+  private def localPeerNode[F[_]: Sync: Log]() =
     WhoAmI
       .fetchLocalPeerNode[F](
         conf.server.host,
@@ -381,7 +383,7 @@ class NodeRuntime private[node] (
         id
       )
 
-  private def initPeers[F[_]: MonadThrowable]: F[List[Node]] =
+  private def initPeers[F[_]: MonadThrowable]: F[List[NodeWithoutChainId]] =
     conf.server.bootstrap match {
       case Nil if !conf.casper.standalone =>
         MonadThrowable[F].raiseError(
@@ -393,11 +395,26 @@ class NodeRuntime private[node] (
         nodes.pure[F]
     }
 
+  private def makeGenesis[F[_]: MonadThrowable](chainSpec: ChainSpec)(
+      implicit E: ExecutionEngineService[F],
+      L: Log[F],
+      B: BlockStorage[F]
+  ): Resource[F, Block] =
+    Resource.liftF[F, Block] {
+      for {
+        _       <- Log[F].info("Constructing Genesis block...")
+        genesis <- Genesis.fromChainSpec[F](chainSpec.getGenesis)
+        _ <- Log[F].info(
+              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash)}"
+            )
+      } yield genesis.getBlockMessage
+    }
 }
 
 object NodeRuntime {
   def apply(
-      conf: Configuration
+      conf: Configuration,
+      chainSpec: ChainSpec
   )(
       implicit
       scheduler: Scheduler,
@@ -406,6 +423,6 @@ object NodeRuntime {
   ): Task[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler))
+      runtime <- Task.delay(new NodeRuntime(conf, chainSpec, id, scheduler))
     } yield runtime
 }

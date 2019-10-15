@@ -6,7 +6,7 @@ import java.nio.file.Path
 import cats._
 import cats.implicits._
 import com.github.ghik.silencer.silent
-import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
 import io.casperlabs.node.configuration.Utils._
@@ -20,11 +20,13 @@ import scala.language.implicitConversions
 private[configuration] object Converter extends ParserImplicits {
   import Options._
 
-  implicit val bootstrapAddressConverter: ValueConverter[List[Node]] =
-    new ValueConverter[List[Node]] {
-      def parse(s: List[(String, List[String])]): Either[String, Option[List[Node]]] = {
+  implicit val bootstrapAddressConverter: ValueConverter[List[NodeWithoutChainId]] =
+    new ValueConverter[List[NodeWithoutChainId]] {
+      def parse(
+          s: List[(String, List[String])]
+      ): Either[String, Option[List[NodeWithoutChainId]]] = {
         val all = s.unzip._2.flatten.mkString(" ")
-        Parser[List[Node]].parse(all).map(Option(_).filterNot(_.isEmpty))
+        Parser[List[NodeWithoutChainId]].parse(all).map(Option(_).filterNot(_.isEmpty))
       }
 
       val argType: ArgType.V = ArgType.LIST
@@ -80,7 +82,7 @@ private[configuration] final case class Options private (
   //Used in @scallop macro when it puts things into `field`
   private implicit def showList[T: Show]: Show[List[T]] = xs => xs.map(_.show).mkString(" ")
   @silent("is never used")
-  private implicit val showNodeList = showList[Node]
+  private implicit val showNodeList = showList[NodeWithoutChainId]
   //Used in @scallop macro
   @silent("is never used")
   private implicit def show[T: NotNode]: Show[T] = Show.show(_.toString)
@@ -279,7 +281,7 @@ private[configuration] final case class Options private (
 
     @scallop
     val serverBootstrap =
-      gen[List[Node]](
+      gen[List[NodeWithoutChainId]](
         "Bootstrap casperlabs node address for initial seed. Accepts multiple instances for redundancy.",
         'b'
       )
@@ -439,6 +441,15 @@ private[configuration] final case class Options private (
     @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
+
+    @scallop
+    val blockstorageCacheNeighborhoodBefore =
+      gen[Int]("How far to go to the past (by ranks) for caching neighborhood of looked up block")
+
+    @scallop
+    val blockstorageCacheNeighborhoodAfter = gen[Int](
+      "How far to go to the future (by ranks) for caching neighborhood of looked up block"
+    )
 
     @scallop
     val casperValidatorPublicKey =

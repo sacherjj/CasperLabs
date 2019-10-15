@@ -8,7 +8,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.{BlockStatus => _, _}
+import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
@@ -139,41 +139,40 @@ object BlockAPI {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-
-      BlockStorage[F].findBlockHashesWithDeployHash(deployHash) flatMap {
-        case blockHashes if blockHashes.nonEmpty =>
+      DeployStorageReader[F].getByHash(deployHash) flatMap {
+        case None =>
+          none.pure[F]
+        case Some(deploy) =>
           for {
-            blocks <- blockHashes.toList.traverse(ProtoUtil.unsafeGetBlock[F](_))
-            blockInfos = blocks.map { block =>
-              val summary =
-                BlockSummary(block.blockHash, block.header, block.signature)
-              makeBlockInfo(summary, block.some)
-            }
-            results = (blocks zip blockInfos).flatMap {
-              case (block, info) =>
-                block.getBody.deploys
-                  .find(_.getDeploy.deployHash == deployHash)
-                  .map(_ -> info)
-            }
-            info = DeployInfo(
-              deploy = results.headOption.flatMap(_._1.deploy),
-              processingResults = results.map {
-                case (processedDeploy, blockInfo) =>
-                  DeployInfo
-                    .ProcessingResult(
-                      cost = processedDeploy.cost,
-                      isError = processedDeploy.isError,
-                      errorMessage = processedDeploy.errorMessage
-                    )
-                    .withBlockInfo(blockInfo)
-              }
-            )
+            maybeStatus       <- DeployStorageReader[F].getBufferedStatus(deployHash)
+            processingResults <- DeployStorageReader[F].getProcessingResults(deployHash)
+            info <- if (processingResults.nonEmpty) {
+                     processingResults.toList.traverse(
+                       x => BlockStorage[F].getBlockSummary(x._1)
+                     ) map { blockSummaries =>
+                       DeployInfo()
+                         .withDeploy(deploy)
+                         .withStatus(
+                           maybeStatus getOrElse DeployInfo
+                             .Status(DeployInfo.State.FINALIZED)
+                         )
+                         .withProcessingResults(
+                           (processingResults zip blockSummaries).collect {
+                             case ((_, result), maybeSummary) =>
+                               DeployInfo
+                                 .ProcessingResult(
+                                   cost = result.cost,
+                                   isError = result.isError,
+                                   errorMessage = result.errorMessage,
+                                   blockInfo = maybeSummary.map(makeBlockInfo(_, None))
+                                 )
+                           }
+                         )
+                     }
+                   } else {
+                     DeployInfo(status = maybeStatus).withDeploy(deploy).pure[F]
+                   }
           } yield info.some
-
-        case _ =>
-          DeployStorageReader[F]
-            .getPendingOrProcessed(deployHash)
-            .map(_.map(DeployInfo().withDeploy))
       }
     }
 
@@ -199,14 +198,14 @@ object BlockAPI {
       maybeBlock: Option[Block]
   ): BlockInfo = {
     val maybeStats = maybeBlock.map { block =>
-      BlockStatus
+      BlockInfo.Status
         .Stats()
         .withBlockSizeBytes(block.serializedSize)
         .withDeployErrorCount(
           block.getBody.deploys.count(_.isError)
         )
     }
-    val status = BlockStatus(stats = maybeStats)
+    val status = BlockInfo.Status(stats = maybeStats)
     BlockInfo()
       .withSummary(summary)
       .withStatus(status)
@@ -285,7 +284,10 @@ object BlockAPI {
             case 0 => dag.topoSortTail(depth).compile.toVector
             case r =>
               dag
-                .topoSort(endBlockNumber = r, startBlockNumber = math.max(r - depth + 1, 0))
+                .topoSort(
+                  endBlockNumber = r,
+                  startBlockNumber = math.max(r - depth + 1, 0)
+                )
                 .compile
                 .toVector
           }
@@ -294,10 +296,8 @@ object BlockAPI {
             MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
           case ex: IllegalArgumentException =>
             MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } map { ranksOfHashes =>
-          ranksOfHashes.flatten.reverse.map(h => Base16.encode(h.toByteArray))
-        } flatMap { hashes =>
-          hashes.toList.flatTraverse(getBlockInfoOpt[F](_, full).map(_.toList))
+        } flatMap { summariesByRank =>
+          summariesByRank.flatten.reverse.toList.traverse(makeBlockInfo[F](_, full))
         }
     }
 

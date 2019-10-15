@@ -1,12 +1,15 @@
 package io.casperlabs.storage.dag
 
 import cats.effect.concurrent.Ref
+import cats.instances.list._
 import cats.instances.long._
 import cats.instances.map._
 import cats.instances.set._
 import cats.syntax.semigroup._
+import cats.syntax.traverse._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.storage.dag.CachingDagStorageTest.{CachingDagStorageTestData, MockMetrics}
@@ -39,11 +42,16 @@ class CachingDagStorageTest
   private val justifications: Seq[ByteString] =
     sampleBlock.justifications.map(_.latestBlockHash).toList
 
-  private def prepareTestEnvironment(cacheSize: Long) = {
+  private def prepareTestEnvironment(cacheSize: Long, neighborhoodRange: Int) = {
     implicit val metrics: MockMetrics = new MockMetrics()
     for {
       dagStorage <- SQLiteDagStorage.create[Task]
-      cache      <- CachingDagStorage[Task](dagStorage, cacheSize)
+      cache <- CachingDagStorage[Task](
+                dagStorage,
+                cacheSize,
+                neighborhoodBefore = neighborhoodRange,
+                neighborhoodAfter = neighborhoodRange
+              )
     } yield CachingDagStorageTestData(
       underlying = dagStorage,
       cache = cache,
@@ -52,7 +60,7 @@ class CachingDagStorageTest
   }
 
   override def createTestResource: Task[CachingDagStorageTestData] =
-    prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L)
+    prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1)
 
   private def verifyCached[A](
       name: String,
@@ -155,7 +163,7 @@ class CachingDagStorageTest
 
       "evict items if max size threshold is reached" in {
         runSQLiteTest(
-          resources = prepareTestEnvironment(cacheSize = 64L * 10),
+          resources = prepareTestEnvironment(cacheSize = 64L * 10, neighborhoodRange = 1),
           test = {
             case CachingDagStorageTestData(_, cache, metrics) =>
               // 1 parent and 1 justification will result
@@ -163,13 +171,13 @@ class CachingDagStorageTest
               // needed for reproducibility
               def genBlock =
                 sampleBlock
-                  .withHeader(
-                    sampleBlock.getHeader.copy(
-                      parentHashes = List(sample(genHash)),
-                      justifications = List(Block.Justification(ByteString.EMPTY, sample(genHash)))
+                  .update(_.header.parentHashes := List(sample(genHash)))
+                  .update(
+                    _.header.justifications := List(
+                      Block.Justification(ByteString.EMPTY, sample(genHash))
                     )
                   )
-                  .copy(blockHash = sample(genHash))
+                  .update(_.blockHash := sample(genHash))
 
               val blocksNum   = 20
               val otherBlocks = List.fill(blocksNum)(genBlock)
@@ -204,6 +212,61 @@ class CachingDagStorageTest
     ) { store =>
       store.justificationToBlocks(justifications.head)
     }
+    "cache neighborhood on lookup" in runSQLiteTest(
+      resources = prepareTestEnvironment(cacheSize = 1024L * 1024L * 25L, neighborhoodRange = 1),
+      test = {
+        case CachingDagStorageTestData(underlying, cache, mockMetrics) =>
+          def genChild(parent: Block) =
+            parent
+              .update(_.header.rank := parent.rank + 1)
+              .update(_.header.parentHashes := List(parent.blockHash))
+              .update(_.blockHash := sample(genHash))
+
+          val grandGrandParent =
+            sampleBlock
+              .update(_.header.parentHashes := Nil)
+              .update(_.header.justifications := Nil)
+
+          val grandParent =
+            genChild(grandGrandParent)
+
+          val parent        = genChild(grandParent)
+          val justification = genChild(grandParent)
+
+          val child =
+            genChild(parent).update(
+              _.header.justifications := List(
+                Justification(sample(genHash), justification.blockHash)
+              )
+            )
+
+          for {
+            // Inserting directly bypassing cache
+            _ <- List(grandGrandParent, grandParent, parent, justification, child).traverse(
+                  underlying.insert
+                )
+            // Should cache neighborhood on lookup
+            _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
+                  maybeMessage should not be empty
+                }
+            queriesNumBefore <- mockMetrics.counterRef.get.map(_.values.sum)
+            // Should not query underlying storage again
+            _ <- cache.lookup(parent.blockHash).foreachL { maybeMessage =>
+                  maybeMessage should not be empty
+                }
+            queriesNumAfter <- mockMetrics.counterRef.get.map(_.values.sum)
+          } yield {
+            Option(cache.messagesCache.getIfPresent(child.blockHash)) should not be empty
+            Option(cache.messagesCache.getIfPresent(parent.blockHash)) should not be empty
+            Option(cache.messagesCache.getIfPresent(justification.blockHash)) should not be empty
+            Option(cache.messagesCache.getIfPresent(grandParent.blockHash)) should not be empty
+            Option(cache.messagesCache.getIfPresent(grandGrandParent.blockHash)) shouldBe None
+            // 'queriesNumAfter' should count only the 'lookup' on CachingDagStorage itself
+            queriesNumBefore shouldBe (queriesNumAfter - 1)
+          }
+      },
+      timeout = 15.seconds
+    )
   }
 }
 

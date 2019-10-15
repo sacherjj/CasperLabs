@@ -19,7 +19,9 @@ use engine_shared::transform::Transform;
 use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
 use engine_storage::global_state::{CommitResult, StateProvider};
 
+use super::attenuate_uref_for_account;
 use super::{Address, Error, RuntimeContext, Validated};
+use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
 use crate::execution::extract_access_rights_from_keys;
 use crate::execution::AddressGenerator;
 use crate::tracking_copy::TrackingCopy;
@@ -122,6 +124,7 @@ fn mock_runtime_context<'a>(
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         Phase::Session,
+        Default::default(),
     )
 }
 
@@ -435,6 +438,7 @@ fn contract_key_addable_valid() {
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         PHASE,
+        Default::default(),
     );
 
     let uref_name = "NewURef".to_owned();
@@ -496,6 +500,7 @@ fn contract_key_addable_invalid() {
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
         PHASE,
+        Default::default(),
     );
 
     let uref_name = "NewURef".to_owned();
@@ -906,4 +911,28 @@ fn validate_valid_purse_id_of_an_account() {
     // in known urefs.
     let purse_id = URef::new([53; 32], AccessRights::READ_ADD_WRITE);
     assert!(runtime_context.validate_uref(&purse_id).is_err());
+}
+
+#[test]
+fn attenuate_uref_for_system_account() {
+    let (_key, account) = mock_account(SYSTEM_ACCOUNT_ADDR);
+    let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD);
+    let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
+
+    let access_rights = attenuated_uref
+        .access_rights()
+        .expect("should have access rights");
+    assert_eq!(access_rights, AccessRights::READ_ADD_WRITE);
+}
+
+#[test]
+fn attenuate_uref_for_user_account() {
+    let (_key, account) = mock_account([42; 32]);
+    let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+    let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
+
+    let access_rights = attenuated_uref
+        .access_rights()
+        .expect("should have access rights");
+    assert_eq!(access_rights, AccessRights::READ);
 }

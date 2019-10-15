@@ -29,6 +29,8 @@ You will also see any lint errors in the console.
 If we add `"proxy": "http://localhost:8001/"` to `package.json` we get transparent proxying to the server, but it seems to clash with auto-reloading in Firefox; works
 in Chrome.
 
+To change the code in the `sdk` and see the effect you can run `npm run ~build` in that directory and reload the page.
+
 ### `npm test`
 
 Launches the test runner in the interactive watch mode.<br>

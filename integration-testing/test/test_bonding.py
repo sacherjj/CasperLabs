@@ -90,7 +90,7 @@ def bonds_by_account_and_stake(
     block_ds = parse_show_block(block)
     bonds = list(
         filter(
-            lambda x: x.stake == bonding_amount
+            lambda x: int(x.stake.value) == bonding_amount
             and x.validator_public_key == public_key,
             block_ds.summary.header.state.bonds,
         )

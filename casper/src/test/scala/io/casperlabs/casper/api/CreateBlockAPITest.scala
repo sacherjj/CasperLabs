@@ -16,6 +16,7 @@ import io.casperlabs.casper.util._
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -143,7 +144,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   ): F[List[BlockHash]] =
     underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
     underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def faultToleranceThreshold      = underlying.faultToleranceThreshold

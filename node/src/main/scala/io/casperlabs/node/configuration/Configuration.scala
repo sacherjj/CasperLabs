@@ -10,7 +10,7 @@ import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.CasperConf
-import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.node.configuration.Utils._
@@ -57,7 +57,7 @@ object Configuration extends ParserImplicits {
       dynamicHostAddress: Boolean,
       noUpnp: Boolean,
       defaultTimeout: FiniteDuration,
-      bootstrap: List[Node],
+      bootstrap: List[NodeWithoutChainId],
       dataDir: Path,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
@@ -91,7 +91,9 @@ object Configuration extends ParserImplicits {
   ) extends SubConfig
 
   case class BlockStorage(
-      cacheMaxSizeBytes: Long
+      cacheMaxSizeBytes: Long,
+      cacheNeighborhoodBefore: Int,
+      cacheNeighborhoodAfter: Int
   ) extends SubConfig
 
   case class Grpc(

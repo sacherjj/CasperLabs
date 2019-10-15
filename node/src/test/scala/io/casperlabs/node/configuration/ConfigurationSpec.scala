@@ -6,12 +6,14 @@ import java.util.concurrent.TimeUnit
 import cats.data.Validated.Valid
 import cats.syntax.option._
 import cats.syntax.show._
+import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.CasperConf
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.ignore
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.node.configuration.Utils._
 import org.scalacheck.Shrink
 import org.scalacheck.ScalacheckShapeless._
@@ -49,17 +51,23 @@ class ConfigurationSpec
       noUpnp = false,
       defaultTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       bootstrap = List(
-        Node(
-          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-          "52.119.8.109",
-          1,
-          1
+        NodeWithoutChainId(
+          Node(
+            NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+            "52.119.8.109",
+            1,
+            1,
+            ByteString.EMPTY
+          )
         ),
-        Node(
-          NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
-          "127.0.0.1",
-          1,
-          1
+        NodeWithoutChainId(
+          Node(
+            NodeIdentifier("de6eed5d00cf080fc587eeb412cb31a75fd10358"),
+            "127.0.0.1",
+            1,
+            1,
+            ByteString.EMPTY
+          )
         )
       ),
       dataDir = Paths.get("/tmp"),
@@ -122,7 +130,9 @@ class ConfigurationSpec
       apiKey = Paths.get("/tmp/test.api.key")
     )
     val blockStorage = Configuration.BlockStorage(
-      cacheMaxSizeBytes = 1
+      cacheMaxSizeBytes = 1,
+      cacheNeighborhoodBefore = 1,
+      cacheNeighborhoodAfter = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,
@@ -324,7 +334,7 @@ class ConfigurationSpec
     val tables = reduce(conf, Map.empty[String, Map[String, String]]) {
       case s: String             => s""""$s""""
       case d: FiniteDuration     => s""""${d.toString.replace(" ", "")}""""
-      case p: Node               => s""""${p.show}""""
+      case p: NodeWithoutChainId => s""""${p.show}""""
       case p: java.nio.file.Path => s""""${p.toString}""""
       case x                     => x.toString
     } {
@@ -370,8 +380,8 @@ class ConfigurationSpec
     val mapper = (_: String).replace(" ", "")
 
     reduce(conf, Map.empty[String, String])({
-      case n: Node => mapper(n.show)
-      case x       => mapper(x.toString)
+      case n: NodeWithoutChainId => mapper(n.show)
+      case x                     => mapper(x.toString)
     }) {
       case (envVars, _, "") =>
         envVars
@@ -407,10 +417,10 @@ class ConfigurationSpec
       def dispatch[T](sealedTrait: SealedTrait[Typeclass, T]): Typeclass[T] = ???
       implicit def gen[T]: Typeclass[T] = macro Magnolia.gen[T]
 
-      implicit val peerNode: Flattener[Node] =
+      implicit val peerNode: Flattener[NodeWithoutChainId] =
         (path, a) => List((path, innerFieldsMapper(a)))
 
-      implicit val peerNodes: Flattener[List[Node]] =
+      implicit val peerNodes: Flattener[List[NodeWithoutChainId]] =
         (path, xs) => List((path, xs.map(innerFieldsMapper).mkString(" ")))
 
       implicit def default[A: NotSubConfig]: Flattener[A] =

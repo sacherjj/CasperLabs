@@ -111,7 +111,7 @@ impl Key {
 
     pub fn to_c_ptr(self) -> Option<ContractRef> {
         match self {
-            Key::URef(uref) => TURef::from_uref(uref).map(ContractRef::URef).ok(),
+            Key::URef(uref) => TURef::from_uref(uref).map(ContractRef::TURef).ok(),
             Key::Hash(id) => Some(ContractRef::Hash(id)),
             _ => None,
         }

@@ -27,7 +27,7 @@ pub extern "C" fn hello_name_ext() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let y = hello_name(&name);
-    runtime::ret(&y, &Vec::new());
+    runtime::ret(y, Vec::new());
 }
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
@@ -83,9 +83,9 @@ pub extern "C" fn mailing_list_ext() {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
-                runtime::ret(&Some(Key::from(turef)), &extra_urefs);
+                runtime::ret(Some(Key::from(turef)), extra_urefs);
             }
-            _ => runtime::ret(&Option::<Key>::None, &Vec::new()),
+            _ => runtime::ret(Option::<Key>::None, Vec::new()),
         },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an
@@ -114,7 +114,7 @@ pub extern "C" fn counter_ext() {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(Error::Read)
                 .unwrap_or_revert_with(Error::ValueNotFound);
-            runtime::ret(&result, &Vec::new());
+            runtime::ret(result, Vec::new());
         }
         _ => panic!("Unknown method name!"),
     }

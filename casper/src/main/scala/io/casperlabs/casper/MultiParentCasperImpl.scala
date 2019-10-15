@@ -27,7 +27,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.{Message, SmartContractEngineError}
+import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -60,7 +60,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
-    chainId: String,
+    chainName: String,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
     blockProcessingLock: Semaphore[F],
     val faultToleranceThreshold: Float = 0f
@@ -131,12 +131,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
           .tupleLeft(InvalidUnslashableBlock: BlockStatus)
 
+    // If the block timestamp is in the future, wait some time before adding it,
+    // so we won't include it as a justification from the future.
     Validation[F].preTimestamp(block).attempt.flatMap {
-      case Right(None) => addBlock(statelessExecutor.validateAndAddBlock)
+      case Right(None) =>
+        addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
-        Time[F].sleep(delay) >> Log[F].info(
+        Log[F].info(
           s"Block ${PrettyPrinter.buildString(block)} is ahead for $delay from now, will retry adding later"
-        ) >> addBlock(statelessExecutor.validateAndAddBlock)
+        ) >> Time[F].sleep(delay) >> addBlock(statelessExecutor.validateAndAddBlock)
       case _ =>
         Log[F].warn(validation.ignore(block, "block timestamp exceeded threshold")) >> addBlock(
           handleInvalidTimestamp
@@ -384,13 +387,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
           timestamp        <- Time[F].currentMillis
+          _                <- ensureJustificationsInThePast(timestamp, latestMessages)
           remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp) // TODO: Should be streaming all the way down
           bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
           //We ensure that only the justifications given in the block are those
           //which are bonded validators in the chosen parent. This is safe because
           //any latest message not from a bonded validator will not change the
           //final fork-choice.
-          latestMessages   <- dag.latestMessages
           bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
           justifications   = toJustification(bondedLatestMsgs.values.toSeq)
           rank             = ProtoUtil.nextRank(bondedLatestMsgs.values.toSeq)
@@ -420,6 +423,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
+
+  // Sanity check, this should never happen because we delay messages from the future.
+  private def ensureJustificationsInThePast(
+      timestamp: Long,
+      latestMessages: Map[DagRepresentation.Validator, Message]
+  ): F[Unit] =
+    latestMessages.values
+      .find {
+        _.timestamp > timestamp
+      }
+      .fold(().pure[F]) { msg =>
+        Log[F].error(
+          s"Justification is in the future: ${PrettyPrinter
+            .buildString(msg.messageHash)}; ${msg.timestamp} > $timestamp"
+        ) *>
+          functorRaiseInvalidBlock.raise[Unit](InvalidUnslashableBlock)
+      }
 
   def lastFinalizedBlock: F[Block] =
     for {
@@ -519,7 +539,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             protocolVersion,
             merged.parents.map(_.blockHash),
             validatorSeqNum,
-            chainId,
+            chainName,
             timestamp,
             rank,
             validatorId,
@@ -549,14 +569,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def dag: F[DagRepresentation[F]] =
     DagStorage[F].getRepresentation
 
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
     } yield tracker.keySet
       .flatMap(weights.get)
       .sum
-      .toFloat / weightMapTotal(weights)
+      .toFloat / weightMapTotal(weights).toFloat
 
   /** After a block is executed we can try to execute the other blocks in the buffer that dependent on it. */
   private def reAttemptBuffer(
@@ -639,7 +659,7 @@ object MultiParentCasperImpl {
       broadcaster: Broadcaster[F],
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
@@ -651,7 +671,7 @@ object MultiParentCasperImpl {
           broadcaster,
           validatorId,
           genesis,
-          chainId,
+          chainName,
           upgrades,
           blockProcessingLock,
           faultToleranceThreshold
@@ -661,7 +681,7 @@ object MultiParentCasperImpl {
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
     //TODO pull out
@@ -686,7 +706,7 @@ object MultiParentCasperImpl {
           _ <- Validation[F].blockFull(
                 block,
                 dag,
-                chainId,
+                chainName,
                 maybeContext.map(_.genesis)
               )
           casperState <- Cell[F, CasperState].read
@@ -797,7 +817,7 @@ object MultiParentCasperImpl {
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
-            InvalidChainId | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
+            InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
             InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
             InvalidTargetHash =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
@@ -869,10 +889,10 @@ object MultiParentCasperImpl {
     }
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
-        chainId: String,
+        chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
-      establishMetrics[F] as new StatelessExecutor[F](chainId, upgrades)
+      establishMetrics[F] as new StatelessExecutor[F](chainName, upgrades)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
@@ -917,7 +937,7 @@ object MultiParentCasperImpl {
 
           case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
               InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
-              InvalidBondsCache | InvalidRepeatDeploy | InvalidChainId | InvalidBlockHash |
+              InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
               InvalidTargetHash =>

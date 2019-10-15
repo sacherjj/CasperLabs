@@ -12,7 +12,7 @@ use contract_ffi::uref::URef;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(Error::GetURef);
+    let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(Error::GetKey);
     let contract_pointer: ContractRef = match contract_key {
         Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),

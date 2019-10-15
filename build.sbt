@@ -4,8 +4,13 @@ import com.typesafe.sbt.packager.docker._
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
-//disallow any unresolved version conflicts at all for faster feedback
-Global / conflictManager := ConflictManager.strict
+//to show library sources if using Bloop in IDEA
+bloopExportJarClassifiers.in(Global) := Some(Set("sources"))
+
+// disallow any unresolved version conflicts at all for faster feedback
+// TODO: After upgrading sbt to 1.3.2 it started throwing errors during compilation
+// Global / conflictManager := ConflictManager.strict
+
 //resolve all version conflicts explicitly
 Global / dependencyOverrides := Dependencies.overrides
 
@@ -30,7 +35,6 @@ lazy val projectSettings = Seq(
     "jitpack" at "https://jitpack.io"
   ),
   scalafmtOnCompile := true,
-  scapegoatVersion in ThisBuild := "1.3.4",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
@@ -46,26 +50,16 @@ lazy val projectSettings = Seq(
   Compile / packageDoc / publishArtifact := false
 )
 
-lazy val coverageSettings = Seq(
-  coverageMinimum := 90,
-  coverageFailOnMinimum := false,
-  coverageExcludedFiles := Seq(
-    (javaSource in Compile).value,
-    (sourceManaged in Compile).value.getPath ++ "/.*"
-  ).mkString(";")
-)
-
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
 // for your OS (https://www.yourkit.com/docs/java/help/agent.jsp)
 lazy val profilerSettings = Seq(
   javaOptions in run ++= sys.env
     .get("YOURKIT_AGENT")
     .map(agent => s"-agentpath:$agent=onexit=snapshot,sampling")
-    .toSeq,
-  javaOptions in reStart ++= (javaOptions in run).value
+    .toSeq
 )
 
-lazy val commonSettings = projectSettings ++ coverageSettings ++ CompilerSettings.options ++ profilerSettings
+lazy val commonSettings = projectSettings ++ CompilerSettings.options ++ profilerSettings
 
 lazy val jmhSettings = Seq(
   sourceDirectory in Jmh := (sourceDirectory in Test).value,
@@ -257,13 +251,6 @@ lazy val node = (project in file("node"))
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "io.casperlabs.node",
-    mainClass in assembly := Some("io.casperlabs.node.Main"),
-    assemblyMergeStrategy in assembly := {
-      case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    },
     /*
      * This monstrosity exists because
      * a) we want to get rid of annoying JVM >= 9 warnings,

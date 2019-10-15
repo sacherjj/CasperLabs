@@ -313,8 +313,8 @@ pub fn delegate() {
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
             runtime::ret(
-                &rights_controlled_purse,
-                &vec![rights_controlled_purse.value()],
+                rights_controlled_purse,
+                vec![rights_controlled_purse.value()],
             );
         }
         "set_refund_purse" => {
@@ -329,9 +329,9 @@ pub fn delegate() {
             // supposed to have it.
             let result = get_refund_purse().map(|p| p.value().remove_access_rights());
             if let Some(uref) = result {
-                runtime::ret(&Some(PurseId::new(uref)), &vec![uref]);
+                runtime::ret(Some(PurseId::new(uref)), vec![uref]);
             } else {
-                runtime::ret(&result, &Vec::new());
+                runtime::ret(result, Vec::new());
             }
         }
         "finalize_payment" => {

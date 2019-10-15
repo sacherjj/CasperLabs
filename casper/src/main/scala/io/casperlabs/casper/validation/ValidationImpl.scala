@@ -19,6 +19,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -80,7 +81,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     * obviously corrupt data from being downloaded. */
   def blockSummary(
       summary: BlockSummary,
-      chainId: String
+      chainName: String
   )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
@@ -93,7 +94,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             if (!treatAsGenesis) blockSignature(summary) else true.pure[F]
           )
       _ <- summaryHash(summary)
-      _ <- chainIdentifier(summary, chainId)
+      _ <- chainIdentifier(summary, chainName)
       _ <- ballot(summary)
     } yield ()
   }
@@ -102,7 +103,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def blockFull(
       block: Block,
       dag: DagRepresentation[F],
-      chainId: String,
+      chainName: String,
       maybeGenesis: Option[Block]
   )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
@@ -116,7 +117,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               blockSender(summary)
             }
           )
-      _ <- blockSummary(summary, chainId)
+      _ <- blockSummary(summary, chainName)
       // Checks that need dependencies.
       _ <- missingBlocks(summary)
       _ <- timestamp(summary)
@@ -262,7 +263,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis.")).as(false)
     } else if (!b.getSignature.sigAlgorithm.isEmpty && treatAsGenesis) {
       Log[F].warn(ignore(b, s"block signature algorithm is empty.")).as(false)
-    } else if (b.chainId.isEmpty) {
+    } else if (b.chainName.isEmpty) {
       Log[F].warn(ignore(b, s"block chain identifier is empty.")).as(false)
     } else if (b.state.postStateHash.isEmpty) {
       Log[F].warn(ignore(b, s"block post state hash is empty.")).as(false)
@@ -318,25 +319,26 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       currentTime  <- Time[F].currentMillis
       timestamp    = b.timestamp
       beforeFuture = currentTime + ValidationImpl.DRIFT >= timestamp
-      latestParentTimestamp <- b.parentHashes.toList.foldM(0L) {
-                                case (latestTimestamp, parentHash) =>
-                                  ProtoUtil
-                                    .unsafeGetBlockSummary[F](parentHash)
-                                    .map(parent => {
-                                      val timestamp =
-                                        parent.header.fold(latestTimestamp)(_.timestamp)
-                                      math.max(latestTimestamp, timestamp)
-                                    })
-                              }
-      afterLatestParent = timestamp >= latestParentTimestamp
-      _ <- if (beforeFuture && afterLatestParent) {
+      dependencies = b.parentHashes ++ b.getHeader.justifications.map(_.latestBlockHash)
+      latestDependencyTimestamp <- dependencies.distinct.toList.foldM(0L) {
+                                    case (latestTimestamp, blockHash) =>
+                                      ProtoUtil
+                                        .unsafeGetBlockSummary[F](blockHash)
+                                        .map(block => {
+                                          val timestamp =
+                                            block.header.fold(latestTimestamp)(_.timestamp)
+                                          math.max(latestTimestamp, timestamp)
+                                        })
+                                  }
+      afterLatestDependency = timestamp >= latestDependencyTimestamp
+      _ <- if (beforeFuture && afterLatestDependency) {
             Applicative[F].unit
           } else {
             for {
               _ <- Log[F].warn(
                     ignore(
                       b,
-                      s"block timestamp $timestamp is not between latest parent block time and current time."
+                      s"block timestamp $timestamp is not between latest justification block time and current time."
                     )
                   )
               _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidUnslashableBlock)
@@ -441,16 +443,16 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   // Agnostic of justifications
   def chainIdentifier(
       b: BlockSummary,
-      chainId: String
+      chainName: String
   ): F[Unit] =
-    if (b.chainId == chainId) {
+    if (b.chainName == chainName) {
       Applicative[F].unit
     } else {
       for {
         _ <- Log[F].warn(
-              ignore(b, s"got chain identifier ${b.chainId} while $chainId was expected.")
+              ignore(b, s"got chain identifier ${b.chainName} while $chainName was expected.")
             )
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidChainId)
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidChainName)
       } yield ()
     }
 
@@ -671,7 +673,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       val slashedValidatorBond =
         bonds(block).find(_.validatorPublicKey == justification.validatorPublicKey)
       slashedValidatorBond match {
-        case Some(bond) => bond.stake > 0
+        case Some(bond) => Weight(bond.stake) > 0
         case None       => false
       }
     }

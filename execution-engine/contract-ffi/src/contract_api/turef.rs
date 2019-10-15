@@ -5,6 +5,7 @@ use core::marker::PhantomData;
 use crate::key::addr_to_hex;
 use crate::uref::AccessRights;
 use crate::uref::URef;
+use crate::value::Value;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum AccessRightsError {
@@ -32,7 +33,10 @@ pub struct TURef<T> {
 }
 
 impl<T> TURef<T> {
-    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> TURef<T> {
+    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> Self
+    where
+        T: Into<Value>,
+    {
         TURef {
             addr,
             access_rights,
@@ -42,7 +46,12 @@ impl<T> TURef<T> {
 
     pub fn from_uref(uref: URef) -> Result<Self, AccessRightsError> {
         if let Some(access_rights) = uref.access_rights() {
-            Ok(TURef::new(uref.addr(), access_rights))
+            let addr = uref.addr();
+            Ok(TURef {
+                addr,
+                access_rights,
+                _marker: PhantomData,
+            })
         } else {
             Err(AccessRightsError::NoAccessRights)
         }

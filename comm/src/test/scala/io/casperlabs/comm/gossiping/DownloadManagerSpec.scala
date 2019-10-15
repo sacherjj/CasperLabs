@@ -39,6 +39,8 @@ class DownloadManagerSpec
   override def beforeEach() =
     log.reset()
 
+  implicit val chainId: ByteString = sample(genHash)
+
   // Create a random Node so I don't have to repeat this in all tests.
   val source = sample(arbitrary[Node])
 
