@@ -1,4 +1,5 @@
 import pytest
+import logging
 
 from casperlabs_local_net.common import Contract
 from casperlabs_local_net.client_parser import parse_show_block
@@ -104,6 +105,7 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     Scenario: Bonding a validator node to an existing network.
     """
     # Bond
+    logging.info(f"Funding Account {BONDING_ACCT} and bonding to network.")
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn)
     block_hash, account = add_account_and_bond_to_network(
@@ -123,15 +125,21 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     )
 
     # Test deploy/propose bonded
+    logging.info(f"Deploy and propose on bonded node.")
     block_hash = node1.d_client.deploy_and_propose(
         from_address=account.public_key_hex,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_CALL,
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
     check_no_errors_in_deploys(node1, block_hash)
 
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network_fn.docker_nodes, block_hash
+    )
+
     # Unbond
+    logging.info(f"Unbonding Account {BONDING_ACCT} from network.")
     block_hash, account = unbond_from_network(
         one_node_network_fn, bonding_amount, BONDING_ACCT
     )
@@ -142,10 +150,15 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     )
     assert len(bonds) == 0
 
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network_fn.docker_nodes, block_hash
+    )
+
     # Test deploy/propose unbonded
+    logging.info(f"Testing unbonded deploy and propose.")
     node1.d_client.deploy(
         from_address=account.public_key_hex,
-        session_contract=Contract.HELLONAME,
+        session_contract=Contract.HELLO_NAME_CALL,
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
@@ -223,7 +236,7 @@ def test_invalid_bonding_amount(one_node_network_fn):
 
     r = node1.d_client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 5"
+    assert r.error_message == "Exit code: 65286"
 
 
 def test_unbonding_without_bonding(one_node_network_fn):
@@ -249,7 +262,7 @@ def test_unbonding_without_bonding(one_node_network_fn):
 
     r = node0.client.show_deploys(block_hash)[0]
     assert r.is_error is True
-    assert r.error_message == "Exit code: 0"
+    assert r.error_message == "Exit code: 65280"
 
     block = node1.client.show_block(block_hash)
     block_ds = parse_show_block(block)
