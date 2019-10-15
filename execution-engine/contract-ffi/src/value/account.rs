@@ -563,17 +563,17 @@ impl AssociatedKeys {
     }
 
     /// Calculates total weight of authorization keys provided by an argument
-    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
+    fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
         self.calculate_any_keys_weight(authorization_keys.iter())
     }
 
     /// Calculates total weight of all authorization keys
-    pub fn total_keys_weight(&self) -> Weight {
+    fn total_keys_weight(&self) -> Weight {
         self.calculate_any_keys_weight(self.0.keys())
     }
 
     /// Calculates total weight of all authorization keys excluding a given key
-    pub fn total_keys_weight_excluding(&self, public_key: PublicKey) -> Weight {
+    fn total_keys_weight_excluding(&self, public_key: PublicKey) -> Weight {
         self.calculate_any_keys_weight(self.0.keys().filter(|&&element| element != public_key))
     }
 }
