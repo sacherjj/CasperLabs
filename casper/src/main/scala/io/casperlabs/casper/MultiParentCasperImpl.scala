@@ -529,7 +529,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         } else {
           // Start numbering from 1 (validator's first block seqNum = 1)
           val validatorSeqNum =
-            latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+            latestMessages.get(ByteString.copyFrom(validatorId)).fold(1)(_.validatorMsgSeqNum + 1)
           val block = ProtoUtil.block(
             justifications,
             checkpoint.preStateHash,
