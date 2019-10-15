@@ -273,6 +273,9 @@ class MockDeployStorage[F[_]: Sync: Log](
     b.getBody.deploys.map(pd => deployToString(pd.getDeploy)).mkString(", ")
 
   private def now = System.currentTimeMillis()
+
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+    none[DeployInfo].pure[F]
 }
 
 object MockDeployStorage {

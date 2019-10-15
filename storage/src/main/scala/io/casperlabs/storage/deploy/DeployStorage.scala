@@ -94,6 +94,8 @@ import scala.concurrent.duration._
 
   /** Read the status of a deploy from the buffer, if it's still in it. */
   def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]]
+
+  def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -169,8 +171,12 @@ object DeployStorage {
     override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
       reader.getBufferedStatus(hash)
 
+    override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+      reader.getDeployInfo(deployHash)
+
     override def clear(): F[Unit] = writer.clear()
 
     override def close(): F[Unit] = writer.close()
+
   }
 }

@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
@@ -186,5 +186,8 @@ object SQLiteStorage {
 
       override def latestMessages: F[Map[Validator, Message]] =
         dagStorage.latestMessages
+
+      override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+        deployStorage.getDeployInfo(deployHash)
     }
 }
