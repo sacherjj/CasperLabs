@@ -443,7 +443,6 @@ trait DeployStorageSpec
                 .map(d => (d.getHeader.timestamp, d.deployHash))
                 .getOrElse((Long.MaxValue, ByteString.EMPTY))
             val expectResult = deploysByAccount.drop(offset + 1).take(limit)
-            printf("%d/%d\n", expectResult.size, deploysByAccount.size)
 
             for {
               _ <- writer.addAsPending(deploys)

@@ -188,10 +188,10 @@ object SQLiteStorage {
         dagStorage.latestMessages
 
       override def getDeploysByAccount(
-          account: Validator,
+          account: ByteString,
           limit: Int,
           lastTimeStamp: Long,
-          lastDeployHash: Validator
+          lastDeployHash: DeployHash
       ): F[List[Deploy]] =
         deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
     }

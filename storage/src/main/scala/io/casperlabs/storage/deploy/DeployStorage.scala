@@ -100,7 +100,7 @@ import scala.concurrent.duration._
       account: ByteString,
       limit: Int,
       lastTimeStamp: Long,
-      lastDeployHash: ByteString
+      lastDeployHash: DeployHash
   ): F[List[Deploy]]
 }
 
@@ -182,10 +182,10 @@ object DeployStorage {
     override def close(): F[Unit] = writer.close()
 
     override def getDeploysByAccount(
-        account: BlockHash,
+        account: ByteString,
         limit: Int,
         lastTimeStamp: Long,
-        lastDeployHash: BlockHash
+        lastDeployHash: DeployHash
     ): F[List[Deploy]] =
       reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
   }

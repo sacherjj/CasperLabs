@@ -276,10 +276,10 @@ class MockDeployStorage[F[_]: Sync: Log](
   private def now = System.currentTimeMillis()
 
   override def getDeploysByAccount(
-      account: BlockHash,
+      account: ByteString,
       limit: Int,
       lastTimeStamp: Long,
-      lastDeployHash: BlockHash
+      lastDeployHash: DeployHash
   ): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(
       _.keys
