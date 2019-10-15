@@ -243,7 +243,7 @@ impl Debug for Error {
             Error::Read => write!(f, "Error::Read")?,
             Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
             Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
-            Error::GetKey => write!(f, "Error::GetURef")?,
+            Error::GetKey => write!(f, "Error::GetKey")?,
             Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
             Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
             Error::UnexpectedContractRefVariant => {
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
-        assert_eq!("Error::GetURef [8]", &format!("{:?}", Error::GetKey));
+        assert_eq!("Error::GetKey [8]", &format!("{:?}", Error::GetKey));
         assert_eq!("Error::Mint(0) [65024]", &format!("{:?}", Error::Mint(0)));
         assert_eq!(
             "Error::Mint(255) [65279]",
