@@ -7,9 +7,11 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
+import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -276,6 +278,29 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
     none[DeployInfo].pure[F]
+
+  override def getDeploysByAccount(
+      account: PublicKeyBS,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]] =
+    deploysWithMetadataRef.get.map(
+      _.keys
+        .filter { d =>
+          if (PublicKey(d.getHeader.accountPublicKey) != account) {
+            false
+          } else {
+            val strictEarlier = d.getHeader.timestamp < lastTimeStamp
+            strictEarlier || d.getHeader.timestamp == lastTimeStamp && byteStringOrdering
+              .lt(d.deployHash, lastDeployHash)
+          }
+        }
+        .toList
+        .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+        .reverse
+        .take(limit)
+    )
 }
 
 object MockDeployStorage {

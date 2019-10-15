@@ -12,6 +12,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -380,6 +381,22 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         } yield info.some
     }
   }
+
+  override def getDeploysByAccount(
+      account: PublicKeyBS,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]] =
+    sql"""|SELECT data FROM deploys
+          |WHERE account = $account
+          | AND (create_time_millis < $lastTimeStamp OR
+          |      create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
+          |ORDER BY create_time_millis DESC, hash DESC
+          |LIMIT $limit""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
 
   override def clear(): F[Unit] =
     (for {
