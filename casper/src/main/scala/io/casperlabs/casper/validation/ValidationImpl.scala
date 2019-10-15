@@ -368,16 +368,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      justificationMsgs <- b.justifications.toList.traverse { justification =>
-                            dag.lookup(justification.latestBlockHash).flatMap {
-                              MonadThrowable[F].fromOption(
-                                _,
-                                new Exception(
-                                  s"Block dag store was missing ${PrettyPrinter.buildString(justification.latestBlockHash)}."
+      justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
+                            .traverse { messageHash =>
+                              dag.lookup(messageHash).flatMap {
+                                MonadThrowable[F].fromOption(
+                                  _,
+                                  new Exception(
+                                    s"Block dag store was missing ${PrettyPrinter.buildString(messageHash)}."
+                                  )
                                 )
-                              )
+                              }
                             }
-                          }
       calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
