@@ -104,7 +104,8 @@ object Dependencies {
   val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
     .exclude("co.fs2", s"fs2-core_2.12")
   val flyway = "org.flywaydb" % "flyway-core" % "5.2.4"
-  val fs2    = "co.fs2"       %% "fs2-io"     % fs2Version
+  val fs2Io    = "co.fs2"       %% "fs2-io"     % fs2Version
+  val fs2ReactiveStreams    = "co.fs2"       %% "fs2-reactive-streams"     % fs2Version
   val upperbound = ("org.systemfw" %% "upperbound" % "0.3.0")
     .exclude("co.fs2", "fs2-core_2.12")
 
