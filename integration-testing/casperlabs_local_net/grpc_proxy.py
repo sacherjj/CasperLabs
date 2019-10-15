@@ -4,6 +4,8 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
+from functools import reduce
+from operator import add
 from casperlabs_client import (
     hexify,
     casper_pb2_grpc,
@@ -465,12 +467,12 @@ def proxy_kademlia(
 
 def block_from_chunks(chunks):
     """Builds Block from chunks returned from GetBlockChunked"""
-    # TODO: handle more than one data chunk
     chunks = list(chunks)
-    header_chunk, data_chunk = chunks
+    header_chunk, *data_chunks = chunks
+    data = reduce(add, [chunk.data for chunk in data_chunks])
 
     uncompressed_block_data = lz4.block.decompress(
-        data_chunk.data, uncompressed_size=header_chunk.header.original_content_length
+        data, uncompressed_size=header_chunk.header.original_content_length
     )
     block = consensus.Block()
     block.ParseFromString(uncompressed_block_data)

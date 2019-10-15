@@ -15,6 +15,18 @@ from casperlabs_client import hexify, extract_common_name
 
 
 class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
+    """
+    Sends an equivocating block to node.
+
+    GetBlockChunked is first intercepted to make a copy of a genuine block
+    and modify it so it has a different identity but the same justifications.
+    Next, StreamDagTipBlockSummaries is intercepted to advertise the equivocating block.
+    Node follows with StreamAncestorBlockSummaries, interceptor responds with
+    summary of the equivocating block.
+    Eventually, node asks for the equivocating block with GetBlockChunked and gets it
+    from the interceptor.
+    """
+
     def __init__(self, node):
         super().__init__(node)
         self.last_block = None
