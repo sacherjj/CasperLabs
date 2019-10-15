@@ -21,16 +21,13 @@ pub extern "C" fn call() {
 
     if stage == "init" {
         // executed with weight >= 1
-        account::add_associated_key(PublicKey::new([42; 32]), Weight::new(100))
-            .unwrap_or_else(|_| runtime::revert(Error::User(100)));
+        account::add_associated_key(PublicKey::new([42; 32]), Weight::new(100)).unwrap_or_revert();
         // this key will be used to test permission denied when removing keys with low
         // total weight
-        account::add_associated_key(PublicKey::new([43; 32]), Weight::new(1))
-            .unwrap_or_else(|_| runtime::revert(Error::User(101)));
-        account::add_associated_key(PublicKey::new([1; 32]), Weight::new(1))
-            .unwrap_or_else(|_| runtime::revert(Error::User(102)));
+        account::add_associated_key(PublicKey::new([43; 32]), Weight::new(1)).unwrap_or_revert();
+        account::add_associated_key(PublicKey::new([1; 32]), Weight::new(1)).unwrap_or_revert();
         account::set_action_threshold(ActionType::KeyManagement, Weight::new(101))
-            .unwrap_or_else(|_| runtime::revert(Error::User(103)));
+            .unwrap_or_revert();
     } else if stage == "test-permission-denied" {
         // Has to be executed with keys of total weight < 255
         match account::add_associated_key(PublicKey::new([44; 32]), Weight::new(1)) {
@@ -57,17 +54,14 @@ pub extern "C" fn call() {
         }
     } else if stage == "test-key-mgmnt-succeed" {
         // Has to be executed with keys of total weight >= 254
-        account::add_associated_key(PublicKey::new([44; 32]), Weight::new(1))
-            .unwrap_or_else(|_| runtime::revert(Error::User(600)));
+        account::add_associated_key(PublicKey::new([44; 32]), Weight::new(1)).unwrap_or_revert();
         // Updates [43;32] key weight created in init stage
-        account::update_associated_key(PublicKey::new([44; 32]), Weight::new(2))
-            .unwrap_or_else(|_| runtime::revert(Error::User(601)));
+        account::update_associated_key(PublicKey::new([44; 32]), Weight::new(2)).unwrap_or_revert();
         // Removes [43;32] key created in init stage
-        account::remove_associated_key(PublicKey::new([44; 32]))
-            .unwrap_or_else(|_| runtime::revert(Error::User(602)));
+        account::remove_associated_key(PublicKey::new([44; 32])).unwrap_or_revert();
         // Sets action threshodl
         account::set_action_threshold(ActionType::KeyManagement, Weight::new(100))
-            .unwrap_or_else(|_| runtime::revert(Error::User(603)));
+            .unwrap_or_revert();
     } else {
         runtime::revert(Error::User(1))
     }

@@ -19,11 +19,11 @@ pub extern "C" fn call() {
 
     if key_management_threshold != Weight::new(0) {
         account::set_action_threshold(ActionType::KeyManagement, key_management_threshold)
-            .unwrap_or_else(|_| runtime::revert(Error::User(100)));
+            .unwrap_or_revert_with(Error::User(100));
     }
 
     if deploy_threshold != Weight::new(0) {
         account::set_action_threshold(ActionType::Deployment, deploy_threshold)
-            .unwrap_or_else(|_| runtime::revert(Error::User(200)));
+            .unwrap_or_revert_with(Error::User(200));
     }
 }
