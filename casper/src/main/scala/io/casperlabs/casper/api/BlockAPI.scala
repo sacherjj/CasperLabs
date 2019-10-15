@@ -139,41 +139,7 @@ object BlockAPI {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-      DeployStorageReader[F].getByHash(deployHash) flatMap {
-        case None =>
-          none.pure[F]
-        case Some(deploy) =>
-          for {
-            maybeStatus       <- DeployStorageReader[F].getBufferedStatus(deployHash)
-            processingResults <- DeployStorageReader[F].getProcessingResults(deployHash)
-            info <- if (processingResults.nonEmpty) {
-                     processingResults.toList.traverse(
-                       x => BlockStorage[F].getBlockSummary(x._1)
-                     ) map { blockSummaries =>
-                       DeployInfo()
-                         .withDeploy(deploy)
-                         .withStatus(
-                           maybeStatus getOrElse DeployInfo
-                             .Status(DeployInfo.State.FINALIZED)
-                         )
-                         .withProcessingResults(
-                           (processingResults zip blockSummaries).collect {
-                             case ((_, result), maybeSummary) =>
-                               DeployInfo
-                                 .ProcessingResult(
-                                   cost = result.cost,
-                                   isError = result.isError,
-                                   errorMessage = result.errorMessage,
-                                   blockInfo = maybeSummary.map(makeBlockInfo(_, None))
-                                 )
-                           }
-                         )
-                     }
-                   } else {
-                     DeployInfo(status = maybeStatus).withDeploy(deploy).pure[F]
-                   }
-          } yield info.some
-      }
+      DeployStorageReader[F].getDeployInfo(deployHash)
     }
 
   def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](

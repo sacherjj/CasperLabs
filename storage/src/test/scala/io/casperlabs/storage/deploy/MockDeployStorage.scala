@@ -276,6 +276,9 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   private def now = System.currentTimeMillis()
 
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+    none[DeployInfo].pure[F]
+
   override def getDeploysByAccount(
       account: PublicKeyBS,
       limit: Int,
