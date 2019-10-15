@@ -47,13 +47,11 @@ pub extern "C" fn call() {
         "init" => {
             // Deployed with identity key only
             account::add_associated_key(PublicKey::new([100; 32]), Weight::new(2))
-                .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::AddKey1 as u16)));
+                .unwrap_or_else(|_| runtime::revert(Error::AddKey1));
             account::add_associated_key(PublicKey::new([101; 32]), Weight::new(255))
-                .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::AddKey2 as u16)));
+                .unwrap_or_else(|_| runtime::revert(Error::AddKey2));
             account::set_action_threshold(ActionType::KeyManagement, Weight::new(254))
-                .unwrap_or_else(|_| {
-                    runtime::revert(ApiError::User(Error::SetActionThreshold as u16))
-                });
+                .unwrap_or_else(|_| runtime::revert(Error::SetActionThreshold));
         }
 
         "test" => {
@@ -64,7 +62,7 @@ pub extern "C" fn call() {
                 .unwrap_or_revert();
         }
         _ => {
-            runtime::revert(ApiError::User(Error::UnknownPass as u16));
+            runtime::revert(Error::UnknownPass);
         }
     }
 }
