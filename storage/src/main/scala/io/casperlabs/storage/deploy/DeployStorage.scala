@@ -3,6 +3,7 @@ package io.casperlabs.storage.deploy
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
@@ -84,10 +85,15 @@ import scala.concurrent.duration._
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy]
+  def getByHash(hash: ByteString): F[Option[Deploy]]
+
+  def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy]
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
   def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
+
+  /** Read the status of a deploy from the buffer, if it's still in it. */
+  def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]]
 
   /** @return List of deploys created by specified account*/
   def getDeploysByAccount(
@@ -159,10 +165,17 @@ object DeployStorage {
     override def sizePendingOrProcessed(): F[Long] =
       reader.sizePendingOrProcessed()
 
-    override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = reader.getByHashes(l)
+    override def getByHash(hash: ByteString): F[Option[Deploy]] =
+      reader.getByHash(hash)
+
+    override def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy] =
+      reader.getByHashes(hashes)
 
     override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
       reader.getProcessingResults(hash)
+
+    override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+      reader.getBufferedStatus(hash)
 
     override def clear(): F[Unit] = writer.clear()
 

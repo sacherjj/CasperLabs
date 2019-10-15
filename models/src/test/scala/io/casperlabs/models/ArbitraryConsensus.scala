@@ -113,7 +113,9 @@ trait ArbitraryConsensus {
     for {
       pk    <- genKey
       stake <- arbitrary[Long]
-    } yield Bond().withValidatorPublicKey(pk).withStake(stake)
+    } yield Bond()
+      .withValidatorPublicKey(pk)
+      .withStake(state.BigInt(stake.toString, bitWidth = 512))
   }
 
   implicit def arbBlock(implicit c: ConsensusConfig): Arbitrary[Block] = Arbitrary {
