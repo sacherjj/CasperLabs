@@ -149,7 +149,10 @@ object GraphQL {
                   )
                   .flatMap(_ => Stream.empty.covary[F])
               },
-              m => Stream.emit[F, GraphQLWebSocketMessage](m)
+              m =>
+                Stream.eval[F, GraphQLWebSocketMessage](
+                  Log[F].debug(s"Received subscription query: $m") >> m.pure[F]
+                )
             )
         case _ => Stream.empty.covary[F]
       }
