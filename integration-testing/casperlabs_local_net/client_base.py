@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 
-class CasperLabsClient(ABC):
+class CasperLabsClientBase(ABC):
     @property
     @abstractmethod
     def client_type(self) -> str:
