@@ -674,7 +674,7 @@ impl Account {
     }
 
     /// Checks if removing given key would properly satisfy thresholds.
-    fn check_thresholds_for_key_removal(&self, public_key: PublicKey) -> bool {
+    fn can_remove_key(&self, public_key: PublicKey) -> bool {
         let total_weight_without = self.associated_keys.total_keys_weight_excluding(public_key);
 
         // Returns true if the total weight calculated without given public key would be greater or
@@ -700,7 +700,7 @@ impl Account {
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
         if self.associated_keys.contains_key(&public_key) {
             // Check if removing this weight would fall below thresholds
-            if !self.check_thresholds_for_key_removal(public_key) {
+            if !self.can_remove_key(public_key) {
                 return Err(RemoveKeyFailure::ThresholdViolation);
             }
         }
