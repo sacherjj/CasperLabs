@@ -13,8 +13,8 @@ import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.InvalidArgument
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.casper._
@@ -30,27 +30,9 @@ object GrpcCasperService {
   def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
-      def validateBlockHashPrefix(p: String): F[String] =
-        Utils
-          .checkString[F](
-            p,
-            "BlockHash prefix must be at least 4 characters (2 bytes) long",
-            s => Base16.tryDecode(s).exists(_.length >= 2)
-          )
-          .adaptErr {
-            case e => InvalidArgument(e.getMessage)
-          }
-
-      def validateDeployHash(p: String): F[String] =
-        Utils
-          .checkString[F](
-            p,
-            "DeployHash must be 64 characters (32 bytes) long",
-            Base16.tryDecode(_).exists(_.length == 32)
-          )
-          .adaptErr {
-            case e => InvalidArgument(e.getMessage)
-          }
+      val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
+        case e => InvalidArgument(e.getMessage)
+      }
 
       new CasperGrpcMonix.CasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
@@ -60,12 +42,13 @@ object GrpcCasperService {
 
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
           TaskLike[F].apply {
-            validateBlockHashPrefix(request.blockHashBase16) >>= { blockHashPrefix =>
-              BlockAPI
-                .getBlockInfo[F](
-                  blockHashPrefix,
-                  full = request.view == BlockInfo.View.FULL
-                )
+            validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
+              blockHashPrefix =>
+                BlockAPI
+                  .getBlockInfo[F](
+                    blockHashPrefix,
+                    full = request.view == BlockInfo.View.FULL
+                  )
             }
           }
 
@@ -82,16 +65,17 @@ object GrpcCasperService {
 
         override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
           TaskLike[F].apply {
-            validateDeployHash(request.deployHashBase16) >>= { deployHash =>
-              BlockAPI
-                .getDeployInfo[F](deployHash) map { info =>
-                request.view match {
-                  case DeployInfo.View.BASIC =>
-                    info.withDeploy(info.getDeploy.copy(body = None))
-                  case _ =>
-                    info
+            validateDeployHash[F](request.deployHashBase16, adaptToInvalidArgument) >>= {
+              deployHash =>
+                BlockAPI
+                  .getDeployInfo[F](deployHash) map { info =>
+                  request.view match {
+                    case DeployInfo.View.BASIC =>
+                      info.withDeploy(info.getDeploy.copy(body = None))
+                    case _ =>
+                      info
+                  }
                 }
-              }
             }
           }
 
@@ -99,17 +83,18 @@ object GrpcCasperService {
             request: StreamBlockDeploysRequest
         ): Observable[Block.ProcessedDeploy] = {
           val deploys = TaskLike[F].apply {
-            validateBlockHashPrefix(request.blockHashBase16) >>= { blockHashPrefix =>
-              BlockAPI.getBlockDeploys[F](blockHashPrefix) map {
-                _ map { pd =>
-                  request.view match {
-                    case DeployInfo.View.BASIC =>
-                      pd.withDeploy(pd.getDeploy.copy(body = None))
-                    case _ =>
-                      pd
+            validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
+              blockHashPrefix =>
+                BlockAPI.getBlockDeploys[F](blockHashPrefix) map {
+                  _ map { pd =>
+                    request.view match {
+                      case DeployInfo.View.BASIC =>
+                        pd.withDeploy(pd.getDeploy.copy(body = None))
+                      case _ =>
+                        pd
+                    }
                   }
                 }
-              }
             }
           }
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
@@ -126,7 +111,10 @@ object GrpcCasperService {
             request: BatchGetBlockStateRequest
         ): Task[BatchGetBlockStateResponse] = TaskLike[F].apply {
           for {
-            blockHashPrefix <- validateBlockHashPrefix(request.blockHashBase16)
+            blockHashPrefix <- validateBlockHashPrefix[F](
+                                request.blockHashBase16,
+                                adaptToInvalidArgument
+                              )
             info            <- BlockAPI.getBlockInfo[F](blockHashPrefix)
             stateHash       = info.getSummary.state.postStateHash
             protocolVersion = info.getSummary.getHeader.getProtocolVersion

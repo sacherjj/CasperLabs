@@ -6,9 +6,9 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
+import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
@@ -44,10 +44,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             arguments = blocks.arguments.BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
               (for {
-                blockHashPrefix <- Utils.checkString[F](
-                                    context.arg(blocks.arguments.BlockHashPrefix),
-                                    "BlockHash prefix must be at least 4 characters (2 bytes) long",
-                                    s => Base16.tryDecode(s).exists(_.length >= 2)
+                blockHashPrefix <- validateBlockHashPrefix[F](
+                                    context.arg(blocks.arguments.BlockHashPrefix)
                                   )
                 res <- BlockAPI
                         .getBlockInfoOpt[F](
@@ -76,11 +74,9 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
-              (Utils.checkString[F](
-                c.arg(blocks.arguments.DeployHash),
-                "DeployHash must be 64 characters (32 bytes) long",
-                Base16.tryDecode(_).exists(_.length == 32)
-              ) >>= (deployHash => BlockAPI.getDeployInfoOpt[F](deployHash))).unsafeToFuture
+              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
+                  deployHash => BlockAPI.getDeployInfoOpt[F](deployHash)
+              )).unsafeToFuture
             }
           ),
           Field(
@@ -91,10 +87,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val queries = c.arg(globalstate.arguments.StateQueryArgument).toList
 
               val program = for {
-                blockHashBase16Prefix <- Utils.checkString[F](
-                                          c.arg(blocks.arguments.BlockHashPrefix),
-                                          "BlockHash prefix must be at least 4 characters (2 bytes) long",
-                                          s => Base16.tryDecode(s).exists(_.length >= 2)
+                blockHashBase16Prefix <- validateBlockHashPrefix[F](
+                                          c.arg(blocks.arguments.BlockHashPrefix)
                                         )
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoOpt[F](blockHashBase16Prefix)
