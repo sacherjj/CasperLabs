@@ -76,7 +76,7 @@ object GraphQL {
         val res: F[Response[F]] = for {
           json                 <- req.as[Json]
           query                <- Sync[F].fromEither(json.as[GraphQLQuery])
-          isIntrospectionQuery = query.query.startsWith("query IntrospectionQuery")
+          isIntrospectionQuery = query.query.contains("__schema")
           runQuery             = processHttpQuery(query, executor, ec).flatMap(Ok(_))
           res <- if (isIntrospectionQuery) {
                   runQuery
