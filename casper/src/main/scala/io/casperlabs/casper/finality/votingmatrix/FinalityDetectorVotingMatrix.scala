@@ -126,5 +126,5 @@ object FinalityDetectorVotingMatrix {
       lock                 <- Semaphore[F](1)
       votingMatrix         <- VotingMatrix.create[F](dag, finalizedBlock, equivocationsTracker)
       votingMatrixWithLock = synchronizedVotingMatrix(lock, votingMatrix)
-    } yield new FinalityDetectorVotingMatrix[F](rFTT)(Concurrent[F], Log[F], votingMatrixWithLock)
+    } yield new FinalityDetectorVotingMatrix[F](rFTT) (Concurrent[F], Log[F], votingMatrixWithLock)
 }

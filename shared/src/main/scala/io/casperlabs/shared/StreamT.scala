@@ -19,7 +19,8 @@ sealed abstract class StreamT[F[_], +A] { self =>
       case SCons(_, lazyTail) => StreamT.delay(lazyTail.map(_.map(_.drop(n - 1))))
       case SLazy(lazyTail)    => StreamT.delay(lazyTail.map(_.map(_.drop(n))))
       case _: SNil[F]         => StreamT.empty[F, A]
-    } else self
+    }
+    else self
 
   def filter(p: A => Boolean)(implicit functor: Functor[F]): StreamT[F, A] = self match {
     case SCons(curr, lazyTail) =>
@@ -177,7 +178,8 @@ sealed abstract class StreamT[F[_], +A] { self =>
       case SCons(curr, lazyTail) => StreamT.cons(curr, lazyTail.map(_.map(_.take(n - 1))))
       case SLazy(lazyTail)       => StreamT.delay(lazyTail.map(_.map(_.take(n))))
       case _: SNil[F]            => StreamT.empty[F, A]
-    } else StreamT.empty[F, A]
+    }
+    else StreamT.empty[F, A]
 
   def takeWhile(p: A => Boolean)(implicit functor: Functor[F]): StreamT[F, A] = self match {
     case SCons(curr, lazyTail) if p(curr) => StreamT.cons(curr, lazyTail.map(_.map(_.takeWhile(p))))

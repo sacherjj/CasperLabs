@@ -239,7 +239,7 @@ object GraphQLServiceSpec {
   type Service = Kleisli[Task, Request[Task], Response[Task]]
 
   implicit val concurrentEffectMonix: ConcurrentEffect[Task] =
-    new CatsConcurrentEffectForTask()(global, Task.defaultOptions)
+    new CatsConcurrentEffectForTask() (global, Task.defaultOptions)
 
   implicit val noOpLog: Log[Task] = new NOPLog[Task]
 

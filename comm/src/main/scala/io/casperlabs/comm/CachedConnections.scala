@@ -45,7 +45,7 @@ object CachedConnections {
   def apply[F[_]: Concurrent: Metrics, T]: F[ConnectionsCache[F, T]] =
     for {
       connections <- Cell.mvarCell[F, TransportState](TransportState.empty)
-    } yield new CachedConnections[F, T](connections)(_)
+    } yield new CachedConnections[F, T](connections) (_)
 }
 
 object Transport {
