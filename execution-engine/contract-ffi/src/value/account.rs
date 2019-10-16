@@ -1312,27 +1312,36 @@ mod tests {
     #[test]
     fn updating_key_would_violate_action_thresholds() {
         let identity_key = PublicKey::new([1u8; 32]);
+        let identity_key_weight = Weight::new(1);
         let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(2);
         let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(3);
         let key_3 = PublicKey::new([4u8; 32]);
+        let key_3_weight = Weight::new(4);
         let associated_keys = {
-            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
-            res.add_key(key_1, Weight::new(2))
-                .expect("should add key 1");
-            res.add_key(key_2, Weight::new(3))
-                .expect("should add key 2");
-            res.add_key(key_3, Weight::new(4))
-                .expect("should add key 3");
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+            res.add_key(key_3, key_3_weight).expect("should add key 3");
             // 1 + 2 + 3 + 4
             res
         };
+
+        let deployment_threshold = Weight::new(
+            identity_key_weight.value()
+                + key_1_weight.value()
+                + key_2_weight.value()
+                + key_3_weight.value(),
+        );
+        let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
             [0u8; 32],
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
             // deploy: 33 (3*11)
-            ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 1))
+            ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
@@ -1425,12 +1434,50 @@ mod tests {
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
-            // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(1), Weight::new(254))
                 .expect("should create thresholds"),
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         account.remove_associated_key(key_1).expect("should work")
+    }
+
+    #[test]
+    fn overflowing_should_allow_updating() {
+        let identity_key = PublicKey::new([1; 32]);
+        let identity_key_weight = Weight::new(1);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(3);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(255);
+        let deployment_threshold = Weight::new(1);
+        let key_management_threshold = Weight::new(254);
+
+        let associated_keys = {
+            // Identity
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+
+            // Spare key
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            // Big key
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+
+            res
+        };
+
+        let mut account = Account::new(
+            identity_key.value(),
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            ActionThresholds::new(deployment_threshold, key_management_threshold)
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // decrease so total weight would be changed from 1 + 3 + 255 to 1 + 1 + 255
+        account
+            .update_associated_key(key_1, Weight::new(1))
+            .expect("should work");
     }
 }
