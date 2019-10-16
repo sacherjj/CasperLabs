@@ -45,8 +45,8 @@ object GrpcCasperService {
         Utils
           .checkString[F](
             p,
-            "BlockHash prefix must be at least 4 characters (2 bytes) long",
-            s => Base16.tryDecode(s).exists(_.length >= 2)
+            "DeployHash must be 64 characters (32 bytes) long",
+            Base16.tryDecode(_).exists(_.length == 32)
           )
           .adaptErr {
             case e => InvalidArgument(e.getMessage)
