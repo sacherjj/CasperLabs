@@ -345,8 +345,8 @@ class SecureGRPCService:
         )
 
     def __getattr__(self, name):
-        logging.info(
-            f"Creating insecure connection to {self.address} ({self.serviceStub})"
+        logging.debug(
+            f"Creating secure connection to {self.address} ({self.serviceStub})"
         )
 
         @retry_unary
