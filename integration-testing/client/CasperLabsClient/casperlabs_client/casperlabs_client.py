@@ -258,23 +258,61 @@ def _serialize(o) -> bytes:
     return o.SerializeToString()
 
 
+NUMBER_OF_RETRIES = 5
+
+# Initial delay in seconds before an attempt to retry
+INITIAL_DELAY = 0.3
+
+
 class InsecureGRPCService:
     def __init__(self, host, port, serviceStub):
         self.address = f"{host}:{port}"
         self.serviceStub = serviceStub
 
     def __getattr__(self, name):
-        def f(*args):
+        def retry_wrapper(function, *args):
+            delay = INITIAL_DELAY
+            for i in range(NUMBER_OF_RETRIES):
+                try:
+                    return function(*args)
+                except _Rendezvous as e:
+                    if (
+                        e.code() == grpc.StatusCode.UNAVAILABLE
+                        and i < NUMBER_OF_RETRIES - 1
+                    ):
+                        logging.warning(f"Retrying after {e} in {delay} seconds")
+                        time.sleep(delay)
+                        delay += delay
+                    else:
+                        raise
+
+        def retry_unary(function):
+            @functools.wraps(function)
+            def wrapper(*args):
+                return retry_wrapper(function, *args)
+
+            return wrapper
+
+        def retry_stream(function):
+            @functools.wraps(function)
+            def wrapper(*args):
+                yield from retry_wrapper(function, *args)
+
+            return wrapper
+
+        @retry_unary
+        def unary_unary(*args):
             with grpc.insecure_channel(self.address) as channel:
                 return getattr(self.serviceStub(channel), name)(*args)
 
-        def g(*args):
+        @retry_stream
+        def unary_stream(*args):
             with grpc.insecure_channel(self.address) as channel:
                 yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
                     *args
                 )
 
-        return name.endswith("_stream") and g or f
+        return name.endswith("_stream") and unary_stream or unary_unary
 
 
 def extract_common_name(certificate_file: str) -> str:
