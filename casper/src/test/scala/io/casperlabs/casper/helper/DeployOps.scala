@@ -1,6 +1,7 @@
 package io.casperlabs.casper.helper
 
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.models.ArbitraryConsensus
@@ -29,6 +30,8 @@ object DeployOps extends ArbitraryConsensus {
       rehash(
         deploy.withHeader(deploy.getHeader.withDependencies(dependencies))
       )
+
+    def processed(cost: Long): ProcessedDeploy = ProcessedDeploy().withDeploy(deploy).withCost(cost)
   }
 
   private def rehash(deploy: Deploy): Deploy = {

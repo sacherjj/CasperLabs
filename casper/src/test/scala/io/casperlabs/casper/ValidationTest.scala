@@ -16,6 +16,7 @@ import io.casperlabs.casper.helper.{
   HashSetCasperTestNode,
   StorageFixture
 }
+import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
@@ -917,6 +918,16 @@ class ValidationTest
                       dag
                     )
       } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
+  }
+
+  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploysWithCost = Vector(DeployOps.randomTooShortTTL().processed(1))
+      for {
+        block  <- createAndStoreBlock[Task](Seq.empty, deploys = deploysWithCost)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
   }
 
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
