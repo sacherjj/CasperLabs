@@ -76,8 +76,10 @@ object GraphQL {
         val res: F[Response[F]] = for {
           json  <- req.as[Json]
           query <- Sync[F].fromEither(json.as[GraphQLQuery])
-          _     <- Log[F].debug(s"GraphQL query: ${query.query}")
-          res   <- Metrics[F].timer("query")(processHttpQuery(query, executor, ec).flatMap(Ok(_)))
+          _ <- Log[F]
+                .debug(s"GraphQL query: ${query.query}")
+                .whenA(!query.query.startsWith("query IntrospectionQuery"))
+          res <- Metrics[F].timer("query")(processHttpQuery(query, executor, ec).flatMap(Ok(_)))
         } yield res
 
         res.handleErrorWith {
