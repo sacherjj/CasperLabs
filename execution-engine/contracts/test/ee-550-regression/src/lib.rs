@@ -56,7 +56,7 @@ pub extern "C" fn call() {
                 .unwrap_or_else(|_| runtime::revert(Error::SetActionThreshold));
         }
         "test" => {
-            // Deployed with two keys: 1 and 255 (total 256 which overflows to 255) to satify new
+            // Deployed with two keys of weights 2 and 255 (total saturates at 255) to satisfy new
             // threshold
             account::remove_associated_key(PublicKey::new([100; 32]))
                 .map_err(Error::from)

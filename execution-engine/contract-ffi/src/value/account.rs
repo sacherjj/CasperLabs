@@ -673,7 +673,7 @@ impl Account {
         self.associated_keys.add_key(public_key, weight)
     }
 
-    /// Checks if removing given key would properly satify thresholds.
+    /// Checks if removing given key would properly satisfy thresholds.
     fn check_thresholds_for_key_removal(&self, public_key: PublicKey) -> bool {
         let total_weight_without = self.associated_keys.total_keys_weight_excluding(public_key);
 
