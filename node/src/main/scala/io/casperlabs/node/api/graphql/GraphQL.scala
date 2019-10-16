@@ -74,12 +74,16 @@ object GraphQL {
           .getOrElseF(NotFound())
       case req @ POST -> Root =>
         val res: F[Response[F]] = for {
-          json  <- req.as[Json]
-          query <- Sync[F].fromEither(json.as[GraphQLQuery])
-          _ <- Log[F]
-                .debug(s"GraphQL query: ${query.query}")
-                .whenA(!query.query.startsWith("query IntrospectionQuery"))
-          res <- Metrics[F].timer("query")(processHttpQuery(query, executor, ec).flatMap(Ok(_)))
+          json                 <- req.as[Json]
+          query                <- Sync[F].fromEither(json.as[GraphQLQuery])
+          isIntrospectionQuery = query.query.startsWith("query IntrospectionQuery")
+          runQuery             = processHttpQuery(query, executor, ec).flatMap(Ok(_))
+          res <- if (isIntrospectionQuery) {
+                  runQuery
+                } else {
+                  Log[F].debug(s"GraphQL query: ${query.query}") >>
+                    Metrics[F].timer("query")(runQuery)
+                }
         } yield res
 
         res.handleErrorWith {
