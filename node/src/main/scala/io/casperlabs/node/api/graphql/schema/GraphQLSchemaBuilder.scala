@@ -6,9 +6,9 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils
+import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
@@ -16,7 +16,6 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorageReader
 import sangria.schema._
-import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
 
@@ -44,12 +43,16 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             OptionType(blocks.types.BlockType),
             arguments = blocks.arguments.BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
-              BlockAPI
-                .getBlockInfoOpt[F](
-                  blockHashBase16 = context.arg(blocks.arguments.BlockHashPrefix),
-                  full = hasAtLeastOne(projections, requireFullBlockFields)
-                )
-                .unsafeToFuture
+              (for {
+                blockHashPrefix <- validateBlockHashPrefix[F](
+                                    context.arg(blocks.arguments.BlockHashPrefix)
+                                  )
+                res <- BlockAPI
+                        .getBlockInfoOpt[F](
+                          blockHashBase16 = blockHashPrefix,
+                          full = hasAtLeastOne(projections, requireFullBlockFields)
+                        )
+              } yield res).unsafeToFuture
             }
           ),
           Field(
@@ -70,18 +73,23 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             "deploy",
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
-            resolve =
-              c => BlockAPI.getDeployInfoOpt[F](c.arg(blocks.arguments.DeployHash)).unsafeToFuture
+            resolve = { c =>
+              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
+                  deployHash => BlockAPI.getDeployInfoOpt[F](deployHash)
+              )).unsafeToFuture
+            }
           ),
           Field(
             "globalState",
             ListType(OptionType(globalstate.types.Value)),
             arguments = globalstate.arguments.StateQueryArgument :: blocks.arguments.BlockHashPrefix :: Nil,
             resolve = { c =>
-              val queries               = c.arg(globalstate.arguments.StateQueryArgument)
-              val blockHashBase16Prefix = c.arg(blocks.arguments.BlockHashPrefix)
+              val queries = c.arg(globalstate.arguments.StateQueryArgument).toList
 
               val program = for {
+                blockHashBase16Prefix <- validateBlockHashPrefix[F](
+                                          c.arg(blocks.arguments.BlockHashPrefix)
+                                        )
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoOpt[F](blockHashBase16Prefix)
                                     .map(_.map {
@@ -93,7 +101,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                            case (stateHash, protocolVersion) =>
                              for {
 
-                               values <- queries.toList.traverse {
+                               values <- queries.traverse {
                                           query =>
                                             for {
                                               key <- Utils.toKey[F](

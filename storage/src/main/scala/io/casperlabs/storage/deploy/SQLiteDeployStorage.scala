@@ -8,8 +8,11 @@ import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -346,6 +349,54 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             message = maybeMessage.getOrElse("")
           )
       })
+
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] = {
+    val processingResults =
+      sql"""|SELECT dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count
+            |FROM deploy_process_results dpr 
+            |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
+            |WHERE dpr.deploy_hash = $deployHash""".stripMargin
+        .query[ProcessingResult]
+        .to[List]
+        .transact(xa)
+
+    getByHash(deployHash) flatMap {
+      case None =>
+        none[DeployInfo].pure[F]
+      case Some(deploy) =>
+        for {
+          maybeStatus <- getBufferedStatus(deployHash)
+          prs         <- processingResults
+          info = if (prs.nonEmpty) {
+            DeployInfo()
+              .withDeploy(deploy)
+              .withStatus(
+                maybeStatus getOrElse DeployInfo
+                  .Status(DeployInfo.State.FINALIZED)
+              )
+              .withProcessingResults(prs)
+          } else {
+            DeployInfo(status = maybeStatus).withDeploy(deploy)
+          }
+        } yield info.some
+    }
+  }
+
+  override def getDeploysByAccount(
+      account: PublicKeyBS,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]] =
+    sql"""|SELECT data FROM deploys
+          |WHERE account = $account
+          | AND (create_time_millis < $lastTimeStamp OR
+          |      create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
+          |ORDER BY create_time_millis DESC, hash DESC
+          |LIMIT $limit""".stripMargin
+      .query[Deploy]
+      .to[List]
+      .transact(xa)
 
   override def clear(): F[Unit] =
     (for {

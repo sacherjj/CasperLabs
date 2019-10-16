@@ -1,7 +1,12 @@
 use core::fmt::{self, Debug, Formatter};
 use core::{u16, u8};
 
+use crate::bytesrepr;
+use crate::contract_api::turef::AccessRightsError;
 use crate::system_contracts::{mint, pos};
+use crate::value::account::{
+    AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
+};
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
 /// value less than or equal to `RESERVED_ERROR_MAX`.
@@ -76,6 +81,34 @@ pub enum Error {
     Transfer,
     /// No access rights.
     NoAccessRights,
+    /// A given type could be derived from a `Value`.
+    ValueConversion,
+    /// Early end of stream when deserializing.
+    EarlyEndOfStream,
+    /// Formatting error.
+    FormattingError,
+    /// Leftover bytes.
+    LeftOverBytes,
+    /// Out of memory error.
+    OutOfMemoryError,
+    /// Unable to add new associated key because maximum amount of keys is reached.
+    MaxKeysLimit,
+    /// Unable to add new associated key because given key already exists.
+    DuplicateKey,
+    /// Unable to add/update/remove new associated key due to insufficient permissions.
+    PermissionDenied,
+    /// Unable to update/remove a key that does exist
+    MissingKey,
+    /// Unable to update/remove a key which would violate action threshold constraints
+    ThresholdViolation,
+    /// New threshold should be lower or equal than deployment threshold.
+    KeyManagmentThresholdError,
+    /// New threshold should be lower or equal than key management threshold.
+    DeploymentThresholdError,
+    /// Unable to set action threshold due to insufficient permissions.
+    PermissionDeniedError,
+    /// New threshold should be lower or equal than total weight of associated keys.
+    InsufficientTotalWeight,
     /// Returns when contract tries to obtain URef to a system contract that does not exist.
     InvalidSystemContract,
     /// Error specific to Mint contract.
@@ -85,6 +118,66 @@ pub enum Error {
     /// User-specified value.  The internal `u16` value is added to `u16::MAX as u32 + 1` when an
     /// `Error::User` is converted to a `u32`.
     User(u16),
+}
+
+impl From<bytesrepr::Error> for Error {
+    fn from(error: bytesrepr::Error) -> Self {
+        match error {
+            bytesrepr::Error::EarlyEndOfStream => Error::EarlyEndOfStream,
+            bytesrepr::Error::FormattingError => Error::FormattingError,
+            bytesrepr::Error::LeftOverBytes => Error::LeftOverBytes,
+            bytesrepr::Error::OutOfMemoryError => Error::OutOfMemoryError,
+        }
+    }
+}
+
+impl From<AddKeyFailure> for Error {
+    fn from(error: AddKeyFailure) -> Self {
+        match error {
+            AddKeyFailure::MaxKeysLimit => Error::MaxKeysLimit,
+            AddKeyFailure::DuplicateKey => Error::DuplicateKey,
+            AddKeyFailure::PermissionDenied => Error::PermissionDenied,
+        }
+    }
+}
+
+impl From<UpdateKeyFailure> for Error {
+    fn from(error: UpdateKeyFailure) -> Self {
+        match error {
+            UpdateKeyFailure::MissingKey => Error::MissingKey,
+            UpdateKeyFailure::PermissionDenied => Error::PermissionDenied,
+            UpdateKeyFailure::ThresholdViolation => Error::ThresholdViolation,
+        }
+    }
+}
+
+impl From<RemoveKeyFailure> for Error {
+    fn from(error: RemoveKeyFailure) -> Self {
+        match error {
+            RemoveKeyFailure::MissingKey => Error::MissingKey,
+            RemoveKeyFailure::PermissionDenied => Error::PermissionDenied,
+            RemoveKeyFailure::ThresholdViolation => Error::ThresholdViolation,
+        }
+    }
+}
+
+impl From<SetThresholdFailure> for Error {
+    fn from(error: SetThresholdFailure) -> Self {
+        match error {
+            SetThresholdFailure::KeyManagementThresholdError => Error::KeyManagmentThresholdError,
+            SetThresholdFailure::DeploymentThresholdError => Error::DeploymentThresholdError,
+            SetThresholdFailure::PermissionDeniedError => Error::PermissionDeniedError,
+            SetThresholdFailure::InsufficientTotalWeight => Error::InsufficientTotalWeight,
+        }
+    }
+}
+
+impl From<AccessRightsError> for Error {
+    fn from(error: AccessRightsError) -> Self {
+        match error {
+            AccessRightsError::NoAccessRights => Error::NoAccessRights,
+        }
+    }
 }
 
 impl From<mint::Error> for Error {
@@ -118,7 +211,21 @@ impl From<Error> for u32 {
             Error::UpgradeContractAtURef => 14,
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
-            Error::InvalidSystemContract => 17,
+            Error::ValueConversion => 17,
+            Error::EarlyEndOfStream => 18,
+            Error::FormattingError => 19,
+            Error::LeftOverBytes => 20,
+            Error::OutOfMemoryError => 21,
+            Error::MaxKeysLimit => 22,
+            Error::DuplicateKey => 23,
+            Error::PermissionDenied => 24,
+            Error::MissingKey => 25,
+            Error::ThresholdViolation => 26,
+            Error::KeyManagmentThresholdError => 27,
+            Error::DeploymentThresholdError => 28,
+            Error::PermissionDeniedError => 29,
+            Error::InsufficientTotalWeight => 30,
+            Error::InvalidSystemContract => 31,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -136,7 +243,7 @@ impl Debug for Error {
             Error::Read => write!(f, "Error::Read")?,
             Error::ValueNotFound => write!(f, "Error::ValueNotFound")?,
             Error::ContractNotFound => write!(f, "Error::ContractNotFound")?,
-            Error::GetKey => write!(f, "Error::GetURef")?,
+            Error::GetKey => write!(f, "Error::GetKey")?,
             Error::UnexpectedKeyVariant => write!(f, "Error::UnexpectedKeyVariant")?,
             Error::UnexpectedValueVariant => write!(f, "Error::UnexpectedValueVariant")?,
             Error::UnexpectedContractRefVariant => {
@@ -147,6 +254,20 @@ impl Debug for Error {
             Error::UpgradeContractAtURef => write!(f, "Error::UpgradeContractAtURef")?,
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
+            Error::ValueConversion => write!(f, "Error::ValueConversion")?,
+            Error::EarlyEndOfStream => write!(f, "Error::EarlyEndOfStream")?,
+            Error::FormattingError => write!(f, "Error::FormattingError")?,
+            Error::LeftOverBytes => write!(f, "Error::LeftOverBytes")?,
+            Error::OutOfMemoryError => write!(f, "Error::OutOfMemoryError")?,
+            Error::MaxKeysLimit => write!(f, "Error::MaxKeysLimit")?,
+            Error::DuplicateKey => write!(f, "Error::DuplicateKey")?,
+            Error::PermissionDenied => write!(f, "Error::PermissionDenied")?,
+            Error::MissingKey => write!(f, "Error::MissingKey")?,
+            Error::ThresholdViolation => write!(f, "Error::ThresholdViolation")?,
+            Error::KeyManagmentThresholdError => write!(f, "Error::KeyManagementThresholdError")?,
+            Error::DeploymentThresholdError => write!(f, "Error::DeploymentThresholdError")?,
+            Error::PermissionDeniedError => write!(f, "Error::PermissionDeniedError")?,
+            Error::InsufficientTotalWeight => write!(f, "Error::InsufficientTotalWeight")?,
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
@@ -182,6 +303,21 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         14 => Err(Error::UpgradeContractAtURef),
         15 => Err(Error::Transfer),
         16 => Err(Error::NoAccessRights),
+        17 => Err(Error::ValueConversion),
+        18 => Err(Error::EarlyEndOfStream),
+        19 => Err(Error::FormattingError),
+        20 => Err(Error::LeftOverBytes),
+        21 => Err(Error::OutOfMemoryError),
+        22 => Err(Error::MaxKeysLimit),
+        23 => Err(Error::DuplicateKey),
+        24 => Err(Error::PermissionDenied),
+        25 => Err(Error::MissingKey),
+        26 => Err(Error::ThresholdViolation),
+        27 => Err(Error::KeyManagmentThresholdError),
+        28 => Err(Error::DeploymentThresholdError),
+        29 => Err(Error::PermissionDeniedError),
+        30 => Err(Error::InsufficientTotalWeight),
+        31 => Err(Error::InvalidSystemContract),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -190,8 +326,8 @@ pub fn result_from(value: i32) -> Result<(), Error> {
             } else if value >= POS_ERROR_OFFSET as i32 {
                 Err(Error::ProofOfStake(value as u8))
             } else {
-                // TODO: this is not unreachable
-                unreachable!()
+                // TODO: rethink this
+                panic!("unhandled value: {}", value)
             }
         }
     }
@@ -216,7 +352,7 @@ mod tests {
         assert_eq!(65_536_u32, Error::User(0).into()); // u16::MAX + 1
         assert_eq!(131_071_u32, Error::User(u16::MAX).into()); // 2 * u16::MAX + 1
 
-        assert_eq!("Error::GetURef [8]", &format!("{:?}", Error::GetKey));
+        assert_eq!("Error::GetKey [8]", &format!("{:?}", Error::GetKey));
         assert_eq!("Error::Mint(0) [65024]", &format!("{:?}", Error::Mint(0)));
         assert_eq!(
             "Error::Mint(255) [65279]",
@@ -253,6 +389,23 @@ mod tests {
         round_trip(Err(Error::UpgradeContractAtURef));
         round_trip(Err(Error::Transfer));
         round_trip(Err(Error::NoAccessRights));
+        round_trip(Err(Error::ValueConversion));
+        round_trip(Err(Error::EarlyEndOfStream));
+        round_trip(Err(Error::FormattingError));
+        round_trip(Err(Error::LeftOverBytes));
+        round_trip(Err(Error::OutOfMemoryError));
+        round_trip(Err(Error::MaxKeysLimit));
+        round_trip(Err(Error::DuplicateKey));
+        round_trip(Err(Error::PermissionDenied));
+        round_trip(Err(Error::MissingKey));
+        round_trip(Err(Error::ThresholdViolation));
+        round_trip(Err(Error::KeyManagmentThresholdError));
+        round_trip(Err(Error::DeploymentThresholdError));
+        round_trip(Err(Error::PermissionDeniedError));
+        round_trip(Err(Error::InsufficientTotalWeight));
+        round_trip(Err(Error::InvalidSystemContract));
+        round_trip(Err(Error::Mint(0)));
+        round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));
         round_trip(Err(Error::ProofOfStake(u8::MAX)));
         round_trip(Err(Error::User(0)));

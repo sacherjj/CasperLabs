@@ -18,7 +18,6 @@ const CONTRACT_POINTER: u32 = 0;
 #[repr(u16)]
 enum Error {
     GetArgument = 0,
-    CreateTURef,
 }
 
 const REPLACEMENT_DATA: &str = "bawitdaba";
@@ -37,8 +36,7 @@ pub extern "C" fn call() {
 
     let forged_reference: TURef<String> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
-        TURef::from_uref(ret)
-            .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::CreateTURef as u16)))
+        TURef::from_uref(ret).unwrap_or_revert()
     };
 
     storage::write(forged_reference, REPLACEMENT_DATA.to_string())

@@ -27,7 +27,7 @@ export default class CasperService {
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
-  ) { }
+  ) {}
 
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
@@ -100,9 +100,7 @@ export default class CasperService {
     });
   }
 
-  getBlockDeploys(
-    blockHash: ByteArray
-  ): Promise<Block.ProcessedDeploy[]> {
+  getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
     return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
       const request = new StreamBlockDeploysRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
@@ -192,7 +190,10 @@ export default class CasperService {
         .find(x => x.getName() === 'mint')!;
 
       const localKeyQuery = QueryLocalKey(
-        mintPublic.getKey()!.getUref()!.getUref_asU8(),
+        mintPublic
+          .getKey()!
+          .getUref()!
+          .getUref_asU8(),
         ByteArrayArg(account.getPurseId()!.getUref_asU8())
       );
 

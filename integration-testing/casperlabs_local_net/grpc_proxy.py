@@ -4,18 +4,20 @@ from concurrent import futures
 from threading import Thread
 import logging
 import re
-import lz4.block
-import ed25519
-import base64
+from functools import reduce
+from operator import add
 from casperlabs_client import (
     hexify,
-    blake2b_hash,
     casper_pb2_grpc,
     gossiping_pb2_grpc,
     kademlia_pb2_grpc,
-    consensus_pb2 as consensus,
     extract_common_name,
+    blake2b_hash,
+    consensus_pb2 as consensus,
+    gossiping_pb2 as gossiping,
 )
+import ed25519
+import lz4.block
 
 
 def read_binary(file_name):
@@ -44,8 +46,10 @@ class Interceptor:
     def pre_request(self, name, request):
         """
         Preprocess request received by the proxy.
+        Returns tuple (response, request). If response is not None it will be returned to the client
+        and the node behind proxy will not be convnected to at all.
         """
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         """
@@ -66,7 +70,7 @@ class LoggingInterceptor(Interceptor):
 
     def pre_request(self, name, request):
         logging.info(f"PRE REQUEST: {name}({hexify(request)})")
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         logging.info(f"POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})")
@@ -84,7 +88,7 @@ class KademliaInterceptor(Interceptor):
         return "kademlia_interceptor"
 
     def pre_request(self, name, request):
-        logging.info(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
+        logging.debug(f"KADEMLIA PRE REQUEST: <= {name}({hexify(request)})")
 
         """
         Patch node address to point to proxy.
@@ -102,17 +106,17 @@ class KademliaInterceptor(Interceptor):
         request.sender.protocol_port = node.server_proxy_port
         request.sender.discovery_port = node.kademlia_proxy_port
 
-        logging.info(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
-        return request
+        logging.debug(f"KADEMLIA PRE REQUEST: => {name}({hexify(request)})")
+        return (None, request)
 
     def post_request(self, name, request, response):
-        logging.info(
+        logging.debug(
             f"KADEMLIA POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
         )
         return response
 
     def post_request_stream(self, name, request, response):
-        logging.info(
+        logging.debug(
             f"KADEMLIA POST REQUEST STREAM: {name}({hexify(request)}) => {response}"
         )
         for r in response:
@@ -120,7 +124,7 @@ class KademliaInterceptor(Interceptor):
             r.host = node.proxy_host
             r.protocol_port = node.server_proxy_port
             r.discovery_port = node.kademlia_proxy_port
-            logging.info(f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
+            logging.debug(f"KADEMLIA POST REQUEST STREAM: {name} => {r}")
             yield r
 
 
@@ -144,14 +148,13 @@ class GossipInterceptor(Interceptor):
             block_hashes: "0f449d2ae52139bda1a201a22d6f142ca4ae616b92867b301f1c6244f08defbb"
             )
             """
-            sender = self.node.cl_network.lookup_node(request.sender.id.hex())
-            request.sender.host = sender.proxy_host
-            request.sender.protocol_port = sender.server_proxy_port
-            request.sender.discovery_port = sender.kademlia_proxy_port
+            node = self.node.cl_network.lookup_node(request.sender.id.hex())
+            request.sender.host = node.proxy_host
+            request.sender.protocol_port = node.server_proxy_port
+            request.sender.discovery_port = node.kademlia_proxy_port
 
             # Update SSL credentials for the proxy connection to server node
             try:
-                node = self.node.cl_network.lookup_node(request.sender.id.hex())
                 self.node.proxy_server.servicer.update_credentials(
                     node.config.tls_certificate_local_path(),
                     node.config.tls_key_local_path(),
@@ -166,7 +169,7 @@ class GossipInterceptor(Interceptor):
 
             logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
 
-        return request
+        return (None, request)
 
     def post_request(self, name, request, response):
         logging.info(
@@ -176,44 +179,9 @@ class GossipInterceptor(Interceptor):
 
     def post_request_stream(self, name, request, response):
         logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
-
-        if name == "GetBlockChunked":
-            chunk1 = next(response)
-            logging.info(f"GOSSIP POST GetBlockChunked:: => {hexify(chunk1.header)}")
-            chunk2 = next(response)
-            logging.info(f"GOSSIP POST GetBlockChunked:: => {len(chunk2.data)}")
-
-            uncompressed_block_data = lz4.block.decompress(
-                chunk2.data, uncompressed_size=chunk1.header.original_content_length
-            )
-            block = consensus.Block()
-            block.ParseFromString(uncompressed_block_data)
-            # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-
-            # Remove approvals from first deploy in the block.
-            del block.body.deploys[0].deploy.approvals[:]
-            block.header.body_hash = blake2b_hash(block.body.SerializeToString())
-            block_hash = blake2b_hash(block.header.SerializeToString())
-            block.block_hash = block_hash
-
-            block.signature.sig_algorithm = "ed25519"
-            block.signature.sig = ed25519.SigningKey(
-                base64.b64decode(self.node.config.node_private_key)
-            ).sign(block_hash)
-
-            new_data = block.SerializeToString()
-            compressed_new_data = lz4.block.compress(new_data, store_size=False)
-
-            chunk1.header.original_content_length = len(new_data)
-            chunk1.header.content_length = len(compressed_new_data)
-            chunk2.data = compressed_new_data
-
-            yield chunk1
-            yield chunk2
-        else:
-            for r in response:
-                logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
-                yield r
+        for r in response:
+            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
+            yield r
 
 
 class ProxyServicer:
@@ -282,7 +250,11 @@ class ProxyServicer:
         def unary_unary(request, context):
             logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.interceptor.pre_request(name, request)
+                response, preprocessed_request = self.interceptor.pre_request(
+                    name, request
+                )
+                if response:
+                    return response
                 service_method = getattr(self.service_stub(channel), name)
                 response = service_method(preprocessed_request)
                 return self.interceptor.post_request(
@@ -292,20 +264,47 @@ class ProxyServicer:
         def unary_stream(request, context):
             logging.info(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
-                preprocessed_request = self.interceptor.pre_request(name, request)
-                streaming_service_method = getattr(self.service_stub(channel), name)
-                response_stream = streaming_service_method(preprocessed_request)
-                yield from self.interceptor.post_request_stream(
-                    name, preprocessed_request, response_stream
+                response, preprocessed_request = self.interceptor.pre_request(
+                    name, request
                 )
+                if response:
+                    yield from response
+                else:
+                    streaming_service_method = getattr(self.service_stub(channel), name)
+                    response_stream = streaming_service_method(preprocessed_request)
+                    yield from self.interceptor.post_request_stream(
+                        name, preprocessed_request, response_stream
+                    )
 
         return unary_stream if self.is_unary_stream(name) else unary_unary
 
     @property
     def service(self):
         """ Provide client API for the service behind proxy. """
-        with self.channel() as channel:
-            yield self.service_stub(channel)
+
+        class Service:
+            def __init__(self, servicer):
+                self.servicer = servicer
+
+            def __getattr__(self, name):
+                def is_unary_stream(method_name):
+                    return method_name.startswith("Stream") or method_name.endswith(
+                        "Chunked"
+                    )
+
+                def unary_stream(*args, **kwargs):
+                    with self.servicer.channel() as channel:
+                        method = getattr(self.servicer.service_stub(channel), name)
+                        yield from method(*args, *kwargs)
+
+                def unary_unary(*args, **kwargs):
+                    with self.servicer.channel() as channel:
+                        method = getattr(self.servicer.service_stub(channel), name)
+                        return method(*args, *kwargs)
+
+                return is_unary_stream(name) and unary_stream or unary_unary
+
+        return Service(self)
 
 
 class ProxyThread(Thread):
@@ -334,7 +333,6 @@ class ProxyThread(Thread):
         self.client_certificate_file = client_certificate_file
         self.client_key_file = client_key_file
         self.encrypted_connection = encrypted_connection
-        self.interceptor = interceptor
         self.node_id = None
         if self.encrypted_connection:
             self.node_id = extract_common_name(self.client_certificate_file)
@@ -347,8 +345,16 @@ class ProxyThread(Thread):
             key_file=self.client_key_file,
             node_id=self.node_id,
             service_stub=self.service_stub,
-            interceptor=self.interceptor,
+            interceptor=interceptor,
         )
+
+    def set_interceptor(self, interceptor_class):
+        node = self.servicer.interceptor.node
+        self.servicer.interceptor = interceptor_class(node)
+
+    @property
+    def interceptor(self):
+        return self.servicer.interceptor
 
     def run(self):
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
@@ -381,7 +387,8 @@ class ProxyThread(Thread):
 
     @property
     def service(self):
-        return next(self.servicer.service)
+        """"Gives access to the gRPC API of the node behind proxy."""
+        return self.servicer.service
 
 
 def proxy_client(
@@ -456,3 +463,49 @@ def proxy_kademlia(
     )
     t.start()
     return t
+
+
+def block_from_chunks(chunks):
+    """Builds Block from chunks returned from GetBlockChunked"""
+    chunks = list(chunks)
+    header_chunk, *data_chunks = chunks
+    data = reduce(add, [chunk.data for chunk in data_chunks])
+
+    uncompressed_block_data = lz4.block.decompress(
+        data, uncompressed_size=header_chunk.header.original_content_length
+    )
+    block = consensus.Block()
+    block.ParseFromString(uncompressed_block_data)
+    return block
+
+
+def block_to_chunks(block):
+    data = block.SerializeToString()
+    compressed_data = lz4.block.compress(data, store_size=False)
+
+    header_chunk = gossiping.Chunk(
+        header=gossiping.Chunk.Header(
+            compression_algorithm="lz4",
+            content_length=len(compressed_data),
+            original_content_length=len(data),
+        )
+    )
+    data_chunk = gossiping.Chunk(data=compressed_data)
+    return [header_chunk, data_chunk]
+
+
+def block_summary(block):
+    return consensus.BlockSummary(
+        block_hash=block.block_hash, header=block.header, signature=block.signature
+    )
+
+
+def update_hashes_and_signature(block, private_key):
+    """Updates in-place block.header.body_hash, block.block_hash and block.signature."""
+    block.header.body_hash = blake2b_hash(block.body.SerializeToString())
+    block_hash = blake2b_hash(block.header.SerializeToString())
+    block.block_hash = block_hash
+
+    block.signature.sig_algorithm = "ed25519"
+    block.signature.sig = ed25519.SigningKey(private_key).sign(block_hash)
+    return block

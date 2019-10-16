@@ -529,7 +529,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         } else {
           // Start numbering from 1 (validator's first block seqNum = 1)
           val validatorSeqNum =
-            latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+            latestMessages.get(ByteString.copyFrom(validatorId)).fold(1)(_.validatorMsgSeqNum + 1)
           val block = ProtoUtil.block(
             justifications,
             checkpoint.preStateHash,
@@ -664,19 +664,21 @@ object MultiParentCasperImpl {
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
-    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
-      Sync[F].delay(
-        new MultiParentCasperImpl[F](
-          statelessExecutor,
-          broadcaster,
-          validatorId,
-          genesis,
-          chainName,
-          upgrades,
-          blockProcessingLock,
-          faultToleranceThreshold
-        )
-      )
+    for {
+      dag <- DagStorage[F].getRepresentation
+      lmh <- dag.latestMessageHashes
+      lca <- DagOperations.latestCommonAncestorsMainParent[F](dag, lmh.values.toList)
+      _   <- LastFinalizedBlockHashContainer[F].set(lca)
+    } yield new MultiParentCasperImpl[F](
+      statelessExecutor,
+      broadcaster,
+      validatorId,
+      genesis,
+      chainName,
+      upgrades,
+      blockProcessingLock,
+      faultToleranceThreshold
+    )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */

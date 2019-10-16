@@ -810,15 +810,10 @@ impl FromBytes for BlockTime {
     }
 }
 
-const DEPLOYMENT_THRESHOLD_ID: u8 = 0;
-const KEY_MANAGEMENT_THRESHOLD_ID: u8 = 1;
-
 impl ToBytes for ActionThresholds {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(2 * (WEIGHT_SIZE + U8_SIZE));
-        result.push(DEPLOYMENT_THRESHOLD_ID);
+        let mut result = Vec::with_capacity(2 * WEIGHT_SIZE);
         result.extend(&self.deployment.to_bytes()?);
-        result.push(KEY_MANAGEMENT_THRESHOLD_ID);
         result.extend(&self.key_management.to_bytes()?);
         Ok(result)
     }
@@ -826,32 +821,13 @@ impl ToBytes for ActionThresholds {
 
 impl FromBytes for ActionThresholds {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut action_thresholds: ActionThresholds = Default::default();
-        let (id_1, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (weight_1, rem2): (Weight, &[u8]) = FromBytes::from_bytes(&rem)?;
-        let (id_2, rem3): (u8, &[u8]) = FromBytes::from_bytes(&rem2)?;
-        let (weight_2, rem4): (Weight, &[u8]) = FromBytes::from_bytes(&rem3)?;
-        match (id_1, id_2) {
-            (DEPLOYMENT_THRESHOLD_ID, KEY_MANAGEMENT_THRESHOLD_ID) => {
-                action_thresholds
-                    .set_key_management_threshold(weight_2)
-                    .map_err(Error::custom)?;
-                action_thresholds
-                    .set_deployment_threshold(weight_1)
-                    .map_err(Error::custom)?;
-                Ok((action_thresholds, rem4))
-            }
-            (KEY_MANAGEMENT_THRESHOLD_ID, DEPLOYMENT_THRESHOLD_ID) => {
-                action_thresholds
-                    .set_key_management_threshold(weight_1)
-                    .map_err(Error::custom)?;
-                action_thresholds
-                    .set_deployment_threshold(weight_2)
-                    .map_err(Error::custom)?;
-                Ok((action_thresholds, rem4))
-            }
-            _ => Err(Error::FormattingError),
-        }
+        let (deployment, rem): (Weight, &[u8]) = FromBytes::from_bytes(&bytes)?;
+        let (key_management, rem): (Weight, &[u8]) = FromBytes::from_bytes(&rem)?;
+        let ret = ActionThresholds {
+            deployment,
+            key_management,
+        };
+        Ok((ret, rem))
     }
 }
 
