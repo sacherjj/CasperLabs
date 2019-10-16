@@ -171,7 +171,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
@@ -194,6 +194,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 }
