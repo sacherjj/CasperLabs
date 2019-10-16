@@ -920,14 +920,30 @@ class ValidationTest
       } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
   }
 
-  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in withStorage {
+  private def shouldBeInvalidDeployHeader(deploy: consensus.Deploy) = withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
-      val deploysWithCost = Vector(DeployOps.randomTooShortTTL().processed(1))
+      val deploysWithCost = Vector(deploy.processed(1))
       for {
         block  <- createAndStoreBlock[Task](Seq.empty, deploys = deploysWithCost)
         dag    <- dagStorage.getRepresentation
         result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
+  }
+
+  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooShortTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too long a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooLongTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too many dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooManyDependencies())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has invalid dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomInvalidDependency())
   }
 
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
