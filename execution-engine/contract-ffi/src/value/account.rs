@@ -1156,19 +1156,28 @@ mod tests {
 
     #[test]
     fn associated_keys_total_weight_excluding() {
+        let identity_key = PublicKey::new([1u8; 32]);
+        let identity_key_weight = Weight::new(1);
+
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(11);
+
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(12);
+
+        let key_3 = PublicKey::new([4u8; 32]);
+        let key_3_weight = Weight::new(13);
+
         let associated_keys = {
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(11))
-                .expect("should add key 1");
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(12))
-                .expect("should add key 2");
-            res.add_key(PublicKey::new([4u8; 32]), Weight::new(13))
-                .expect("should add key 3");
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+            res.add_key(key_3, key_3_weight).expect("should add key 3");
             res
         };
         assert_eq!(
-            associated_keys.total_keys_weight_excluding(PublicKey::new([3u8; 32])),
-            Weight::new(1 + 11 + 13)
+            associated_keys.total_keys_weight_excluding(key_2),
+            Weight::new(identity_key_weight.value() + key_1_weight.value() + key_3_weight.value())
         );
     }
 
@@ -1383,47 +1392,60 @@ mod tests {
 
     #[test]
     fn overflowing_keys_weight() {
-        let associated_keys = {
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(250));
+        let identity_key = PublicKey::new([1u8; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_3 = PublicKey::new([4u8; 32]);
 
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(1))
-                .expect("should add key 1");
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(2))
-                .expect("should add key 2");
-            res.add_key(PublicKey::new([4u8; 32]), Weight::new(3))
-                .expect("should add key 3");
+        let identity_key_weight = Weight::new(250);
+        let weight_1 = Weight::new(1);
+        let weight_2 = Weight::new(2);
+        let weight_3 = Weight::new(3);
+
+        let saturated_weight = Weight::new(u8::max_value());
+
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+
+            res.add_key(key_1, weight_1).expect("should add key 1");
+            res.add_key(key_2, weight_2).expect("should add key 2");
+            res.add_key(key_3, weight_3).expect("should add key 3");
             res
         };
 
         assert_eq!(
             associated_keys.calculate_keys_weight(&BTreeSet::from_iter(vec![
-                PublicKey::new([1; 32]), // 250
-                PublicKey::new([2; 32]), // 251
-                PublicKey::new([3; 32]), // 253
-                PublicKey::new([4; 32]), // 256 - error
+                identity_key, // 250
+                key_1,        // 251
+                key_2,        // 253
+                key_3,        // 256 - error
             ])),
-            Weight::new(255u8)
+            saturated_weight,
         );
     }
 
     #[test]
     fn overflowing_should_allow_removal() {
+        let identity_key = PublicKey::new([42; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+
         let associated_keys = {
             // Identity
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
+            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
 
             // Spare key
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(2))
+            res.add_key(key_1, Weight::new(2))
                 .expect("should add key 1");
             // Big key
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(255))
+            res.add_key(key_2, Weight::new(255))
                 .expect("should add key 2");
 
             res
         };
 
         let mut account = Account::new(
-            [0u8; 32],
+            identity_key.value(),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
@@ -1433,8 +1455,6 @@ mod tests {
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
-        account
-            .remove_associated_key(PublicKey::new([2u8; 32]))
-            .expect("should work")
+        account.remove_associated_key(key_1).expect("should work")
     }
 }

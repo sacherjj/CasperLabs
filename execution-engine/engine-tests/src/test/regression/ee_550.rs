@@ -1,10 +1,11 @@
+use contract_ffi::value::account::PublicKey;
+
 use crate::support::test_support::{
     DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
 };
 use crate::test::{
     CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
 };
-use contract_ffi::value::account::PublicKey;
 
 const CONTRACT_EE_550_REGRESSION: &str = "ee_550_regression.wasm";
 
