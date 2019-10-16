@@ -35,7 +35,7 @@ PACKAGED_SYSTEM_CONTRACTS = mint_install.wasm pos_install.wasm
 all: build build-contracts
 
 .PHONY: build
-build: $(SYSTEM_CONTRACTS)
+build:
 	$(CARGO) build $(CARGO_FLAGS)
 
 build-contract/%:
@@ -67,7 +67,7 @@ build-contracts: \
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: test
-test: $(SYSTEM_CONTRACTS)
+test:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-contracts
@@ -88,8 +88,8 @@ lint:
 
 .PHONY: check
 check: \
-	check-format \
 	build \
+	check-format \
 	lint \
 	test \
 	test-contracts
@@ -100,14 +100,14 @@ clean:
 	$(CARGO) clean
 
 .PHONY: deb
-deb: $(SYSTEM_CONTRACTS)
+deb:
 	cd engine-grpc-server && $(CARGO) deb
 
 engine-grpc-server/.rpm:
 	cd engine-grpc-server && $(CARGO) rpm init
 
 .PHONY: rpm
-rpm: engine-grpc-server/.rpm $(SYSTEM_CONTRACTS)
+rpm: engine-grpc-server/.rpm
 	cd engine-grpc-server && $(CARGO) rpm build
 
 target/system-contracts.tar.gz: $(SYSTEM_CONTRACTS)
