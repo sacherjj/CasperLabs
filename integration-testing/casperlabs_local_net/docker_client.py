@@ -14,7 +14,7 @@ from casperlabs_local_net.common import (
     DEFAULT_PAYMENT_COST,
     resources_path,
 )
-from casperlabs_local_net.client_base import CasperLabsClient
+from casperlabs_local_net.client_base import CasperLabsClientBase
 from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.client_parser import parse, parse_show_deploys
 from casperlabs_client import extract_common_name
@@ -42,7 +42,7 @@ class Arg:
     value: Optional[Any]
 
 
-class DockerClient(CasperLabsClient, LoggingMixin):
+class DockerClient(CasperLabsClientBase, LoggingMixin):
     def __init__(self, node: "DockerNode"):  # NOQA
         self.node = node
         self.abi = (
