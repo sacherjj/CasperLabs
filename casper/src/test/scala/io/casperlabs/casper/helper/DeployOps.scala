@@ -88,4 +88,16 @@ object DeployOps extends ArbitraryConsensus {
 
     sample(genDeploy)
   }
+
+  def randomNonzeroTTL(): Deploy = {
+    implicit val c = ConsensusConfig()
+
+    val genDeploy = arbitrary[Deploy]
+      .filter(
+        d =>
+          d.getHeader.ttlMillis > 0 && d.getHeader.timestamp < (Long.MaxValue - d.getHeader.ttlMillis)
+      )
+
+    sample(genDeploy)
+  }
 }

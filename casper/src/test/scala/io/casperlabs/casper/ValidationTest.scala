@@ -170,6 +170,12 @@ class ValidationTest
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
     }
+    def changeTimestamp(t: Long): Block = {
+      val header    = b.getHeader
+      val newHeader = header.withTimestamp(t)
+
+      ProtoUtil.unsignedBlockProto(b.getBody, newHeader)
+    }
     def changeSigAlgorithm(sigAlgorithm: String): Block =
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
     def changeSig(sig: ByteString): Block =
@@ -944,6 +950,19 @@ class ValidationTest
 
   it should "return InvalidDeployHeader when a deploy has invalid dependencies" in {
     shouldBeInvalidDeployHeader(DeployOps.randomInvalidDependency())
+  }
+
+  it should "return DeployExpired when a deploy is past its TTL" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp + deploy.getHeader.ttlMillis + 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
   }
 
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
