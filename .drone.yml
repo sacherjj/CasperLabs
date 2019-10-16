@@ -907,6 +907,27 @@ steps:
   - package-ee-tag
   - rsync-mac-tarball-tag
 
+- name: cleanup-mac-tag
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    port:
+      from_secret: mac-port
+    script:
+    - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
+  when:
+    ref:
+    - refs/tags/v*
+    status:
+    - failure
+    - success
+
 volumes:
 - name: docker_sock
   host:
