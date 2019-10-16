@@ -685,11 +685,14 @@ impl Account {
 
     /// Checks if subtracting passed weight from current total would make the
     /// new cumulative weight to fall below any of the thresholds on account.
-    fn check_thresholds_for_weight_update(&self, weight: Weight) -> bool {
-        let total_weight = self.associated_keys.total_keys_weight();
+    ///
+    /// New weight passed is assumed to be lower than the original weight.
+    fn can_update_key(&self, public_key: PublicKey, weight: Weight) -> bool {
+        // Calculates total weight of all keys excluding the given key
+        let total_weight = self.associated_keys.total_keys_weight_excluding(public_key);
 
-        // Safely calculate new weight
-        let new_weight = total_weight.value().saturating_sub(weight.value());
+        // Safely calculate new weight by adding the old weight
+        let new_weight = total_weight.value().saturating_add(weight.value());
 
         // Returns true if the new weight would be greater or equal to all of
         // the thresholds.
@@ -714,9 +717,8 @@ impl Account {
     ) -> Result<(), UpdateKeyFailure> {
         if let Some(current_weight) = self.associated_keys.get(&public_key) {
             if weight < *current_weight {
-                let diff = Weight::new(current_weight.value() - weight.value());
                 // New weight is smaller than current weight
-                if !self.check_thresholds_for_weight_update(diff) {
+                if !self.can_update_key(public_key, weight) {
                     return Err(UpdateKeyFailure::ThresholdViolation);
                 }
             }
