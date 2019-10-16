@@ -49,11 +49,11 @@ pub extern "C" fn call() {
         "init" => {
             // Deployed with identity key only
             account::add_associated_key(PublicKey::new([100; 32]), Weight::new(2))
-                .unwrap_or_else(|_| runtime::revert(Error::AddKey1));
+                .unwrap_or_revert_with(Error::AddKey1);
             account::add_associated_key(PublicKey::new([101; 32]), Weight::new(255))
-                .unwrap_or_else(|_| runtime::revert(Error::AddKey2));
+                .unwrap_or_revert_with(Error::AddKey2);
             account::set_action_threshold(ActionType::KeyManagement, Weight::new(254))
-                .unwrap_or_else(|_| runtime::revert(Error::SetActionThreshold));
+                .unwrap_or_revert_with(Error::SetActionThreshold);
         }
         "test" => {
             // Deployed with two keys of weights 2 and 255 (total saturates at 255) to satisfy new
