@@ -1118,11 +1118,6 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
-      _ <- Task.delay(
-            println(
-              s"blockB parents: ${blockB.getHeader.parentHashes.map(PrettyPrinter.buildString(_))}"
-            )
-          )
       // nodes(1) should have more weight than nodes(0) so it should take over
       _              <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       pendingDeploys <- nodes(0).deployStorage.readPending
