@@ -4,11 +4,17 @@ import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.ipc.TransformEntry
 
 trait DoobieCodecs {
   protected implicit val metaByteString: Meta[ByteString] =
     Meta[Array[Byte]].imap(ByteString.copyFrom)(_.toByteArray)
+
+  protected implicit val metaPublicKeyBS: Meta[PublicKeyBS] =
+    Meta[Array[Byte]].imap(d => PublicKey(ByteString.copyFrom(d)))(_.toByteArray)
 
   protected implicit val readDeploy: Read[Deploy] =
     Read[Array[Byte]].map(Deploy.parseFrom)
@@ -28,6 +34,30 @@ trait DoobieCodecs {
             errorMessage = maybeError.getOrElse("")
           )
         )
+    }
+  }
+
+  protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
+    Read[(Long, Option[String], Array[Byte], Int, Int)].map {
+      case (cost, maybeError, blockSummaryData, blockSize, deployErrorCount) =>
+        val blockSummary = BlockSummary.parseFrom(blockSummaryData)
+        val blockStatus = BlockInfo
+          .Status()
+          .withStats(
+            BlockInfo.Status
+              .Stats()
+              .withBlockSizeBytes(blockSize)
+              .withDeployErrorCount(deployErrorCount)
+          )
+        val blockInfo = BlockInfo()
+          .withSummary(blockSummary)
+          .withStatus(blockStatus)
+
+        ProcessingResult(
+          cost = cost,
+          isError = maybeError.nonEmpty,
+          errorMessage = maybeError.getOrElse("")
+        ).withBlockInfo(blockInfo)
     }
   }
 

@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
@@ -94,6 +95,16 @@ import scala.concurrent.duration._
 
   /** Read the status of a deploy from the buffer, if it's still in it. */
   def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]]
+
+  def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
+
+  /** @return List of deploys created by specified account*/
+  def getDeploysByAccount(
+      account: PublicKeyBS,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -169,8 +180,19 @@ object DeployStorage {
     override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
       reader.getBufferedStatus(hash)
 
+    override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+      reader.getDeployInfo(deployHash)
+
     override def clear(): F[Unit] = writer.clear()
 
     override def close(): F[Unit] = writer.close()
+
+    override def getDeploysByAccount(
+        account: PublicKeyBS,
+        limit: Int,
+        lastTimeStamp: Long,
+        lastDeployHash: DeployHash
+    ): F[List[Deploy]] =
+      reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
   }
 }

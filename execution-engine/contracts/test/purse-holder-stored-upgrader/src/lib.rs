@@ -36,8 +36,7 @@ enum CustomError {
     InvalidMethodNameArg = 3,
     MissingPurseNameArg = 4,
     InvalidPurseNameArg = 5,
-    InvalidTURef = 6,
-    UnknownMethodName = 7,
+    UnknownMethodName = 6,
 }
 
 impl From<CustomError> for Error {
@@ -78,8 +77,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(CustomError::MissingPurseHolderURefArg)
         .unwrap_or_revert_with(CustomError::InvalidPurseHolderURefArg);
 
-    let turef =
-        TURef::from_uref(uref).unwrap_or_else(|_| runtime::revert(CustomError::InvalidTURef));
+    let turef = TURef::from_uref(uref).unwrap_or_revert();
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);

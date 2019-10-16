@@ -1,4 +1,3 @@
-use crate::bytesrepr;
 use crate::contract_api::{runtime, Error};
 
 /// A trait which provides syntactic sugar for unwrapping a type or calling
@@ -19,16 +18,6 @@ impl<T, E: Into<Error>> UnwrapOrRevert<T> for Result<T, E> {
     }
 
     fn unwrap_or_revert_with<F: Into<Error>>(self, error: F) -> T {
-        self.unwrap_or_else(|_| runtime::revert(error.into()))
-    }
-}
-
-impl<T> UnwrapOrRevert<T> for Result<T, bytesrepr::Error> {
-    fn unwrap_or_revert(self) -> T {
-        self.unwrap_or_else(|_| runtime::revert(Error::Deserialize))
-    }
-
-    fn unwrap_or_revert_with<E: Into<Error>>(self, error: E) -> T {
         self.unwrap_or_else(|_| runtime::revert(error.into()))
     }
 }

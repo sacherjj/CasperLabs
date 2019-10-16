@@ -9,10 +9,12 @@ import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
-import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
+import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
 import fs2._
 
@@ -166,7 +168,8 @@ object SQLiteStorage {
       override def topoSort(
           startBlockNumber: Long,
           endBlockNumber: Long
-      ): Stream[F, Vector[BlockSummary]] = dagStorage.topoSort(startBlockNumber, endBlockNumber)
+      ): Stream[F, Vector[BlockSummary]] =
+        dagStorage.topoSort(startBlockNumber, endBlockNumber)
 
       override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockSummary]] =
         dagStorage.topoSort(startBlockNumber)
@@ -185,5 +188,16 @@ object SQLiteStorage {
 
       override def latestMessages: F[Map[Validator, Message]] =
         dagStorage.latestMessages
+
+      override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+        deployStorage.getDeployInfo(deployHash)
+
+      override def getDeploysByAccount(
+          account: PublicKeyBS,
+          limit: Int,
+          lastTimeStamp: Long,
+          lastDeployHash: DeployHash
+      ): F[List[Deploy]] =
+        deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
     }
 }

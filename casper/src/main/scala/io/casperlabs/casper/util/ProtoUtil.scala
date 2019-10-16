@@ -6,6 +6,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.finality.votingmatrix
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
@@ -19,7 +20,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.models.Message
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.Abi
 import io.casperlabs.storage.block.BlockStorage
@@ -28,6 +29,8 @@ import io.casperlabs.storage.dag.DagRepresentation
 import scala.collection.immutable
 
 object ProtoUtil {
+  import Weight._
+
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
@@ -205,15 +208,15 @@ object ProtoUtil {
           validator == header.validatorPublicKey
       }
 
-  def weightMap(block: Block): Map[ByteString, Long] =
+  def weightMap(block: Block): Map[ByteString, Weight] =
     weightMap(block.getHeader)
 
-  def weightMap(header: Block.Header): Map[ByteString, Long] =
+  def weightMap(header: Block.Header): Map[ByteString, Weight] =
     header.getState.bonds.map {
-      case Bond(validator, stake) => validator -> stake
+      case Bond(validator, stake) => validator -> Weight(stake)
     }.toMap
 
-  def weightMapTotal(weights: Map[ByteString, Long]): Long =
+  def weightMapTotal(weights: Map[ByteString, Weight]): Weight =
     weights.values.sum
 
   private def mainParent[F[_]: Monad: BlockStorage](
@@ -238,47 +241,47 @@ object ProtoUtil {
       dag: DagRepresentation[F],
       blockHash: BlockHash,
       validator: Validator
-  ): F[Long] =
-    mainParentWeightMap(dag, blockHash).map(_.getOrElse(validator, 0L))
+  ): F[Weight] =
+    mainParentWeightMap(dag, blockHash).map(_.getOrElse(validator, Weight.Zero))
 
   def weightFromValidator[F[_]: Monad: BlockStorage](
       header: Block.Header,
       validator: Validator
-  ): F[Long] =
+  ): F[Weight] =
     for {
       maybeMainParent <- mainParent[F](header)
       weightFromValidator = maybeMainParent
-        .map(_.weightMap.getOrElse(validator, 0L))
-        .getOrElse(weightMap(header).getOrElse(validator, 0L)) //no parents means genesis -- use itself
+        .map(_.weightMap.getOrElse(validator, Weight.Zero))
+        .getOrElse(weightMap(header).getOrElse(validator, Weight.Zero)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
   def weightFromValidator[F[_]: Monad: BlockStorage](
       b: Block,
       validator: ByteString
-  ): F[Long] =
+  ): F[Weight] =
     weightFromValidator[F](b.getHeader, validator)
 
-  def weightFromSender[F[_]: Monad: BlockStorage](b: Block): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](b: Block): F[Weight] =
     weightFromValidator[F](b, b.getHeader.validatorPublicKey)
 
-  def weightFromSender[F[_]: Monad: BlockStorage](header: Block.Header): F[Long] =
+  def weightFromSender[F[_]: Monad: BlockStorage](header: Block.Header): F[Weight] =
     weightFromValidator[F](header, header.validatorPublicKey)
 
   def mainParentWeightMap[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       candidateBlockHash: BlockHash
-  ): F[Map[BlockHash, Long]] =
+  ): F[Map[BlockHash, Weight]] =
     dag.lookup(candidateBlockHash).flatMap { messageOpt =>
       val message = messageOpt.get
       if (message.isGenesisLike) {
 
-        /** We know that Gensis is of [[Message.Block]] type */
+        // We know that Gensis is of [[Message.Block]] type.
         message.asInstanceOf[Message.Block].weightMap.pure[F]
       } else {
         dag.lookup(message.parentBlock).flatMap {
           case Some(b: Message.Block) => b.weightMap.pure[F]
           case Some(b: Message.Ballot) =>
-            MonadThrowable[F].raiseError[Map[ByteString, Long]](
+            MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
                 s"A ballot ${PrettyPrinter.buildString(b.messageHash)} was a parent block for ${PrettyPrinter
                   .buildString(message.messageHash)}"
@@ -288,7 +291,7 @@ object ProtoUtil {
           // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
           case Some(_) => ???
           case None =>
-            MonadThrowable[F].raiseError[Map[ByteString, Long]](
+            MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
                 s"Missing dependency ${PrettyPrinter.buildString(message.parentBlock)}"
               )

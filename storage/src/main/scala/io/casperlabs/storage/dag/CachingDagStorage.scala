@@ -2,28 +2,39 @@ package io.casperlabs.storage.dag
 
 import cats._
 import cats.effect._
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent._
 import cats.implicits._
-import com.google.common.cache.{Cache, CacheBuilder}
+import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.dag.CachingDagStorage.Rank
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 
-class CachingDagStorage[F[_]: Sync](
-    // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
-    neighbourhoodRadiusToCacheOnLookup: Int,
+import scala.collection.concurrent.TrieMap
+
+class CachingDagStorage[F[_]: Concurrent](
+    // How far to go to the past (by ranks) for caching neighborhood of looked up block
+    neighborhoodBefore: Int,
+    // How far to go to the future (by ranks) for caching neighborhood of looked up block
+    neighborhoodAfter: Int,
     underlying: DagStorage[F] with DagRepresentation[F],
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
+    private[dag] val ranksRanges: TrieMap[Rank, Unit],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
     with DagRepresentation[F] {
+
+  /** Unsafe to be invoked concurrently */
+  private def unsafeUpdateRanks(start: Rank, end: Rank): F[Unit] = Sync[F].delay {
+    ranksRanges ++= (start to end).map((_, ()))
+  }
+
   private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
     Sync[F].delay(fromCache) flatMap {
       case None    => fromUnderlying
@@ -36,7 +47,8 @@ class CachingDagStorage[F[_]: Sync](
       case s @ Some(_) => (s: Option[A]).pure[F]
     }
 
-  private def cacheMessage(message: Message): F[Unit] = Sync[F].delay {
+  /** Unsafe to be invoked concurrently */
+  private def unsafeCacheMessage(message: Message): F[Unit] = Sync[F].delay {
     val parents        = message.parents
     val justifications = message.justifications.map(_.latestBlockHash)
     parents.foreach { parent =>
@@ -52,14 +64,30 @@ class CachingDagStorage[F[_]: Sync](
     messagesCache.put(message.messageHash, message)
   }
 
-  private def cacheSummary(summary: BlockSummary): F[Unit] =
-    Sync[F].fromTry(Message.fromBlockSummary(summary)).flatMap(cacheMessage)
+  /** Unsafe to be invoked concurrently */
+  private def unsafeCacheSummary(summary: BlockSummary): F[Unit] =
+    Sync[F].fromTry(Message.fromBlockSummary(summary)).flatMap(unsafeCacheMessage)
 
-  private def cacheNeighbourhood(message: Message): F[Unit] =
-    topoSort(
-      startBlockNumber = message.rank - neighbourhoodRadiusToCacheOnLookup,
-      endBlockNumber = message.rank + neighbourhoodRadiusToCacheOnLookup
-    ).evalMap(summaries => semaphore.withPermit(summaries.traverse_(cacheSummary))).compile.drain
+  /** Unsafe to be invoked concurrently.
+    * Reads from [[underlying]] only missing neighbors.
+    * Calculates them using ranks ranges kept in [[ranksRanges]].
+    * */
+  private def unsafeCacheNeighborhood(m: Message): F[Unit] = {
+    val missingRanks =
+      (m.rank - neighborhoodBefore)
+        .to(m.rank + neighborhoodAfter)
+        .toSet
+        .diff(ranksRanges.keySet)
+        .toList
+    (for {
+      start <- missingRanks.minimumOption
+      end   <- missingRanks.maximumOption
+    } yield topoSort(start, end).compile.toList
+      .flatMap(summaries => summaries.flatten.traverse_(unsafeCacheSummary)) >> unsafeUpdateRanks(
+      start,
+      end
+    )).getOrElse(().pure[F])
+  }
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     cacheOrUnderlying(
@@ -79,9 +107,9 @@ class CachingDagStorage[F[_]: Sync](
 
   override private[storage] def insert(block: Block): F[DagRepresentation[F]] =
     for {
-      message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- semaphore.withPermit(cacheMessage(message))
       dag     <- underlying.insert(block)
+      message <- Sync[F].fromTry(Message.fromBlock(block))
+      _       <- semaphore.withPermit(unsafeCacheMessage(message))
     } yield dag
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
@@ -100,7 +128,9 @@ class CachingDagStorage[F[_]: Sync](
       underlying
         .lookup(blockHash)
         .flatMap(
-          maybeMessage => maybeMessage.traverse_(cacheNeighbourhood) >> maybeMessage.pure[F]
+          maybeMessage =>
+            semaphore.withPermit(maybeMessage.traverse_(unsafeCacheNeighborhood)) >>
+              maybeMessage.pure[F]
         )
     )
 
@@ -113,7 +143,8 @@ class CachingDagStorage[F[_]: Sync](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]] = underlying.topoSort(startBlockNumber, endBlockNumber)
+  ): fs2.Stream[F, Vector[BlockSummary]] =
+    underlying.topoSort(startBlockNumber, endBlockNumber)
 
   /** Return ranks of blocks in the DAG from a start index to the end. */
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
@@ -134,12 +165,16 @@ class CachingDagStorage[F[_]: Sync](
 }
 
 object CachingDagStorage {
+  type Rank = Long
+
   def apply[F[_]: Concurrent: Metrics](
       underlying: DagStorage[F] with DagRepresentation[F],
       maxSizeBytes: Long,
-      name: String = "cache",
-      // How far to go to the past and future (by ranks) for caching neighbourhood of looked up block
-      neighbourhoodRadiusToCacheOnLookup: Int = 5
+      // How far to go to the past (by ranks) for caching neighborhood of looked up block
+      neighborhoodBefore: Int,
+      // How far to go to the future (by ranks) for caching neighborhood of looked up block
+      neighborhoodAfter: Int,
+      name: String = "cache"
   ): F[CachingDagStorage[F]] = {
     val metricsF = Metrics[F]
     val createBlockHashesSetCache = Sync[F].delay {
@@ -151,25 +186,44 @@ object CachingDagStorage {
         .build[BlockHash, Set[BlockHash]]()
     }
 
-    val createMessagesCache = Sync[F].delay {
-      CacheBuilder
-        .newBuilder()
-        .maximumWeight(maxSizeBytes)
-        .weigher((_: BlockHash, msg: Message) => msg.blockSummary.serializedSize) //TODO: Fix the size estimate of a message.
-        .build[BlockHash, Message]()
+    /** Updates [[ranksRanges]] when a message is evicted from cache.
+      * Otherwise [[CachingDagStorage]] would think that the message is cached even after its eviction. */
+    def createMessageRemovalListener(
+        ranksRanges: TrieMap[Rank, Unit]
+    ): RemovalListener[BlockHash, Message] = { n: RemovalNotification[BlockHash, Message] =>
+      Option(n.getValue)
+        .foreach { m =>
+          ranksRanges -= m.rank
+        }
     }
 
+    def createMessagesCache(
+        removalListener: RemovalListener[BlockHash, Message]
+    ) =
+      Sync[F].delay {
+        CacheBuilder
+          .newBuilder()
+          .maximumWeight(maxSizeBytes)
+          .weigher((_: BlockHash, msg: Message) => msg.blockSummary.serializedSize)
+          .removalListener(removalListener)
+          .build[BlockHash, Message]()
+      }
+
     for {
+      ranksRanges        <- Sync[F].delay(TrieMap.empty[Rank, Unit])
+      semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
       justificationCache <- createBlockHashesSetCache
-      messagesCache      <- createMessagesCache
-      semaphore          <- Semaphore[F](1)
+      messagesCache      <- createMessagesCache(createMessageRemovalListener(ranksRanges))
+
       store = new CachingDagStorage[F](
-        neighbourhoodRadiusToCacheOnLookup,
+        neighborhoodBefore,
+        neighborhoodAfter,
         underlying,
         childrenCache,
         justificationCache,
         messagesCache,
+        ranksRanges,
         semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
         override implicit val m: Metrics[F] = metricsF

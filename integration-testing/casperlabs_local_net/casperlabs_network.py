@@ -139,22 +139,27 @@ class CasperLabsNetwork:
             cl_node = CasperLabsNode(self, config)
             self.cl_nodes.append(cl_node)
 
-    def add_new_node_to_network(self, generate_config=None) -> None:
-        kp = self.get_key()
-        config = (
-            generate_config
-            and generate_config(kp)
-            or DockerConfig(
+    def add_new_node_to_network(
+        self, generate_config=None, account: Account = None
+    ) -> Account:
+        if account is None:
+            account = self.get_key()
+
+        if generate_config is not None:
+            config = generate_config(account)
+        else:
+            config = DockerConfig(
                 self.docker_client,
-                node_private_key=kp.private_key,
-                node_account=kp,
+                node_private_key=account.private_key,
+                node_account=account,
                 grpc_encryption=self.grpc_encryption,
                 behind_proxy=self.behind_proxy,
             )
-        )
+
         self.add_cl_node(config)
         self.wait_method(wait_for_approved_block_received_handler_state, 1)
         self.wait_for_peers()
+        return account
 
     def add_bootstrap(self, config: DockerConfig) -> None:
         if self.node_count > 0:

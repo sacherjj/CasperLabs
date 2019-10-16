@@ -16,6 +16,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::InvalidArgument);
     let weight = Weight::new(weight_val as u8);
 
-    account::update_associated_key(account, weight)
-        .unwrap_or_else(|_| runtime::revert(Error::User(100)));
+    account::update_associated_key(account, weight).unwrap_or_revert_with(Error::User(100));
 }
