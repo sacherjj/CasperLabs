@@ -979,6 +979,35 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
   }
 
+  it should "work for valid deploys" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA = DeployOps.randomNonzeroTTL()
+      val deployB = DeployOps
+        .randomNonzeroTTL()
+        .withTimestamp(deployA.getHeader.timestamp + deployA.getHeader.ttlMillis)
+      val deployC = DeployOps
+        .randomNonzeroTTL()
+        .withDependencies(List(deployA.deployHash, deployB.deployHash))
+        .withTimestamp(deployB.getHeader.timestamp + deployB.getHeader.ttlMillis)
+      val timeA = deployA.getHeader.timestamp + deployA.getHeader.ttlMillis - 1
+      val timeB = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      val timeC = deployC.getHeader.timestamp + deployC.getHeader.ttlMillis - 1
+
+      for {
+        blockA <- createBlock[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
+                   .map(_.changeTimestamp(timeA))
+        _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
+        blockB <- createBlock[Task](List(blockA.blockHash), deploys = Vector(deployB.processed(1)))
+                   .map(_.changeTimestamp(timeB))
+        _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
+        blockC <- createBlock[Task](List(blockB.blockHash), deploys = Vector(deployC.processed(1)))
+                   .map(_.changeTimestamp(timeC))
+        _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(blockC, dag).attempt
+      } yield result shouldBe Right(())
+  }
+
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val contract        = ByteString.copyFromUtf8("some contract")
