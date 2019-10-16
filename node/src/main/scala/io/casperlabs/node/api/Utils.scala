@@ -11,6 +11,10 @@ import io.casperlabs.crypto.hash.Blake2b256
 import scala.util.Try
 
 object Utils {
+  def checkString[F[_]: MonadThrowable](s: String, desc: String, b: String => Boolean): F[String] =
+    MonadThrowable[F].raiseError[String](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
+      .pure[F]
+
   def toKey[F[_]: Monad](keyType: String, keyValue: String)(
       implicit appErr: MonadThrowable[F]
   ): F[state.Key] = {

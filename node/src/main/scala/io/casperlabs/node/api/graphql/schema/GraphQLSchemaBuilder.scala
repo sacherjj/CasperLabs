@@ -33,10 +33,6 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
     flatToSet(projections, Set.empty).intersect(fields).nonEmpty
   }
 
-  def checkString(s: String, desc: String, b: String => Boolean): F[String] =
-    MonadThrowable[F].raiseError[String](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
-      .pure[F]
-
   def createSchema: Schema[Unit, Unit] =
     Schema(
       query = ObjectType(
@@ -48,10 +44,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             arguments = blocks.arguments.BlockHashPrefix :: Nil,
             resolve = Projector { (context, projections) =>
               (for {
-                blockHashPrefix <- checkString(
+                blockHashPrefix <- Utils.checkString[F](
                                     context.arg(blocks.arguments.BlockHashPrefix),
                                     "BlockHash prefix must be at least 4 characters (2 bytes) long",
-                                    s => Base16.tryDecode(s.take(4)).nonEmpty
+                                    s => Base16.tryDecode(s).exists(_.length >= 2)
                                   )
                 res <- BlockAPI
                         .getBlockInfoOpt[F](
@@ -80,7 +76,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
-              (checkString(
+              (Utils.checkString[F](
                 c.arg(blocks.arguments.DeployHash),
                 "DeployHash must be 64 characters (32 bytes) long",
                 Base16.tryDecode(_).exists(_.length == 32)
@@ -95,10 +91,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               val queries = c.arg(globalstate.arguments.StateQueryArgument).toList
 
               val program = for {
-                blockHashBase16Prefix <- checkString(
+                blockHashBase16Prefix <- Utils.checkString[F](
                                           c.arg(blocks.arguments.BlockHashPrefix),
                                           "BlockHash prefix must be at least 4 characters (2 bytes) long",
-                                          s => Base16.tryDecode(s.take(4)).nonEmpty
+                                          s => Base16.tryDecode(s).exists(_.length >= 2)
                                         )
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoOpt[F](blockHashBase16Prefix)
