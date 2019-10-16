@@ -965,6 +965,20 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
   }
 
+  it should "return DeployDependencyNotMet when a deploy has a dependency not in the p-past cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA        = DeployOps.randomNonzeroTTL()
+      val deployB        = deployA.withDependencies(List(deployA.deployHash))
+      val blockTimestamp = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deployB.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
+  }
+
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val contract        = ByteString.copyFromUtf8("some contract")
