@@ -682,7 +682,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
@@ -821,7 +821,7 @@ object MultiParentCasperImpl {
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
             InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
             InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
-            InvalidTargetHash =>
+            InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -890,7 +890,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
@@ -942,7 +942,7 @@ object MultiParentCasperImpl {
               InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
-              InvalidTargetHash =>
+              InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
             ().pure[F]
 
           case UnexpectedBlockException(_) =>

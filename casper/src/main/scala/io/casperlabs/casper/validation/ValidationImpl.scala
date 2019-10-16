@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -105,7 +105,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainName: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
+  )(
+      implicit bs: BlockStorage[F],
+      versions: CasperLabsProtocolVersions[F],
+      compiler: Fs2Compiler[F]
+  ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -129,6 +133,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
       _ <- deployUniqueness(block, dag)
+      _ <- deployHeaders(block, dag)
     } yield ()
   }
 
@@ -525,6 +530,78 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployCount)
       } yield ()
     }
+
+  def deployHeaders(b: Block, dag: DagRepresentation[F])(
+      implicit blockStorage: BlockStorage[F],
+      compiler: Fs2Compiler[F]
+  ): F[Unit] = {
+    val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
+    val headersAndHashes                = deploys.map(d => d.deployHash -> d.getHeader)
+    val timestamp                       = b.getHeader.timestamp
+    val timestampFilter = DeployFilters.timestampBefore[F](timestamp) andThen DeployFilters
+      .ttlAfter[F](timestamp)
+
+    def raiseHeaderErrors(errors: List[Errors.DeployHeaderError]): F[Unit] =
+      for {
+        _ <- Log[F].warn(ignore(b, errors.map(_.errorMessage).mkString(". ")))
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHeader)
+      } yield ()
+
+    def raiseExpiredDeploy(deployHash: DeployHash): F[Unit] =
+      for {
+        _ <- Log[F].warn(ignore(b, s"Deploy ${PrettyPrinter.buildString(deployHash)} was expired."))
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
+      } yield ()
+
+    def raiseDeployDependencyNotMet(deploy: consensus.Deploy): F[Unit] =
+      for {
+        _ <- Log[F].warn(
+              ignore(b, s"${PrettyPrinter.buildString(deploy)} did not have all dependencies met.")
+            )
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployDependencyNotMet)
+      } yield ()
+
+    for {
+      deployErrors <- deploys.traverse(deployHeader).map(_.flatten)
+      _            <- raiseHeaderErrors(deployErrors).whenA(deployErrors.nonEmpty)
+      _ <- raiseFilterFailure[(DeployHash, consensus.Deploy.Header)](
+            headersAndHashes,
+            timestampFilter, {
+              case (deployHash, _) => raiseExpiredDeploy(deployHash)
+            }
+          )
+      parents          <- ProtoUtil.unsafeGetParents[F](b)
+      dependencyFilter = DeployFilters.dependenciesMet(dag, parents)
+      _                <- raiseFilterFailure(deploys, dependencyFilter, raiseDeployDependencyNotMet)
+    } yield ()
+  }
+
+  private def toStream[A](list: List[A]): fs2.Stream[F, A] =
+    fs2.Stream.chunk(fs2.Chunk.iterable(list))
+
+  private def raiseFilterFailure[A](
+      list: List[A],
+      filter: fs2.Pipe[F, A, A],
+      handler: A => F[Unit]
+  )(implicit compiler: Fs2Compiler[F]): F[Unit] = {
+    val stream         = toStream(list).map(_.some)
+    val filteredStream = toStream(list).through(filter).map(_.some)
+
+    // If all elements pass the filter, then `stream` == `filteredStream`,
+    // otherwise, the first mismatch is the first element which was filtered out
+    val failure = stream
+      .zipAll(filteredStream)(none[A], none[A])
+      .filter { case (a, b) => a != b }
+      .head
+      // This .get is safe because the entire left stream is created with .some and
+      // must be at least as long as the right (filtered) stream, so will never be padded.
+      .map(_._1.get)
+
+    failure.compile.last.flatMap {
+      case Some(a) => handler(a)
+      case None    => ().pure[F]
+    }
+  }
 
   def deployHashes(
       b: Block
