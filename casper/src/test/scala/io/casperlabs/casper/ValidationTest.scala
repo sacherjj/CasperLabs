@@ -10,7 +10,12 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
+import io.casperlabs.casper.helper.{
+  BlockGenerator,
+  DeployOps,
+  HashSetCasperTestNode,
+  StorageFixture
+}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
@@ -296,67 +301,34 @@ class ValidationTest
   }
 
   it should "not accept too short time to live" in withoutStorage {
-    val minTTL = 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(1, minTTL - 1)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooShortTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, DeployOps.minTTL)
     )
   }
 
   it should "not accept too long time to live" in withoutStorage {
-    val maxTTL = 24 * 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooLongTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, DeployOps.maxTTL)
     )
   }
 
   it should "not accept too many dependencies" in withoutStorage {
-    val maxDependencies = 10
-    val genDeploy = for {
-      d               <- arbitrary[consensus.Deploy]
-      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
-      dependencies    <- Gen.listOfN(numDependencies, genHash)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(dependencies)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooManyDependencies()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        maxDependencies
+        DeployOps.maxDependencies
       )
     )
   }
 
   it should "not accept invalid dependencies" in withoutStorage {
-    val genDeploy = for {
-      d          <- arbitrary[consensus.Deploy]
-      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
-      dependency <- genBytes(nBytes)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(List(dependency))
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomInvalidDependency()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
         .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
