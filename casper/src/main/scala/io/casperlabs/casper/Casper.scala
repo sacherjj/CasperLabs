@@ -5,7 +5,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
@@ -13,7 +13,6 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.gossiping
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
@@ -31,7 +30,7 @@ trait MultiParentCasper[F[_]] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
-      latestMessages: Map[ByteString, ByteString]
+      latestMessages: Map[ByteString, Set[ByteString]]
   ): F[List[ByteString]]
   def createBlock: F[CreateBlockStatus]
   ////
@@ -47,15 +46,6 @@ trait MultiParentCasper[F[_]] {
 
 object MultiParentCasper extends MultiParentCasperInstances {
   def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
-
-  def forkChoiceTip[F[_]: MultiParentCasper: MonadThrowable: BlockStorage]: F[Block] =
-    for {
-      dag            <- MultiParentCasper[F].dag
-      latestMessages <- dag.latestMessageHashes
-      tipHashes      <- MultiParentCasper[F].estimator(dag, latestMessages)
-      tipHash        = tipHashes.head
-      tip            <- ProtoUtil.unsafeGetBlock[F](tipHash)
-    } yield tip
 }
 
 sealed abstract class MultiParentCasperInstances {

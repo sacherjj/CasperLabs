@@ -379,7 +379,7 @@ object GossipServiceCasperTestNodeFactory {
                              for {
                                dag    <- casper.dag
                                latest <- dag.latestMessageHashes
-                             } yield latest.values.toList
+                             } yield latest.values.flatten.toList
 
                            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
                              for {

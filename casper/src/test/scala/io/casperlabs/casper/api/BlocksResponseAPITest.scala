@@ -85,8 +85,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
-                 latestMessageHashes,
-                 EquivocationsTracker.empty
+                 latestMessageHashes
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -169,8 +168,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                    .tips[Task](
                      dag,
                      genesis.blockHash,
-                     latestMessagesHashes,
-                     EquivocationsTracker.empty
+                     latestMessagesHashes
                    )
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],

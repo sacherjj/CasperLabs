@@ -561,7 +561,7 @@ package object gossiping {
                              casper <- unsafeGetCasper[F]
                              dag    <- casper.dag
                              latest <- dag.latestMessageHashes
-                           } yield latest.values.toList
+                           } yield latest.values.flatten.toList
 
                          override def validate(blockSummary: BlockSummary): F[Unit] =
                            Validation[F].blockSummary(blockSummary, chainName)

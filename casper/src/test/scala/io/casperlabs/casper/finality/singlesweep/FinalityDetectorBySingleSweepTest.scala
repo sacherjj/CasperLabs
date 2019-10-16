@@ -2,6 +2,7 @@ package io.casperlabs.casper.finality.singlesweep
 
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
@@ -268,7 +269,6 @@ class FinalityDetectorBySingleSweepTest
       } yield ()
   }
 
-  // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
   it should "detect possible disagreements appropriately" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
@@ -285,26 +285,24 @@ class FinalityDetectorBySingleSweepTest
         b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v2,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               bonds
              )
         b3 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v1,
-               bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+               bonds
              )
         b4 <- createAndStoreBlock[Task](
                Seq(b2.blockHash),
                v3,
                bonds,
-               HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
+               HashMap(v2 -> b2.blockHash, v3 -> b2.blockHash)
              )
         b5 <- createAndStoreBlock[Task](
                Seq(b3.blockHash),
                v2,
                bonds,
-               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
+               HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash)
              )
         b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
@@ -328,14 +326,30 @@ class FinalityDetectorBySingleSweepTest
         dag <- dagStorage.getRepresentation
 
         genesisFaultTolerance <- FinalityDetector[Task]
-                                  .normalizedFaultTolerance(dag, genesis.blockHash)
-        _                = assert(genesisFaultTolerance === 0.5f +- 0.01f)
-        b2FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b2.blockHash)
-        _                = assert(b2FaultTolerance === 0f +- 0.01f)
-        b3FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b3.blockHash)
-        _                = assert(b3FaultTolerance === 0f +- 0.01f)
-        b4FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(dag, b4.blockHash)
-        result           = assert(b4FaultTolerance === 0f +- 0.01f)
+                                  .normalizedFaultTolerance(
+                                    dag,
+                                    genesis.blockHash,
+                                    EquivocationsTracker.empty
+                                  )
+        _ = assert(genesisFaultTolerance === 0.5f +- 0.01f)
+        b2FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(
+                             dag,
+                             b2.blockHash,
+                             EquivocationsTracker.empty
+                           )
+        _ = assert(b2FaultTolerance === 0f +- 0.01f)
+        b3FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(
+                             dag,
+                             b3.blockHash,
+                             EquivocationsTracker.empty
+                           )
+        _ = assert(b3FaultTolerance === 0f +- 0.01f)
+        b4FaultTolerance <- FinalityDetector[Task].normalizedFaultTolerance(
+                             dag,
+                             b4.blockHash,
+                             EquivocationsTracker.empty
+                           )
+        result = assert(b4FaultTolerance === 0f +- 0.01f)
       } yield result
   }
 }

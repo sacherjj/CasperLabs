@@ -210,7 +210,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
   def estimator(
       dag: DagRepresentation[F],
-      latestMessagesHashes: Map[ByteString, ByteString]
+      latestMessagesHashes: Map[ByteString, Set[ByteString]]
   ): F[List[BlockHash]] =
     underlying.estimator(dag, latestMessagesHashes)
   def dag: F[DagRepresentation[F]] = underlying.dag

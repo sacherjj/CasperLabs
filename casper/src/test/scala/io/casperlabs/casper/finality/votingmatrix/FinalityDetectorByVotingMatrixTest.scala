@@ -6,7 +6,7 @@ import cats.mtl.FunctorRaise
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.{Block}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.helper.BlockGenerator._
@@ -300,8 +300,7 @@ class FinalityDetectorByVotingMatrixTest
                      Seq(genesis.blockHash),
                      genesis.blockHash,
                      v1,
-                     bonds,
-                     HashMap(v1 -> genesis.blockHash)
+                     bonds
                    )
         _ = c1 shouldBe None
         (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
@@ -309,7 +308,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v2,
                      bonds,
-                     HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash)
+                     HashMap(v1 -> b1.blockHash)
                    )
         _ = c2 shouldBe None
         // b4 and b2 are both created by v2 but don't cite each other
@@ -318,7 +317,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v2,
                      bonds,
-                     HashMap(v3 -> genesis.blockHash, v1 -> b1.blockHash),
+                     HashMap(v1 -> b1.blockHash),
                      ByteString.copyFromUtf8(scala.util.Random.nextString(64))
                    )
         _ = c4 shouldBe None
@@ -331,7 +330,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v3,
                      bonds,
-                     HashMap(v2 -> b2.blockHash, v3 -> genesis.blockHash)
+                     HashMap(v2 -> b2.blockHash)
                    )
         _ = c3 shouldBe None
         (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
@@ -339,7 +338,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v1,
                      bonds,
-                     HashMap(v3 -> b3.blockHash)
+                     HashMap(v1 -> b1.blockHash, v3 -> b3.blockHash)
                    )
         // Though v2 also votes for b1, it has been detected equivocating, so the committee doesn't include v2 or count its weight
         result = c5 shouldBe Some(CommitteeWithConsensusValue(Set(v1, v3), 20, b1.blockHash))
@@ -374,8 +373,7 @@ class FinalityDetectorByVotingMatrixTest
                      Seq(genesis.blockHash),
                      genesis.blockHash,
                      v1,
-                     bonds,
-                     HashMap(v1 -> genesis.blockHash)
+                     bonds
                    )
         _ = c1 shouldBe None
         (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
@@ -383,7 +381,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v2,
                      bonds,
-                     HashMap(v1 -> b1.blockHash, v2 -> genesis.blockHash)
+                     HashMap(v1 -> b1.blockHash)
                    )
         _ = c2 shouldBe None
         // b1 and b3 are both created by v1 but don't cite each other
@@ -403,7 +401,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v3,
                      bonds,
-                     HashMap(v2 -> b2.blockHash, v3 -> genesis.blockHash)
+                     HashMap(v2 -> b2.blockHash)
                    )
         _ = c4 shouldBe None
         (b5, c5) <- createBlockAndUpdateFinalityDetector[Task](
@@ -411,7 +409,7 @@ class FinalityDetectorByVotingMatrixTest
                      genesis.blockHash,
                      v2,
                      bonds,
-                     HashMap(v3 -> b4.blockHash)
+                     HashMap(v2 -> b2.blockHash, v3 -> b4.blockHash)
                    )
         // After creating b5, v2 knows v3 and himself vote for b1, and v3 knows v2 and
         // himself vote for b1, so v2 and v3 construct a committee.
@@ -518,7 +516,7 @@ class FinalityDetectorByVotingMatrixTest
   ]](
       parentsHashList: Seq[BlockHash],
       lastFinalizedBlockHash: BlockHash,
-      creator: Validator = ByteString.EMPTY,
+      creator: Validator,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64))

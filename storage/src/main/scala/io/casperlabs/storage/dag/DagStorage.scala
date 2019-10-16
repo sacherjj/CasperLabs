@@ -47,16 +47,16 @@ object DagStorage {
     abstract override def contains(blockHash: BlockHash): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
 
-    abstract override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+    abstract override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
       incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
 
-    abstract override def latestMessage(validator: Validator): F[Option[Message]] =
+    abstract override def latestMessage(validator: Validator): F[Set[Message]] =
       incAndMeasure("latestMessage", super.latestMessage(validator))
 
-    abstract override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+    abstract override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
       incAndMeasure("latestMessageHashes", super.latestMessageHashes)
 
-    abstract override def latestMessages: F[Map[Validator, Message]] =
+    abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
       incAndMeasure("latestMessages", super.latestMessages)
 
     abstract override def topoSort(
@@ -95,10 +95,10 @@ trait DagRepresentation[F[_]] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]]
 
-  def latestMessageHash(validator: Validator): F[Option[BlockHash]]
-  def latestMessage(validator: Validator): F[Option[Message]]
-  def latestMessageHashes: F[Map[Validator, BlockHash]]
-  def latestMessages: F[Map[Validator, Message]]
+  def latestMessageHash(validator: Validator): F[Set[BlockHash]]
+  def latestMessage(validator: Validator): F[Set[Message]]
+  def latestMessageHashes: F[Map[Validator, Set[BlockHash]]]
+  def latestMessages: F[Map[Validator, Set[Message]]]
 }
 
 object DagRepresentation {

@@ -55,33 +55,38 @@ object VotingMatrix {
                     )
                   )
               }
-      weights    = block.weightMap
-      validators = weights.keySet.toArray
-      n          = validators.size
+      weights          = block.weightMap
+      honestValidators = weights.keySet.filterNot(equivocationsTracker.contains(_)).toArray
+      n                = honestValidators.size
       // Assigns numeric identifiers 0, ..., N-1 to all validators
-      validatorsToIndex      = validators.zipWithIndex.toMap
-      latestMessages         <- dag.latestMessages
-      latestMessagesOfVoters = latestMessages.filterKeys(validatorsToIndex.contains)
-      latestVoteValueOfVotesAsList <- latestMessagesOfVoters.toList
-                                       .traverse {
-                                         case (v, b) =>
-                                           ProtoUtil
-                                             .votedBranch[F](
-                                               dag,
-                                               newFinalizedBlock,
-                                               b.messageHash
-                                             )
-                                             .map {
-                                               _.map(
-                                                 branch => (v, branch)
-                                               )
-                                             }
+      honestValidatorsToIndex = honestValidators.zipWithIndex.toMap
+      latestMessagesOfHonestVoters <- dag.latestMessages.map(
+                                       _.filterKeys(honestValidatorsToIndex.contains).collect {
+                                         case (validator, messages) if messages.size == 1 =>
+                                           validator -> messages.head
                                        }
-                                       .map(_.flatten)
+                                     )
+      // On which child of LFB validators vote on.
+      voteOnLFBChild <- latestMessagesOfHonestVoters.toList
+                         .traverse {
+                           case (v, b) =>
+                             ProtoUtil
+                               .votedBranch[F](
+                                 dag,
+                                 newFinalizedBlock,
+                                 b.messageHash
+                               )
+                               .map {
+                                 _.map(
+                                   branch => (v, branch)
+                                 )
+                               }
+                         }
+                         .map(_.flatten)
       // Traverse down the swim lane of V(i) to find the earliest block voting
       // for the same Fm's child as V(i) latest does.
       // This way we can initialize first-zero-level-messages(i).
-      firstLevelZeroVotes <- latestVoteValueOfVotesAsList
+      firstLevelZeroVotes <- voteOnLFBChild
                               .traverse {
                                 case (v, voteValue) =>
                                   FinalityDetectorUtil
@@ -93,18 +98,18 @@ object VotingMatrix {
                               }
                               .map(_.flatten.toMap)
       firstLevelZeroVotesArray = FinalityDetectorUtil.fromMapToArray(
-        validatorsToIndex,
+        honestValidatorsToIndex,
         firstLevelZeroVotes.get
       )
-      latestMessagesToUpdated = latestMessagesOfVoters.filterKeys(
+      latestMessagesToUpdated = latestMessagesOfHonestVoters.filterKeys(
         firstLevelZeroVotes.contains
       )
       state = VotingMatrixState(
         MutableSeq.fill(n, n)(0),
         firstLevelZeroVotesArray,
-        validatorsToIndex,
+        honestValidatorsToIndex,
         weights,
-        validators
+        honestValidators
       )
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest

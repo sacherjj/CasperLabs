@@ -573,8 +573,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       genesisHash: BlockHash,
-      dag: DagRepresentation[F],
-      equivocationsTracker: EquivocationsTracker
+      dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
@@ -585,7 +584,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -601,7 +600,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             val estimateString =
               computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
             val justificationString = latestMessagesHashes.values
-              .map(hash => PrettyPrinter.buildString(hash))
+              .map(hashes => hashes.map(PrettyPrinter.buildString).mkString("[", ",", "]"))
               .mkString(",")
             val message =
               s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."

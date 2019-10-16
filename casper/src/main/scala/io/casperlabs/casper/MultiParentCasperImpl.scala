@@ -275,7 +275,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       blockHash: BlockHash
   ): F[Boolean] =
     for {
-      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(dag, blockHash)
+      equivocationsTracker <- Cell[F, CasperState].read.map(_.equivocationsTracker)
+      faultTolerance <- FinalityDetector[F].normalizedFaultTolerance(
+                         dag,
+                         blockHash,
+                         equivocationsTracker
+                       )
       _ <- Log[F].trace(
             s"Fault tolerance for block ${PrettyPrinter.buildString(blockHash)} is $faultTolerance; threshold is $faultToleranceThreshold"
           )
@@ -331,19 +336,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Return the list of tips. */
   def estimator(
       dag: DagRepresentation[F],
-      latestMessagesHashes: Map[ByteString, BlockHash]
+      latestMessagesHashes: Map[ByteString, Set[BlockHash]]
   ): F[List[BlockHash]] =
     Metrics[F].timer("estimator") {
-      Cell[F, CasperState].read
-        .flatMap(
-          casperState =>
-            Estimator.tips[F](
-              dag,
-              genesis.blockHash,
-              latestMessagesHashes,
-              casperState.equivocationsTracker
-            )
-        )
+      Estimator.tips[F](
+        dag,
+        genesis.blockHash,
+        latestMessagesHashes
+      )
     }
 
   /*
@@ -365,7 +365,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         for {
           dag            <- dag
           latestMessages <- dag.latestMessages
-          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash))
+          tipHashes      <- estimator(dag, latestMessages.mapValues(_.map(_.messageHash).toSet))
           tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
           _ <- Log[F].info(
                 s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
@@ -418,6 +418,24 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield block
 
+  // Returns latest messages from honest validators
+  private def latestMessagesHonestValidators(
+      dag: DagRepresentation[F],
+      casperState: Cell[F, CasperState]
+  ): F[Map[Validator, Message]] =
+    (
+      casperState.read.map(_.equivocationsTracker),
+      dag.latestMessages
+    ).mapN {
+      case (equivocationsTracker, latestMessages) =>
+        latestMessages.collect {
+          case (v, messages)
+              if !equivocationsTracker
+                .contains(v) && messages.size == 1 =>
+            (v, messages.head)
+        }
+    }
+
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
@@ -468,7 +486,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
       dag: DagRepresentation[F],
-      latestMessages: Map[ByteString, Message],
+      latestMessages: Map[ByteString, Set[Message]],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       remainingHashes: Set[BlockHash],
       validatorId: Keys.PublicKey,
@@ -484,7 +502,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       val bondedValidators = bonds(merged.parents.head).map(_.validatorPublicKey).toSet
       val bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
       // TODO: Remove redundant justifications.
-      val justifications = toJustification(latestMessages.values.toSeq)
+      val justifications = toJustification(latestMessages.values.flatten.toSeq)
       val deployStream =
         DeployStorageReader[F]
           .getByHashes(remainingHashes)
@@ -496,7 +514,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         rank <- MonadThrowable[F].fromTry(
                  merged.parents.toList
                    .traverse(Message.fromBlock(_))
-                   .map(_.toSet | bondedLatestMsgs.values.toSet)
+                   .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                    .map(set => ProtoUtil.nextRank(set.toList))
                )
         protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
@@ -514,7 +532,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         } else {
           // Start numbering from 1 (validator's first block seqNum = 1)
           val validatorSeqNum =
-            latestMessages.get(ByteString.copyFrom(validatorId)).fold(1)(_.validatorMsgSeqNum + 1)
+            latestMessages
+              .get(ByteString.copyFrom(validatorId))
+              .fold(1)(_.toList.maxBy(_.validatorMsgSeqNum).validatorMsgSeqNum + 1)
           val block = ProtoUtil.block(
             justifications,
             checkpoint.preStateHash,
@@ -654,8 +674,9 @@ object MultiParentCasperImpl {
       lmh <- dag.latestMessageHashes
       // A stopgap solution to initialize the Last Finalized Block while we don't have the finality streams
       // that we can use to mark every final block in the database and just look up the latest upon restart.
-      lca <- NonEmptyList.fromList(lmh.values.toList).fold(genesis.blockHash.pure[F]) { hashes =>
-              DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
+      lca <- NonEmptyList.fromList(lmh.values.flatten.toList).fold(genesis.blockHash.pure[F]) {
+              hashes =>
+                DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
             }
       _ <- LastFinalizedBlockHashContainer[F].set(lca)
     } yield new MultiParentCasperImpl[F](
@@ -710,7 +731,7 @@ object MultiParentCasperImpl {
                        .pure[F]
                    ) { ctx =>
                      Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag, casperState.equivocationsTracker)
+                       .parents(block, ctx.genesis.blockHash, dag)
                    }
           _            <- Log[F].debug(s"Computing the pre-state hash of $hashPrefix")
           preStateHash <- ExecEngineUtil.computePrestate[F](merged, block.getHeader.rank, upgrades)

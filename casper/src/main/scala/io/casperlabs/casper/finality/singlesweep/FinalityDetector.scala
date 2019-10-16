@@ -1,6 +1,7 @@
 package io.casperlabs.casper.finality.singlesweep
 
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -18,7 +19,8 @@ trait FinalityDetector[F[_]] {
     */
   def normalizedFaultTolerance(
       dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash
+      candidateBlockHash: BlockHash,
+      equivocationsTracker: EquivocationsTracker
   ): F[Float]
 }
 

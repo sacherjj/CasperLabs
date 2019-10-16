@@ -103,40 +103,89 @@ object EquivocationDetector {
       block: Block
   ): F[Boolean] =
     for {
-      maybeLatestMessageOfCreator <- dag.latestMessage(block.getHeader.validatorPublicKey)
-      equivocated <- maybeLatestMessageOfCreator match {
-                      case None =>
-                        // It is the first block by that validator
+      validatorLatestMessages <- dag.latestMessage(block.getHeader.validatorPublicKey)
+      equivocated <- if (validatorLatestMessages.isEmpty || citesPreviousMsg(
+                           block,
+                           validatorLatestMessages
+                         )) {
+                      // It is the first message by that validator
+                      // or cites previous one.
+                      false.pure[F]
+                    } else if (validatorLatestMessages.size > 1) {
+                      Log[F]
+                        .warn(
+                          s"Validator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has already equivocated in the past."
+                        )
+                        .as(true)
+                    } else {
+                      val creatorsMessagesInJPastCone = creatorJustificationHash(block)
+                      // We've already tested whether `validatorLatestMessage` is empty
+                      // or has more than one element.
+                      val validatorLatestMessage = validatorLatestMessages.head
+                      if (creatorsMessagesInJPastCone.size > 1)
+                        // More than latest message from the creator of a block visible in the
+                        // j-past-cone of the block.
+                        // NOTE: Messages like that should not be accepted - merging of a swimlane is not allowed.
+                        Log[F]
+                          .warn(s"More than one latest message visible in the j-past-cone of the ${PrettyPrinter
+                            .buildString(block.blockHash)} by the creator ${PrettyPrinter
+                            .buildString(block.getHeader.validatorPublicKey)}")
+                          .as(true)
+                      else if (creatorsMessagesInJPastCone.isEmpty)
+                        // We have seen a message from that validator (see `validatorLatestMessage`)
+                        // but block's j-past-cone doesn't cite any message by that validator.
+                        // This is an equivocation.
+                        Log[F]
+                          .warn(
+                            s"Found equivocation: justifications of block ${PrettyPrinter
+                              .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                              .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
+                              .buildString(validatorLatestMessage.messageHash)}"
+                          )
+                          .as(true)
+                      else if (creatorsMessagesInJPastCone == validatorLatestMessages) {
+                        // `creatorsMessagesInJPastCone` should have single element
+                        // and if it's equal to what we have seen so far it means that block
+                        // cites validator's previous message directly and that's not an equivocation.
                         false.pure[F]
-                      case Some(latestMessageOfCreator) =>
-                        if (creatorJustificationHash(block)
-                              .filter(_ == latestMessageOfCreator.messageHash)
-                              .isDefined) {
-                          // Directly reference latestMessage of creator of the block
-                          false.pure[F]
-                        } else
-                          for {
-                            message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                            stream  = toposortJDagDesc(dag, message)
-                            // Find whether the block cites latestMessageOfCreator
-                            decisionPointBlock <- stream.find(
-                                                   b =>
-                                                     b == latestMessageOfCreator || b.rank < latestMessageOfCreator.rank
-                                                 )
-                            equivocated = decisionPointBlock != latestMessageOfCreator.some
-                            _ <- Log[F]
-                                  .warn(
-                                    s"Found equivocation: justifications of block ${PrettyPrinter
-                                      .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
-                                      .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                                      .buildString(latestMessageOfCreator.messageHash)}"
-                                  )
-                                  .whenA(equivocated)
-                          } yield equivocated
+                      } else
+                        validatorLatestMessages.toList
+                          .traverse { latestMessageOfCreator =>
+                            for {
+                              message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+                              stream  = toposortJDagDesc(dag, message)
+                              // Find whether the block cites latestMessageOfCreator
+                              decisionPointBlock <- stream.find(
+                                                     b =>
+                                                       b == latestMessageOfCreator || b.rank < latestMessageOfCreator.rank
+                                                   )
+                              equivocated = decisionPointBlock != latestMessageOfCreator.some
+                              _ <- Log[F]
+                                    .warn(
+                                      s"Found equivocation: justifications of block ${PrettyPrinter
+                                        .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                                        .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
+                                        .buildString(latestMessageOfCreator.messageHash)}"
+                                    )
+                                    .whenA(equivocated)
+                            } yield equivocated
+                          }
+                          .map(_.exists(identity))
                     }
     } yield equivocated
 
-  private def creatorJustificationHash(block: Block): Option[BlockHash] =
+  // Check whether block cites previous message by the same creator.
+  // Since citing multiple latest messages is prohibited `creatorsMessagesInJPastCone` should have
+  // at most 1 element.
+  private def citesPreviousMsg(block: Block, latestMessages: Set[Message]): Boolean = {
+    val creatorsMessagesInJPastCone = creatorJustificationHash(block)
+    creatorsMessagesInJPastCone.size == 1 && latestMessages.size == 1 && latestMessages.map(
+      _.messageHash
+    ) == creatorsMessagesInJPastCone
+  }
+
+  // Messages from the creator of the block in the j-past-cone of that block.
+  private def creatorJustificationHash(block: Block): Set[BlockHash] =
     ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
 
   private def toposortJDagDesc[F[_]: Monad: Log](
@@ -156,9 +205,6 @@ object EquivocationDetector {
   /**
     * Find equivocating validators that a block can see based on its direct justifications
     *
-    * This method is not used to detect new equivocations when receiving new blocks.
-    * It is used to help calculating main parent in the `forkchoice`.
-    *
     * We use `bfToposortTraverseF` to traverse from `latestMessageHashes` down beyond the minimal rank
     * of base block of equivocationRecords. Since we have already validated `validatorBlockSeqNum`
     * equals 1 plus that of previous block created by the same validator, if we find a duplicated
@@ -172,7 +218,7 @@ object EquivocationDetector {
     */
   def detectVisibleFromJustifications[F[_]: Monad](
       dag: DagRepresentation[F],
-      justificationMsgHashes: Map[Validator, BlockHash],
+      justificationMsgHashes: Map[Validator, Set[BlockHash]],
       equivocationsTracker: EquivocationsTracker
   ): F[Set[Validator]] =
     equivocationsTracker.min match {
@@ -181,7 +227,7 @@ object EquivocationDetector {
       case Some(minRank) =>
         for {
           justificationMessages <- justificationMsgHashes.values.toList
-                                    .traverse(dag.lookup)
+                                    .flatTraverse(_.toList.traverse(dag.lookup))
                                     .map(_.flatten)
           implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
 

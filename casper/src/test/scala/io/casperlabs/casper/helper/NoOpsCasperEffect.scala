@@ -35,7 +35,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStorage: DagStorage] private (
   def deploy(r: Deploy): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
   def estimator(
       dag: DagRepresentation[F],
-      latestMessageHashes: Map[ByteString, ByteString]
+      latestMessageHashes: Map[ByteString, Set[ByteString]]
   ): F[List[BlockHash]] =
     estimatorFunc.pure[F]
   def createBlock: F[CreateBlockStatus]                                 = CreateBlockStatus.noNewDeploys.pure[F]

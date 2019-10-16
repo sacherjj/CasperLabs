@@ -81,7 +81,7 @@ object FinalityDetectorUtil {
       validator: Validator,
       candidateBlockHash: BlockHash
   ): F[List[Message]] =
-    dag.latestMessage(validator).flatMap {
+    dag.latestMessage(validator).map(s => if (s.size > 1) None else s.headOption).flatMap {
       case Some(latestMsgByValidator) =>
         DagOperations
           .bfTraverseF[F, Message](List(latestMsgByValidator))(

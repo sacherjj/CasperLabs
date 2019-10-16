@@ -21,24 +21,10 @@ object Estimator {
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  /* Should not be used as long as `DagRepresentation` is not immutable. See NODE-923
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      equivocationsTracker: EquivocationsTracker
-  ): F[List[BlockHash]] =
-    for {
-      latestMessageHashes <- dag.latestMessageHashes
-      result <- Estimator
-                 .tips[F](dag, genesis, latestMessageHashes, equivocationsTracker)
-    } yield result
-   */
-
-  def tips[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
-      genesis: BlockHash,
-      latestMessageHashes: Map[Validator, BlockHash],
-      equivocationsTracker: EquivocationsTracker
+      latestMessageHashes: Map[Validator, Set[BlockHash]]
   ): F[List[BlockHash]] = {
 
     /** Eliminate any latest message which has a descendant which is a latest message
@@ -70,17 +56,13 @@ object Estimator {
 
     for {
       lca <- NonEmptyList
-              .fromList(latestMessageHashes.values.toList)
+              .fromList(latestMessageHashes.values.flatten.toList)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
-                                 dag,
-                                 latestMessageHashes,
-                                 equivocationsTracker
-                               )
-      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
-      newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, lca)
-      secondaryParents = parents.filter(_ != newMainParent)
+      equivocatingValidators <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      scores                 <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
+      newMainParent          <- forkChoiceTip(dag, lca, scores)
+      parents                <- tipsOfLatestMessages(latestMessageHashes.values.flatten.toList, lca)
+      secondaryParents       = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
         .reverse
@@ -99,13 +81,13 @@ object Estimator {
   def lmdScoring[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
-      latestMessageHashes: Map[Validator, BlockHash],
+      latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Weight]] =
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
-      case (acc, (validator, latestMessageHash)) =>
+      case (acc, (validator, latestMessageHashes)) =>
         DagOperations
-          .bfTraverseF[F, BlockHash](List(latestMessageHash))(
+          .bfTraverseF[F, BlockHash](latestMessageHashes.toList)(
             hash => dag.lookup(hash).map(_.get.parents.take(1).toList)
           )
           .takeUntil(_ == stopHash)

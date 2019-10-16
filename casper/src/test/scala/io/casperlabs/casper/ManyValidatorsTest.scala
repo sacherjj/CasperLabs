@@ -40,8 +40,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
-                 latestMessageHashes,
-                 EquivocationsTracker.empty
+                 latestMessageHashes
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],

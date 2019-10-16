@@ -94,15 +94,15 @@ class ValidationTest
     ) {
       case (block, _) =>
         for {
-          bprev         <- block
-          dag           <- IndexedDagStorage[F].getRepresentation
-          latestMsgs    <- dag.latestMessages
-          justification = latestMsgs.map { case (v, b) => (v, b.messageHash) }
-          bnext <- createAndStoreBlock[F](
+          bprev          <- block
+          dag            <- IndexedDagStorage[F].getRepresentation
+          latestMsgs     <- dag.latestMessages
+          justifications = latestMsgs.mapValues(_.map(_.messageHash))
+          bnext <- createAndStoreBlockNew[F](
                     Seq(bprev.blockHash),
-                    creator = creator,
-                    bonds = bonds,
-                    justifications = justification
+                    creator,
+                    bonds,
+                    justifications
                   )
         } yield bnext
     }
@@ -587,8 +587,6 @@ class ValidationTest
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      val emptyEquivocationsTracker = EquivocationsTracker.empty
-
       def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
         messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
 
@@ -629,49 +627,43 @@ class ValidationTest
                    _ <- Validation[Task].parents(
                          b1,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b2,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b3,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b4,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b5,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b6,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
 
                    // Not valid
                    _ <- Validation[Task]
-                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b7, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b8, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b9, genesisBlockHash, dag)
                          .attempt
 
                    _ = log.warns should have size 3
@@ -684,7 +676,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
+                              .parents(b10, genesisBlockHash, dag)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result
