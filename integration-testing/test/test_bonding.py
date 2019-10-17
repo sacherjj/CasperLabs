@@ -132,16 +132,18 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
         private_key=account.private_key_docker_path,
         public_key=account.public_key_docker_path,
     )
-    check_no_errors_in_deploys(node1, block_hash)
-
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network_fn.docker_nodes, block_hash
     )
+    check_no_errors_in_deploys(node1, block_hash)
 
     # Unbond
     logging.info(f"Unbonding Account {BONDING_ACCT} from network.")
     block_hash, account = unbond_from_network(
         one_node_network_fn, bonding_amount, BONDING_ACCT
+    )
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network_fn.docker_nodes, block_hash
     )
     check_no_errors_in_deploys(node0, block_hash)
 
