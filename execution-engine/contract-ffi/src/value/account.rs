@@ -1338,7 +1338,7 @@ mod tests {
         );
         let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
-            [0u8; 32],
+            identity_key.value(),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
