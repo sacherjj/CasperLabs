@@ -429,7 +429,7 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::UpgradeContractAtURef => {
+            FunctionIndex::UpgradeContractAtURefIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 // args(2) = pointer to key in Wasm memory
