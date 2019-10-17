@@ -14,8 +14,8 @@ use std::rc::Rc;
 
 use num_traits::Zero;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::argsparser::ArgsParser;
 use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, HASH_SIZE};
 use contract_ffi::system_contracts::mint;
@@ -88,8 +88,18 @@ where
         &self,
         protocol_version: ProtocolVersion,
     ) -> Result<Option<WasmCosts>, Error> {
+        match self.get_protocol_data(protocol_version)? {
+            Some(protocol_data) => Ok(Some(*protocol_data.wasm_costs())),
+            None => Ok(None),
+        }
+    }
+
+    pub fn get_protocol_data(
+        &self,
+        protocol_version: ProtocolVersion,
+    ) -> Result<Option<ProtocolData>, Error> {
         match self.state.get_protocol_data(protocol_version) {
-            Ok(Some(protocol_data)) => Ok(Some(*protocol_data.wasm_costs())),
+            Ok(Some(protocol_data)) => Ok(Some(protocol_data)),
             Err(error) => Err(Error::ExecError(error.into())),
             _ => Ok(None),
         }
@@ -258,6 +268,7 @@ where
                 correlation_id,
                 tracking_copy,
                 phase,
+                ProtocolData::default(),
             )?
         };
 
@@ -280,15 +291,20 @@ where
                     .and_then(|args| args.to_bytes())
                     .expect("args should parse")
             };
-            let mut named_keys = {
-                let mut ret = BTreeMap::new();
-                ret.insert(MINT_NAME.to_string(), Key::URef(mint_reference));
-                ret
-            };
+            let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
+
+            // Constructs a partial protocol data with already known urefs to pass the validation
+            // step
+            let partial_protocol_data = ProtocolData::new(
+                Default::default(),
+                mint_reference,
+                // This is used as unknown key
+                URef::new([0; 32], AccessRights::READ),
+            );
 
             executor.better_exec(
                 proof_of_stake_installer_module,
@@ -305,17 +321,16 @@ where
                 correlation_id,
                 tracking_copy,
                 phase,
+                partial_protocol_data,
             )?
         };
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
-        {
-            let protocol_data =
-                ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
-            self.state
-                .put_protocol_data(protocol_version, &protocol_data)
-                .map_err(Into::into)?
-        }
+        let protocol_data = ProtocolData::new(wasm_costs, mint_reference, proof_of_stake_reference);
+
+        self.state
+            .put_protocol_data(protocol_version, &protocol_data)
+            .map_err(Into::into)?;
 
         //
         // NOTE: The following stanzas deviate from the implementation strategy described in the
@@ -330,6 +345,8 @@ where
 
         // Create known keys for chainspec accounts
         let account_named_keys = {
+            // After merging in EE-704 system contracts lookup internally uses protocol data and
+            // this is used for backwards compatibility with explorer to query mint/pos urefs.
             let mut ret = BTreeMap::new();
             let m_attenuated = URef::new(mint_reference.addr(), AccessRights::READ);
             let p_attenuated = URef::new(proof_of_stake_reference.addr(), AccessRights::READ);
@@ -398,7 +415,7 @@ where
                 };
 
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
-                let mint_result: Result<URef, mint::error::Error> = executor.better_exec(
+                let mint_result: Result<URef, mint::Error> = executor.better_exec(
                     module,
                     &args,
                     &mut named_keys_exec,
@@ -413,6 +430,7 @@ where
                     correlation_id,
                     tracking_copy_exec,
                     phase,
+                    protocol_data,
                 )?;
 
                 // ...and write that account to global state...
@@ -533,15 +551,7 @@ where
                 }
             };
 
-            let keys = &mut BTreeMap::new();
-            keys.insert(
-                MINT_NAME.to_string(),
-                Key::URef(current_protocol_data.mint()),
-            );
-            keys.insert(
-                POS_NAME.to_string(),
-                Key::URef(current_protocol_data.proof_of_stake()),
-            );
+            let mut keys = BTreeMap::new();
 
             let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
             let authorization_keys = {
@@ -574,7 +584,7 @@ where
             WasmiExecutor.better_exec(
                 upgrade_installer_module,
                 &args,
-                keys,
+                &mut keys,
                 initial_base_key,
                 &system_account,
                 authorization_keys,
@@ -586,6 +596,7 @@ where
                 correlation_id,
                 state,
                 phase,
+                new_protocol_data,
             )?
         };
 
@@ -799,8 +810,21 @@ where
             }
         };
 
-        // --- REMOVE BELOW --- //
+        // Obtain current protocol data for given version
+        let protocol_data = match self.state.get_protocol_data(protocol_version) {
+            Ok(Some(protocol_data)) => protocol_data,
+            Ok(None) => {
+                let error = Error::InvalidProtocolVersion(protocol_version);
+                return Ok(ExecutionResult::precondition_failure(error));
+            }
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(Error::ExecError(
+                    error.into(),
+                )));
+            }
+        };
 
+        // --- REMOVE BELOW --- //
         // If payment logic is turned off, execute only session code
         if !(self.config.use_payment_code()) {
             // DEPLOY WITH NO PAYMENT
@@ -823,6 +847,7 @@ where
                 correlation_id,
                 Rc::clone(&tracking_copy),
                 Phase::Session,
+                protocol_data,
             );
 
             return Ok(session_result);
@@ -838,14 +863,7 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = match account.named_keys().get(MINT_NAME) {
-                Some(uref) => uref.normalize(),
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(
-                        Error::MissingSystemContractError(MINT_NAME.to_string()),
-                    ));
-                }
-            };
+            let mint_public_uref: Key = Key::from(protocol_data.mint()).normalize();
 
             // FIXME: This is inefficient; we don't need to get the entire contract.
             let mint_info = match tracking_copy
@@ -866,14 +884,7 @@ where
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = match account.named_keys().get(POS_NAME) {
-            Some(uref) => uref.normalize(),
-            None => {
-                return Ok(ExecutionResult::precondition_failure(
-                    Error::MissingSystemContractError(POS_NAME.to_string()),
-                ));
-            }
-        };
+        let proof_of_stake_public_uref: Key = Key::from(protocol_data.proof_of_stake()).normalize();
 
         // Get proof of stake system contract details
         // payment_code_spec_6: system contract validity
@@ -998,6 +1009,7 @@ where
                 correlation_id,
                 Rc::clone(&tracking_copy),
                 Phase::Payment,
+                protocol_data,
             )
         };
 
@@ -1078,6 +1090,7 @@ where
                 correlation_id,
                 Rc::clone(&session_tc),
                 Phase::Session,
+                protocol_data,
             )
         };
 
@@ -1116,13 +1129,15 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or
             // session, so we need to look them up again from the tracking copy
-            let mut proof_of_stake_keys = finalization_tc
+            let proof_of_stake_info = match finalization_tc
                 .borrow_mut()
                 .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
-                .expect("PoS must be found because we found it earlier")
-                .contract()
-                .named_keys()
-                .clone();
+            {
+                Ok(info) => info,
+                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+            };
+
+            let mut proof_of_stake_keys = proof_of_stake_info.contract().named_keys().clone();
 
             let base_key = proof_of_stake_info.key();
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
@@ -1141,6 +1156,7 @@ where
                 correlation_id,
                 finalization_tc,
                 Phase::FinalizePayment,
+                protocol_data,
             )
         };
 

@@ -1,9 +1,8 @@
 use super::alloc::collections::BTreeMap;
 use super::alloc::collections::TryReserveError;
-use super::alloc::string::{String, ToString};
+use super::alloc::string::String;
 use super::alloc::vec::Vec;
 
-use core::fmt::Display;
 use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
 
@@ -33,9 +32,10 @@ pub trait FromBytes: Sized {
 }
 
 #[derive(Debug, Fail, PartialEq, Eq, Clone)]
+#[repr(u8)]
 pub enum Error {
     #[fail(display = "Deserialization error: early end of stream")]
-    EarlyEndOfStream,
+    EarlyEndOfStream = 0,
 
     #[fail(display = "Deserialization error: formatting error")]
     FormattingError,
@@ -45,20 +45,11 @@ pub enum Error {
 
     #[fail(display = "Serialization error: out of memory")]
     OutOfMemoryError,
-
-    #[fail(display = "Serialization error: {}", _0)]
-    CustomError(String),
 }
 
 impl From<TryReserveError> for Error {
     fn from(_: TryReserveError) -> Error {
         Error::OutOfMemoryError
-    }
-}
-
-impl Error {
-    pub fn custom<T: Display>(msg: T) -> Error {
-        Error::CustomError(msg.to_string())
     }
 }
 
@@ -528,139 +519,155 @@ impl FromBytes for ProtocolVersion {
     }
 }
 
+#[doc(hidden)]
+/// Returns `true` if a we can serialize and then deserialize a value
+pub fn test_serialization_roundtrip<T>(t: &T)
+where
+    T: ToBytes + FromBytes + PartialEq,
+{
+    let serialized = ToBytes::to_bytes(t).expect("Unable to serialize data");
+    let deserialized = deserialize::<T>(&serialized).expect("Unable to deserialize data");
+    assert!(*t == deserialized)
+}
+
+#[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod proptests {
-    // Bring the macros and other important things into scope.
-    use crate::gens::*;
-    use crate::test_utils::test_serialization_roundtrip;
     use proptest::collection::vec;
     use proptest::prelude::*;
 
-    proptest! {
+    use crate::bytesrepr;
+    use crate::gens::*;
 
+    proptest! {
         #[test]
         fn test_u8(u in any::<u8>()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_u32(u in any::<u32>()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_i32(u in any::<i32>()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_u64(u in any::<u64>()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_u8_slice_32(s in u8_slice_32()) {
-            assert!(test_serialization_roundtrip(&s));
+            bytesrepr::test_serialization_roundtrip(&s)
         }
 
         #[test]
         fn test_vec_u8(u in vec(any::<u8>(), 1..100)) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_vec_i32(u in vec(any::<i32>(), 1..100)) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_vec_vec_u8(u in vec(vec(any::<u8>(), 1..100), 10)) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u)
         }
 
         #[test]
         fn test_uref_map(m in named_keys_arb(20)) {
-            assert!(test_serialization_roundtrip(&m));
+            bytesrepr::test_serialization_roundtrip(&m)
         }
 
         #[test]
         fn test_array_u8_32(arr in any::<[u8; 32]>()) {
-            assert!(test_serialization_roundtrip(&arr));
+            bytesrepr::test_serialization_roundtrip(&arr)
         }
 
         #[test]
         fn test_string(s in "\\PC*") {
-            assert!(test_serialization_roundtrip(&s));
+            bytesrepr::test_serialization_roundtrip(&s)
         }
 
         #[test]
         fn test_option(o in proptest::option::of(key_arb())) {
-            assert!(test_serialization_roundtrip(&o));
+            bytesrepr::test_serialization_roundtrip(&o)
         }
 
         #[test]
         fn test_unit(unit in Just(())) {
-            assert!(test_serialization_roundtrip(&unit));
+            bytesrepr::test_serialization_roundtrip(&unit)
         }
 
         #[test]
         fn test_value_account(acct in account_arb()) {
-            assert!(test_serialization_roundtrip(&acct));
+            bytesrepr::test_serialization_roundtrip(&acct)
         }
 
         #[test]
         fn test_u128_serialization(u in u128_arb()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u);
         }
 
         #[test]
         fn test_u256_serialization(u in u256_arb()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u);
         }
 
         #[test]
         fn test_u512_serialization(u in u512_arb()) {
-            assert!(test_serialization_roundtrip(&u));
+            bytesrepr::test_serialization_roundtrip(&u);
         }
 
         #[test]
         fn test_key_serialization(key in key_arb()) {
-            assert!(test_serialization_roundtrip(&key));
+            bytesrepr::test_serialization_roundtrip(&key);
         }
 
         #[test]
         fn test_value_serialization(v in value_arb()) {
-            assert!(test_serialization_roundtrip(&v));
+            bytesrepr::test_serialization_roundtrip(&v);
         }
 
         #[test]
         fn test_access_rights(access_right in access_rights_arb()) {
-            assert!(test_serialization_roundtrip(&access_right))
+            bytesrepr::test_serialization_roundtrip(&access_right)
+        }
+
+        #[test]
+        fn test_uref(uref in uref_arb()) {
+            bytesrepr::test_serialization_roundtrip(&uref);
         }
 
         #[test]
         fn test_public_key(pk in public_key_arb()) {
-            assert!(test_serialization_roundtrip(&pk))
+            bytesrepr::test_serialization_roundtrip(&pk)
         }
 
         #[test]
         fn test_result(result in result_arb()) {
-            assert!(test_serialization_roundtrip(&result))
+            bytesrepr::test_serialization_roundtrip(&result)
         }
 
         #[test]
         fn test_phase_serialization(phase in phase_arb()) {
-            assert!(test_serialization_roundtrip(&phase));
+            bytesrepr::test_serialization_roundtrip(&phase)
         }
 
         #[test]
         fn test_protocol_version(protocol_version in protocol_version_arb()) {
-            assert!(test_serialization_roundtrip(&protocol_version))
+            bytesrepr::test_serialization_roundtrip(&protocol_version)
         }
 
         #[test]
         fn test_sem_ver(sem_ver in sem_ver_arb()) {
-            assert!(test_serialization_roundtrip(&sem_ver))
+            bytesrepr::test_serialization_roundtrip(&sem_ver)
         }
     }
 }

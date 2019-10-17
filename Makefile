@@ -11,6 +11,7 @@ $(eval VER = $(shell echo $(TAGS_OR_SHA) | grep -oE 'v?[0-9]+(\.[0-9]){1,2}$$' |
 # But with comm/build.rs compiling .proto to .rs every time we build the timestamps are updated as well, so filter those and depend on .proto instead.
 RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.rs" -o -name "*.proto" \) \
 	| grep -v target \
+	| grep -v node_modules \
 	| grep -v -E '(ipc|transforms).*\.rs')
 SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \) | grep -v node_modules)
@@ -184,10 +185,15 @@ cargo-native-packager/%:
 	build-explorer-contracts
 	# CI=false so on Drone it won't fail on warnings (currently about href).
 	./hack/build/docker-buildenv.sh "\
-	        cd explorer/grpc   && npm install && cd - &&\
-	        cd explorer/sdk    && npm install && npm install --no-save ../grpc && npm run build && cd - &&\
-			cd explorer/ui     && npm install  && CI=false npm run build && cd - && \
-			cd explorer/server && npm install && npm run clean:dist && npm run build && cd - \
+			cd explorer && \
+			cd grpc   && npm install && cd - && \
+			cd sdk    && npm install && cd - && \
+			cd ui     && npm install && cd - && \
+			cd server && npm install && cd - && \
+			./install-sdk-grpc.sh && \
+			cd sdk    && npm run build && cd - && \
+			cd ui     && CI=false npm run build && cd - && \
+			cd server && npm run clean:dist && npm run build && cd - \
 		"
 	mkdir -p $(dir $@) && touch $@
 
@@ -195,7 +201,7 @@ cargo-native-packager/%:
 # Installed via `npm install ts-protoc-gen --no-bin-links --save-dev`
 .make/protoc/explorer: \
 		.make/install/protoc \
-		.make/install/protoc-ts \
+		./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts \
 		$(PROTO_SRC)
 	$(eval DIR_IN = ./protobuf)
 	$(eval DIR_OUT = ./explorer/grpc)
@@ -373,11 +379,10 @@ protobuf/google:
 	mkdir -p $(dir $@) && touch $@
 
 # Install the protoc plugin to generate TypeScript. Use docker so people don't have to install npm.
-.make/install/protoc-ts: explorer/grpc/package.json
+./explorer/grpc/node_modules/ts-protoc-gen/bin/protoc-gen-ts:
 	./hack/build/docker-buildenv.sh "\
 		cd explorer/grpc && npm install && npm install ts-protoc-gen --no-bin-links --save-dev \
 	"
-	mkdir -p $(dir $@) && touch $@
 
 .make/install/rpm:
 	if [ -z "$$(which rpmbuild)" ]; then

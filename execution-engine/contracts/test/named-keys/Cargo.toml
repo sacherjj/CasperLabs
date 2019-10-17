@@ -5,8 +5,10 @@ authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-name = "named_keys"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

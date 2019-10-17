@@ -5,10 +5,13 @@ import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.deploy.MockDeployStorage.Metadata
+import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration.FiniteDuration
 
@@ -35,6 +38,7 @@ class MockDeployStorage[F[_]: Sync: Log](
             pd.getDeploy,
             Metadata(
               if (pd.isError) ExecutionErrorStatusCode else ExecutionSuccessStatusCode,
+              "",
               now,
               now,
               Nil
@@ -51,7 +55,7 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def getProcessingResults(hash: ByteString): F[List[(BlockHash, Block.ProcessedDeploy)]] =
     deploysWithMetadataRef.get.map(_.collect {
-      case (d, Metadata(_, _, _, processingResults)) if d.deployHash == hash => processingResults
+      case (d, Metadata(_, _, _, _, processingResults)) if d.deployHash == hash => processingResults
     }.toList.flatten)
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
@@ -70,7 +74,7 @@ class MockDeployStorage[F[_]: Sync: Log](
     deploysWithMetadataRef.update(
       deploys
         .map(
-          d => (d, Metadata(status, now, now, Nil))
+          d => (d, Metadata(status, "", now, now, Nil))
         )
         .toMap ++ _
     )
@@ -78,21 +82,21 @@ class MockDeployStorage[F[_]: Sync: Log](
   override def markAsPendingByHashes(hashes: List[ByteString]): F[Unit] =
     logOperation(
       s"markAsPending(hashes = ${hashesToString(hashes)})",
-      setStatus(hashes, PendingStatusCode, ProcessedStatusCode)
+      setStatus(hashes.map(_ -> ""), PendingStatusCode, ProcessedStatusCode)
     )
 
   override def markAsProcessedByHashes(hashes: List[ByteString]): F[Unit] =
     logOperation(
       s"markAsProcessed(hashes = ${hashesToString(hashes)})",
-      setStatus(hashes, ProcessedStatusCode, PendingStatusCode)
+      setStatus(hashes.map(_ -> ""), ProcessedStatusCode, PendingStatusCode)
     )
 
   override def markAsFinalizedByHashes(hashes: List[ByteString]): F[Unit] =
     logOperation(
       s"markAsFinalized(hashes = ${hashesToString(hashes)})",
       deploysWithMetadataRef.update(_.filter {
-        case (deploy, Metadata(`ProcessedStatusCode`, _, _, _))
-            if hashes.toSet(deploy.deployHash) =>
+        case (deploy, Metadata(`ProcessedStatusCode`, _, _, _, _))
+            if hashes.contains(deploy.deployHash) =>
           false
         case _ => true
       })
@@ -101,26 +105,35 @@ class MockDeployStorage[F[_]: Sync: Log](
   override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit] =
     logOperation(
       s"markAsDiscarded(hashes = ${hashesToString(hashesAndReasons.map(_._1))})",
-      setStatus(hashesAndReasons.map(_._1), DiscardedStatusCode, PendingStatusCode)
+      setStatus(hashesAndReasons, DiscardedStatusCode, PendingStatusCode)
     )
 
-  private def setStatus(hashes: List[ByteString], newStatus: Int, prevStatus: Int): F[Unit] =
+  private def setStatus(
+      hashesAndReasons: Seq[(ByteString, String)],
+      newStatus: Int,
+      prevStatus: Int
+  ): F[Unit] = {
+    val updates = hashesAndReasons.toMap
     deploysWithMetadataRef.update(_.map {
-      case (deploy, Metadata(`prevStatus`, _, createdAt, processingResults))
-          if hashes.toSet(deploy.deployHash) =>
-        (deploy, Metadata(newStatus, now, createdAt, processingResults))
+      case (deploy, Metadata(`prevStatus`, _, _, createdAt, processingResults))
+          if updates contains deploy.deployHash =>
+        (
+          deploy,
+          Metadata(newStatus, updates(deploy.deployHash), now, createdAt, processingResults)
+        )
       case x => x
     }) >> logCurrentState()
+  }
 
   override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
     logOperation(
       s"markAsDiscarded(expirationPeriod = ${expirationPeriod.toCoarsest.toString()})",
       deploysWithMetadataRef.update(_.map {
-        case (deploy, Metadata(`PendingStatusCode`, updatedAt, createdAt, processingResults))
+        case (deploy, Metadata(`PendingStatusCode`, _, updatedAt, createdAt, processingResults))
             if updatedAt < now - expirationPeriod.toMillis =>
           (
             deploy,
-            Metadata(DiscardedStatusCode, now, createdAt, processingResults)
+            Metadata(DiscardedStatusCode, "Expired.", now, createdAt, processingResults)
           )
         case x => x
       })
@@ -128,7 +141,7 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] = {
     val selectDiscarding: ((Deploy, Metadata)) => Boolean = (_: (Deploy, Metadata)) match {
-      case (_, Metadata(`DiscardedStatusCode`, updatedAt, _, processingResults))
+      case (_, Metadata(`DiscardedStatusCode`, _, updatedAt, _, processingResults))
           if updatedAt < now - expirationPeriod.toMillis && processingResults.isEmpty =>
         true
       case _ => false
@@ -174,9 +187,12 @@ class MockDeployStorage[F[_]: Sync: Log](
       .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
   }
 
+  def getByHash(hash: ByteString): F[Option[Deploy]] =
+    getByHashes(Set(hash)).compile.last
+
   private def readByStatus(status: Int): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(_.collect {
-      case (deploy, Metadata(`status`, _, _, _)) => deploy
+      case (deploy, Metadata(`status`, _, _, _, _)) => deploy
     }.toList)
 
   override def sizePendingOrProcessed(): F[Long] =
@@ -184,9 +200,23 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
     deploysWithMetadataRef.get.map(_.collectFirst {
-      case (d, Metadata(`PendingStatusCode` | `ProcessedStatusCode`, _, _, _))
+      case (d, Metadata(`PendingStatusCode` | `ProcessedStatusCode`, _, _, _, _))
           if d.deployHash == hash =>
         d
+    })
+
+  override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
+    deploysWithMetadataRef.get.map(_.collectFirst {
+      case (d, Metadata(status, msg, _, _, _)) if d.deployHash == hash =>
+        DeployInfo.Status(
+          state = status match {
+            case `PendingStatusCode`   => DeployInfo.State.PENDING
+            case `ProcessedStatusCode` => DeployInfo.State.PROCESSED
+            case `DiscardedStatusCode` => DeployInfo.State.DISCARDED
+            case _                     => DeployInfo.State.UNDEFINED
+          },
+          message = msg
+        )
     })
 
   override def clear(): F[Unit] = ().pure[F]
@@ -245,11 +275,38 @@ class MockDeployStorage[F[_]: Sync: Log](
     b.getBody.deploys.map(pd => deployToString(pd.getDeploy)).mkString(", ")
 
   private def now = System.currentTimeMillis()
+
+  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+    none[DeployInfo].pure[F]
+
+  override def getDeploysByAccount(
+      account: PublicKeyBS,
+      limit: Int,
+      lastTimeStamp: Long,
+      lastDeployHash: DeployHash
+  ): F[List[Deploy]] =
+    deploysWithMetadataRef.get.map(
+      _.keys
+        .filter { d =>
+          if (PublicKey(d.getHeader.accountPublicKey) != account) {
+            false
+          } else {
+            val strictEarlier = d.getHeader.timestamp < lastTimeStamp
+            strictEarlier || d.getHeader.timestamp == lastTimeStamp && byteStringOrdering
+              .lt(d.deployHash, lastDeployHash)
+          }
+        }
+        .toList
+        .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+        .reverse
+        .take(limit)
+    )
 }
 
 object MockDeployStorage {
   case class Metadata(
       status: Int,
+      message: String,
       updatedAt: Long,
       createdAt: Long,
       processingResults: List[(ByteString, Block.ProcessedDeploy)]

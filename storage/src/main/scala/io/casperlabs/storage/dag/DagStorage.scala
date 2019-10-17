@@ -3,7 +3,7 @@ package io.casperlabs.storage.dag
 import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.Block
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
 import io.casperlabs.storage.block.BlockStorage.BlockHash
@@ -62,14 +62,14 @@ object DagStorage {
     abstract override def topoSort(
         startBlockNumber: Long,
         endBlockNumber: Long
-    ): fs2.Stream[F, Vector[BlockHash]] =
+    ): fs2.Stream[F, Vector[BlockSummary]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
         .topoSort(startBlockNumber, endBlockNumber)
 
-    abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]] =
+    abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
 
-    abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]] =
+    abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]] =
       fs2.Stream.eval(m.incrementCounter("topoSortTail")) >> super.topoSortTail(tailLength)
   }
 
@@ -84,13 +84,16 @@ trait DagRepresentation[F[_]] {
   def lookup(blockHash: BlockHash): F[Option[Message]]
   def contains(blockHash: BlockHash): F[Boolean]
 
-  /** Return the ranks of blocks in the DAG between start and end, inclusive. */
-  def topoSort(startBlockNumber: Long, endBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]]
+  /** Return block summaries with ranks in the DAG between start and end, inclusive. */
+  def topoSort(
+      startBlockNumber: Long,
+      endBlockNumber: Long
+  ): fs2.Stream[F, Vector[BlockSummary]]
 
-  /** Return ranks of blocks in the DAG from a start index to the end. */
-  def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockHash]]
+  /** Return block summaries with ranks of blocks in the DAG from a start index to the end. */
+  def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]]
 
-  def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockHash]]
+  def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]]
 
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
   def latestMessage(validator: Validator): F[Option[Message]]

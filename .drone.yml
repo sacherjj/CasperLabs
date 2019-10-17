@@ -14,6 +14,7 @@
 #  volumes:
 #    - "/var/cache/cl-build/.sbt:/root/.sbt"
 #    - "/var/cache/cl-build/.ivy2:/root/.ivy2"
+#    - "/var/cache/cl-build/.coursier:/root/.coursier"
 
 # Begin
 clone:
@@ -423,7 +424,7 @@ steps:
 - name: run-integration-tests
   commands:
   - "apt-get update && apt-get -y install gcc"
-  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2"
+  - "python3 -m pip install pipenv pytest dataclasses typing_extensions dataclasses grpcio grpcio_tools protobuf in-place ed25519 pyblake2 lz4"
   - "cd integration-testing"
   - "./docker_run_tests.sh"
   environment:
@@ -548,6 +549,7 @@ steps:
 - name: package-sbt-artifacts-merge
   commands:
   - "make build-client-contracts build-node-contracts"
+  - "rm -rf project/target project/project/target"
   - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin node/docker:publishLocal client/docker:publishLocal"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
   - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
@@ -820,6 +822,7 @@ steps:
 - name: package-ee-tag
   commands:
   - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "make setup -C ./execution-engine"
   - "make cargo-package-all"
   - "cp execution-engine/target/system-contracts.tar.gz artifacts/${DRONE_BRANCH}"
   - "cp execution-engine/target/debian/casperlabs-engine-grpc-server_*.deb artifacts/${DRONE_BRANCH}"
@@ -832,6 +835,57 @@ steps:
   when:
     ref:
     - refs/tags/v*
+
+- name: mac-ee-tarball-tag
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+    CARGO_FLAGS: "--release"
+  settings:
+    command_timeout: 60m
+    port:
+      from_secret: mac-port
+    script:
+    - mkdir -p DRONE_BUILD_${DRONE_BUILD_NUMBER}
+    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
+    - git clone -b master https://github.com/CasperLabs/CasperLabs.git
+    - export PATH=$PATH:/usr/local/bin/
+    - cd CasperLabs/execution-engine
+    - make setup
+    - CARGO_FLAGS=--release make build
+    - cd target/release/
+    - export OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+    - export ARCH=$(uname -p)
+    - export VERSION=$(./casperlabs-engine-grpc-server --version | awk '{print $NF}')
+    - tar -czvf casperlabs-engine-grpc-server-"$VERSION"_"$OS"_"$ARCH".tar.gz casperlabs-engine-grpc-server
+  when:
+    ref:
+    - refs/tags/v*
+
+- name: rsync-mac-tarball-tag
+  image: "casperlabs/buildenv:latest"
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  commands:
+  - mkdir -p ~/.ssh
+  - mkdir -p artifacts/
+  - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_ed25519
+  - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs/execution-engine/target/release/casperlabs-engine-grpc-server-*darwin*.tar.gz artifacts/${DRONE_BRANCH}/
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+    - mac-ee-tarball-tag
 
 - name: github_publish_release_artifacts
   settings:
@@ -851,6 +905,28 @@ steps:
   depends_on:
   - package-sbt-artifacts-tag
   - package-ee-tag
+  - rsync-mac-tarball-tag
+
+- name: cleanup-mac-tag
+  image: appleboy/drone-ssh:latest
+  environment:
+    SSH_HOST:
+      from_secret: mac-host
+    SSH_USERNAME:
+      from_secret: mac-user
+    SSH_KEY:
+      from_secret: mac-ssh-key
+  settings:
+    port:
+      from_secret: mac-port
+    script:
+    - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
+  when:
+    ref:
+    - refs/tags/v*
+    status:
+    - failure
+    - success
 
 volumes:
 - name: docker_sock

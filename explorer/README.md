@@ -9,7 +9,7 @@ The purpose of the explorer is to help users interact with the blockchain:
 
 ## Build
 
-You can use `npm` in the `ui` and the `server` directories to build and interactively develop the components.
+You can use `npm` in the `ui`, `server` and `sdk` directories to build and interactively develop the components.
 
 To package the whole thing into a docker image, run `make docker-build/explorer` in the project root directory.
 

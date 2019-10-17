@@ -5,8 +5,10 @@ authors = ["Ed Hastings <ed@casperlabs.io>, Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "get_blocktime"
 crate-type = ["cdylib"]
+bench = false
+doctest = false
+test = false
 
 [features]
 default = []

@@ -9,7 +9,7 @@ use crate::system_contracts::mint::purse_id::PurseIdError;
 /// An enum error that is capable of carrying a value across FFI-Host
 /// boundary.
 #[derive(Fail, Debug, Copy, Clone, PartialEq, Eq)]
-#[repr(u32)]
+#[repr(u8)]
 pub enum Error {
     #[fail(display = "Insufficient funds")]
     InsufficientFunds = 0,
@@ -47,38 +47,38 @@ impl From<PurseIdError> for Error {
 }
 
 /// The error type returned when a construction
-pub struct TryFromDeserializedU32Error(());
+pub struct TryFromU8ForError(());
 
-impl TryFrom<u32> for Error {
-    type Error = TryFromDeserializedU32Error;
+impl TryFrom<u8> for Error {
+    type Error = TryFromU8ForError;
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            d if d == Error::InsufficientFunds as u32 => Ok(Error::InsufficientFunds),
-            d if d == Error::SourceNotFound as u32 => Ok(Error::SourceNotFound),
-            d if d == Error::DestNotFound as u32 => Ok(Error::DestNotFound),
-            d if d == Error::InvalidURef as u32 => Ok(Error::InvalidURef),
-            d if d == Error::InvalidAccessRights as u32 => Ok(Error::InvalidAccessRights),
-            d if d == Error::MissingArgument as u32 => Ok(Error::MissingArgument),
-            d if d == Error::InvalidArgument as u32 => Ok(Error::InvalidArgument),
-            d if d == Error::InvalidNonEmptyPurseCreation as u32 => {
+            d if d == Error::InsufficientFunds as u8 => Ok(Error::InsufficientFunds),
+            d if d == Error::SourceNotFound as u8 => Ok(Error::SourceNotFound),
+            d if d == Error::DestNotFound as u8 => Ok(Error::DestNotFound),
+            d if d == Error::InvalidURef as u8 => Ok(Error::InvalidURef),
+            d if d == Error::InvalidAccessRights as u8 => Ok(Error::InvalidAccessRights),
+            d if d == Error::MissingArgument as u8 => Ok(Error::MissingArgument),
+            d if d == Error::InvalidArgument as u8 => Ok(Error::InvalidArgument),
+            d if d == Error::InvalidNonEmptyPurseCreation as u8 => {
                 Ok(Error::InvalidNonEmptyPurseCreation)
             }
-            _ => Err(TryFromDeserializedU32Error(())),
+            _ => Err(TryFromU8ForError(())),
         }
     }
 }
 
 impl ToBytes for Error {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let value = *self as u32;
+        let value = *self as u8;
         value.to_bytes()
     }
 }
 
 impl FromBytes for Error {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (value, rem): (u32, _) = FromBytes::from_bytes(bytes)?;
+        let (value, rem): (u8, _) = FromBytes::from_bytes(bytes)?;
         let error: Error = value
             .try_into()
             // In case an Error variant is unable to be determined it would

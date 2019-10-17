@@ -1,20 +1,20 @@
 package io.casperlabs.node.configuration
 import java.nio.file.{Files, Path}
 
-import scala.io.Source
 import cats.syntax.either._
-import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.configuration.SubConfig
 import shapeless.<:!<
 import shapeless.tag.@@
 
+import scala.io.Source
+import scala.util.Try
 import scala.util.control.NonFatal
 import scala.util.matching.Regex
-import scala.util.Try
 
 private[configuration] object Utils {
   type NotPath[A]      = A <:!< Path
-  type NotNode[A]      = A <:!< Node
+  type NotNode[A]      = A <:!< NodeWithoutChainId
   type IsSubConfig[A]  = A <:< SubConfig
   type NotSubConfig[A] = A <:!< SubConfig
   type NotOption[A]    = A <:!< Option[_]

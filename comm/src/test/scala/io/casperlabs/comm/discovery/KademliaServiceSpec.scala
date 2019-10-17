@@ -103,7 +103,7 @@ abstract class KademliaServiceSpec[F[_]: MonadThrowable: cats.effect.Timer, E <:
         Random.nextBytes(key)
         NodeIdentifier(key)
       }
-      val otherPeer = Node(id, "1.2.3.4", 0, 0)
+      val otherPeer = Node(id.asByteString, "1.2.3.4", 0, 0)
 
       "everything is fine" should {
         "send and receive a list of peers" in

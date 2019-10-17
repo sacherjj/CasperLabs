@@ -27,7 +27,7 @@ no-upnp = false
 default-timeout = "5second"
 
 # Bootstrap casperlabs node addresses for initial seeds. Empty defaut provided for standalone mode.
-# bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
+# bootstrap = "casperlabs://<keccak-hash-of-tls-public-key>:<chain id>@<host>?protocol=<intra-node-port>&discovery=<kademila-port>"
 bootstrap = ""
 
 # Path to data directory.
@@ -128,6 +128,12 @@ block-upload-rate-max-throttled = 0
 
 # Maximum size of each of in-memory block/dag/justifications caches in bytes.
 cache-max-size-bytes = 262144000
+
+# How far to go to the past (by ranks) for caching neighborhood of looked up block
+cache-neighborhood-before = 5
+
+# How far to go to the future (by ranks) for caching neighborhood of looked up block
+cache-neighborhood-after = 6
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]

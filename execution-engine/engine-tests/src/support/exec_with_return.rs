@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::rc::Rc;
 
+use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::{self, FromBytes};
 use contract_ffi::execution::Phase;
 use contract_ffi::key::Key;
@@ -19,6 +20,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
+use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::WasmiPreprocessor;
 
 use crate::support::test_support::{self, WasmTestBuilder};
@@ -37,7 +39,7 @@ pub fn exec<S, T>(
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
-    args: impl contract_ffi::contract_api::argsparser::ArgsParser,
+    args: impl ArgsParser,
     extra_urefs: Vec<URef>,
 ) -> Option<(T, Vec<URef>, ExecutionEffect)>
 where
@@ -100,6 +102,7 @@ where
         protocol_version,
         correlation_id,
         phase,
+        ProtocolData::default(),
     );
 
     let wasm_bytes = test_support::read_wasm_file_bytes(wasm_file);

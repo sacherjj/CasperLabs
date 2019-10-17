@@ -3,6 +3,7 @@ package io.casperlabs.node
 import cats.implicits._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
+import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.node.configuration.Configuration.Command.{Diagnostics, Run}
 import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
@@ -23,10 +24,16 @@ object Main {
 
   def main(args: Array[String]): Unit =
     Configuration
-      .parse(args.toArray, sys.env)
+      .parse(args, sys.env)
+      .andThen({
+        case (command, configuration) =>
+          ChainSpecReader
+            .fromConf(configuration)
+            .map(chainSpec => (command, configuration, chainSpec))
+      })
       .fold(
         errors => println(errors.mkString_("", "\n", "")), {
-          case (command, conf) =>
+          case (command, conf, chainSpec) =>
             // Create a scheduler to execute the program and block waiting on it to finish.
             implicit val scheduler: Scheduler = Scheduler.forkJoin(
               parallelism = Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 4),
@@ -38,7 +45,7 @@ object Main {
               reporter = uncaughtExceptionHandler
             )
 
-            val exec = updateLoggingProps(conf) >> mainProgram(command, conf)
+            val exec = updateLoggingProps(conf) >> mainProgram(command, conf, chainSpec)
 
             // This uses Scala `blocking` under the hood, so make sure the thread pool we use supports it.
             exec.runSyncUnsafe()
@@ -52,7 +59,11 @@ object Main {
     sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
-  private def mainProgram(command: Configuration.Command, conf: Configuration)(
+  private def mainProgram(
+      command: Configuration.Command,
+      conf: Configuration,
+      chainSpec: ChainSpec
+  )(
       implicit scheduler: Scheduler
   ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
@@ -66,7 +77,7 @@ object Main {
 
     val program = command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
-      case Run         => nodeProgram(conf)
+      case Run         => nodeProgram(conf, chainSpec)
     }
 
     program
@@ -85,11 +96,13 @@ object Main {
       }
   }
 
-  private def nodeProgram(conf: Configuration)(implicit scheduler: Scheduler): Task[Unit] = {
+  private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
+      implicit scheduler: Scheduler
+  ): Task[Unit] = {
     val node =
       for {
         _       <- log.info(api.VersionInfo.get)
-        runtime <- NodeRuntime(conf)
+        runtime <- NodeRuntime(conf, chainSpec)
         _       <- runtime.main
       } yield ()
 
