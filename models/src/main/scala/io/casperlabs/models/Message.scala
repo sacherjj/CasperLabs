@@ -21,6 +21,7 @@ trait Message {
   type Id = ByteString
   val messageHash: Id
   val validatorId: ByteString
+  val timestamp: Long
   val parentBlock: Id
   val justifications: Seq[consensus.Block.Justification]
   val rank: Long
@@ -40,6 +41,7 @@ object Message {
   case class Block private (
       messageHash: Message#Id,
       validatorId: ByteString,
+      timestamp: Long,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -55,14 +57,16 @@ object Message {
     lazy val secondaryParents =
       if (blockSummary.getHeader.parentHashes.isEmpty) Seq.empty
       else blockSummary.getHeader.parentHashes.tail
-    lazy val weightMap = blockSummary.getHeader.getState.bonds.map {
-      case Bond(validatorPk, stake) => validatorPk -> stake
+
+    lazy val weightMap: Map[ByteString, Weight] = blockSummary.getHeader.getState.bonds.map {
+      case Bond(validatorPk, stake) => validatorPk -> Weight(stake)
     }.toMap
   }
 
   case class Ballot private (
       messageHash: Message#Id,
       validatorId: ByteString,
+      timestamp: Long,
       parentBlock: Message#Id,
       justifications: Seq[consensus.Block.Justification],
       rank: Long,
@@ -77,6 +81,7 @@ object Message {
     try {
       val messageHash        = b.blockHash
       val header             = b.getHeader
+      val timestamp          = header.timestamp
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
       val validatorId        = header.validatorPublicKey
       val justifications     = header.justifications
@@ -91,6 +96,7 @@ object Message {
             Ballot(
               messageHash,
               validatorId,
+              timestamp,
               parentBlock,
               justifications,
               rank,
@@ -104,6 +110,7 @@ object Message {
             Block(
               messageHash,
               validatorId,
+              timestamp,
               parentBlock,
               justifications,
               rank,

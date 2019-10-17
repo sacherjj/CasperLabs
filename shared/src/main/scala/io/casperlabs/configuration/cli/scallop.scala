@@ -73,9 +73,9 @@ object scallopImpl {
 
     def tomlClassName(typeName: String) =
       typeName match {
-        case "Flag" => "Boolean"
-        case "Node" => "String"
-        case other  => other
+        case "Flag"               => "Boolean"
+        case "NodeWithoutChainId" => "String"
+        case other                => other
       }
 
     // To see what we're dealing with: `println(showRaw(tpe))`
@@ -90,10 +90,10 @@ object scallopImpl {
     q"""
           val tomlType: String = {
             val primitiveType = classOf[$t].getSimpleName match {
-              case "Path" | "String" | "Node" | "StoreType" | "FiniteDuration" => "String"
-              case "int" | "long" | "BigInt"                                   => "Integer"
-              case "boolean"                                                   => "Boolean"
-              case "double"                                                    => "Double"
+              case "Path" | "String" | "NodeWithoutChainId" | "StoreType" | "FiniteDuration" => "String"
+              case "int" | "long" | "BigInt"                                                 => "Integer"
+              case "boolean"                                                                 => "Boolean"
+              case "double"                                                                  => "Double"
               case other => sys.error(s"Unexpected field type in io.casperlabs.configuration.cli.scallop annotation: $$other")
             }
             primitiveType + (if ($isMulti) "..." else "")

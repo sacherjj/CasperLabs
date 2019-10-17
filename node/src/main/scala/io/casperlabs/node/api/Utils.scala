@@ -11,6 +11,34 @@ import io.casperlabs.crypto.hash.Blake2b256
 import scala.util.Try
 
 object Utils {
+  def checkString[F[_]: MonadThrowable](s: String, desc: String, b: String => Boolean): F[String] =
+    MonadThrowable[F].raiseError[String](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
+      .pure[F]
+
+  def validateBlockHashPrefix[F[_]: MonadThrowable](
+      p: String,
+      adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
+  ): F[String] =
+    Utils
+      .checkString[F](
+        p,
+        "BlockHash prefix must be at least 4 characters (2 bytes) long",
+        s => Base16.tryDecode(s).exists(_.length >= 2)
+      )
+      .adaptErr(adaptError)
+
+  def validateDeployHash[F[_]: MonadThrowable](
+      p: String,
+      adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
+  ): F[String] =
+    Utils
+      .checkString[F](
+        p,
+        "DeployHash must be 64 characters (32 bytes) long",
+        Base16.tryDecode(_).exists(_.length == 32)
+      )
+      .adaptError(adaptError)
+
   def toKey[F[_]: Monad](keyType: String, keyValue: String)(
       implicit appErr: MonadThrowable[F]
   ): F[state.Key] = {

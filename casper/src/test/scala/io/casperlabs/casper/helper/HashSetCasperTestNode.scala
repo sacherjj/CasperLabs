@@ -25,6 +25,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -64,7 +65,7 @@ abstract class HashSetCasperTestNode[F[_]](
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
   val bonds = genesis.getHeader.getState.bonds
-    .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> b.stake)
+    .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> Weight(b.stake))
     .toMap
 
   implicit val casperSmartContractsApi =
@@ -190,7 +191,7 @@ trait HashSetCasperTestNodeFactory {
 }
 
 object HashSetCasperTestNode {
-  type Bonds                            = Map[Keys.PublicKey, Long]
+  type Bonds                            = Map[Keys.PublicKey, Weight]
   type MakeExecutionEngineService[F[_]] = Bonds => ExecutionEngineService[F]
 
   def randomBytes(length: Int): Array[Byte] = Array.fill(length)(Random.nextInt(256).toByte)
@@ -200,14 +201,17 @@ object HashSetCasperTestNode {
 
   //TODO: Give a better implementation for use in testing; this one is too simplistic.
   def simpleEEApi[F[_]: Defer: Applicative](
-      initialBonds: Map[PublicKey, Long],
+      initialBonds: Map[PublicKey, Weight],
       generateConflict: Boolean = false
   ): ExecutionEngineService[F] =
     new ExecutionEngineService[F] {
       import ipc.{Bond => _, _}
 
-      private val zero  = Array.fill(32)(0.toByte)
-      private val bonds = initialBonds.map(p => Bond(ByteString.copyFrom(p._1), p._2)).toSeq
+      private val zero = Array.fill(32)(0.toByte)
+      private val bonds =
+        initialBonds
+          .map(p => Bond(ByteString.copyFrom(p._1)).withStake(state.BigInt(p._2.toString, 512)))
+          .toSeq
 
       private def getExecutionEffect(deploy: ipc.DeployItem) = {
         // The real execution engine will get the keys from what the code changes, which will include

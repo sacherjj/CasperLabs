@@ -6,6 +6,7 @@ import java.net.{InetAddress, URL}
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.catscontrib.ski.kp
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
@@ -21,23 +22,25 @@ object WhoAmI {
       discoveryPort: Int,
       noUpnp: Boolean,
       id: NodeIdentifier
-  ): F[Node] =
+  ): F[NodeWithoutChainId] =
     for {
       externalAddress <- retrieveExternalAddress(noUpnp, protocolPort)
       host            <- fetchHost(host, externalAddress)
-      peerNode        = Node(id, host, protocolPort, discoveryPort)
+      peerNode        = NodeWithoutChainId(Node(id.asByteString, host, protocolPort, discoveryPort))
     } yield peerNode
 
+  /** TODO: Unused at the moment, might be useful for dynamic IPs tracking: NODE-496
+    * If make use, then update to use [[NodeWithoutChainId]] if needed.
+    */
   def checkLocalPeerNode[F[_]: Sync: Log](
       protocolPort: Int,
       discoveryPort: Int,
       peerNode: Node
   ): F[Option[Node]] =
     for {
-      r      <- checkAll()
-      (_, a) = r
-      host <- if (a == peerNode.host) Option.empty[String].pure[F]
-             else Log[F].info(s"external IP address has changed to $a").map(kp(Option(a)))
+      (_, a) <- checkAll()
+      host <- if (a == peerNode.host) none[String].pure[F]
+             else Log[F].info(s"external IP address has changed to $a").map(kp(a.some))
     } yield host.map(h => Node(peerNode.id, h, protocolPort, discoveryPort))
 
   private def fetchHost[F[_]: Sync: Log](

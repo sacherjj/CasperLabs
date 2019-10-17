@@ -5,7 +5,7 @@ use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
-use crate::contract_api::pointers::TURef;
+use crate::contract_api::TURef;
 
 pub const UREF_ADDR_SIZE: usize = 32;
 pub const ACCESS_RIGHTS_SIZE: usize = 1;
@@ -136,6 +136,14 @@ impl URef {
         }
     }
 
+    pub fn into_read(self) -> URef {
+        URef(self.0, Some(AccessRights::READ))
+    }
+
+    pub fn into_read_add_write(self) -> URef {
+        URef(self.0, Some(AccessRights::READ_ADD_WRITE))
+    }
+
     pub fn is_writeable(self) -> bool {
         if let Some(access_rights) = self.1 {
             access_rights.is_writeable()
@@ -227,10 +235,6 @@ impl<T> From<TURef<T>> for URef {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use proptest::proptest;
-
-    use crate::gens;
-    use crate::test_utils;
     use crate::uref::{AccessRights, URef};
 
     fn test_readable(right: AccessRights, is_true: bool) {
@@ -276,13 +280,6 @@ mod tests {
         test_addable(AccessRights::READ, false);
         test_addable(AccessRights::WRITE, false);
         test_addable(AccessRights::READ_ADD_WRITE, true);
-    }
-
-    proptest! {
-        #[test]
-        fn test_uref(uref in gens::uref_arb()) {
-            assert!(test_utils::test_serialization_roundtrip(&uref));
-        }
     }
 
     #[test]

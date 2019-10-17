@@ -20,12 +20,14 @@ object BlockImplicits {
     def timestamp: Long                    = block.getHeader.timestamp
     def protocolVersion: ProtocolVersion   = block.getHeader.getProtocolVersion
     def deployCount: Int                   = block.getHeader.deployCount
-    def chainId: String                    = block.getHeader.chainId
+    def chainName: String                  = block.getHeader.chainName
     def validatorBlockSeqNum: Int          = block.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = block.getHeader.validatorPublicKey
     def rank: Long                         = block.getHeader.rank
-    def weightMap: Map[ByteString, Long] =
-      block.getHeader.getState.bonds.map(b => (b.validatorPublicKey, b.stake)).toMap
+    def weightMap: Map[ByteString, Weight] =
+      block.getHeader.getState.bonds
+        .map(b => (b.validatorPublicKey, Weight(b.stake)))
+        .toMap
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {
@@ -41,12 +43,14 @@ object BlockImplicits {
     def timestamp: Long                    = summary.getHeader.timestamp
     def protocolVersion: ProtocolVersion   = summary.getHeader.getProtocolVersion
     def deployCount: Int                   = summary.getHeader.deployCount
-    def chainId: String                    = summary.getHeader.chainId
+    def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
     def rank: Long                         = summary.getHeader.rank
-    def weightMap: Map[ByteString, Long] =
-      summary.getHeader.getState.bonds.map(b => (b.validatorPublicKey, b.stake)).toMap
+    def weightMap: Map[ByteString, Weight] =
+      summary.getHeader.getState.bonds
+        .map(b => (b.validatorPublicKey, Weight(b.stake)))
+        .toMap
   }
 
   implicit class BlockSummaryObjectOps(val blockSummary: BlockSummary.type) extends AnyVal {

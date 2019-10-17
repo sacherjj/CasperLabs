@@ -51,29 +51,29 @@ mod pointer_block {
 mod proptests {
     use proptest::prelude::proptest;
 
-    use engine_shared::test_utils::test_serialization_roundtrip;
+    use contract_ffi::bytesrepr;
 
     use crate::trie::gens::*;
 
     proptest! {
         #[test]
         fn roundtrip_blake2b_hash(hash in blake2b_hash_arb()) {
-            assert!(test_serialization_roundtrip(&hash));
+            bytesrepr::test_serialization_roundtrip(&hash);
         }
 
         #[test]
         fn roundtrip_trie_pointer(pointer in trie_pointer_arb()) {
-            assert!(test_serialization_roundtrip(&pointer));
+            bytesrepr::test_serialization_roundtrip(&pointer);
         }
 
         #[test]
         fn roundtrip_trie_pointer_block(pointer_block in trie_pointer_block_arb()) {
-            assert!(test_serialization_roundtrip(&pointer_block));
+            bytesrepr::test_serialization_roundtrip(&pointer_block);
         }
 
         #[test]
         fn roundtrip_trie(trie in trie_arb()) {
-            assert!(test_serialization_roundtrip(&trie));
+            bytesrepr::test_serialization_roundtrip(&trie);
         }
     }
 }

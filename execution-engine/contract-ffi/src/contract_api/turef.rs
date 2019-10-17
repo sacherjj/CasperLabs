@@ -2,10 +2,10 @@ use core::any::type_name;
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::key::{addr_to_hex, Key};
+use crate::key::addr_to_hex;
 use crate::uref::AccessRights;
 use crate::uref::URef;
-use crate::value::Contract;
+use crate::value::Value;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum AccessRightsError {
@@ -33,7 +33,10 @@ pub struct TURef<T> {
 }
 
 impl<T> TURef<T> {
-    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> TURef<T> {
+    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> Self
+    where
+        T: Into<Value>,
+    {
         TURef {
             addr,
             access_rights,
@@ -43,7 +46,12 @@ impl<T> TURef<T> {
 
     pub fn from_uref(uref: URef) -> Result<Self, AccessRightsError> {
         if let Some(access_rights) = uref.access_rights() {
-            Ok(TURef::new(uref.addr(), access_rights))
+            let addr = uref.addr();
+            Ok(TURef {
+                addr,
+                access_rights,
+                _marker: PhantomData,
+            })
         } else {
             Err(AccessRightsError::NoAccessRights)
         }
@@ -59,37 +67,6 @@ impl<T> TURef<T> {
 
     pub fn set_access_rights(&mut self, access_rights: AccessRights) {
         self.access_rights = access_rights;
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ContractPointer {
-    Hash([u8; 32]),
-    URef(TURef<Contract>),
-}
-
-impl ContractPointer {
-    pub fn into_turef(self) -> Option<TURef<Contract>> {
-        match self {
-            ContractPointer::URef(ret) => Some(ret),
-            _ => None,
-        }
-    }
-}
-
-impl<T> From<TURef<T>> for Key {
-    fn from(turef: TURef<T>) -> Self {
-        let uref = URef::new(turef.addr(), turef.access_rights());
-        Key::URef(uref)
-    }
-}
-
-impl From<ContractPointer> for Key {
-    fn from(c_ptr: ContractPointer) -> Self {
-        match c_ptr {
-            ContractPointer::Hash(h) => Key::Hash(h),
-            ContractPointer::URef(turef) => turef.into(),
-        }
     }
 }
 
@@ -109,7 +86,7 @@ impl<T> core::fmt::Display for TURef<T> {
 mod tests {
     use alloc::string::{String, ToString};
 
-    use crate::contract_api::pointers::TURef;
+    use crate::contract_api::TURef;
     use crate::uref::AccessRights;
     use crate::value::Value;
 

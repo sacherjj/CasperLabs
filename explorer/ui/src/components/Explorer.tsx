@@ -15,6 +15,7 @@ import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { number } from 'prop-types';
 
 interface Props {
   dag: DagContainer;
@@ -54,7 +55,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
-                    block.getSummary()!.getBlockHash_asB64()
+                  block.getSummary()!.getBlockHash_asB64()
                 ) {
                   dag.selectedBlock = undefined;
                 } else {
@@ -167,7 +168,7 @@ class BlockDetails extends React.Component<{
               );
             // Genesis doesn't have a validator.
             return (
-              (validatorBond && validatorBond.getStake().toLocaleString()) ||
+              (validatorBond && validatorBond.getStake() && Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
               null
             );
           })()

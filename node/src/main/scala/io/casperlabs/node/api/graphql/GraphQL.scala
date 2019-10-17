@@ -9,6 +9,7 @@ import fs2.{Pipe, Stream}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.GraphQLQuery._
 import io.casperlabs.node.api.graphql.ProtocolState.Subscriptions
 import io.casperlabs.node.api.graphql.circe._
@@ -36,12 +37,14 @@ import scala.util.{Failure, Success}
   */
 object GraphQL {
 
+  private[graphql] implicit val MetricsSource = Metrics.Source(Metrics.BaseSource, "graphql")
+
   private[graphql] val requiredHeaders =
     Headers.of(Header("Upgrade", "websocket"), Header("Sec-WebSocket-Protocol", "graphql-ws"))
   private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler: Metrics](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect
@@ -55,7 +58,7 @@ object GraphQL {
     )
   }
 
-  private[graphql] def buildRoute[F[_]: Concurrent: ContextShift: Timer: Log: Fs2SubscriptionStream](
+  private[graphql] def buildRoute[F[_]: Concurrent: ContextShift: Timer: Log: Fs2SubscriptionStream: Metrics](
       executor: Executor[Unit, Unit],
       keepAlivePeriod: FiniteDuration,
       ec: ExecutionContext
@@ -71,9 +74,16 @@ object GraphQL {
           .getOrElseF(NotFound())
       case req @ POST -> Root =>
         val res: F[Response[F]] = for {
-          json  <- req.as[Json]
-          query <- Sync[F].fromEither(json.as[GraphQLQuery])
-          res   <- processHttpQuery(query, executor, ec).flatMap(Ok(_))
+          json                 <- req.as[Json]
+          query                <- Sync[F].fromEither(json.as[GraphQLQuery])
+          isIntrospectionQuery = query.query.contains("__schema")
+          runQuery             = processHttpQuery(query, executor, ec).flatMap(Ok(_))
+          res <- if (isIntrospectionQuery) {
+                  runQuery
+                } else {
+                  Log[F].debug(s"GraphQL query: ${query.query}") >>
+                    Metrics[F].timer("query")(runQuery)
+                }
         } yield res
 
         res.handleErrorWith {
@@ -143,7 +153,10 @@ object GraphQL {
                   )
                   .flatMap(_ => Stream.empty.covary[F])
               },
-              m => Stream.emit[F, GraphQLWebSocketMessage](m)
+              m =>
+                Stream.eval[F, GraphQLWebSocketMessage](
+                  Log[F].debug(s"Received subscription query: $m") >> m.pure[F]
+                )
             )
         case _ => Stream.empty.covary[F]
       }

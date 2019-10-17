@@ -48,12 +48,14 @@ object Genesis {
 
       // Sorted list of bonded validators.
       bonds = genesisConfig.accounts
+        .sortBy { x =>
+          x.publicKey -> x.getBondedAmount.value
+        }
         .collect {
           case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-            PublicKey(account.publicKey.toByteArray) -> account.getBondedAmount.value.toLong
+            PublicKey(account.publicKey.toByteArray) -> account.bondedAmount
         }
         .toSeq
-        .sorted
         .map {
           case (pk, stake) =>
             val validator = ByteString.copyFrom(pk)
@@ -80,7 +82,7 @@ object Genesis {
         validatorSeqNum = 0,
         protocolVersion = genesisConfig.getProtocolVersion,
         timestamp = genesisConfig.timestamp,
-        chainId = genesisConfig.name
+        chainName = genesisConfig.name
       )
 
       unsignedBlock = unsignedBlockProto(body, header)

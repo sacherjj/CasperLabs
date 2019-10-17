@@ -1,4 +1,5 @@
-use contract_ffi::contract_api::{Error, TransferResult, TransferredTo};
+use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
+use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};

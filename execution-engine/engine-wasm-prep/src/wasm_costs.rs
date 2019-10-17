@@ -5,7 +5,7 @@ const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
 
 // Taken (partially) from parity-ethereum
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct WasmCosts {
     /// Default opcode cost
     pub regular: u32,
@@ -116,16 +116,17 @@ pub mod gens {
 mod tests {
     use proptest::proptest;
 
+    use contract_ffi::bytesrepr;
     use engine_shared::test_utils;
 
     use super::gens;
 
     #[test]
     fn should_serialize_and_deserialize() {
-        let v1 = test_utils::wasm_costs_mock();
+        let mock = test_utils::wasm_costs_mock();
         let free = test_utils::wasm_costs_free();
-        assert!(test_utils::test_serialization_roundtrip(&v1));
-        assert!(test_utils::test_serialization_roundtrip(&free));
+        bytesrepr::test_serialization_roundtrip(&mock);
+        bytesrepr::test_serialization_roundtrip(&free);
     }
 
     proptest! {
@@ -133,7 +134,7 @@ mod tests {
         fn should_serialize_and_deserialize_with_arbitrary_values(
             wasm_costs in gens::wasm_costs_arb()
         ) {
-            assert!(test_utils::test_serialization_roundtrip(&wasm_costs));
+            bytesrepr::test_serialization_roundtrip(&wasm_costs);
         }
     }
 }

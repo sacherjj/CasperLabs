@@ -17,6 +17,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.gossiping
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -39,7 +40,7 @@ trait MultiParentCasper[F[_]] {
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
+  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float]
   def lastFinalizedBlock: F[Block]
   def faultToleranceThreshold: Float
 }
@@ -78,7 +79,7 @@ sealed abstract class MultiParentCasperInstances {
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
-      chainId: String,
+      chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
@@ -88,13 +89,13 @@ sealed abstract class MultiParentCasperInstances {
                                                                               genesisPreState,
                                                                               genesisEffects
                                                                             )
-      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainId, upgrades)
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainName, upgrades)
       casper <- MultiParentCasperImpl.create[F](
                  statelessExecutor,
                  MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,
                  genesis,
-                 chainId,
+                 chainName,
                  upgrades,
                  blockProcessingLock
                )

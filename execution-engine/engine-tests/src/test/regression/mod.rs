@@ -19,6 +19,8 @@ mod ee_539;
 #[cfg(test)]
 mod ee_549;
 #[cfg(test)]
+mod ee_550;
+#[cfg(test)]
 mod ee_572;
 #[cfg(test)]
 mod ee_584;

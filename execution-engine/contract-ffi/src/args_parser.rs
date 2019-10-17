@@ -1,6 +1,6 @@
-use crate::bytesrepr;
 use alloc::vec::Vec;
-use bytesrepr::{Error, ToBytes};
+
+use crate::bytesrepr::{Error, ToBytes};
 
 /// Parses `Self` into a byte representation that is ABI compliant.
 /// It means that each type of the tuple have to implement `ToBytes`.

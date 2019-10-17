@@ -7,6 +7,7 @@ import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTr
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable.Map
@@ -14,6 +15,8 @@ import scala.collection.immutable.Map
 object Estimator {
   type BlockHash = ByteString
   type Validator = ByteString
+
+  import Weight._
 
   implicit val decreasingOrder = Ordering[Long].reverse
 
@@ -76,7 +79,7 @@ object Estimator {
       parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, lca)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
-        .sortBy(b => scores.getOrElse(b, 0L) -> b.toStringUtf8)
+        .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
         .reverse
     } yield newMainParent +: sortedSecParents
   }
@@ -95,8 +98,8 @@ object Estimator {
       stopHash: BlockHash,
       latestMessageHashes: Map[Validator, BlockHash],
       equivocatingValidators: Set[Validator]
-  ): F[Map[BlockHash, Long]] =
-    latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Long]) {
+  ): F[Map[BlockHash, Weight]] =
+    latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHash)) =>
         DagOperations
           .bfTraverseF[F, BlockHash](List(latestMessageHash))(
@@ -106,11 +109,11 @@ object Estimator {
           .foldLeftF(acc) {
             case (acc2, blockHash) =>
               (if (equivocatingValidators.contains(validator)) {
-                 0L.pure[F]
+                 Zero.pure[F]
                } else {
                  weightFromValidatorByDag(dag, blockHash, validator)
                }).map { realWeight =>
-                val oldValue = acc2.getOrElse(blockHash, 0L)
+                val oldValue = acc2.getOrElse(blockHash, Zero)
                 acc2.updated(blockHash, realWeight + oldValue)
               }
           }
@@ -127,7 +130,7 @@ object Estimator {
   def forkChoiceTip[F[_]: Monad](
       dag: DagRepresentation[F],
       startingBlock: BlockHash,
-      scores: Map[BlockHash, Long]
+      scores: Map[BlockHash, Weight]
   ): F[BlockHash] =
     dag.getMainChildren(startingBlock).flatMap { mainChildren =>
       {

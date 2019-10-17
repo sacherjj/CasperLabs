@@ -52,7 +52,7 @@ in an upcoming release.
 
 ##### Step 4: Download the ChainSpec
 
-The node comes with a ChainSpec that should allow you to connect to DevNet. To connect elsewhere,
+The node comes with the ChainSpec contracts that should allow you to connect to DevNet. You will also need to pull down the latest `accounts.csv` and store this in the `chainspec/genesis` directory for your node if you wish to connect to DevNet. You can download DevNet's `account.csv` from our [releases](https://github.com/CasperLabs/CasperLabs/releases) page starting with Release `v0.8.0`. To connect elsewhere,
 you need to obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
 option pointed to the directory.
 

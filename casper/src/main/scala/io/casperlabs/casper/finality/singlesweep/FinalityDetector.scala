@@ -1,6 +1,7 @@
 package io.casperlabs.casper.finality.singlesweep
 
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 
 trait FinalityDetector[F[_]] {
@@ -26,5 +27,6 @@ object FinalityDetector {
 
   // Calculate threshold value as described in the specification.
   // Note that validator weights (`q` and `n`) are normalized to 1.
-  private[casper] def calculateThreshold(q: Long, n: Long): Float = (2.0f * q - n) / (2 * n)
+  private[casper] def calculateThreshold(q: Weight, n: Weight): Float =
+    (2.0f * q.toFloat - n.toFloat) / (2 * n.toFloat)
 }
