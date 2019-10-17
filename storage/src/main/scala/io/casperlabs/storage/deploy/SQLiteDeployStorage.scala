@@ -352,8 +352,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
   override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] = {
     val processingResults =
-      sql"""|SELECT dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count
-            |FROM deploy_process_results dpr 
+      sql"""|SELECT dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count, bm.deploy_cost_total
+            |FROM deploy_process_results dpr
             |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
             |WHERE dpr.deploy_hash = $deployHash""".stripMargin
         .query[ProcessingResult]

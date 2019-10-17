@@ -171,7 +171,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
             BlockInfo
               .Status()
               .withStats(
-                Stats(block.serializedSize, block.getBody.deploys.count(_.isError))
+                Stats(
+                  block.serializedSize,
+                  block.getBody.deploys.count(_.isError),
+                  block.getBody.deploys.map(_.cost).sum
+                )
               )
           )
         expectProcessingResult = ProcessingResult(

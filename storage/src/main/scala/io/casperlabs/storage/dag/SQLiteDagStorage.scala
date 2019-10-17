@@ -29,13 +29,15 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
+
   override def insert(block: Block): F[DagRepresentation[F]] = {
     val blockSummary     = BlockSummary.fromBlock(block)
     val deployErrorCount = block.getBody.deploys.count(_.isError)
+    val deployCostTotal  = block.getBody.deploys.map(_.cost).sum
     val blockMetadataQuery =
       sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, validator, rank, data, block_size, deploy_error_count)
-            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount)
+            |(block_hash, validator, rank, data, block_size, deploy_error_count, deploy_cost_total)
+            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal)
             |""".stripMargin.update.run
 
     val justificationsQuery =
@@ -151,7 +153,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       startBlockNumber: Long,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT rank, data, block_size, deploy_error_count
+    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
           |ORDER BY rank
@@ -162,7 +164,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .groupByRank
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT rank, data, block_size, deploy_error_count
+    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE rank>=$startBlockNumber
           |ORDER BY rank""".stripMargin
@@ -172,7 +174,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .groupByRank
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT a.rank, a.data, a.block_size, a.deploy_error_count
+    sql"""|SELECT a.rank, a.data, a.block_size, a.deploy_error_count, deploy_cost_total
           |FROM block_metadata a
           |INNER JOIN (
           | SELECT max(rank) max_rank FROM block_metadata

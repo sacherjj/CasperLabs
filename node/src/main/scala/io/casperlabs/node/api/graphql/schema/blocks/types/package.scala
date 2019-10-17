@@ -214,6 +214,11 @@ package object types {
         "deployErrorCount",
         OptionType(IntType),
         resolve = c => c.value._1.getStatus.stats.map(_.deployErrorCount)
+      ),
+      Field(
+        "deployCostTotal",
+        OptionType(LongType),
+        resolve = c => c.value._1.getStatus.stats.map(_.deployCostTotal)
       )
     )
   )

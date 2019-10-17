@@ -116,17 +116,20 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                       finalityDetectorEffect,
                       blockStorage
                     )
-        _      = blockInfo.getSummary.blockHash should be(blockHash)
-        _      = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
-        _      = blockInfo.getSummary.getHeader.rank should be(blockNumber)
-        _      = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
-        _      = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
-        _      = blockInfo.getStatus.faultTolerance should be(faultTolerance)
-        _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
-        _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
-        _      = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
-        result = blockInfo.getSummary.getHeader.chainName should be(chainName)
-      } yield result
+        _ = blockInfo.getSummary.blockHash should be(blockHash)
+        _ = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
+        _ = blockInfo.getStatus.getStats.deployCostTotal should be(
+          secondBlock.getBody.deploys.map(_.cost).sum
+        )
+        _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
+        _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
+        _ = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
+        _ = blockInfo.getStatus.faultTolerance should be(faultTolerance)
+        _ = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
+        _ = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
+        _ = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
+        _ = blockInfo.getSummary.getHeader.chainName should be(chainName)
+      } yield ()
   }
 
   it should "return error when no block exists" in withStorage {
