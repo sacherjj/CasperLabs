@@ -563,13 +563,18 @@ impl AssociatedKeys {
     }
 
     /// Calculates total weight of authorization keys provided by an argument
-    pub fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
+    fn calculate_keys_weight(&self, authorization_keys: &BTreeSet<PublicKey>) -> Weight {
         self.calculate_any_keys_weight(authorization_keys.iter())
     }
 
     /// Calculates total weight of all authorization keys
-    pub fn total_keys_weight(&self) -> Weight {
+    fn total_keys_weight(&self) -> Weight {
         self.calculate_any_keys_weight(self.0.keys())
+    }
+
+    /// Calculates total weight of all authorization keys excluding a given key
+    fn total_keys_weight_excluding(&self, public_key: PublicKey) -> Weight {
+        self.calculate_any_keys_weight(self.0.keys().filter(|&&element| element != public_key))
     }
 }
 
@@ -668,13 +673,24 @@ impl Account {
         self.associated_keys.add_key(public_key, weight)
     }
 
-    /// Checks if subtracting passed weight from current total would make the
-    /// new cumulative weight to fall below any of the thresholds on account.
-    fn check_thresholds_for_weight_update(&self, weight: Weight) -> bool {
-        let total_weight = self.associated_keys.total_keys_weight();
+    /// Checks if removing given key would properly satisfy thresholds.
+    fn can_remove_key(&self, public_key: PublicKey) -> bool {
+        let total_weight_without = self.associated_keys.total_keys_weight_excluding(public_key);
 
-        // Safely calculate new weight
-        let new_weight = total_weight.value().saturating_sub(weight.value());
+        // Returns true if the total weight calculated without given public key would be greater or
+        // equal to all of the thresholds.
+        total_weight_without >= *self.action_thresholds().deployment()
+            && total_weight_without >= *self.action_thresholds().key_management()
+    }
+
+    /// Checks if adding a weight to a sum of all weights excluding the given key would make the
+    /// resulting value to fall below any of the thresholds on account.
+    fn can_update_key(&self, public_key: PublicKey, weight: Weight) -> bool {
+        // Calculates total weight of all keys excluding the given key
+        let total_weight = self.associated_keys.total_keys_weight_excluding(public_key);
+
+        // Safely calculate new weight by adding the updated weight
+        let new_weight = total_weight.value().saturating_add(weight.value());
 
         // Returns true if the new weight would be greater or equal to all of
         // the thresholds.
@@ -683,9 +699,9 @@ impl Account {
     }
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-        if let Some(weight) = self.associated_keys.get(&public_key) {
+        if self.associated_keys.contains_key(&public_key) {
             // Check if removing this weight would fall below thresholds
-            if !self.check_thresholds_for_weight_update(*weight) {
+            if !self.can_remove_key(public_key) {
                 return Err(RemoveKeyFailure::ThresholdViolation);
             }
         }
@@ -699,9 +715,8 @@ impl Account {
     ) -> Result<(), UpdateKeyFailure> {
         if let Some(current_weight) = self.associated_keys.get(&public_key) {
             if weight < *current_weight {
-                let diff = Weight::new(current_weight.value() - weight.value());
                 // New weight is smaller than current weight
-                if !self.check_thresholds_for_weight_update(diff) {
+                if !self.can_update_key(public_key, weight) {
                     return Err(UpdateKeyFailure::ThresholdViolation);
                 }
             }
@@ -1116,6 +1131,33 @@ mod tests {
     }
 
     #[test]
+    fn associated_keys_total_weight_excluding() {
+        let identity_key = PublicKey::new([1u8; 32]);
+        let identity_key_weight = Weight::new(1);
+
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(11);
+
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(12);
+
+        let key_3 = PublicKey::new([4u8; 32]);
+        let key_3_weight = Weight::new(13);
+
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+            res.add_key(key_3, key_3_weight).expect("should add key 3");
+            res
+        };
+        assert_eq!(
+            associated_keys.total_keys_weight_excluding(key_2),
+            Weight::new(identity_key_weight.value() + key_1_weight.value() + key_3_weight.value())
+        );
+    }
+
+    #[test]
     fn account_can_manage_keys_with() {
         let associated_keys = {
             let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(1));
@@ -1270,27 +1312,36 @@ mod tests {
     #[test]
     fn updating_key_would_violate_action_thresholds() {
         let identity_key = PublicKey::new([1u8; 32]);
+        let identity_key_weight = Weight::new(1);
         let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(2);
         let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(3);
         let key_3 = PublicKey::new([4u8; 32]);
+        let key_3_weight = Weight::new(4);
         let associated_keys = {
-            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
-            res.add_key(key_1, Weight::new(2))
-                .expect("should add key 1");
-            res.add_key(key_2, Weight::new(3))
-                .expect("should add key 2");
-            res.add_key(key_3, Weight::new(4))
-                .expect("should add key 3");
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+            res.add_key(key_3, key_3_weight).expect("should add key 3");
             // 1 + 2 + 3 + 4
             res
         };
+
+        let deployment_threshold = Weight::new(
+            identity_key_weight.value()
+                + key_1_weight.value()
+                + key_2_weight.value()
+                + key_3_weight.value(),
+        );
+        let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
-            [0u8; 32],
+            identity_key.value(),
             BTreeMap::new(),
             PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
             associated_keys,
             // deploy: 33 (3*11)
-            ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 1))
+            ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
             AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
@@ -1326,26 +1377,107 @@ mod tests {
 
     #[test]
     fn overflowing_keys_weight() {
-        let associated_keys = {
-            let mut res = AssociatedKeys::new(PublicKey::new([1u8; 32]), Weight::new(250));
+        let identity_key = PublicKey::new([1u8; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_3 = PublicKey::new([4u8; 32]);
 
-            res.add_key(PublicKey::new([2u8; 32]), Weight::new(1))
-                .expect("should add key 1");
-            res.add_key(PublicKey::new([3u8; 32]), Weight::new(2))
-                .expect("should add key 2");
-            res.add_key(PublicKey::new([4u8; 32]), Weight::new(3))
-                .expect("should add key 3");
+        let identity_key_weight = Weight::new(250);
+        let weight_1 = Weight::new(1);
+        let weight_2 = Weight::new(2);
+        let weight_3 = Weight::new(3);
+
+        let saturated_weight = Weight::new(u8::max_value());
+
+        let associated_keys = {
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+
+            res.add_key(key_1, weight_1).expect("should add key 1");
+            res.add_key(key_2, weight_2).expect("should add key 2");
+            res.add_key(key_3, weight_3).expect("should add key 3");
             res
         };
 
         assert_eq!(
             associated_keys.calculate_keys_weight(&BTreeSet::from_iter(vec![
-                PublicKey::new([1; 32]), // 250
-                PublicKey::new([2; 32]), // 251
-                PublicKey::new([3; 32]), // 253
-                PublicKey::new([4; 32]), // 256 - error
+                identity_key, // 250
+                key_1,        // 251
+                key_2,        // 253
+                key_3,        // 256 - error
             ])),
-            Weight::new(255u8)
+            saturated_weight,
         );
+    }
+
+    #[test]
+    fn overflowing_should_allow_removal() {
+        let identity_key = PublicKey::new([42; 32]);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_2 = PublicKey::new([3u8; 32]);
+
+        let associated_keys = {
+            // Identity
+            let mut res = AssociatedKeys::new(identity_key, Weight::new(1));
+
+            // Spare key
+            res.add_key(key_1, Weight::new(2))
+                .expect("should add key 1");
+            // Big key
+            res.add_key(key_2, Weight::new(255))
+                .expect("should add key 2");
+
+            res
+        };
+
+        let mut account = Account::new(
+            identity_key.value(),
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            ActionThresholds::new(Weight::new(1), Weight::new(254))
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        account.remove_associated_key(key_1).expect("should work")
+    }
+
+    #[test]
+    fn overflowing_should_allow_updating() {
+        let identity_key = PublicKey::new([1; 32]);
+        let identity_key_weight = Weight::new(1);
+        let key_1 = PublicKey::new([2u8; 32]);
+        let key_1_weight = Weight::new(3);
+        let key_2 = PublicKey::new([3u8; 32]);
+        let key_2_weight = Weight::new(255);
+        let deployment_threshold = Weight::new(1);
+        let key_management_threshold = Weight::new(254);
+
+        let associated_keys = {
+            // Identity
+            let mut res = AssociatedKeys::new(identity_key, identity_key_weight);
+
+            // Spare key
+            res.add_key(key_1, key_1_weight).expect("should add key 1");
+            // Big key
+            res.add_key(key_2, key_2_weight).expect("should add key 2");
+
+            res
+        };
+
+        let mut account = Account::new(
+            identity_key.value(),
+            BTreeMap::new(),
+            PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
+            associated_keys,
+            ActionThresholds::new(deployment_threshold, key_management_threshold)
+                .expect("should create thresholds"),
+            AccountActivity::new(BlockTime(0), BlockTime(0)),
+        );
+
+        // decrease so total weight would be changed from 1 + 3 + 255 to 1 + 1 + 255
+        account
+            .update_associated_key(key_1, Weight::new(1))
+            .expect("should work");
     }
 }
