@@ -802,6 +802,7 @@ where
 // WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
+    thread_count: usize,
     e: E,
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
@@ -814,7 +815,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 
     let mut server = grpc::ServerBuilder::new_plain();
     server.http.set_unix_addr(socket.to_owned()).unwrap();
-    server.http.set_cpu_pool_threads(1);
+    server.http.set_cpu_pool_threads(thread_count);
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }
