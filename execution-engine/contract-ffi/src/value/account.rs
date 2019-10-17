@@ -683,15 +683,13 @@ impl Account {
             && total_weight_without >= *self.action_thresholds().key_management()
     }
 
-    /// Checks if subtracting passed weight from current total would make the
-    /// new cumulative weight to fall below any of the thresholds on account.
-    ///
-    /// New weight passed is assumed to be lower than the original weight.
+    /// Checks if adding a weight to a sum of all weights excluding the given key would make the
+    /// resulting value to fall below any of the thresholds on account.
     fn can_update_key(&self, public_key: PublicKey, weight: Weight) -> bool {
         // Calculates total weight of all keys excluding the given key
         let total_weight = self.associated_keys.total_keys_weight_excluding(public_key);
 
-        // Safely calculate new weight by adding the old weight
+        // Safely calculate new weight by adding the updated weight
         let new_weight = total_weight.value().saturating_add(weight.value());
 
         // Returns true if the new weight would be greater or equal to all of

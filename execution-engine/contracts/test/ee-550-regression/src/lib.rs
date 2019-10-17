@@ -62,7 +62,7 @@ pub extern "C" fn call() {
                 .unwrap_or_revert_with(Error::SetActionThreshold);
         }
         "test_update" => {
-            // Deployed with two keys of weights 2 and 255 (total saturates at 255) to satisfy new
+            // Deployed with two keys of weights 3 and 255 (total saturates at 255) to satisfy new
             // threshold
             account::update_associated_key(PublicKey::new(KEY_1_ADDR), Weight::new(1))
                 .unwrap_or_revert_with(Error::UpdateKey);
