@@ -80,8 +80,8 @@ def check_no_errors_in_deploys(node, block_hash):
     deploy_infos = list(node.p_client.show_deploys(block_hash))
     assert len(deploy_infos) > 0
     for deploy_info in deploy_infos:
-        assert deploy_info.is_error is False, deploy_info.error_message
-        assert deploy_info.error_message == ""
+        if deploy_info.is_error:
+            raise Exception(deploy_info.error_message)
 
 
 def bonds_by_account_and_stake(
@@ -178,9 +178,15 @@ def test_double_bonding(one_node_network_fn):
         one_node_network_fn, 1, BONDING_ACCT
     )
     node0, node1 = one_node_network_fn.docker_nodes
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network_fn.docker_nodes, block_hash
+    )
     check_no_errors_in_deploys(node0, block_hash)
 
     block_hash, account = bond_to_the_network(one_node_network_fn, 2, BONDING_ACCT)
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network_fn.docker_nodes, block_hash
+    )
     check_no_errors_in_deploys(node1, block_hash)
 
     bonds = bonds_by_account_and_stake(node1, block_hash, 1 + 2, account.public_key_hex)
