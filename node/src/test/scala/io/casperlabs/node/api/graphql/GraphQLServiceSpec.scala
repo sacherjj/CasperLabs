@@ -5,10 +5,11 @@ import cats.effect.{ConcurrentEffect, Resource}
 import cats.implicits._
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.Log.NOPLog
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Json, JsonObject}
-import fs2._
 import monix.eval.Task
 import monix.eval.instances.CatsConcurrentEffectForTask
 import monix.execution.Scheduler.Implicits.global
@@ -21,14 +22,17 @@ import org.http4s.server.blaze.BlazeServerBuilder
 import org.java_websocket.extensions.IExtension
 import org.java_websocket.protocols.IProtocol
 import java.net.URI
+
 import org.java_websocket.client.WebSocketClient
 import org.java_websocket.drafts.Draft_6455
 import org.java_websocket.handshake.ServerHandshake
+
 import scala.collection.JavaConverters._
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{Matchers, WordSpecLike}
 import sangria.execution.{ExceptionHandler, Executor, HandledException}
 import sangria.schema._
+import fs2._
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -235,12 +239,14 @@ object GraphQLServiceSpec {
   type Service = Kleisli[Task, Request[Task], Response[Task]]
 
   implicit val concurrentEffectMonix: ConcurrentEffect[Task] =
-    new CatsConcurrentEffectForTask()(global, Task.defaultOptions)
+    new CatsConcurrentEffectForTask() (global, Task.defaultOptions)
 
   implicit val noOpLog: Log[Task] = new NOPLog[Task]
 
   implicit val fs2SubscriptionStream: Fs2SubscriptionStream[Task] =
     new Fs2SubscriptionStream[Task]()
+
+  implicit val metrics: Metrics[Task] = new MetricsNOP[Task] {}
 
   val QueryFieldName     = "testField"
   val QueryFieldResponse = "testFieldResponse"

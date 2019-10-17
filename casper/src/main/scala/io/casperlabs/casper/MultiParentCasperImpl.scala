@@ -664,19 +664,21 @@ object MultiParentCasperImpl {
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
-    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
-      Sync[F].delay(
-        new MultiParentCasperImpl[F](
-          statelessExecutor,
-          broadcaster,
-          validatorId,
-          genesis,
-          chainName,
-          upgrades,
-          blockProcessingLock,
-          faultToleranceThreshold
-        )
-      )
+    for {
+      dag <- DagStorage[F].getRepresentation
+      lmh <- dag.latestMessageHashes
+      lca <- DagOperations.latestCommonAncestorsMainParent[F](dag, lmh.values.toList)
+      _   <- LastFinalizedBlockHashContainer[F].set(lca)
+    } yield new MultiParentCasperImpl[F](
+      statelessExecutor,
+      broadcaster,
+      validatorId,
+      genesis,
+      chainName,
+      upgrades,
+      blockProcessingLock,
+      faultToleranceThreshold
+    )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */

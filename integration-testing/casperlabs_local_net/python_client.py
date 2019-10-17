@@ -1,23 +1,20 @@
 from typing import Optional, Union
-import os
 import logging
 import time
 from pathlib import Path  # noqa: F401
 
 from casperlabs_local_net import LoggingMixin
 from casperlabs_local_net.common import Contract, DEFAULT_PAYMENT_ABI
+from casperlabs_local_net.client_base import CasperLabsClientBase
 from casperlabs_client import CasperLabsClient, ABI, InternalError, extract_common_name
 
 
-class PythonClient(CasperLabsClient, LoggingMixin):
+class PythonClient(CasperLabsClientBase, LoggingMixin):
     def __init__(self, node: "DockerNode"):  # NOQA
         super(PythonClient, self).__init__()
         self.node = node
         self.abi = ABI
-        # If $TAG_NAME is set it means we are running in docker, see docker_run_test.sh
-        host = (
-            os.environ.get("TAG_NAME", None) and self.node.container_name or "localhost"
-        )
+        host = node.node_host
 
         certificate_file = None
         node_id = None
@@ -37,6 +34,12 @@ class PythonClient(CasperLabsClient, LoggingMixin):
             f"port={self.node.grpc_external_docker_port}, "
             f"internal_port={self.node.grpc_internal_docker_port})"
         )
+
+    def __getattr__(self, name):
+        """ Compatibility with the times when this class was derived from CasperLabsClient,
+            some tests may need to call methods of self.client directly
+        """
+        return getattr(self.client, name)
 
     @property
     def client_type(self) -> str:
