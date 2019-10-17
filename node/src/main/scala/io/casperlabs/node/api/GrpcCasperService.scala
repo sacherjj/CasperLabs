@@ -46,8 +46,7 @@ object GrpcCasperService {
               blockHashPrefix =>
                 BlockAPI
                   .getBlockInfo[F](
-                    blockHashPrefix,
-                    full = request.view == BlockInfo.View.FULL
+                    blockHashPrefix
                   )
             }
           }
@@ -56,8 +55,7 @@ object GrpcCasperService {
           val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
-              maxRank = request.maxRank,
-              full = request.view == BlockInfo.View.FULL
+              maxRank = request.maxRank
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)

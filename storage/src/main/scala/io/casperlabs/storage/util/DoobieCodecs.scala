@@ -37,9 +37,9 @@ trait DoobieCodecs {
     }
   }
 
-  protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
-    Read[(Long, Option[String], Array[Byte], Int, Int)].map {
-      case (cost, maybeError, blockSummaryData, blockSize, deployErrorCount) =>
+  protected implicit val readBlockInfo: Read[BlockInfo] = {
+    Read[(Array[Byte], Int, Int)].map {
+      case (blockSummaryData, blockSize, deployErrorCount) =>
         val blockSummary = BlockSummary.parseFrom(blockSummaryData)
         val blockStatus = BlockInfo
           .Status()
@@ -49,10 +49,16 @@ trait DoobieCodecs {
               .withBlockSizeBytes(blockSize)
               .withDeployErrorCount(deployErrorCount)
           )
-        val blockInfo = BlockInfo()
+        BlockInfo()
           .withSummary(blockSummary)
           .withStatus(blockStatus)
 
+    }
+  }
+
+  protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
+    Read[(Long, Option[String], BlockInfo)].map {
+      case (cost, maybeError, blockInfo) =>
         ProcessingResult(
           cost = cost,
           isError = maybeError.nonEmpty,

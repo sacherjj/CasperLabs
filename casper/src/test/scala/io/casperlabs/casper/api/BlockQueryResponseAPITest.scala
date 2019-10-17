@@ -109,7 +109,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
 
-        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, full = true)(
+        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery)(
                       Sync[Task],
                       logEff,
                       casperRef,

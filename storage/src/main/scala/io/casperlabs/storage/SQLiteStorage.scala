@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
@@ -133,8 +133,11 @@ object SQLiteStorage {
 
       override def isEmpty: F[Boolean] = blockStorage.isEmpty
 
-      override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
-        blockStorage.getSummaryByPrefix(blockHashPrefix)
+      override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] =
+        blockStorage.getBlockInfoByPrefix(blockHashPrefix)
+
+      override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+        blockStorage.getBlockInfo(blockHash)
 
       override def put(
           blockHash: BlockHash,
@@ -168,13 +171,13 @@ object SQLiteStorage {
       override def topoSort(
           startBlockNumber: Long,
           endBlockNumber: Long
-      ): Stream[F, Vector[BlockSummary]] =
+      ): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSort(startBlockNumber, endBlockNumber)
 
-      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockSummary]] =
+      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSort(startBlockNumber)
 
-      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockSummary]] =
+      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSortTail(tailLength)
 
       override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =

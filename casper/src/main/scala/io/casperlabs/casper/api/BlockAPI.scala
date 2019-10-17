@@ -25,6 +25,7 @@ import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
+import cats.Applicative
 
 object BlockAPI {
 
@@ -159,74 +160,49 @@ object BlockAPI {
       .getByPrefix(blockHashBase16)
       .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
 
-  def makeBlockInfo(
-      summary: BlockSummary,
-      maybeBlock: Option[Block]
-  ): BlockInfo = {
-    val maybeStats = maybeBlock.map { block =>
-      BlockInfo.Status
-        .Stats()
-        .withBlockSizeBytes(block.serializedSize)
-        .withDeployErrorCount(
-          block.getBody.deploys.count(_.isError)
-        )
-    }
-    val status = BlockInfo.Status(stats = maybeStats)
-    BlockInfo()
-      .withSummary(summary)
-      .withStatus(status)
-  }
-
-  def makeBlockInfo[F[_]: Monad: BlockStorage: MultiParentCasper: FinalityDetector](
-      summary: BlockSummary,
-      full: Boolean
-  ): F[(BlockInfo, Option[Block])] =
-    for {
-      maybeBlock <- if (full) {
-                     BlockStorage[F]
-                       .get(summary.blockHash)
-                       .map(_.get.blockMessage)
-                   } else {
-                     none[Block].pure[F]
-                   }
-      info = makeBlockInfo(summary, maybeBlock)
-    } yield (info, maybeBlock)
-
   def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
       blockHash: BlockHash,
       full: Boolean = false
   ): F[(BlockInfo, Option[Block])] =
-    unsafeWithCasper[F, (BlockInfo, Option[Block])]("Could not show block.") { implicit casper =>
-      BlockStorage[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
-        maybeSummary.fold(
-          MonadThrowable[F]
-            .raiseError[(BlockInfo, Option[Block])](
-              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
-            )
-        )(makeBlockInfo[F](_, full))
-      }
+    BlockStorage[F].getBlockInfo(blockHash).flatMap(maybeAttachBlock[F](_, full)).flatMap { x =>
+      x.fold(
+        MonadThrowable[F]
+          .raiseError[(BlockInfo, Option[Block])](
+            NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
+          )
+      )(_.pure[F])
     }
 
   def getBlockInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: MultiParentCasperRef: FinalityDetector](
       blockHashBase16: String,
       full: Boolean = false
   ): F[Option[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block") {
-      implicit casper =>
+    BlockStorage[F]
+      .getBlockInfoByPrefix(blockHashBase16)
+      .flatMap(maybeAttachBlock[F](_, full))
+
+  // TODO: Change this so we don't retrieve the full block, only deploy headers.
+  private def maybeAttachBlock[F[_]: Applicative: BlockStorage](
+      maybeInfo: Option[BlockInfo],
+      full: Boolean
+  ): F[Option[(BlockInfo, Option[Block])]] =
+    maybeInfo.fold(none[(BlockInfo, Option[Block])].pure[F]) { info =>
+      // TODO: Change this so we don't retrieve the full block, only deploy headers.
+      if (full) {
         BlockStorage[F]
-          .getSummaryByPrefix(blockHashBase16)
-          .flatMap(
-            _.fold(none[(BlockInfo, Option[Block])].pure[F])(
-              makeBlockInfo[F](_, full).map(_.some)
-            )
-          )
+          .get(info.getSummary.blockHash)
+          .map { maybeBlockWithTransforms =>
+            maybeBlockWithTransforms.map(info -> _.blockMessage)
+          }
+      } else {
+        (info -> none[Block]).some.pure[F]
+      }
     }
 
   def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
-      blockHashBase16: String,
-      full: Boolean = false
+      blockHashBase16: String
   ): F[BlockInfo] =
-    getBlockInfoOpt[F](blockHashBase16, full).flatMap(
+    getBlockInfoOpt[F](blockHashBase16, full = false).flatMap(
       _.fold(
         MonadThrowable[F]
           .raiseError[BlockInfo](
@@ -262,8 +238,10 @@ object BlockAPI {
             MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
           case ex: IllegalArgumentException =>
             MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } flatMap { summariesByRank =>
-          summariesByRank.flatten.reverse.toList.traverse(makeBlockInfo[F](_, full))
+        } flatMap { infosByRank =>
+          infosByRank.flatten.reverse.toList.traverse { info =>
+            maybeAttachBlock[F](Option(info), full).map(_.get)
+          }
         }
     }
 
@@ -271,8 +249,7 @@ object BlockAPI {
     * then we pass previous ranks to paginate backwards. */
   def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
       depth: Int,
-      maxRank: Long = 0,
-      full: Boolean = false
+      maxRank: Long = 0
   ): F[List[BlockInfo]] =
-    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
+    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full = false).map(_.map(_._1))
 }
