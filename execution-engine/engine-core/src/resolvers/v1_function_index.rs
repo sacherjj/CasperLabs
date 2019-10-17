@@ -40,7 +40,7 @@ pub enum FunctionIndex {
     TransferFromPurseToPurseIndex = 33,
     GetBalanceIndex = 34,
     GetPhaseIndex = 35,
-    UpgradeContractAtURef = 36,
+    UpgradeContractAtURefIndex = 36,
     GetSystemContractIndex = 37,
 }
 
