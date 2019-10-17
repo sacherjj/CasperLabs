@@ -5,6 +5,7 @@ use super::to_ptr;
 use crate::bytesrepr::deserialize;
 use crate::contract_api::alloc_bytes;
 use crate::ext_ffi;
+use crate::unwrap_or_revert::UnwrapOrRevert;
 pub use crate::value::account::PublicKey;
 use crate::value::account::{
     ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
@@ -17,7 +18,7 @@ pub fn get_main_purse() -> PurseId {
         ext_ffi::get_main_purse(dest_ptr);
         Vec::from_raw_parts(dest_ptr, PURSE_ID_SIZE_SERIALIZED, PURSE_ID_SIZE_SERIALIZED)
     };
-    deserialize(&bytes).unwrap()
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn set_action_threshold(
