@@ -21,7 +21,7 @@ import monix.eval.Task
 import monix.eval.Task._
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
-import org.scalacheck.Gen
+import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -50,14 +50,19 @@ class DeploySelectionTest
   val sampleDeploy        = sample(arbDeploy.arbitrary)
   val deploysInSmallBlock = smallBlockSizeBytes / sampleDeploy.serializedSize
 
+  // ScalaCheck shrinker doesn't respect constraints on the generators.
+  // There is no other way at the moment (`suchThat` used to work but it doesn't now).
+  // see: https://gist.github.com/davidallsopp/f65d73fea8b5e5165fc3
+  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+
   it should "stop consuming the stream when block size limit is reached" in forAll(
     Gen.listOfN(deploysInSmallBlock * 2, arbDeploy.arbitrary)
   ) { deploys =>
     {
       val expected = takeUnlessTooBig(smallBlockSizeBytes)(deploys)
-      assert(expected.size < deploys.size)
+      assert(expected.size <= deploys.size)
 
-      assert(deploysSize(expected) < (0.9 * smallBlockSizeBytes))
+      assert(deploysSize(expected) <= (0.9 * smallBlockSizeBytes))
 
       val countedStream = CountedStream(fs2.Stream.fromIterator(deploys.toIterator))
 
@@ -289,12 +294,6 @@ object DeploySelectionTest {
 
   private def raiseNotImplemented[F[_], A](implicit F: MonadThrowable[F]): F[A] =
     F.raiseError[A](new IllegalArgumentException("Not implemented in this mock."))
-
-  private def assertMinSize(sizeLimitMb: Int)(l: List[Deploy]): Boolean =
-    deploysSize(l) > (sizeLimitMb)
-
-  private def assertMaxSize(sizeLimitMb: Int)(l: List[Deploy]): Boolean =
-    deploysSize(l) < sizeLimitMb
 
   private def takeUnlessTooBig(sizeLimitMb: Int)(deploys: List[Deploy]): List[Deploy] =
     deploys
