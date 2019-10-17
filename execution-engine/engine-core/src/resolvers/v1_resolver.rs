@@ -193,6 +193,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::GetSystemContractIndex.into(),
             ),
+            "get_main_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetMainPurseIndex.into(),
+            ),
             _ => {
                 return Err(InterpreterError::Function(format!(
                     "host module doesn't export function with name {}",
