@@ -394,7 +394,7 @@ class ProxyThread(Thread):
 def proxy_client(
     node,
     node_port=40401,
-    node_host="casperlabs",
+    node_host=None,
     proxy_port=50401,
     server_certificate_file: str = None,
     server_key_file: str = None,
@@ -406,7 +406,7 @@ def proxy_client(
         casper_pb2_grpc.CasperServiceStub,
         casper_pb2_grpc.add_CasperServiceServicer_to_server,
         proxy_port=proxy_port,
-        node_host=node_host,
+        node_host=node_host or node.node_host,
         node_port=node_port,
         server_certificate_file=server_certificate_file,
         server_key_file=server_key_file,
@@ -421,7 +421,7 @@ def proxy_client(
 def proxy_server(
     node,
     node_port=50400,
-    node_host="localhost",
+    node_host=None,
     proxy_port=40400,
     server_certificate_file=None,
     server_key_file=None,
@@ -433,7 +433,7 @@ def proxy_server(
         gossiping_pb2_grpc.GossipServiceStub,
         gossiping_pb2_grpc.add_GossipServiceServicer_to_server,
         proxy_port=proxy_port,
-        node_host=node_host,
+        node_host=node_host or node.node_host,
         node_port=node_port,
         server_certificate_file=server_certificate_file,
         server_key_file=server_key_file,
@@ -448,7 +448,7 @@ def proxy_server(
 def proxy_kademlia(
     node,
     node_port=50404,
-    node_host="127.0.0.1",
+    node_host=None,
     proxy_port=40404,
     interceptor_class=KademliaInterceptor,
 ):
@@ -456,7 +456,7 @@ def proxy_kademlia(
         kademlia_pb2_grpc.KademliaServiceStub,
         kademlia_pb2_grpc.add_KademliaServiceServicer_to_server,
         proxy_port=proxy_port,
-        node_host=node_host,
+        node_host=node_host or node.node_host,
         node_port=node_port,
         encrypted_connection=False,
         interceptor=interceptor_class(node),

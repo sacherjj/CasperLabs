@@ -162,7 +162,7 @@ pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
         ext_ffi::new_uref(key_ptr, value_ptr, value_size); // new_uref creates a URef with ReadWrite access writes
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
-    let key: Key = deserialize(&bytes).unwrap();
+    let key: Key = deserialize(&bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap()
     } else {

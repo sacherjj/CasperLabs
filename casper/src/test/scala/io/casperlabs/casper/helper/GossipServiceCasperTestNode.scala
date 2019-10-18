@@ -55,7 +55,7 @@ class GossipServiceCasperTestNode[F[_]](
       sk,
       genesis,
       maybeMakeEE
-    )(concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
+    ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   val ownValidatorKey = validatorId match {
@@ -144,7 +144,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
-          )(
+          ) (
             concurrentF,
             blockStorage,
             dagStorage,
@@ -228,7 +228,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   relaying = relaying,
                   gossipService = gossipService,
                   maybeMakeEE = maybeMakeEE
-                )(
+                ) (
                   concurrentF,
                   blockStorage,
                   dagStorage,

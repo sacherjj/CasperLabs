@@ -141,21 +141,20 @@ def test_transfer_to_accounts(node):
     # This is throwing an Exit 1.  (Transfer Failure in Contract)
     node.transfer_to_account(to_account_id=c_id, amount=700, from_account_id=b_id)
 
-    blocks = node.p_client.show_blocks(10)
-    block = blocks.__next__()
+    block = list(node.p_client.show_blocks(1))[0]
     block_hash = block.summary.block_hash.hex()
 
-    acct_a_bal = node.d_client.get_balance(acct_a.public_key_hex, block_hash)
+    acct_a_bal = node.p_client.balance(acct_a.public_key_hex, block_hash)
     assert (
         acct_a_bal < initial_amt
     ), "Should not have transferred any money, but spent on payment"
 
-    acct_b_bal = node.d_client.get_balance(acct_b.public_key_hex, block_hash)
+    acct_b_bal = node.p_client.balance(acct_b.public_key_hex, block_hash)
     assert (
         acct_b_bal < initial_amt - 700
     ), "Should be transfer_amt - 700 - payment for transfer"
 
-    acct_c_bal = node.d_client.get_balance(acct_c.public_key_hex, block_hash)
+    acct_c_bal = node.p_client.balance(acct_c.public_key_hex, block_hash)
     assert acct_c_bal == 700, "Should be result of only transfers in"
 
 
