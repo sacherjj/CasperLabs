@@ -8,7 +8,7 @@ import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTr
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.Weight
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable.Map
@@ -58,7 +58,7 @@ object Estimator {
       lca <- NonEmptyList
               .fromList(latestMessageHashes.values.flatten.toList)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      equivocatingValidators <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      equivocatingValidators = latestMessageHashes.filter(_._2.size > 1).keys.toSet
       scores                 <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
       newMainParent          <- forkChoiceTip(dag, lca, scores)
       parents                <- tipsOfLatestMessages(latestMessageHashes.values.flatten.toList, lca)
@@ -86,22 +86,28 @@ object Estimator {
   ): F[Map[BlockHash, Weight]] =
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHashes)) =>
-        DagOperations
-          .bfTraverseF[F, BlockHash](latestMessageHashes.toList)(
-            hash => dag.lookup(hash).map(_.get.parents.take(1).toList)
-          )
-          .takeUntil(_ == stopHash)
-          .foldLeftF(acc) {
-            case (acc2, blockHash) =>
-              (if (equivocatingValidators.contains(validator)) {
-                 Zero.pure[F]
-               } else {
-                 weightFromValidatorByDag(dag, blockHash, validator)
-               }).map { realWeight =>
-                val oldValue = acc2.getOrElse(blockHash, Zero)
-                acc2.updated(blockHash, realWeight + oldValue)
-              }
-          }
+        for {
+          sortedMessages <- latestMessageHashes.toList
+                             .traverse(dag.lookup(_))
+                             .map(_.flatten.sortBy(_.rank))
+          lmdScore <- DagOperations
+                       .bfTraverseF[F, Message](sortedMessages)(
+                         _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
+                       )
+                       .takeUntil(_.messageHash == stopHash)
+                       .foldLeftF(acc) {
+                         case (acc2, message) =>
+                           (if (equivocatingValidators.contains(validator)) {
+                              Zero.pure[F]
+                            } else {
+                              weightFromValidatorByDag(dag, message.messageHash, validator)
+                            }).map { realWeight =>
+                             val oldValue = acc2.getOrElse(message.messageHash, Zero)
+                             acc2.updated(message.messageHash, realWeight + oldValue)
+                           }
+                       }
+        } yield lmdScore
+
     }
 
   /**

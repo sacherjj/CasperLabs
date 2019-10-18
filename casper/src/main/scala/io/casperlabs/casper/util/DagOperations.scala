@@ -342,7 +342,7 @@ object DagOperations {
       starters: NonEmptyList[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    import io.casperlabs.casper.util.implicits.{eqMessageSummary, showBlockHash}
+    import io.casperlabs.casper.util.implicits.eqMessageSummary
 
     def lookup(hash: BlockHash): F[Message] =
       dag

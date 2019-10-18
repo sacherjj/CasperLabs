@@ -236,24 +236,26 @@ class ForkchoiceTest
         c       <- createAndStoreBlock[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
         dag     <- dagStorage.getRepresentation
 
-        latestBlocks <- dag.latestMessageHashes
+        latestMessageHashes <- dag.latestMessageHashes
         // Set the equivocationsTracker manually
         equivocationsTracker = new EquivocationsTracker(Map(v2 -> genesis.getHeader.rank))
         equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                    dag,
-                                   latestBlocks,
+                                   latestMessageHashes,
                                    equivocationsTracker
                                  )
-        _      = equivocatingValidators shouldBe Set(v1)
-        scores <- Estimator.lmdScoring(dag, genesis.blockHash, latestBlocks, equivocatingValidators)
+        _ = equivocatingValidators shouldBe Set(v1)
+        scores <- Estimator.lmdScoring(
+                   dag,
+                   a2.blockHash,
+                   latestMessageHashes,
+                   equivocatingValidators
+                 )
         _ = scores shouldBe Map(
-          genesis.blockHash -> 3L,
-          a2.blockHash      -> 3L,
-          b.blockHash       -> 3L,
-          c.blockHash       -> 0L
+          a2.blockHash -> 3L,
+          b.blockHash  -> 3L,
+          c.blockHash  -> 0L
         )
-
-        latestMessageHashes <- dag.latestMessageHashes
 
         tips <- Estimator.tips(
                  dag,
