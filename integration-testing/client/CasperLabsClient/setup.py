@@ -17,6 +17,7 @@ from setuptools.command.install import install as InstallCommand
 from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../../client/src/main/resources"
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
@@ -148,6 +149,8 @@ def run_codegen():
         [(r"(import .*_pb2)", r"from . \1")],
         glob(f"{PACKAGE_DIR}/*pb2*py"),
     )
+    for filename in glob(os.path.join(CONTRACTS_DIR, "*.wasm")):
+        shutil.copy(filename, PACKAGE_DIR)
 
 
 with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
@@ -187,6 +190,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",

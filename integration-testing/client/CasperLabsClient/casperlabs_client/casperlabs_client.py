@@ -12,6 +12,7 @@ parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
 
 # end of hack #
+import os
 import time
 import argparse
 import grpc
@@ -24,6 +25,7 @@ import base64
 import json
 import struct
 import logging
+import pkg_resources
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -965,6 +967,13 @@ def main():
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
     # fmt:on
     sys.exit(parser.run())
+
+
+def check_bundled_contracts():
+    print(dir(pkg_resources))
+    p = pkg_resources.resource_filename(__name__, "bonding.wasm")
+    if not os.path.exists(p):
+        raise Exception(f"No bundled contract {p}")
 
 
 if __name__ == "__main__":
