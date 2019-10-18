@@ -286,9 +286,6 @@ object ProtoUtil {
                   .buildString(message.messageHash)}"
               )
             )
-          // For some reason scalac produces a warning that we are missing a case
-          // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
-          case Some(_) => ???
           case None =>
             MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
