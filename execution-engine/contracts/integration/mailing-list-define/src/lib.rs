@@ -15,7 +15,9 @@ use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
-    runtime::get_key(name).unwrap().to_turef().unwrap()
+    let key = runtime::get_key(name).unwrap_or_revert_with(Error::GetKey);
+    key.to_turef()
+        .unwrap_or_revert_with(Error::UnexpectedKeyVariant)
 }
 
 fn update_list(name: String) {
@@ -29,9 +31,7 @@ fn update_list(name: String) {
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
     if runtime::has_key(&name) {
-        let init_message = vec![String::from("Hello again!")];
-        let new_key = storage::new_turef(init_message);
-        Some(new_key) //already subscribed
+        None //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = storage::new_turef(init_message);
@@ -60,8 +60,11 @@ pub extern "C" fn mailing_list_ext() {
     let method_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
+    let arg1: String = runtime::get_arg(1)
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
     match method_name.as_str() {
-        "sub" => match sub(runtime::get_arg(1).unwrap().unwrap()) {
+        "sub" => match sub(arg1) {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
@@ -74,7 +77,7 @@ pub extern "C" fn mailing_list_ext() {
         //unforgable reference because otherwise anyone could
         //spam the mailing list.
         "pub" => {
-            publish(runtime::get_arg(1).unwrap().unwrap());
+            publish(arg1);
         }
         _ => panic!("Unknown method name!"),
     }

@@ -12,11 +12,10 @@ use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let counter_uref = runtime::get_key("counter").unwrap_or_revert_with(Error::User(100));
-    let pointer = if let Key::Hash(hash) = counter_uref {
-        ContractRef::Hash(hash)
-    } else {
-        runtime::revert(Error::User(66))
+    let counter_uref = runtime::get_key("counter").unwrap_or_revert_with(Error::GetKey);
+    let pointer = match counter_uref {
+        Key::Hash(hash) => ContractRef::Hash(hash),
+        _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
     {

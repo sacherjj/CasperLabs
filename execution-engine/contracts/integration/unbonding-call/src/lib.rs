@@ -8,17 +8,20 @@ use contract_ffi::contract_api::{runtime, system, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::uint::U512;
 
+const UNBOND_METHOD_NAME: &str = "unbond";
+
+// Unbonding contract.
+//
+// Accepts unbonding amount (of type `Option<u64>`) as first argument.
+// Unbonding with `None` unbonds all stakes in the PoS contract.
+// Otherwise (`Some<u64>`) unbonds with part of the bonded stakes.
 #[no_mangle]
 pub extern "C" fn call() {
     let pos_pointer = system::get_proof_of_stake();
-    // I dont have any safe method to check for the existence of the args.
-    // I am utilizing 0(invalid) amount to indicate no args to EE.
-    let unbond_amount: Option<U512> = match runtime::get_arg::<u32>(0)
+    let unbond_amount: Option<U512> = runtime::get_arg::<Option<u64>>(0)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument)
-    {
-        0 => None,
-        amount => Some(amount.into()),
-    };
-    runtime::call_contract::<_, ()>(pos_pointer, &("unbond", unbond_amount), &vec![]);
+        .map(Into::into);
+
+    runtime::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
 }
