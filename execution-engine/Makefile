@@ -17,6 +17,12 @@ SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdep
 SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -exec basename {} \;)
 TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -exec basename {} \;)
 
+# Finds directories that only contains `Cargo.toml` because `./contracts/examples` directory contains
+# files that could be mistakenly treated as packages but they are not.
+EXAMPLE_CONTRACTS  = $(shell find ./contracts/examples -mindepth 1 -maxdepth 2 -iname Cargo.toml -print0 | \
+                             xargs -0 -I{} dirname -z -- {} | \
+                             xargs -0 -I{} basename {})
+
 BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
 CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
 EXPLORER_CONTRACTS  := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
@@ -24,8 +30,26 @@ PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
 SRE_CONTRACTS       := $(patsubst %, build-contract/%, $(SRE_CONTRACTS))
 SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+EXAMPLE_CONTRACTS   := $(patsubst %, build-contract/%, $(EXAMPLE_CONTRACTS))
 
-INTEGRATION_CONTRACTS += endless-loop pos-bonding remove-associated-key standard-payment
+# Contracts that are used in integration testing but are located in `./contracts/examples`
+INTEGRATION_EXAMPLE_CONTRACTS += \
+	hello-name-call \
+	hello-name-define \
+	mailing-list-call \
+	mailing-list-define \
+	bonding-call \
+	unbonding-call \
+	counter-call \
+	counter-define
+
+INTEGRATION_CONTRACTS += \
+	endless-loop \
+	pos-bonding \
+	remove-associated-key \
+	standard-payment \
+	$(INTEGRATION_EXAMPLE_CONTRACTS)
+
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
@@ -61,10 +85,12 @@ build-contracts: \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS) \
-	$(TEST_CONTRACTS)
+	$(TEST_CONTRACTS) \
+	$(EXAMPLE_CONTRACTS)
 
-.PHONY: build-integration-contracts
+.PHONY: build-integration-contracts build-example-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
+build-example-contracts: $(EXAMPLE_CONTRACTS)
 
 .PHONY: test
 test: $(SYSTEM_CONTRACTS)
