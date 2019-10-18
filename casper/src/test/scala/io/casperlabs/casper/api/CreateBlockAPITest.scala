@@ -10,7 +10,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
@@ -146,6 +146,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
     implicit val safetyOracle  = node.safetyOracleEff
+
+    implicit val dv = DeployInfo.View.FULL
 
     val deploy = ProtoUtil.basicDeploy(
       0,

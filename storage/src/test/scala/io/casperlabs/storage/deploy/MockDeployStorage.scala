@@ -53,10 +53,21 @@ class MockDeployStorage[F[_]: Sync: Log](
       }
     )
 
-  override def getProcessingResults(hash: ByteString): F[List[(BlockHash, Block.ProcessedDeploy)]] =
+  override def getProcessingResults(
+      hash: ByteString
+  )(implicit dv: DeployInfo.View): F[List[(BlockHash, Block.ProcessedDeploy)]] =
     deploysWithMetadataRef.get.map(_.collect {
       case (d, Metadata(_, _, _, _, processingResults)) if d.deployHash == hash => processingResults
     }.toList.flatten)
+
+  def getProcessedDeploys(
+      blockHash: ByteString
+  )(implicit dv: DeployInfo.View): F[List[Block.ProcessedDeploy]] =
+    deploysWithMetadataRef.get.map(_.flatMap {
+      case (_, Metadata(_, _, _, _, processingResults)) => processingResults
+    }.collect {
+      case (hash, result) if blockHash == hash => result
+    }.toList)
 
   override def addAsPending(deploys: List[Deploy]): F[Unit] =
     logOperation(
@@ -179,7 +190,9 @@ class MockDeployStorage[F[_]: Sync: Log](
       )
       .flatMap(result => fs2.Stream.fromIterator(result.toIterator))
 
-  override def getByHashes(l: Set[ByteString]): fs2.Stream[F, Deploy] = {
+  override def getByHashes(
+      l: Set[ByteString]
+  )(implicit dv: DeployInfo.View): fs2.Stream[F, Deploy] = {
     val deploys =
       (readPending, readProcessed).mapN(_ ++ _).map(_.filter(d => l.contains(d.deployHash)))
     fs2.Stream
@@ -187,7 +200,7 @@ class MockDeployStorage[F[_]: Sync: Log](
       .flatMap(all => fs2.Stream.fromIterator(all.toIterator))
   }
 
-  def getByHash(hash: ByteString): F[Option[Deploy]] =
+  def getByHash(hash: ByteString)(implicit dv: DeployInfo.View): F[Option[Deploy]] =
     getByHashes(Set(hash)).compile.last
 
   private def readByStatus(status: Int): F[List[Deploy]] =
@@ -276,7 +289,9 @@ class MockDeployStorage[F[_]: Sync: Log](
 
   private def now = System.currentTimeMillis()
 
-  override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+  override def getDeployInfo(
+      deployHash: DeployHash
+  )(implicit dv: DeployInfo.View): F[Option[DeployInfo]] =
     none[DeployInfo].pure[F]
 
   override def getDeploysByAccount(
@@ -284,7 +299,7 @@ class MockDeployStorage[F[_]: Sync: Log](
       limit: Int,
       lastTimeStamp: Long,
       lastDeployHash: DeployHash
-  ): F[List[Deploy]] =
+  )(implicit dv: DeployInfo.View): F[List[Deploy]] =
     deploysWithMetadataRef.get.map(
       _.keys
         .filter { d =>
@@ -295,6 +310,9 @@ class MockDeployStorage[F[_]: Sync: Log](
             strictEarlier || d.getHeader.timestamp == lastTimeStamp && byteStringOrdering
               .lt(d.deployHash, lastDeployHash)
           }
+        }
+        .map { d =>
+          if (dv == DeployInfo.View.BASIC) d.clearBody else d
         }
         .toList
         .sortBy(d => (d.getHeader.timestamp, d.deployHash))

@@ -104,7 +104,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
         effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -114,7 +114,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                       logEff,
                       casperRef,
                       finalityDetectorEffect,
-                      blockStorage
+                      blockStorage,
+                      deployStorage
                     )
         _ = blockInfo.getSummary.blockHash should be(blockHash)
         _ = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
@@ -133,7 +134,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   }
 
   it should "return error when no block exists" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
         effects                                     <- emptyEffects(blockStorage, dagStorage)
         (logEff, casperRef, finalityDetectorEffect) = effects
@@ -143,7 +144,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                                  logEff,
                                  casperRef,
                                  finalityDetectorEffect,
-                                 blockStorage
+                                 blockStorage,
+                                 deployStorage
                                )
                                .attempt
       } yield {

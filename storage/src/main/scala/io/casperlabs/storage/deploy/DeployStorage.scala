@@ -9,6 +9,7 @@ import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
 import scala.concurrent.duration._
+import cats.mtl.ApplicativeAsk
 
 @typeclass trait DeployStorageWriter[F[_]] {
   private[storage] def addAsExecuted(block: Block): F[Unit]
@@ -72,31 +73,40 @@ import scala.concurrent.duration._
 
   def readProcessedByAccount(account: ByteString): F[List[Deploy]]
 
-  def readProcessedHashes: F[List[ByteString]]
+  def readProcessedHashes: F[List[DeployHash]]
 
   def readPending: F[List[Deploy]]
 
-  def readPendingHashes: F[List[ByteString]]
+  def readPendingHashes: F[List[DeployHash]]
 
   def readPendingHeaders: F[List[Deploy.Header]]
 
-  def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)]
+  def readPendingHashesAndHeaders: fs2.Stream[F, (DeployHash, Deploy.Header)]
 
-  def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
+  def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHash(hash: ByteString): F[Option[Deploy]]
+  def getByHash(deployHash: DeployHash)(implicit dv: DeployInfo.View): F[Option[Deploy]]
 
-  def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy]
+  def getByHashes(deployHashes: Set[DeployHash])(
+      implicit dv: DeployInfo.View
+  ): fs2.Stream[F, Deploy]
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
-  def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
+  def getProcessingResults(deployHash: DeployHash)(
+      implicit view: DeployInfo.View
+  ): F[List[(BlockHash, ProcessedDeploy)]]
+
+  /** Read all the processsed deploys in a block. */
+  def getProcessedDeploys(blockHash: BlockHash)(
+      implicit view: DeployInfo.View
+  ): F[List[ProcessedDeploy]]
 
   /** Read the status of a deploy from the buffer, if it's still in it. */
-  def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]]
+  def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]]
 
-  def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
+  def getDeployInfo(deployHash: DeployHash)(implicit dv: DeployInfo.View): F[Option[DeployInfo]]
 
   /** @return List of deploys created by specified account*/
   def getDeploysByAccount(
@@ -104,7 +114,7 @@ import scala.concurrent.duration._
       limit: Int,
       lastTimeStamp: Long,
       lastDeployHash: DeployHash
-  ): F[List[Deploy]]
+  )(implicit dv: DeployInfo.View): F[List[Deploy]]
 }
 
 @typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
@@ -147,13 +157,13 @@ object DeployStorage {
     override def readProcessedByAccount(account: BlockHash): F[List[Deploy]] =
       reader.readProcessedByAccount(account)
 
-    override def readProcessedHashes: F[List[BlockHash]] =
+    override def readProcessedHashes: F[List[DeployHash]] =
       reader.readProcessedHashes
 
     override def readPending: F[List[Deploy]] =
       reader.readPending
 
-    override def readPendingHashes: F[List[BlockHash]] =
+    override def readPendingHashes: F[List[DeployHash]] =
       reader.readPendingHashes
 
     override def readPendingHeaders: F[List[Deploy.Header]] =
@@ -162,25 +172,38 @@ object DeployStorage {
     override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
       reader.readPendingHashesAndHeaders
 
-    override def getPendingOrProcessed(hash: BlockHash): F[Option[Deploy]] =
-      reader.getPendingOrProcessed(hash)
+    override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
+      reader.getPendingOrProcessed(deployHash)
 
     override def sizePendingOrProcessed(): F[Long] =
       reader.sizePendingOrProcessed()
 
-    override def getByHash(hash: ByteString): F[Option[Deploy]] =
-      reader.getByHash(hash)
+    override def getByHash(
+        deployHash: DeployHash
+    )(implicit dv: DeployInfo.View): F[Option[Deploy]] =
+      reader.getByHash(deployHash)
 
-    override def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy] =
-      reader.getByHashes(hashes)
+    override def getByHashes(
+        deployHashes: Set[DeployHash]
+    )(implicit dv: DeployInfo.View): fs2.Stream[F, Deploy] =
+      reader.getByHashes(deployHashes)
 
-    override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
-      reader.getProcessingResults(hash)
+    override def getProcessingResults(
+        deployHash: DeployHash
+    )(implicit dv: DeployInfo.View): F[List[(BlockHash, ProcessedDeploy)]] =
+      reader.getProcessingResults(deployHash)
+
+    override def getProcessedDeploys(blockHash: BlockHash)(
+        implicit dv: DeployInfo.View
+    ): F[List[ProcessedDeploy]] =
+      reader.getProcessedDeploys(blockHash)
 
     override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
       reader.getBufferedStatus(hash)
 
-    override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+    override def getDeployInfo(
+        deployHash: DeployHash
+    )(implicit dv: DeployInfo.View): F[Option[DeployInfo]] =
       reader.getDeployInfo(deployHash)
 
     override def clear(): F[Unit] = writer.clear()
@@ -192,7 +215,7 @@ object DeployStorage {
         limit: Int,
         lastTimeStamp: Long,
         lastDeployHash: DeployHash
-    ): F[List[Deploy]] =
+    )(implicit dv: DeployInfo.View): F[List[Deploy]] =
       reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
   }
 }

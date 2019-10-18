@@ -4,6 +4,7 @@ import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.state
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.models.SmartContractEngineError
@@ -19,9 +20,10 @@ import sangria.schema._
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
 
-  val requireFullBlockFields: Set[String] = Set("blockSizeBytes", "deployErrorCount", "deploys")
+  // GraphQL projecttions don't expose the body.
+  implicit val dv = DeployInfo.View.BASIC
 
-  def hasAtLeastOne(projections: Vector[ProjectedName], fields: Set[String]): Boolean = {
+  def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
       if (ps.isEmpty) {
         acc
@@ -30,8 +32,14 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
         flatToSet(ps.tail, acc + h.name) ++ flatToSet(h.children, acc)
       }
 
-    flatToSet(projections, Set.empty).intersect(fields).nonEmpty
+    flatToSet(projections, Set.empty)
   }
+
+  def deployView(projections: Vector[ProjectedName]): Option[DeployInfo.View] =
+    deployView(projectionTerms(projections))
+
+  def deployView(terms: Set[String]): Option[DeployInfo.View] =
+    if (terms contains "deploys") Some(dv) else None
 
   def createSchema: Schema[Unit, Unit] =
     Schema(
@@ -48,9 +56,9 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                     context.arg(blocks.arguments.BlockHashPrefix)
                                   )
                 res <- BlockAPI
-                        .getBlockInfoOpt[F](
+                        .getBlockInfoWithDeploysOpt[F](
                           blockHashBase16 = blockHashPrefix,
-                          full = hasAtLeastOne(projections, requireFullBlockFields)
+                          maybeDeployView = deployView(projections)
                         )
               } yield res).unsafeToFuture
             }
@@ -61,10 +69,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             arguments = blocks.arguments.Depth :: blocks.arguments.MaxRank :: Nil,
             resolve = Projector { (context, projections) =>
               BlockAPI
-                .getBlockInfosMaybeWithBlocks[F](
+                .getBlockInfosWithDeploys[F](
                   depth = context.arg(blocks.arguments.Depth),
                   maxRank = context.arg(blocks.arguments.MaxRank),
-                  full = hasAtLeastOne(projections, requireFullBlockFields)
+                  maybeDeployView = deployView(projections)
                 )
                 .unsafeToFuture
             }
@@ -91,7 +99,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                           c.arg(blocks.arguments.BlockHashPrefix)
                                         )
                 maybeBlockProps <- BlockAPI
-                                    .getBlockInfoOpt[F](blockHashBase16Prefix)
+                                    .getBlockInfoWithDeploysOpt[F](
+                                      blockHashBase16Prefix,
+                                      maybeDeployView = None
+                                    )
                                     .map(_.map {
                                       case (info, _) =>
                                         info.getSummary.getHeader.getState.postStateHash ->
@@ -142,19 +153,18 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             "Subscribes to new finalized blocks".some,
             resolve = { c =>
               // Projectors don't work with Subscriptions
-              val requireFullBlock = c.query.renderCompact
+              val terms = c.query.renderCompact
                 .split("[^a-zA-Z0-9]")
                 .collect {
                   case s if s.trim.nonEmpty => s.trim
                 }
                 .toSet
-                .intersect(requireFullBlockFields)
-                .nonEmpty
+
               FinalizedBlocksStream[F].subscribe.evalMap { blockHash =>
                 BlockAPI
-                  .getBlockInfoWithBlock[F](
+                  .getBlockInfoWithDeploys[F](
                     blockHash = blockHash,
-                    full = requireFullBlock
+                    maybeDeployView = deployView(terms)
                   )
                   .map(Action(_))
               }

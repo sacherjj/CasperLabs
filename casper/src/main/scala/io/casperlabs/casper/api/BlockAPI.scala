@@ -26,8 +26,12 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
+import io.casperlabs.casper.util.execengine.ProcessedDeployResult
 
 object BlockAPI {
+
+  // GraphQL can serve processed deploys, if asked for.
+  type BlockAndMaybeDeploys = (BlockInfo, Option[List[Block.ProcessedDeploy]])
 
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "block-api")
@@ -135,7 +139,7 @@ object BlockAPI {
 
   def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
       deployHashBase16: String
-  ): F[Option[DeployInfo]] =
+  )(implicit dv: DeployInfo.View): F[Option[DeployInfo]] =
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
@@ -145,7 +149,7 @@ object BlockAPI {
 
   def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
       deployHashBase16: String
-  ): F[DeployInfo] =
+  )(implicit dv: DeployInfo.View): F[DeployInfo] =
     getDeployInfoOpt[F](deployHashBase16).flatMap(
       _.fold(
         MonadThrowable[F]
@@ -153,56 +157,61 @@ object BlockAPI {
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: Functor: BlockStorage](
+  def getBlockDeploys[F[_]: Monad: DeployStorageReader: BlockStorage](
       blockHashBase16: String
-  ): F[Seq[Block.ProcessedDeploy]] =
-    BlockStorage[F]
-      .getByPrefix(blockHashBase16)
-      .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
-
-  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
-      blockHash: BlockHash,
-      full: Boolean = false
-  ): F[(BlockInfo, Option[Block])] =
-    BlockStorage[F].getBlockInfo(blockHash).flatMap(maybeAttachBlock[F](_, full)).flatMap { x =>
-      x.fold(
-        MonadThrowable[F]
-          .raiseError[(BlockInfo, Option[Block])](
-            NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
-          )
-      )(_.pure[F])
-    }
-
-  def getBlockInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: MultiParentCasperRef: FinalityDetector](
-      blockHashBase16: String,
-      full: Boolean = false
-  ): F[Option[(BlockInfo, Option[Block])]] =
+  )(implicit dv: DeployInfo.View): F[List[Block.ProcessedDeploy]] =
     BlockStorage[F]
       .getBlockInfoByPrefix(blockHashBase16)
-      .flatMap(maybeAttachBlock[F](_, full))
+      .flatMap {
+        _.fold(List.empty[Block.ProcessedDeploy].pure[F]) { info =>
+          DeployStorageReader[F].getProcessedDeploys(info.getSummary.blockHash)
+        }
+      }
 
-  // TODO: Change this so we don't retrieve the full block, only deploy headers.
-  private def maybeAttachBlock[F[_]: Applicative: BlockStorage](
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
+      blockHash: BlockHash,
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[BlockAndMaybeDeploys] =
+    BlockStorage[F]
+      .getBlockInfo(blockHash)
+      .flatMap(maybeWithDeploys[F](_, maybeDeployView))
+      .flatMap { x =>
+        x.fold(
+          MonadThrowable[F]
+            .raiseError[BlockAndMaybeDeploys](
+              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
+            )
+        )(_.pure[F])
+      }
+
+  def getBlockInfoWithDeploysOpt[F[_]: MonadThrowable: Log: BlockStorage: DeployStorageReader: MultiParentCasperRef: FinalityDetector](
+      blockHashBase16: String,
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[Option[BlockAndMaybeDeploys]] =
+    BlockStorage[F]
+      .getBlockInfoByPrefix(blockHashBase16)
+      .flatMap(maybeWithDeploys[F](_, maybeDeployView))
+
+  private def maybeWithDeploys[F[_]: Applicative: DeployStorageReader](
       maybeInfo: Option[BlockInfo],
-      full: Boolean
-  ): F[Option[(BlockInfo, Option[Block])]] =
-    maybeInfo.fold(none[(BlockInfo, Option[Block])].pure[F]) { info =>
-      // TODO: Change this so we don't retrieve the full block, only deploy headers.
-      if (full) {
-        BlockStorage[F]
-          .get(info.getSummary.blockHash)
-          .map { maybeBlockWithTransforms =>
-            maybeBlockWithTransforms.map(info -> _.blockMessage)
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[Option[BlockAndMaybeDeploys]] =
+    maybeInfo.fold(none[BlockAndMaybeDeploys].pure[F]) { info =>
+      maybeDeployView.map { implicit dv =>
+        DeployStorageReader[F]
+          .getProcessedDeploys(info.getSummary.blockHash)
+          .map { deploys =>
+            (info -> deploys.some).some
           }
-      } else {
-        (info -> none[Block]).some.pure[F]
+      } getOrElse {
+        (info -> none[List[Block.ProcessedDeploy]]).some.pure[F]
       }
     }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
       blockHashBase16: String
   ): F[BlockInfo] =
-    getBlockInfoOpt[F](blockHashBase16, full = false).flatMap(
+    getBlockInfoWithDeploysOpt[F](blockHashBase16, None).flatMap(
       _.fold(
         MonadThrowable[F]
           .raiseError[BlockInfo](
@@ -211,45 +220,45 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
-  /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
+  /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: DeployStorageReader: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
-      full: Boolean = false
-  ): F[List[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, List[(BlockInfo, Option[Block])]]("Could not show blocks.") {
-      implicit casper =>
-        casper.dag flatMap { dag =>
-          maxRank match {
-            case 0 => dag.topoSortTail(depth).compile.toVector
-            case r =>
-              dag
-                .topoSort(
-                  endBlockNumber = r,
-                  startBlockNumber = math.max(r - depth + 1, 0)
-                )
-                .compile
-                .toVector
-          }
-        } handleErrorWith {
-          case ex: StorageError =>
-            MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-          case ex: IllegalArgumentException =>
-            MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } flatMap { infosByRank =>
-          infosByRank.flatten.reverse.toList.traverse { info =>
-            maybeAttachBlock[F](Option(info), full).map(_.get)
-          }
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[List[BlockAndMaybeDeploys]] =
+    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
+      casper.dag flatMap { dag =>
+        maxRank match {
+          case 0 =>
+            dag.topoSortTail(depth).compile.toVector
+          case r =>
+            dag
+              .topoSort(
+                endBlockNumber = r,
+                startBlockNumber = math.max(r - depth + 1, 0)
+              )
+              .compile
+              .toVector
         }
+      } handleErrorWith {
+        case ex: StorageError =>
+          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+        case ex: IllegalArgumentException =>
+          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+      } flatMap { infosByRank =>
+        infosByRank.flatten.reverse.toList.traverse { info =>
+          maybeWithDeploys[F](Option(info), maybeDeployView).map(_.get)
+        }
+      }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: DeployStorageReader: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0
   ): F[List[BlockInfo]] =
-    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full = false).map(_.map(_._1))
+    getBlockInfosWithDeploys[F](depth, maxRank, None).map(_.map(_._1))
 }

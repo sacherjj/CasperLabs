@@ -10,6 +10,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
+import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
@@ -508,6 +509,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       rank: Long
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
+      implicit val dv = DeployInfo.View.FULL
       // TODO: Remove redundant justifications.
       val justifications = toJustification(latestMessages.values.toSeq)
       val deployStream =

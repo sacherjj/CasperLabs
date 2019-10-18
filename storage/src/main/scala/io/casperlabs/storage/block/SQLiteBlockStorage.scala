@@ -35,7 +35,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
   ): F[Option[BlockMsgWithTransform]] = {
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
-        body <- sql"""|SELECT d.data, dpr.deploy_position, dpr.cost, dpr.execution_error_message
+        body <- sql"""|SELECT d.summary, d.body, dpr.deploy_position, dpr.cost, dpr.execution_error_message
                       |FROM deploy_process_results dpr
                       |INNER JOIN deploys d
                       |ON dpr.deploy_hash=d.hash

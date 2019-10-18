@@ -24,6 +24,8 @@ trait DeployStorageSpec
     with ArbitraryConsensus
     with GeneratorDrivenPropertyChecks {
 
+  implicit val dv = DeployInfo.View.FULL
+
   /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
   protected def testFixture(
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
@@ -454,6 +456,33 @@ trait DeployStorageSpec
                       lastDeployHash
                     )
               _ = assert(expectResult == all)
+            } yield ()
+          }
+      }
+
+      "not fetch the body if it's not asked for" in forAll(
+        deploysGen(),
+        Gen.oneOf(randomAccounts)
+      ) {
+        case (deploys, accountKey) =>
+          testFixture { (reader, writer) =>
+            val accountDeploysWithoutBody = deploys
+              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
+              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+              .reverse
+              .map(_.clearBody)
+
+            implicit val dv = DeployInfo.View.BASIC
+
+            for {
+              _ <- writer.addAsPending(deploys)
+              all <- reader.getDeploysByAccount(
+                      PublicKey(accountKey.publicKey),
+                      limit = Int.MaxValue,
+                      lastTimeStamp = Long.MaxValue,
+                      lastDeployHash = ByteString.EMPTY
+                    )
+              _ = all should contain theSameElementsInOrderAs accountDeploysWithoutBody
             } yield ()
           }
       }

@@ -87,22 +87,34 @@ object SQLiteStorage {
       override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
         deployStorage.readPendingHashesAndHeaders
 
-      override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
-        deployStorage.getPendingOrProcessed(hash)
+      override def getPendingOrProcessed(deployHash: ByteString): F[Option[Deploy]] =
+        deployStorage.getPendingOrProcessed(deployHash)
 
       override def sizePendingOrProcessed(): F[Long] = deployStorage.sizePendingOrProcessed()
 
-      override def getByHash(hash: ByteString): F[Option[Deploy]] = deployStorage.getByHash(hash)
+      override def getByHash(deployHash: ByteString)(
+          implicit dv: DeployInfo.View
+      ): F[Option[Deploy]] =
+        deployStorage.getByHash(deployHash)
 
-      override def getByHashes(hashes: Set[ByteString]): Stream[F, Deploy] =
-        deployStorage.getByHashes(hashes)
+      override def getByHashes(deployHashes: Set[ByteString])(
+          implicit dv: DeployInfo.View
+      ): Stream[F, Deploy] =
+        deployStorage.getByHashes(deployHashes)
 
       override def getProcessingResults(
-          hash: ByteString
-      ): F[List[(BlockHash, Block.ProcessedDeploy)]] = deployStorage.getProcessingResults(hash)
+          deployHash: ByteString
+      )(
+          implicit dv: DeployInfo.View
+      ): F[List[(BlockHash, Block.ProcessedDeploy)]] =
+        deployStorage.getProcessingResults(deployHash)
 
-      override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
-        deployStorage.getBufferedStatus(hash)
+      override def getProcessedDeploys(blockHash: ByteString)(
+          implicit dv: DeployInfo.View
+      ): F[List[Block.ProcessedDeploy]] = deployStorage.getProcessedDeploys(blockHash)
+
+      override def getBufferedStatus(deployHash: ByteString): F[Option[DeployInfo.Status]] =
+        deployStorage.getBufferedStatus(deployHash)
 
       override def getRepresentation: F[DagRepresentation[F]] = dagStorage.getRepresentation
 
@@ -192,7 +204,9 @@ object SQLiteStorage {
       override def latestMessages: F[Map[Validator, Message]] =
         dagStorage.latestMessages
 
-      override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
+      override def getDeployInfo(deployHash: DeployHash)(
+          implicit dv: DeployInfo.View
+      ): F[Option[DeployInfo]] =
         deployStorage.getDeployInfo(deployHash)
 
       override def getDeploysByAccount(
@@ -200,6 +214,8 @@ object SQLiteStorage {
           limit: Int,
           lastTimeStamp: Long,
           lastDeployHash: DeployHash
+      )(
+          implicit dv: DeployInfo.View
       ): F[List[Deploy]] =
         deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
     }

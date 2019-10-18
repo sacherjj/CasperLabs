@@ -17,7 +17,12 @@ trait DoobieCodecs {
     Meta[Array[Byte]].imap(d => PublicKey(ByteString.copyFrom(d)))(_.toByteArray)
 
   protected implicit val readDeploy: Read[Deploy] =
-    Read[Array[Byte]].map(Deploy.parseFrom)
+    Read[(Array[Byte], Option[Array[Byte]])].map {
+      case (deploySummary, maybeDeployBody) =>
+        val deploy    = Deploy.parseFrom(deploySummary)
+        val maybeBody = maybeDeployBody.map(Deploy.Body.parseFrom) orElse deploy.body
+        maybeBody.map(deploy.withBody).getOrElse(deploy)
+    }
 
   protected implicit val readDeployHeader: Read[Deploy.Header] =
     Read[Array[Byte]].map(Deploy.Header.parseFrom)
@@ -33,6 +38,18 @@ trait DoobieCodecs {
             isError = maybeError.nonEmpty,
             errorMessage = maybeError.getOrElse("")
           )
+        )
+    }
+  }
+
+  protected implicit val readProcessedDeploy: Read[ProcessedDeploy] = {
+    Read[(Deploy, Long, Option[String])].map {
+      case (deploy, cost, maybeError) =>
+        ProcessedDeploy(
+          deploy = Option(deploy),
+          cost = cost,
+          isError = maybeError.nonEmpty,
+          errorMessage = maybeError.getOrElse("")
         )
     }
   }
