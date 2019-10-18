@@ -2,6 +2,7 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.util.DagOperations
@@ -45,30 +46,32 @@ object Estimator {
     def tipsOfLatestMessages(
         latestMessages: List[BlockHash],
         stopHash: BlockHash
-    ): F[List[BlockHash]] = {
-      // Start from the highest latest messages and traverse backwards
-      implicit val ord = DagOperations.blockTopoOrderingDesc
-      for {
-        latestMessagesMeta <- latestMessages.traverse(dag.lookup).map(_.flatten)
-        tips <- DagOperations
-                 .bfToposortTraverseF[F](latestMessagesMeta)(
-                   _.parents.toList.traverse(dag.lookup(_)).map(_.flatten)
-                 )
-                 .takeUntil(_.messageHash == stopHash)
-                 // We start with the tips and remove any message
-                 // that is reachable through the parent-child link from other tips.
-                 // This should leave us only with the tips that cannot be reached from others.
-                 .foldLeft(latestMessagesMeta.map(_.messageHash).toSet) {
-                   case (tips, message) =>
-                     tips -- message.parents
-                 }
-      } yield tips.toList
-    }
+    ): F[List[BlockHash]] =
+      if (latestMessages.isEmpty) List(genesis).pure[F]
+      else {
+        // Start from the highest latest messages and traverse backwards
+        implicit val ord = DagOperations.blockTopoOrderingDesc
+        for {
+          latestMessagesMeta <- latestMessages.traverse(dag.lookup).map(_.flatten)
+          tips <- DagOperations
+                   .bfToposortTraverseF[F](latestMessagesMeta)(
+                     _.parents.toList.traverse(dag.lookup(_)).map(_.flatten)
+                   )
+                   .takeUntil(_.messageHash == stopHash)
+                   // We start with the tips and remove any message
+                   // that is reachable through the parent-child link from other tips.
+                   // This should leave us only with the tips that cannot be reached from others.
+                   .foldLeft(latestMessagesMeta.map(_.messageHash).toSet) {
+                     case (tips, message) =>
+                       tips -- message.parents
+                   }
+        } yield tips.toList
+      }
 
     for {
-      lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
-            else
-              DagOperations.latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      lca <- NonEmptyList
+              .fromList(latestMessageHashes.values.toList)
+              .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
       equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                  dag,
                                  latestMessageHashes,

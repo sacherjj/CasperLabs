@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
@@ -342,6 +343,7 @@ class ForkchoiceTest
       supporterForBlocks: Map[BlockHash, Seq[Validator]],
       latestMessageHashes: Map[Validator, BlockHash]
   ): Unit = {
+    assert(latestMessageHashes.size > 1)
     val equivocatorsGen: Gen[Set[Validator]] =
       for {
         n   <- Gen.choose(0, bonds.size)
@@ -349,7 +351,10 @@ class ForkchoiceTest
       } yield idx.map(_.validatorPublicKey).toSet
 
     val lca = DagOperations
-      .latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      .latestCommonAncestorsMainParent(
+        dag,
+        NonEmptyList.fromListUnsafe(latestMessageHashes.values.toList)
+      )
       .runSyncUnsafe(1.second)
 
     forAll(equivocatorsGen) { equivocators: Set[Validator] =>

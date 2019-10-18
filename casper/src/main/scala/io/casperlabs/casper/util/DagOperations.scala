@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util
 
 import cats.implicits._
+import cats.data.NonEmptyList
 import cats.{Eq, Eval, Monad, Show}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
@@ -324,7 +325,7 @@ object DagOperations {
   /** Computes Latest Common Ancestor of the set of elements.
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
-      starters: List[A]
+      starters: NonEmptyList[A]
   )(next: A => F[A]): F[A] =
     starters.foldLeftM(starters.head)(latestCommonAncestorF(_, _)(next))
 
@@ -338,26 +339,29 @@ object DagOperations {
     */
   def latestCommonAncestorsMainParent[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      starters: List[BlockHash]
+      starters: NonEmptyList[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
     import io.casperlabs.casper.util.implicits.{eqMessageSummary, showBlockHash}
-    def lookup[A](f: A => BlockHash): A => F[Message] =
-      el =>
-        dag
-          .lookup(f(el))
-          .flatMap(
-            MonadThrowable[F].fromOption(
-              _,
-              new IllegalStateException(s"Missing ${PrettyPrinter.buildString(f(el))} dependency.")
-            )
+
+    def lookup(hash: BlockHash): F[Message] =
+      dag
+        .lookup(hash)
+        .flatMap(
+          MonadThrowable[F].fromOption(
+            _,
+            new IllegalStateException(s"Missing dependency: ${PrettyPrinter.buildString(hash)}")
           )
+        )
 
     starters
-      .traverse(lookup(identity))
-      .flatMap(
-        latestCommonAncestorF[F, Message](_)(lookup[Message](_.parents.head)(_))
-      )
+      .traverse(lookup)
+      .flatMap {
+        latestCommonAncestorF[F, Message](_) { block =>
+          // Genesis doesn't have parents, so just return itself until it's recognised as LCA.
+          block.parents.headOption.fold(block.pure[F])(lookup)
+        }
+      }
       .map(_.messageHash)
   }
 
