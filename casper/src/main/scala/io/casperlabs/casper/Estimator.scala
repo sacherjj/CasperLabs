@@ -2,6 +2,7 @@ package io.casperlabs.casper
 
 import cats.Monad
 import cats.implicits._
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.util.DagOperations
@@ -68,9 +69,9 @@ object Estimator {
       }
 
     for {
-      lca <- if (latestMessageHashes.isEmpty) genesis.pure[F]
-            else
-              DagOperations.latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      lca <- NonEmptyList
+              .fromList(latestMessageHashes.values.toList)
+              .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
       equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                  dag,
                                  latestMessageHashes,

@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Resource, Sync}
 import cats.implicits._
@@ -670,8 +671,12 @@ object MultiParentCasperImpl {
     for {
       dag <- DagStorage[F].getRepresentation
       lmh <- dag.latestMessageHashes
-      lca <- DagOperations.latestCommonAncestorsMainParent[F](dag, lmh.values.toList)
-      _   <- LastFinalizedBlockHashContainer[F].set(lca)
+      // A stopgap solution to initialize the Last Finalized Block while we don't have the finality streams
+      // that we can use to mark every final block in the database and just look up the latest upon restart.
+      lca <- NonEmptyList.fromList(lmh.values.toList).fold(genesis.blockHash.pure[F]) { hashes =>
+              DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
+            }
+      _ <- LastFinalizedBlockHashContainer[F].set(lca)
     } yield new MultiParentCasperImpl[F](
       statelessExecutor,
       broadcaster,
