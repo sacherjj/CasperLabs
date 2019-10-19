@@ -91,7 +91,9 @@ object Configuration extends ParserImplicits {
   ) extends SubConfig
 
   case class BlockStorage(
-      cacheMaxSizeBytes: Long
+      cacheMaxSizeBytes: Long,
+      cacheNeighborhoodBefore: Int,
+      cacheNeighborhoodAfter: Int
   ) extends SubConfig
 
   case class Grpc(

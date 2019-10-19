@@ -343,6 +343,72 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
+  def assertCreator(b: Block, validator: ByteString): Unit =
+    assert(b.getHeader.validatorPublicKey == validator)
+
+  def assertValidatorSeqNum(b: Block, seqNum: Int): Unit =
+    assert(
+      b.getHeader.validatorBlockSeqNum == seqNum,
+      s"Expected validatorBlockSeqNum=$seqNum got ${b.getHeader.validatorBlockSeqNum}"
+    )
+
+  def assertValidatorPrevMessage(
+      b: Block,
+      validator: ByteString,
+      maybeMsg: Option[ByteString]
+  ): Unit =
+    assert(
+      b.getHeader.justifications
+        .find(_.validatorPublicKey == validator)
+        .map(_.latestBlockHash) == maybeMsg
+    )
+
+  it should "start numbering validators' blocks from 1" in effectTest {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    val validator = ByteString.copyFrom(validators.head)
+
+    for {
+      deploy1         <- ProtoUtil.basicDeploy[Task]()
+      _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
+      Created(block1) <- node.casperEff.createBlock
+      _               = assertCreator(block1, validator)
+      _               = assertValidatorSeqNum(block1, 1)
+      _               = assertValidatorPrevMessage(block1, validator, None)
+      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      deploy2         <- ProtoUtil.basicDeploy[Task]()
+      _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
+      Created(block2) <- node.casperEff.createBlock
+      _               <- node.casperEff.addBlock(block2) shouldBeF Valid
+      _ = assertValidatorPrevMessage(
+        block2,
+        validator,
+        Some(block1.blockHash)
+      )
+      _ = assertCreator(block2, validator)
+      _ = assertValidatorSeqNum(block2, 2)
+      _ <- node.tearDown()
+    } yield ()
+  }
+
+  it should "not treat Genesis block as validator's latest message if it hasn't produced any" in effectTest {
+    val validatorA = (ByteString.copyFrom(validators(0)), validatorKeys(0))
+    val validatorB = (ByteString.copyFrom(validators(1)), validatorKeys(1))
+    for {
+      nodes           <- networkEff(IndexedSeq(validatorA._2, validatorB._2), genesis, transforms)
+      deploy1         <- ProtoUtil.basicDeploy[Task]()
+      _               <- nodes(0).casperEff.deploy(deploy1) shouldBeF Right(())
+      Created(block1) <- nodes(0).casperEff.createBlock
+      _               = assertValidatorPrevMessage(block1, validatorB._1, None)
+      _               <- nodes(1).casperEff.addBlock(block1) shouldBeF Valid
+      deploy2         <- ProtoUtil.basicDeploy[Task]()
+      _               <- nodes(1).casperEff.deploy(deploy2) shouldBeF Right(())
+      Created(block2) <- nodes(1).casperEff.createBlock
+      _               = assertValidatorPrevMessage(block2, validatorA._1, Some(block1.blockHash))
+      _               <- nodes.toList.traverse_(_.tearDown())
+    } yield ()
+  }
+
   it should "propose blocks it adds to peers" in effectTest {
     for {
       nodes                <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -1112,7 +1178,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
-      // nodes(1) should have more weight then nodes(0) so it should take over
+      // nodes(1) should have more weight than nodes(0) so it should take over
       _              <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       pendingDeploys <- nodes(0).deployStorage.readPending
       _              = pendingDeploys should contain(deployA)

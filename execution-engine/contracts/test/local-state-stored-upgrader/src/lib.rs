@@ -12,13 +12,6 @@ enum Args {
     LocalStateURef = 0,
 }
 
-#[repr(u16)]
-enum CustomError {
-    MissingLocalStateURefArg = 0,
-    InvalidLocalStateURefArg = 1,
-    InvalidTURef = 2,
-}
-
 const ENTRY_FUNCTION_NAME: &str = "upgraded_delegate";
 
 #[no_mangle]
@@ -29,11 +22,10 @@ pub extern "C" fn upgraded_delegate() {
 #[no_mangle]
 pub extern "C" fn call() {
     let uref: URef = runtime::get_arg(Args::LocalStateURef as u32)
-        .unwrap_or_revert_with(Error::User(CustomError::MissingLocalStateURefArg as u16))
-        .unwrap_or_revert_with(Error::User(CustomError::InvalidLocalStateURefArg as u16));
+        .unwrap_or_revert_with(Error::MissingArgument)
+        .unwrap_or_revert_with(Error::InvalidArgument);
 
-    let turef = TURef::from_uref(uref)
-        .unwrap_or_else(|_| runtime::revert(Error::User(CustomError::InvalidTURef as u16)));
+    let turef = TURef::from_uref(uref).unwrap_or_revert();
 
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);

@@ -3,6 +3,7 @@
 extern crate contract_ffi;
 
 use contract_ffi::contract_api::{account, runtime, Error};
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::{
     ActionType, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
 };
@@ -14,15 +15,11 @@ pub extern "C" fn call() {
     let key_2 = PublicKey::new([43; 32]);
 
     // Total keys weight = 11 (identity + new key's weight)
-    account::add_associated_key(key_1, Weight::new(10))
-        .unwrap_or_else(|_| runtime::revert(Error::User(100)));
-    account::add_associated_key(key_2, Weight::new(11))
-        .unwrap_or_else(|_| runtime::revert(Error::User(101)));
+    account::add_associated_key(key_1, Weight::new(10)).unwrap_or_revert();
+    account::add_associated_key(key_2, Weight::new(11)).unwrap_or_revert();
 
-    account::set_action_threshold(ActionType::KeyManagement, Weight::new(13))
-        .unwrap_or_else(|_| runtime::revert(Error::User(200)));
-    account::set_action_threshold(ActionType::Deployment, Weight::new(10))
-        .unwrap_or_else(|_| runtime::revert(Error::User(201)));
+    account::set_action_threshold(ActionType::KeyManagement, Weight::new(13)).unwrap_or_revert();
+    account::set_action_threshold(ActionType::Deployment, Weight::new(10)).unwrap_or_revert();
 
     match account::remove_associated_key(key_2) {
         Err(RemoveKeyFailure::ThresholdViolation) => {

@@ -16,6 +16,7 @@ import io.casperlabs.casper.finality.singlesweep.{
 }
 import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.Keys
@@ -170,7 +171,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 
   private def emptyEffects(
@@ -193,6 +194,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]()(Sync[Task], logEff)
+      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
     } yield (logEff, casperRef, finalityDetectorEffect)
 }

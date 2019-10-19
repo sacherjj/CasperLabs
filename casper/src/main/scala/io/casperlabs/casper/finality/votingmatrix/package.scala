@@ -6,13 +6,16 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
-import io.casperlabs.models.Message
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
 package object votingmatrix {
+
+  import Weight.Implicits._
+  import Weight.Zero
 
   /**
     * Updates voting matrix when a new block added to dag
@@ -56,7 +59,7 @@ package object votingmatrix {
     for {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
-      quorum                    = math.ceil(totalWeight * (rFTT + 0.5)).toLong
+      quorum                    = totalWeight * (rFTT + 0.5)
       committeeApproximationOpt <- findCommitteeApproximation[F](quorum, equivocationTrack)
       result <- committeeApproximationOpt match {
                  case Some(
@@ -69,7 +72,7 @@ package object votingmatrix {
                      mask = FinalityDetectorUtil
                        .fromMapToArray(validatorToIndex, committeeApproximation.contains)
                      weight = FinalityDetectorUtil
-                       .fromMapToArray(validatorToIndex, weightMap.getOrElse(_, 0L))
+                       .fromMapToArray(validatorToIndex, weightMap.getOrElse(_, Zero))
                      committeeOpt = pruneLoop(
                        votingMatrix,
                        firstLevelZeroVotes,
@@ -136,7 +139,7 @@ package object votingmatrix {
     * @return
     */
   private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
-      quorum: Long,
+      quorum: Weight,
       equivocationTrack: EquivocationsTracker
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
@@ -151,7 +154,7 @@ package object votingmatrix {
         .mapValues(_.map(_._2))
       // Get most support voteBranch and its support weight
       mostSupport = consensusValueToHonestValidators
-        .mapValues(_.map(weightMap.getOrElse(_, 0L)).sum)
+        .mapValues(_.map(weightMap.getOrElse(_, Zero)).sum)
         .maxBy(_._2)
       (voteValue, supportingWeight) = mostSupport
       // Get the voteBranch's supporters
@@ -165,26 +168,26 @@ package object votingmatrix {
 
   @tailrec
   private[votingmatrix] def pruneLoop(
-      matrix: MutableSeq[MutableSeq[Long]],
+      matrix: MutableSeq[MutableSeq[Level]],
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
       mask: MutableSeq[Boolean],
-      q: Long,
-      weight: MutableSeq[Long]
-  ): Option[(MutableSeq[Boolean], Long)] = {
+      q: Weight,
+      weight: MutableSeq[Weight]
+  ): Option[(MutableSeq[Boolean], Weight)] = {
     val (newMask, prunedValidator, maxTotalWeight) = matrix.zipWithIndex
       .filter { case (_, rowIndex) => mask(rowIndex) }
-      .foldLeft((mask, false, 0L)) {
+      .foldLeft((mask, false, Zero)) {
         case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
           val voteSum = row.zipWithIndex
             .filter { case (_, columnIndex) => mask(columnIndex) }
             .map {
               case (latestDagLevelSeen, columnIndex) =>
-                firstLevelZeroVotes(columnIndex).fold(0L) {
+                firstLevelZeroVotes(columnIndex).fold(Zero) {
                   case (consensusValue, dagLevelOf1stLevel0) =>
                     if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
                       weight(columnIndex)
-                    else 0L
+                    else Zero
                 }
             }
             .sum

@@ -131,7 +131,9 @@ class ConfigurationSpec
       apiKey = Paths.get("/tmp/test.api.key")
     )
     val blockStorage = Configuration.BlockStorage(
-      cacheMaxSizeBytes = 1
+      cacheMaxSizeBytes = 1,
+      cacheNeighborhoodBefore = 1,
+      cacheNeighborhoodAfter = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

@@ -29,12 +29,12 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
   override def insert(block: Block): F[DagRepresentation[F]] = {
-    val blockSummary = BlockSummary.fromBlock(block)
-
+    val blockSummary     = BlockSummary.fromBlock(block)
+    val deployErrorCount = block.getBody.deploys.count(_.isError)
     val blockMetadataQuery =
       sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, validator, rank, data)
-            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString})
+            |(block_hash, validator, rank, data, block_size, deploy_error_count)
+            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount)
             |""".stripMargin.update.run
 
     val justificationsQuery =
@@ -48,20 +48,8 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           .toList
       )
 
-    val latestMessagesQuery = {
-      if (block.isGenesisLike) {
-        val newValidators = block.state.bonds
-          .map(_.validatorPublicKey)
-          .toSet
-          .diff(block.justifications.map(_.validatorPublicKey).toSet)
-          .toList
-        // Will ignore existing entries, because genesis should only be the first block and can't be added twice
-        Update[(Validator, BlockHash, Long)](
-          """|INSERT OR IGNORE INTO validator_latest_messages
-             |(validator, block_hash, rank)
-             |VALUES (?, ?, ?)""".stripMargin
-        ).updateMany(newValidators.map((_, blockSummary.blockHash, 0L)))
-      } else {
+    val latestMessagesQuery =
+      if (!block.isGenesisLike) {
         // Insert in case if new block has a higher rank than the previous max rank of validator
         sql"""|INSERT OR REPLACE INTO validator_latest_messages
               |SELECT ${blockSummary.validatorPublicKey} as validator,
@@ -73,8 +61,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
               |        WHERE validator = ${blockSummary.validatorPublicKey}
               |          AND rank > ${blockSummary.rank}
               |    )""".stripMargin.update.run
-      }
-    }
+      } else ().pure[ConnectionIO]
 
     val topologicalSortingQuery =
       if (block.isGenesisLike) {

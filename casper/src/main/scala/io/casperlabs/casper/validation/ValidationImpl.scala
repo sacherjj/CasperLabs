@@ -19,6 +19,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -369,16 +370,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      justificationMsgs <- b.justifications.toList.traverse { justification =>
-                            dag.lookup(justification.latestBlockHash).flatMap {
-                              MonadThrowable[F].fromOption(
-                                _,
-                                new Exception(
-                                  s"Block dag store was missing ${PrettyPrinter.buildString(justification.latestBlockHash)}."
+      justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
+                            .traverse { messageHash =>
+                              dag.lookup(messageHash).flatMap {
+                                MonadThrowable[F].fromOption(
+                                  _,
+                                  new Exception(
+                                    s"Block dag store was missing ${PrettyPrinter.buildString(messageHash)}."
+                                  )
                                 )
-                              )
+                              }
                             }
-                          }
       calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
@@ -674,7 +676,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       val slashedValidatorBond =
         bonds(block).find(_.validatorPublicKey == justification.validatorPublicKey)
       slashedValidatorBond match {
-        case Some(bond) => bond.stake > 0
+        case Some(bond) => Weight(bond.stake) > 0
         case None       => false
       }
     }

@@ -28,7 +28,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.{Message, SmartContractEngineError}
+import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -391,7 +391,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
               )
           timestamp        <- Time[F].currentMillis
           _                <- ensureJustificationsInThePast(timestamp, latestMessages)
-          remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp) // TODO: Should be streaming all the way down
+          remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp)
           bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
           //We ensure that only the justifications given in the block are those
           //which are bonded validators in the chosen parent. This is safe because
@@ -411,9 +411,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                          publicKey,
                          privateKey,
                          sigAlgorithm,
-                         protocolVersion,
-                         timestamp,
-                         rank
+                         timestamp
                        )
                      } else if (canCreateBallot && merged.parents.nonEmpty) {
                        createBallot(
@@ -517,11 +515,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      protocolVersion: ProtocolVersion,
-      timestamp: Long,
-      rank: Long
+      timestamp: Long
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
+      //We ensure that only the justifications given in the block are those
+      //which are bonded validators in the chosen parent. This is safe because
+      //any latest message not from a bonded validator will not change the
+      //final fork-choice.
+      val bondedValidators = bonds(merged.parents.head).map(_.validatorPublicKey).toSet
+      val bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
       // TODO: Remove redundant justifications.
       val justifications = toJustification(latestMessages.values.toSeq)
       val deployStream =
@@ -529,6 +531,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           .getByHashes(remainingHashes)
           .through(DeployFilters.dependenciesMet[F](dag, merged.parents))
       (for {
+        // `bondedLatestMsgs` won't include Genesis block
+        // and in the case when it becomes the main parent we want to include its rank
+        // when calculating it for the current block.
+        rank <- MonadThrowable[F].fromTry(
+                 merged.parents.toList
+                   .traverse(Message.fromBlock(_))
+                   .map(_.toSet | bondedLatestMsgs.values.toSet)
+                   .map(set => ProtoUtil.nextRank(set.toList))
+               )
+        protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
         checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
                        merged,
                        deployStream,
@@ -543,7 +555,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         } else {
           // Start numbering from 1 (validator's first block seqNum = 1)
           val validatorSeqNum =
-            latestMessages.get(ByteString.copyFrom(validatorId)).fold(0)(_.validatorMsgSeqNum + 1)
+            latestMessages.get(ByteString.copyFrom(validatorId)).fold(1)(_.validatorMsgSeqNum + 1)
           val block = ProtoUtil.block(
             justifications,
             checkpoint.preStateHash,
@@ -615,14 +627,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   def dag: F[DagRepresentation[F]] =
     DagStorage[F].getRepresentation
 
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] =
+  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
     for {
       state   <- Cell[F, CasperState].read
       tracker = state.equivocationsTracker
     } yield tracker.keySet
       .flatMap(weights.get)
       .sum
-      .toFloat / weightMapTotal(weights)
+      .toFloat / weightMapTotal(weights).toFloat
 
   /** After a block is executed we can try to execute the other blocks in the buffer that dependent on it. */
   private def reAttemptBuffer(
@@ -710,19 +722,25 @@ object MultiParentCasperImpl {
       blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
-    LastFinalizedBlockHashContainer[F].set(genesis.blockHash) >>
-      Sync[F].delay(
-        new MultiParentCasperImpl[F](
-          statelessExecutor,
-          broadcaster,
-          validatorId,
-          genesis,
-          chainName,
-          upgrades,
-          blockProcessingLock,
-          faultToleranceThreshold
-        )
-      )
+    for {
+      dag <- DagStorage[F].getRepresentation
+      lmh <- dag.latestMessageHashes
+      // A stopgap solution to initialize the Last Finalized Block while we don't have the finality streams
+      // that we can use to mark every final block in the database and just look up the latest upon restart.
+      lca <- NonEmptyList.fromList(lmh.values.toList).fold(genesis.blockHash.pure[F]) { hashes =>
+              DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
+            }
+      _ <- LastFinalizedBlockHashContainer[F].set(lca)
+    } yield new MultiParentCasperImpl[F](
+      statelessExecutor,
+      broadcaster,
+      validatorId,
+      genesis,
+      chainName,
+      upgrades,
+      blockProcessingLock,
+      faultToleranceThreshold
+    )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */

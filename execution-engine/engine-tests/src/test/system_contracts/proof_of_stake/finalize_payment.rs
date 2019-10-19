@@ -211,7 +211,7 @@ fn get_named_account_balance(
         .query(None, account_key, &[])
         .and_then(|v| v.try_into().ok())
         .expect("should find balance uref");
-    println!("account {:?}", account);
+
     let purse_id = account
         .named_keys()
         .get(name)

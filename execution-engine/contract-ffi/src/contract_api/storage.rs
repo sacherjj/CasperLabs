@@ -6,8 +6,10 @@ use core::u8;
 
 use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::{self, deserialize, ToBytes};
+use crate::contract_api::Error;
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
+use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::AccessRights;
 use crate::value::{Contract, Value};
 
@@ -31,10 +33,11 @@ where
 {
     match maybe_value {
         None => Ok(None),
-        Some(value) => value
-            .try_into()
-            .map(Some)
-            .map_err(|_| bytesrepr::Error::custom("T could not be derived from Value")),
+        Some(value) => {
+            let ret = value.try_into();
+            let ret = ret.map_err(|_| Error::ValueConversion).unwrap_or_revert();
+            Ok(Some(ret))
+        }
     }
 }
 
@@ -159,7 +162,7 @@ pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
         ext_ffi::new_uref(key_ptr, value_ptr, value_size); // new_uref creates a URef with ReadWrite access writes
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
-    let key: Key = deserialize(&bytes).unwrap();
+    let key: Key = deserialize(&bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap()
     } else {

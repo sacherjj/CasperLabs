@@ -26,12 +26,11 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
 
-    let purse_key =
-        runtime::get_key(&purse_name).unwrap_or_else(|| runtime::revert(Error::InvalidPurseName));
-    let purse = match purse_key.as_uref() {
-        Some(uref) => PurseId::new(*uref),
-        None => runtime::revert(Error::InvalidPurse),
-    };
+    let purse_key = runtime::get_key(&purse_name).unwrap_or_revert_with(Error::InvalidPurseName);
+    let purse = purse_key
+        .as_uref()
+        .map(|uref| PurseId::new(*uref))
+        .unwrap_or_revert_with(Error::InvalidPurse);
 
     let amount: U512 = runtime::get_arg(Arg::Amount as u32)
         .unwrap_or_revert_with(Error::MissingArgument)

@@ -7,14 +7,14 @@ extern crate contract_ffi;
 use contract_ffi::contract_api::{runtime, system, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::system_contracts::mint;
+use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 
 #[repr(u16)]
 enum Error {
-    PurseNotCreated = 0,
-    BalanceNotFound,
+    BalanceNotFound = 0,
     BalanceMismatch,
 }
 
@@ -30,8 +30,7 @@ fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
 #[no_mangle]
 pub extern "C" fn call() {
     let amount: U512 = 12345.into();
-    let new_purse = mint_purse(amount)
-        .unwrap_or_else(|_| runtime::revert(ApiError::User(Error::PurseNotCreated as u16)));
+    let new_purse = mint_purse(amount).unwrap_or_revert();
 
     let mint = system::get_mint();
 

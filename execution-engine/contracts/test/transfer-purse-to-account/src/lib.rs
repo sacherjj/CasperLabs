@@ -25,8 +25,7 @@ pub extern "C" fn call() {
 
     let transfer_result = system::transfer_from_purse_to_account(source, destination, amount);
 
-    let final_balance =
-        system::get_balance(source).unwrap_or_else(|| runtime::revert(Error::User(103)));
+    let final_balance = system::get_balance(source).unwrap_or_revert_with(Error::User(103));
 
     let result = format!("{:?}", transfer_result);
 

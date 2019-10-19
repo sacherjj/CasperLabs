@@ -56,6 +56,7 @@ class Contract:
 # TEST Account Use Notes
 # test_transfer_to_accounts: 300, 299, 298
 # test_transfer_with_overdraft: 297, 296
+# test_bonding: 295
 
 MAX_PAYMENT_COST = 10000000
 DEFAULT_PAYMENT_COST = 100000000
@@ -117,6 +118,14 @@ def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
     except ValueError:
         raise UnexpectedShowBlocksOutputFormatError(show_blocks_output)
     return result
+
+
+def extract_deploy_hash_from_deploy_output(deploy_output: str) -> str:
+    """Success! Deploy [hex_hash] deployed."""
+    match = re.match(r"Success! Deploy ([0-9a-f]+) deployed.", deploy_output.strip())
+    if match is None:
+        raise UnexpectedProposeOutputFormatError(deploy_output)
+    return match.group(1)
 
 
 def extract_block_hash_from_propose_output(propose_output: str):

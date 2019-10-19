@@ -42,7 +42,7 @@ import monix.execution.Scheduler
 
 import scala.concurrent.duration._
 import scala.util.Random
-import scala.util.control.NoStackTrace
+import scala.util.control.{NoStackTrace, NonFatal}
 
 /** Create the Casper stack using the GossipService. */
 package object gossiping {
@@ -721,11 +721,18 @@ package object gossiping {
   }
 
   /** Start something in a fiber. Make sure it stops if the resource is released. */
-  private def makeFiberResource[F[_]: Concurrent, A](f: F[A]): Resource[F, Fiber[F, A]] =
+  private def makeFiberResource[F[_]: Concurrent: Log, A](f: F[A]): Resource[F, Fiber[F, A]] =
     Resource {
-      Concurrent[F].start(f).map { fiber =>
-        (fiber, fiber.cancel.attempt.void)
-      }
+      Concurrent[F]
+        .start {
+          f.onError {
+            case NonFatal(ex) =>
+              Log[F].error("Fiber resource dead.", ex)
+          }
+        }
+        .map { fiber =>
+          (fiber, fiber.cancel.attempt.void)
+        }
     }
 
   private def makeRateLimiter[F[_]: Concurrent: Timer: Log](

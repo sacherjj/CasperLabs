@@ -45,8 +45,7 @@ pub extern "C" fn call() {
     assert_eq!(hello_world, "Hello, world!");
 
     // Read data through dedicated FFI function
-    let uref1 =
-        runtime::get_key("hello-world").unwrap_or_else(|| runtime::revert(Error::User(100)));
+    let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
     let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
     let hello_world = storage::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
@@ -59,8 +58,7 @@ pub extern "C" fn call() {
     assert!(runtime::has_key("big-value"));
 
     // Get the big value back
-    let big_value_key =
-        runtime::get_key("big-value").unwrap_or_else(|| runtime::revert(Error::User(102)));
+    let big_value_key = runtime::get_key("big-value").unwrap_or_revert_with(Error::User(102));
     let big_value_ref = big_value_key
         .to_turef()
         .expect("Unable to get turef for big-value");

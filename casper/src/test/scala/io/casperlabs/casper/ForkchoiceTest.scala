@@ -1,14 +1,16 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.DagOperations
+import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -26,6 +28,7 @@ class ForkchoiceTest
     with GeneratorDrivenPropertyChecks
     with BlockGenerator
     with StorageFixture {
+
   "Estimator on empty latestMessages" should "return the genesis regardless of DAG" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v1     = generateValidator("V1")
@@ -340,6 +343,7 @@ class ForkchoiceTest
       supporterForBlocks: Map[BlockHash, Seq[Validator]],
       latestMessageHashes: Map[Validator, BlockHash]
   ): Unit = {
+    assert(latestMessageHashes.size > 1)
     val equivocatorsGen: Gen[Set[Validator]] =
       for {
         n   <- Gen.choose(0, bonds.size)
@@ -347,16 +351,19 @@ class ForkchoiceTest
       } yield idx.map(_.validatorPublicKey).toSet
 
     val lca = DagOperations
-      .latestCommonAncestorsMainParent(dag, latestMessageHashes.values.toList)
+      .latestCommonAncestorsMainParent(
+        dag,
+        NonEmptyList.fromListUnsafe(latestMessageHashes.values.toList)
+      )
       .runSyncUnsafe(1.second)
 
     forAll(equivocatorsGen) { equivocators: Set[Validator] =>
       val weightMap = bonds.map {
         case Bond(validator, stake) =>
           if (equivocators.contains(validator))
-            (validator, 0L)
+            (validator, Weight.Zero)
           else {
-            (validator, stake)
+            (validator, Weight(stake))
           }
       }.toMap
       val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
