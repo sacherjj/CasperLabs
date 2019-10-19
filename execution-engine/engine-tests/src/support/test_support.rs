@@ -639,7 +639,7 @@ where
 
         let genesis_response = self
             .engine_state
-            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config_proto)
+            .run_genesis(RequestOptions::new(), genesis_config_proto)
             .wait_drop_metadata()
             .expect("Unable to get genesis response");
 

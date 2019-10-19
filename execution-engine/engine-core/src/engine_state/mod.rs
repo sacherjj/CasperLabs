@@ -22,7 +22,7 @@ use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, SemVer, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -56,14 +56,6 @@ pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
-
-// TODO: delete the following after migration to new genesis
-const LEGACY_CHAIN_NAME: &str = "gerald";
-const LEGACY_TIMESTAMP: u64 = 0;
-const MINT_INSTALL_BYTES: &[u8] =
-    include_bytes!("../../../target/wasm32-unknown-unknown/release/mint_install.wasm");
-const PROOF_OF_STAKE_INSTALL_BYTES: &[u8] =
-    include_bytes!("../../../target/wasm32-unknown-unknown/release/pos_install.wasm");
 
 #[derive(Debug)]
 pub struct EngineState<S> {
@@ -105,72 +97,7 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn commit_genesis(
-        &self,
-        correlation_id: CorrelationId,
-        genesis_account_addr: [u8; 32],
-        initial_motes: U512,
-        _mint_code_bytes: &[u8],
-        _proof_of_stake_code_bytes: &[u8],
-        genesis_validators: Vec<(PublicKey, U512)>,
-        protocol_version: ProtocolVersion,
-    ) -> Result<GenesisResult, Error> {
-        assert_eq!(
-            protocol_version.value(),
-            SemVer::V1_0_0,
-            "legacy genesis only supports protocol version 1"
-        );
-
-        let wasm_costs = WasmCosts {
-            regular: 1,
-            div: 16,
-            mul: 4,
-            mem: 2,
-            initial_mem: 4096,
-            grow_mem: 8192,
-            memcpy: 1,
-            max_stack_height: 64 * 1024,
-            opcodes_mul: 3,
-            opcodes_div: 8,
-        };
-
-        let mut accounts = Vec::new();
-
-        {
-            let genesis_account = GenesisAccount::new(
-                PublicKey::new(genesis_account_addr),
-                Motes::new(initial_motes),
-                Motes::zero(),
-            );
-            accounts.push(genesis_account);
-        }
-
-        for (key, bonded_amount) in genesis_validators {
-            let balance = Motes::new(bonded_amount); // this is bullshit
-            let bonded_amount = Motes::new(bonded_amount);
-            let account = GenesisAccount::new(key, balance, bonded_amount);
-            accounts.push(account);
-        }
-
-        let legacy_chain_name = LEGACY_CHAIN_NAME.to_string();
-        let mint_install_bytes = MINT_INSTALL_BYTES.to_vec();
-        let proof_of_stake_install_bytes = PROOF_OF_STAKE_INSTALL_BYTES.to_vec();
-
-        let genesis_config = GenesisConfig::new(
-            legacy_chain_name,
-            LEGACY_TIMESTAMP,
-            protocol_version,
-            mint_install_bytes,
-            proof_of_stake_install_bytes,
-            accounts,
-            wasm_costs,
-        );
-
-        self.commit_genesis_with_chainspec(correlation_id, genesis_config)
-    }
-
-    pub fn commit_genesis_with_chainspec(
         &self,
         correlation_id: CorrelationId,
         genesis_config: GenesisConfig,

@@ -125,7 +125,7 @@ class GrpcExecutionEngineService[F[_]: Defer: Sync: Log: TaskLift: Metrics] priv
   override def runGenesis(
       genesisConfig: GenesisConfig
   ): F[Either[Throwable, GenesisResult]] =
-    sendMessage(genesisConfig, _.runGenesisWithChainspec) {
+    sendMessage(genesisConfig, _.runGenesis) {
       _.result match {
         case GenesisResponse.Result.Success(result) =>
           Right(result)

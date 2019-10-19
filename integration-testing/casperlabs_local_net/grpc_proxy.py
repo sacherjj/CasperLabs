@@ -69,15 +69,17 @@ class LoggingInterceptor(Interceptor):
         return "logging_interceptor"
 
     def pre_request(self, name, request):
-        logging.info(f"PRE REQUEST: {name}({hexify(request)})")
+        logging.debug(f"PRE REQUEST: {name}({hexify(request)})")
         return (None, request)
 
     def post_request(self, name, request, response):
-        logging.info(f"POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})")
+        logging.debug(
+            f"POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
+        )
         return response
 
     def post_request_stream(self, name, request, response):
-        logging.info(f"POST REQUEST STREAM: {name}({hexify(request)}) => {response}")
+        logging.debug(f"POST REQUEST STREAM: {name}({hexify(request)}) => {response}")
         yield from response
 
 
@@ -135,7 +137,7 @@ class GossipInterceptor(Interceptor):
     def pre_request(self, name, request):
         """ ~/CasperLabs/protobuf/io/casperlabs/comm/gossiping/gossiping.proto """
 
-        logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
+        logging.debug(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
 
         if name == "NewBlocks":
             """
@@ -167,20 +169,20 @@ class GossipInterceptor(Interceptor):
             except Exception as ex:
                 logging.info(f"GOSSIP PRE REQUEST: FAILED UPDATING CREDS: {str(ex)}")
 
-            logging.info(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
+            logging.debug(f"GOSSIP PRE REQUEST: => {name}({hexify(request)})")
 
         return (None, request)
 
     def post_request(self, name, request, response):
-        logging.info(
+        logging.debug(
             f"GOSSIP POST REQUEST: {name}({hexify(request)}) => ({hexify(response)})"
         )
         return response
 
     def post_request_stream(self, name, request, response):
-        logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
+        logging.debug(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
         for r in response:
-            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
+            logging.debug(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
             yield r
 
 
@@ -216,7 +218,7 @@ class ProxyServicer:
             f" {self.node_host}:{self.node_port} on {self.proxy_port}"
             f" {stub_name(self.service_stub)}"
         )
-        logging.info(f"{self.log_prefix}, interceptor: {self.interceptor}")
+        logging.debug(f"{self.log_prefix}, interceptor: {self.interceptor}")
 
     def update_credentials(self, certificate_file, key_file, node_id=None):
         self.node_id = node_id or extract_common_name(certificate_file)
@@ -248,7 +250,7 @@ class ProxyServicer:
         """ Implement the gRPC Server's Servicer interface. """
 
         def unary_unary(request, context):
-            logging.info(f"{self.log_prefix}: ({hexify(request)})")
+            logging.debug(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
                 response, preprocessed_request = self.interceptor.pre_request(
                     name, request
@@ -262,7 +264,7 @@ class ProxyServicer:
                 )
 
         def unary_stream(request, context):
-            logging.info(f"{self.log_prefix}: ({hexify(request)})")
+            logging.debug(f"{self.log_prefix}: ({hexify(request)})")
             with self.channel() as channel:
                 response, preprocessed_request = self.interceptor.pre_request(
                     name, request

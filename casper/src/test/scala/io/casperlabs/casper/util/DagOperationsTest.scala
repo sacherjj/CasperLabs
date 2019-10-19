@@ -1,5 +1,6 @@
 package io.casperlabs.casper.util
 
+import cats.data.NonEmptyList
 import cats.implicits._
 import cats.{Id, Monad}
 import com.github.ghik.silencer.silent
@@ -132,7 +133,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b3             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+              )
       } yield assert(lca == genesis.blockHash)
 
       /* 2) DAG looks like this:
@@ -149,7 +153,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b2             <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+              )
       } yield assert(lca == genesis.blockHash)
 
       /* 3) DAG looks like this:
@@ -175,7 +182,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b6             <- createAndStoreBlock[Task](Seq(b5.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+              )
       } yield assert(lca == genesis.blockHash)
 
       /* 4) DAG looks like this:
@@ -201,7 +211,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b6             <- createAndStoreBlock[Task](Seq(b5.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+              )
       } yield assert(lca == genesis.blockHash)
 
       /* 5) DAG looks like this:
@@ -226,7 +239,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         b7             <- createAndStoreBlock[Task](Seq(b4.blockHash), v3)
         dag            <- dagStorage.getRepresentation
         latestMessages <- dag.latestMessageHashes
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, latestMessages.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+              )
       } yield assert(lca == b4.blockHash)
 
       /* 6) DAG looks like:
@@ -264,7 +280,10 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2)
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
-        lca          <- DagOperations.latestCommonAncestorsMainParent(dag, latestBlocks.values.toList)
+        lca <- DagOperations.latestCommonAncestorsMainParent(
+                dag,
+                NonEmptyList.fromListUnsafe(latestBlocks.values.toList)
+              )
       } yield assert(lca == f.blockHash)
   }
 

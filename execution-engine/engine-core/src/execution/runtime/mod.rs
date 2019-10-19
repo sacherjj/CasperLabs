@@ -366,6 +366,19 @@ where
         Ok(())
     }
 
+    /// Writes runtime context's account main purse to [dest_ptr] in the Wasm memory.
+    fn get_main_purse(&mut self, dest_ptr: u32) -> Result<(), Trap> {
+        let purse_id = self
+            .context
+            .account()
+            .purse_id()
+            .to_bytes()
+            .map_err(Error::BytesRepr)?;
+        self.memory
+            .set(dest_ptr, &purse_id)
+            .map_err(|e| Error::Interpreter(e).into())
+    }
+
     /// Writes caller (deploy) account public key to [dest_ptr] in the Wasm
     /// memory.
     fn get_caller(&mut self, dest_ptr: u32) -> Result<(), Trap> {

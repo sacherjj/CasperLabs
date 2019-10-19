@@ -447,6 +447,13 @@ where
                 let ret = self.get_system_contract(system_contract_index, dest_ptr, dest_size)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
+
+            FunctionIndex::GetMainPurseIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_main_purse(dest_ptr)?;
+                Ok(None)
+            }
         }
     }
 }
