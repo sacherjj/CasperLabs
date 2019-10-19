@@ -19,8 +19,10 @@ trait DoobieCodecs {
   protected implicit val readDeploy: Read[Deploy] =
     Read[(Array[Byte], Option[Array[Byte]])].map {
       case (deploySummary, maybeDeployBody) =>
-        val deploy    = Deploy.parseFrom(deploySummary)
-        val maybeBody = maybeDeployBody.map(Deploy.Body.parseFrom) orElse deploy.body
+        val deploy = Deploy.parseFrom(deploySummary)
+        val maybeBody = maybeDeployBody
+          .filterNot(_.isEmpty)
+          .map(Deploy.Body.parseFrom) orElse deploy.body
         maybeBody.map(deploy.withBody).getOrElse(deploy)
     }
 
