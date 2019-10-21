@@ -34,14 +34,14 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
         self.equivocating_block_summary = None
 
     def pre_request(self, name, request):
-        logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
+        logging.debug(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
 
         if name == "GetBlockChunked":
             if (
                 self.equivocating_block
                 and request.block_hash == self.equivocating_block.block_hash
             ):
-                logging.info(
+                logging.debug(
                     f"SENDING EQUIVOCATING BLOCK {self.equivocating_block.block_hash.hex()}"
                     f" to {self.node.config.number}"
                 )
@@ -55,7 +55,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
                 self.equivocating_block
                 and self.equivocating_block.block_hash == request.target_block_hashes[0]
             ):
-                logging.info(
+                logging.debug(
                     f"StreamAncestorBlockSummaries: {self.equivocating_block_summary}"
                 )
                 return ((s for s in (self.equivocating_block_summary,)), None)
@@ -64,7 +64,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
         return (response, request)
 
     def post_request_stream(self, name, request, response):
-        logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
+        logging.debug(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
 
         if name == "StreamDagTipBlockSummaries":
             if self.equivocating_block:
@@ -99,7 +99,9 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
                 )
 
         for r in response:
-            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:1000]}...")
+            logging.debug(
+                f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:1000]}..."
+            )
             yield r
 
     def modify_to_equivocate(self, block):

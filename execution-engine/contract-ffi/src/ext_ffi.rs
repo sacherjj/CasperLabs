@@ -95,4 +95,5 @@ extern "C" {
         dest_ptr: *mut u8,
         dest_size: usize,
     ) -> i32;
+    pub fn get_main_purse(dest_ptr: *mut u8);
 }

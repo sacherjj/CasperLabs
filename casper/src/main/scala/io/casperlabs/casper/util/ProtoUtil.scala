@@ -171,9 +171,10 @@ object ProtoUtil {
     } yield block
 
   def nextRank(justificationMsgs: Seq[Message]): Long =
-    1L + justificationMsgs.foldLeft(-1L) {
-      case (acc, msgSummary) => math.max(acc, msgSummary.rank)
-    }
+    if (justificationMsgs.isEmpty) 0 // Genesis has rank=0
+    else
+      // For any other block `rank` should be 1 higher than the highest rank in its justifications.
+      justificationMsgs.map(_.rank).max + 1
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -185,11 +186,11 @@ object ProtoUtil {
         case Justification(validator: Validator, _) =>
           validator == creator
       }
-      .foldM(0) {
+      .foldM(1) {
         case (_, Justification(_, latestBlockHash)) =>
           dag.lookup(latestBlockHash).flatMap {
             case Some(meta) =>
-              meta.validatorMsgSeqNum.pure[F]
+              (1 + meta.validatorMsgSeqNum).pure[F]
 
             case None =>
               MonadThrowable[F].raiseError[Int](
@@ -199,7 +200,6 @@ object ProtoUtil {
               )
           }
       }
-      .map(_ + 1)
 
   def creatorJustification(header: Block.Header): Option[Justification] =
     header.justifications

@@ -187,11 +187,15 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ),
             "upgrade_contract_at_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
-                FunctionIndex::UpgradeContractAtURef.into(),
+                FunctionIndex::UpgradeContractAtURefIndex.into(),
             ),
             "get_system_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::GetSystemContractIndex.into(),
+            ),
+            "get_main_purse" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], None),
+                FunctionIndex::GetMainPurseIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

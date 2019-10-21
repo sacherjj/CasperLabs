@@ -1,28 +1,24 @@
-use core::convert::{TryFrom, TryInto};
+use alloc::vec::Vec;
+use core::convert::TryFrom;
 
-use super::runtime::get_caller;
-use super::storage::read_untyped;
 use super::to_ptr;
+use crate::bytesrepr::deserialize;
+use crate::contract_api::alloc_bytes;
 use crate::ext_ffi;
-use crate::key::Key;
+use crate::unwrap_or_revert::UnwrapOrRevert;
 pub use crate::value::account::PublicKey;
 use crate::value::account::{
     ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    Weight,
+    Weight, PURSE_ID_SIZE_SERIALIZED,
 };
-use crate::value::Account;
 
 pub fn get_main_purse() -> PurseId {
-    // TODO: this could be more efficient, bringing the entire account
-    // object across the host/wasm boundary only to use 32 bytes of
-    // its data is pretty bad. A native FFI (as opposed to a library
-    // API) would get around this problem. However, this solution
-    // works for the time being.
-    // https://casperlabs.atlassian.net/browse/EE-439
-    let account_pk = get_caller();
-    let key = Key::Account(account_pk.value());
-    let account: Account = read_untyped(&key).unwrap().unwrap().try_into().unwrap();
-    account.purse_id()
+    let dest_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let bytes = unsafe {
+        ext_ffi::get_main_purse(dest_ptr);
+        Vec::from_raw_parts(dest_ptr, PURSE_ID_SIZE_SERIALIZED, PURSE_ID_SIZE_SERIALIZED)
+    };
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn set_action_threshold(

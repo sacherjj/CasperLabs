@@ -429,7 +429,7 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::UpgradeContractAtURef => {
+            FunctionIndex::UpgradeContractAtURefIndex => {
                 // args(0) = pointer to name in Wasm memory
                 // args(1) = size of name in Wasm memory
                 // args(2) = pointer to key in Wasm memory
@@ -446,6 +446,13 @@ where
                 let (system_contract_index, dest_ptr, dest_size) = Args::parse(args)?;
                 let ret = self.get_system_contract(system_contract_index, dest_ptr, dest_size)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
+            FunctionIndex::GetMainPurseIndex => {
+                // args(0) = pointer to Wasm memory where to write.
+                let dest_ptr = Args::parse(args)?;
+                self.get_main_purse(dest_ptr)?;
+                Ok(None)
             }
         }
     }

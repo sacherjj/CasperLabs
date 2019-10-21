@@ -10,7 +10,7 @@ use grpc::SingleResponse;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{ProtocolVersion, U512};
+use contract_ffi::value::ProtocolVersion;
 use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
@@ -395,161 +395,12 @@ where
         grpc::SingleResponse::completed(validate_result)
     }
 
-    #[allow(dead_code)]
     fn run_genesis(
-        &self,
-        _request_options: ::grpc::RequestOptions,
-        genesis_request: ipc::GenesisRequest,
-    ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
-        let start = Instant::now();
-        let correlation_id = CorrelationId::new();
-
-        let genesis_account_addr = {
-            let address = genesis_request.get_address();
-            if address.len() != 32 {
-                let err_msg =
-                    "genesis account public key has to be exactly 32 bytes long.".to_string();
-                logging::log_error(&err_msg);
-
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-
-            let mut ret = [0u8; 32];
-            ret.clone_from_slice(address);
-            ret
-        };
-
-        let initial_motes: U512 = match genesis_request.get_initial_motes().try_into() {
-            Ok(initial_motes) => initial_motes,
-            Err(err) => {
-                let err_msg = format!("{:?}", err);
-                logging::log_error(&err_msg);
-
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-        };
-
-        let mint_code_bytes = genesis_request.get_mint_code().get_code();
-
-        let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
-
-        let genesis_validators_result: Result<Vec<(PublicKey, U512)>, MappingError> =
-            genesis_request
-                .get_genesis_validators()
-                .iter()
-                .map(TryInto::try_into)
-                .collect();
-
-        let genesis_validators = match genesis_validators_result {
-            Ok(validators) => validators,
-            Err(error) => {
-                logging::log_error(&error.to_string());
-
-                let genesis_deploy_error = {
-                    let mut tmp = ipc::GenesisDeployError::new();
-                    tmp.set_message(error.to_string());
-                    tmp
-                };
-                let mut genesis_response = ipc::GenesisResponse::new();
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-        };
-
-        let protocol_version = genesis_request.get_protocol_version().into();
-
-        let genesis_response = {
-            let mut genesis_response = ipc::GenesisResponse::new();
-
-            match self.commit_genesis(
-                correlation_id,
-                genesis_account_addr,
-                initial_motes,
-                mint_code_bytes,
-                proof_of_stake_code_bytes,
-                genesis_validators,
-                protocol_version,
-            ) {
-                Ok(GenesisResult::Success {
-                    post_state_hash,
-                    effect,
-                }) => {
-                    let success_message = format!("run_genesis successful: {}", post_state_hash);
-                    log_info(&success_message);
-
-                    let mut genesis_result = ipc::GenesisResult::new();
-                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
-                    genesis_result.set_effect(effect.into());
-                    genesis_response.set_success(genesis_result);
-                }
-                Ok(genesis_result) => {
-                    let err_msg = genesis_result.to_string();
-                    logging::log_error(&err_msg);
-
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                }
-                Err(err) => {
-                    let err_msg = err.to_string();
-                    logging::log_error(&err_msg);
-
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                }
-            }
-
-            genesis_response
-        };
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_GENESIS,
-            TAG_RESPONSE_GENESIS,
-            start.elapsed(),
-        );
-
-        grpc::SingleResponse::completed(genesis_response)
-    }
-
-    fn run_genesis_with_chainspec(
         &self,
         _request_options: ::grpc::RequestOptions,
         genesis_config: ipc::ChainSpec_GenesisConfig,
     ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
         let genesis_config: GenesisConfig = match genesis_config.try_into() {
@@ -566,44 +417,50 @@ where
             }
         };
 
-        let genesis_response =
-            match self.commit_genesis_with_chainspec(correlation_id, genesis_config) {
-                Ok(GenesisResult::Success {
-                    post_state_hash,
-                    effect,
-                }) => {
-                    let success_message =
-                        format!("run_genesis_with_chainspec successful: {}", post_state_hash);
-                    log_info(&success_message);
+        let genesis_response = match self.commit_genesis(correlation_id, genesis_config) {
+            Ok(GenesisResult::Success {
+                post_state_hash,
+                effect,
+            }) => {
+                let success_message =
+                    format!("run_genesis_with_chainspec successful: {}", post_state_hash);
+                log_info(&success_message);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_result = ipc::GenesisResult::new();
-                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
-                    genesis_result.set_effect(effect.into());
-                    genesis_response.set_success(genesis_result);
-                    genesis_response
-                }
-                Ok(genesis_result) => {
-                    let err_msg = genesis_result.to_string();
-                    logging::log_error(&err_msg);
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_result = ipc::GenesisResult::new();
+                genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                genesis_result.set_effect(effect.into());
+                genesis_response.set_success(genesis_result);
+                genesis_response
+            }
+            Ok(genesis_result) => {
+                let err_msg = genesis_result.to_string();
+                logging::log_error(&err_msg);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                    genesis_response
-                }
-                Err(err) => {
-                    let err_msg = err.to_string();
-                    logging::log_error(&err_msg);
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                genesis_deploy_error.set_message(err_msg);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
+                genesis_response
+            }
+            Err(err) => {
+                let err_msg = err.to_string();
+                logging::log_error(&err_msg);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                    genesis_response
-                }
-            };
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                genesis_deploy_error.set_message(err_msg);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
+                genesis_response
+            }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_GENESIS,
+            TAG_RESPONSE_GENESIS,
+            start.elapsed(),
+        );
 
         grpc::SingleResponse::completed(genesis_response)
     }
@@ -802,6 +659,7 @@ where
 // WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
+    thread_count: usize,
     e: E,
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
@@ -814,7 +672,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 
     let mut server = grpc::ServerBuilder::new_plain();
     server.http.set_unix_addr(socket.to_owned()).unwrap();
-    server.http.set_cpu_pool_threads(1);
+    server.http.set_cpu_pool_threads(thread_count);
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }
