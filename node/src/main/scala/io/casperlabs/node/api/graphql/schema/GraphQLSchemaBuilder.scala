@@ -20,7 +20,7 @@ import sangria.schema._
 
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
 
-  // GraphQL projecttions don't expose the body.
+  // GraphQL projections don't expose the body.
   implicit val dv = DeployInfo.View.BASIC
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {

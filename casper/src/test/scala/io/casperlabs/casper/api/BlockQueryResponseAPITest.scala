@@ -113,7 +113,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                       Sync[Task],
                       logEff,
                       casperRef,
-                      finalityDetectorEffect,
                       blockStorage,
                       deployStorage
                     )
@@ -143,7 +142,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                                  Sync[Task],
                                  logEff,
                                  casperRef,
-                                 finalityDetectorEffect,
                                  blockStorage,
                                  deployStorage
                                )
