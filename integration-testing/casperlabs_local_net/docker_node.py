@@ -327,11 +327,19 @@ class DockerNode(LoggingDockerBase):
         return f"run {bootstrap_flag} {' '.join(options)}"
 
     def get_metrics(self) -> Tuple[int, str]:
+        if self.config.custom_docker_tag is not None:
+            raise NotImplementedError(
+                "get_metrics not functional on nodes with custom_docker_tags."
+            )
         cmd = "curl -s http://localhost:40403/metrics"
         output = self.exec_run(cmd=cmd)
         return output
 
     def get_metrics_strict(self):
+        if self.config.custom_docker_tag is not None:
+            raise NotImplementedError(
+                "get_metrics not functional on nodes with custom_docker_tags."
+            )
         output = self.shell_out("curl", "-s", "http://localhost:40403/metrics")
         return output
 
