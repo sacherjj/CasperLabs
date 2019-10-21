@@ -1119,10 +1119,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
       // nodes(1) should have more weight than nodes(0) so it should take over
-      _              <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
-      pendingDeploys <- nodes(0).deployStorage.readPending
-      _              = pendingDeploys should contain(deployA)
-      _              <- nodes.map(_.tearDown()).toList.sequence
+      _ <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
+      // Need to propose a new block, it should again contain deployA
+      createC         <- nodes(0).casperEff.createBlock
+      Created(blockC) = createC
+      _               = blockC.getBody.deploys.map(_.getDeploy) should contain(deployA)
+      _               <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 

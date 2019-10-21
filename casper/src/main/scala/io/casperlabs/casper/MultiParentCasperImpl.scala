@@ -177,23 +177,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                         }
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _                    <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
-      _                    <- updateLastFinalizedBlock(updatedDag)
-      _                    <- Log[F].debug(s"Estimating hashes after adding ${hashPrefix}")
-      latestMessagesHashes <- updatedDag.latestMessageHashes
-      tipHashes            <- estimator(updatedDag, latestMessagesHashes)
-      _ <- Log[F].debug(
-            s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
-          )
-      tipHash = tipHashes.head
-      _       <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
-
-      // Push any unfinalized deploys which are still in the buffer back to pending state
-      // if the blocks they were contained have just become orphans.
-      _        <- Log[F].debug(s"Re-queueing orphaned deploys after adding ${hashPrefix}")
-      requeued <- requeueOrphanedDeploys(updatedDag, tipHashes)
-      _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
-
+      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
+      _ <- updateLastFinalizedBlock(updatedDag)
       // Remove any deploys from the buffer which are in finalized blocks.
       _ <- Log[F].debug(s"Removing finalized deploys after adding ${hashPrefix}")
       _ <- removeFinalizedDeploys(updatedDag)
@@ -380,13 +365,27 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         for {
           dag            <- dag
           latestMessages <- dag.latestMessages
-          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash)).map(_.toVector)
+          tipHashes      <- estimator(dag, latestMessages.mapValues(_.messageHash))
           tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-          merged         <- ExecEngineUtil.merge[F](tips, dag)
-          parents        = merged.parents
+          _ <- Log[F].info(
+                s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
+              )
+          _ <- Log[F].info(
+                s"Fork-choice tip is block ${PrettyPrinter.buildString(tipHashes.head)}."
+              )
+          merged  <- ExecEngineUtil.merge[F](tips, dag)
+          parents = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
+
+          // Push any unfinalized deploys which are still in the buffer back to pending state if the
+          // blocks they were contained have become orphans since we last tried to propose a block.
+          // Doing this here rather than after adding blocks because it's quite costly; the downside
+          // is that the auto-proposer will not pick up the change in the pending set immediately.
+          requeued <- requeueOrphanedDeploys(dag, tipHashes)
+          _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
+
           timestamp       <- Time[F].currentMillis
           remainingHashes <- remainingDeploysHashes(dag, parents, timestamp)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
