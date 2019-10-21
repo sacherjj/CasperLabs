@@ -238,8 +238,9 @@ class GrpcGossipServiceSpec
             "throttle" in forAll(arbitrary[Block], validSenderGen) { (block, sender) =>
               val requestsNum   = 5
               val queueSize     = 10
-              val sleepingTime  = 3.seconds
               val minSuccessful = 2
+
+              implicit val patienceConfig = PatienceConfig(7.second, 500.millis)
 
               test(block, queueSize) { stub =>
                 val success = Atomic(0)
@@ -256,11 +257,12 @@ class GrpcGossipServiceSpec
 
                 for {
                   _ <- runParallelRequests.startAndForget
-                  _ <- Task.sleep(sleepingTime)
                 } yield {
-                  assert(errors.get() == 0)
-                  // Not comparing with precise number, because it may vary in CI and fail
-                  assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                  eventually {
+                    assert(errors.get() == 0)
+                    // Not comparing with precise number, because it may vary in CI and fail
+                    assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                  }
                 }
               }
             }
