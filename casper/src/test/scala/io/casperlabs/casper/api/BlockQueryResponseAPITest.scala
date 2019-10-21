@@ -32,8 +32,6 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.immutable.HashMap
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 
-//TODO: Remove
-@silent("deprecated")
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   val badTestHashQuery = "No such a hash"

@@ -207,6 +207,46 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       node.tearDown()
     }
   }
+
+  "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+    val v1 = generateValidator("V1")
+
+    implicit val logEff        = new LogStub[Task]
+    implicit val blockStorage  = node.blockStorage
+    implicit val deployStorage = node.deployStorage
+    implicit val safetyOracle  = node.safetyOracleEff
+
+    implicit val dv = DeployInfo.View.FULL
+
+    def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code), v1)
+
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
+      for {
+        _         <- BlockAPI.deploy[Task](mkDeploy("a"))
+        _         <- BlockAPI.deploy[Task](mkDeploy("b"))
+        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        deploys   <- BlockAPI.getBlockDeploys[Task](Base16.encode(blockHash.toByteArray))
+        block <- blockStorage
+                  .get(blockHash)
+                  .map(_.get.blockMessage.get)
+        _ = deploys shouldBe block.getBody.deploys
+      } yield ()
+
+    try {
+      (for {
+        casperRef    <- MultiParentCasperRef.of[Task]
+        _            <- casperRef.set(node.casperEff)
+        blockApiLock <- Semaphore[Task](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).unsafeRunSync
+    } finally {
+      node.tearDown()
+    }
+  }
 }
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
