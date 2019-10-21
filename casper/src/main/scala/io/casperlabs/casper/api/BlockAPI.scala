@@ -168,45 +168,49 @@ object BlockAPI {
         }
       }
 
-  def getBlockInfoWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorageReader](
       blockHash: BlockHash,
       maybeDeployView: Option[DeployInfo.View]
   ): F[BlockAndMaybeDeploys] =
-    BlockStorage[F]
-      .getBlockInfo(blockHash)
-      .flatMap(maybeWithDeploys[F](_, maybeDeployView))
-      .flatMap { x =>
-        x.fold(
-          MonadThrowable[F]
-            .raiseError[BlockAndMaybeDeploys](NotFound.block(blockHash))
-        )(_.pure[F])
-      }
+    for {
+      blockInfo <- BlockStorage[F]
+                    .getBlockInfo(blockHash)
+                    .flatMap(
+                      _.fold(
+                        MonadThrowable[F]
+                          .raiseError[BlockInfo](
+                            NotFound.block(blockHash)
+                          )
+                      )(_.pure[F])
+                    )
+      withDeploys <- maybeWithDeploys[F](blockInfo, maybeDeployView)
+    } yield withDeploys
 
-  def getBlockInfoWithDeploysOpt[F[_]: MonadThrowable: Log: BlockStorage: DeployStorageReader: MultiParentCasperRef: FinalityDetector](
+  def getBlockInfoWithDeploysOpt[F[_]: Monad: BlockStorage: DeployStorageReader](
       blockHashBase16: String,
       maybeDeployView: Option[DeployInfo.View]
   ): F[Option[BlockAndMaybeDeploys]] =
     BlockStorage[F]
       .getBlockInfoByPrefix(blockHashBase16)
-      .flatMap(maybeWithDeploys[F](_, maybeDeployView))
+      .flatMap(
+        _.traverse(
+          maybeWithDeploys[F](_, maybeDeployView)
+        )
+      )
 
   private def maybeWithDeploys[F[_]: Applicative: DeployStorageReader](
-      maybeInfo: Option[BlockInfo],
+      blockInfo: BlockInfo,
       maybeDeployView: Option[DeployInfo.View]
-  ): F[Option[BlockAndMaybeDeploys]] =
-    maybeInfo.fold(none[BlockAndMaybeDeploys].pure[F]) { info =>
-      maybeDeployView.map { implicit dv =>
-        DeployStorageReader[F]
-          .getProcessedDeploys(info.getSummary.blockHash)
-          .map { deploys =>
-            (info -> deploys.some).some
-          }
-      } getOrElse {
-        (info -> none[List[Block.ProcessedDeploy]]).some.pure[F]
-      }
+  ): F[BlockAndMaybeDeploys] =
+    maybeDeployView.fold((blockInfo -> none[List[Block.ProcessedDeploy]]).pure[F]) { implicit dv =>
+      DeployStorageReader[F]
+        .getProcessedDeploys(blockInfo.getSummary.blockHash)
+        .map { deploys =>
+          blockInfo -> deploys.some
+        }
     }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorageReader](
       blockHashBase16: String
   ): F[BlockInfo] =
     getBlockInfoWithDeploysOpt[F](blockHashBase16, None).flatMap(
@@ -221,7 +225,7 @@ object BlockAPI {
   /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: DeployStorageReader: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorageReader: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
       maybeDeployView: Option[DeployInfo.View]
@@ -247,7 +251,7 @@ object BlockAPI {
           MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
       } flatMap { infosByRank =>
         infosByRank.flatten.reverse.toList.traverse { info =>
-          maybeWithDeploys[F](Option(info), maybeDeployView).map(_.get)
+          maybeWithDeploys[F](info, maybeDeployView)
         }
       }
     }
