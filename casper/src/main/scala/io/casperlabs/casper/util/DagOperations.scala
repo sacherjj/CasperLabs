@@ -3,13 +3,14 @@ package io.casperlabs.casper.util
 import cats.implicits._
 import cats.data.NonEmptyList
 import cats.{Eq, Eval, Monad}
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.shared.StreamT
+import io.casperlabs.shared.{Log, StreamT}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
@@ -56,6 +57,21 @@ object DagOperations {
         .traverse(j => dag.lookup(j.latestBlockHash))
         .map(_.flatten)
     )
+  }
+
+  /** Traverses j-past-cone of the block and returns messages by specified validator.
+    */
+  def swimlaneV[F[_]: Monad: Log](
+      validator: ByteString,
+      message: Message,
+      dag: DagRepresentation[F]
+  ): StreamT[F, Message] = {
+    // Messages visible in the direct justifications of the block.
+    val messagePanorama =
+      message.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+    StreamT.lift(messagePanorama).flatMap { jTips =>
+      toposortJDagDesc[F](dag, jTips).filter(_.validatorId == validator)
+    }
   }
 
   def bfTraverseF[F[_]: Monad, A](
