@@ -7,13 +7,10 @@ import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated}
-import io.casperlabs.comm.auth.Principal
+import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Utils.hex
-import io.casperlabs.comm.grpc.ContextKeys
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
@@ -227,6 +224,11 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   override def addApproval(request: AddApprovalRequest): F[Unit] =
     rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)).void
 
+  override def streamDagSliceBlockSummaries(
+      request: StreamDagSliceBlockSummariesRequest
+  ): Iterant[F, BlockSummary] =
+    backend.dagTopoSort(request.startRank.toLong, request.endRank.toLong)
+
   private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize
     else maxChunkSize
@@ -278,6 +280,9 @@ object GossipServiceServer {
 
     /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
     def listTips: F[Seq[BlockSummary]]
+
+    /* Retrieve the DAG slice in topological order, inclusive */
+    def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]
   }
 
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](

@@ -582,6 +582,10 @@ class GrpcGossipServiceSpec
                   def hasBlock(blockHash: ByteString)        = ???
                   def getBlockSummary(blockHash: ByteString) = ???
                   def listTips                               = ???
+                  def dagTopoSort(
+                      startRank: Long,
+                      endRank: Long
+                  ): Iterant[Task, BlockSummary] = ???
                 }
               }
 
@@ -1282,6 +1286,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.summaries.get(blockHash))
         def listTips =
           Task.delay(testDataRef.get.tips)
+        def dagTopoSort(startRank: Long, endRank: Long): Iterant[Task, BlockSummary] = ???
       }
 
     implicit val chainId: ByteString = sample(genHash)
