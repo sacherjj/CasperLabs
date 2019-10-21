@@ -21,13 +21,13 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {

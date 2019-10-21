@@ -125,7 +125,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
-      _ <- deployStorage.addAsPending(deploy.toList)
+      _ <- deployStorage.writer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,

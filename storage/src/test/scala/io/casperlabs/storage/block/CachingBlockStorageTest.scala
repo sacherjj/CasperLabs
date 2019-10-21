@@ -226,7 +226,7 @@ object CachingBlockStorageTest {
       ): Task[Unit] =
         for {
           _ <- blockMsgWithTransform.blockMessage.fold(().pure[Task])(
-                b => deployStorage.addAsExecuted(b) >> dagStorage.insert(b).void
+                b => deployStorage.writer.addAsExecuted(b) >> dagStorage.insert(b).void
               )
           _ <- underlyingBlockStorage.put(blockHash, blockMsgWithTransform)
         } yield ()

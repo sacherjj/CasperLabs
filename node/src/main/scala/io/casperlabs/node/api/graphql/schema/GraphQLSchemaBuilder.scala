@@ -15,10 +15,10 @@ import io.casperlabs.node.api.graphql._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.DeployStorageReader
+import io.casperlabs.storage.deploy.DeployStorage
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorageReader: Fs2Compiler] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
 
   // GraphQL projections don't expose the body.
   implicit val dv = DeployInfo.View.BASIC

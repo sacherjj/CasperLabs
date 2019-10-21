@@ -11,7 +11,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
@@ -497,7 +496,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       timestamp: Long
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
-      implicit val dv = DeployInfo.View.FULL
       //We ensure that only the justifications given in the block are those
       //which are bonded validators in the chosen parent. This is safe because
       //any latest message not from a bonded validator will not change the
