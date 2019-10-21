@@ -65,9 +65,8 @@ object GrpcCasperService {
           TaskLike[F].apply {
             validateDeployHash[F](request.deployHashBase16, adaptToInvalidArgument) >>= {
               deployHash =>
-                implicit val v = request.view
                 BlockAPI
-                  .getDeployInfo[F](deployHash)
+                  .getDeployInfo[F](deployHash, request.view)
             }
           }
 
@@ -77,8 +76,7 @@ object GrpcCasperService {
           val deploys = TaskLike[F].apply {
             validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
               blockHashPrefix =>
-                implicit val v = request.view
-                BlockAPI.getBlockDeploys[F](blockHashPrefix)
+                BlockAPI.getBlockDeploys[F](blockHashPrefix, request.view)
             }
           }
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)

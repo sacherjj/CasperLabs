@@ -10,7 +10,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
@@ -157,9 +157,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[Unit] =
       for {
-        _          <- BlockAPI.deploy[Task](deploy)
-        blockHash  <- BlockAPI.propose[Task](blockApiLock)
-        deployInfo <- BlockAPI.getDeployInfo[Task](Base16.encode(deploy.deployHash.toByteArray))
+        _         <- BlockAPI.deploy[Task](deploy)
+        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        deployInfo <- BlockAPI.getDeployInfo[Task](
+                       Base16.encode(deploy.deployHash.toByteArray),
+                       DeployInfo.View.FULL
+                     )
         block <- blockStorage
                   .get(blockHash)
                   .map(_.get.blockMessage.get)
@@ -188,7 +191,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         _ = deployInfo.deploy shouldBe deploy.some
         result <- BlockAPI
                    .getDeployInfo[Task](
-                     Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray)
+                     Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray),
+                     DeployInfo.View.BASIC
                    )
                    .attempt
         _ = result.left.get.getMessage should include("NOT_FOUND: Deploy")
@@ -225,7 +229,10 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         _         <- BlockAPI.deploy[Task](mkDeploy("a"))
         _         <- BlockAPI.deploy[Task](mkDeploy("b"))
         blockHash <- BlockAPI.propose[Task](blockApiLock)
-        deploys   <- BlockAPI.getBlockDeploys[Task](Base16.encode(blockHash.toByteArray))
+        deploys <- BlockAPI.getBlockDeploys[Task](
+                    Base16.encode(blockHash.toByteArray),
+                    DeployInfo.View.FULL
+                  )
         block <- blockStorage
                   .get(blockHash)
                   .map(_.get.blockMessage.get)

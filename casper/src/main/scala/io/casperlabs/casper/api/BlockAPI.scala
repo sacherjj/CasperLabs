@@ -137,34 +137,37 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
-      deployHashBase16: String
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
+      deployHashBase16: String,
+      deployView: DeployInfo.View
   ): F[Option[DeployInfo]] =
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-      DeployStorageReader[F].getDeployInfo(deployHash)
+      DeployStorage[F].reader(deployView).getDeployInfo(deployHash)
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
-      deployHashBase16: String
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
+      deployHashBase16: String,
+      deployView: DeployInfo.View
   ): F[DeployInfo] =
-    getDeployInfoOpt[F](deployHashBase16).flatMap(
+    getDeployInfoOpt[F](deployHashBase16, deployView).flatMap(
       _.fold(
         MonadThrowable[F]
           .raiseError[DeployInfo](NotFound.deploy(deployHashBase16))
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: Monad: BlockStorage: DeployStorageReader](
-      blockHashBase16: String
+  def getBlockDeploys[F[_]: Monad: BlockStorage: DeployStorage](
+      blockHashBase16: String,
+      deployView: DeployInfo.View
   ): F[List[Block.ProcessedDeploy]] =
     BlockStorage[F]
       .getBlockInfoByPrefix(blockHashBase16)
       .flatMap {
         _.fold(List.empty[Block.ProcessedDeploy].pure[F]) { info =>
-          DeployStorageReader[F].getProcessedDeploys(info.getSummary.blockHash)
+          DeployStorage[F].reader(deployView).getProcessedDeploys(info.getSummary.blockHash)
         }
       }
 

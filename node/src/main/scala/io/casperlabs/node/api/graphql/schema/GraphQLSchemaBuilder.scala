@@ -21,7 +21,7 @@ import sangria.schema._
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
 
   // GraphQL projections don't expose the body.
-  implicit val dv = DeployInfo.View.BASIC
+  val deployView = DeployInfo.View.BASIC
 
   private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
@@ -39,7 +39,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
     deployView(projectionTerms(projections))
 
   private def deployView(terms: Set[String]): Option[DeployInfo.View] =
-    if (terms contains "deploys") Some(dv) else None
+    if (terms contains "deploys") Some(deployView) else None
 
   def createSchema: Schema[Unit, Unit] =
     Schema(
@@ -83,7 +83,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
               (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
-                  deployHash => BlockAPI.getDeployInfoOpt[F](deployHash)
+                  deployHash => BlockAPI.getDeployInfoOpt[F](deployHash, deployView)
               )).unsafeToFuture
             }
           ),
