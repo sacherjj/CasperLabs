@@ -18,7 +18,7 @@ enum Arg {
 
 // Bonding contract.
 //
-// Accepts bonding amount (of type `u64`) as first argument.
+// Accepts bonding amount (of type `U512`) as first argument.
 // Issues bonding request to the PoS contract.
 #[no_mangle]
 pub extern "C" fn call() {
