@@ -570,8 +570,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               case (deployHash, _) => raiseExpiredDeploy(deployHash)
             }
           )
-      parents          <- ProtoUtil.unsafeGetParents[F](b)
-      dependencyFilter = DeployFilters.dependenciesMet(dag, parents)
+      dependencyFilter = DeployFilters.dependenciesMet(dag, b.getHeader.parentHashes.toSet)
       _                <- raiseFilterFailure(deploys, dependencyFilter, raiseDeployDependencyNotMet)
     } yield ()
   }

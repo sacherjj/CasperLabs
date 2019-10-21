@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.ValidationImpl.MAX_TTL
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
@@ -49,7 +50,7 @@ object DeployFilters {
     */
   def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
       dag: DagRepresentation[F],
-      parents: Seq[Block]
+      parents: Set[BlockHash]
   ): fs2.Pipe[F, Deploy, Deploy] =
     _.evalMap { deploy =>
       val dependencies = deploy.getHeader.dependencies.toList
@@ -69,7 +70,7 @@ object DeployFilters {
     */
   def filterDeploysNotInPast[F[_]: MonadThrowable: BlockStorage](
       dag: DagRepresentation[F],
-      parents: Seq[Block],
+      parents: Set[BlockHash],
       deployHashes: List[ByteString]
   ): F[List[ByteString]] =
     for {
@@ -83,13 +84,11 @@ object DeployFilters {
 
       blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 
-      // Find the blocks from which there's a way through the descendants to reach a tip.
-      parentSet = parents.map(_.blockHash).toSet
       nonOrphanedBlockHashes <- DagOperations
                                  .collectWhereDescendantPathExists[F](
                                    dag,
                                    blockHashes.toSet,
-                                   parentSet
+                                   parents
                                  )
 
       deploysNotInPast = deployHashToBlocksMap.collect {

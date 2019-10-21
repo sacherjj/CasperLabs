@@ -388,7 +388,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
               )
           timestamp        <- Time[F].currentMillis
           _                <- ensureJustificationsInThePast(timestamp, latestMessages)
-          remainingHashes  <- remainingDeploysHashes(dag, parents, timestamp) // TODO: Should be streaming all the way down
+          remainingHashes  <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp) // TODO: Should be streaming all the way down
           bondedValidators = bonds(parents.head).map(_.validatorPublicKey).toSet
           //We ensure that only the justifications given in the block are those
           //which are bonded validators in the chosen parent. This is safe because
@@ -450,7 +450,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
-      parents: Seq[Block],
+      parents: Set[BlockHash],
       timestamp: Long
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     // We have re-queued orphan deploys already, so we can just look at pending ones.
@@ -487,7 +487,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       parents = merged.parents
       // Consider deploys which this node has processed but hasn't finalized yet.
       processedDeploys <- DeployStorageReader[F].readProcessedHashes
-      orphanedDeploys  <- filterDeploysNotInPast(dag, parents, processedDeploys)
+      orphanedDeploys <- filterDeploysNotInPast(
+                          dag,
+                          parents.map(_.blockHash).toSet,
+                          processedDeploys
+                        )
       _ <- DeployStorageWriter[F]
             .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
@@ -513,7 +517,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       val deployStream =
         DeployStorageReader[F]
           .getByHashes(remainingHashes)
-          .through(DeployFilters.dependenciesMet[F](dag, merged.parents))
+          .through(DeployFilters.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet))
       (for {
         checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
                        merged,
