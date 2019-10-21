@@ -23,7 +23,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
   // GraphQL projecttions don't expose the body.
   implicit val dv = DeployInfo.View.BASIC
 
-  def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
+  private def projectionTerms(projections: Vector[ProjectedName]): Set[String] = {
     def flatToSet(ps: Vector[ProjectedName], acc: Set[String]): Set[String] =
       if (ps.isEmpty) {
         acc
@@ -35,10 +35,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
     flatToSet(projections, Set.empty)
   }
 
-  def deployView(projections: Vector[ProjectedName]): Option[DeployInfo.View] =
+  private def deployView(projections: Vector[ProjectedName]): Option[DeployInfo.View] =
     deployView(projectionTerms(projections))
 
-  def deployView(terms: Set[String]): Option[DeployInfo.View] =
+  private def deployView(terms: Set[String]): Option[DeployInfo.View] =
     if (terms contains "deploys") Some(dv) else None
 
   def createSchema: Schema[Unit, Unit] =
