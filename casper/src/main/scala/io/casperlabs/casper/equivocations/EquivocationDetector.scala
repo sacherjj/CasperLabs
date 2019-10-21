@@ -237,7 +237,7 @@ object EquivocationDetector {
                 case (state, b) =>
                   val creator            = b.validatorId
                   val creatorBlockSeqNum = b.validatorMsgSeqNum
-                  if (state.alreadyDetected(equivocationsTracker.keySet) || b.rank <= minBaseRank) {
+                  if (state.allDetected(equivocationsTracker.keySet) || b.rank <= minBaseRank) {
                     // Stop traversal if all known equivocations has been found in j-past-cone
                     // of `b` or we traversed beyond the minimum rank of all equivocations.
                     Right(state)
@@ -262,7 +262,7 @@ object EquivocationDetector {
     def alreadyVisited(v: Validator, blockSeqNum: Int): Boolean =
       visitedBlocks.get(v).contains(blockSeqNum)
     def alreadyDetected(v: Validator): Boolean       = detectedEquivocators.contains(v)
-    def alreadyDetected(vs: Set[Validator]): Boolean = detectedEquivocators == vs
+    def allDetected(vs: Set[Validator]): Boolean = detectedEquivocators == vs
   }
 
   /**
