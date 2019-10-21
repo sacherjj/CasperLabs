@@ -930,7 +930,7 @@ class ValidationTest
     implicit blockStorage => implicit dagStorage => _ =>
       val deploysWithCost = Vector(deploy.processed(1))
       for {
-        block  <- createAndStoreBlock[Task](Seq.empty, deploys = deploysWithCost)
+        block  <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
         dag    <- dagStorage.getRepresentation
         result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
