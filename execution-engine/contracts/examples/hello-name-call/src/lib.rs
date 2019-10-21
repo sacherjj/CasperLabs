@@ -15,15 +15,15 @@ use contract_ffi::value::Value;
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key = runtime::get_key("hello_name").unwrap_or_revert_with(Error::GetKey);
-    let pointer = match contract_key {
+    let contract_ref = match contract_key {
         Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
-    let arg = ("World",);
-    let result: String = runtime::call_contract(pointer, &arg, &Vec::new());
+    let args = ("World",);
+    let result: String = runtime::call_contract(contract_ref, &args, &Vec::new());
     assert_eq!("Hello, World", result);
 
-    //store the result at a uref so it can be seen as an effect on the global state
+    // Store the result at a uref so it can be seen as an effect on the global state
     runtime::put_key(
         "helloworld",
         &storage::new_turef(Value::String(result)).into(),

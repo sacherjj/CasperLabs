@@ -13,18 +13,18 @@ use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 #[no_mangle]
 pub extern "C" fn call() {
     let counter_uref = runtime::get_key("counter").unwrap_or_revert_with(Error::GetKey);
-    let pointer = match counter_uref {
+    let contract_ref = match counter_uref {
         Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
     {
-        let arg = "inc";
-        runtime::call_contract::<_, ()>(pointer.clone(), &(arg,), &Vec::new())
+        let args = ("inc",);
+        runtime::call_contract::<_, ()>(contract_ref.clone(), &args, &Vec::new())
     }
 
     let _result: i32 = {
-        let arg = "get";
-        runtime::call_contract(pointer, &(arg,), &Vec::new())
+        let args = ("get",);
+        runtime::call_contract(contract_ref, &args, &Vec::new())
     };
 }
