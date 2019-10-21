@@ -5,11 +5,10 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import cats.Id
 import cats.effect._
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
@@ -42,8 +41,8 @@ class GrpcGossipServiceSpec
     with SequentialNestedSuiteExecution
     with ArbitraryConsensusAndComm { self =>
 
-  import GrpcGossipServiceSpec._
   import GrpcGossipServiceSpec.TestEnvironment.chainId
+  import GrpcGossipServiceSpec._
   import Scheduler.Implicits.global
 
   // Test data that we can set in each test.
@@ -1223,33 +1222,66 @@ class GrpcGossipServiceSpec
   object StreamDagSliceBlockSummariesSpec extends WordSpecLike {
     implicit val config                         = PropertyCheckConfiguration(minSuccessful = 10)
     implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
-    implicit val consensusConfig                = ConsensusConfig()
+    implicit val consensusConfig = ConsensusConfig(
+      dagSize = 10
+    )
 
     "streamDagSliceBlockSummariesSpec" when {
       "called with a min and max rank" should {
-        "return only valid ranks" in {
+        /* Abstracts over streamDagSlice RPC test, parameters are dag, start and end ranks */
+        def test(task: (Vector[BlockSummary], Int, Int) => Task[Unit]): Unit =
           forAll(genSummaryDagFromGenesis) { dag =>
             val minRank = dag.map(_.rank).min.toInt
             val maxRank = dag.map(_.rank).max.toInt
 
-            val startGen: Gen[Int] = Gen.choose(minRank, maxRank - 1)
+            val startGen: Gen[Int] = Gen.choose(minRank, math.max(maxRank - 1, minRank))
             val endGen: Gen[Int]   = startGen.flatMap(start => Gen.choose(start, maxRank))
 
             forAll(startGen, endGen) { (startRank, endRank) =>
-              runTestUnsafe(TestData(dag)) {
-                val req = StreamDagSliceBlockSummariesRequest(
-                  startRank = startRank,
-                  endRank = endRank
-                )
-                for {
-                  res <- stub.streamDagSliceBlockSummaries(req).toListL
-                } yield {
-                  res should contain theSameElementsInOrderAs (dag
-                    .filter(s => s.rank >= startRank && s.rank <= endRank)
-                    .toList)
+              runTestUnsafe(TestData(dag))(task(dag, startRank, endRank))
+            }
+          }
+
+        "return only valid ranks in increasing order" in {
+          test {
+            case (dag, startRank, endRank) =>
+              val req = StreamDagSliceBlockSummariesRequest(
+                startRank = startRank,
+                endRank = endRank
+              )
+              for {
+                res <- stub
+                        .streamDagSliceBlockSummaries(req)
+                        .toListL
+              } yield {
+                val expected = dag.filter(s => s.rank >= startRank && s.rank <= endRank)
+                // Returned slice must be increasing order by rank,
+                // but it may differ from expected if there are multiple summaries for the same rank.
+                // We don't care about it and checking only ranks
+                Inspectors.forAll(res.zip(expected)) {
+                  case (a, b) =>
+                    assert(a.rank == b.rank)
                 }
               }
-            }
+          }
+        }
+        "should not return the same summary multiple times in a slice" in {
+          test {
+            case (_, startRank, endRank) =>
+              val req = StreamDagSliceBlockSummariesRequest(
+                startRank = startRank,
+                endRank = endRank
+              )
+              for {
+                res <- stub
+                        .streamDagSliceBlockSummaries(req)
+                        .toListL
+              } yield {
+                Inspectors.forAll(res.groupBy(_.blockHash).toList) {
+                  case (_, summaries) =>
+                    assert(summaries.size == 1)
+                }
+              }
           }
         }
       }
@@ -1333,6 +1365,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
                   .values
                   .filter(s => s.rank >= startRank && s.rank <= endRank)
                   .toList
+                  .sortBy(_.rank)
               )
             )
             .flatMap(Iterant.fromSeq[Task, BlockSummary])
