@@ -153,7 +153,7 @@ object BlockAPI {
     getDeployInfoOpt[F](deployHashBase16).flatMap(
       _.fold(
         MonadThrowable[F]
-          .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+          .raiseError[DeployInfo](NotFound.deploy(deployHashBase16))
       )(_.pure[F])
     )
 
@@ -178,9 +178,7 @@ object BlockAPI {
       .flatMap { x =>
         x.fold(
           MonadThrowable[F]
-            .raiseError[BlockAndMaybeDeploys](
-              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
-            )
+            .raiseError[BlockAndMaybeDeploys](NotFound.block(blockHash))
         )(_.pure[F])
       }
 
