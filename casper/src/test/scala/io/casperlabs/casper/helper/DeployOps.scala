@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.validation.ValidationImpl.{MAX_DEPENDENCIES, MAX_TTL, MIN_TTL}
 import io.casperlabs.models.ArbitraryConsensus
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -39,16 +40,12 @@ object DeployOps extends ArbitraryConsensus {
     deploy.withDeployHash(ProtoUtil.protoHash(header)).withHeader(header)
   }
 
-  val minTTL          = 60 * 60 * 1000
-  val maxTTL          = 24 * 60 * 60 * 1000
-  val maxDependencies = 10
-
   def randomTooShortTTL(): Deploy = {
     implicit val c = ConsensusConfig()
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, minTTL - 1)
+      ttl <- Gen.choose(1, MIN_TTL - 1)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -59,7 +56,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
+      ttl <- Gen.choose(MAX_TTL + 1, Int.MaxValue)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -70,7 +67,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d               <- arbitrary[Deploy]
-      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
+      numDependencies <- Gen.chooseNum(MAX_DEPENDENCIES + 1, 2 * MAX_DEPENDENCIES)
       dependencies    <- Gen.listOfN(numDependencies, genHash)
     } yield d.withDependencies(dependencies)
 

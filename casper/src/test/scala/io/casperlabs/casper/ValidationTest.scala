@@ -311,7 +311,7 @@ class ValidationTest
     val deploy = DeployOps.randomTooShortTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, DeployOps.minTTL)
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MIN_TTL)
     )
   }
 
@@ -319,7 +319,7 @@ class ValidationTest
     val deploy = DeployOps.randomTooLongTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, DeployOps.maxTTL)
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MAX_TTL)
     )
   }
 
@@ -329,7 +329,7 @@ class ValidationTest
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        DeployOps.maxDependencies
+        ValidationImpl.MAX_DEPENDENCIES
       )
     )
   }
