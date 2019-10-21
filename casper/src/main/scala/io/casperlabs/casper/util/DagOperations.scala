@@ -2,7 +2,7 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import cats.data.NonEmptyList
-import cats.{Eq, Eval, Monad, Show}
+import cats.{Eq, Eval, Monad}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.PrettyPrinter
@@ -37,6 +37,25 @@ object DagOperations {
     implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
     implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
     implicit val blockHashKey      = identity[BlockHash]
+  }
+
+  /** Starts from the list of messages and follows their justifications,
+    * sorting them by their rank value.
+    *
+    * Returns a stream.
+    */
+  def toposortJDagDesc[F[_]: Monad](
+      dag: DagRepresentation[F],
+      msgs: List[Message]
+  ): StreamT[F, Message] = {
+    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
+    DagOperations.bfToposortTraverseF(
+      msgs
+    )(
+      _.justifications.toList
+        .traverse(j => dag.lookup(j.latestBlockHash))
+        .map(_.flatten)
+    )
   }
 
   def bfTraverseF[F[_]: Monad, A](

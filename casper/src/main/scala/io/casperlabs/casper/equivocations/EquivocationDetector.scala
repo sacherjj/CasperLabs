@@ -153,7 +153,7 @@ object EquivocationDetector {
                           .traverse { latestMessageOfCreator =>
                             for {
                               message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                              stream  = toposortJDagDesc(dag, message)
+                              stream  = DagOperations.toposortJDagDesc(dag, List(message))
                               // Find whether the block cites latestMessageOfCreator
                               decisionPointBlock <- stream.find(
                                                      b =>
@@ -187,20 +187,6 @@ object EquivocationDetector {
   // Messages from the creator of the block in the j-past-cone of that block.
   private def creatorJustificationHash(block: Block): Set[BlockHash] =
     ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
-
-  private def toposortJDagDesc[F[_]: Monad: Log](
-      dag: DagRepresentation[F],
-      msg: Message
-  ): StreamT[F, Message] = {
-    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
-    DagOperations.bfToposortTraverseF(
-      List(msg)
-    )(
-      _.justifications.toList
-        .traverse(j => dag.lookup(j.latestBlockHash))
-        .map(_.flatten)
-    )
-  }
 
   /**
     * Find equivocating validators that a block can see based on its direct justifications
@@ -261,7 +247,7 @@ object EquivocationDetector {
       copy(visitedBlocks = visitedBlocks + (v -> blockSeqNum))
     def alreadyVisited(v: Validator, blockSeqNum: Int): Boolean =
       visitedBlocks.get(v).contains(blockSeqNum)
-    def alreadyDetected(v: Validator): Boolean       = detectedEquivocators.contains(v)
+    def alreadyDetected(v: Validator): Boolean   = detectedEquivocators.contains(v)
     def allDetected(vs: Set[Validator]): Boolean = detectedEquivocators == vs
   }
 
@@ -279,7 +265,8 @@ object EquivocationDetector {
       dag: DagRepresentation[F],
       msg: Message
   ): F[Long] =
-    toposortJDagDesc(dag, msg)
+    DagOperations
+      .toposortJDagDesc(dag, List(msg))
       .filter(_.validatorId == msg.validatorId)
       .take(2)
       .toList
