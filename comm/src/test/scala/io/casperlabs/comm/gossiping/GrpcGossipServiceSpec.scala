@@ -78,7 +78,8 @@ class GrpcGossipServiceSpec
     StreamAncestorBlockSummariesSpec,
     StreamDagTipBlockSummariesSpec,
     NewBlocksSpec,
-    GenesisApprovalSpec
+    GenesisApprovalSpec,
+    StreamDagSliceBlockSummariesSpec
   )
 
   trait AuthSpec extends WordSpecLike {
@@ -1218,6 +1219,42 @@ class GrpcGossipServiceSpec
       }
     }
   }
+
+  object StreamDagSliceBlockSummariesSpec extends WordSpecLike {
+    implicit val config                         = PropertyCheckConfiguration(minSuccessful = 10)
+    implicit val hashGen: Arbitrary[ByteString] = Arbitrary(genHash)
+    implicit val consensusConfig                = ConsensusConfig()
+
+    "streamDagSliceBlockSummariesSpec" when {
+      "called with a min and max rank" should {
+        "return only valid ranks" in {
+          forAll(genSummaryDagFromGenesis) { dag =>
+            val minRank = dag.map(_.rank).min.toInt
+            val maxRank = dag.map(_.rank).max.toInt
+
+            val startGen: Gen[Int] = Gen.choose(minRank, maxRank - 1)
+            val endGen: Gen[Int]   = startGen.flatMap(start => Gen.choose(start, maxRank))
+
+            forAll(startGen, endGen) { (startRank, endRank) =>
+              runTestUnsafe(TestData(dag)) {
+                val req = StreamDagSliceBlockSummariesRequest(
+                  startRank = startRank,
+                  endRank = endRank
+                )
+                for {
+                  res <- stub.streamDagSliceBlockSummaries(req).toListL
+                } yield {
+                  res should contain theSameElementsInOrderAs (dag
+                    .filter(s => s.rank >= startRank && s.rank <= endRank)
+                    .toList)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm {
@@ -1286,7 +1323,19 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.summaries.get(blockHash))
         def listTips =
           Task.delay(testDataRef.get.tips)
-        def dagTopoSort(startRank: Long, endRank: Long): Iterant[Task, BlockSummary] = ???
+        def dagTopoSort(startRank: Long, endRank: Long): Iterant[Task, BlockSummary] =
+          Iterant
+            .liftF(
+              Task.delay(
+                testDataRef
+                  .get()
+                  .summaries
+                  .values
+                  .filter(s => s.rank >= startRank && s.rank <= endRank)
+                  .toList
+              )
+            )
+            .flatMap(Iterant.fromSeq[Task, BlockSummary])
       }
 
     implicit val chainId: ByteString = sample(genHash)
