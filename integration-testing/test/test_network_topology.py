@@ -2,7 +2,7 @@ import logging
 
 from casperlabs_local_net.wait import (
     wait_for_block_contains,
-    wait_for_new_fork_choice_tip_block,
+    wait_for_finished_adding_block,
 )
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 from casperlabs_local_net.common import Contract
@@ -43,4 +43,4 @@ def test_star_network(star_network):
 
     # validate all nodes get block
     for node in star_network.docker_nodes:
-        wait_for_new_fork_choice_tip_block(node, block, node.timeout)
+        wait_for_finished_adding_block(node, block, node.timeout)
