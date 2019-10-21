@@ -388,7 +388,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
           timestamp       <- Time[F].currentMillis
-          _               <- ensureJustificationsInThePast(timestamp, latestMessages)
           remainingHashes <- remainingDeploysHashes(dag, parents, timestamp)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
@@ -413,23 +412,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]
   }
-
-  // Sanity check, this should never happen because we delay messages from the future.
-  private def ensureJustificationsInThePast(
-      timestamp: Long,
-      latestMessages: Map[DagRepresentation.Validator, Message]
-  ): F[Unit] =
-    latestMessages.values
-      .find {
-        _.timestamp > timestamp
-      }
-      .fold(().pure[F]) { msg =>
-        Log[F].error(
-          s"Justification is in the future: ${PrettyPrinter
-            .buildString(msg.messageHash)}; ${msg.timestamp} > $timestamp"
-        ) *>
-          functorRaiseInvalidBlock.raise[Unit](InvalidUnslashableBlock)
-      }
 
   def lastFinalizedBlock: F[Block] =
     for {
