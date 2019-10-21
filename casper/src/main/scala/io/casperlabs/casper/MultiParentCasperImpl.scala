@@ -445,8 +445,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
-      .through(DeployFilters.timestampBefore[F](timestamp))
-    val unexpired = earlierPendingDeploys.through(DeployFilters.ttlAfter[F](timestamp))
+      .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
+    val unexpired = earlierPendingDeploys.through(DeployFilters.Pipes.ttlAfter[F](timestamp))
 
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList
@@ -511,7 +511,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       val deployStream =
         DeployStorageReader[F]
           .getByHashes(remainingHashes)
-          .through(DeployFilters.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet))
+          .through(
+            DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
+          )
       (for {
         // `bondedLatestMsgs` won't include Genesis block
         // and in the case when it becomes the main parent we want to include its rank
@@ -833,7 +835,8 @@ object MultiParentCasperImpl {
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
             InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
             InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
-            InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
+            InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired |
+            DeployFromFuture =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -957,7 +960,7 @@ object MultiParentCasperImpl {
               InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
             ().pure[F]
 
-          case UnexpectedBlockException(_) =>
+          case UnexpectedBlockException(_) | DeployFromFuture =>
             ().pure[F]
         }
     }

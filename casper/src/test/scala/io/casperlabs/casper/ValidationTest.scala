@@ -952,6 +952,19 @@ class ValidationTest
     shouldBeInvalidDeployHeader(DeployOps.randomInvalidDependency())
   }
 
+  it should "return DeployFromFuture when a deploy timestamp is later than the block timestamp" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployFromFuture))
+  }
+
   it should "return DeployExpired when a deploy is past its TTL" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val deploy         = DeployOps.randomNonzeroTTL()

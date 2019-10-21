@@ -533,14 +533,28 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     }
 
   def deployHeaders(b: Block, dag: DagRepresentation[F])(
-      implicit blockStorage: BlockStorage[F],
-      compiler: Fs2Compiler[F]
+      implicit blockStorage: BlockStorage[F]
   ): F[Unit] = {
     val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
-    val headersAndHashes                = deploys.map(d => d.deployHash -> d.getHeader)
-    val timestamp                       = b.getHeader.timestamp
-    val timestampFilter = DeployFilters.timestampBefore[F](timestamp) andThen DeployFilters
-      .ttlAfter[F](timestamp)
+    val parents: Set[BlockHash] =
+      b.header.toSet.flatMap((h: consensus.Block.Header) => h.parentHashes)
+    val timestamp       = b.getHeader.timestamp
+    val isFromPast      = DeployFilters.timestampBefore(timestamp)
+    val isNotExpired    = DeployFilters.ttlAfter(timestamp)
+    val dependenciesMet = DeployFilters.dependenciesMet[F](dag, parents)
+
+    def singleDeployValidation(d: consensus.Deploy): F[Unit] =
+      for {
+        staticErrors           <- deployHeader(d)
+        _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
+        header                 = d.getHeader
+        isFromFuture           = !isFromPast(header)
+        _                      <- raiseFutureDeploy(d.deployHash, header).whenA(isFromFuture)
+        isExpired              = !isNotExpired(header)
+        _                      <- raiseExpiredDeploy(d.deployHash, header).whenA(isExpired)
+        hasMissingDependencies <- dependenciesMet(d).map(!_)
+        _                      <- raiseDeployDependencyNotMet(d).whenA(hasMissingDependencies)
+      } yield ()
 
     def raiseHeaderErrors(errors: List[Errors.DeployHeaderError]): F[Unit] =
       for {
@@ -548,11 +562,27 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHeader)
       } yield ()
 
-    def raiseExpiredDeploy(deployHash: DeployHash): F[Unit] =
-      for {
-        _ <- Log[F].warn(ignore(b, s"Deploy ${PrettyPrinter.buildString(deployHash)} was expired."))
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
-      } yield ()
+    def raiseFutureDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash = PrettyPrinter.buildString(deployHash)
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is earlier than timestamp of deploy $hash, ${header.timestamp}"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployFromFuture)
+    }
+
+    def raiseExpiredDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash           = PrettyPrinter.buildString(deployHash)
+      val ttl            = ProtoUtil.getTimeToLive(header, MAX_TTL)
+      val expirationTime = header.timestamp + ttl
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is later than expiration time of deploy $hash, $expirationTime"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
+    }
 
     def raiseDeployDependencyNotMet(deploy: consensus.Deploy): F[Unit] =
       for {
@@ -562,45 +592,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployDependencyNotMet)
       } yield ()
 
-    for {
-      deployErrors <- deploys.traverse(deployHeader).map(_.flatten)
-      _            <- raiseHeaderErrors(deployErrors).whenA(deployErrors.nonEmpty)
-      _ <- raiseFilterFailure[(DeployHash, consensus.Deploy.Header)](
-            headersAndHashes,
-            timestampFilter, {
-              case (deployHash, _) => raiseExpiredDeploy(deployHash)
-            }
-          )
-      dependencyFilter = DeployFilters.dependenciesMet(dag, b.getHeader.parentHashes.toSet)
-      _                <- raiseFilterFailure(deploys, dependencyFilter, raiseDeployDependencyNotMet)
-    } yield ()
-  }
-
-  private def toStream[A](list: List[A]): fs2.Stream[F, A] =
-    fs2.Stream.chunk(fs2.Chunk.iterable(list))
-
-  private def raiseFilterFailure[A](
-      list: List[A],
-      filter: fs2.Pipe[F, A, A],
-      handler: A => F[Unit]
-  )(implicit compiler: Fs2Compiler[F]): F[Unit] = {
-    val stream         = toStream(list).map(_.some)
-    val filteredStream = toStream(list).through(filter).map(_.some)
-
-    // If all elements pass the filter, then `stream` == `filteredStream`,
-    // otherwise, the first mismatch is the first element which was filtered out
-    val failure = stream
-      .zipAll(filteredStream)(none[A], none[A])
-      .filter { case (a, b) => a != b }
-      .head
-      // This .get is safe because the entire left stream is created with .some and
-      // must be at least as long as the right (filtered) stream, so will never be padded.
-      .map(_._1.get)
-
-    failure.compile.last.flatMap {
-      case Some(a) => handler(a)
-      case None    => ().pure[F]
-    }
+    deploys.traverse(singleDeployValidation).as(())
   }
 
   def deployHashes(

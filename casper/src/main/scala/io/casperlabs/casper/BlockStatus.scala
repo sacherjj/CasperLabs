@@ -48,6 +48,7 @@ final case object InvalidDeploySignature extends InvalidBlock with Slashable
 final case object InvalidDeployHeader    extends InvalidBlock with Slashable
 final case object DeployDependencyNotMet extends InvalidBlock with Slashable
 final case object DeployExpired          extends InvalidBlock with Slashable
+final case object DeployFromFuture       extends InvalidBlock with Slashable
 
 // Raised only for Ballot message type when parents.size != 1
 final case object InvalidTargetHash extends InvalidBlock
