@@ -361,8 +361,10 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum number of blocks to allow to be synced initially.")
 
     @scallop
-    val serverInitSyncRoundPeriod =
-      gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+    val serverInitSyncStep =
+      gen[Int](
+        "Depth of DAG slices (by rank) retrieved slice-by-slice until node fully synchronized."
+      )
 
     @scallop
     val serverPeriodicSyncRoundPeriod =

@@ -2,20 +2,14 @@ package io.casperlabs.comm.gossiping
 
 import java.util.concurrent.TimeoutException
 
-import cats.effect.concurrent.Semaphore
-import cats.syntax.either._
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -33,24 +27,28 @@ class InitialSynchronizationSpec
     with BeforeAndAfterEach
     with ArbitraryConsensusAndComm
     with GeneratorDrivenPropertyChecks {
-  private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+  private implicit val noShrinkNodes: Shrink[List[Node]] = Shrink(_ => Stream.empty)
 
   private implicit val chainId: ByteString = sample(genHash)
 
-  def genNodes(min: Int = 1, max: Int = 10) =
+  private implicit val consensusConfig: ConsensusConfig = ConsensusConfig(
+    dagSize = 10,
+    maxSessionCodeBytes = 1,
+    maxPaymentCodeBytes = 1
+  )
+
+  private def genNodes(min: Int = 1, max: Int = 10) =
     Gen.choose(min, max).flatMap(n => Gen.listOfN(n, arbNode.arbitrary))
 
-  def genTips(n: Int = 10) = Gen.listOfN(n, arbBlockSummary.arbitrary)
-
-  def pos(n: Int): Int Refined Positive = refineV[Positive](n).right.get
+  private def genDag() = genSummaryDagFromGenesis
 
   "InitialSynchronization" when {
     "doesn't have nodes in the initial round" should {
-      "try again later" in forAll(genNodes(), genTips()) { (nodes, tips) =>
+      "try again later" in forAll(genNodes(), genDag()) { (nodes, dag) =>
         val counter = AtomicInt(0)
         TestFixture(
           nodes,
-          tips,
+          Task(dag),
           selectNodes = { nodes =>
             val cnt = counter.incrementAndGet()
             if (cnt == 1) Nil else nodes
@@ -67,29 +65,26 @@ class InitialSynchronizationSpec
       }
     }
     "specified to memoize nodes between rounds" should {
-      def test(skipFailedNodesInNextRound: Boolean): Unit = forAll(genNodes(), genTips()) {
-        (nodes, tips) =>
-          val counter = Atomic(0)
-
-          TestFixture(
-            nodes,
-            tips,
-            memoizeNodes = true,
-            selectNodes = { nodes =>
-              counter.increment()
-              nodes
-            },
-            minSuccessful = pos(nodes.size),
-            sync = (_, _) => Task.raiseError(new RuntimeException),
-            skipFailedNodesInNextRounds = skipFailedNodesInNextRound
-          ) { (initialSynchronizer, _) =>
-            for {
-              w <- initialSynchronizer.sync()
-              _ <- w.timeout(75.millis).attempt
-            } yield {
-              counter.get() shouldBe 1
-            }
+      def test(skipFailedNodesInNextRound: Boolean): Unit = forAll(genNodes()) { nodes =>
+        val counter = Atomic(0)
+        TestFixture(
+          nodes,
+          Task.raiseError(new RuntimeException("Boom!")),
+          memoizeNodes = true,
+          selectNodes = { nodes =>
+            counter.increment()
+            nodes
+          },
+          minSuccessful = nodes.size,
+          skipFailedNodesInNextRounds = skipFailedNodesInNextRound
+        ) { (initialSynchronizer, _) =>
+          for {
+            w <- initialSynchronizer.sync()
+            _ <- w.timeout(75.millis).attempt
+          } yield {
+            counter.get() shouldBe 1
           }
+        }
       }
 
       "not apply selectNodes function more than once if skipFailingNodesInNextRound is true" in {
@@ -100,86 +95,77 @@ class InitialSynchronizationSpec
       }
     }
     "specified to skip nodes failed to response" should {
-      def test(memoize: Boolean): Unit =
-        forAll(genNodes().map(_.toSet), genNodes().map(_.toSet), genTips()) {
-          (successfulNodes, failingNodes, tips) =>
-            TestFixture(
-              (successfulNodes ++ failingNodes).toList,
-              tips,
-              memoizeNodes = memoize,
-              sync = { (node, _) =>
-                if (successfulNodes(node))
-                  Task(true)
-                else
-                  Task.raiseError(new RuntimeException)
-              },
-              skipFailedNodesInNextRounds = true
-            ) { (initialSynchronizer, mockGossipServiceServer) =>
-              for {
-                w <- initialSynchronizer.sync()
-                // It's configured with minimum isccessful being infinite so it will try
-                // forever and fail. We just want to give it enough time to try all of them.
-                _ <- w.timeout(200.millis).attempt
-              } yield {
-                val asked = mockGossipServiceServer.asked.get()
-                Inspectors.forAll(failingNodes) { node =>
-                  asked.count(n => n == node) shouldBe 1
-                }
-                Inspectors.forAll(successfulNodes) { node =>
-                  asked.count(n => n == node) should be >= 1
-                }
-              }
-            }
-        }
+      def test(memoize: Boolean): Unit = {
+        val successfulNodes = sample(genNodes())
+        val failingNodes    = sample(genNodes()).toSet
+        val dag             = sample(genDag())
 
-      """
-        |invoke successful nodes multiple times and
-        |not include failed nodes in next rounds
-        |if memoization is true
+        TestFixture(
+          successfulNodes ++ failingNodes,
+          Task(dag),
+          memoizeNodes = memoize,
+          failing = failingNodes,
+          skipFailedNodesInNextRounds = true
+        ) { (initialSynchronizer, mockDownloadManager) =>
+          for {
+            w <- initialSynchronizer.sync()
+            // It's configured with minimum successful being infinite so it will try
+            // forever and fail. We just want to give it enough time to try all of them.
+            _ <- w.timeout(200.millis).attempt
+          } yield {
+            val asked = mockDownloadManager.requestsCounter.get()
+            Inspectors.forAll(failingNodes) { node =>
+              asked(node) shouldBe dag.size
+            }
+            Inspectors.forAll(successfulNodes) { node =>
+              asked(node) should be >= dag.size
+            }
+          }
+        }
+      }
+
+      """|invoke successful nodes multiple times and
+         |not include failed nodes in next rounds
+         |if memoization is true
       """.stripMargin in {
         test(memoize = true)
       }
-      """
-        |invoke successful nodes multiple times and
-        |not include failed nodes in next rounds
-        |if memoization is false
+      """|invoke successful nodes multiple times and
+         |not include failed nodes in next rounds
+         |if memoization is false
       """.stripMargin in {
         test(memoize = false)
       }
 
-      "fails with error if all nodes responds with error" in forAll(genNodes(), genTips()) {
-        (nodes, tips) =>
-          TestFixture(
-            nodes,
-            tips,
-            sync = (_, _) => Task.raiseError(new RuntimeException),
-            skipFailedNodesInNextRounds = true
-          ) { (initialSynchronizer, _) =>
-            for {
-              w <- initialSynchronizer.sync()
-              r <- w.attempt
-            } yield {
-              r.isLeft shouldBe true
-              r.left.get shouldBe an[SynchronizationError]
-            }
+      "fails with error if all nodes responds with error" in forAll(genNodes()) { nodes =>
+        TestFixture(
+          nodes,
+          Task.raiseError(new RuntimeException("Boom!")),
+          skipFailedNodesInNextRounds = true
+        ) { (initialSynchronizer, _) =>
+          for {
+            w <- initialSynchronizer.sync()
+            r <- w.attempt
+          } yield {
+            r.isLeft shouldBe true
+            r.left.get shouldBe an[SynchronizationError]
           }
+        }
       }
     }
-
     "reaches minSuccessful amount of successful syncs" should {
-      "resolve the handle" in forAll(genNodes(), genTips()) { (nodes, tips) =>
+      "resolve the handle" in forAll(genNodes(), genDag()) { (nodes, dag) =>
         val flag = Atomic(false)
         TestFixture(
           nodes,
-          tips,
-          sync = { (_, _) =>
+          Task.defer {
             if (flag.get()) {
-              Task(true)
+              Task(dag)
             } else {
-              Task.raiseError(new RuntimeException)
+              Task.raiseError(new RuntimeException("Boom!"))
             }
           },
-          minSuccessful = pos(nodes.size)
+          minSuccessful = nodes.size
         ) { (initialSynchronizer, _) =>
           for {
             w1 <- initialSynchronizer.sync()
@@ -200,6 +186,49 @@ class InitialSynchronizationSpec
         }
       }
     }
+    "returned dag slice contains summaries with unasked rank" should {
+      "mark node as failed" in {
+        val nodes = sample(genNodes(max = 1))
+        val dag = {
+          val d = sample(genDag())
+          d.head.update(_.header.rank := 100) +: d.tail
+        }
+        TestFixture(
+          nodes,
+          Task(dag),
+          correctRanges = false,
+          skipFailedNodesInNextRounds = true
+        ) { (initialSynchronizer, _) =>
+          for {
+            w <- initialSynchronizer.sync()
+            r <- w.attempt
+          } yield {
+            r.left.get shouldBe an[SynchronizationError]
+          }
+        }
+      }
+    }
+    "returned dag slice contains repeated summaries" should {
+      "consider sync with such peers as failure" in {
+        val nodes = sample(genNodes(max = 1))
+        val dag = {
+          val d = sample(genDag()).head
+          Vector(d, d)
+        }
+        TestFixture(
+          nodes,
+          Task(dag),
+          skipFailedNodesInNextRounds = true
+        ) { (initialSynchronizer, _) =>
+          for {
+            w <- initialSynchronizer.sync()
+            r <- w.attempt
+          } yield {
+            r.left.get shouldBe an[SynchronizationError]
+          }
+        }
+      }
+    }
   }
 }
 
@@ -214,92 +243,82 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     def banTemp(node: Node): Task[Unit]     = ???
   }
 
-  object MockBackend extends GossipServiceServer.Backend[Task] {
-    def hasBlock(blockHash: ByteString)        = ???
-    def getBlockSummary(blockHash: ByteString) = ???
-    def getBlock(blockHash: ByteString)        = ???
-    def listTips                               = ???
+  class MockDownloadManager(failing: Set[Node]) extends DownloadManager[Task] {
+    val requestsCounter = Atomic(Map.empty[Node, Int].withDefaultValue(0))
+
+    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
+      Task.delay {
+        requestsCounter.transform(m => m + (source -> (m(source) + 1)))
+        if (failing(source)) {
+          Task.raiseError(new RuntimeException("Boom!"))
+        } else {
+          Task.unit
+        }
+      }
+
   }
 
-  object MockSynchronizer extends Synchronizer[Task] {
-    def syncDag(source: Node, targetBlockHashes: Set[ByteString]) = ???
-    def downloaded(blockHash: ByteString): Task[Unit]             = ???
-  }
-
-  object MockDownloadManager extends DownloadManager[Task] {
-    def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) = ???
-  }
-
-  object MockGenesisApprover extends GenesisApprover[Task] {
-    def getCandidate                                           = ???
-    def addApproval(blockHash: ByteString, approval: Approval) = ???
-    def awaitApproval                                          = ???
-  }
-
-  val MockSemaphore = Semaphore[Task](1).runSyncUnsafe(1.second)
-
-  class MockGossipServiceServer(sync: (Node, Seq[ByteString]) => Task[Boolean])
-      extends GossipServiceServer[Task](
-        MockBackend,
-        MockSynchronizer,
-        MockDownloadManager,
-        MockGenesisApprover,
-        0,
-        MockSemaphore
-      ) {
-    val asked = Atomic(Vector.empty[Node])
-
-    override def newBlocksSynchronous(
-        request: NewBlocksRequest,
-        skipRelaying: Boolean
-    ): Task[Either[SyncError, NewBlocksResponse]] = {
-      asked.transform(_ :+ request.getSender)
-      sync(request.getSender, request.blockHashes)
-        .map(b => NewBlocksResponse(isNew = b).asRight[SyncError])
-    }
-  }
-
-  class MockGossipService(tips: List[BlockSummary]) extends GossipService[Task] {
+  class MockGossipService(produceDag: Task[Vector[BlockSummary]], correct: Boolean)
+      extends GossipService[Task] {
     def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
     def streamAncestorBlockSummaries(
         request: StreamAncestorBlockSummariesRequest
     ): Iterant[Task, BlockSummary] = ???
     def streamDagTipBlockSummaries(
         request: StreamDagTipBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] =
-      Iterant.fromList[Task, BlockSummary](tips)
+    ): Iterant[Task, BlockSummary] = ???
     def streamBlockSummaries(request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] =
       ???
     def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
     def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
       ???
     def addApproval(request: AddApprovalRequest): Task[Unit] = ???
+    def streamDagSliceBlockSummaries(
+        request: StreamDagSliceBlockSummariesRequest
+    ): Iterant[Task, BlockSummary] =
+      Iterant
+        .liftF {
+          produceDag.flatMap { dag =>
+            Task {
+              val range = request.startRank.to(request.endRank)
+              if (correct) {
+                dag.filter(s => range.contains(s.rank))
+              } else {
+                dag
+              }
+            }
+          }
+        }
+        .flatMap(summaries => Iterant.fromSeq[Task, BlockSummary](summaries))
   }
 
   object TestFixture {
     def apply(
         nodes: List[Node],
-        tips: List[BlockSummary],
-        sync: (Node, Seq[ByteString]) => Task[Boolean] = (_, _) => Task(true),
+        produceDag: Task[Vector[BlockSummary]],
+        correctRanges: Boolean = true,
+        failing: Set[Node] = Set.empty,
         selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
-        minSuccessful: Int Refined Positive = Int.MaxValue,
+        minSuccessful: Int = Int.MaxValue,
         skipFailedNodesInNextRounds: Boolean = false,
-        roundPeriod: FiniteDuration = 25.millis
-    )(test: (InitialSynchronization[Task], MockGossipServiceServer) => Task[Unit]): Unit = {
-      val mockGossipServiceServer                = new MockGossipServiceServer(sync)
-      val mockGossipService: GossipService[Task] = new MockGossipService(tips)
-      val effect = new InitialSynchronizationImpl(
+        step: Int = 10
+    )(
+        test: (InitialSynchronization[Task], MockDownloadManager) => Task[Unit]
+    ): Unit = {
+      val mockGossipService   = new MockGossipService(produceDag, correctRanges)
+      val mockDownloadManager = new MockDownloadManager(failing)
+      val effect = new InitialSynchronizationImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
-        mockGossipServiceServer,
         selectNodes,
         memoizeNodes,
         _ => Task(mockGossipService),
         minSuccessful,
         skipFailedNodesInNextRounds,
-        roundPeriod
+        mockDownloadManager,
+        step
       )
-      test(effect, mockGossipServiceServer).runSyncUnsafe(5.seconds)
+      test(effect, mockDownloadManager).runSyncUnsafe(5.seconds)
     }
   }
 }

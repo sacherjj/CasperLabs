@@ -39,6 +39,7 @@ import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
 import monix.execution.Scheduler
+import monix.tail.Iterant
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -197,7 +198,7 @@ package object gossiping {
             .ifM(
               makeInitialSynchronizer(
                 conf,
-                gossipServiceServer,
+                downloadManager,
                 connectToGossip,
                 awaitApproval.join,
                 isInitialRef
@@ -207,7 +208,7 @@ package object gossiping {
 
       _ <- makePeriodicSynchronizer(
             conf,
-            gossipServiceServer,
+            downloadManager,
             connectToGossip,
             awaitApproval.join,
             isInitialRef
@@ -555,7 +556,7 @@ package object gossiping {
                              latestMessages <- dag.latestMessageHashes
                              equivocators   <- dag.getEquivocators
                              tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
-                           } yield tipHashes.toList
+                           } yield tipHashes
 
                          override def justifications: F[List[ByteString]] =
                            for {
@@ -573,15 +574,13 @@ package object gossiping {
                        maxPossibleDepth = conf.server.syncMaxPossibleDepth,
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                       isInitialRef = isInitialRef
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
                      )
     } yield synchronizer
   }
 
   /** Create gossip service. */
-  def makeGossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
+  def makeGossipServiceServer[F[_]: ConcurrentEffect: Parallel: Log: Metrics: BlockStorage: DagStorage: MultiParentCasperRef](
       conf: Configuration,
       synchronizer: Synchronizer[F],
       downloadManager: DownloadManager[F],
@@ -611,6 +610,21 @@ package object gossiping {
                         tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
                         tips           <- tipHashes.toList.traverse(BlockStorage[F].getBlockSummary(_))
                       } yield tips.flatten
+
+                    override def dagTopoSort(
+                        startRank: Long,
+                        endRank: Long
+                    ): Iterant[F, BlockSummary] = {
+                      import fs2.interop.reactivestreams._
+                      Iterant
+                        .liftF(for {
+                          dag       <- DagStorage[F].getRepresentation
+                          stream    = dag.topoSort(startRank, endRank).flatMap(fs2.Stream.emits)
+                          publisher = stream.toUnicastPublisher()
+                          iterant   = Iterant.fromReactivePublisher(publisher)
+                        } yield iterant)
+                        .flatten
+                    }
                   }
                 }
 
@@ -630,7 +644,7 @@ package object gossiping {
   /** Initially sync with the bootstrap node and/or some others. */
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
       conf: Configuration,
-      gossipServiceServer: GossipServiceServer[F],
+      downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
@@ -639,13 +653,13 @@ package object gossiping {
       initialSync <- Resource.pure[F, InitialSynchronization[F]] {
                       new InitialSynchronizationImpl(
                         NodeDiscovery[F],
-                        gossipServiceServer,
                         selectNodes = ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
                         minSuccessful = conf.server.initSyncMinSuccessful,
                         memoizeNodes = conf.server.initSyncMemoizeNodes,
                         skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
-                        roundPeriod = conf.server.initSyncRoundPeriod,
-                        connector = connectToGossip
+                        connector = connectToGossip,
+                        downloadManager = downloadManager,
+                        step = conf.server.initSyncStep
                       )
                     }
       _ <- makeFiberResource {
@@ -662,7 +676,7 @@ package object gossiping {
   /** Periodically sync with a random node. */
   private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
       conf: Configuration,
-      gossipServiceServer: GossipServiceServer[F],
+      downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
@@ -683,13 +697,13 @@ package object gossiping {
       periodicSync <- Resource.pure[F, InitialSynchronization[F]] {
                        new InitialSynchronizationImpl(
                          NodeDiscovery[F],
-                         gossipServiceServer,
                          selectNodes = ns => List(ns(Random.nextInt(ns.length))),
                          minSuccessful = 1,
                          memoizeNodes = false,
                          skipFailedNodesInNextRounds = false,
-                         roundPeriod = conf.server.periodicSyncRoundPeriod,
-                         connector = connectToGossip
+                         connector = connectToGossip,
+                         downloadManager = downloadManager,
+                         step = conf.server.initSyncStep
                        )
                      }
       _ <- makeFiberResource {
