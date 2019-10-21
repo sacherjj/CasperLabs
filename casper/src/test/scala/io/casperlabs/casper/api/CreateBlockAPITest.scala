@@ -193,7 +193,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
                      Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray)
                    )
                    .attempt
-        _ = result.left.get.getMessage should include("Cannot find deploy")
+        _ = result.left.get.getMessage should include("NOT_FOUND: Deploy")
       } yield ()
 
     try {
