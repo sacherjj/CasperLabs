@@ -9,29 +9,45 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::{runtime, storage, Error, TURef};
+use contract_ffi::contract_api::{runtime, storage, Error as ApiError, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
+enum Arg {
+    MethodName = 0,
+    Arg1 = 1,
+}
+
+#[repr(u16)]
+enum Error {
+    UnknownMethodName = 0,
+}
+
+impl Into<ApiError> for Error {
+    fn into(self) -> ApiError {
+        ApiError::User(self as u16)
+    }
+}
+
 fn get_list_key(name: &str) -> TURef<Vec<String>> {
-    runtime::get_key(name).unwrap().to_turef().unwrap()
+    let key = runtime::get_key(name).unwrap_or_revert_with(ApiError::GetKey);
+    key.to_turef()
+        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant)
 }
 
 fn update_list(name: String) {
     let list_key = get_list_key("list");
     let mut list = storage::read(list_key.clone())
-        .unwrap_or_revert_with(Error::Read)
-        .unwrap_or_revert_with(Error::ValueNotFound);
+        .unwrap_or_revert_with(ApiError::Read)
+        .unwrap_or_revert_with(ApiError::ValueNotFound);
     list.push(name);
     storage::write(list_key, list);
 }
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
     if runtime::has_key(&name) {
-        let init_message = vec![String::from("Hello again!")];
-        let new_key = storage::new_turef(init_message);
-        Some(new_key) //already subscribed
+        None //already subscribed
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = storage::new_turef(init_message);
@@ -43,13 +59,13 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 
 fn publish(msg: String) {
     let curr_list = storage::read(get_list_key("list"))
-        .unwrap_or_revert_with(Error::Read)
-        .unwrap_or_revert_with(Error::ValueNotFound);
+        .unwrap_or_revert_with(ApiError::Read)
+        .unwrap_or_revert_with(ApiError::ValueNotFound);
     for name in curr_list.iter() {
         let uref = get_list_key(name);
         let mut messages = storage::read(uref.clone())
-            .unwrap_or_revert_with(Error::Read)
-            .unwrap_or_revert_with(Error::ValueNotFound);
+            .unwrap_or_revert_with(ApiError::Read)
+            .unwrap_or_revert_with(ApiError::ValueNotFound);
         messages.push(msg.clone());
         storage::write(uref, messages);
     }
@@ -57,11 +73,14 @@ fn publish(msg: String) {
 
 #[no_mangle]
 pub extern "C" fn mailing_list_ext() {
-    let method_name: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
+    let method_name: String = runtime::get_arg(Arg::MethodName as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let arg1: String = runtime::get_arg(Arg::Arg1 as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
     match method_name.as_str() {
-        "sub" => match sub(runtime::get_arg(1).unwrap().unwrap()) {
+        "sub" => match sub(arg1) {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
@@ -74,9 +93,9 @@ pub extern "C" fn mailing_list_ext() {
         //unforgable reference because otherwise anyone could
         //spam the mailing list.
         "pub" => {
-            publish(runtime::get_arg(1).unwrap().unwrap());
+            publish(arg1);
         }
-        _ => panic!("Unknown method name!"),
+        _ => runtime::revert(Error::UnknownMethodName),
     }
 }
 
