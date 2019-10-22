@@ -644,7 +644,7 @@ package object gossiping {
     } yield server
 
   /** Initially sync with the bootstrap node and/or some others. */
-  private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
+  private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
       conf: Configuration,
       downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
@@ -652,17 +652,23 @@ package object gossiping {
       isInitialRef: Ref[F, Boolean]
   ): Resource[F, Unit] =
     for {
-      initialSync <- Resource.pure[F, InitialSynchronization[F]] {
-                      new InitialSynchronizationImpl(
-                        NodeDiscovery[F],
-                        selectNodes = ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
-                        minSuccessful = conf.server.initSyncMinSuccessful,
-                        memoizeNodes = conf.server.initSyncMemoizeNodes,
-                        skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
-                        connector = connectToGossip,
-                        downloadManager = downloadManager,
-                        step = conf.server.initSyncStep
-                      )
+      initialSync <- Resource.liftF {
+                      latestMessagesMinRank[F] >>= { minRank =>
+                        Sync[F].delay(
+                          new InitialSynchronizationImpl(
+                            NodeDiscovery[F],
+                            selectNodes =
+                              ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
+                            minSuccessful = conf.server.initSyncMinSuccessful,
+                            memoizeNodes = conf.server.initSyncMemoizeNodes,
+                            skipFailedNodesInNextRounds = conf.server.initSyncSkipFailedNodes,
+                            connector = connectToGossip,
+                            downloadManager = downloadManager,
+                            step = conf.server.initSyncStep,
+                            rankStartFrom = minRank
+                          )
+                        )
+                      }
                     }
       _ <- makeFiberResource {
             for {
@@ -676,7 +682,7 @@ package object gossiping {
     } yield ()
 
   /** Periodically sync with a random node. */
-  private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
+  private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
       conf: Configuration,
       downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
@@ -696,17 +702,22 @@ package object gossiping {
     }
 
     for {
-      periodicSync <- Resource.pure[F, InitialSynchronization[F]] {
-                       new InitialSynchronizationImpl(
-                         NodeDiscovery[F],
-                         selectNodes = ns => List(ns(Random.nextInt(ns.length))),
-                         minSuccessful = 1,
-                         memoizeNodes = false,
-                         skipFailedNodesInNextRounds = false,
-                         connector = connectToGossip,
-                         downloadManager = downloadManager,
-                         step = conf.server.initSyncStep
-                       )
+      periodicSync <- Resource.liftF {
+                       latestMessagesMinRank[F] >>= { minRank =>
+                         Sync[F].delay(
+                           new InitialSynchronizationImpl(
+                             NodeDiscovery[F],
+                             selectNodes = ns => List(ns(Random.nextInt(ns.length))),
+                             minSuccessful = 1,
+                             memoizeNodes = false,
+                             skipFailedNodesInNextRounds = false,
+                             connector = connectToGossip,
+                             downloadManager = downloadManager,
+                             step = conf.server.initSyncStep,
+                             rankStartFrom = minRank
+                           )
+                         )
+                       }
                      }
       _ <- makeFiberResource {
             awaitApproved >> loop(periodicSync)
@@ -782,6 +793,17 @@ package object gossiping {
 
   private def show(hash: ByteString) =
     PrettyPrinter.buildString(hash)
+
+  private def latestMessagesMinRank[F[_]: Monad: DagStorage]: F[Long] =
+    for {
+      dag            <- DagStorage[F].getRepresentation
+      latestMessages <- dag.latestMessages
+      minRank = latestMessages.values
+        .map(_.rank)
+        .toList
+        .minimumOption
+        .getOrElse(0L)
+    } yield minRank
 
   def startGrpcServer[F[_]: Sync: TaskLike: ObservableIterant](
       server: GossipServiceServer[F],

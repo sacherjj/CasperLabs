@@ -35,6 +35,7 @@ trait InitialSynchronization[F[_]] {
   *                      Otherwise, invokes it each round
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
   * @param step          Depth of DAG slices (by rank) retrieved slice-by-slice until node fully synchronized
+  * @param rankStartFrom Initial value of rank to start syncing with peers. Usually, the minimum rank of latest messages.
   */
 class InitialSynchronizationImpl[F[_]: Parallel: Log](
     nodeDiscovery: NodeDiscovery[F],
@@ -44,7 +45,8 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
     minSuccessful: Int,
     skipFailedNodesInNextRounds: Boolean,
     downloadManager: DownloadManager[F],
-    step: Int
+    step: Int,
+    rankStartFrom: Long
 )(implicit F: Concurrent[F])
     extends InitialSynchronization[F] {
   override def sync(): F[WaitHandle[F]] = {
@@ -171,7 +173,8 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
     nodeDiscovery.recentlyAlivePeersAscendingDistance
       .flatMap { peers =>
         val nodesToSyncWith = selectNodes(peers)
-        loop(nodesToSyncWith, failed = Set.empty, rank = 0)
+        //TODO: Another unsafe cast to Int
+        loop(nodesToSyncWith, failed = Set.empty, rank = rankStartFrom.toInt)
       }
       .start
       .map(_.join)
