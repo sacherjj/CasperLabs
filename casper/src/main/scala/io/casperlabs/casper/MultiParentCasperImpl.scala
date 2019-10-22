@@ -387,7 +387,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
 
           timestamp       <- Time[F].currentMillis
-          remainingHashes <- remainingDeploysHashes(dag, parents, timestamp)
+          remainingHashes <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp)
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
                          dag,
@@ -421,13 +421,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
-      parents: Seq[Block],
+      parents: Set[BlockHash],
       timestamp: Long
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
-      .through(DeployFilters.timestampBefore[F](timestamp))
-    val unexpired = earlierPendingDeploys.through(DeployFilters.ttlAfter[F](timestamp))
+      .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
+    val unexpired = earlierPendingDeploys.through(DeployFilters.Pipes.notExpired[F](timestamp))
 
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList
@@ -458,7 +458,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       parents = merged.parents
       // Consider deploys which this node has processed but hasn't finalized yet.
       processedDeploys <- DeployStorageReader[F].readProcessedHashes
-      orphanedDeploys  <- filterDeploysNotInPast(dag, parents, processedDeploys)
+      orphanedDeploys <- filterDeploysNotInPast(
+                          dag,
+                          parents.map(_.blockHash).toSet,
+                          processedDeploys
+                        )
       _ <- DeployStorageWriter[F]
             .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
@@ -488,7 +492,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       val deployStream =
         DeployStorageReader[F]
           .getByHashes(remainingHashes)
-          .through(DeployFilters.dependenciesMet[F](dag, merged.parents))
+          .through(
+            DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
+          )
       (for {
         // `bondedLatestMsgs` won't include Genesis block
         // and in the case when it becomes the main parent we want to include its rank
@@ -671,7 +677,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
@@ -810,7 +816,8 @@ object MultiParentCasperImpl {
             NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
             InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
             InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
-            InvalidTargetHash =>
+            InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired |
+            DeployFromFuture =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -879,7 +886,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
@@ -931,10 +938,10 @@ object MultiParentCasperImpl {
               InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash |
               InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
-              InvalidTargetHash =>
+              InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
             ().pure[F]
 
-          case UnexpectedBlockException(_) =>
+          case UnexpectedBlockException(_) | DeployFromFuture =>
             ().pure[F]
         }
     }
