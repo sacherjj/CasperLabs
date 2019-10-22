@@ -642,11 +642,11 @@ object DownloadManagerSpec {
       implicit val log = new Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
-          def hasBlock(blockHash: ByteString)                                          = ???
-          def getBlock(blockHash: ByteString)                                          = Task.now(None)
-          def getBlockSummary(blockHash: ByteString)                                   = ???
-          def listTips: Task[Seq[BlockSummary]]                                        = ???
-          def dagTopoSort(startRank: Long, endRank: Long): Iterant[Task, BlockSummary] = ???
+          def hasBlock(blockHash: ByteString)             = ???
+          def getBlock(blockHash: ByteString)             = Task.now(None)
+          def getBlockSummary(blockHash: ByteString)      = ???
+          def listTips: Task[Seq[BlockSummary]]           = ???
+          def dagTopoSort(startRank: Long, endRank: Long) = ???
         },
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
@@ -670,11 +670,12 @@ object DownloadManagerSpec {
         // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
           backend = new GossipServiceServer.Backend[Task] {
-            def hasBlock(blockHash: ByteString)                                          = ???
-            def getBlock(blockHash: ByteString)                                          = regetter(Task.delay(blockMap.get(blockHash)))
-            def getBlockSummary(blockHash: ByteString)                                   = ???
-            def listTips                                                                 = ???
-            def dagTopoSort(startRank: Long, endRank: Long): Iterant[Task, BlockSummary] = ???
+            def hasBlock(blockHash: ByteString) = ???
+            def getBlock(blockHash: ByteString) =
+              regetter(Task.delay(blockMap.get(blockHash)))
+            def getBlockSummary(blockHash: ByteString)      = ???
+            def listTips                                    = ???
+            def dagTopoSort(startRank: Long, endRank: Long) = ???
 
           },
           synchronizer = emptySynchronizer,

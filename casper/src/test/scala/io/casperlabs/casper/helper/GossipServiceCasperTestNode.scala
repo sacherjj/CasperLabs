@@ -417,13 +417,9 @@ object GossipServiceCasperTestNodeFactory {
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
 
-                     override def listTips =
-                       ???
+                     override def listTips = ???
 
-                     override def dagTopoSort(
-                         startRank: Long,
-                         endRank: Long
-                     ): Iterant[F, BlockSummary] = ???
+                     override def dagTopoSort(startRank: Long, endRank: Long) = ???
                    },
                    synchronizer = synchronizer,
                    downloadManager = downloadManager,
