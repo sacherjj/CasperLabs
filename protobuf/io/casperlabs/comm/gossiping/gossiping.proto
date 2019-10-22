@@ -33,8 +33,8 @@ service GossipService {
     // the callee's candidate it will return INVALID_ARGUMENT, otherwise add the signature and forward it to its peers.
     rpc AddApproval(AddApprovalRequest) returns (google.protobuf.Empty);
 
-    // Retrieve the slice of the DAG as specified by the caller,
-    // to gradually perform initial synchronization for new peers in the network.
+    // Returns block summaries between two ranks (inclusive) in ascending topological order.
+    // Used to gradually perform initial synchronization for new peers in the network.
     rpc StreamDagSliceBlockSummaries(StreamDagSliceBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
 }
 
