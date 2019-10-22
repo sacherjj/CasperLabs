@@ -120,7 +120,6 @@ class EquivocationDetectorTest
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v0,
-                 justifications = HashMap(v0 -> genesis.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           _ <- createBlockAndTestEquivocateDetector(

@@ -18,7 +18,8 @@ object EquivocationDetector {
 
   private implicit val logSource: LogSource = LogSource(this.getClass)
 
-  /**
+  /** !!!CAUTION!!!: Must be called before storing block in the DAG
+    *
     * Check whether a block creates equivocations when adding a new block to the block dag,
     * if so store the validator with the lowest rank of any base block from
     * the same validator to `EquivocationsTracker`, then an error is `EquivocatedBlock` returned.
@@ -98,95 +99,41 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
+  // NOTE: Assumes CON-557 is done i.e. a block is valid if its swimlane has only one tip.
   private def checkEquivocations[F[_]: MonadThrowable: Log](
       dag: DagRepresentation[F],
       block: Block
   ): F[Boolean] =
     for {
       validatorLatestMessages <- dag.latestMessage(block.getHeader.validatorPublicKey)
-      equivocated <- if (validatorLatestMessages.isEmpty || citesPreviousMsg(
-                           block,
-                           validatorLatestMessages
-                         )) {
-                      // It is the first message by that validator
-                      // or cites previous one.
-                      false.pure[F]
-                    } else if (validatorLatestMessages.size > 1) {
-                      Log[F]
-                        .warn(
-                          s"Validator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has already equivocated in the past."
-                        )
-                        .as(true)
-                    } else {
-                      val creatorsMessagesInJPastCone = creatorJustificationHash(block)
-                      // We've already tested whether `validatorLatestMessage` is empty
-                      // or has more than one element.
-                      val validatorLatestMessage = validatorLatestMessages.head
-                      if (creatorsMessagesInJPastCone.size > 1)
-                        // More than latest message from the creator of a block visible in the
-                        // j-past-cone of the block.
-                        // NOTE: Messages like that should not be accepted - merging of a swimlane is not allowed.
-                        Log[F]
-                          .warn(s"More than one latest message visible in the j-past-cone of the ${PrettyPrinter
-                            .buildString(block.blockHash)} by the creator ${PrettyPrinter
-                            .buildString(block.getHeader.validatorPublicKey)}")
-                          .as(true)
-                      else if (creatorsMessagesInJPastCone.isEmpty)
-                        // We have seen a message from that validator (see `validatorLatestMessage`)
-                        // but block's j-past-cone doesn't cite any message by that validator.
-                        // This is an equivocation.
+      equivocated <- validatorLatestMessages.toList match {
+                      case Nil =>
+                        // It is the first message by that validator.
+                        false.pure[F]
+                      case head :: Nil =>
+                        citesPreviousMsg(dag, block, head).map(!_)
+                      case _ =>
                         Log[F]
                           .warn(
-                            s"Found equivocation: justifications of block ${PrettyPrinter
-                              .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
-                              .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                              .buildString(validatorLatestMessage.messageHash)}"
+                            s"Validator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has already equivocated in the past."
                           )
                           .as(true)
-                      else if (creatorsMessagesInJPastCone == validatorLatestMessages) {
-                        // `creatorsMessagesInJPastCone` should have single element
-                        // and if it's equal to what we have seen so far it means that block
-                        // cites validator's previous message directly and that's not an equivocation.
-                        false.pure[F]
-                      } else
-                        validatorLatestMessages.toList
-                          .traverse { latestMessageOfCreator =>
-                            for {
-                              message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-                              stream  = DagOperations.toposortJDagDesc(dag, List(message))
-                              // Find whether the block cites latestMessageOfCreator
-                              decisionPointBlock <- stream.find(
-                                                     b =>
-                                                       b == latestMessageOfCreator || b.rank < latestMessageOfCreator.rank
-                                                   )
-                              equivocated = decisionPointBlock != latestMessageOfCreator.some
-                              _ <- Log[F]
-                                    .warn(
-                                      s"Found equivocation: justifications of block ${PrettyPrinter
-                                        .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
-                                        .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                                        .buildString(latestMessageOfCreator.messageHash)}"
-                                    )
-                                    .whenA(equivocated)
-                            } yield equivocated
-                          }
-                          .map(_.exists(identity))
                     }
     } yield equivocated
 
   // Check whether block cites previous message by the same creator.
-  // Since citing multiple latest messages is prohibited `creatorsMessagesInJPastCone` should have
-  // at most 1 element.
-  private def citesPreviousMsg(block: Block, latestMessages: Set[Message]): Boolean = {
-    val creatorsMessagesInJPastCone = creatorJustificationHash(block)
-    creatorsMessagesInJPastCone.size == 1 && latestMessages.size == 1 && latestMessages.map(
-      _.messageHash
-    ) == creatorsMessagesInJPastCone
-  }
-
-  // Messages from the creator of the block in the j-past-cone of that block.
-  private def creatorJustificationHash(block: Block): Set[BlockHash] =
-    ProtoUtil.creatorJustification(block.getHeader).map(_.latestBlockHash)
+  private def citesPreviousMsg[F[_]: MonadThrowable: Log](
+      dag: DagRepresentation[F],
+      block: Block,
+      latestMessage: Message
+  ): F[Boolean] =
+    for {
+      message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
+      result <- DagOperations
+                 .swimlaneV(message.validatorId, message, dag)
+                 .find(_.messageHash == latestMessage.messageHash)
+                 .map(_.isDefined)
+    } yield result
 
   /**
     * Find equivocating validators that a block can see based on its direct justifications
