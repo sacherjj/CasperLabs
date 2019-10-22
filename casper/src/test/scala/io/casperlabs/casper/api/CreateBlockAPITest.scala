@@ -10,7 +10,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.helper.{GossipServiceCasperTestNodeFactory, HashSetCasperTestNode}
@@ -25,6 +25,8 @@ import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.deploy.DeployStorageReader
+import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
@@ -188,6 +190,60 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
                    )
                    .attempt
         _ = result.left.get.getMessage should include("Cannot find deploy")
+      } yield ()
+
+    try {
+      (for {
+        casperRef    <- MultiParentCasperRef.of[Task]
+        _            <- casperRef.set(node.casperEff)
+        blockApiLock <- Semaphore[Task](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).unsafeRunSync
+    } finally {
+      node.tearDown()
+    }
+  }
+
+  "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
+    // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+    val v1 = generateValidator("V1")
+
+    implicit val logEff        = new LogStub[Task]
+    implicit val blockStorage  = node.blockStorage
+    implicit val deployStorage = node.deployStorage
+    implicit val safetyOracle  = node.safetyOracleEff
+
+    val deploys = (1L to 10L)
+      .map(
+        t =>
+          ProtoUtil.basicDeploy(
+            t,
+            ByteString.EMPTY,
+            v1
+          )
+      )
+      .toList
+
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
+      for {
+        _ <- deploys.toList.traverse(d => {
+              BlockAPI.deploy[Task](d) *> BlockAPI.propose[Task](blockApiLock)
+            })
+        deployInfos <- DeployStorageReader[Task].getDeployInfos(deploys)
+        _ <- deployInfos.traverse(
+              deployInfo =>
+                DeployStorageReader[Task]
+                  .getDeployInfo(deployInfo.getDeploy.deployHash) shouldBeF deployInfo.some
+            )
+        result <- DeployStorageReader[Task]
+                   .getDeployInfos(
+                     List.empty[Deploy]
+                   )
+        _ = result shouldBe List.empty[DeployInfo]
       } yield ()
 
     try {

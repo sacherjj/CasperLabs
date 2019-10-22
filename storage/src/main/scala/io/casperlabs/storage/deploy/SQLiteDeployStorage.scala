@@ -446,7 +446,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
     for {
       deployHashToProcessingResults <- processingResults
       deployHashToBufferedStatus    <- getStatus.map(_.toMap)
-      deployInfos = deploys.map(f = d => {
+      deployInfos = deploys.map(d => {
         val bs = deployHashToBufferedStatus.get(d.deployHash)
         deployHashToProcessingResults.get(d.deployHash) match {
           case Some(prs) =>
