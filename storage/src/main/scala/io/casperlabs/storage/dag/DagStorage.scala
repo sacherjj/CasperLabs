@@ -4,6 +4,7 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
 import io.casperlabs.storage.block.BlockStorage.BlockHash
@@ -62,14 +63,14 @@ object DagStorage {
     abstract override def topoSort(
         startBlockNumber: Long,
         endBlockNumber: Long
-    ): fs2.Stream[F, Vector[BlockSummary]] =
+    ): fs2.Stream[F, Vector[BlockInfo]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
         .topoSort(startBlockNumber, endBlockNumber)
 
-    abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
+    abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
       fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
 
-    abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]] =
+    abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
       fs2.Stream.eval(m.incrementCounter("topoSortTail")) >> super.topoSortTail(tailLength)
   }
 
@@ -88,12 +89,12 @@ trait DagRepresentation[F[_]] {
   def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]]
+  ): fs2.Stream[F, Vector[BlockInfo]]
 
   /** Return block summaries with ranks of blocks in the DAG from a start index to the end. */
-  def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]]
+  def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]]
 
-  def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]]
+  def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
   def latestMessage(validator: Validator): F[Option[Message]]

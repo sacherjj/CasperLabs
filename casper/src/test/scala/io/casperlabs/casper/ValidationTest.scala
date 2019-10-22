@@ -1015,7 +1015,7 @@ class ValidationTest
         5 * 1024 * 1024
       )
       for {
-        _ <- deployStorage.addAsPending(deploys.toList)
+        _ <- deployStorage.writer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               fs2.Stream.fromIterator[Task](deploys.toIterator),

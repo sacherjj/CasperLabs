@@ -40,7 +40,7 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
@@ -257,7 +257,7 @@ class NodeRuntime private[node] (
             ingressScheduler,
             egressScheduler
           )
-    } yield (nodeAsk, nodeDiscovery, storage)
+    } yield (nodeAsk, nodeDiscovery, storage.writer)
 
     resources.allocated flatMap {
       case ((nodeAsk, nodeDiscovery, deployStorage), release) =>

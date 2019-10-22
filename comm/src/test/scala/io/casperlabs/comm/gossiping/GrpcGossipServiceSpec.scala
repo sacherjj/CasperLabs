@@ -238,8 +238,9 @@ class GrpcGossipServiceSpec
             "throttle" in forAll(arbitrary[Block], validSenderGen) { (block, sender) =>
               val requestsNum   = 5
               val queueSize     = 10
-              val sleepingTime  = 3.seconds
               val minSuccessful = 2
+
+              implicit val patienceConfig = PatienceConfig(7.second, 500.millis)
 
               test(block, queueSize) { stub =>
                 val success = Atomic(0)
@@ -256,11 +257,12 @@ class GrpcGossipServiceSpec
 
                 for {
                   _ <- runParallelRequests.startAndForget
-                  _ <- Task.sleep(sleepingTime)
                 } yield {
-                  assert(errors.get() == 0)
-                  // Not comparing with precise number, because it may vary in CI and fail
-                  assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                  eventually {
+                    assert(errors.get() == 0)
+                    // Not comparing with precise number, because it may vary in CI and fail
+                    assert(success.get() >= minSuccessful && success.get() < requestsNum)
+                  }
                 }
               }
             }
@@ -274,10 +276,10 @@ class GrpcGossipServiceSpec
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit override val patienceConfig = PatienceConfig(1.second, 100.millis)
     implicit override val consensusConfig = ConsensusConfig(
-      maxSessionCodeBytes = 500 * 1024,
-      minSessionCodeBytes = 400 * 1024,
-      maxPaymentCodeBytes = 300 * 1024,
-      minPaymentCodeBytes = 200 * 1024
+      maxSessionCodeBytes = 2500 * 1024,
+      minSessionCodeBytes = 1500 * 1024,
+      maxPaymentCodeBytes = 900 * 1024,
+      minPaymentCodeBytes = 800 * 1024
     )
 
     override def rpcName: String = "getBlocksChunked"
