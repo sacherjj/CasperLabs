@@ -422,8 +422,7 @@ where
                 post_state_hash,
                 effect,
             }) => {
-                let success_message =
-                    format!("run_genesis_with_chainspec successful: {}", post_state_hash);
+                let success_message = format!("run_genesis successful: {}", post_state_hash);
                 log_info(&success_message);
 
                 let mut genesis_response = ipc::GenesisResponse::new();

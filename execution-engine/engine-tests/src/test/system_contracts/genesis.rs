@@ -24,7 +24,7 @@ const ACCOUNT_2_BALANCE: u64 = 2_000_000_000;
 
 #[ignore]
 #[test]
-fn should_run_genesis_with_chainspec() {
+fn should_run_genesis() {
     let account_1_balance = Motes::new(ACCOUNT_1_BALANCE.into());
     let account_1 = {
         let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
