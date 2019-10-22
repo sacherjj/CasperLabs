@@ -13,6 +13,9 @@ members = [
     "engine-tests",
     "engine-wasm-prep",
 ]
+exclude = [
+    "contracts/examples/README.md",
+]
 
 default-members = [
     "contract-ffi",
