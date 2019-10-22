@@ -4,7 +4,6 @@ set -e
 
 USERNAME="casperlabs"
 DIRECTORY="/etc/${USERNAME}"
-SYSTEMD_SERVICE_FILE="/lib/systemd/system/${USERNAME}-node.service"
 
 if id -u ${USERNAME} >/dev/null 2>&1; then
     echo "User ${USERNAME} already exists."
@@ -17,7 +16,6 @@ if [ -d ${DIRECTORY} ] ; then
 else
     mkdir -p ${DIRECTORY}
     chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
-    chmod 0644 ${SYSTEMD_SERVICE_FILE}
 fi
 
-systemctl enable casperlabs-node.service
+systemctl enable casperlabs-engine-grpc-server.service

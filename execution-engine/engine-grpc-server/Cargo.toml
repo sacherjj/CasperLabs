@@ -40,3 +40,10 @@ buildflags = ["--release"]
 
 [package.metadata.rpm.targets]
 casperlabs-engine-grpc-server = { path = "/usr/bin/casperlabs-engine-grpc-server" }
+
+[package.metadata.deb]
+maintainer-scripts="debian"
+assets = [
+	["debian/casperlabs-engine-grpc-server.service", "/lib/systemd/system/casperlabs-engine-grpc-server.service", "644"],
+	["../target/release/casperlabs-engine-grpc-server", "/usr/bin/casperlabs-engine-grpc-server", "755"]
+]
