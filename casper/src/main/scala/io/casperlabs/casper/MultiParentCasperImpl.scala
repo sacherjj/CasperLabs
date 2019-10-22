@@ -427,7 +427,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
       .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
-    val unexpired = earlierPendingDeploys.through(DeployFilters.Pipes.ttlAfter[F](timestamp))
+    val unexpired = earlierPendingDeploys.through(DeployFilters.Pipes.notExpired[F](timestamp))
 
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList

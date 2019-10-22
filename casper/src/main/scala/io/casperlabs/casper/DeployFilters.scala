@@ -30,7 +30,7 @@ object DeployFilters {
     * equal to the given timestamp. I.e. this takes deploys that are not expired as of
     * the provided timestamp.
     */
-  def ttlAfter(timestamp: Long): Deploy.Header => Boolean = header => {
+  def notExpired(timestamp: Long): Deploy.Header => Boolean = header => {
     val ttl = ProtoUtil.getTimeToLive(header, MAX_TTL)
     timestamp <= (header.timestamp + ttl)
   }
@@ -57,10 +57,10 @@ object DeployFilters {
     ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
       filter(tupleRight(DeployFilters.timestampBefore(timestamp)))
 
-    def ttlAfter[F[_]](
+    def notExpired[F[_]](
         timestamp: Long
     ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
-      filter(tupleRight(DeployFilters.ttlAfter(timestamp)))
+      filter(tupleRight(DeployFilters.notExpired(timestamp)))
 
     def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
         dag: DagRepresentation[F],

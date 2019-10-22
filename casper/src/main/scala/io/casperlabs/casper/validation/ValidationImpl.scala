@@ -540,7 +540,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       b.header.toSet.flatMap((h: consensus.Block.Header) => h.parentHashes)
     val timestamp       = b.getHeader.timestamp
     val isFromPast      = DeployFilters.timestampBefore(timestamp)
-    val isNotExpired    = DeployFilters.ttlAfter(timestamp)
+    val isNotExpired    = DeployFilters.notExpired(timestamp)
     val dependenciesMet = DeployFilters.dependenciesMet[F](dag, parents)
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
