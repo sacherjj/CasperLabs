@@ -69,7 +69,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  it should "not allow multiple threads to process the same block" in {
+  // Casper used to process just 1 block at a time, and this test made sure
+  // of that, but it doesn't make sense any more because the download manager
+  // feeds them in a topological order. This test adds the *same* block on
+  // two threads, which will not happen under normal cirucmstances. We could
+  // protect against it but it should be an idempotent operation really.
+  it should "not mind multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)(scheduler)
@@ -96,7 +101,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val threadStatuses: (BlockStatus, BlockStatus) =
       testProgram.unsafeRunSync(scheduler)
 
-    threadStatuses should matchPattern { case (Processed, Valid) | (Valid, Processed) => }
+    threadStatuses should matchPattern {
+      case (Processed, Valid) | (Valid, Processed) | (Valid, Valid) =>
+    }
     node.tearDown().unsafeRunSync
   }
 
