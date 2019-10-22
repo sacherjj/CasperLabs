@@ -618,8 +618,10 @@ package object gossiping {
                       import fs2.interop.reactivestreams._
                       Iterant
                         .liftF(for {
-                          dag       <- DagStorage[F].getRepresentation
-                          stream    = dag.topoSort(startRank, endRank).flatMap(fs2.Stream.emits)
+                          dag <- DagStorage[F].getRepresentation
+                          stream = dag
+                            .topoSort(startRank, endRank)
+                            .flatMap(blockInfo => fs2.Stream.emits(blockInfo.flatMap(_.summary)))
                           publisher = stream.toUnicastPublisher()
                           iterant   = Iterant.fromReactivePublisher(publisher)
                         } yield iterant)
