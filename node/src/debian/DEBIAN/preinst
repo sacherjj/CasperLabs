@@ -1,0 +1,13 @@
+#! /usr/bin/env bash
+
+set -e
+
+USERNAME=casperlabs
+DIRECTORY="/etc/${USERNAME}"
+
+if [ -d ${DIRECTORY} ] ; then
+    echo "Directory ${DIRECTORY} already exists."
+else
+    mkdir -p ${DIRECTORY}
+    chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
+fi
