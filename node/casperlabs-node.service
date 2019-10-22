@@ -1,10 +1,13 @@
 [Unit]
 Description=CasperLabs Node
-After=network.target
+Requires=casperlabs-engine-grpc-server.service
+After=network.target casperlabs-engine-grpc-server.service
+BindsTo=casperlabs-engine-grpc-server.service
 
 [Service]
-ExecStart=/usr/bin/casperlabs-node run --server-data-dir=/var/lib/casperlabs-node
+ExecStart=/usr/bin/casperlabs-node --config-file=/etc/casperlabs/default-configuration.toml run --server-data-dir=/etc/casperlabs
 User=casperlabs-node
+Restart=no
 
 [Install]
 WantedBy=multi-user.target
