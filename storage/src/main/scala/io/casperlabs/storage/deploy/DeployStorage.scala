@@ -98,6 +98,8 @@ import scala.concurrent.duration._
 
   def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
 
+  def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]]
+
   /** @return List of deploys created by specified account*/
   def getDeploysByAccount(
       account: PublicKeyBS,
@@ -194,5 +196,8 @@ object DeployStorage {
         lastDeployHash: DeployHash
     ): F[List[Deploy]] =
       reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
+
+    override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] =
+      reader.getDeployInfos(deploys)
   }
 }

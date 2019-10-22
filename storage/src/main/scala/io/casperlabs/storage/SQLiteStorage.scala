@@ -199,5 +199,8 @@ object SQLiteStorage {
           lastDeployHash: DeployHash
       ): F[List[Deploy]] =
         deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
+
+      override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] =
+        deployStorage.getDeployInfos(deploys)
     }
 }
