@@ -63,7 +63,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     genesis: Block,
     chainName: String,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-    blockProcessingLock: Semaphore[F],
     val faultToleranceThreshold: Float = 0f
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
@@ -89,42 +88,38 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             Block
         ) => F[(BlockStatus, DagRepresentation[F])]
     ) =
-      Resource
-        .make(blockProcessingLock.acquire)(_ => blockProcessingLock.release)
-        .use { _ =>
-          for {
-            dag       <- dag
-            blockHash = block.blockHash
-            inDag     <- dag.contains(blockHash)
-            inBuffer <- Cell[F, CasperState].read
-                         .map(casperState => casperState.blockBuffer.contains(blockHash))
-            attempts <- if (inDag) {
-                         Log[F]
-                           .info(
-                             s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
-                           ) *>
-                           List(block -> BlockStatus.processed).pure[F]
-                       } else if (inBuffer) {
-                         // Waiting for dependencies to become available.
-                         Log[F]
-                           .info(
-                             s"Block ${PrettyPrinter.buildString(blockHash)} is already in the buffer."
-                           ) *>
-                           List(block -> BlockStatus.processing).pure[F]
-                       } else {
-                         // This might be the first time we see this block, or it may not have been added to the state
-                         // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
-                         internalAddBlock(block, dag, validateAndAddBlock)
-                       }
-            // This method could just return the block hashes it created,
-            // but for now it does gossiping as well. The methods return the full blocks
-            // because for missing blocks it's not yet saved to the database.
-            _ <- attempts.traverse {
-                  case (attemptedBlock, status) =>
-                    broadcaster.networkEffects(attemptedBlock, status)
-                }
-          } yield attempts.head._2
-        }
+      for {
+        dag       <- dag
+        blockHash = block.blockHash
+        inDag     <- dag.contains(blockHash)
+        inBuffer <- Cell[F, CasperState].read
+                     .map(casperState => casperState.blockBuffer.contains(blockHash))
+        attempts <- if (inDag) {
+                     Log[F]
+                       .info(
+                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                       ) *>
+                       List(block -> BlockStatus.processed).pure[F]
+                   } else if (inBuffer) {
+                     // Waiting for dependencies to become available.
+                     Log[F]
+                       .info(
+                         s"Block ${PrettyPrinter.buildString(blockHash)} is already in the buffer."
+                       ) *>
+                       List(block -> BlockStatus.processing).pure[F]
+                   } else {
+                     // This might be the first time we see this block, or it may not have been added to the state
+                     // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
+                     internalAddBlock(block, dag, validateAndAddBlock)
+                   }
+        // This method could just return the block hashes it created,
+        // but for now it does gossiping as well. The methods return the full blocks
+        // because for missing blocks it's not yet saved to the database.
+        _ <- attempts.traverse {
+              case (attemptedBlock, status) =>
+                broadcaster.networkEffects(attemptedBlock, status)
+            }
+      } yield attempts.head._2
 
     val handleInvalidTimestamp =
       (_: Option[StatelessExecutor.Context], dag: DagRepresentation[F], block: Block) =>
@@ -652,7 +647,6 @@ object MultiParentCasperImpl {
       genesis: Block,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      blockProcessingLock: Semaphore[F],
       faultToleranceThreshold: Float = 0f
   ): F[MultiParentCasper[F]] =
     for {
@@ -671,7 +665,6 @@ object MultiParentCasperImpl {
       genesis,
       chainName,
       upgrades,
-      blockProcessingLock,
       faultToleranceThreshold
     )
 

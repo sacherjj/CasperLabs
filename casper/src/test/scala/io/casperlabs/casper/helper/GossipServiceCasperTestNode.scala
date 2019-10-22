@@ -34,7 +34,6 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    blockProcessingLock: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainName: String = "casperlabs",
@@ -79,7 +78,6 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       chainName,
       upgrades = Nil,
-      blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
     )
 
@@ -134,13 +132,11 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     initStorage() flatMap {
       case (blockStorage, dagStorage, deployStorage) =>
         for {
-          blockProcessingLock <- Semaphore[F](1)
-          casperState         <- Cell.mvarCell[F, CasperState](CasperState())
+          casperState <- Cell.mvarCell[F, CasperState](CasperState())
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
             sk,
-            blockProcessingLock,
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
@@ -215,7 +211,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           initStorage() flatMap {
             case (blockStorage, dagStorage, deployStorage) =>
               for {
-                semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
@@ -223,7 +218,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   peer,
                   genesis,
                   sk,
-                  semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
