@@ -220,13 +220,11 @@ impl Work {
         durations.push(duration)
     }
 
-    fn average_duration(&self) -> Duration {
-        let durations = self.durations.lock().expect("Expected to lock mutex");
-        if durations.is_empty() {
-            Duration::from_secs(0)
-        } else {
-            Duration::sum(durations.iter()) / durations.len() as u32
-        }
+    fn durations(&self) -> Vec<Duration> {
+        self.durations
+            .lock()
+            .expect("Expected to lock mutex")
+            .clone()
     }
 }
 
@@ -335,11 +333,17 @@ fn main() {
             Ok(client)
         }))
         .expect("Expected to join all threads");
-    let duration = Instant::now() - start;
-    println!(
-        "Server handled {} requests in {:?} with an average response time of {:?}",
-        client.work.total_to_send,
-        duration,
-        client.work.average_duration()
-    );
+
+    let overall_duration = Instant::now() - start;
+    let request_durations = client.work.durations();
+    if !request_durations.is_empty() {
+        let average_duration =
+            Duration::sum(request_durations.iter()) / request_durations.len() as u32;
+        println!(
+            "Server handled {} requests in {:?} with an average response time of {:?}",
+            request_durations.len(),
+            overall_duration,
+            average_duration
+        );
+    }
 }

@@ -87,9 +87,7 @@ First build the contracts and run `state-initializer`:
 cd CasperLabs/execution-engine/
 make build-contracts
 cd engine-tests/
-DATA_DIR=/tmp/CasperLabs/DataDir
-mkdir --parents $DATA_DIR
-HASH=$(cargo run --release --bin=state-initializer -- --data-dir=$DATA_DIR)
+HASH=$(cargo run --release --bin=state-initializer -- --data-dir=/tmp/CasperLabs/DataDir)
 ```
 
 In a new terminal, run the server, using the same data directory populated by the `state-initializer`:
