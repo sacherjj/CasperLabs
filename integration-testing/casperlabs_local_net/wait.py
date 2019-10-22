@@ -77,6 +77,11 @@ class FinishedAddingBlock(LogsContainMessage):
         super().__init__(node, f"Finished adding {block[:10]}...")
 
 
+class AddedBlock(LogsContainMessage):
+    def __init__(self, node: DockerNode, block: str) -> None:
+        super().__init__(node, f"Added {block[:10]}...")
+
+
 class RegexBlockRequest:
     regex = None
 
@@ -388,6 +393,11 @@ def wait_for_new_fork_choice_tip_block(
 
 def wait_for_finished_adding_block(node: DockerNode, block: str, timeout_seconds: int):
     predicate = FinishedAddingBlock(node, block)
+    wait_on_using_wall_clock_time(predicate, timeout_seconds)
+
+
+def wait_for_added_block(node: DockerNode, block: str, timeout_seconds: int):
+    predicate = AddedBlock(node, block)
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
