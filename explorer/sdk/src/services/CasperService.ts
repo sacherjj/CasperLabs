@@ -12,6 +12,8 @@ import {
   GetBlockInfoRequest,
   GetBlockStateRequest,
   GetDeployInfoRequest,
+  ListDeployInfosRequest,
+  ListDeployInfosResponse,
   StateQuery,
   StreamBlockDeploysRequest,
   StreamBlockInfosRequest
@@ -40,6 +42,33 @@ export default class CasperService {
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve(res.message as DeployInfo);
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      });
+    });
+  }
+
+  getDeployInfos(
+    accountPublicKey: ByteArray,
+    pageSize: number,
+    view?: 0 | 1,
+    pageToken: string = ''
+  ): Promise<ListDeployInfosResponse> {
+    return new Promise<ListDeployInfosResponse>((resolve, reject) => {
+      const request = new ListDeployInfosRequest();
+      request.setAccountPublicKeyBase16(encodeBase16(accountPublicKey));
+      request.setPageSize(pageSize);
+      request.setPageToken(pageToken);
+      request.setView(view === undefined ? BlockInfo.View.FULL : view);
+
+      grpc.unary(GrpcCasperService.ListDeployInfos, {
+        host: this.url,
+        request,
+        onEnd: res => {
+          if (res.status == grpc.Code.OK) {
+            resolve(res.message as ListDeployInfosResponse);
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
           }
