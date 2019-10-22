@@ -12,6 +12,7 @@ import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationEr
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
+import io.casperlabs.shared.IterantOps.RichIterant
 
 trait InitialSynchronization[F[_]] {
 
@@ -69,7 +70,7 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
                                        endRank = rank + step
                                      )
                                    )
-                                   .foldWhileLeftEvalL(F.pure(emptyS)) {
+                                   .foldLeftM(emptyS) {
                                      case ((prevHashes, handlers, maxRank), s) =>
                                        val h = s.blockHash
                                        val r = s.rank
@@ -96,7 +97,6 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
                                          newHandlers   = handlers :+ wh
                                          newMaxRank    = math.max(maxRank, r)
                                        } yield (newSeenHashes, newHandlers, newMaxRank)
-                                         .asLeft[S]
                                    }
         fullySynced = maxRank < rank + step
         _           <- handlers.sequence
