@@ -79,7 +79,7 @@ class ABI:
     def optional_value(name, a):
         if a is None:
             return Arg(name=name, value=Value(optional_value=Value()))
-        return Arg(name=name, value=Value(optional_value=a))
+        return Arg(name=name, value=Value(optional_value=a.value))
 
     @staticmethod
     def bytes_value(name, a: bytes):
@@ -758,12 +758,68 @@ def no_command(casperlabs_client, args):
 
 
 @guarded_command
+def bond_command(casperlabs_client, args):
+    logging.info(f"BOND {args}")
+    # Unless one of the session* args is set use bundled bonding.wasm
+    if not (
+        args.session or args.session_hash or args.session_name or args.session_uref
+    ):
+        p = pkg_resources.resource_filename(__name__, "bonding.wasm")
+        if not os.path.exists(p):
+            raise Exception(f"Missing bundled contract bonding.wasm")
+        args.session = p
+
+    if not args.session_args:
+        args.session_args = ABI.args_to_json(
+            ABI.args([ABI.long_value("amount", args.amount)])
+        )
+
+    return deploy_command(casperlabs_client, args)
+
+
+@guarded_command
+def unbond_command(casperlabs_client, args):
+    logging.info(f"UNBOND {args}")
+    # Unless one of the session* args is set use bundled unbonding.wasm
+    if not (
+        args.session or args.session_hash or args.session_name or args.session_uref
+    ):
+        p = pkg_resources.resource_filename(__name__, "unbonding.wasm")
+        if not os.path.exists(p):
+            raise Exception(f"Missing bundled contract unbonding.wasm")
+        args.session = p
+
+    if not args.session_args:
+        args.session_args = ABI.args_to_json(
+            ABI.args(
+                [ABI.optional_value("amount", ABI.long_value("amount", args.amount))]
+            )
+        )
+
+    return deploy_command(casperlabs_client, args)
+
+
+@guarded_command
 def deploy_command(casperlabs_client, args):
     from_addr = bytes.fromhex(getattr(args, "from"))
     if len(from_addr) != 32:
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
+
+    if args.payment_amount is not None:
+        args.payment_args = ABI.args_to_json(
+            ABI.args([ABI.int_value("amount", int(args.payment_amount))])
+        )
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not (
+            args.payment or args.payment_name or args.payment_hash or args.payment_uref
+        ):
+            p = pkg_resources.resource_filename(__name__, "standard_payment.wasm")
+            if not os.path.exists(p):
+                raise Exception(f"No bundled contract {p}")
+            logging.info(f"DEPLOY: Using {p} as a payment contract.")
+            args.payment = p
 
     kwargs = dict(
         from_addr=from_addr,
@@ -785,6 +841,7 @@ def deploy_command(casperlabs_client, args):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
+    logging.debug(f"DEPLOY: {kwargs}")
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
@@ -919,21 +976,34 @@ def main():
     parser = Parser()
 
     # fmt: off
+    deploy_options = [
+        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        # TODO: handling of dependencies not implemented yet. It is not clear what the format of <arg>... is (list of args).
+        [('--dependencies',), dict(required=False, type=str, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
+        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+        [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
+        [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
+        [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
+        [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
+        [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
+        [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
+        [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
+        [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
+        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
+        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
+        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]]
+
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
-                       [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
-                       [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
-                       [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
-                       [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
-                       [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
-                       [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
-                       [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
-                       [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
-                       [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
-                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
+                      deploy_options)
+
+    parser.addCommand('bond', bond_command, 'Issues bonding request',
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options)
+
+    parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
+                      [[('-a', '--amount'),
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options)
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
