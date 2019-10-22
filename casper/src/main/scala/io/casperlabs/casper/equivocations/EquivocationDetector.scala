@@ -111,7 +111,18 @@ object EquivocationDetector {
                         // It is the first message by that validator.
                         false.pure[F]
                       case head :: Nil =>
-                        citesPreviousMsg(dag, block, head).map(!_)
+                        Monad[F].ifM(citesPreviousMsg(dag, block, head))(
+                          false.pure[F], {
+                            Log[F]
+                              .warn(
+                                s"Found equivocation: justifications of block ${PrettyPrinter
+                                  .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                                  .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
+                                  .buildString(head.messageHash)}"
+                              )
+                              .as(true)
+                          }
+                        )
                       case _ =>
                         Log[F]
                           .warn(
