@@ -53,8 +53,10 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
     def schedule(p: Node, s: BlockSummary): F[WaitHandle[F]] =
       downloadManager.scheduleDownload(s, p, relay = false)
 
-    /* Returns 'true' if the DAG is fully synced with the peer */
-    def syncDagSlice(peer: Node, rank: Int): F[Boolean] = {
+    /** Returns
+      * - max returned rank
+      * - 'true' if the DAG is fully synced with the peer or 'false' otherwise */
+    def syncDagSlice(peer: Node, rank: Int): F[(Int, Boolean)] = {
       // 1. previously seen hashes
       // 2. wait handlers from DownloadManager
       // 3. max rank from a batch
@@ -100,15 +102,25 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
                                    }
         fullySynced = maxRank < rank + step
         _           <- handlers.sequence
-      } yield fullySynced
+        //TODO: Maybe use int64 protobuf type for StreamDagSliceBlockSummariesRequest to use Long everywhere?
+        //      Or start dealing with complex specifics of protobuf unsigned numbers encodings in Java?
+        //      https://developers.google.com/protocol-buffers/docs/proto3#scalar
+        //      Unsafe and dirty hack is used now here.
+        _ <- F.whenA(maxRank > Int.MaxValue) {
+              val m =
+                s"Failed to sync with ${peer.show}, returned rank $maxRank is higher than Int.MaxValue"
+              Log[F].error(m) >> F.raiseError(SynchronizationError())
+            }
+      } yield (maxRank.toInt, fullySynced)
     }
 
     def loop(nodes: List[Node], failed: Set[Node], rank: Int): F[Unit] = {
       // 1. fully synced nodes num
       // 2. successfully responded nodes
       // 3. nodes failed to respond
-      type S = (Int, List[Node], Set[Node])
-      val emptyS: S = (0, Nil, failed)
+      // 4. max synced rank from the previous round
+      type S = (Int, List[Node], Set[Node], Int)
+      val emptyS: S = (0, Nil, failed, -1)
       for {
         _ <- F.whenA(nodes.isEmpty && failed.nonEmpty)(
               Log[F].error("Failed to run initial sync - no more nodes to try") >>
@@ -117,10 +129,12 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
         _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show)}")
         // Sync in parallel
         results <- nodes.parTraverse(n => syncDagSlice(n, rank).attempt.map(result => n -> result))
-        (fullSyncs, successful, newFailed) = results.foldLeft(emptyS) {
-          case ((i, s, f), (node, Right(true)))  => (i + 1, node :: s, f)
-          case ((i, s, f), (node, Right(false))) => (i, node :: s, f)
-          case ((i, s, f), (node, Left(_)))      => (i, s, f + node)
+        (fullSyncs, successful, newFailed, prevRoundRank) = results.foldLeft(emptyS) {
+          case ((i, s, f, r), (node, Right((prevRank, true)))) =>
+            (i + 1, node :: s, f, math.max(r, prevRank))
+          case ((i, s, f, r), (node, Right((prevRank, false)))) =>
+            (i, node :: s, f, math.max(r, prevRank))
+          case ((i, s, f, r), (node, Left(_))) => (i, s, f + node, r)
         }
         _ <- if (fullSyncs >= minSuccessful) {
               Log[F].debug(
@@ -147,7 +161,7 @@ class InitialSynchronizationImpl[F[_]: Parallel: Log](
                 _ <- loop(
                       nextRoundNodes,
                       if (skipFailedNodesInNextRounds) newFailed else Set.empty,
-                      rank + step + 1
+                      prevRoundRank
                     )
               } yield ()
             }
