@@ -10,6 +10,10 @@ use alloc::vec::Vec;
 use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
+enum Arg {
+    Name = 0,
+}
+
 fn hello_name(name: &str) -> String {
     let mut result = String::from("Hello, ");
     result.push_str(name);
@@ -18,7 +22,7 @@ fn hello_name(name: &str) -> String {
 
 #[no_mangle]
 pub extern "C" fn hello_name_ext() {
-    let name: String = runtime::get_arg(0)
+    let name: String = runtime::get_arg(Arg::Name as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let y = hello_name(&name);
