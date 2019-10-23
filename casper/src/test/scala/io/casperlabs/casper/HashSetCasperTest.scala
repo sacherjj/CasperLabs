@@ -25,7 +25,7 @@ import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 import scala.collection.immutable
 
@@ -34,7 +34,11 @@ class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasper
 
 /** Run tests against whatever kind of test node the inheriting sets up. */
 @silent("match may not be exhaustive")
-abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasperTestNodeFactory {
+abstract class HashSetCasperTest
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with HashSetCasperTestNodeFactory {
 
   import HashSetCasperTest._
 
@@ -396,6 +400,29 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
             )
           }
     } yield result
+  }
+
+  it should "process blocks in parallel" in effectTest {
+    def createBlock(node: HashSetCasperTestNode[Task]) =
+      for {
+        deploy         <- ProtoUtil.basicDeploy[Task]()
+        result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+        Created(block) = result
+      } yield block
+    for {
+      nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
+      // Create three independent blocks in parallel.
+      blocks <- List.range(0, 3).traverse(i => createBlock(nodes(i)))
+      // Add them all concurrently to the 4th node. it shouldn't run into validation problems.
+      // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
+      results <- Task.gatherUnordered {
+                  blocks.map(nodes(3).casperEff.addBlock(_))
+                }
+    } yield {
+      forAll(results) {
+        _ shouldBe Valid
+      }
+    }
   }
 
   it should "handle multi-parent blocks correctly" in effectTest {
