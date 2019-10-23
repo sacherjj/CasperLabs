@@ -751,6 +751,26 @@ def _show_block(response):
     print(hexify(response))
 
 
+def bundled_contract(file_name):
+    """
+    Return path to contract file bundled with the package.
+    """
+    p = pkg_resources.resource_filename(__name__, file_name)
+    if not os.path.exists(p):
+        raise Exception(f"Missing bundled contract {file_name}")
+    return p
+
+
+def _set_session(args, file_name):
+    """
+    Use bundled contract unless one of the session* args is set.
+    """
+    if not (
+        args.session or args.session_hash or args.session_name or args.session_uref
+    ):
+        args.session = bundled_contract(file_name)
+
+
 @guarded_command
 def no_command(casperlabs_client, args):
     print("You must provide a command. --help for documentation of commands.")
@@ -760,14 +780,7 @@ def no_command(casperlabs_client, args):
 @guarded_command
 def bond_command(casperlabs_client, args):
     logging.info(f"BOND {args}")
-    # Unless one of the session* args is set use bundled bonding.wasm
-    if not (
-        args.session or args.session_hash or args.session_name or args.session_uref
-    ):
-        p = pkg_resources.resource_filename(__name__, "bonding.wasm")
-        if not os.path.exists(p):
-            raise Exception(f"Missing bundled contract bonding.wasm")
-        args.session = p
+    _set_session(args, "bonding.wasm")
 
     if not args.session_args:
         args.session_args = ABI.args_to_json(
@@ -780,14 +793,7 @@ def bond_command(casperlabs_client, args):
 @guarded_command
 def unbond_command(casperlabs_client, args):
     logging.info(f"UNBOND {args}")
-    # Unless one of the session* args is set use bundled unbonding.wasm
-    if not (
-        args.session or args.session_hash or args.session_name or args.session_uref
-    ):
-        p = pkg_resources.resource_filename(__name__, "unbonding.wasm")
-        if not os.path.exists(p):
-            raise Exception(f"Missing bundled contract unbonding.wasm")
-        args.session = p
+    _set_session(args, "unbonding.wasm")
 
     if not args.session_args:
         args.session_args = ABI.args_to_json(
@@ -795,6 +801,8 @@ def unbond_command(casperlabs_client, args):
                 [ABI.optional_value("amount", ABI.long_value("amount", args.amount))]
             )
         )
+
+    logging.info(f" XXX unbond_command: args.session_args={args.session_args}")
 
     return deploy_command(casperlabs_client, args)
 
@@ -841,7 +849,8 @@ def deploy_command(casperlabs_client, args):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
-    logging.debug(f"DEPLOY: {kwargs}")
+    logging.info(f"DEPLOY: {kwargs}")
+    print(f"DEPLOY: {kwargs}")
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
 

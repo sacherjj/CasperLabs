@@ -62,6 +62,7 @@ EXECUTION_PAYMENT_AMOUNT = 10 * 10 * 6
 def unbond_from_network(
     network: OneNodeNetwork, bonding_amount: int, account_number: int
 ):
+    """
     node = network.docker_nodes[1]
     account = Account(account_number)
     r = node.d_client.unbond(bonding_amount, account.private_key_docker_path)
@@ -70,6 +71,7 @@ def unbond_from_network(
     block_hash = extract_block_hash_from_propose_output(r)
     assert block_hash is not None
     return block_hash, account
+    """
 
     node = network.docker_nodes[1]
     account = Account(account_number)

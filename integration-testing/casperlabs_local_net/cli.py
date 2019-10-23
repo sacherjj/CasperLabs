@@ -92,8 +92,13 @@ class CLI:
 
     def __call__(self, *args):
         command_line = [str(self.cli_cmd)] + self.expand_args(args)
-        logging.info(f"EXECUTING []: {command_line}")
+        # logging.info(f"EXECUTING []: {command_line}")
         logging.info(f"EXECUTING: {' '.join(command_line)}")
+        if args[0] == "unbond":
+            # pass
+            import time
+
+            time.sleep(100000)
         cp = subprocess.run(
             command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
