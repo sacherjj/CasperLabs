@@ -1,6 +1,6 @@
 package io.casperlabs.shared
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
+import monix.execution.Scheduler
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.IntBinaryOperator
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -17,11 +17,13 @@ class SemaphoreMapSpec extends FlatSpec with Matchers with Inspectors {
 
     val counterMap = TrieMap.empty[Int, Counter]
     val capacity   = 2
+    val groups     = 3
+    val threads    = groups * capacity
 
     val test = for {
       semaphoreMap <- SemaphoreMap[Task, Int](capacity)
-      tasks = List.range(0, 99).map { i =>
-        val k = i % 10
+      tasks = List.range(0, threads * 10).map { i =>
+        val k = i % groups
         semaphoreMap.withPermit(k) {
           for {
             counter <- Task.delay {
@@ -43,11 +45,11 @@ class SemaphoreMapSpec extends FlatSpec with Matchers with Inspectors {
     } yield {
       forAll(counterMap.values) { c =>
         c.current.get shouldBe 0
-        c.max.get should be > 0
-        c.max.get should be <= capacity
+        c.max.get shouldBe capacity
       }
     }
 
+    implicit val scheduler = Scheduler.fixedPool("semaphore-threads", threads)
     test.runSyncUnsafe(10.seconds)
   }
 }
