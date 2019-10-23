@@ -817,7 +817,7 @@ def deploy_command(casperlabs_client, args):
 
     if args.payment_amount is not None:
         args.payment_args = ABI.args_to_json(
-            ABI.args([ABI.int_value("amount", int(args.payment_amount))])
+            ABI.args([ABI.big_int("amount", int(args.payment_amount))])
         )
         # Unless one of payment* options supplied use bundled standard-payment
         if not (

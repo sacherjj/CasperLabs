@@ -47,32 +47,19 @@ def bond_to_the_network(network: OneNodeNetwork, bond_amount: int, account_numbe
         "--amount", bond_amount,
         '--public-key', account.public_key_path,
         '--private-key', account.private_key_path,
-        # '--payment-amount', EXECUTION_PAYMENT_AMOUNT,
-        "--payment", cli.resource(Contract.STANDARD_PAYMENT),
-        "--payment-args", cli.payment_json,
+        '--payment-amount', EXECUTION_PAYMENT_AMOUNT,
         '--from', account.public_key_hex)
     # fmt: on
     block_hash = cli("propose")
     return block_hash, account
 
 
-EXECUTION_PAYMENT_AMOUNT = 10 * 10 * 6
+EXECUTION_PAYMENT_AMOUNT = 100 * 10 ** 6
 
 
 def unbond_from_network(
     network: OneNodeNetwork, bonding_amount: int, account_number: int
 ):
-    """
-    node = network.docker_nodes[1]
-    account = Account(account_number)
-    r = node.d_client.unbond(bonding_amount, account.private_key_docker_path)
-    assert "Success!" in r
-    r = node.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(r)
-    assert block_hash is not None
-    return block_hash, account
-    """
-
     node = network.docker_nodes[1]
     account = Account(account_number)
     cli = CLI(node)
@@ -81,9 +68,7 @@ def unbond_from_network(
         "--amount", bonding_amount,
         '--public-key', account.public_key_path,
         "--private-key", account.private_key_path,
-        # "--payment-amount", EXECUTION_PAYMENT_AMOUNT,
-        "--payment", cli.resource(Contract.STANDARD_PAYMENT),
-        "--payment-args", cli.payment_json,
+        "--payment-amount", EXECUTION_PAYMENT_AMOUNT,
         "--from", account.public_key_hex)
     # fmt: on
     block_hash = cli("propose")
