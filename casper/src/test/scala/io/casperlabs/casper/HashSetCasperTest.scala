@@ -54,6 +54,13 @@ abstract class HashSetCasperTest
   private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, 0L)
 
+  private def deployAndCreate(node: HashSetCasperTestNode[Task]) =
+    for {
+      deploy         <- ProtoUtil.basicDeploy[Task]()
+      result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+      Created(block) = result
+    } yield block
+
   //put a new casper instance at the start of each
   //test since we cannot reset it
   behavior of "HashSetCasper"
@@ -73,12 +80,10 @@ abstract class HashSetCasperTest
     } yield result
   }
 
-  // Casper used to process just 1 block at a time, and this test made sure
-  // of that, but it doesn't make sense any more because the download manager
-  // feeds them in a topological order. This test adds the *same* block on
-  // two threads, which will not happen under normal circumstances. We could
-  // protect against it but it should be an idempotent operation really.
-  it should "not mind multiple threads to process the same block" in {
+  // Leaving this test around. It won't happen in real life because the download manager
+  // won't attempt the same block on two different fibers, however it's protected by the
+  // mechanism we put in place against equivocating blocks going in at the same time.
+  it should "not allow multiple threads to process the same block at the same time" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)(scheduler)
@@ -106,7 +111,7 @@ abstract class HashSetCasperTest
       testProgram.unsafeRunSync(scheduler)
 
     threadStatuses should matchPattern {
-      case (Processed, Valid) | (Valid, Processed) | (Valid, Valid) =>
+      case (Processed, Valid) | (Valid, Processed) =>
     }
     node.tearDown().unsafeRunSync
   }
@@ -774,7 +779,7 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  it should "adding equivocation blocks" in effectTest {
+  it should "add equivocation blocks" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
 
@@ -808,6 +813,23 @@ abstract class HashSetCasperTest
             } yield result
           }
     } yield result
+  }
+
+  it should "track equivocating blocks added at the same time" in effectTest {
+    for {
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+
+      blockA <- deployAndCreate(nodes(0))
+      blockB <- deployAndCreate(nodes(0))
+
+      _ <- Task.gatherUnordered {
+            List(blockA, blockB).map(nodes(1).casperEff.addBlock)
+          }
+
+      state <- nodes(1).casperState.read
+    } yield {
+      state.equivocationsTracker.contains(nodes(0).ownValidatorKey) shouldBe true
+    }
   }
 
   it should "not ignore adding equivocation blocks when a child is revealed later" in effectTest {

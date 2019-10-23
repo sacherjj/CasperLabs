@@ -88,8 +88,10 @@ sealed abstract class MultiParentCasperInstances {
                                                        genesisPreState,
                                                        genesisEffects
                                                      )
+      semaphoreMap      <- SemaphoreMap[F, ByteString](1)
       statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainName, upgrades)
       casper <- MultiParentCasperImpl.create[F](
+                 semaphoreMap,
                  statelessExecutor,
                  MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,

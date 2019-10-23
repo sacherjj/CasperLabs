@@ -56,6 +56,7 @@ final case class CasperState(
 
 @silent("is never used")
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocolVersions](
+    validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
@@ -87,29 +88,31 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
             Block
         ) => F[(BlockStatus, DagRepresentation[F])]
     ) =
-      for {
-        dag       <- dag
-        blockHash = block.blockHash
-        inDag     <- dag.contains(blockHash)
-        attempts <- if (inDag) {
-                     Log[F]
-                       .info(
-                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
-                       ) *>
-                       List(block -> BlockStatus.processed).pure[F]
-                   } else {
-                     // This might be the first time we see this block, or it may not have been added to the state
-                     // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
-                     internalAddBlock(block, dag, validateAndAddBlock)
-                   }
-        // This method could just return the block hashes it created,
-        // but for now it does gossiping as well. The methods return the full blocks
-        // because for missing blocks it's not yet saved to the database.
-        _ <- attempts.traverse {
-              case (attemptedBlock, status) =>
-                broadcaster.networkEffects(attemptedBlock, status)
-            }
-      } yield attempts.head._2
+      validatorSemaphoreMap.withPermit(block.getHeader.validatorPublicKey) {
+        for {
+          dag       <- dag
+          blockHash = block.blockHash
+          inDag     <- dag.contains(blockHash)
+          attempts <- if (inDag) {
+                       Log[F]
+                         .info(
+                           s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                         ) *>
+                         List(block -> BlockStatus.processed).pure[F]
+                     } else {
+                       // This might be the first time we see this block, or it may not have been added to the state
+                       // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
+                       internalAddBlock(block, dag, validateAndAddBlock)
+                     }
+          // This method could just return the block hashes it created,
+          // but for now it does gossiping as well. The methods return the full blocks
+          // because for missing blocks it's not yet saved to the database.
+          _ <- attempts.traverse {
+                case (attemptedBlock, status) =>
+                  broadcaster.networkEffects(attemptedBlock, status)
+              }
+        } yield attempts.head._2
+      }
 
     val handleInvalidTimestamp =
       (_: Option[StatelessExecutor.Context], dag: DagRepresentation[F], block: Block) =>
@@ -585,6 +588,7 @@ object MultiParentCasperImpl {
     ?[_],
     CasperState
   ]: DeploySelection](
+      semaphoreMap: SemaphoreMap[F, ByteString],
       statelessExecutor: StatelessExecutor[F],
       broadcaster: Broadcaster[F],
       validatorId: Option[ValidatorIdentity],
@@ -603,6 +607,7 @@ object MultiParentCasperImpl {
             }
       _ <- LastFinalizedBlockHashContainer[F].set(lca)
     } yield new MultiParentCasperImpl[F](
+      semaphoreMap,
       statelessExecutor,
       broadcaster,
       validatorId,
