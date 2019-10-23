@@ -534,7 +534,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
           val validatorSeqNum =
             latestMessages
               .get(ByteString.copyFrom(validatorId))
-              .fold(1)(_.toList.maxBy(_.validatorMsgSeqNum).validatorMsgSeqNum + 1)
+              .fold(1)(_.maxBy(_.validatorMsgSeqNum).validatorMsgSeqNum + 1)
           val block = ProtoUtil.block(
             justifications,
             checkpoint.preStateHash,
