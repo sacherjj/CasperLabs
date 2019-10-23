@@ -3,11 +3,11 @@ package io.casperlabs.comm.gossiping.synchronization
 import java.util.concurrent.TimeoutException
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
-import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationSpec.TestFixture
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationForwardImplSpec.TestFixture
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits._
@@ -22,7 +22,7 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
-class InitialSynchronizationSpec
+class InitialSynchronizationForwardImplSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
@@ -233,7 +233,7 @@ class InitialSynchronizationSpec
   }
 }
 
-object InitialSynchronizationSpec extends ArbitraryConsensus {
+object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
   implicit val logNoOp = new NOPLog[Task]
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
@@ -261,22 +261,14 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
 
   class MockGossipService(produceDag: Task[Vector[BlockSummary]], correct: Boolean)
       extends GossipService[Task] {
-    def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-    def streamAncestorBlockSummaries(
-        request: StreamAncestorBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-    def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-    def streamBlockSummaries(request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] =
-      ???
-    def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
-    def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
-      ???
-    def addApproval(request: AddApprovalRequest): Task[Unit] = ???
-    def streamDagSliceBlockSummaries(
-        request: StreamDagSliceBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] =
+    def newBlocks(request: NewBlocksRequest)                                       = ???
+    def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
+    def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+    def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
+    def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
+    def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
+    def addApproval(request: AddApprovalRequest)                                   = ???
+    def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) =
       Iterant
         .liftF {
           produceDag.flatMap { dag =>
