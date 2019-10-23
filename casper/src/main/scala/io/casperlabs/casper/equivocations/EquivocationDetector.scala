@@ -53,9 +53,9 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      s       <- state.read
-      creator = block.getHeader.validatorPublicKey
-      equivocated <- if (s.equivocationsTracker.contains(creator)) {
+      equivocators <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keySet)
+      creator      = block.getHeader.validatorPublicKey
+      equivocated <- if (equivocators.contains(creator)) {
                       Log[F].debug(
                         s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
                       ) *> true.pure[F]

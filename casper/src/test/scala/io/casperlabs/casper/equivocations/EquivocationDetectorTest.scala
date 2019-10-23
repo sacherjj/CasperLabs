@@ -59,9 +59,11 @@ class EquivocationDetectorTest
         case Some(_) =>
           blockStatus shouldBe Left(ValidateErrorWrapper(EquivocatedBlock))
       }
-      _     <- blockStorage.put(b.blockHash, b, Seq.empty)
-      state <- Cell[Task, CasperState].read
-      _     = state.equivocationsTracker.get(b.getHeader.validatorPublicKey) shouldBe rankOfLowestBaseBlockExpect
+      _ <- blockStorage.put(b.blockHash, b, Seq.empty)
+      rankOfLowestBaseBlock <- dag
+                                .latestMessage(b.getHeader.validatorPublicKey)
+                                .map(s => if (s.size > 1) Some(s.minBy(_.rank).rank - 1) else None)
+      _ = rankOfLowestBaseBlock shouldBe rankOfLowestBaseBlockExpect
     } yield b
 
   def createBlockAndCheckEquivocatorsFromViewOfBlock(
@@ -181,7 +183,7 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  "EquivocationDetector" should "not report equivocation when block indirectly references previous creator's block" in withStorage {
+  it should "not report equivocation when block indirectly references previous creator's block" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       _ =>
         /*
