@@ -141,8 +141,8 @@ trait BlockGenerator {
         .withBonds(bonds)
       body = Block.Body().withDeploys(deploys)
       dag  <- IndexedDagStorage[F].getRepresentation
-      // Every parent should also include in the justification,
-      // by doing this we can avoid passing parameter justifications when creating block in test
+      // Every parent should also be included in the justifications;
+      // By doing this we can avoid passing parameter justifications when creating block in test
       updatedJustifications <- parentsHashList.toList.foldLeftM(justifications) {
                                 case (acc, b) =>
                                   dag
