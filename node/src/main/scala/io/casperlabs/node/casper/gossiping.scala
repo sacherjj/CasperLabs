@@ -5,6 +5,7 @@ import java.util.concurrent.{TimeUnit, TimeoutException}
 import cats._
 import cats.data.NonEmptyList
 import cats.effect._
+import cats.effect.implicits._
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -177,8 +178,25 @@ package object gossiping {
                         }
                       }
 
+      // Start syncing with the bootstrap and/or some others in the background.
+      awaitSynchronization <- Resource
+                               .liftF(isInitialRef.get)
+                               .ifM(
+                                 makeInitialSynchronizer(
+                                   conf,
+                                   downloadManager,
+                                   connectToGossip,
+                                   awaitApproval.join,
+                                   isInitialRef
+                                 ),
+                                 Resource.liftF(().pure[F].start)
+                               )
+
       stashingSynchronizer <- Resource.liftF {
-                               StashingSynchronizer.wrap(synchronizer, awaitApproval.join)
+                               StashingSynchronizer.wrap(
+                                 synchronizer,
+                                 awaitApproval.join >> awaitSynchronization.join
+                               )
                              }
 
       rateLimiter <- makeRateLimiter[F](conf)
@@ -199,20 +217,6 @@ package object gossiping {
             port,
             ingressScheduler
           )
-
-      // Start syncing with the bootstrap and/or some others in the background.
-      _ <- Resource
-            .liftF(isInitialRef.get)
-            .ifM(
-              makeInitialSynchronizer(
-                conf,
-                downloadManager,
-                connectToGossip,
-                awaitApproval.join,
-                isInitialRef
-              ),
-              Resource.liftF(().pure[F])
-            )
 
       _ <- makePeriodicSynchronizer(
             conf,
@@ -653,14 +657,15 @@ package object gossiping {
 
     } yield server
 
-  /** Initially sync with the bootstrap node and/or some others. */
+  /** Initially sync with the bootstrap node and/or some others.
+    * Returns handle which will be resolved when initial synchronization is finished. */
   private def makeInitialSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
       conf: Configuration,
       downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
-  ): Resource[F, Unit] =
+  ): Resource[F, Fiber[F, Unit]] =
     for {
       initialSync <- Resource.liftF {
                       latestMessagesMinRank[F] >>= { minRank =>
@@ -680,16 +685,16 @@ package object gossiping {
                         )
                       }
                     }
-      _ <- makeFiberResource {
-            for {
-              _         <- awaitApproved
-              awaitSync <- initialSync.sync()
-              _         <- awaitSync
-              _         <- isInitialRef.set(false)
-              _         <- Log[F].info("Initial synchronization complete.")
-            } yield ()
-          }
-    } yield ()
+      fiber <- makeFiberResource {
+                for {
+                  _         <- awaitApproved
+                  awaitSync <- initialSync.sync()
+                  _         <- awaitSync
+                  _         <- isInitialRef.set(false)
+                  _         <- Log[F].info("Initial synchronization complete.")
+                } yield ()
+              }
+    } yield fiber
 
   /** Periodically sync with a random node. */
   private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
