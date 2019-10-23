@@ -50,6 +50,11 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
     val latestMessagesQuery =
       if (!block.isGenesisLike) {
+        // CON-557 will add a validity condition that a block cannot cite multiple latest messages
+        // from its creator, i.e. merging of swimlane is not allowed.
+        // CON-556 will add a `prevMsg` field to a `Block` so every message will directly reference
+        // previous message from that validator.
+        // Given the above, every _valid_ message will _directly_ reference only one previous message from its creators.
         val validatorPreviousMessage = blockSummary.justifications
           .find(_.validatorPublicKey == blockSummary.validatorPublicKey)
           .map(_.latestBlockHash)
