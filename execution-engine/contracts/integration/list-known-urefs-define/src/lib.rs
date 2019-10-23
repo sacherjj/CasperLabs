@@ -16,7 +16,7 @@ use contract_ffi::value::Value;
 
 #[no_mangle]
 pub extern "C" fn list_named_keys_ext() {
-    let passed_in_uref = runtime::get_key("Foo").unwrap_or_revert_with(Error::User(100));
+    let passed_in_uref = runtime::get_key("Foo").unwrap_or_revert_with(Error::GetKey);
     let uref = storage::new_turef(Value::String("Test".to_owned()));
     runtime::put_key("Bar", &uref.clone().into());
     let contracts_named_keys = runtime::list_named_keys();

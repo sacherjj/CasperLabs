@@ -14,13 +14,12 @@ use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 #[no_mangle]
 pub extern "C" fn call() {
     let list_named_keys_key =
-        runtime::get_key("list_named_keys").unwrap_or_revert_with(Error::User(100));
-    let pointer = if let Key::Hash(hash) = list_named_keys_key {
-        ContractRef::Hash(hash)
-    } else {
-        runtime::revert(Error::User(66)); // exit code is currently arbitrary
+        runtime::get_key("list_named_keys").unwrap_or_revert_with(Error::GetKey);
+    let contract_ref = match list_named_keys_key {
+        Key::Hash(hash) => ContractRef::Hash(hash),
+        _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
     // Call `define` part of the contract.
-    runtime::call_contract(pointer, &(), &Vec::new())
+    runtime::call_contract(contract_ref, &(), &Vec::new())
 }

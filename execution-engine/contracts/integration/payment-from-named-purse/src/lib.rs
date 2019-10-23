@@ -21,6 +21,12 @@ enum Error {
     NamedPurseNotFound = 2,
 }
 
+impl Into<ApiError> for Error {
+    fn into(self) -> ApiError {
+        ApiError::User(self as u16)
+    }
+}
+
 enum Arg {
     Amount = 0,
     Name = 1,
@@ -34,8 +40,7 @@ pub extern "C" fn call() {
     let name: String = runtime::get_arg(Arg::Name as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let purse: PurseId =
-        get_named_purse(&name).unwrap_or_revert_with(ApiError::User(Error::PosNotFound as u16));
+    let purse: PurseId = get_named_purse(&name).unwrap_or_revert_with(Error::PosNotFound);
 
     let pos_pointer = system::get_proof_of_stake();
     let payment_purse: PurseId =
@@ -51,8 +56,7 @@ pub extern "C" fn call() {
 }
 
 fn get_named_purse(name: &str) -> Option<PurseId> {
-    let key = runtime::get_key(name)
-        .unwrap_or_revert_with(ApiError::User(Error::NamedPurseNotFound as u16));
+    let key = runtime::get_key(name).unwrap_or_revert_with(Error::NamedPurseNotFound);
     let uref = key.as_uref()?;
 
     Some(PurseId::new(*uref))

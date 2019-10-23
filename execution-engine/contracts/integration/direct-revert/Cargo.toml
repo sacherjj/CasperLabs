@@ -1,5 +1,5 @@
 [package]
-name = "direct-revert-call"
+name = "direct-revert"
 version = "0.1.0"
 authors = ["Piotr Kuchta <piotr@casperlabs.io>"]
 edition = "2018"

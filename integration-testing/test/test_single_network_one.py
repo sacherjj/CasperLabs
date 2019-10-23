@@ -321,7 +321,7 @@ def test_revert_subcall(client, node):
 
 def test_revert_direct(client, node):
     # This contract calls revert(1) directly
-    block_hash = deploy_and_propose_from_genesis(node, Contract.DIRECT_REVERT_CALL)
+    block_hash = deploy_and_propose_from_genesis(node, Contract.DIRECT_REVERT)
 
     r = client.show_deploys(block_hash)[0]
     assert r.is_error

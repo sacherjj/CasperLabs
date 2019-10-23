@@ -109,7 +109,7 @@ def test_error_in_payment_contract(payment_node_network):
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
         session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
-        payment_contract=Contract.ERR_STANDARD_PAYMENT,
+        payment_contract=Contract.DIRECT_REVERT,
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
         gas_price=1,
@@ -139,7 +139,7 @@ def test_error_in_session_contract(payment_node_network):
     assert genesis_balance == INITIAL_MOTES_AMOUNT
     block_hash = node0.transfer_to_account(
         1,
-        session_contract=Contract.ERR_STANDARD_PAYMENT,
+        session_contract=Contract.DIRECT_REVERT,
         amount=10 ** 7,
         is_deploy_error_check=False,
     )
