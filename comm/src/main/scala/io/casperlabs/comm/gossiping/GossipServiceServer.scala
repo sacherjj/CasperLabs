@@ -10,7 +10,8 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}

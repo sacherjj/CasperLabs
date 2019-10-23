@@ -1,28 +1,25 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
+import io.casperlabs.casper.consensus.{state, BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer
+import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
@@ -390,8 +387,8 @@ object SynchronizerSpec {
         mockJustifications: List[ByteString],
         mockNotInDag: ByteString => Task[Boolean],
         mockValidate: BlockSummary => Task[Unit]
-    ): gossiping.SynchronizerImpl.Backend[Task] =
-      new gossiping.SynchronizerImpl.Backend[Task] {
+    ): SynchronizerImpl.Backend[Task] =
+      new SynchronizerImpl.Backend[Task] {
         def tips: Task[List[ByteString]]                     = Task.now(mockTips)
         def justifications: Task[List[ByteString]]           = Task.now(mockJustifications)
         def validate(blockSummary: BlockSummary): Task[Unit] = mockValidate(blockSummary)

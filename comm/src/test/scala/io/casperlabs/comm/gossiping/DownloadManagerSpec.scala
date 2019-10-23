@@ -11,6 +11,7 @@ import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log

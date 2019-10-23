@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import cats.Monad
 import cats.data._
@@ -14,8 +14,13 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError._
+import io.casperlabs.comm.gossiping.{
+  GossipService,
+  GossipingMetricsSource,
+  StreamAncestorBlockSummariesRequest
+}
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
@@ -36,7 +41,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
-  import io.casperlabs.comm.gossiping.SynchronizerImpl._
+  import io.casperlabs.comm.gossiping.synchronization.SynchronizerImpl._
 
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.

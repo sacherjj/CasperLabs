@@ -17,6 +17,7 @@ import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics

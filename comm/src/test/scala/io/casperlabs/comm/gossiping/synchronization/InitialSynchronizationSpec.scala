@@ -1,12 +1,13 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import java.util.concurrent.TimeoutException
 
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.gossiping.InitialSynchronization.SynchronizationError
-import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
+import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits._

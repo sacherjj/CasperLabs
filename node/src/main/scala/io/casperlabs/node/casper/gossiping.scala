@@ -21,6 +21,13 @@ import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.{
+  InitialSynchronization,
+  InitialSynchronizationForwardImpl,
+  StashingSynchronizer,
+  Synchronizer,
+  SynchronizerImpl
+}
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
 import io.casperlabs.crypto.Keys.PublicKey

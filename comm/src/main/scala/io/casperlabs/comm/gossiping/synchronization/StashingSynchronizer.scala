@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref, Semaphore}
@@ -8,9 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-
-import scala.concurrent.duration._
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 
 class StashingSynchronizer[F[_]: Concurrent: Parallel](
     underlying: Synchronizer[F],

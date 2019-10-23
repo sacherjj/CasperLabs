@@ -1,12 +1,12 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import cats.effect.concurrent.Deferred
 import cats.syntax.either._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.gossiping.ArbitraryConsensusAndComm
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import monix.eval.Task
 import monix.execution.atomic.{Atomic, AtomicInt}
 import monix.execution.schedulers.CanBlock.permit

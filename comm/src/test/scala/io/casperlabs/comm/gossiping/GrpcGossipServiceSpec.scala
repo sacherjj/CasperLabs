@@ -9,8 +9,9 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.comm.grpc.{AuthInterceptor, ErrorInterceptor, GrpcServer, SslContexts}
 import io.casperlabs.comm.{ServiceError, TestRuntime}
 import io.casperlabs.crypto.codec.Base16

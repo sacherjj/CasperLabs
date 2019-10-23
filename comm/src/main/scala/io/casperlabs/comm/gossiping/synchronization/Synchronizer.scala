@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import com.google.protobuf.ByteString
 import eu.timepit.refined._
@@ -6,8 +6,9 @@ import eu.timepit.refined.api.Refined
 import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+
 import scala.util.control.NoStackTrace
 
 trait Synchronizer[F[_]] {
