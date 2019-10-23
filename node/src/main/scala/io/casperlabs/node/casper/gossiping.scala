@@ -655,7 +655,7 @@ package object gossiping {
       initialSync <- Resource.liftF {
                       latestMessagesMinRank[F] >>= { minRank =>
                         Sync[F].delay(
-                          new InitialSynchronizationImpl(
+                          new InitialSynchronizationForwardImpl[F](
                             NodeDiscovery[F],
                             selectNodes =
                               ns => Random.shuffle(ns).take(conf.server.initSyncMaxNodes),
@@ -705,7 +705,7 @@ package object gossiping {
       periodicSync <- Resource.liftF {
                        latestMessagesMinRank[F] >>= { minRank =>
                          Sync[F].delay(
-                           new InitialSynchronizationImpl(
+                           new InitialSynchronizationForwardImpl[F](
                              NodeDiscovery[F],
                              selectNodes = ns => List(ns(Random.nextInt(ns.length))),
                              minSuccessful = 1,

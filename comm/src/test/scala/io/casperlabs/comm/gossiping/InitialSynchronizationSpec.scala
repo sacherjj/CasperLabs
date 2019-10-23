@@ -5,7 +5,7 @@ import java.util.concurrent.TimeoutException
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
+import io.casperlabs.comm.gossiping.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
@@ -309,7 +309,7 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
     ): Unit = {
       val mockGossipService   = new MockGossipService(produceDag, correctRanges)
       val mockDownloadManager = new MockDownloadManager(failing)
-      val effect = new InitialSynchronizationImpl[Task](
+      val effect = new InitialSynchronizationForwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
         selectNodes,
         memoizeNodes,
