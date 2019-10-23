@@ -237,12 +237,9 @@ class ForkchoiceTest
         dag     <- dagStorage.getRepresentation
 
         latestMessageHashes <- dag.latestMessageHashes
-        // Set the equivocationsTracker manually
-        equivocationsTracker = new EquivocationsTracker(Map(v2 -> genesis.getHeader.rank))
         equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                    dag,
-                                   latestMessageHashes,
-                                   equivocationsTracker
+                                   latestMessageHashes
                                  )
         _ = equivocatingValidators shouldBe Set(v1)
         scores <- Estimator.lmdScoring(

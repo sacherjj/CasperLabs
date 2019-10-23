@@ -170,7 +170,6 @@ object EquivocationDetector {
     *
     * @param dag the block dag
     * @param justificationMsgHashes generate from direct justifications
-    * @param equivocationsTracker local tracker of equivocations
     * @tparam F effect type
     * @return validators that can be seen equivocating from the view of latestMessages
     */
@@ -178,39 +177,39 @@ object EquivocationDetector {
   // It might be useful once again in the near future.
   def detectVisibleFromJustifications[F[_]: Monad](
       dag: DagRepresentation[F],
-      justificationMsgHashes: Map[Validator, Set[BlockHash]],
-      equivocationsTracker: EquivocationsTracker
-  ): F[Set[Validator]] = {
-    val minBaseRank = equivocationsTracker.min.getOrElse(0L)
+      justificationMsgHashes: Map[Validator, Set[BlockHash]]
+  ): F[Set[Validator]] =
     for {
-      justificationMessages <- justificationMsgHashes.values.toList
-                                .flatTraverse(_.toList.traverse(dag.lookup))
-                                .map(_.flatten)
-      implicit0(blockTopoOrdering: Ordering[Message]) = DagOperations.blockTopoOrderingDesc
-
-      toposortJDagFromBlock = DagOperations.bfToposortTraverseF(justificationMessages)(
-        _.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
-      )
-
-      acc <- toposortJDagFromBlock
-              .foldWhileLeft(State()) {
-                case (state, b) =>
-                  val creator            = b.validatorId
-                  val creatorBlockSeqNum = b.validatorMsgSeqNum
-                  if (state.allDetected(equivocationsTracker.keySet) || b.rank <= minBaseRank) {
-                    // Stop traversal if all known equivocations has been found in j-past-cone
-                    // of `b` or we traversed beyond the minimum rank of all equivocations.
-                    Right(state)
-                  } else if (state.alreadyDetected(creator)) {
-                    Left(state)
-                  } else if (state.alreadyVisited(creator, creatorBlockSeqNum)) {
-                    Left(state.addEquivocator(creator))
-                  } else {
-                    Left(state.addVisited(creator, creatorBlockSeqNum))
-                  }
-              }
-    } yield acc.detectedEquivocators
-  }
+      equivocations <- dag.latestMessages.map(_.filter(_._2.size > 1))
+      minBaseRank = if (equivocations.isEmpty) None
+      else Some(equivocations.values.flatten.minBy(_.rank).rank - 1)
+      equivocators <- minBaseRank.fold(Set.empty[Validator].pure[F])(minBaseRank => {
+                       for {
+                         justificationMessages <- justificationMsgHashes.values.toList
+                                                   .flatTraverse(_.toList.traverse(dag.lookup))
+                                                   .map(_.flatten)
+                         equivocators = equivocations.keySet
+                         acc <- DagOperations
+                                 .toposortJDagDesc[F](dag, justificationMessages)
+                                 .foldWhileLeft(State()) {
+                                   case (state, b) =>
+                                     val creator            = b.validatorId
+                                     val creatorBlockSeqNum = b.validatorMsgSeqNum
+                                     if (state.allDetected(equivocators) || b.rank <= minBaseRank) {
+                                       // Stop traversal if all known equivocations has been found in j-past-cone
+                                       // of `b` or we traversed beyond the minimum rank of all equivocations.
+                                       Right(state)
+                                     } else if (state.alreadyDetected(creator)) {
+                                       Left(state)
+                                     } else if (state.alreadyVisited(creator, creatorBlockSeqNum)) {
+                                       Left(state.addEquivocator(creator))
+                                     } else {
+                                       Left(state.addVisited(creator, creatorBlockSeqNum))
+                                     }
+                                 }
+                       } yield acc.detectedEquivocators
+                     })
+    } yield equivocators
 
   private case class State(
       detectedEquivocators: Set[Validator] = Set.empty,
