@@ -72,7 +72,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   // Casper used to process just 1 block at a time, and this test made sure
   // of that, but it doesn't make sense any more because the download manager
   // feeds them in a topological order. This test adds the *same* block on
-  // two threads, which will not happen under normal cirucmstances. We could
+  // two threads, which will not happen under normal circumstances. We could
   // protect against it but it should be an idempotent operation really.
   it should "not mind multiple threads to process the same block" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)

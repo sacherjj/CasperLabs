@@ -109,7 +109,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
     // Similarly to integration tests, start multiple concurrent processes that
     // try to deploy and immediately propose. The proposals should be rejected
     // when another one is already running, but eventually all deploys should be
-    // taken and put into blocks. In the blocks we created should form a simple
+    // taken and put into blocks. The blocks we created should form a simple
     // chain, there shouldn't be any forks in it, which we should see from the
     // fact that each rank is occupied by a single block.
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
@@ -145,9 +145,14 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       blocks <- dag.topoSortTail(Int.MaxValue).compile.toList.map(_.flatten)
     } yield {
       val successCount  = results.flatten.count(_.isRight)
-      val blocksPerRank = blocks.groupBy(_.getHeader.rank)
+      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.rank)
       blocks should have size (1L + successCount.toLong)
       blocksPerRank should have size (blocks.size.toLong)
+      // Check that adding the block hasn't failed for an unexpected reason.
+      results.flatten.foreach {
+        case Right(_) =>
+        case Left(ex) => ex.getMessage should include("ABORTED")
+      }
     }
 
     try {
