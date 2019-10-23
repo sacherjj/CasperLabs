@@ -412,11 +412,11 @@ abstract class HashSetCasperTest
     for {
       nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
       // Create three independent blocks in parallel.
-      blocks <- List.range(0, 3).traverse(i => createBlock(nodes(i)))
-      // Add them all concurrently to the 4th node. it shouldn't run into validation problems.
+      blocks <- Task.sequence(nodes.map(createBlock))
+      // Add them all concurrently to the one of the nodes; it shouldn't run into validation problems.
       // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
       results <- Task.gatherUnordered {
-                  blocks.map(nodes(3).casperEff.addBlock(_))
+                  blocks.map(nodes.head.casperEff.addBlock(_))
                 }
     } yield {
       forAll(results) {

@@ -28,12 +28,16 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 import scala.concurrent.duration._
 
 @silent("deprecated")
-class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasperTestNodeFactory {
+class CreateBlockAPITest
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
@@ -144,14 +148,21 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
       dag    <- node.dagStorage.getRepresentation
       blocks <- dag.topoSortTail(Int.MaxValue).compile.toList.map(_.flatten)
     } yield {
-      val successCount  = results.flatten.count(_.isRight)
-      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.rank)
+      // Genesis plus as many as we created (most likely the number of waves we have)
+      val successCount = results.flatten.count(_.isRight)
       blocks should have size (1L + successCount.toLong)
+
+      // Check that we have no forks.
+      val blocksPerRank = blocks.groupBy(_.getSummary.getHeader.rank)
       blocksPerRank should have size (blocks.size.toLong)
+      forAll(blocksPerRank.values)(_ should have size 1)
+
       // Check that adding the block hasn't failed for an unexpected reason.
       results.flatten.foreach {
         case Right(_) =>
-        case Left(ex) => ex.getMessage should include("ABORTED")
+        case Left(ex) =>
+          // Either the lock couldn't be acquired or all deploys were stolen.
+          ex.getMessage should (include("ABORTED") or include("OUT_OF_RANGE"))
       }
     }
 
