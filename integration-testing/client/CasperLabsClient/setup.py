@@ -149,7 +149,18 @@ def run_codegen():
         [(r"(import .*_pb2)", r"from . \1")],
         glob(f"{PACKAGE_DIR}/*pb2*py"),
     )
-    for filename in glob(os.path.join(CONTRACTS_DIR, "*.wasm")):
+
+    pattern = (
+        os.environ.get("TAG_NAME")
+        and "/root/bundled_contracts/*.wasm"
+        or os.path.join(CONTRACTS_DIR, "*.wasm")
+    )
+    bundled_contracts = list(glob(pattern))
+    if len(bundled_contracts) == 0:
+        raise Exception(
+            f"Could not find wasm files that should be bunndled with the client. {pattern}"
+        )
+    for filename in bundled_contracts:
         shutil.copy(filename, PACKAGE_DIR)
 
 

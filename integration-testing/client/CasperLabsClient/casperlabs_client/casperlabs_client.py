@@ -757,7 +757,7 @@ def bundled_contract(file_name):
     """
     p = pkg_resources.resource_filename(__name__, file_name)
     if not os.path.exists(p):
-        raise Exception(f"Missing bundled contract {file_name}")
+        raise Exception(f"Missing bundled contract {file_name} ({p})")
     return p
 
 
