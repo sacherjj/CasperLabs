@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent._
 
-/** Keep track of semaphores when we want to limit to one operation per key. */
+/** Keep track of semaphores when we want to limit to number of outstanding operations per key. */
 class SemaphoreMap[F[_]: Concurrent, K](capacity: Int, ref: Ref[F, Map[K, Semaphore[F]]]) {
   def getOrAdd(key: K): F[Semaphore[F]] =
     ref.get.map(_.get(key)).flatMap {
@@ -24,10 +24,10 @@ class SemaphoreMap[F[_]: Concurrent, K](capacity: Int, ref: Ref[F, Map[K, Semaph
         } yield s1
     }
 
-  def withPermit[T](key: K)(thunk: => F[T]) =
+  def withPermit[T](key: K)(block: F[T]) =
     getOrAdd(key).flatMap { semaphore =>
       semaphore.withPermit {
-        thunk
+        block
       }
     }
 }
