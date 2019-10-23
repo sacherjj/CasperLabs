@@ -68,8 +68,7 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1,
-                                                                        EquivocationsTracker.empty
+                                                                        rFTT = 0.1
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -134,8 +133,7 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1,
-                                                                        EquivocationsTracker.empty
+                                                                        rFTT = 0.1
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -211,8 +209,7 @@ class FinalityDetectorByVotingMatrixTest
                                                                       .of[Task](
                                                                         dag,
                                                                         genesis.blockHash,
-                                                                        rFTT = 0.1,
-                                                                        EquivocationsTracker.empty
+                                                                        rFTT = 0.1
                                                                       )
           (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                        Seq(genesis.blockHash),
@@ -293,8 +290,7 @@ class FinalityDetectorByVotingMatrixTest
                                                                     .of[Task](
                                                                       dag,
                                                                       genesis.blockHash,
-                                                                      rFTT = 0.1,
-                                                                      EquivocationsTracker.empty
+                                                                      rFTT = 0.1
                                                                     )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
@@ -366,8 +362,7 @@ class FinalityDetectorByVotingMatrixTest
                                                                     .of[Task](
                                                                       dag,
                                                                       genesis.blockHash,
-                                                                      rFTT = 0.1,
-                                                                      EquivocationsTracker.empty
+                                                                      rFTT = 0.1
                                                                     )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
@@ -438,15 +433,13 @@ class FinalityDetectorByVotingMatrixTest
                                                                     .of[Task](
                                                                       dag,
                                                                       genesis.blockHash,
-                                                                      rFTT = 0.1,
-                                                                      EquivocationsTracker.empty
+                                                                      rFTT = 0.1
                                                                     )
         (b1, c1) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
                      v1,
-                     bonds,
-                     HashMap(v1 -> genesis.blockHash)
+                     bonds
                    )
         _ = c1 shouldBe None
         (b2, c2) <- createBlockAndUpdateFinalityDetector[Task](
@@ -543,8 +536,7 @@ class FinalityDetectorByVotingMatrixTest
       finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
                             dag,
                             block,
-                            lastFinalizedBlockHash,
-                            equivocationsTracker
+                            lastFinalizedBlockHash
                           )
     } yield block -> finalizedBlockOpt
 }

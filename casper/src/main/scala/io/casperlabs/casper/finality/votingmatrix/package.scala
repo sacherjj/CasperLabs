@@ -27,8 +27,7 @@ package object votingmatrix {
   def updateVoterPerspective[F[_]: Monad](
       dag: DagRepresentation[F],
       msg: Message,
-      currentVoteValue: BlockHash,
-      equivocationsTracker: EquivocationsTracker
+      currentVoteValue: BlockHash
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
@@ -39,7 +38,7 @@ package object votingmatrix {
             ().pure[F]
           } else {
             for {
-              _ <- updateVotingMatrixOnNewBlock[F](dag, msg, equivocationsTracker)
+              _ <- updateVotingMatrixOnNewBlock[F](dag, msg)
               _ <- updateFirstZeroLevelVote[F](voter, currentVoteValue, msg.rank)
             } yield ()
           }
@@ -51,8 +50,8 @@ package object votingmatrix {
     * @return
     */
   def checkForCommittee[F[_]: Monad](
-      rFTT: Double,
-      equivocationTrack: EquivocationsTracker
+      dag: DagRepresentation[F],
+      rFTT: Double
   )(
       implicit matrix: VotingMatrix[F]
   ): F[Option[CommitteeWithConsensusValue]] =
@@ -60,7 +59,7 @@ package object votingmatrix {
       weightMap                 <- (matrix >> 'weightMap).get
       totalWeight               = weightMap.values.sum
       quorum                    = totalWeight * (rFTT + 0.5)
-      committeeApproximationOpt <- findCommitteeApproximation[F](quorum, equivocationTrack)
+      committeeApproximationOpt <- findCommitteeApproximation[F](dag, quorum)
       result <- committeeApproximationOpt match {
                  case Some(
                      CommitteeWithConsensusValue(committeeApproximation, _, consensusValue)
@@ -94,13 +93,12 @@ package object votingmatrix {
 
   private[votingmatrix] def updateVotingMatrixOnNewBlock[F[_]: Monad](
       dag: DagRepresentation[F],
-      msg: Message,
-      equivocationsTracker: EquivocationsTracker
+      msg: Message
   )(implicit matrix: VotingMatrix[F]): F[Unit] =
     for {
       validatorToIndex <- (matrix >> 'validatorToIdx).get
       panoramaM <- FinalityDetectorUtil
-                    .panoramaM[F](dag, validatorToIndex, msg, equivocationsTracker)
+                    .panoramaM[F](dag, validatorToIndex, msg)
       // Replace row i in voting-matrix by panoramaM
       _ <- (matrix >> 'votingMatrix).modify(
             _.updated(validatorToIndex(msg.validatorId), panoramaM)
@@ -139,17 +137,18 @@ package object votingmatrix {
     * @return
     */
   private[votingmatrix] def findCommitteeApproximation[F[_]: Monad](
-      quorum: Weight,
-      equivocationTrack: EquivocationsTracker
+      dag: DagRepresentation[F],
+      quorum: Weight
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
+      equivocators        <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
       firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
       consensusValueToHonestValidators = firstLevelZeroVotes.zipWithIndex
         .collect { case (Some((blockHash, _)), idx) => (blockHash, validators(idx)) }
-        .filterNot { case (_, validator) => equivocationTrack.contains(validator) }
+        .filterNot { case (_, validator) => equivocators.contains(validator) }
         .groupBy(_._1)
         .mapValues(_.map(_._2))
       // Get most support voteBranch and its support weight

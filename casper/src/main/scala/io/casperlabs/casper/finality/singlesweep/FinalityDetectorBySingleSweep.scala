@@ -7,7 +7,6 @@ import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.{Message, Weight}
 import Weight.Zero
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -20,13 +19,13 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
 
   def normalizedFaultTolerance(
       dag: DagRepresentation[F],
-      candidateBlockHash: BlockHash,
-      equivocationsTracker: EquivocationsTracker
+      candidateBlockHash: BlockHash
   ): F[Float] =
     for {
-      weights          <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
-      honestValidators = weights.filterKeys(!equivocationsTracker.contains(_))
-      committeeOpt     <- findBestCommittee(dag, candidateBlockHash, honestValidators)
+      weights                   <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
+      equivocators              <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      weightsOfHonestValidators = weights.filterKeys(!equivocators.contains(_))
+      committeeOpt              <- findBestCommittee(dag, candidateBlockHash, weightsOfHonestValidators)
     } yield committeeOpt
       .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
       .getOrElse(0f)

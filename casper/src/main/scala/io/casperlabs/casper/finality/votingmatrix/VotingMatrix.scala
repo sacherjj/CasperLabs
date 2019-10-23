@@ -39,8 +39,7 @@ object VotingMatrix {
     */
   private[votingmatrix] def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
-      newFinalizedBlock: BlockHash,
-      equivocationsTracker: EquivocationsTracker
+      newFinalizedBlock: BlockHash
   ): F[VotingMatrix[F]] =
     for {
       // Start a new round, get weightMap and validatorSet from the post-global-state of new finalized block's
@@ -55,13 +54,13 @@ object VotingMatrix {
                     )
                   )
               }
-      weights          = block.weightMap
-      honestValidators = weights.keySet.filterNot(equivocationsTracker.contains(_)).toArray
-      n                = honestValidators.size
+      weights    = block.weightMap
+      validators = weights.keySet.toArray
       // Assigns numeric identifiers 0, ..., N-1 to all validators
-      honestValidatorsToIndex = honestValidators.zipWithIndex.toMap
+      validatorsToIndex = validators.zipWithIndex.toMap
+      n                 = validators.size
       latestMessagesOfHonestVoters <- dag.latestMessages.map(
-                                       _.filterKeys(honestValidatorsToIndex.contains).collect {
+                                       _.collect {
                                          case (validator, messages) if messages.size == 1 =>
                                            validator -> messages.head
                                        }
@@ -98,7 +97,7 @@ object VotingMatrix {
                               }
                               .map(_.flatten.toMap)
       firstLevelZeroVotesArray = FinalityDetectorUtil.fromMapToArray(
-        honestValidatorsToIndex,
+        validatorsToIndex,
         firstLevelZeroVotes.get
       )
       latestMessagesToUpdated = latestMessagesOfHonestVoters.filterKeys(
@@ -107,14 +106,14 @@ object VotingMatrix {
       state = VotingMatrixState(
         MutableSeq.fill(n, n)(0),
         firstLevelZeroVotesArray,
-        honestValidatorsToIndex,
+        validatorsToIndex,
         weights,
-        honestValidators
+        validators
       )
       implicit0(votingMatrix: VotingMatrix[F]) <- of[F](state)
       // Apply the incremental update step to update voting matrix by taking M := V(i)latest
       _ <- latestMessagesToUpdated.values.toList.traverse { b =>
-            updateVotingMatrixOnNewBlock[F](dag, b, equivocationsTracker)
+            updateVotingMatrixOnNewBlock[F](dag, b)
           }
     } yield votingMatrix
 }

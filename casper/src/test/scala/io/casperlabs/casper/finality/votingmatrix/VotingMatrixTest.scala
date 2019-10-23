@@ -106,8 +106,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
                                                             dag,
-                                                            genesis.blockHash,
-                                                            EquivocationsTracker.empty
+                                                            genesis.blockHash
                                                           )
           _            <- checkMatrix(Map.empty)
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
@@ -132,7 +131,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                   v2 -> None
                 )
               )
-          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
           b2 <- createAndUpdateVotingMatrix[Task](
                  Seq(genesis.blockHash),
@@ -152,7 +151,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                   v2 -> Some((b2.blockHash, b2.getHeader.rank))
                 )
               )
-          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
           b3 <- createAndUpdateVotingMatrix[Task](
                  Seq(b1.blockHash),
@@ -173,7 +172,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                   v2 -> Some((b2.blockHash, b2.getHeader.rank))
                 )
               )
-          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
           b4 <- createAndUpdateVotingMatrix[Task](
                  Seq(b3.blockHash),
@@ -195,7 +194,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                 )
               )
 
-          committee <- checkForCommittee[Task](0.01, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
 
           b5 <- createAndUpdateVotingMatrix[Task](
@@ -218,10 +217,10 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
                 )
               )
 
-          committee <- checkForCommittee[Task](0.1, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe Some(CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash))
 
-          committee <- checkForCommittee[Task](0.4, EquivocationsTracker.empty)
+          committee <- checkForCommittee[Task](dag, 0.4)
           _ = committee shouldBe Some(
             CommitteeWithConsensusValue(Set(v1, v2), 20, b1.blockHash)
           )
@@ -231,8 +230,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           newVotingMatrix <- VotingMatrix
                               .create[Task](
                                 updatedDag,
-                                b1.blockHash,
-                                EquivocationsTracker.empty
+                                b1.blockHash
                               )
           _ <- checkWeightMap(Map(v1 -> 20, v2 -> 10))(newVotingMatrix)
           _ <- checkMatrix(
@@ -266,8 +264,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       _ <- updateVoterPerspective(
             dag,
             Message.fromBlock(b).get,
-            votedBranch.get,
-            EquivocationsTracker.empty
+            votedBranch.get
           )
     } yield b
 }
