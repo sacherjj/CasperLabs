@@ -132,8 +132,14 @@ object EquivocationDetector {
                     }
     } yield equivocated
 
+  // Util ADT to support finding whether a block cites his previous message.
+  sealed trait Status
+  case object Continue   extends Status
+  case object Cites      extends Status
+  case object NoCitation extends Status
+
   // Check whether block cites previous message by the same creator.
-  private def citesPreviousMsg[F[_]: MonadThrowable: Log](
+  private def citesPreviousMsg[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       block: Block,
       latestMessage: Message
@@ -142,8 +148,16 @@ object EquivocationDetector {
       message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
       result <- DagOperations
                  .swimlaneV(message.validatorId, message, dag)
-                 .find(_.messageHash == latestMessage.messageHash)
-                 .map(_.isDefined)
+                 .foldWhileLeft[Status](Continue) {
+                   case (_, message) =>
+                     if (message.messageHash == latestMessage.messageHash) Right(Cites)
+                     else if (message.rank <= latestMessage.rank || message.rank == 0)
+                       Right(NoCitation)
+                     else Left(Continue)
+                 } map {
+                 case Continue | NoCitation => false
+                 case Cites                 => true
+               }
     } yield result
 
   /**

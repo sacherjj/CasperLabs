@@ -61,7 +61,7 @@ object DagOperations {
 
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
-  def swimlaneV[F[_]: Monad: Log](
+  def swimlaneV[F[_]: Monad](
       validator: ByteString,
       message: Message,
       dag: DagRepresentation[F]
