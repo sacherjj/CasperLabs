@@ -47,7 +47,8 @@ fn update_list(name: String) {
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
     if runtime::has_key(&name) {
-        None //already subscribed
+        let init_message = vec![String::from("Hello again!")];
+        Some(storage::new_turef(init_message))
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = storage::new_turef(init_message);

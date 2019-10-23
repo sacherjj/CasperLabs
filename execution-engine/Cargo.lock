@@ -426,13 +426,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "combined-contracts-define"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
 name = "constant_time_eq"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

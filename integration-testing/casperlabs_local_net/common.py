@@ -20,7 +20,6 @@ class Contract:
     ARGS_MULTI = "args_multi.wasm"
     ARGS_U32 = "args_u32.wasm"
     ARGS_U512 = "args_u512.wasm"
-    COMBINED_CONTRACTS_DEFINE = "combined_contracts_define.wasm"
     COUNTER_CALL = "counter_call.wasm"
     COUNTER_DEFINE = "counter_define.wasm"
     CREATE_NAMED_PURSE = "create_named_purse.wasm"
