@@ -23,6 +23,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.{
   InitialSynchronization,
+  InitialSynchronizationBackwardImpl,
   InitialSynchronizationForwardImpl,
   StashingSynchronizer,
   Synchronizer,
@@ -215,7 +216,7 @@ package object gossiping {
 
       _ <- makePeriodicSynchronizer(
             conf,
-            downloadManager,
+            gossipServiceServer,
             connectToGossip,
             awaitApproval.join,
             isInitialRef
@@ -581,7 +582,9 @@ package object gossiping {
                        maxPossibleDepth = conf.server.syncMaxPossibleDepth,
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
+                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
+                       isInitialRef = isInitialRef
                      )
     } yield synchronizer
   }
@@ -689,9 +692,9 @@ package object gossiping {
     } yield ()
 
   /** Periodically sync with a random node. */
-  private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery: DagStorage](
+  private def makePeriodicSynchronizer[F[_]: Concurrent: Parallel: Log: Timer: NodeDiscovery](
       conf: Configuration,
-      downloadManager: DownloadManager[F],
+      gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
       awaitApproved: F[Unit],
       isInitialRef: Ref[F, Boolean]
@@ -709,22 +712,17 @@ package object gossiping {
     }
 
     for {
-      periodicSync <- Resource.liftF {
-                       latestMessagesMinRank[F] >>= { minRank =>
-                         Sync[F].delay(
-                           new InitialSynchronizationForwardImpl[F](
-                             NodeDiscovery[F],
-                             selectNodes = ns => List(ns(Random.nextInt(ns.length))),
-                             minSuccessful = 1,
-                             memoizeNodes = false,
-                             skipFailedNodesInNextRounds = false,
-                             connector = connectToGossip,
-                             downloadManager = downloadManager,
-                             step = conf.server.initSyncStep,
-                             rankStartFrom = minRank
-                           )
-                         )
-                       }
+      periodicSync <- Resource.pure[F, InitialSynchronization[F]] {
+                       new InitialSynchronizationBackwardImpl[F](
+                         NodeDiscovery[F],
+                         gossipServiceServer,
+                         selectNodes = ns => List(ns(Random.nextInt(ns.length))),
+                         minSuccessful = 1,
+                         memoizeNodes = false,
+                         skipFailedNodesInNextRounds = false,
+                         roundPeriod = conf.server.periodicSyncRoundPeriod,
+                         connector = connectToGossip
+                       )
                      }
       _ <- makeFiberResource {
             awaitApproved >> loop(periodicSync)

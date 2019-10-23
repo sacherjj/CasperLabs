@@ -1,9 +1,6 @@
 package io.casperlabs.comm.gossiping.synchronization
 
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.numeric._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.Utils.hex
@@ -40,21 +37,21 @@ object Synchronizer {
   }
   object SyncError {
     final case class TooWide(
-        maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
+        maxBondingRate: Double,
         depth: Int,
         maxTotal: Int,
         total: Int
     ) extends SyncError
     final case class Unreachable(
         summary: BlockSummary,
-        requestedDepth: Int Refined Positive,
+        requestedDepth: Int,
         reason: String
     ) extends SyncError
-    final case class TooMany(hash: ByteString, limit: Int Refined Positive)        extends SyncError
-    final case class TooDeep(hashes: Set[ByteString], limit: Int Refined Positive) extends SyncError
-    final case class ValidationError(summary: BlockSummary, reason: Throwable)     extends SyncError
-    final case class MissingDependencies(missing: Set[ByteString])                 extends SyncError
-    final case class Cycle(summary: BlockSummary)                                  extends SyncError
+    final case class TooMany(hash: ByteString, limit: Int)                     extends SyncError
+    final case class TooDeep(hashes: Set[ByteString], limit: Int)              extends SyncError
+    final case class ValidationError(summary: BlockSummary, reason: Throwable) extends SyncError
+    final case class MissingDependencies(missing: Set[ByteString])             extends SyncError
+    final case class Cycle(summary: BlockSummary)                              extends SyncError
 
     def getMessage(error: SyncError): String =
       error match {

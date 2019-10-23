@@ -1,25 +1,24 @@
 package io.casperlabs.comm.gossiping.synchronization
 
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.consensus.{state, BlockSummary, Bond, GenesisCandidate}
+import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
-import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
 import monix.execution.schedulers.CanBlock.permit
 import monix.tail.Iterant
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
@@ -42,13 +41,26 @@ class SynchronizerSpec
 
   implicit val consensusConfig: ConsensusConfig = ConsensusConfig(dagDepth = 5, dagWidth = 5)
 
-  def genPositiveInt(min: Int, max: Int): Gen[Int Refined Positive] =
-    Gen.choose(min, max).map(i => refineV[Positive](i).right.get)
+  def genPositiveInt(min: Int, max: Int): Gen[Int] =
+    Gen.choose(min, max)
 
-  def genDoubleGreaterEqualOf0(max: Double): Gen[Double Refined GreaterEqual[W.`0.0`.T]] =
-    Gen.choose(0.0, max).map(i => refineV[GreaterEqual[W.`0.0`.T]](i).right.get)
+  def genDoubleGreaterEqualOf0(max: Double): Gen[Double] =
+    Gen.choose(0.0, max)
 
   "Synchronizer" when {
+    "gets too many blocks during initializing" should {
+      "return SyncError.TooMany" in forAll(
+        genPartialDagFromTips
+      ) { dag =>
+        log.reset()
+        TestFixture(dag)(maxInitialBlockCount = 1, isInitial = true) { (synchronizer, _) =>
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
+            dagOrError.isLeft shouldBe true
+            dagOrError.left.get shouldBe an[SyncError.TooMany]
+          }
+        }
+      }
+    }
     "streamed DAG contains cycle" should {
       "return SyncError.Cycle" in forAll(genPartialDagFromTips) { dag =>
         log.reset()
@@ -83,13 +95,18 @@ class SynchronizerSpec
     "streamed DAG is too deep" should {
       "return SyncError.TooDeep" in forAll(
         genPartialDagFromTips,
-        genPositiveInt(1, consensusConfig.dagDepth - 1)
-      ) { (dag, n) =>
+        genPositiveInt(1, consensusConfig.dagDepth - 1),
+        arbitrary[Boolean]
+      ) { (dag, n, isInitial) =>
         log.reset()
-        TestFixture(dag)(maxPossibleDepth = n) { (synchronizer, _) =>
+        TestFixture(dag)(maxPossibleDepth = n, isInitial = isInitial) { (synchronizer, _) =>
           synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { dagOrError =>
-            dagOrError.isLeft shouldBe true
-            dagOrError.left.get shouldBe an[SyncError.TooDeep]
+            if (isInitial) {
+              dagOrError.isLeft shouldBe false
+            } else {
+              dagOrError.isLeft shouldBe true
+              dagOrError.left.get shouldBe an[SyncError.TooDeep]
+            }
           }
         }
       }
@@ -252,7 +269,7 @@ class SynchronizerSpec
         ) { dag =>
           // This was copied from the iterative test.
           log.reset()
-          val ancestorsDepthRequest: Int Refined Positive = 2
+          val ancestorsDepthRequest: Int = 2
           val grouped = {
             val headGroup   = Vector(Vector(dag.head))
             val generations = dag.tail.grouped(consensusConfig.dagWidth).toVector
@@ -313,7 +330,7 @@ class SynchronizerSpec
         genPartialDagFromTips
       ) { dag =>
         log.reset()
-        val ancestorsDepthRequest: Int Refined Positive = 2
+        val ancestorsDepthRequest: Int = 2
         val grouped = {
           val headGroup   = Vector(Vector(dag.head))
           val generations = dag.tail.grouped(consensusConfig.dagWidth).toVector
@@ -407,10 +424,8 @@ object SynchronizerSpec {
     ): Task[GossipService[Task]] =
       Task.now {
         new GossipService[Task] {
-          def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-          def streamAncestorBlockSummaries(
-              request: StreamAncestorBlockSummariesRequest
-          ): Iterant[Task, BlockSummary] = {
+          def newBlocks(request: NewBlocksRequest) = ???
+          def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = {
             request.knownBlockHashes.foreach(h => knownHashes += h)
             Iterant
               .resource {
@@ -428,19 +443,12 @@ object SynchronizerSpec {
                 }
               }
           }
-
-          def streamDagTipBlockSummaries(
-              request: StreamDagTipBlockSummariesRequest
-          ): Iterant[Task, BlockSummary] = ???
-          def streamBlockSummaries(
-              request: StreamBlockSummariesRequest
-          ): Iterant[Task, BlockSummary]                                                       = ???
-          def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk]           = ???
-          def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] = ???
-          def addApproval(request: AddApprovalRequest): Task[Unit]                             = ???
-          def streamDagSliceBlockSummaries(
-              request: StreamDagSliceBlockSummariesRequest
-          ): Iterant[Task, BlockSummary] = ???
+          def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+          def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
+          def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
+          def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
+          def addApproval(request: AddApprovalRequest)                                   = ???
+          def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) = ???
         }
       }
   }
@@ -453,10 +461,12 @@ object SynchronizerSpec {
 
   object TestFixture {
     def apply(dags: Vector[BlockSummary]*)(
-        maxPossibleDepth: Int Refined Positive = Int.MaxValue,
-        maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T] = 1.0,
-        maxDepthAncestorsRequest: Int Refined Positive = Int.MaxValue,
-        minBlockCountToCheckWidth: Int Refined NonNegative = Int.MaxValue,
+        maxPossibleDepth: Int = Int.MaxValue,
+        maxBondingRate: Double = 1.0,
+        maxDepthAncestorsRequest: Int = Int.MaxValue,
+        minBlockCountToCheckWidth: Int = Int.MaxValue,
+        maxInitialBlockCount: Int = Int.MaxValue,
+        isInitial: Boolean = false,
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
         error: Option[RuntimeException] = None,
@@ -474,7 +484,9 @@ object SynchronizerSpec {
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
-        maxDepthAncestorsRequest = maxDepthAncestorsRequest
+        maxDepthAncestorsRequest = maxDepthAncestorsRequest,
+        maxInitialBlockCount = maxInitialBlockCount,
+        isInitialRef = Ref.unsafe[Task, Boolean](isInitial)
       ).flatMap { synchronizer =>
           test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
         }

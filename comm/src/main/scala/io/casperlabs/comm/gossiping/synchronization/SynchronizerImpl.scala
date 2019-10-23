@@ -5,35 +5,31 @@ import cats.data._
 import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
+import cats.kernel.Monoid
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.{
-  GossipService,
-  GossipingMetricsSource,
-  StreamAncestorBlockSummariesRequest
-}
+import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
+import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
-
 import scala.util.control.NonFatal
 
 class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
-    maxPossibleDepth: Int Refined Positive,
-    minBlockCountToCheckWidth: Int Refined NonNegative,
-    maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
-    maxDepthAncestorsRequest: Int Refined Positive,
+    maxPossibleDepth: Int,
+    minBlockCountToCheckWidth: Int,
+    maxBondingRate: Double,
+    maxDepthAncestorsRequest: Int,
+    maxInitialBlockCount: Int,
+    // Before the initial sync has succeeded we allow more depth.
+    isInitialRef: Ref[F, Boolean],
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
@@ -58,13 +54,15 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       service        <- connectToGossip(source)
       tips           <- backend.tips
       justifications <- backend.justifications
+      isInitial      <- isInitialRef.get
       syncStateOrError <- Metrics[F].gauge("syncs_ongoing") {
                            loop(
                              source,
                              service,
                              targetBlockHashes.toList,
                              tips ::: justifications,
-                             SyncState.initial(targetBlockHashes)
+                             SyncState.initial(targetBlockHashes),
+                             isInitial
                            )
                          }
       res <- syncStateOrError.fold(
@@ -88,7 +86,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState
+      prevSyncState: SyncState,
+      isInitial: Boolean
   ): F[Either[SyncError, SyncState]] =
     if (targetBlockHashes.isEmpty) {
       prevSyncState.asRight[SyncError].pure[F]
@@ -97,7 +96,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         service,
         targetBlockHashes,
         knownBlockHashes,
-        prevSyncState
+        prevSyncState,
+        isInitial
       ).flatMap {
         case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
         case Right(newSyncState) =>
@@ -114,7 +114,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                     service,
                     missing,
                     knownBlockHashes,
-                    newSyncState.copy(iteration = prevSyncState.iteration + 1)
+                    newSyncState.copy(iteration = prevSyncState.iteration + 1),
+                    isInitial
                   )
             )
       }
@@ -182,7 +183,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState
+      prevSyncState: SyncState,
+      isInitial: Boolean
   ): F[Either[SyncError, SyncState]] =
     service
       .streamAncestorBlockSummaries(
@@ -202,10 +204,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                          targetBlockHashes.toSet
                        )
             newSyncState = syncState.append(summary, distance)
-            _ <- noCycles(syncState, summary) >>
-                  notTooDeep(newSyncState) >>
-                  notTooWide(newSyncState)
-
+            _ <- if (isInitial) {
+                  notTooManyInitial(newSyncState, summary)
+                } else {
+                  noCycles(syncState, summary) >>
+                    notTooDeep(newSyncState) >>
+                    notTooWide(newSyncState)
+                }
             _ <- EitherT(
                   backend
                     .validate(summary)
@@ -248,6 +253,16 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       EitherT(().asRight[SyncError].pure[F])
     }
   }
+
+  private def notTooManyInitial(
+      syncState: SyncState,
+      last: BlockSummary
+  ): EitherT[F, SyncError, Unit] =
+    if (syncState.summaries.size <= maxInitialBlockCount) {
+      EitherT(().asRight[SyncError].pure[F])
+    } else {
+      EitherT((TooMany(last.blockHash, maxInitialBlockCount): SyncError).asLeft[Unit].pure[F])
+    }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
     if (syncState.distanceFromOriginalTarget.isEmpty) {
@@ -365,10 +380,12 @@ object SynchronizerImpl {
   def apply[F[_]: Concurrent: Log: Metrics](
       connectToGossip: Node => F[GossipService[F]],
       backend: SynchronizerImpl.Backend[F],
-      maxPossibleDepth: Int Refined Positive,
-      minBlockCountToCheckWidth: Int Refined NonNegative,
-      maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
-      maxDepthAncestorsRequest: Int Refined Positive
+      maxPossibleDepth: Int,
+      minBlockCountToCheckWidth: Int,
+      maxBondingRate: Double,
+      maxDepthAncestorsRequest: Int,
+      maxInitialBlockCount: Int,
+      isInitialRef: Ref[F, Boolean]
   ) =
     for {
       semaphoreMap       <- SemaphoreMap[F, Node](1)
