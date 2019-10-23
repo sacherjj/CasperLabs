@@ -50,7 +50,14 @@ class CLI:
         return self.resources_directory / file_name
 
     def expand_args(self, args):
-        connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
+        connection_details = [
+            "--host",
+            f"{self.host}",
+            "--port",
+            f"{self.port}",
+            "--internal-port",
+            f"{self.internal_port}",
+        ]
         if self.tls_parameters:
             connection_details += reduce(
                 add,
@@ -71,7 +78,7 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command in ("deploy", "send-deploy"):
+        if command in ("deploy", "send-deploy", "bond", "unbond"):
             return output.split()[2]
             # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
