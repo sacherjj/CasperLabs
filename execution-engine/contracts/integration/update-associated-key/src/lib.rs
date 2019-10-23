@@ -23,7 +23,6 @@ impl Into<ApiError> for Error {
 }
 
 #[no_mangle]
-#[no_mangle]
 pub extern "C" fn call() {
     let account: PublicKey = runtime::get_arg(Arg::Account as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
