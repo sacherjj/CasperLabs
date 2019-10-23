@@ -340,7 +340,7 @@ class DockerNode(LoggingDockerBase):
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = Contract.TRANSFER_TO_ACCOUNT_IT,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
         payment_contract: str = Contract.STANDARD_PAYMENT,
         payment_args: bytes = MAX_PAYMENT_ABI,
         gas_price: int = 1,
@@ -375,7 +375,7 @@ class DockerNode(LoggingDockerBase):
         session_args = ABI.args(
             [
                 ABI.account("account", to_account.public_key_binary),
-                ABI.u32("amount", amount),
+                ABI.u64("amount", amount),
             ]
         )
 

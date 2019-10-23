@@ -102,13 +102,13 @@ def test_error_in_payment_contract(payment_node_network):
     to_account = Account(1)
 
     session_args = ABI.args(
-        [ABI.account("account", to_account.public_key_hex), ABI.u32("amount", 10 ** 7)]
+        [ABI.account("account", to_account.public_key_hex), ABI.u64("amount", 10 ** 7)]
     )
     payment_args = ABI.args([ABI.u512("amount", 10 ** 6)])
 
     response, deploy_hash_bytes = node0.p_client.deploy(
         from_address=from_account.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT,
         payment_contract=Contract.DIRECT_REVERT,
         public_key=from_account.public_key_path,
         private_key=from_account.private_key_path,
@@ -267,12 +267,12 @@ def test_not_enough_funds_to_run_payment_code(payment_node_network):
     session_args = ABI.args(
         [
             ABI.account("account", GENESIS_ACCOUNT.public_key_hex),
-            ABI.u32("amount", 10 ** 7),
+            ABI.u64("amount", 10 ** 7),
         ]
     )
     _, deploy_hash = node0.p_client.deploy(
         from_address=GENESIS_ACCOUNT.public_key_hex,
-        session_contract=Contract.TRANSFER_TO_ACCOUNT_IT,
+        session_contract=Contract.TRANSFER_TO_ACCOUNT,
         payment_contract=Contract.STANDARD_PAYMENT,
         public_key=GENESIS_ACCOUNT.public_key_path,
         private_key=GENESIS_ACCOUNT.private_key_path,

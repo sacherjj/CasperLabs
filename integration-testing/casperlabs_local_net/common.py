@@ -41,7 +41,7 @@ class Contract:
     STANDARD_PAYMENT = "standard_payment.wasm"
     SUBCALL_REVERT_CALL = "subcall_revert_call.wasm"
     SUBCALL_REVERT_DEFINE = "subcall_revert_define.wasm"
-    TRANSFER_TO_ACCOUNT_IT = "transfer_to_account_it.wasm"
+    TRANSFER_TO_ACCOUNT = "transfer_to_account.wasm"
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
