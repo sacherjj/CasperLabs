@@ -11,6 +11,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.Utils.hex
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.Log
 import io.casperlabs.shared.IterantOps.RichIterant

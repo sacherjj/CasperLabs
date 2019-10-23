@@ -14,6 +14,7 @@ import io.casperlabs.casper.consensus.{BlockSummary, Bond, GenesisCandidate}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
