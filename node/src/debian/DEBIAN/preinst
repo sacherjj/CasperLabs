@@ -2,12 +2,12 @@
 
 set -e
 
-USERNAME=casperlabs
-DIRECTORY="/etc/${USERNAME}"
+DEFAULT_USERNAME=casperlabs
+DEFAULT_DIRECTORY="/etc/${DEFAULT_USERNAME}"
 
-if [ -d ${DIRECTORY} ] ; then
-    echo "Directory ${DIRECTORY} already exists."
+# Assure $DEFAULT_DIRECTORY is available for unpacking
+if [ -d ${DEFAULT_DIRECTORY} ] ; then
+    echo "Directory ${DEFAULT_DIRECTORY} already exists."
 else
-    mkdir -p ${DIRECTORY}
-    chown -R ${USERNAME}:${USERNAME} ${DIRECTORY}
+    mkdir -p ${DEFAULT_DIRECTORY}
 fi
