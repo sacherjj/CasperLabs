@@ -433,7 +433,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               .fromList[ByteString](deployHashes)
               .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
                 val q = fr"""|SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, bm.data, bm.block_size,
-                             | bm.deploy_error_count
+                             | bm.deploy_error_count, bm.deploy_cost_total
                              |FROM deploy_process_results dpr
                              |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
                              |WHERE """.stripMargin ++ Fragments.in(fr"dpr.deploy_hash", nel)
