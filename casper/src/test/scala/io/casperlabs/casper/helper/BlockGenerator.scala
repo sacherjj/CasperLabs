@@ -137,13 +137,13 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
-      validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
-                        else
-                          ProtoUtil.nextValidatorBlockSeqNum(dag, serializedJustifications, creator)
       validatorPrevBlockHash = serializedJustifications
         .find(_.validatorPublicKey == creator)
         .map(_.latestBlockHash)
         .getOrElse(ByteString.EMPTY)
+      validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
+                        else
+                          ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
       rank <- if (parentsHashList.isEmpty) 0L.pure[F]
              else
                updatedJustifications.values.toList

@@ -178,28 +178,24 @@ object ProtoUtil {
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      justifications: Seq[Justification],
-      creator: Validator
+      validatorPrevBlockHash: ByteString
   ): F[Int] =
-    justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == creator
-      }
-      .foldM(1) {
-        case (_, Justification(_, latestBlockHash)) =>
-          dag.lookup(latestBlockHash).flatMap {
-            case Some(meta) =>
-              (1 + meta.validatorMsgSeqNum).pure[F]
+    if (validatorPrevBlockHash.isEmpty) {
+      1.pure[F]
+    } else {
 
-            case None =>
-              MonadThrowable[F].raiseError[Int](
-                new NoSuchElementException(
-                  s"DagStorage is missing hash ${PrettyPrinter.buildString(latestBlockHash)}"
-                )
-              )
-          }
+      dag.lookup(validatorPrevBlockHash).flatMap {
+        case Some(meta) =>
+          (1 + meta.validatorMsgSeqNum).pure[F]
+
+        case None =>
+          MonadThrowable[F].raiseError[Int](
+            new NoSuchElementException(
+              s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(validatorPrevBlockHash)}"
+            )
+          )
       }
+    }
 
   def creatorJustification(header: Block.Header): Option[Justification] =
     header.justifications

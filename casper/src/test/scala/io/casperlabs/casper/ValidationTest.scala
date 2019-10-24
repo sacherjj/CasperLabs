@@ -401,18 +401,18 @@ class ValidationTest
       } yield result
   }
 
-  "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
+  "Block rank validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       for {
         _     <- createChain[Task](1)
         block <- dagStorage.lookupByIdUnsafe(0)
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
-              .blockNumber(block.changeBlockNumber(1), dag)
+              .blockRank(block.changeBlockNumber(1), dag)
               .attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- ValidationImpl[Task].blockNumber(block, dag) shouldBeF Unit
+        _ <- ValidationImpl[Task].blockRank(block, dag) shouldBeF Unit
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no justifications") should be(
           true
@@ -427,15 +427,15 @@ class ValidationTest
       for {
         _   <- createChain[Task](n.toInt, bonds = List(Bond(validator, 1)), creator = validator)
         dag <- dagStorage.getRepresentation
-        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockRank(b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
               (dagStorage.lookupByIdUnsafe(i) >>= (
-                  b => ValidationImpl[Task].blockNumber(b, dag)
+                  b => ValidationImpl[Task].blockRank(b, dag)
               )).map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -465,9 +465,9 @@ class ValidationTest
         b2  <- createBlockWithNumber(7)
         b3  <- createBlockWithNumber(8, Seq(b1, b2))
         dag <- dagStorage.getRepresentation
-        _   <- ValidationImpl[Task].blockNumber(b3, dag) shouldBeF Unit
+        _   <- ValidationImpl[Task].blockRank(b3, dag) shouldBeF Unit
         result <- ValidationImpl[Task]
-                   .blockNumber(b3.changeBlockNumber(4), dag)
+                   .blockRank(b3.changeBlockNumber(4), dag)
                    .attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
@@ -537,6 +537,12 @@ class ValidationTest
         result = log.warns should be(Nil)
       } yield result
   }
+
+  "Previous block hash validation" should "pass if the hash is in the j-DAG" in (pending)
+  it should "pass if the hash is in the justifications" in (pending)
+  it should "fail if the hash belongs to somebody else" in (pending)
+  it should "fail if the hash is not in the j-DAG" in (pending)
+  it should "fail if the hash does not exist" in (pending)
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>

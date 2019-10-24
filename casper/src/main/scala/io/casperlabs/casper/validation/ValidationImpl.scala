@@ -13,6 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
+import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.codec.Base16
@@ -125,7 +126,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       // Checks that need dependencies.
       _ <- missingBlocks(summary)
       _ <- timestamp(summary)
-      _ <- blockNumber(summary, dag)
+      _ <- blockRank(summary, dag)
+      _ <- validatorPrevBlockHash(summary, dag)
       _ <- sequenceNumber(summary, dag)
       // Checks that need the body.
       _ <- blockHash(block)
@@ -367,8 +369,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               }
     } yield delay
 
-  // Block number is 1 plus the maximum of block number of its justifications.
-  def blockNumber(
+  // Block rank is 1 plus the maximum of the rank of its justifications.
+  def blockRank(
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
@@ -426,8 +428,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
                                           dag,
-                                          b.getHeader.justifications,
-                                          b.getHeader.validatorPublicKey
+                                          b.getHeader.validatorPrevBlockHash
                                         )
         number = b.validatorBlockSeqNum
         ok     = creatorJustificationSeqNumber == number
@@ -445,6 +446,69 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               } yield ()
             }
       } yield ()
+
+  /** Validate that the j-DAG of the block cites the previous block hash,
+    * except if this is the first block the validator created.
+    */
+  def validatorPrevBlockHash(
+      b: BlockSummary,
+      dag: DagRepresentation[F]
+  ): F[Unit] = {
+    val prevBlockHash = b.getHeader.validatorPrevBlockHash
+    val validatorId   = b.getHeader.validatorPublicKey
+    if (prevBlockHash.isEmpty) {
+      ().pure[F]
+    } else {
+      def raise(msg: String) =
+        Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
+          .raise[Unit](InvalidPrevBlockHash)
+
+      dag.lookup(prevBlockHash).flatMap {
+        case None =>
+          raise(
+            s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
+          )
+        case Some(meta) if meta.validatorId != validatorId =>
+          raise(
+            s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
+              .buildString(validatorId)}"
+          )
+        case Some(meta) =>
+          MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap {
+            toposortJDagDesc(dag, _)
+              .find { j =>
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
+              }
+              .flatMap {
+                case None =>
+                  raise(s"Could not find any previous block hash from the validator in the j-DAG.")
+                case Some(msg) if msg.messageHash != prevBlockHash =>
+                  raise(
+                    s"The previous block hash in the j-DAG is ${PrettyPrinter
+                      .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
+                  )
+                case _ =>
+                  ().pure[F]
+              }
+          }
+      }
+    }
+  }
+
+  // TODO: Use the `cites` method from Mateusz' PR
+  private def toposortJDagDesc(
+      dag: DagRepresentation[F],
+      msg: Message
+  ): StreamT[F, Message] = {
+    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
+    DagOperations.bfToposortTraverseF(
+      List(msg)
+    )(
+      _.justifications.toList
+        .traverse(j => dag.lookup(j.latestBlockHash))
+        .map(_.flatten)
+    )
+  }
 
   // Agnostic of justifications
   def chainIdentifier(

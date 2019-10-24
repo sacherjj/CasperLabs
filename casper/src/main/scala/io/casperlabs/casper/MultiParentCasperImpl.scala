@@ -816,11 +816,11 @@ object MultiParentCasperImpl {
           } yield updatedDag
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
-            NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy |
-            InvalidChainName | InvalidBlockHash | InvalidDeployCount | InvalidDeployHash |
-            InvalidDeploySignature | InvalidPreStateHash | InvalidPostStateHash |
-            InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired |
-            DeployFromFuture =>
+            InvalidPrevBlockHash | NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache |
+            InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash | InvalidDeployCount |
+            InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
+            InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
+            DeployDependencyNotMet | DeployExpired | DeployFromFuture =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -937,9 +937,9 @@ object MultiParentCasperImpl {
             )
 
           case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
-              InvalidSequenceNumber | NeglectedInvalidBlock | InvalidTransaction |
-              InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash |
-              InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
+              InvalidSequenceNumber | InvalidPrevBlockHash | NeglectedInvalidBlock |
+              InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName |
+              InvalidBlockHash | InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
               InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
               InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
             ().pure[F]
