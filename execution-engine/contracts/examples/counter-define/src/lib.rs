@@ -58,7 +58,7 @@ pub extern "C" fn call() {
 
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let key_name = String::from(COUNTER_KEY);
+    let key_name = String::from(COUNT_KEY);
     counter_urefs.insert(key_name, counter_local_key.into());
 
     let pointer = storage::store_function_at_hash(COUNTER_EXT, counter_urefs);
