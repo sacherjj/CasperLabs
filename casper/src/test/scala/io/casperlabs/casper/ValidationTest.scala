@@ -665,6 +665,47 @@ class ValidationTest
       } yield result
   }
 
+  // See [[/resources/casper/localDetectedForeignDidnt.svg]]
+  it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+      val v2 = generateValidator("v2")
+      val v3 = generateValidator("v3")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3,
+        v2 -> 5,
+        v3 -> 2
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        d       <- createValidatorBlock[Task](Seq(c), bonds, Seq(a, c), v3)
+        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3)
+        dag     <- dagStorage.getRepresentation
+        // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
+        // It will choose C as a main parent and A as a secondary one.
+        _ <- Validation[Task]
+              .parents(d, genesis.blockHash, dag)
+              .map(_.parents)
+              .attempt shouldBeF Right(
+              Vector(c, a)
+            )
+        // While v0 has seen everything so it will use 0 as v2's weight when scoring.
+        _ <- Validation[Task]
+              .parents(e, genesis.blockHash, dag)
+              .map(_.parents)
+              .attempt shouldBeF Right(Vector(a, b, c))
+      } yield ()
+  }
+
   // Creates a block with an invalid block number and sequence number
   "Block validation" should "short circuit after first invalidity" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
