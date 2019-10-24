@@ -53,7 +53,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       timestamp = 1527191663,
       chainName = "casperlabs",
       creator = Keys.PublicKey(Array.emptyByteArray),
-      validatorSeqNum = 0
+      validatorSeqNum = 0,
+      validatorPrevBlockHash = ByteString.EMPTY
     )
     ProtoUtil.unsignedBlockProto(body, header)
   }
@@ -86,6 +87,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     ProtocolVersion(1),
     Seq(genesisBlock.blockHash),
     1,
+    ByteString.EMPTY,
     chainName,
     timestamp,
     1,

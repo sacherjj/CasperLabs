@@ -243,6 +243,7 @@ class ValidationTest
       ProtocolVersion(1),
       Seq.empty,
       1,
+      ByteString.EMPTY,
       "casperlabs",
       1,
       0,

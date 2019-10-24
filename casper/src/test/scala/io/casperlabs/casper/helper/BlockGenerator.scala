@@ -140,6 +140,10 @@ trait BlockGenerator {
       validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
                         else
                           ProtoUtil.nextValidatorBlockSeqNum(dag, serializedJustifications, creator)
+      validatorPrevBlockHash = serializedJustifications
+        .find(_.validatorPublicKey == creator)
+        .map(_.latestBlockHash)
+        .getOrElse(ByteString.EMPTY)
       rank <- if (parentsHashList.isEmpty) 0L.pure[F]
              else
                updatedJustifications.values.toList
@@ -154,6 +158,7 @@ trait BlockGenerator {
           postState,
           rank,
           validatorSeqNum,
+          validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
           timestamp = now,
           chainName = chainName

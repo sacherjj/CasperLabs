@@ -421,6 +421,7 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parents: Seq[ByteString],
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
       rank: Long,
@@ -445,7 +446,8 @@ object ProtoUtil {
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
-      validatorSeqNum = validatorSeqNum
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
@@ -464,6 +466,7 @@ object ProtoUtil {
       state: Block.GlobalState,
       rank: Long,
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainName: String
@@ -477,6 +480,7 @@ object ProtoUtil {
       .withRank(rank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
+      .withValidatorPrevBlockHash(validatorPrevBlockHash)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
       .withChainName(chainName)
