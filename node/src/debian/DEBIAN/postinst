@@ -2,29 +2,57 @@
 
 set -e
 
+# Default Variables
+# ---
 DEFAULT_USERNAME="casperlabs"
 DEFAULT_SYSTEMD_SERVICE_FILE="/lib/systemd/system/${DEFAULT_USERNAME}-node.service"
-DEFAULT_DATA_DIRECTORY="/etc/${DEFAULT_USERNAME}"
-DEFAULT_TOML="${DEFAULT_DATA_DIRECTORY}/default-configuration.toml"
+DEFAULT_CONFIG_DIRECTORY="/etc/${DEFAULT_USERNAME}"
+DEFAULT_TOML="${DEFAULT_CONFIG_DIRECTORY}/default-configuration.toml"
+DEFAULT_DATA_DIRECTORY="/var/lib/${DEFAULT_USERNAME}"
 
-# Check if $DEFAULT_USERNAME user exists
+# User Creation
+# ---
+# Assure DEFAULT_USERNAME user exists
 if id -u ${DEFAULT_USERNAME} >/dev/null 2>&1; then
     echo "User ${DEFAULT_USERNAME} already exists."
 else
     adduser --no-create-home --group --system ${DEFAULT_USERNAME}
 fi
 
-# Assure default service file has correct permissions after unpacking
+# Creation of Files/Directories
+# ---
+# Assure DEFAULT_DATA_DIRECTORY is available for state data
+if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
+    echo "Directory ${DEFAULT_DATA_DIRECTORY} already exists."
+else
+    mkdir -p ${DEFAULT_DATA_DIRECTORY}
+fi
+
+# Files/Directories Permissions
+# ---
+# Assure DEFAULT_SYSTEMD_SERVICE_FILE has correct permissions after unpacking
 if [ -f ${DEFAULT_SYSTEMD_SERVICE_FILE} ] ; then
     chmod 0644 ${DEFAULT_SYSTEMD_SERVICE_FILE}
 fi
 
-# Assure default data directory is owned by $DEFAULT_USERNAME; created in preinst
-if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
-    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_DATA_DIRECTORY}
+# Assure DEFAULT_TOML has correct permissions after unpacking
+if [ -f ${DEFAULT_TOML} ] ; then
+    chmod 0644 ${DEFAULT_TOML}
 fi
 
-# Assure default toml is owned by $DEFAULT_USERNAME after unpacking
+# Files/Directories Owner
+# ---
+# Assure DEFAULT_CONFIG_DIRECTORY is owned by DEFAULT_USERNAME; created in preinst
+if [ -d ${DEFAULT_CONFIG_DIRECTORY} ] ; then
+    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_CONFIG_DIRECTORY}
+fi
+
+# Assure DEFAULT_TOML is owned by DEFAULT_USERNAME after unpacking
 if [ -f ${DEFAULT_TOML} ] ; then
     chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_TOML}
+fi
+
+# Assure DEFAULT_DATA_DIRECTORY is owned by DEFAULT_USERNAME
+if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
+    chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_DATA_DIRECTORY}
 fi

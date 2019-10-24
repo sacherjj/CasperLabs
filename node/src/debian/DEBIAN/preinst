@@ -2,12 +2,16 @@
 
 set -e
 
+# Default Variables
+# ---
 DEFAULT_USERNAME=casperlabs
-DEFAULT_DIRECTORY="/etc/${DEFAULT_USERNAME}"
+DEFAULT_CONFIG_DIRECTORY="/etc/${DEFAULT_USERNAME}"
 
-# Assure $DEFAULT_DIRECTORY is available for unpacking
-if [ -d ${DEFAULT_DIRECTORY} ] ; then
-    echo "Directory ${DEFAULT_DIRECTORY} already exists."
+# Creation of Files/Directories
+# ---
+# Assure $DEFAULT_CONFIG_DIRECTORY is available for unpacking
+if [ -d ${DEFAULT_CONFIG_DIRECTORY} ] ; then
+    echo "Directory ${DEFAULT_CONFIG_DIRECTORY} already exists."
 else
-    mkdir -p ${DEFAULT_DIRECTORY}
+    mkdir -p ${DEFAULT_CONFIG_DIRECTORY}
 fi

@@ -4,7 +4,7 @@ After=network.target casperlabs-engine-grpc-server.service
 BindsTo=casperlabs-engine-grpc-server.service
 
 [Service]
-ExecStart=/usr/bin/casperlabs-node --config-file=/etc/casperlabs/default-configuration.toml run --server-data-dir=/etc/casperlabs
+ExecStart=/usr/bin/casperlabs-node --config-file=/etc/casperlabs/default-configuration.toml run --server-data-dir=/var/lib/casperlabs
 User=casperlabs
 Restart=no
 

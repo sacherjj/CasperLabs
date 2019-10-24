@@ -5,7 +5,7 @@ Before=casperlabs-node.service
 BindsTo=casperlabs-node.service
 
 [Service]
-ExecStart=/usr/bin/casperlabs-engine-grpc-server -d /etc/casperlabs /etc/casperlabs/.casper-node.sock
+ExecStart=/usr/bin/casperlabs-engine-grpc-server -d /var/lib/casperlabs /var/lib/casperlabs/.casper-node.sock
 User=casperlabs
 Restart=no
 
