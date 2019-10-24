@@ -6,8 +6,10 @@
 
 #[macro_use]
 extern crate clap;
+extern crate crossbeam_channel;
 extern crate env_logger;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate grpc;
 #[macro_use]
 extern crate log;
@@ -18,16 +20,18 @@ extern crate engine_core;
 extern crate engine_grpc_server;
 extern crate engine_shared;
 
+use std::env;
 use std::iter::Sum;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use std::{env, thread};
 
 use clap::{App, Arg};
-use futures::future::{self, Either, Future, Loop};
-use grpc::{ClientStubExt, GrpcFuture, RequestOptions};
-use tokio::runtime;
+use crossbeam_channel::{Receiver, Sender};
+use futures::future::Future;
+use futures::{stream, Stream};
+use futures_cpupool::{CpuFuture, CpuPool};
+use grpc::{ClientStubExt, RequestOptions};
 
 use contract_ffi::base16;
 use contract_ffi::value::U512;
@@ -72,6 +76,9 @@ const REQUEST_COUNT_ARG_HELP: &str = "Total number of 'ExecuteRequest's to send"
 
 const CONTRACT_NAME: &str = "transfer_to_existing_account.wasm";
 const THREAD_PREFIX: &str = "client-worker-";
+/// The maximum number of work objects which can be enqueued in the channel feeding the threadpool
+/// workers.
+const CHANNEL_BOUND: usize = 1000;
 
 fn socket_arg() -> Arg<'static, 'static> {
     Arg::with_name(SOCKET_ARG_NAME)
@@ -123,7 +130,6 @@ fn parse_count(encoded_thread_count: &str) -> usize {
     count
 }
 
-#[derive(Debug)]
 struct Args {
     socket: String,
     pre_state_hash: Vec<u8>,
@@ -168,20 +174,164 @@ impl Args {
     }
 }
 
+/// A record of the durations it took to receive responses to all requests.
 #[derive(Clone)]
-struct Work {
-    /// A specific `execute` request to be sent to the server.
-    request: ExecuteRequest,
-    /// The total number of times this request should be sent to the server.
-    total_to_send: usize,
-    /// The number of times this request has been sent to the server.
-    num_sent: Arc<AtomicUsize>,
-    /// A record of the durations it took to receive responses to these requests.
-    durations: Arc<Mutex<Vec<Duration>>>,
+struct Results {
+    durations: Arc<Mutex<Vec<Vec<Duration>>>>,
+}
+
+impl Results {
+    fn new(args: &Args) -> Self {
+        Self {
+            durations: Arc::new(Mutex::new(vec![Vec::with_capacity(args.request_count)])),
+        }
+    }
+
+    /// Records a new duration for the results at `index`.
+    fn record(&self, index: usize, duration: Duration) {
+        let mut durations = self.durations.lock().expect("Expected to lock mutex");
+        durations[index].push(duration);
+    }
+
+    /// Returns the number of recorded durations and their mean for the results at `index`.
+    fn count_and_mean(&self, index: usize) -> Option<(usize, Duration)> {
+        let all_durations = self.durations.lock().expect("Expected to lock mutex");
+        let durations = all_durations.get(index)?;
+        if durations.is_empty() {
+            return None;
+        }
+        let mean = Duration::sum(durations.iter()) / durations.len() as u32;
+        Some((durations.len(), mean))
+    }
+}
+
+/// A stateful container for the data needed by the client to execute a request and record the
+/// results.
+///
+/// In its initial state, it is passed via the channel to the client to be executed on the
+/// threadpool.  Its state is then changed by the client to hold info while the request is being
+/// processed; i.e. it's passed from the request future to response handler.  Finally, in the
+/// response handler, it's consumed and records the result of the work.
+enum Work {
+    Initial {
+        /// A specific `execute` request to be sent to the server.
+        request: ExecuteRequest,
+        /// The index of the request in the `WorkProducer::requests` collection.
+        index: usize,
+        /// The number of request (zero-indexed).
+        request_num: usize,
+    },
+    AfterSendingRequest {
+        /// The time at which the request was sent.
+        sent: Instant,
+        /// The index of the request in the `WorkProducer::requests` collection.
+        index: usize,
+        /// The number of request (zero-indexed).
+        request_num: usize,
+        /// The results to be updated in the response handler.
+        results: Results,
+    },
 }
 
 impl Work {
-    fn new(args: &Args) -> Self {
+    fn new(request: ExecuteRequest, index: usize, request_num: usize) -> Self {
+        Work::Initial {
+            request,
+            index,
+            request_num,
+        }
+    }
+
+    /// Transition from initial state, returning the contained `request` for sending by the client,
+    /// and the updated `Work` object.
+    fn transition(self, results: Results) -> (Self, ExecuteRequest) {
+        match self {
+            Work::Initial {
+                request,
+                index,
+                request_num,
+            } => {
+                let work = Work::AfterSendingRequest {
+                    sent: Instant::now(),
+                    index,
+                    request_num,
+                    results,
+                };
+                (work, request)
+            }
+            _ => panic!("Can't transition"),
+        }
+    }
+
+    /// Finish the work, recording the elapsed duration in the results.
+    fn complete(self) {
+        match self {
+            Work::AfterSendingRequest {
+                sent,
+                index,
+                request_num,
+                results,
+            } => {
+                let duration = Instant::now() - sent;
+                results.record(index, duration);
+                info!(
+                    "Client received successful response {} on {} in {:?}",
+                    request_num,
+                    thread::current()
+                        .name()
+                        .expect("Expected current thread to be named"),
+                    duration
+                );
+            }
+            _ => panic!("Can't complete"),
+        }
+    }
+
+    fn request_num(&self) -> usize {
+        match self {
+            Work::Initial { request_num, .. } | Work::AfterSendingRequest { request_num, .. } => {
+                *request_num
+            }
+        }
+    }
+}
+
+/// A pseudo-queue of `count` duplicate `ExecuteRequest`s.
+#[derive(Clone)]
+struct WorkQueue {
+    request: ExecuteRequest,
+    count: usize,
+}
+
+impl WorkQueue {
+    fn new(request: ExecuteRequest, count: usize) -> Self {
+        Self { request, count }
+    }
+}
+
+impl Iterator for WorkQueue {
+    type Item = ExecuteRequest;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count > 0 {
+            self.count -= 1;
+            Some(self.request.clone())
+        } else {
+            None
+        }
+    }
+}
+
+/// A struct which holds queues of `ExecuteRequest`s and which sends these to the client for
+/// processing.
+struct WorkProducer {
+    queues: Vec<WorkQueue>,
+    // This is optional so it can be dropped in order to terminate the flow of work being received.
+    sender: Option<Sender<Work>>,
+}
+
+impl WorkProducer {
+    fn new(args: &Args) -> (Self, Receiver<Work>) {
         let amount = U512::one();
         let account_1_public_key = profiling_common::account_1_public_key();
         let account_2_public_key = profiling_common::account_2_public_key();
@@ -193,79 +343,100 @@ impl Work {
         .with_pre_state_hash(&args.pre_state_hash)
         .build();
 
-        let num_sent = Arc::new(AtomicUsize::new(0));
-        let durations = Arc::new(Mutex::new(Vec::with_capacity(args.request_count)));
-        Self {
-            request,
-            total_to_send: args.request_count,
-            num_sent,
-            durations,
-        }
+        let queues = vec![WorkQueue::new(request, args.request_count)];
+        let (sender, receiver) = crossbeam_channel::bounded(CHANNEL_BOUND);
+        let work_producer = Self {
+            queues,
+            sender: Some(sender),
+        };
+        (work_producer, receiver)
     }
 
-    /// If we still have some requests to send, returns a clone of the request and the request
-    /// number (zero-indexed), while incrementing the sent counter.  Otherwise, if we've sent the
-    /// required number of requests, returns `None`.
-    fn next_request(&self) -> Option<(ExecuteRequest, usize)> {
-        let this_index = self.num_sent.fetch_add(1, Ordering::SeqCst);
-        if this_index < self.total_to_send {
-            Some((self.request.clone(), this_index))
-        } else {
-            None
-        }
-    }
-
-    fn record_duration(&self, duration: Duration) {
-        let mut durations = self.durations.lock().expect("Expected to lock mutex");
-        durations.push(duration)
-    }
-
-    fn durations(&self) -> Vec<Duration> {
-        self.durations
-            .lock()
-            .expect("Expected to lock mutex")
-            .clone()
+    /// Pops `Work` instances from the `WorkQueues` and sends them on the channel.  The returned
+    /// thread is blocked until all `WorkQueues` are emptied.
+    ///
+    /// Once all queues are empty, the channel sender is dropped, allowing the receivers to
+    /// eventually break out of their receiving loops.
+    fn produce(mut self) -> JoinHandle<()> {
+        thread::spawn(move || {
+            let sender = self.sender.take().expect("Expected self.sender to be Some");
+            let mut request_num = 0;
+            for (index, queue) in self.queues.drain(..).enumerate() {
+                for request in queue {
+                    info!("Producer sending work item {} to Client", request_num);
+                    let work = Work::new(request, index, request_num);
+                    request_num += 1;
+                    sender.send(work).expect("Expected to send work");
+                }
+            }
+        })
     }
 }
 
 #[derive(Clone)]
 struct Client {
     ee_client: Arc<ExecutionEngineServiceClient>,
-    work: Work,
+    work_receiver: Receiver<Work>,
+    threadpool: CpuPool,
+    results: Results,
 }
 
 impl Client {
-    fn new(args: &Args) -> Self {
+    fn new(args: &Args, work_receiver: Receiver<Work>, results: Results) -> Self {
         let client_config = Default::default();
         let ee_client = Arc::new(
             ExecutionEngineServiceClient::new_plain_unix(args.socket.as_str(), client_config)
                 .expect("Expected to create Test Client"),
         );
-        info!("Connected on Socket({})", args.socket.as_str());
+        info!("Client connected on Socket({})", args.socket.as_str());
+
+        let threadpool = futures_cpupool::Builder::new()
+            .pool_size(args.thread_count)
+            .name_prefix(THREAD_PREFIX)
+            .create();
+
         Self {
             ee_client,
-            work: Work::new(args),
+            work_receiver,
+            threadpool,
+            results,
         }
     }
 
-    fn send_request(&self) -> Option<GrpcFuture<ExecuteResponse>> {
-        let (request, request_num) = self.work.next_request()?;
+    /// Using the threadpool to execute tasks, this pulls work off the channel, sends the contained
+    /// request to the server and handles the response.
+    fn run(&self) -> CpuFuture<(), ()> {
+        let client = self.clone();
+        let stream = stream::iter_ok::<_, ()>(self.work_receiver.clone());
+        self.threadpool.spawn_fn(|| {
+            stream.for_each(move |work| {
+                client
+                    .send_request(work)
+                    .and_then(move |(work, response)| Self::handle_response(work, response))
+            })
+        })
+    }
+
+    fn send_request(&self, work: Work) -> impl Future<Item = (Work, ExecuteResponse), Error = ()> {
         info!(
-            "Sending 'execute' request {} on {}",
-            request_num,
+            "Client sending 'execute' request {} on {}",
+            work.request_num(),
             thread::current()
                 .name()
                 .expect("Expected current thread to be named")
         );
-        let response_future = self
-            .ee_client
+
+        let (work, request) = work.transition(self.results.clone());
+        self.ee_client
             .execute(RequestOptions::new(), request)
-            .drop_metadata();
-        Some(response_future)
+            .drop_metadata()
+            .map(move |response| (work, response))
+            .map_err(|error| {
+                panic!("Received {:?}", error);
+            })
     }
 
-    fn handle_response(&self, sent_instant: Instant, response: ExecuteResponse) {
-        let duration = Instant::now() - sent_instant;
+    fn handle_response(work: Work, response: ExecuteResponse) -> Result<(), ()> {
         let deploy_result = response
             .get_success()
             .get_deploy_results()
@@ -280,70 +451,36 @@ impl Client {
                 deploy_result.get_execution_result().get_error(),
             );
         }
-
-        info!(
-            "Received successful response on {} in {:?}",
-            thread::current()
-                .name()
-                .expect("Expected current thread to be named"),
-            duration
-        );
-
-        self.work.record_duration(duration);
+        work.complete();
+        Ok(())
     }
-}
-
-fn run_while_work(client: Client) -> impl Future<Item = (), Error = ()> {
-    future::loop_fn(client, move |client| {
-        let start = Instant::now();
-        match client.send_request() {
-            None => Either::A(future::ok(Loop::Break(()))),
-            Some(response_future) => Either::B(
-                response_future
-                    .and_then(move |response| {
-                        client.handle_response(start, response);
-                        Ok(Loop::Continue(client))
-                    })
-                    .map_err(|error| {
-                        panic!("Received {:?}", error);
-                    }),
-            ),
-        }
-    })
 }
 
 fn main() {
     env_logger::init();
 
     let args = Args::new();
-    let client = Client::new(&args);
+    let (work_producer, receiver) = WorkProducer::new(&args);
+    let results = Results::new(&args);
+    let client = Client::new(&args, receiver, results.clone());
 
-    let runtime = runtime::Builder::new()
-        .core_threads(args.thread_count)
-        .name_prefix(THREAD_PREFIX)
-        .build()
-        .expect("Expected to construct tokio runtime");
     let start = Instant::now();
 
-    let client = runtime
-        .block_on_all::<_, _, ()>(future::lazy(move || {
-            for _ in 0..args.thread_count {
-                tokio::spawn(run_while_work(client.clone()));
-            }
-            Ok(client)
-        }))
-        .expect("Expected to join all threads");
+    let client_future = client.run();
+    let producer_thread = work_producer.produce();
+    client_future
+        .wait()
+        .expect("Expected to join client threadpool");
+    producer_thread
+        .join()
+        .expect("Expected to join the producer thread");
 
     let overall_duration = Instant::now() - start;
-    let request_durations = client.work.durations();
-    if !request_durations.is_empty() {
-        let average_duration =
-            Duration::sum(request_durations.iter()) / request_durations.len() as u32;
+
+    if let Some((response_count, mean_duration)) = results.count_and_mean(0) {
         println!(
             "Server handled {} requests in {:?} with an average response time of {:?}",
-            request_durations.len(),
-            overall_duration,
-            average_duration
+            response_count, overall_duration, mean_duration
         );
     }
 }
