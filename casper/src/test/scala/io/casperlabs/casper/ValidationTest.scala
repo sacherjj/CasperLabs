@@ -688,8 +688,15 @@ class ValidationTest
         b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
         d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
-        e       <- createValidatorBlock[Task](Seq(a, b, c), bonds, Seq(a, b, c), v3)
-        dag     <- dagStorage.getRepresentation
+        e <- {
+          // `b` and `c` create an equivocation. Their scores will be 0 but secondary parents
+          // list is sorted. If two values are the same we sort by hash.
+          // We need to make sure that block we create here has the same order of secondary parents
+          // as will be computed in the validation step.
+          val secondarySorted = Seq(b, c).sortBy(_.blockHash.toStringUtf8).reverse
+          createValidatorBlock[Task](Seq(a) ++ secondarySorted, bonds, Seq(a, b, c), v3)
+        }
+        dag <- dagStorage.getRepresentation
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.
         _ <- Validation[Task]
@@ -701,8 +708,7 @@ class ValidationTest
         // While v0 has seen everything so it will use 0 as v2's weight when scoring.
         _ <- Validation[Task]
               .parents(e, genesis.blockHash, dag)
-              .map(_.parents.map(_.blockHash))
-              .attempt shouldBeF Right(Vector(a.blockHash, b.blockHash, c.blockHash))
+              .map(_.parents.map(_.blockHash)) shouldBeF e.getHeader.parentHashes.toVector
       } yield ()
   }
 

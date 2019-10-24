@@ -4,10 +4,10 @@ import cats.Monad
 import cats.implicits._
 import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.equivocations.{EquivocationDetector}
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -18,8 +18,6 @@ object Estimator {
   type Validator = ByteString
 
   import Weight._
-
-  implicit val decreasingOrder = Ordering[Long].reverse
 
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
@@ -55,13 +53,15 @@ object Estimator {
         } yield tips.toList
       }
 
+    val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
+
     for {
       lca <- NonEmptyList
-              .fromList(latestMessageHashes.values.flatten.toList)
+              .fromList(latestMessagesFlattened)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
       scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessageHashes.values.flatten.toList, lca)
+      parents          <- tipsOfLatestMessages(latestMessagesFlattened, lca)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
@@ -83,7 +83,8 @@ object Estimator {
       stopHash: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
-  ): F[Map[BlockHash, Weight]] =
+  ): F[Map[BlockHash, Weight]] = {
+    implicit val decreasingOrder = Ordering[Long].reverse
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHashes)) =>
         for {
@@ -107,8 +108,8 @@ object Estimator {
                            }
                        }
         } yield lmdScore
-
     }
+  }
 
   /**
     * Computes fork choice.

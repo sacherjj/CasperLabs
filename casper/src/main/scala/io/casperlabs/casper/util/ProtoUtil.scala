@@ -6,8 +6,6 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.votingmatrix
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
