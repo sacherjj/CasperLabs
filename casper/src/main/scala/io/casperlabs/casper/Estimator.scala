@@ -4,7 +4,7 @@ import cats.Monad
 import cats.implicits._
 import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.equivocations.{EquivocationDetector}
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable

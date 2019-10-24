@@ -3,7 +3,6 @@ package io.casperlabs.casper.finality
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.votingmatrix.VotingMatrix.{Vote, VotingMatrix}
 import io.casperlabs.catscontrib.MonadStateOps._
 import io.casperlabs.models.{Message, Weight}

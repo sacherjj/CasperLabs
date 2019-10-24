@@ -36,10 +36,7 @@ trait MultiParentCasper[F[_]] {
   ////
 
   def dag: F[DagRepresentation[F]]
-  // This is the weight of faults that have been accumulated so far.
-  // We want the clique oracle to give us a fault tolerance that is greater than
-  // this initial fault weight combined with our fault tolerance threshold t.
-  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float]
+
   def lastFinalizedBlock: F[Block]
   def faultToleranceThreshold: Float
 }

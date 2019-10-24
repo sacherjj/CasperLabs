@@ -7,7 +7,7 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.equivocations.{EquivocationDetector}
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -318,9 +318,7 @@ class FinalityDetectorByVotingMatrixTest
                    )
         _ = c4 shouldBe None
         // so v2 can be detected equivocating
-        _ <- casperState.read.map(
-              _.equivocationsTracker.keySet shouldBe Set(v2)
-            )
+        _ <- dag.getEquivocators.map(_ shouldBe Set(v2))
         (b3, c3) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b2.blockHash),
                      genesis.blockHash,
@@ -388,9 +386,7 @@ class FinalityDetectorByVotingMatrixTest
                    )
         _ = c3 shouldBe None
         // so v1 can be detected equivocating
-        _ <- casperState.read.map(
-              _.equivocationsTracker.keySet shouldBe Set(v1)
-            )
+        _ <- dag.getEquivocators.map(_ shouldBe Set(v1))
         (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b2.blockHash),
                      genesis.blockHash,
@@ -459,9 +455,7 @@ class FinalityDetectorByVotingMatrixTest
                    )
         _ = c3 shouldBe None
         // so v1 can be detected equivocating
-        _ <- casperState.read.map(
-              _.equivocationsTracker.keySet shouldBe Set(v1)
-            )
+        _ <- dag.getEquivocators.map(_ shouldBe Set(v1))
         (b4, c4) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(genesis.blockHash),
                      genesis.blockHash,
@@ -480,9 +474,7 @@ class FinalityDetectorByVotingMatrixTest
                    )
         _ = c5 shouldBe None
         // so v3 can be detected equivocating
-        _ <- casperState.read.map(
-              _.equivocationsTracker.keySet shouldBe Set(v1, v3)
-            )
+        _ <- dag.getEquivocators.map(_ shouldBe Set(v1, v3))
         (b6, c6) <- createBlockAndUpdateFinalityDetector[Task](
                      Seq(b5.blockHash),
                      genesis.blockHash,
@@ -531,8 +523,6 @@ class FinalityDetectorByVotingMatrixTest
               .checkEquivocationWithUpdate(dag, block)
           )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
-      // FinalityDetector works after adding block to DAG
-      equivocationsTracker <- casperState.read.map(_.equivocationsTracker)
       finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
                             dag,
                             block,

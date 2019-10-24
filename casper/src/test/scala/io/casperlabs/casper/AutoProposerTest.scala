@@ -194,10 +194,9 @@ object AutoProposerTest {
     override def estimator(
         dag: DagRepresentation[F],
         lm: Map[ByteString, Set[ByteString]]
-    ): F[List[ByteString]]                                                          = ???
-    override def dag: F[DagRepresentation[F]]                                       = ???
-    override def normalizedInitialFault(weights: Map[ByteString, Weight]): F[Float] = ???
-    override def lastFinalizedBlock: F[Block]                                       = ???
-    override def faultToleranceThreshold                                            = 0f
+    ): F[List[ByteString]]                    = ???
+    override def dag: F[DagRepresentation[F]] = ???
+    override def lastFinalizedBlock: F[Block] = ???
+    override def faultToleranceThreshold      = 0f
   }
 }

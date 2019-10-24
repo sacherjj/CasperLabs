@@ -12,7 +12,7 @@ import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.equivocations.{EquivocationDetector}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
@@ -43,15 +43,11 @@ import scala.util.control.NonFatal
   *
   * @param blockBuffer
   * @param invalidBlockTracker
-  * @param equivocationsTracker Stores the lowest rank of any base block, that is, a block from the
-  *                            equivocating validator which precedes the two or more blocks which
-  *                            equivocated by sharing the same sequence number.
   */
 final case class CasperState(
     blockBuffer: Map[ByteString, Block] = Map.empty,
     invalidBlockTracker: Set[BlockHash] = Set.empty[BlockHash],
-    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty,
-    equivocationsTracker: EquivocationsTracker = EquivocationsTracker.empty
+    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
 )
 
 @silent("is never used")
@@ -417,20 +413,13 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
 
   // Returns latest messages from honest validators
   private def latestMessagesHonestValidators(
-      dag: DagRepresentation[F],
-      casperState: Cell[F, CasperState]
+      dag: DagRepresentation[F]
   ): F[Map[Validator, Message]] =
-    (
-      casperState.read.map(_.equivocationsTracker),
-      dag.latestMessages
-    ).mapN {
-      case (equivocationsTracker, latestMessages) =>
-        latestMessages.collect {
-          case (v, messages)
-              if !equivocationsTracker
-                .contains(v) && messages.size == 1 =>
-            (v, messages.head)
-        }
+    dag.latestMessages.map { latestMessages =>
+      latestMessages.collect {
+        case (v, messages) if messages.size == 1 =>
+          (v, messages.head)
+      }
     }
 
   /** Get the deploys that are not present in the past of the chosen parents. */
@@ -570,15 +559,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   // MultiParentCasper Exposes the block DAG to those who need it.
   def dag: F[DagRepresentation[F]] =
     DagStorage[F].getRepresentation
-
-  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
-    for {
-      state   <- Cell[F, CasperState].read
-      tracker = state.equivocationsTracker
-    } yield tracker.keySet
-      .flatMap(weights.get)
-      .sum
-      .toFloat / weightMapTotal(weights).toFloat
 
   /** After a block is executed we can try to execute the other blocks in the buffer that dependent on it. */
   private def reAttemptBuffer(

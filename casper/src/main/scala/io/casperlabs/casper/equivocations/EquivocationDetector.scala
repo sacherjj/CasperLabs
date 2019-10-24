@@ -49,8 +49,6 @@ object EquivocationDetector {
   def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[?[_], InvalidBlock]](
       dag: DagRepresentation[F],
       block: Block
-  )(
-      implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
       equivocators <- dag.getEquivocators
@@ -62,19 +60,6 @@ object EquivocationDetector {
                     } else {
                       checkEquivocations(dag, block)
                     }
-
-      message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-
-      _ <- MonadThrowable[F].whenA(equivocated)(
-            rankOfEarlierMessageFromCreator(dag, message)
-              .flatMap { earlierRank =>
-                state.modify { s =>
-                  s.copy(
-                    equivocationsTracker = s.equivocationsTracker.updated(creator, earlierRank)
-                  )
-                }
-              }
-          )
       _ <- FunctorRaise[F, InvalidBlock].raise[Unit](EquivocatedBlock).whenA(equivocated)
     } yield ()
 
@@ -222,31 +207,6 @@ object EquivocationDetector {
     def alreadyDetected(v: Validator): Boolean   = detectedEquivocators.contains(v)
     def allDetected(vs: Set[Validator]): Boolean = detectedEquivocators == vs
   }
-
-  /**
-    * Returns rank of last but one message by the same validator, as seen in the j-past-cone of the block.
-    *
-    * This method assumes that the system has removed redundant justifications.
-    *
-    * @param dag The block dag
-    * @param msg Block to run
-    * @tparam F Effect type
-    * @return
-    */
-  private def rankOfEarlierMessageFromCreator[F[_]: Monad: Log](
-      dag: DagRepresentation[F],
-      msg: Message
-  ): F[Long] =
-    DagOperations
-      .toposortJDagDesc(dag, List(msg))
-      .filter(_.validatorId == msg.validatorId)
-      .take(2)
-      .toList
-      .map(
-        _.map(_.rank)
-          .get(1)        // The first element is the block we start traversal, ignore it.
-          .getOrElse(0L) // when reached genesis, return 0, which is the rank of genesis
-      )
 
   // Finds the "base rank" of the equivocations.
   // base rank is defined as the lowest block that sees _any_ equivocation.

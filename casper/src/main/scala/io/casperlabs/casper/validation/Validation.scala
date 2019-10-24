@@ -1,14 +1,12 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.{BlockHash}
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.crypto.Keys.{PublicKey}
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage

@@ -39,7 +39,6 @@ class EquivocationDetectorTest
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
-      casperState: Cell[Task, CasperState],
       log: LogStub[Task]
   ): Task[Block] =
     for {
@@ -77,7 +76,6 @@ class EquivocationDetectorTest
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
-      casperState: Cell[Task, CasperState],
       log: LogStub[Task]
   ): Task[Block] =
     for {
