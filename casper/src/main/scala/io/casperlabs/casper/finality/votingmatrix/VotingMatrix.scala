@@ -56,14 +56,9 @@ object VotingMatrix {
       weights    = block.weightMap
       validators = weights.keySet.toArray
       // Assigns numeric identifiers 0, ..., N-1 to all validators
-      validatorsToIndex = validators.zipWithIndex.toMap
-      n                 = validators.size
-      latestMessagesOfHonestVoters <- dag.latestMessages.map(
-                                       _.collect {
-                                         case (validator, messages) if messages.size == 1 =>
-                                           validator -> messages.head
-                                       }
-                                     )
+      validatorsToIndex            = validators.zipWithIndex.toMap
+      n                            = validators.size
+      latestMessagesOfHonestVoters <- dag.latestMessagesHonestValidators
       // On which child of LFB validators vote on.
       voteOnLFBChild <- latestMessagesOfHonestVoters.toList
                          .traverse {

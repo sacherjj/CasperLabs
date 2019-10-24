@@ -411,17 +411,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield block
 
-  // Returns latest messages from honest validators
-  private def latestMessagesHonestValidators(
-      dag: DagRepresentation[F]
-  ): F[Map[Validator, Message]] =
-    dag.latestMessages.map { latestMessages =>
-      latestMessages.collect {
-        case (v, messages) if messages.size == 1 =>
-          (v, messages.head)
-      }
-    }
-
   /** Get the deploys that are not present in the past of the chosen parents. */
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],

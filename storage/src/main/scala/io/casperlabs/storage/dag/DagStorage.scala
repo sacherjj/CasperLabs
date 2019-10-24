@@ -131,6 +131,15 @@ object DagRepresentation {
     // Returns a mapping between equivocators and their messages.
     def getEquivocations(implicit M: Monad[F]): F[Map[Validator, Set[Message]]] =
       dagRepresentation.latestMessages.map(_.filter(_._2.size > 1))
+
+    // Returns latest messages from honest validators
+    def latestMessagesHonestValidators(implicit M: Monad[F]): F[Map[Validator, Message]] =
+      dagRepresentation.latestMessages.map { latestMessages =>
+        latestMessages.collect {
+          case (v, messages) if messages.size == 1 =>
+            (v, messages.head)
+        }
+      }
   }
 
   def apply[F[_]](implicit ev: DagRepresentation[F]): DagRepresentation[F] = ev
