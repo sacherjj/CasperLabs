@@ -159,9 +159,12 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[Unit] =
       for {
-        _          <- BlockAPI.deploy[Task](deploy)
-        blockHash  <- BlockAPI.propose[Task](blockApiLock)
-        deployInfo <- BlockAPI.getDeployInfo[Task](Base16.encode(deploy.deployHash.toByteArray))
+        _         <- BlockAPI.deploy[Task](deploy)
+        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        deployInfo <- BlockAPI.getDeployInfo[Task](
+                       Base16.encode(deploy.deployHash.toByteArray),
+                       DeployInfo.View.FULL
+                     )
         block <- blockStorage
                   .get(blockHash)
                   .map(_.get.blockMessage.get)
@@ -173,7 +176,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
             BlockInfo
               .Status()
               .withStats(
-                Stats(block.serializedSize, block.getBody.deploys.count(_.isError))
+                Stats(
+                  block.serializedSize,
+                  block.getBody.deploys.count(_.isError),
+                  block.getBody.deploys.map(_.cost).sum
+                )
               )
           )
         expectProcessingResult = ProcessingResult(
@@ -186,10 +193,52 @@ class CreateBlockAPITest extends FlatSpec with Matchers with GossipServiceCasper
         _ = deployInfo.deploy shouldBe deploy.some
         result <- BlockAPI
                    .getDeployInfo[Task](
-                     Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray)
+                     Base16.encode(ByteString.copyFromUtf8("NOT_EXIST").toByteArray),
+                     DeployInfo.View.BASIC
                    )
                    .attempt
-        _ = result.left.get.getMessage should include("Cannot find deploy")
+        _ = result.left.get.getMessage should include("NOT_FOUND: Deploy")
+      } yield ()
+
+    try {
+      (for {
+        casperRef    <- MultiParentCasperRef.of[Task]
+        _            <- casperRef.set(node.casperEff)
+        blockApiLock <- Semaphore[Task](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).unsafeRunSync
+    } finally {
+      node.tearDown()
+    }
+  }
+
+  "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+    val v1 = generateValidator("V1")
+
+    implicit val logEff        = new LogStub[Task]
+    implicit val blockStorage  = node.blockStorage
+    implicit val deployStorage = node.deployStorage
+    implicit val safetyOracle  = node.safetyOracleEff
+
+    def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code), v1)
+
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
+      for {
+        _         <- BlockAPI.deploy[Task](mkDeploy("a"))
+        _         <- BlockAPI.deploy[Task](mkDeploy("b"))
+        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        deploys <- BlockAPI.getBlockDeploys[Task](
+                    Base16.encode(blockHash.toByteArray),
+                    DeployInfo.View.FULL
+                  )
+        block <- blockStorage
+                  .get(blockHash)
+                  .map(_.get.blockMessage.get)
+        _ = deploys shouldBe block.getBody.deploys
       } yield ()
 
     try {

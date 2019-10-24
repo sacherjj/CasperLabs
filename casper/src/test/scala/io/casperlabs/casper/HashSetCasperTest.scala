@@ -1011,7 +1011,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block1)
-      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
       Created(block7) <- nodes(0).casperEff
@@ -1021,7 +1021,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block2)
-      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block8) <- nodes(1).casperEff
@@ -1031,7 +1031,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block3)
-      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
       Created(block9) <- nodes(2).casperEff
@@ -1041,7 +1041,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(1).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block4)
-      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
       Created(block10) <- nodes(0).casperEff
@@ -1051,7 +1051,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _ <- nodes(2).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block5)
-      pendingOrProcessedNum <- nodes(0).deployStorage.sizePendingOrProcessed()
+      pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
@@ -1112,17 +1112,19 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       createA          <- nodes(0).casperEff.createBlock
       Created(blockA)  = createA
       _                <- nodes(0).casperEff.addBlock(blockA) shouldBeF Valid
-      processedDeploys <- nodes(0).deployStorage.readProcessed
+      processedDeploys <- nodes(0).deployStorage.reader.readProcessed
       _                = processedDeploys should contain(deployA)
 
       _               <- nodes(1).casperEff.deploy(deployB)
       createB         <- nodes(1).casperEff.createBlock
       Created(blockB) = createB
+      _               <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       // nodes(1) should have more weight than nodes(0) so it should take over
-      _              <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
-      pendingDeploys <- nodes(0).deployStorage.readPending
-      _              = pendingDeploys should contain(deployA)
-      _              <- nodes.map(_.tearDown()).toList.sequence
+      // Need to propose a new block, it should again contain deployA
+      createC         <- nodes(0).casperEff.createBlock
+      Created(blockC) = createC
+      _               = blockC.getBody.deploys.map(_.getDeploy) should contain(deployA)
+      _               <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
 
@@ -1153,17 +1155,17 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(()) // gets deploy1
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(()) // gets deploy2
       _               <- Task.delay { node.timeEff.clock = 0 }
-      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
+      _               <- node.deployStorage.reader.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
       _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // too early to execute deploy, since t = 1
-      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
+      _               <- node.deployStorage.reader.readPending.map(_.toSet) shouldBeF Set(deploy1, deploy2)
       _               <- Task.delay { node.timeEff.clock = 3 }
       Created(block1) <- node.casperEff.createBlock //now we can execute deploy1, but not deploy2
       _               <- node.casperEff.addBlock(block1) shouldBeF Valid
       _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
-      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set(deploy2)
+      _               <- node.deployStorage.reader.readPending.map(_.toSet) shouldBeF Set(deploy2)
       _               <- Task.delay { node.timeEff.clock = minTTL.toLong + 10L }
       _               <- node.casperEff.createBlock shouldBeF NoNewDeploys // now it is too late to execute deploy2
-      _               <- node.deployStorage.readPending.map(_.toSet) shouldBeF Set.empty[Deploy]
+      _               <- node.deployStorage.reader.readPending.map(_.toSet) shouldBeF Set.empty[Deploy]
       _               <- node.tearDown()
     } yield ()
   }
@@ -1179,12 +1181,12 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _               <- node.casperEff.addBlock(block1) shouldBeF Valid
 
       // Should be finalized, so not stop it appearing again as pending.
-      processedDeploys <- node.deployStorage.readProcessed
+      processedDeploys <- node.deployStorage.reader.readProcessed
       _                = processedDeploys shouldBe empty
 
       // Should be able to enquee the deploy again.
       _               <- node.casperEff.deploy(deploy)
-      pendingDeploys1 <- node.deployStorage.readPending
+      pendingDeploys1 <- node.deployStorage.reader.readPending
       _               = pendingDeploys1 should not be empty
 
       // Should not put it in a block.
@@ -1192,7 +1194,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _       = createB shouldBe CreateBlockStatus.noNewDeploys
 
       // Should discard the deploy.
-      pendingDeploys2 <- node.deployStorage.readPending
+      pendingDeploys2 <- node.deployStorage.reader.readPending
       _               = pendingDeploys2 shouldBe empty
 
       _ <- node.tearDown()

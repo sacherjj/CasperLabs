@@ -550,7 +550,7 @@ object ProtoUtil {
   }
 
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
-    basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
+    basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy), cost = 1L))
 
   def sourceDeploy(source: String, timestamp: Long): Deploy =
     sourceDeploy(ByteString.copyFromUtf8(source), timestamp)

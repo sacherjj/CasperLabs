@@ -17,7 +17,14 @@ trait DoobieCodecs {
     Meta[Array[Byte]].imap(d => PublicKey(ByteString.copyFrom(d)))(_.toByteArray)
 
   protected implicit val readDeploy: Read[Deploy] =
-    Read[Array[Byte]].map(Deploy.parseFrom)
+    Read[(Array[Byte], Option[Array[Byte]])].map {
+      case (deploySummary, maybeDeployBody) =>
+        val deploy = Deploy.parseFrom(deploySummary)
+        val maybeBody = maybeDeployBody
+          .filterNot(_.isEmpty)
+          .map(Deploy.Body.parseFrom) orElse deploy.body
+        maybeBody.map(deploy.withBody).getOrElse(deploy)
+    }
 
   protected implicit val readDeployHeader: Read[Deploy.Header] =
     Read[Array[Byte]].map(Deploy.Header.parseFrom)
@@ -37,9 +44,21 @@ trait DoobieCodecs {
     }
   }
 
-  protected implicit val readDeployAndProcessingResult: Read[(ByteString, ProcessingResult)] = {
-    Read[(Array[Byte], Long, Option[String], Array[Byte], Int, Int)].map {
-      case (deployHash, cost, maybeError, blockSummaryData, blockSize, deployErrorCount) =>
+  protected implicit val readProcessedDeploy: Read[ProcessedDeploy] = {
+    Read[(Deploy, Long, Option[String])].map {
+      case (deploy, cost, maybeError) =>
+        ProcessedDeploy(
+          deploy = Option(deploy),
+          cost = cost,
+          isError = maybeError.nonEmpty,
+          errorMessage = maybeError.getOrElse("")
+        )
+    }
+  }
+
+  protected implicit val readBlockInfo: Read[BlockInfo] = {
+    Read[(Array[Byte], Int, Int, Long)].map {
+      case (blockSummaryData, blockSize, deployErrorCount, deployCostTotal) =>
         val blockSummary = BlockSummary.parseFrom(blockSummaryData)
         val blockStatus = BlockInfo
           .Status()
@@ -48,18 +67,22 @@ trait DoobieCodecs {
               .Stats()
               .withBlockSizeBytes(blockSize)
               .withDeployErrorCount(deployErrorCount)
+              .withDeployCostTotal(deployCostTotal)
           )
-        val blockInfo = BlockInfo()
+        BlockInfo()
           .withSummary(blockSummary)
           .withStatus(blockStatus)
-        (
-          ByteString.copyFrom(deployHash),
-          ProcessingResult(
-            cost = cost,
-            isError = maybeError.nonEmpty,
-            errorMessage = maybeError.getOrElse("")
-          ).withBlockInfo(blockInfo)
-        )
+    }
+  }
+
+  protected implicit val readDeployAndProcessingResult: Read[ProcessingResult] = {
+    Read[(Long, Option[String], BlockInfo)].map {
+      case (cost, maybeError, blockInfo) =>
+        ProcessingResult(
+          cost = cost,
+          isError = maybeError.nonEmpty,
+          errorMessage = maybeError.getOrElse("")
+        ).withBlockInfo(blockInfo)
     }
   }
 
