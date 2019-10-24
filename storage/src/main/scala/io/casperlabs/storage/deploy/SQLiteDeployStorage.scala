@@ -401,37 +401,13 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         override def getDeployInfo(
             deployHash: DeployHash
-        ): F[Option[DeployInfo]] = {
-          val processingResults =
-            sql"""|SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, bm.data, bm.block_size, bm.deploy_error_count, bm.deploy_cost_total
-            |FROM deploy_process_results dpr
-            |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
-            |WHERE dpr.deploy_hash = $deployHash""".stripMargin
-              .query[(DeployHash, ProcessingResult)]
-              .to[List]
-              .transact(xa)
-
+        ): F[Option[DeployInfo]] =
           getByHash(deployHash) flatMap {
             case None =>
               none[DeployInfo].pure[F]
             case Some(deploy) =>
-              for {
-                maybeStatus <- getBufferedStatus(deployHash)
-                prs         <- processingResults.map(l => l.map { case (_, prs) => prs })
-                info = if (prs.nonEmpty) {
-                  DeployInfo()
-                    .withDeploy(deploy)
-                    .withStatus(
-                      maybeStatus getOrElse DeployInfo
-                        .Status(DeployInfo.State.FINALIZED)
-                    )
-                    .withProcessingResults(prs)
-                } else {
-                  DeployInfo(status = maybeStatus).withDeploy(deploy)
-                }
-              } yield info.some
+              getDeployInfos(List(deploy)).map(_.headOption)
           }
-        }
 
         override def getDeploysByAccount(
             account: PublicKeyBS,

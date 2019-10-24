@@ -68,7 +68,7 @@ service CasperService {
     // Get deploys list of a given account
     rpc ListDeployInfos (ListDeployInfosRequest) returns (ListDeployInfosResponse) {
         option (google.api.http) = {
-            get: "v2/account/{account_public_key_base16=*}/deploys"
+            get: "v2/accounts/{account_public_key_base16=*}/deploys"
         };
     }
 }
