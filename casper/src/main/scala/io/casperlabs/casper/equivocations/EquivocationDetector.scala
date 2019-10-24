@@ -165,7 +165,7 @@ object EquivocationDetector {
       justificationMsgHashes: Map[Validator, Set[BlockHash]]
   ): F[Set[Validator]] =
     for {
-      equivocations <- dag.latestMessages.map(_.filter(_._2.size > 1))
+      equivocations <- dag.getEquivocations
       minBaseRank   = findMinBaseRank(equivocations)
       equivocators <- minBaseRank.fold(Set.empty[Validator].pure[F])(minBaseRank => {
                        for {
