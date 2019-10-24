@@ -10,9 +10,11 @@ use contract_ffi::contract_api::{runtime, ContractRef, Error};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
+const GET_CALLER_KEY: &str = "get_caller";
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let get_caller_uref = runtime::get_key("get_caller").unwrap_or_revert_with(Error::GetKey);
+    let get_caller_uref = runtime::get_key(GET_CALLER_KEY).unwrap_or_revert_with(Error::GetKey);
     let contract_ref = match get_caller_uref {
         Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),

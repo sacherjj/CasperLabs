@@ -14,6 +14,10 @@ use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;
 
+const LIST_KEY: &str = "list";
+const MAILING_KEY: &str = "mailing";
+const MAILING_LIST_EXT: &str = "mailing_list_ext";
+
 enum Arg {
     MethodName = 0,
     Arg1 = 1,
@@ -37,7 +41,7 @@ fn get_list_key(name: &str) -> TURef<Vec<String>> {
 }
 
 fn update_list(name: String) {
-    let list_key = get_list_key("list");
+    let list_key = get_list_key(LIST_KEY);
     let mut list = storage::read(list_key.clone())
         .unwrap_or_revert_with(ApiError::Read)
         .unwrap_or_revert_with(ApiError::ValueNotFound);
@@ -59,7 +63,7 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
 }
 
 fn publish(msg: String) {
-    let curr_list = storage::read(get_list_key("list"))
+    let curr_list = storage::read(get_list_key(LIST_KEY))
         .unwrap_or_revert_with(ApiError::Read)
         .unwrap_or_revert_with(ApiError::ValueNotFound);
     for name in curr_list.iter() {
@@ -107,9 +111,9 @@ pub extern "C" fn call() {
 
     //create map of references for stored contract
     let mut mailing_list_urefs: BTreeMap<String, Key> = BTreeMap::new();
-    let key_name = String::from("list");
+    let key_name = String::from(LIST_KEY);
     mailing_list_urefs.insert(key_name, list_key.into());
 
-    let pointer = storage::store_function_at_hash("mailing_list_ext", mailing_list_urefs);
-    runtime::put_key("mailing", &pointer.into())
+    let pointer = storage::store_function_at_hash(MAILING_LIST_EXT, mailing_list_urefs);
+    runtime::put_key(MAILING_KEY, &pointer.into())
 }
