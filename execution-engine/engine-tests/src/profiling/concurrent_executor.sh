@@ -53,11 +53,16 @@ run_client() {
         --socket=$SOCKET --pre-state-hash=$PRE_STATE_HASH --threads=$CLIENT_THREAD_COUNT --requests=$MESSAGE_COUNT)
 }
 
-kill_server_and_clean_up() {
+kill_server() {
     kill -SIGINT $SERVER_PID
     wait $SERVER_PID
+}
+
+clean_up() {
     rm -rf $TEMP_DIR
 }
+
+trap clean_up EXIT
 
 if [[ $# -eq 3 ]]; then
     validate_and_assign_arg $1 $MIN_THREADS  $MAX_THREADS  SERVER_THREAD_COUNT
@@ -70,6 +75,6 @@ fi
 build_contracts_and_run_state_initializer
 run_server
 run_client
-kill_server_and_clean_up
+kill_server
 
 printf "\nWith %d Server threads and %d Client threads, %s\n\n" $SERVER_THREAD_COUNT $CLIENT_THREAD_COUNT "$CLIENT_OUTPUT"
