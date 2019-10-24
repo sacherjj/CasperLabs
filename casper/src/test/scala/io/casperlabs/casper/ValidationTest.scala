@@ -694,15 +694,15 @@ class ValidationTest
         // It will choose C as a main parent and A as a secondary one.
         _ <- Validation[Task]
               .parents(d, genesis.blockHash, dag)
-              .map(_.parents)
+              .map(_.parents.map(_.blockHash))
               .attempt shouldBeF Right(
-              Vector(c, a)
+              Vector(c.blockHash, a.blockHash)
             )
         // While v0 has seen everything so it will use 0 as v2's weight when scoring.
         _ <- Validation[Task]
               .parents(e, genesis.blockHash, dag)
-              .map(_.parents)
-              .attempt shouldBeF Right(Vector(a, b, c))
+              .map(_.parents.map(_.blockHash))
+              .attempt shouldBeF Right(Vector(a.blockHash, b.blockHash, c.blockHash))
       } yield ()
   }
 
