@@ -62,20 +62,22 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           .find(_.validatorPublicKey == blockSummary.validatorPublicKey)
           .map(_.latestBlockHash)
 
+        val insertQuery =
+          sql""" INSERT OR IGNORE INTO validator_latest_messages (validator, block_hash)
+                 VALUES (${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin
+
         validatorPreviousMessage
           .fold {
             // No previous message visible from the justifications.
             // This is the first block from this validator (at least according to the creator of the message).
-            sql""" INSERT OR IGNORE INTO validator_latest_messages (validator, block_hash)
-                 VALUES (${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin.update.run
+            insertQuery.update.run
           } { lastMessageHash =>
             // Delete previous entry if the new block cites it.
             // Insert new one.
             sql"""|DELETE FROM validator_latest_messages
                   |WHERE validator = ${blockSummary.validatorPublicKey}
                   |AND block_hash = $lastMessageHash""".stripMargin.update.run >>
-              sql"""|INSERT OR IGNORE INTO validator_latest_messages (validator, block_hash)
-                    |VALUES (${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin.update.run
+              insertQuery.update.run
           }
       } else ().pure[ConnectionIO]
 
