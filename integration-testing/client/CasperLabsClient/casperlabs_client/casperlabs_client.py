@@ -873,7 +873,6 @@ def deploy_command(casperlabs_client, args):
             p = pkg_resources.resource_filename(__name__, "standard_payment.wasm")
             if not os.path.exists(p):
                 raise Exception(f"No bundled contract {p}")
-            logging.info(f"DEPLOY: Using {p} as a payment contract.")
             args.payment = p
 
     kwargs = dict(
@@ -896,8 +895,6 @@ def deploy_command(casperlabs_client, args):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
-    logging.info(f"DEPLOY: {kwargs}")
-    print(f"DEPLOY: {kwargs}")
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
