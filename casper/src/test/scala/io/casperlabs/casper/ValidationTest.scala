@@ -665,7 +665,7 @@ class ValidationTest
       } yield result
   }
 
-  // See [[/resources/casper/localDetectedForeignDidnt.svg]]
+  // See [[/resources/casper/localDetectedForeignDidnt.jpg]]
   it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val v0 = generateValidator("v0")
