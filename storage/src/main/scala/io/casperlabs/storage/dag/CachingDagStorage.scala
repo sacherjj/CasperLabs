@@ -6,6 +6,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
@@ -83,7 +84,7 @@ class CachingDagStorage[F[_]: Concurrent](
       start <- missingRanks.minimumOption
       end   <- missingRanks.maximumOption
     } yield topoSort(start, end).compile.toList
-      .flatMap(summaries => summaries.flatten.traverse_(unsafeCacheSummary)) >> unsafeUpdateRanks(
+      .flatMap(infos => infos.flatten.flatMap(_.summary).traverse_(unsafeCacheSummary)) >> unsafeUpdateRanks(
       start,
       end
     )).getOrElse(().pure[F])
@@ -143,14 +144,14 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]] =
+  ): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSort(startBlockNumber, endBlockNumber)
 
   /** Return ranks of blocks in the DAG from a start index to the end. */
-  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
+  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSort(startBlockNumber)
 
-  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]] =
+  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSortTail(tailLength)
 
   override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =

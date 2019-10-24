@@ -117,11 +117,8 @@ fn main() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut test_builder = LmdbWasmTestBuilder::open(
-        &args.data_dir,
-        EngineConfig::new().set_use_payment_code(true),
-        root_hash,
-    );
+    let mut test_builder =
+        LmdbWasmTestBuilder::open(&args.data_dir, EngineConfig::new(), root_hash);
 
     test_builder.exec(exec_request).expect_success().commit();
 

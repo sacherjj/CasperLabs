@@ -7,6 +7,7 @@ import cats.implicits._
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
@@ -28,19 +29,21 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
+
   override def insert(block: Block): F[DagRepresentation[F]] = {
     val blockSummary     = BlockSummary.fromBlock(block)
     val deployErrorCount = block.getBody.deploys.count(_.isError)
+    val deployCostTotal  = block.getBody.deploys.map(_.cost).sum
     val blockMetadataQuery =
       sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, validator, rank, data, block_size, deploy_error_count)
-            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount)
+            |(block_hash, validator, rank, data, block_size, deploy_error_count, deploy_cost_total)
+            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal)
             |""".stripMargin.update.run
 
     val justificationsQuery =
       Update[(BlockHash, BlockHash)](
-        """|INSERT OR IGNORE INTO block_justifications 
-           |(justification_block_hash, block_hash) 
+        """|INSERT OR IGNORE INTO block_justifications
+           |(justification_block_hash, block_hash)
            |VALUES (?, ?)""".stripMargin
       ).updateMany(
         blockSummary.justifications
@@ -81,8 +84,8 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
         ().pure[ConnectionIO]
       } else {
         Update[(BlockHash, BlockHash)](
-          """|INSERT OR IGNORE INTO block_parents 
-             |(parent_block_hash, child_block_hash) 
+          """|INSERT OR IGNORE INTO block_parents
+             |(parent_block_hash, child_block_hash)
              |VALUES (?, ?)""".stripMargin
         ).updateMany(blockSummary.parentHashes.map((_, blockSummary.blockHash)).toList).void
       }
@@ -114,23 +117,23 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
   override def children(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT child_block_hash
-          |FROM block_parents 
+          |FROM block_parents
           |WHERE parent_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
       .transact(xa)
 
   override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
-    sql"""|SELECT block_hash 
-          |FROM block_justifications 
+    sql"""|SELECT block_hash
+          |FROM block_justifications
           |WHERE justification_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
       .transact(xa)
 
   override def lookup(blockHash: BlockHash): F[Option[Message]] =
-    sql"""|SELECT data 
-          |FROM block_metadata 
+    sql"""|SELECT data
+          |FROM block_metadata
           |WHERE block_hash=$blockHash""".stripMargin
       .query[BlockSummary]
       .option
@@ -138,8 +141,8 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       .flatMap(Message.fromOptionalSummary[F](_))
 
   override def contains(blockHash: BlockHash): F[Boolean] =
-    sql"""|SELECT 1 
-          |FROM block_metadata 
+    sql"""|SELECT 1
+          |FROM block_metadata
           |WHERE block_hash=$blockHash""".stripMargin
       .query[Long]
       .option
@@ -149,29 +152,29 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockSummary]] =
-    sql"""|SELECT rank, data
+  ): fs2.Stream[F, Vector[BlockInfo]] =
+    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
           |ORDER BY rank
           |""".stripMargin
-      .query[(Long, BlockSummary)]
+      .query[(Long, BlockInfo)]
       .stream
       .transact(xa)
       .groupByRank
 
-  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockSummary]] =
-    sql"""|SELECT rank, data
+  override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
+    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE rank>=$startBlockNumber
           |ORDER BY rank""".stripMargin
-      .query[(Long, BlockSummary)]
+      .query[(Long, BlockInfo)]
       .stream
       .transact(xa)
       .groupByRank
 
-  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockSummary]] =
-    sql"""|SELECT a.rank, a.data
+  override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
+    sql"""|SELECT a.rank, a.data, a.block_size, a.deploy_error_count, deploy_cost_total
           |FROM block_metadata a
           |INNER JOIN (
           | SELECT max(rank) max_rank FROM block_metadata
@@ -179,7 +182,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |ON a.rank>b.max_rank-$tailLength
           |ORDER BY a.rank
           |""".stripMargin
-      .query[(Long, BlockSummary)]
+      .query[(Long, BlockInfo)]
       .stream
       .transact(xa)
       .groupByRank
@@ -229,18 +232,18 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 object SQLiteDagStorage {
 
   private case class Fs2State(
-      buffer: Vector[BlockSummary] = Vector.empty,
+      buffer: Vector[BlockInfo] = Vector.empty,
       rank: Long = -1
   )
 
   private implicit class StreamOps[F[_]: Bracket[*[_], Throwable]](
-      val stream: fs2.Stream[F, (Long, BlockSummary)]
+      val stream: fs2.Stream[F, (Long, BlockInfo)]
   ) {
     private type ErrorOr[B] = Either[Throwable, B]
-    private type G[B]       = StateT[ErrorOr, Vector[Vector[BlockSummary]], B]
+    private type G[B]       = StateT[ErrorOr, Vector[Vector[BlockInfo]], B]
 
     /* Returns block summaries grouped by ranks, in ascending order. */
-    def groupByRank: fs2.Stream[F, Vector[BlockSummary]] = go(Fs2State(), stream).stream
+    def groupByRank: fs2.Stream[F, Vector[BlockInfo]] = go(Fs2State(), stream).stream
 
     /** Check [[https://fs2.io/guide.html#statefully-transforming-streams]]
       * and [[https://blog.leifbattermann.de/2017/10/08/error-and-state-handling-with-monad-transformers-in-scala/]]
@@ -248,24 +251,24 @@ object SQLiteDagStorage {
       *  */
     private def go(
         state: Fs2State,
-        s: fs2.Stream[F, (Long, BlockSummary)]
-    ): fs2.Pull[F, Vector[BlockSummary], Unit] =
+        s: fs2.Stream[F, (Long, BlockInfo)]
+    ): fs2.Pull[F, Vector[BlockInfo], Unit] =
       s.pull.uncons.flatMap {
         case Some((chunk, streamTail)) =>
           chunk
             .foldLeftM[G, Fs2State](state) {
-              case (Fs2State(_, currentRank), (rank, summary)) if currentRank == -1 =>
-                Fs2State(Vector(summary), rank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, summary)) if rank == currentRank =>
-                Fs2State(acc :+ summary, currentRank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, summary)) if rank > currentRank =>
-                put(acc) >> Fs2State(Vector(summary), rank).pure[G]
-              case (Fs2State(acc, currentRank), (rank, summary)) =>
+              case (Fs2State(_, currentRank), (rank, info)) if currentRank == -1 =>
+                Fs2State(Vector(info), rank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, info)) if rank == currentRank =>
+                Fs2State(acc :+ info, currentRank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, info)) if rank > currentRank =>
+                put(acc) >> Fs2State(Vector(info), rank).pure[G]
+              case (Fs2State(acc, currentRank), (rank, info)) =>
                 error(
                   new IllegalArgumentException(
                     s"Ranks must increase monotonically, got prev rank: $currentRank, prev block: ${msg(
                       acc.last
-                    )}, next rank: ${rank}, next block: ${msg(summary)}"
+                    )}, next rank: ${rank}, next block: ${msg(info)}"
                   )
                 )
             }
@@ -279,14 +282,14 @@ object SQLiteDagStorage {
         case None => fs2.Pull.output(fs2.Chunk(state.buffer)) >> fs2.Pull.done
       }
 
-    private def put(summaries: Vector[BlockSummary]) =
-      StateT.modify[ErrorOr, Vector[Vector[BlockSummary]]](_ :+ summaries)
+    private def put(infos: Vector[BlockInfo]) =
+      StateT.modify[ErrorOr, Vector[Vector[BlockInfo]]](_ :+ infos)
 
     private def error(e: Throwable) =
-      StateT.liftF[ErrorOr, Vector[Vector[BlockSummary]], Fs2State](e.asLeft[Fs2State])
+      StateT.liftF[ErrorOr, Vector[Vector[BlockInfo]], Fs2State](e.asLeft[Fs2State])
 
-    private def msg(summary: BlockSummary): String =
-      Base16.encode(summary.blockHash.toByteArray).take(10)
+    private def msg(info: BlockInfo): String =
+      Base16.encode(info.getSummary.blockHash.toByteArray).take(10)
   }
 
   private[storage] def create[F[_]: Sync](

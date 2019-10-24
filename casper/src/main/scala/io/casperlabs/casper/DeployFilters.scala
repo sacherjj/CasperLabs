@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 
 import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.ValidationImpl.MAX_TTL
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
@@ -18,58 +19,85 @@ import io.casperlabs.storage.dag.DagRepresentation
 object DeployFilters {
 
   /**
-    * Retains only deploys where `deploy.header.timestamp` is less than or equal
-    * to the given timestamp.
+    * Creates a function which returns true for deploys where `deploy.header.timestamp`
+    * is less than or equal to the given timestamp.
     */
-  def timestampBefore[F[_]](
-      timestamp: Long
-  ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
-    _.filter {
-      case (_, header) =>
-        header.timestamp <= timestamp
-    }
+  def timestampBefore(timestamp: Long): Deploy.Header => Boolean = _.timestamp <= timestamp
 
   /**
-    * Retains only deploys where `deploy.header.timestamp + deploy.header.ttl_millis`
-    * is greater than or equal to the given timestamp. I.e. this takes deploys that
-    * are not expired as of the provided timestamp.
+    * Creates a function which returns true for deploys where
+    * `deploy.header.timestamp + deploy.header.ttl_millis` is greater than or
+    * equal to the given timestamp. I.e. this takes deploys that are not expired as of
+    * the provided timestamp.
     */
-  def ttlAfter[F[_]](
-      timestamp: Long
-  ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
-    _.filter {
-      case (_, header) =>
-        val ttl = ProtoUtil.getTimeToLive(header, MAX_TTL)
-        timestamp <= (header.timestamp + ttl)
-    }
+  def notExpired(timestamp: Long): Deploy.Header => Boolean = header => {
+    val ttl = ProtoUtil.getTimeToLive(header, MAX_TTL)
+    timestamp <= (header.timestamp + ttl)
+  }
 
   /**
-    * Retains only deploys where all `deploy.header.dependencies` are contained in
-    * blocks in the p-past-cone of one or more of the provided `parents`.
+    * Creates a function which returns true for deploys where all
+    * `deploy.header.dependencies` are contained in blocks in the
+    * p-past-cone of one or more of the provided `parents`.
     */
   def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
       dag: DagRepresentation[F],
-      parents: Seq[Block]
-  ): fs2.Pipe[F, Deploy, Deploy] =
-    _.evalMap { deploy =>
-      val dependencies = deploy.getHeader.dependencies.toList
-      val unmetDependenciesF =
-        if (dependencies.nonEmpty)
-          filterDeploysNotInPast(dag, parents, dependencies)
-        else List.empty[ByteString].pure[F]
+      parents: Set[BlockHash]
+  ): Deploy => F[Boolean] = { deploy =>
+    val dependencies = deploy.getHeader.dependencies.toList
 
-      unmetDependenciesF.map { unmetDependencies =>
-        if (unmetDependencies.isEmpty) deploy.some
-        else none[Deploy]
-      }
-    }.unNone
+    if (dependencies.nonEmpty)
+      filterDeploysNotInPast(dag, parents, dependencies).map(_.isEmpty)
+    else true.pure[F]
+  }
+
+  object Pipes {
+    def timestampBefore[F[_]](
+        timestamp: Long
+    ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
+      filter(tupleRight(DeployFilters.timestampBefore(timestamp)))
+
+    def notExpired[F[_]](
+        timestamp: Long
+    ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
+      filter(tupleRight(DeployFilters.notExpired(timestamp)))
+
+    def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
+        dag: DagRepresentation[F],
+        parents: Set[BlockHash]
+    ): fs2.Pipe[F, Deploy, Deploy] =
+      filterA(DeployFilters.dependenciesMet(dag, parents))
+
+    /**
+      * Lifts a boolean function on A to one on (B, A) by acting only
+      * on the right element of the tuple.
+      */
+    private def tupleRight[A, B](condition: A => Boolean): ((B, A)) => Boolean = {
+      case (_, a) => condition(a)
+    }
+
+    /**
+      * Convenience method for creating a Pipe from a boolean condition.
+      * Retains only elements that meet the condition.
+      */
+    private def filter[F[_], A](condition: A => Boolean): fs2.Pipe[F, A, A] = _.filter(condition)
+
+    /**
+      * Convenience method for creating a Pipe from a boolean condition with effect.
+      * Retains only elements that meet the condition.
+      */
+    private def filterA[F[_]: cats.Functor, A](condition: A => F[Boolean]): fs2.Pipe[F, A, A] =
+      _.evalMap { a =>
+        condition(a).map(result => if (result) a.some else none[A])
+      }.unNone
+  }
 
   /** Find deploys which either haven't been processed yet or are in blocks which are
     * not in the past cone of the chosen parents.
     */
   def filterDeploysNotInPast[F[_]: MonadThrowable: BlockStorage](
       dag: DagRepresentation[F],
-      parents: Seq[Block],
+      parents: Set[BlockHash],
       deployHashes: List[ByteString]
   ): F[List[ByteString]] =
     for {
@@ -83,13 +111,11 @@ object DeployFilters {
 
       blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 
-      // Find the blocks from which there's a way through the descendants to reach a tip.
-      parentSet = parents.map(_.blockHash).toSet
       nonOrphanedBlockHashes <- DagOperations
                                  .collectWhereDescendantPathExists[F](
                                    dag,
                                    blockHashes.toSet,
-                                   parentSet
+                                   parents
                                  )
 
       deploysNotInPast = deployHashToBlocksMap.collect {

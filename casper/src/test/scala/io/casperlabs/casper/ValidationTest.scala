@@ -9,7 +9,13 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
+import io.casperlabs.casper.helper.{
+  BlockGenerator,
+  DeployOps,
+  HashSetCasperTestNode,
+  StorageFixture
+}
+import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
@@ -163,6 +169,12 @@ class ValidationTest
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
     }
+    def changeTimestamp(t: Long): Block = {
+      val header    = b.getHeader
+      val newHeader = header.withTimestamp(t)
+
+      ProtoUtil.unsignedBlockProto(b.getBody, newHeader)
+    }
     def changeSigAlgorithm(sigAlgorithm: String): Block =
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
     def changeSig(sig: ByteString): Block =
@@ -295,67 +307,34 @@ class ValidationTest
   }
 
   it should "not accept too short time to live" in withoutStorage {
-    val minTTL = 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(1, minTTL - 1)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooShortTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MIN_TTL)
     )
   }
 
   it should "not accept too long time to live" in withoutStorage {
-    val maxTTL = 24 * 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooLongTTL()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MAX_TTL)
     )
   }
 
   it should "not accept too many dependencies" in withoutStorage {
-    val maxDependencies = 10
-    val genDeploy = for {
-      d               <- arbitrary[consensus.Deploy]
-      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
-      dependencies    <- Gen.listOfN(numDependencies, genHash)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(dependencies)
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomTooManyDependencies()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        maxDependencies
+        ValidationImpl.MAX_DEPENDENCIES
       )
     )
   }
 
   it should "not accept invalid dependencies" in withoutStorage {
-    val genDeploy = for {
-      d          <- arbitrary[consensus.Deploy]
-      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
-      dependency <- genBytes(nBytes)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(List(dependency))
-    )
-
-    val deploy = sample(genDeploy)
+    val deploy = DeployOps.randomInvalidDependency()
     Validation[Task].deployHeader(deploy) shouldBeF List(
       DeployHeaderError
         .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
@@ -942,6 +921,101 @@ class ValidationTest
       } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
   }
 
+  private def shouldBeInvalidDeployHeader(deploy: consensus.Deploy) = withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploysWithCost = Vector(deploy.processed(1))
+      for {
+        block  <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
+  }
+
+  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooShortTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too long a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooLongTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too many dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooManyDependencies())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has invalid dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomInvalidDependency())
+  }
+
+  it should "return DeployFromFuture when a deploy timestamp is later than the block timestamp" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployFromFuture))
+  }
+
+  it should "return DeployExpired when a deploy is past its TTL" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp + deploy.getHeader.ttlMillis + 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
+  }
+
+  it should "return DeployDependencyNotMet when a deploy has a dependency not in the p-past cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA        = DeployOps.randomNonzeroTTL()
+      val deployB        = deployA.withDependencies(List(deployA.deployHash))
+      val blockTimestamp = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deployB.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
+  }
+
+  it should "work for valid deploys" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA = DeployOps.randomNonzeroTTL()
+      val deployB = DeployOps
+        .randomNonzeroTTL()
+        .withTimestamp(deployA.getHeader.timestamp + deployA.getHeader.ttlMillis)
+      val deployC = DeployOps
+        .randomNonzeroTTL()
+        .withDependencies(List(deployA.deployHash, deployB.deployHash))
+        .withTimestamp(deployB.getHeader.timestamp + deployB.getHeader.ttlMillis)
+      val timeA = deployA.getHeader.timestamp + deployA.getHeader.ttlMillis - 1
+      val timeB = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      val timeC = deployC.getHeader.timestamp + deployC.getHeader.ttlMillis - 1
+
+      for {
+        blockA <- createBlock[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
+                   .map(_.changeTimestamp(timeA))
+        _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
+        blockB <- createBlock[Task](List(blockA.blockHash), deploys = Vector(deployB.processed(1)))
+                   .map(_.changeTimestamp(timeB))
+        _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
+        blockC <- createBlock[Task](List(blockB.blockHash), deploys = Vector(deployC.processed(1)))
+                   .map(_.changeTimestamp(timeC))
+        _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(blockC, dag).attempt
+      } yield result shouldBe Right(())
+  }
+
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val contract        = ByteString.copyFromUtf8("some contract")
@@ -1010,7 +1084,7 @@ class ValidationTest
         5 * 1024 * 1024
       )
       for {
-        _ <- deployStorage.addAsPending(deploys.toList)
+        _ <- deployStorage.writer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               fs2.Stream.fromIterator[Task](deploys.toIterator),

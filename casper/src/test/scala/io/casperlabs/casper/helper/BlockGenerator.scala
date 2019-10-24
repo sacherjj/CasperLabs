@@ -20,7 +20,7 @@ import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, IndexedDagStorage}
-import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import monix.eval.Task
 
 import scala.collection.immutable.HashMap
@@ -84,7 +84,7 @@ object BlockGenerator {
       implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
         5 * 1024 * 1024
       )
-      _ <- DeployStorage[F].addAsPending(deploys.toList)
+      _ <- DeployStorageWriter[F].addAsPending(deploys.toList)
       result <- computeDeploysCheckpoint[F](
                  merged,
                  fs2.Stream.fromIterator(deploys.toIterator),

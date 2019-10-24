@@ -162,15 +162,14 @@ object AutoProposerTest {
   }
 
   object MockMultiParentCasper {
-    def apply[F[_]: Sync: MultiParentCasperRef: DeployStorageReader: DeployStorageWriter] =
+    def apply[F[_]: Sync: MultiParentCasperRef: DeployStorage] =
       for {
         c <- Sync[F].delay(new MockMultiParentCasper[F]())
         _ <- MultiParentCasperRef[F].set(c)
       } yield c
   }
 
-  class MockMultiParentCasper[F[_]: Sync: DeployStorageReader: DeployStorageWriter]
-      extends MultiParentCasper[F] {
+  class MockMultiParentCasper[F[_]: Sync: DeployStorage] extends MultiParentCasper[F] {
 
     @volatile var proposalCount = 0
 

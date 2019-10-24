@@ -88,11 +88,6 @@ const ARG_THREAD_COUNT_VALUE: &str = "NUM";
 const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
 const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
 
-// use-payment-code feature flag
-const ARG_USE_PAYMENT_CODE: &str = "use-payment-code";
-const ARG_USE_PAYMENT_CODE_SHORT: &str = "x";
-const ARG_USE_PAYMENT_CODE_HELP: &str = "Enables the use of payment code";
-
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
 const RUNNABLE_CHECK_INTERVAL_SECONDS: u64 = 3;
@@ -204,12 +199,6 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_THREAD_COUNT_HELP),
         )
         .arg(
-            Arg::with_name(ARG_USE_PAYMENT_CODE)
-                .short(ARG_USE_PAYMENT_CODE_SHORT)
-                .long(ARG_USE_PAYMENT_CODE)
-                .help(ARG_USE_PAYMENT_CODE_HELP),
-        )
-        .arg(
             Arg::with_name(ARG_SOCKET)
                 .required(true)
                 .help(ARG_SOCKET_HELP)
@@ -269,10 +258,10 @@ fn get_thread_count(matches: &ArgMatches) -> usize {
         .expect(ARG_THREAD_COUNT_EXPECT)
 }
 
-/// Parses `use-payment-code` argument and returns an [`EngineConfig`].
-fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
-    let use_payment_code = matches.is_present(ARG_USE_PAYMENT_CODE);
-    EngineConfig::new().set_use_payment_code(use_payment_code)
+/// Returns an [`EngineConfig`].
+fn get_engine_config(_matches: &ArgMatches) -> EngineConfig {
+    // feature flags go here
+    EngineConfig::new()
 }
 
 /// Builds and returns a gRPC server.

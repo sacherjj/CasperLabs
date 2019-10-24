@@ -99,7 +99,7 @@ abstract class HashSetCasperTestNode[F[_]](
       _ <- tearDownNode()
       _ <- blockStorage.clear()
       _ <- dagStorage.clear()
-      _ <- deployStorage.clear()
+      _ <- deployStorage.writer.clear()
     } yield ()
 
   /** Close storage. */
@@ -107,7 +107,7 @@ abstract class HashSetCasperTestNode[F[_]](
     for {
       _ <- blockStorage.close()
       _ <- dagStorage.close()
-      _ <- deployStorage.close()
+      _ <- deployStorage.writer.close()
     } yield ()
 
   def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)

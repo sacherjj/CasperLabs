@@ -1,12 +1,13 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.casper.Estimator.{BlockHash}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
-import io.casperlabs.crypto.Keys.{PublicKey}
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
@@ -57,7 +58,11 @@ trait Validation[F[_]] {
       dag: DagRepresentation[F],
       chainName: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit]
+  )(
+      implicit bs: BlockStorage[F],
+      versions: CasperLabsProtocolVersions[F],
+      compiler: Fs2Compiler[F]
+  ): F[Unit]
 
   def preTimestamp(b: Block): F[Option[FiniteDuration]]
 }
