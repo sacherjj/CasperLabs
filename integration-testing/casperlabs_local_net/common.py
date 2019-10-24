@@ -25,7 +25,6 @@ class Contract:
     CREATE_NAMED_PURSE = "create_named_purse.wasm"
     DIRECT_REVERT = "direct_revert.wasm"
     ENDLESS_LOOP = "endless_loop.wasm"
-    FINALIZE_PAYMENT = "finalize_payment.wasm"
     GET_CALLER_CALL = "get_caller_call.wasm"
     GET_CALLER_DEFINE = "get_caller_define.wasm"
     HELLO_NAME_CALL = "hello_name_call.wasm"
