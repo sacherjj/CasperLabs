@@ -818,8 +818,8 @@ def deploy_command(casperlabs_client, args):
             ABI.args([ABI.big_int("amount", int(args.payment_amount))])
         )
         # Unless one of payment* options supplied use bundled standard-payment
-        if not (
-            args.payment or args.payment_name or args.payment_hash or args.payment_uref
+        if not any(
+            (args.payment, args.payment_name, args.payment_hash, args.payment_uref)
         ):
             p = pkg_resources.resource_filename(__name__, "standard_payment.wasm")
             if not os.path.exists(p):
