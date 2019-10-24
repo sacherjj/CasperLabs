@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.{state, Block}
+import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
@@ -29,6 +29,7 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
+import io.casperlabs.storage.block.BlockStorage.DeployHash
 import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
 import io.netty.handler.codec.protobuf.ProtobufDecoder
 import io.casperlabs.storage.deploy.DeployStorage
@@ -144,66 +145,30 @@ object GrpcCasperService {
                                          request.accountPublicKeyBase16,
                                          adaptToInvalidArgument
                                        )
-              maxPageSize = 50
-              pageSize    = math.max(0, math.min(request.pageSize, maxPageSize))
-              (lastTimeStamp, lastDeployHash) <- if (request.pageToken.isEmpty) {
-                                                  (Long.MaxValue, ByteString.EMPTY).pure[F]
-                                                } else {
-                                                  MonadThrowable[F]
-                                                    .fromTry {
-                                                      Try(
-                                                        request.pageToken
-                                                          .split(':')
-                                                          .map(Base16.decode)
-                                                      ).filter(_.length == 2)
-                                                        .map(
-                                                          arr =>
-                                                            (
-                                                              ByteBuffer.wrap(arr(0)).getLong(),
-                                                              ByteString.copyFrom(arr(1))
+              (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F].fromTry(
+                                                              DeployInfoPagination.parsePageToken(
+                                                                request
+                                                              )
                                                             )
-                                                        )
-                                                    }
-                                                    .handleErrorWith(
-                                                      _ =>
-                                                        MonadThrowable[F].raiseError(
-                                                          new IllegalArgumentException(
-                                                            "Expected pageToken encoded as {lastTimeStamp}:{lastDeployHash}. Where both are hex encoded."
-                                                          )
-                                                        )
-                                                    )
-                                                }
               accountPublicKeyBs = PublicKey(
-                ByteString.copyFrom(Base16.decode(accountPublicKeyBase16))
+                ByteString.copyFrom(
+                  Base16.decode(accountPublicKeyBase16)
+                )
               )
-              deploysWithOneMoreElem <- DeployStorage[F]
-                                         .reader(request.view)
-                                         .getDeploysByAccount(
-                                           accountPublicKeyBs,
-                                           pageSize + 1, // get 1 more element to know whether there are more pages
-                                           lastTimeStamp,
-                                           lastDeployHash
-                                         )
-              (deploys, hasMore) = if (deploysWithOneMoreElem.length == pageSize + 1) {
-                (deploysWithOneMoreElem.take(pageSize), true)
-              } else {
-                (deploysWithOneMoreElem, false)
-              }
+              deploys <- DeployStorage[F]
+                          .reader(request.view)
+                          .getDeploysByAccount(
+                            accountPublicKeyBs,
+                            pageSize,
+                            lastTimeStamp,
+                            lastDeployHash
+                          )
               deployInfos <- DeployStorage[F]
                               .reader(request.view)
                               .getDeployInfos(deploys)
-              nextPageToken = if (!hasMore) {
-                // empty if there are no more results in the list.
-                ""
-              } else {
-                val lastDeploy = deploys.last
-                val lastTimestampBase16 =
-                  Base16.encode(
-                    ByteString.copyFromUtf8(lastDeploy.getHeader.timestamp.toString).toByteArray
-                  )
-                val lastDeployHashBase16 = Base16.encode(lastDeploy.deployHash.toByteArray)
-                s"$lastTimestampBase16:$lastDeployHashBase16"
-              }
+              nextPageToken = DeployInfoPagination.createNextPageToken(
+                deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+              )
               result = ListDeployInfosResponse()
                 .withDeployInfos(deployInfos)
                 .withNextPageToken(nextPageToken)
