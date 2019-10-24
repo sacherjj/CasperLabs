@@ -141,7 +141,7 @@ package object votingmatrix {
       quorum: Weight
   )(implicit matrix: VotingMatrix[F]): F[Option[CommitteeWithConsensusValue]] =
     for {
-      equivocators        <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      equivocators        <- dag.getEquivocators
       weightMap           <- (matrix >> 'weightMap).get
       validators          <- (matrix >> 'validators).get
       firstLevelZeroVotes <- (matrix >> 'firstLevelZeroVotes).get

@@ -53,7 +53,7 @@ object EquivocationDetector {
       implicit state: Cell[F, CasperState]
   ): F[Unit] =
     for {
-      equivocators <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keySet)
+      equivocators <- dag.getEquivocators
       creator      = block.getHeader.validatorPublicKey
       equivocated <- if (equivocators.contains(creator)) {
                       Log[F].debug(

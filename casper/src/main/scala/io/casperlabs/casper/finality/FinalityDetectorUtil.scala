@@ -143,7 +143,7 @@ object FinalityDetectorUtil {
       blockSummary: Message
   ): F[MutableSeq[Level]] =
     for {
-      equivocators <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      equivocators <- dag.getEquivocators
       latestBlockDagLevelAsMap <- FinalityDetectorUtil
                                    .panoramaDagLevelsOfBlock(
                                      dag,

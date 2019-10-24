@@ -123,6 +123,10 @@ object DagRepresentation {
                 }
             )
         )
+
+    // Returns a set of validators that this node has seen equivocating.
+    def getEquivocators(implicit M: Monad[F]): F[Set[Validator]] =
+      dagRepresentation.latestMessageHashes.map(_.filter(_._2.size > 1).keySet)
   }
 
   def apply[F[_]](implicit ev: DagRepresentation[F]): DagRepresentation[F] = ev

@@ -33,8 +33,8 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
       block: Block,
       latestFinalizedBlock: BlockHash
   ): F[Option[CommitteeWithConsensusValue]] =
-    dag.latestMessageHashes
-      .map(_.filter(_._2.size > 1).keySet.contains(block.getHeader.validatorPublicKey))
+    dag.getEquivocators
+      .map(_.contains(block.getHeader.validatorPublicKey))
       .ifM(
         none[CommitteeWithConsensusValue].pure[F], {
           matrix

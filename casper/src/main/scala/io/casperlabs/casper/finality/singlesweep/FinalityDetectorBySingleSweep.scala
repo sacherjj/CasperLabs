@@ -23,7 +23,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
   ): F[Float] =
     for {
       weights                   <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
-      equivocators              <- dag.latestMessageHashes.map(_.filter(_._2.size > 1).keys.toSet)
+      equivocators              <- dag.getEquivocators
       weightsOfHonestValidators = weights.filterKeys(!equivocators.contains(_))
       committeeOpt              <- findBestCommittee(dag, candidateBlockHash, weightsOfHonestValidators)
     } yield committeeOpt
