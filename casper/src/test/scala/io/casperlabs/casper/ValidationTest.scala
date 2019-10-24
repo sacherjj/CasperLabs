@@ -575,49 +575,53 @@ class ValidationTest
       } yield result
   }
 
+  // Turns sequence of blocks into a mapping between validators and block hashes
+  def latestMessages(messages: Seq[Block]): Map[Validator, Set[BlockHash]] =
+    messages
+      .map(b => b.getHeader.validatorPublicKey -> b.blockHash)
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
+
+  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+      parents: Seq[Block],
+      bonds: Seq[Bond],
+      justifications: Seq[Block],
+      validator: ByteString
+  ): F[Block] =
+    for {
+      deploy <- ProtoUtil.basicProcessedDeploy[F]()
+      block <- createAndStoreBlockNew[F](
+                parents.map(_.blockHash),
+                creator = validator,
+                bonds = bonds,
+                deploys = Seq(deploy),
+                justifications = latestMessages(justifications)
+              )
+    } yield block
+
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      val validators = Vector(
-        generateValidator("V1"),
-        generateValidator("V2"),
-        generateValidator("V3")
-      )
-      val bonds = validators.zipWithIndex.map {
+      val v0 = generateValidator("V1")
+      val v1 = generateValidator("V2")
+      val v2 = generateValidator("V3")
+
+      val bonds = Seq(v0, v1, v2).zipWithIndex.map {
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
-        messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
-
-      def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
-          parents: Seq[Block],
-          justifications: Seq[Block],
-          validator: Int
-      ): F[Block] =
-        for {
-          deploy <- ProtoUtil.basicProcessedDeploy[F]()
-          block <- createAndStoreBlock[F](
-                    parents.map(_.blockHash),
-                    creator = validators(validator),
-                    bonds = bonds,
-                    deploys = Seq(deploy),
-                    justifications = latestMessages(justifications)
-                  )
-        } yield block
-
       for {
         b0 <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0)
+        b1 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v0)
+        b2 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v1)
+        b3 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v2)
+        b4 <- createValidatorBlock[Task](Seq(b1), bonds, Seq(b1), v0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), bonds, Seq(b1, b2, b3), v1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), bonds, Seq(b1, b4, b5), v0)
+        b7 <- createValidatorBlock[Task](Seq(b4), bonds, Seq(b1, b4, b5), v1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0) //empty justification
         result <- for {
                    dag              <- dagStorage.getRepresentation
                    genesisBlockHash = b0.blockHash
