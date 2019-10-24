@@ -181,8 +181,7 @@ object EquivocationDetector {
   ): F[Set[Validator]] =
     for {
       equivocations <- dag.latestMessages.map(_.filter(_._2.size > 1))
-      minBaseRank = if (equivocations.isEmpty) None
-      else Some(equivocations.values.flatten.minBy(_.rank).rank - 1)
+      minBaseRank   = findMinBaseRank(equivocations)
       equivocators <- minBaseRank.fold(Set.empty[Validator].pure[F])(minBaseRank => {
                        for {
                          justificationMessages <- justificationMsgHashes.values.toList
@@ -248,4 +247,13 @@ object EquivocationDetector {
           .get(1)        // The first element is the block we start traversal, ignore it.
           .getOrElse(0L) // when reached genesis, return 0, which is the rank of genesis
       )
+
+  // Finds the "base rank" of the equivocations.
+  // base rank is defined as the lowest block that sees _any_ equivocation.
+  def findMinBaseRank(latestMessages: Map[Validator, Set[Message]]): Option[Long] = {
+    val equivocators = latestMessages.filter(_._2.size > 1)
+    if (equivocators.isEmpty) None
+    else Some(equivocators.values.flatten.minBy(_.rank).rank - 1)
+  }
+
 }

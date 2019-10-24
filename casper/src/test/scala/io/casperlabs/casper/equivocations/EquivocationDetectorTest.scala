@@ -61,8 +61,10 @@ class EquivocationDetectorTest
       }
       _ <- blockStorage.put(b.blockHash, b, Seq.empty)
       rankOfLowestBaseBlock <- dag
-                                .latestMessage(b.getHeader.validatorPublicKey)
-                                .map(s => if (s.size > 1) Some(s.minBy(_.rank).rank - 1) else None)
+                                .latestMessage(creator)
+                                .map(
+                                  msgs => EquivocationDetector.findMinBaseRank(Map(creator -> msgs))
+                                )
       _ = rankOfLowestBaseBlock shouldBe rankOfLowestBaseBlockExpect
     } yield b
 
