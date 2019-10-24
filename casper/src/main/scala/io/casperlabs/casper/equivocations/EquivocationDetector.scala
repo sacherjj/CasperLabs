@@ -118,10 +118,10 @@ object EquivocationDetector {
     } yield equivocated
 
   // Util ADT to support finding whether a block cites his previous message.
-  sealed trait Status
-  case object Continue   extends Status
-  case object Cites      extends Status
-  case object NoCitation extends Status
+  private sealed trait Status
+  private case object Continue   extends Status
+  private case object Cites      extends Status
+  private case object NoCitation extends Status
 
   // Check whether block cites previous message by the same creator.
   private def citesPreviousMsg[F[_]: MonadThrowable](
