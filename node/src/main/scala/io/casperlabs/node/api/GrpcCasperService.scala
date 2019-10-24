@@ -144,13 +144,8 @@ object GrpcCasperService {
                                          request.accountPublicKeyBase16,
                                          adaptToInvalidArgument
                                        )
-              pageSize <- Utils
-                           .check[F, Int](
-                             request.pageSize,
-                             "PageSize should be bigger than 0 and smaller than 50",
-                             s => 0 < s && s < 50
-                           )
-                           .adaptError(adaptToInvalidArgument)
+              maxPageSize = 50
+              pageSize    = math.max(0, math.min(request.pageSize, maxPageSize))
               (lastTimeStamp, lastDeployHash) <- if (request.pageToken.isEmpty) {
                                                   (Long.MaxValue, ByteString.EMPTY).pure[F]
                                                 } else {
@@ -181,29 +176,22 @@ object GrpcCasperService {
               accountPublicKeyBs = PublicKey(
                 ByteString.copyFrom(Base16.decode(accountPublicKeyBase16))
               )
-              deploysWithOneMoreElem <- DeployStorageReader[F].getDeploysByAccount(
-                                         accountPublicKeyBs,
-                                         pageSize + 1, // get 1 more element to know whether there are more pages
-                                         lastTimeStamp,
-                                         lastDeployHash
-                                       )
+              deploysWithOneMoreElem <- DeployStorage[F]
+                                         .reader(request.view)
+                                         .getDeploysByAccount(
+                                           accountPublicKeyBs,
+                                           pageSize + 1, // get 1 more element to know whether there are more pages
+                                           lastTimeStamp,
+                                           lastDeployHash
+                                         )
               (deploys, hasMore) = if (deploysWithOneMoreElem.length == pageSize + 1) {
                 (deploysWithOneMoreElem.take(pageSize), true)
               } else {
                 (deploysWithOneMoreElem, false)
               }
-              deployInfos <- DeployStorageReader[F]
+              deployInfos <- DeployStorage[F]
+                              .reader(request.view)
                               .getDeployInfos(deploys)
-                              .map { infos =>
-                                request.view match {
-                                  case DeployInfo.View.BASIC =>
-                                    infos.map(
-                                      info => info.withDeploy(info.getDeploy.copy(body = None))
-                                    )
-                                  case _ =>
-                                    infos
-                                }
-                              }
               nextPageToken = if (!hasMore) {
                 // empty if there are no more results in the list.
                 ""

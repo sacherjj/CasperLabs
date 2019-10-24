@@ -7,10 +7,11 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -18,7 +19,6 @@ import io.casperlabs.shared.Time
 import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 import io.casperlabs.storage.util.DoobieCodecs
-
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
