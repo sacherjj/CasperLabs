@@ -36,7 +36,7 @@ class CLI:
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
         )
         self.port = node.grpc_external_docker_port
-        self.internal_port = node.grpc_internal_docker_port
+        self.port_internal = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
         self.tls_parameters = tls_parameters or {}
         self.default_deploy_args = []
@@ -55,8 +55,8 @@ class CLI:
             f"{self.host}",
             "--port",
             f"{self.port}",
-            "--internal-port",
-            f"{self.internal_port}",
+            "--port-internal",
+            f"{self.port_internal}",
         ]
         if self.tls_parameters:
             connection_details += reduce(

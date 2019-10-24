@@ -389,7 +389,7 @@ class CasperLabsClient:
         self,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
-        internal_port: int = DEFAULT_INTERNAL_PORT,
+        port_internal: int = DEFAULT_INTERNAL_PORT,
         node_id: str = None,
         certificate_file: str = None,
     ):
@@ -398,13 +398,13 @@ class CasperLabsClient:
 
         :param host:            Hostname or IP of node on which gRPC service is running
         :param port:            Port used for external gRPC API
-        :param internal_port:   Port used for internal gRPC API
+        :param port_internal:   Port used for internal gRPC API
         :param certificate_file:      Certificate file for TLS
         :param node_id:         node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
-        self.internal_port = internal_port
+        self.port_internal = port_internal
         self.node_id = node_id
         self.certificate_file = certificate_file
 
@@ -420,7 +420,7 @@ class CasperLabsClient:
                 # to open a secure grpc connection in Python without supplying any
                 # certificate on the client side.
                 host,
-                internal_port,
+                port_internal,
                 ControlServiceStub,
                 node_id,
                 certificate_file,
@@ -428,8 +428,88 @@ class CasperLabsClient:
         else:
             self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
             self.controlService = InsecureGRPCService(
-                host, internal_port, ControlServiceStub
+                host, port_internal, ControlServiceStub
             )
+
+    @api
+    def make_deploy(
+        self,
+        from_addr: bytes = None,
+        gas_price: int = 10,
+        payment: str = None,
+        session: str = None,
+        public_key: str = None,
+        private_key: str = None,
+        session_args: bytes = None,
+        payment_args: bytes = None,
+        payment_hash: bytes = None,
+        payment_name: str = None,
+        payment_uref: bytes = None,
+        session_hash: bytes = None,
+        session_name: str = None,
+        session_uref: bytes = None,
+    ):
+        """
+        """
+        # Convert from hex to binary.
+        if from_addr and len(from_addr) == 64:
+            from_addr = bytes.fromhex(from_addr)
+
+        if from_addr and len(from_addr) != 32:
+            raise Exception(f"from_addr must be 32 bytes")
+
+        session_options = (session, session_hash, session_name, session_uref)
+        payment_options = (payment, payment_hash, payment_name, payment_uref)
+
+        # Compatibility mode, should be removed when payment is obligatory
+        if len(list(filter(None, payment_options))) == 0:
+            logging.info("No payment contract provided, using session as payment")
+            payment_options = session_options
+
+        if len(list(filter(None, session_options))) != 1:
+            raise TypeError(
+                "deploy: only one of session, session_hash, session_name, session_uref must be provided"
+            )
+
+        if len(list(filter(None, payment_options))) != 1:
+            raise TypeError(
+                "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
+            )
+
+        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
+        # if payment is same as session:
+        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
+        body = consensus.Deploy.Body(
+            session=_encode_contract(session_options, session_args),
+            payment=_encode_contract(payment_options, payment_args),
+        )
+
+        approval_public_key = public_key and read_pem_key(public_key)
+        account_public_key = from_addr or approval_public_key
+
+        header = consensus.Deploy.Header(
+            account_public_key=account_public_key,
+            timestamp=int(1000 * time.time()),
+            gas_price=gas_price,
+            body_hash=blake2b_hash(_serialize(body)),
+        )
+
+        deploy_hash = blake2b_hash(_serialize(header))
+
+        deploy = consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
+        return self.sign_deploy(deploy, approval_public_key, private_key)
+
+    @api
+    def sign_deploy(self, deploy, public_key, private_key):
+        deploy.approvals.extend(
+            [
+                consensus.Approval(
+                    approver_public_key=public_key,
+                    signature=signature(private_key, deploy.deploy_hash),
+                )
+            ]
+        )
+        return deploy
 
     @api
     def deploy(
@@ -477,63 +557,32 @@ class CasperLabsClient:
                               payment; base16 encoded.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
-        if from_addr and len(from_addr) != 32:
-            raise Exception(f"from_addr must be 32 bytes")
 
-        session_options = (session, session_hash, session_name, session_uref)
-        payment_options = (payment, payment_hash, payment_name, payment_uref)
-
-        # Compatibility mode, should be removed when payment is obligatory
-        if len(list(filter(None, payment_options))) == 0:
-            logging.info("No payment contract provided, using session as payment")
-            payment_options = session_options
-
-        if len(list(filter(None, session_options))) != 1:
-            raise TypeError(
-                "deploy: only one of session, session_hash, session_name, session_uref must be provided"
-            )
-
-        if len(list(filter(None, payment_options))) != 1:
-            raise TypeError(
-                "deploy: only one of payment, payment_hash, payment_name, payment_uref must be provided"
-            )
-
-        # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
-        # if payment is same as session:
-        # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
-        body = consensus.Deploy.Body(
-            session=_encode_contract(session_options, session_args),
-            payment=_encode_contract(payment_options, payment_args),
-        )
-
-        approval_public_key = public_key and read_pem_key(public_key)
-        account_public_key = from_addr or approval_public_key
-
-        header = consensus.Deploy.Header(
-            account_public_key=account_public_key,
-            timestamp=int(1000 * time.time()),
+        deploy = self.make_deploy(
+            from_addr=from_addr,
             gas_price=gas_price,
-            body_hash=blake2b_hash(_serialize(body)),
+            payment=payment,
+            session=session,
+            public_key=public_key,
+            private_key=private_key,
+            session_args=session_args,
+            payment_args=payment_args,
+            payment_hash=payment_hash,
+            payment_name=payment_name,
+            payment_uref=payment_uref,
+            session_hash=session_hash,
+            session_name=session_name,
+            session_uref=session_uref,
         )
 
-        deploy_hash = blake2b_hash(_serialize(header))
-        approvals = (
-            []
-            if not account_public_key
-            else [
-                consensus.Approval(
-                    approver_public_key=approval_public_key,
-                    signature=signature(private_key, deploy_hash),
-                )
-            ]
-        )
-        d = consensus.Deploy(
-            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
-        )
+        # TODO: Return only deploy_hash
+        return self.send_deploy(deploy), deploy.deploy_hash
 
+    @api
+    def send_deploy(self, deploy):
         # TODO: Deploy returns Empty, error handing via exceptions, apparently,
         # so no point in returning it.
-        return self.casperService.Deploy(casper.DeployRequest(deploy=d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
@@ -935,7 +984,7 @@ def main():
                 help="Port used for external gRPC API.",
             )
             self.parser.add_argument(
-                "--internal-port",
+                "--port-internal",
                 required=False,
                 default=DEFAULT_INTERNAL_PORT,
                 type=int,
@@ -973,7 +1022,7 @@ def main():
                 CasperLabsClient(
                     args.host,
                     args.port,
-                    args.internal_port,
+                    args.port_internal,
                     args.node_id,
                     args.certificate_file,
                 ),
