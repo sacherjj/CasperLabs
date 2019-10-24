@@ -687,8 +687,8 @@ class ValidationTest
         a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1)
         b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
-        d       <- createValidatorBlock[Task](Seq(c), bonds, Seq(a, c), v3)
-        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3)
+        d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
+        e       <- createValidatorBlock[Task](Seq(a, b, c), bonds, Seq(a, b, c), v3)
         dag     <- dagStorage.getRepresentation
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.

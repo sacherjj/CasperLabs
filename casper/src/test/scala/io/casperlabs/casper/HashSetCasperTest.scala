@@ -135,7 +135,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Task].dag
       latestMessageHashes  <- dag.latestMessageHashes
-      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators         <- dag.getEquivocators
+      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
@@ -180,7 +181,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Task].dag
       latestMessageHashes   <- dag.latestMessageHashes
-      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators          <- dag.getEquivocators
+      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ <- node.tearDown()

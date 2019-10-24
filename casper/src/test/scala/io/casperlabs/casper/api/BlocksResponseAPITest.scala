@@ -81,10 +81,12 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
             )
         dag                 <- dagStorage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
+        equivocators        <- dag.getEquivocators
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
-                 latestMessageHashes
+                 latestMessageHashes,
+                 equivocators
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -163,11 +165,13 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                )
           dag                  <- dagStorage.getRepresentation
           latestMessagesHashes <- dag.latestMessageHashes
+          equivocators         <- dag.getEquivocators
           tips <- Estimator
                    .tips[Task](
                      dag,
                      genesis.blockHash,
-                     latestMessagesHashes
+                     latestMessagesHashes,
+                     equivocators
                    )
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],

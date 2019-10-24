@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -650,7 +651,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes)
+      equivocators <- EquivocationDetector.detectVisibleFromJustifications(
+                       dag,
+                       latestMessagesHashes
+                     )
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

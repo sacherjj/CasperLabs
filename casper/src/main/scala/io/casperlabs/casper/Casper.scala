@@ -30,7 +30,8 @@ trait MultiParentCasper[F[_]] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
-      latestMessages: Map[ByteString, Set[ByteString]]
+      latestMessages: Map[ByteString, Set[ByteString]],
+      equivocators: Set[Validator]
   ): F[List[ByteString]]
   def createBlock: F[CreateBlockStatus]
   ////

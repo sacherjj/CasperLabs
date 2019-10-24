@@ -36,10 +36,12 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
             }.toMap)
         dag                 <- dagStorage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
+        equivocators        <- dag.getEquivocators
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
-                 latestMessageHashes
+                 latestMessageHashes,
+                 equivocators
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],

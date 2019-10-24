@@ -372,7 +372,8 @@ object GossipServiceCasperTestNodeFactory {
                              for {
                                dag                 <- casper.dag
                                latestMessageHashes <- dag.latestMessageHashes
-                               tipHashes           <- casper.estimator(dag, latestMessageHashes)
+                               equivocators        <- dag.getEquivocators
+                               tipHashes           <- casper.estimator(dag, latestMessageHashes, equivocators)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =

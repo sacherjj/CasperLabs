@@ -553,7 +553,8 @@ package object gossiping {
                              casper         <- unsafeGetCasper[F]
                              dag            <- casper.dag
                              latestMessages <- dag.latestMessageHashes
-                             tipHashes      <- casper.estimator(dag, latestMessages)
+                             equivocators   <- dag.getEquivocators
+                             tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
                            } yield tipHashes.toList
 
                          override def justifications: F[List[ByteString]] =
@@ -606,7 +607,8 @@ package object gossiping {
                         casper         <- unsafeGetCasper[F]
                         dag            <- casper.dag
                         latestMessages <- dag.latestMessageHashes
-                        tipHashes      <- casper.estimator(dag, latestMessages)
+                        equivocators   <- dag.getEquivocators
+                        tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
                         tips           <- tipHashes.toList.traverse(BlockStorage[F].getBlockSummary(_))
                       } yield tips.flatten
                   }

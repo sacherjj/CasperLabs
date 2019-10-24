@@ -329,13 +329,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Return the list of tips. */
   def estimator(
       dag: DagRepresentation[F],
-      latestMessagesHashes: Map[ByteString, Set[BlockHash]]
+      latestMessagesHashes: Map[ByteString, Set[BlockHash]],
+      equivocators: Set[Validator]
   ): F[List[BlockHash]] =
     Metrics[F].timer("estimator") {
       Estimator.tips[F](
         dag,
         genesis.blockHash,
-        latestMessagesHashes
+        latestMessagesHashes,
+        equivocators
       )
     }
 
@@ -356,10 +358,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     case Some(ValidatorIdentity(publicKey, privateKey, sigAlgorithm)) =>
       Metrics[F].timer("createBlock") {
         for {
-          dag            <- dag
-          latestMessages <- dag.latestMessages
-          tipHashes      <- estimator(dag, latestMessages.mapValues(_.map(_.messageHash)))
-          tips           <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
+          dag                 <- dag
+          latestMessages      <- dag.latestMessages
+          latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
+          equivocators        <- dag.getEquivocators
+          tipHashes           <- estimator(dag, latestMessageHashes, equivocators)
+          tips                <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
           _ <- Log[F].info(
                 s"Tip estimates: ${tipHashes.map(PrettyPrinter.buildString).mkString(", ")}"
               )

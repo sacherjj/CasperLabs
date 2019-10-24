@@ -24,7 +24,8 @@ object Estimator {
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      latestMessageHashes: Map[Validator, Set[BlockHash]]
+      latestMessageHashes: Map[Validator, Set[BlockHash]],
+      equivocators: Set[Validator]
   ): F[List[BlockHash]] = {
 
     /** Eliminate any latest message which has a descendant which is a latest message
@@ -58,11 +59,10 @@ object Estimator {
       lca <- NonEmptyList
               .fromList(latestMessageHashes.values.flatten.toList)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      equivocatingValidators = latestMessageHashes.filter(_._2.size > 1).keys.toSet
-      scores                 <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
-      newMainParent          <- forkChoiceTip(dag, lca, scores)
-      parents                <- tipsOfLatestMessages(latestMessageHashes.values.flatten.toList, lca)
-      secondaryParents       = parents.filter(_ != newMainParent)
+      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
+      newMainParent    <- forkChoiceTip(dag, lca, scores)
+      parents          <- tipsOfLatestMessages(latestMessageHashes.values.flatten.toList, lca)
+      secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
         .reverse

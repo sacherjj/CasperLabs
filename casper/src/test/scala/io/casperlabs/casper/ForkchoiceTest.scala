@@ -80,11 +80,13 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag <- dagStorage.getRepresentation
+        dag          <- dagStorage.getRepresentation
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       Map.empty
+                       Map.empty,
+                       equivocators
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -143,10 +145,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       equivocators
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -209,10 +213,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       equivocators
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
@@ -253,11 +259,12 @@ class ForkchoiceTest
           b.blockHash  -> 3L,
           c.blockHash  -> 0L
         )
-
+        equivocators <- dag.getEquivocators
         tips <- Estimator.tips(
                  dag,
                  genesis.blockHash,
-                 latestMessageHashes
+                 latestMessageHashes,
+                 equivocators
                )
         _ = tips.head shouldBe c.blockHash
       } yield ()
@@ -311,10 +318,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       latestBlocks
+                       latestBlocks,
+                       equivocators
                      )
         _ = forkchoice shouldBe List(b4.blockHash)
       } yield ()
@@ -579,7 +588,8 @@ class ForkchoiceTest
           i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks)
+          equivocators <- dag.getEquivocators
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, equivocators)
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }
