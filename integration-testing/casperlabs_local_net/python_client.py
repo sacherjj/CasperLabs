@@ -24,7 +24,7 @@ class PythonClient(CasperLabsClientBase, LoggingMixin):
 
         self.client = CasperLabsClient(
             host=host,
-            internal_port=self.node.grpc_internal_docker_port,
+            port_internal=self.node.grpc_internal_docker_port,
             port=self.node.grpc_external_docker_port,
             node_id=node_id,
             certificate_file=certificate_file,
@@ -32,7 +32,7 @@ class PythonClient(CasperLabsClientBase, LoggingMixin):
         logging.info(
             f"PythonClient(host={self.client.host}, "
             f"port={self.node.grpc_external_docker_port}, "
-            f"internal_port={self.node.grpc_internal_docker_port})"
+            f"port_internal={self.node.grpc_internal_docker_port})"
         )
 
     def __getattr__(self, name):

@@ -17,6 +17,7 @@ from setuptools.command.install import install as InstallCommand
 from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../../client/src/main/resources"
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
@@ -149,6 +150,19 @@ def run_codegen():
         glob(f"{PACKAGE_DIR}/*pb2*py"),
     )
 
+    pattern = (
+        os.environ.get("TAG_NAME")
+        and "/root/bundled_contracts/*.wasm"
+        or os.path.join(CONTRACTS_DIR, "*.wasm")
+    )
+    bundled_contracts = list(glob(pattern))
+    if len(bundled_contracts) == 0:
+        raise Exception(
+            f"Could not find wasm files that should be bunndled with the client. {pattern}"
+        )
+    for filename in bundled_contracts:
+        shutil.copy(filename, PACKAGE_DIR)
+
 
 with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
     long_description = fh.read()
@@ -168,7 +182,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.4.3",
+    version="0.5.0",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
@@ -187,6 +201,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",

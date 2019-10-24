@@ -64,6 +64,10 @@ abstract class HashSetCasperTestNode[F[_]](
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
+  val ownValidatorKey = validatorId match {
+    case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
+  }
+
   val bonds = genesis.getHeader.getState.bonds
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> Weight(b.stake))
     .toMap

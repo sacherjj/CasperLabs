@@ -22,7 +22,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
-import io.casperlabs.shared.{Cell, Log, Time}
+import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
@@ -34,7 +34,7 @@ class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
     sk: PrivateKey,
-    blockProcessingLock: Semaphore[F],
+    semaphoresMap: SemaphoreMap[F, ByteString],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainName: String = "casperlabs",
@@ -58,10 +58,6 @@ class GossipServiceCasperTestNode[F[_]](
     ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
   implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
-  val ownValidatorKey = validatorId match {
-    case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
-  }
-
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
@@ -73,13 +69,13 @@ class GossipServiceCasperTestNode[F[_]](
   // - the download manager tries to validate a block
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
+      semaphoresMap,
       new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
       chainName,
       upgrades = Nil,
-      blockProcessingLock,
       faultToleranceThreshold = faultToleranceThreshold
     )
 
@@ -134,13 +130,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     initStorage() flatMap {
       case (blockStorage, dagStorage, deployStorage) =>
         for {
-          blockProcessingLock <- Semaphore[F](1)
-          casperState         <- Cell.mvarCell[F, CasperState](CasperState())
+          casperState  <- Cell.mvarCell[F, CasperState](CasperState())
+          semaphoreMap <- SemaphoreMap[F, ByteString](1)
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
             sk,
-            blockProcessingLock,
+            semaphoreMap,
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
@@ -215,15 +211,15 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           initStorage() flatMap {
             case (blockStorage, dagStorage, deployStorage) =>
               for {
-                semaphore <- Semaphore[F](1)
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
+                semaphoreMap <- SemaphoreMap[F, ByteString](1)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
                   sk,
-                  semaphore,
+                  semaphoreMap,
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
