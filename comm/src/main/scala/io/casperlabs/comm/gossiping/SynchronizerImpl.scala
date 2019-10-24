@@ -13,6 +13,7 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.Synchronizer.SyncError
@@ -33,30 +34,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // Before the initial sync has succeeded we allow more depth.
     isInitialRef: Ref[F, Boolean],
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
-    sourceSemaphoresRef: Ref[F, Map[Node, Semaphore[F]]],
+    sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
     syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]]
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
   import io.casperlabs.comm.gossiping.SynchronizerImpl._
-
-  private def getSemaphore(source: Node): F[Semaphore[F]] =
-    sourceSemaphoresRef.get.map(_.get(source)).flatMap {
-      case Some(semaphore) =>
-        semaphore.pure[F]
-      case None =>
-        for {
-          s0 <- Semaphore[F](1)
-          s1 <- sourceSemaphoresRef.modify { ss =>
-                 ss.get(source) map { s1 =>
-                   ss -> s1
-                 } getOrElse {
-                   ss.updated(source, s0) -> s0
-                 }
-               }
-        } yield s1
-    }
 
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
@@ -91,13 +75,11 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
 
-    getSemaphore(source).flatMap { semaphore =>
-      semaphore.withPermit {
-        effect.onError {
-          case NonFatal(e) =>
-            Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
-              Metrics[F].incrementCounter("syncs_failed")
-        }
+    sourceSemaphoreMap.withPermit(source) {
+      effect.onError {
+        case NonFatal(e) =>
+          Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+            Metrics[F].incrementCounter("syncs_failed")
       }
     }
   }
@@ -409,7 +391,7 @@ object SynchronizerImpl {
       isInitialRef: Ref[F, Boolean]
   ) =
     for {
-      semaphoresRef      <- Ref[F].of(Map.empty[Node, Semaphore[F]])
+      semaphoreMap       <- SemaphoreMap[F, Node](1)
       syncedSummariesRef <- Ref[F].of(Map.empty[ByteString, SyncedSummary])
     } yield {
       new SynchronizerImpl[F](
@@ -421,7 +403,7 @@ object SynchronizerImpl {
         maxDepthAncestorsRequest,
         maxInitialBlockCount,
         isInitialRef,
-        semaphoresRef,
+        semaphoreMap,
         syncedSummariesRef
       )
     }
