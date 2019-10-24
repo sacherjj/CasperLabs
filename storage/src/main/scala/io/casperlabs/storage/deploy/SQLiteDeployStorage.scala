@@ -206,8 +206,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         now       <- Time[F].currentMillis
         threshold = now - expirationPeriod.toMillis
         _ <- sql"""|UPDATE buffered_deploys
-                 |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
-                 |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
+                   |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
+                   |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
               .transact(xa)
       } yield ()
 
@@ -260,8 +260,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
           sql"""|SELECT summary, null FROM deploys
-          |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-          |WHERE bd.status=$status""".stripMargin
+                |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+                |WHERE bd.status=$status""".stripMargin
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -271,8 +271,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             status: Int
         ): fs2.Stream[F, (ByteString, Deploy.Header)] =
           sql"""|SELECT dh.summary, null FROM deploys dh
-          |INNER JOIN buffered_deploys bd on dh.hash = bd.hash
-          |WHERE bd.status=$status""".stripMargin
+                |INNER JOIN buffered_deploys bd on dh.hash = bd.hash
+                |WHERE bd.status=$status""".stripMargin
             .query[Deploy]
             .streamWithChunkSize(chunkSize)
             .transact(xa)
@@ -280,8 +280,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         private def readByStatus(status: Int): F[List[Deploy]] =
           (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-        INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-        WHERE bd.status=$status""")
+              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+              WHERE bd.status=$status""")
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -291,8 +291,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
           (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-          INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-          WHERE bd.account=$account AND bd.status=$status""")
+              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+              WHERE bd.account=$account AND bd.status=$status""")
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -320,8 +320,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
           (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-        INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-        WHERE bd.hash=$deployHash AND (bd.status=$PendingStatusCode OR bd.status=$ProcessedStatusCode)""")
+              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
+              WHERE bd.hash=$deployHash AND (bd.status=$PendingStatusCode OR bd.status=$ProcessedStatusCode)""")
             .query[Deploy]
             .option
             .transact(xa)
@@ -342,11 +342,11 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         override def getProcessedDeploys(blockHash: ByteString): F[List[ProcessedDeploy]] =
           (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message
-        FROM deploy_process_results dpr
-        JOIN deploys d
-        ON d.hash = dpr.deploy_hash
-        WHERE dpr.block_hash=$blockHash
-        ORDER BY deploy_position""")
+              FROM deploy_process_results dpr
+              JOIN deploys d
+              ON d.hash = dpr.deploy_hash
+              WHERE dpr.block_hash=$blockHash
+              ORDER BY deploy_position""")
             .query[ProcessedDeploy]
             .to[List]
             .transact(xa)
@@ -362,9 +362,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
           val readProcessingResults =
             sql"""|SELECT block_hash, cost, execution_error_message
-            |FROM deploy_process_results
-            |WHERE deploy_hash=$deployHash
-            |ORDER BY execute_time_millis DESC""".stripMargin
+                  |FROM deploy_process_results
+                  |WHERE deploy_hash=$deployHash
+                  |ORDER BY execute_time_millis DESC""".stripMargin
               .query[(ByteString, ProcessedDeploy)]
               .to[List]
               .transact(xa)
@@ -386,8 +386,8 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
 
         override def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]] =
           sql"""|SELECT status, status_message
-          |FROM buffered_deploys
-          |WHERE hash=$deployHash """.stripMargin
+                |FROM buffered_deploys
+                |WHERE hash=$deployHash """.stripMargin
             .query[(Int, Option[String])]
             .option
             .transact(xa)
@@ -416,11 +416,11 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             lastDeployHash: DeployHash
         ): F[List[Deploy]] =
           (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-        WHERE account = $account
-          AND (create_time_millis < $lastTimeStamp OR
-              create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
-        ORDER BY create_time_millis DESC, hash DESC
-        LIMIT $limit""")
+              WHERE account = $account
+              AND (create_time_millis < $lastTimeStamp OR
+                create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
+              ORDER BY create_time_millis DESC, hash DESC
+              LIMIT $limit""")
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -433,10 +433,10 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               .fromList[ByteString](deployHashes)
               .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
                 val q = fr"""|SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, bm.data, bm.block_size,
-                     | bm.deploy_error_count
-                     |FROM deploy_process_results dpr
-                     |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
-                     |WHERE """.stripMargin ++ Fragments.in(fr"dpr.deploy_hash", nel)
+                             | bm.deploy_error_count
+                             |FROM deploy_process_results dpr
+                             |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
+                             |WHERE """.stripMargin ++ Fragments.in(fr"dpr.deploy_hash", nel)
                 q.query[(DeployHash, ProcessingResult)]
                   .to[List]
                   .transact(xa)
@@ -452,8 +452,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               .fold(List.empty[(DeployHash, DeployInfo.Status)].pure[F])(nel => {
                 val statusSql =
                   fr"""|SELECT hash,status, status_message
-                 |FROM buffered_deploys
-                 |WHERE """.stripMargin ++ Fragments.in(fr"hash", nel)
+                       |FROM buffered_deploys
+                       |WHERE """.stripMargin ++ Fragments.in(fr"hash", nel)
+
                 statusSql
                   .query[(Array[Byte], Int, Option[String])]
                   .to[List]
