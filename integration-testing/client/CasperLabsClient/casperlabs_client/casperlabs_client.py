@@ -765,9 +765,7 @@ def _set_session(args, file_name):
     """
     Use bundled contract unless one of the session* args is set.
     """
-    if not (
-        args.session or args.session_hash or args.session_name or args.session_uref
-    ):
+    if not any((args.session, args.session_hash, args.session_name, args.session_uref)):
         args.session = bundled_contract(file_name)
 
 

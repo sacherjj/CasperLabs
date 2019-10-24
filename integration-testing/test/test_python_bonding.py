@@ -13,7 +13,7 @@ from casperlabs_local_net.common import extract_block_hash_from_propose_output
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 
 
-BONDING_ACCT = 295
+BONDING_ACCT = 294
 
 
 def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
