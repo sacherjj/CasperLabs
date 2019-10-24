@@ -49,7 +49,7 @@ pub extern "C" fn call() {
 
     runtime::put_key(MAIL_FEED_KEY, &sub_key);
 
-    let key_name_uref = runtime::get_key(key_name).unwrap_or_revert_with(Error::GetKeyNameURef);
+    let key_name_uref = runtime::get_key(MAIL_FEED_KEY).unwrap_or_revert_with(Error::GetKeyNameURef);
     if sub_key != key_name_uref {
         runtime::revert(Error::BadSubKey);
     }

@@ -17,7 +17,7 @@ const HELLOWORLD_KEY: &str = "helloworld";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key = runtime::get_key(HELL_NAME_KEY).unwrap_or_revert_with(Error::GetKey);
+    let contract_key = runtime::get_key(HELLO_NAME_KEY).unwrap_or_revert_with(Error::GetKey);
     let contract_ref = match contract_key {
         Key::Hash(hash) => ContractRef::Hash(hash),
         _ => runtime::revert(Error::UnexpectedKeyVariant),
