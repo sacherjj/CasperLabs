@@ -16,7 +16,6 @@ use casperlabs_engine_tests::test::{
 };
 use contract_ffi::base16;
 use contract_ffi::value::account::PublicKey;
-use engine_core::engine_state::EngineConfig;
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
@@ -60,10 +59,7 @@ fn main() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let mut builder = LmdbWasmTestBuilder::new_with_config(
-        &data_dir,
-        EngineConfig::new().set_use_payment_code(true),
-    );
+    let mut builder = LmdbWasmTestBuilder::new(&data_dir);
 
     let post_state_hash = builder
         .run_genesis(&DEFAULT_GENESIS_CONFIG)

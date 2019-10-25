@@ -43,7 +43,7 @@ build_contracts_and_run_state_initializer() {
 run_server() {
     cd $EE_DIR
     cargo build --release --bin=$SERVER
-    target/release/$SERVER $SOCKET --data-dir=$DATA_DIR --use-payment-code --threads=$SERVER_THREAD_COUNT &
+    target/release/$SERVER $SOCKET --data-dir=$DATA_DIR --threads=$SERVER_THREAD_COUNT &
     SERVER_PID=$!
 }
 

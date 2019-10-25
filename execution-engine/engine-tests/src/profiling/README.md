@@ -95,7 +95,7 @@ In a new terminal, run the server, using the same data directory populated by th
 ```bash
 cd CasperLabs/execution-engine/
 cargo run --release --bin=casperlabs-engine-grpc-server -- \
-    /tmp/CasperLabs/Socket --data-dir=/tmp/CasperLabs/DataDir --use-payment-code --threads=8
+    /tmp/CasperLabs/Socket --data-dir=/tmp/CasperLabs/DataDir --threads=8
 ```
 
 Then in the first terminal, run the client:
