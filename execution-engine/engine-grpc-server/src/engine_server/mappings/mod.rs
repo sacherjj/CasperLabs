@@ -11,13 +11,13 @@ use contract_ffi::value::account::{
     KEY_SIZE,
 };
 use contract_ffi::value::{ProtocolVersion, U512};
-use engine_core::engine_state::error::{Error as EngineError, RootNotFound};
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 use engine_core::engine_state::op::Op;
 use engine_core::engine_state::upgrade::UpgradeConfig;
+use engine_core::engine_state::{Error as EngineError, RootNotFound};
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
 use engine_shared::motes::Motes;
@@ -1184,10 +1184,9 @@ mod tests {
     use contract_ffi::gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb};
     use contract_ffi::key::Key;
     use contract_ffi::uref::{AccessRights, URef};
-    use engine_core::engine_state::error::Error::ExecError;
-    use engine_core::engine_state::error::{Error as EngineError, RootNotFound};
     use engine_core::engine_state::execution_effect::ExecutionEffect;
     use engine_core::engine_state::execution_result::ExecutionResult;
+    use engine_core::engine_state::{Error as EngineError, RootNotFound};
     use engine_core::execution::Error;
     use engine_shared::gas::Gas;
     use engine_shared::newtypes::Blake2bHash;
@@ -1340,7 +1339,7 @@ mod tests {
         let revert_error = Error::Revert(REVERT);
         let amount: U512 = U512::from(15);
         let exec_result = ExecutionResult::Failure {
-            error: ExecError(revert_error),
+            error: EngineError::ExecError(revert_error),
             effect: Default::default(),
             cost: Gas::new(amount),
         };

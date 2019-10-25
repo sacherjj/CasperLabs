@@ -69,7 +69,7 @@ fn should_raise_auth_failure_with_invalid_key() {
 
     assert_eq!(
         message,
-        format!("{}", engine_state::error::Error::AuthorizationError)
+        format!("{}", engine_state::Error::AuthorizationError)
     )
 }
 
@@ -121,7 +121,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
 
     assert_eq!(
         message,
-        format!("{}", engine_state::error::Error::AuthorizationError)
+        format!("{}", engine_state::Error::AuthorizationError)
     )
 }
 
