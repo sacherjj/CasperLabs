@@ -1,3 +1,4 @@
+pub mod deploy_item;
 pub mod engine_config;
 mod error;
 pub mod executable_deploy_item;
@@ -33,6 +34,7 @@ use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 
+use self::deploy_item::DeployItem;
 pub use self::engine_config::EngineConfig;
 pub use self::error::{Error, RootNotFound};
 use self::executable_deploy_item::ExecutableDeployItem;
@@ -658,19 +660,21 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn deploy(
         &self,
-        session: ExecutableDeployItem,
-        payment: ExecutableDeployItem,
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         executor: &Executor,
         preprocessor: &Preprocessor,
+        protocol_version: ProtocolVersion,
+        prestate_hash: Blake2bHash,
+        blocktime: BlockTime,
+        deploy_item: DeployItem,
     ) -> Result<ExecutionResult, RootNotFound> {
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
+
+        let session = deploy_item.session();
+        let payment = deploy_item.payment();
+        let address = Key::Account(deploy_item.address().value());
+        let authorization_keys = deploy_item.authorization_keys();
+        let deploy_hash = deploy_item.deploy_hash();
 
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
