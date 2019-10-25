@@ -208,7 +208,6 @@ pub fn transfer_bench(c: &mut Criterion) {
             TRANSFER_BATCH_SIZE
         ),
         |b| {
-            // Create new directory with copied contents of existing bootstrapped LMDB database
             b.iter(|| {
                 // Execute multiple deploys with a single exec request
                 transfer_to_account_multiple_deploys(&mut builder_2, target_account)
@@ -229,7 +228,6 @@ pub fn transfer_bench(c: &mut Criterion) {
         format!("transfer_to_purse_multiple_execs/{}", TRANSFER_BATCH_SIZE),
         |b| {
             let target_purse = purses_1[0];
-            // Create new directory with copied contents of existing bootstrapped LMDB database
             b.iter(|| {
                 // Execute multiple deploys with a single exec request
                 transfer_to_purse_multiple_execs(&mut builder_3, target_purse)
@@ -249,7 +247,6 @@ pub fn transfer_bench(c: &mut Criterion) {
         ),
         |b| {
             let target_purse = purses_2[0];
-            // Create new directory with copied contents of existing bootstrapped LMDB database
             b.iter(|| {
                 // Execute multiple deploys with a single exec request
                 transfer_to_purse_multiple_deploys(&mut builder_4, target_purse)
