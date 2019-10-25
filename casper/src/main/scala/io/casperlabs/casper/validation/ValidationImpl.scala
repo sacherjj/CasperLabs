@@ -473,8 +473,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               .buildString(validatorId)}"
           )
         case Some(meta) =>
-          MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap {
-            toposortJDagDesc(dag, _)
+          MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
+            DagOperations
+              .toposortJDagDesc(dag, List(blockMsg))
               .find { j =>
                 j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
               }
@@ -494,21 +495,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           }
       }
     }
-  }
-
-  // TODO: Use the `cites` method from Mateusz' PR
-  private def toposortJDagDesc(
-      dag: DagRepresentation[F],
-      msg: Message
-  ): StreamT[F, Message] = {
-    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
-    DagOperations.bfToposortTraverseF(
-      List(msg)
-    )(
-      _.justifications.toList
-        .traverse(j => dag.lookup(j.latestBlockHash))
-        .map(_.flatten)
-    )
   }
 
   // Agnostic of justifications

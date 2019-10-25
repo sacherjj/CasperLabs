@@ -783,12 +783,16 @@ class ValidationTest
         dag <- dagStorage.getRepresentation
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.
-        _ <- Validation[Task]
+        r <- Validation[Task]
               .parents(d, genesis.blockHash, dag)
               .map(_.parents.map(_.blockHash))
-              .attempt shouldBeF Right(
-              Vector(c.blockHash, a.blockHash)
-            )
+              .attempt
+
+        _ = log.all.foreach(println)
+
+        _ = r shouldBe Right(
+          Vector(c.blockHash, a.blockHash)
+        )
         // While v0 has seen everything so it will use 0 as v2's weight when scoring.
         _ <- Validation[Task]
               .parents(e, genesis.blockHash, dag)
