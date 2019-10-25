@@ -69,9 +69,12 @@ object DagOperations {
     // Messages visible in the direct justifications of the block.
     val messagePanorama =
       message.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
-    StreamT.lift(messagePanorama).flatMap { jTips =>
+    val tail = StreamT.lift(messagePanorama).flatMap { jTips =>
       toposortJDagDesc[F](dag, jTips).filter(_.validatorId == validator)
     }
+    if (message.validatorId == validator) {
+      StreamT.pure[F, Message](message) ++ tail
+    } else tail
   }
 
   def bfTraverseF[F[_]: Monad, A](
