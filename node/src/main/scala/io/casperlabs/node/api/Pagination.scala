@@ -1,15 +1,11 @@
 package io.casperlabs.node.api
 
-import java.nio.ByteBuffer
-
-import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.InvalidArgument
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Try}
 
 trait Pagination {
   type PageTokenParams
