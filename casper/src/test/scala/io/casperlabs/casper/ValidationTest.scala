@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.BlockUtil.{generateHash, generateValidator}
 import io.casperlabs.casper.helper.{
   BlockGenerator,
   DeployOps,
@@ -37,6 +37,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -538,11 +539,87 @@ class ValidationTest
       } yield result
   }
 
-  "Previous block hash validation" should "pass if the hash is in the j-DAG" in (pending)
-  it should "pass if the hash is in the justifications" in (pending)
-  it should "fail if the hash belongs to somebody else" in (pending)
-  it should "fail if the hash is not in the j-DAG" in (pending)
-  it should "fail if the hash does not exist" in (pending)
+  "Previous block hash validation" should "pass if the hash is in the j-DAG" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag)
+      } yield ()
+  }
+  it should "pass if the hash is in the justifications" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b1.getSummary, dag)
+      } yield ()
+  }
+  it should "fail if the hash belongs to somebody else" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b0),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash is not in the j-DAG" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b2 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b2),
+               List(b2),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b3.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash does not exist" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      val bx = generateHash("non-existent")
+      for {
+        g <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](
+               v1,
+               List(g),
+               Nil,
+               maybeValidatorPrevBlockHash = Some(bx),
+               maybeValidatorBlockSeqNum = Some(1)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b0.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>

@@ -107,7 +107,9 @@ trait BlockGenerator {
       postStateHash: ByteString = ByteString.EMPTY,
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
-      messageType: Block.MessageType = Block.MessageType.BLOCK
+      messageType: Block.MessageType = Block.MessageType.BLOCK,
+      maybeValidatorPrevBlockHash: Option[BlockHash] = None,
+      maybeValidatorBlockSeqNum: Option[Int] = None
   ): F[Block] =
     for {
       now <- Time[F].currentMillis
@@ -137,13 +139,17 @@ trait BlockGenerator {
         case (creator: Validator, latestBlockHash: BlockHash) =>
           Block.Justification(creator, latestBlockHash)
       }
-      validatorPrevBlockHash = serializedJustifications
-        .find(_.validatorPublicKey == creator)
-        .map(_.latestBlockHash)
-        .getOrElse(ByteString.EMPTY)
-      validatorSeqNum <- if (parentsHashList.isEmpty) 0.pure[F]
-                        else
-                          ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
+      // Allow for indirect justifications by looking it up in the DAG.
+      validatorPrevBlockHash <- maybeValidatorPrevBlockHash.map(_.pure[F]).getOrElse {
+                                 dag
+                                   .latestMessage(creator)
+                                   .map(_.map(_.messageHash).getOrElse(ByteString.EMPTY))
+                               }
+      validatorSeqNum <- maybeValidatorBlockSeqNum.map(_.pure[F]).getOrElse {
+                          if (parentsHashList.isEmpty) 0.pure[F]
+                          else
+                            ProtoUtil.nextValidatorBlockSeqNum(dag, validatorPrevBlockHash)
+                        }
       rank <- if (parentsHashList.isEmpty) 0L.pure[F]
              else
                updatedJustifications.values.toList
@@ -176,7 +182,9 @@ trait BlockGenerator {
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
       chainName: String = "casperlabs",
-      preStateHash: ByteString = ByteString.EMPTY
+      preStateHash: ByteString = ByteString.EMPTY,
+      maybeValidatorPrevBlockHash: Option[BlockHash] = None,
+      maybeValidatorBlockSeqNum: Option[Int] = None
   ): F[Block] =
     for {
       block <- createBlock[F](
@@ -187,8 +195,36 @@ trait BlockGenerator {
                 deploys = deploys,
                 postStateHash = postStateHash,
                 chainName = chainName,
-                preStateHash = preStateHash
+                preStateHash = preStateHash,
+                maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
+                maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
               )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
     } yield block
+
+  // Same as createAndStoreBlock but works with full models for building DAGs easier.
+  def createAndStoreBlockFull[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+      creator: Validator,
+      parents: Seq[Block],
+      justifications: Seq[Block],
+      bonds: Seq[Bond] = Seq.empty[Bond],
+      deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
+      chainName: String = "casperlabs",
+      preStateHash: ByteString = ByteString.EMPTY,
+      postStateHash: ByteString = ByteString.EMPTY,
+      maybeValidatorPrevBlockHash: Option[BlockHash] = None,
+      maybeValidatorBlockSeqNum: Option[Int] = None
+  ): F[Block] =
+    createAndStoreBlock[F](
+      parentsHashList = parents.map(_.blockHash),
+      creator = creator,
+      bonds = bonds,
+      justifications = justifications.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap,
+      deploys = deploys,
+      postStateHash = postStateHash,
+      chainName = chainName,
+      preStateHash = preStateHash,
+      maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
+      maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+    )
 }
