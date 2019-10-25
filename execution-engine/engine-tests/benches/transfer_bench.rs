@@ -97,7 +97,6 @@ fn create_purses(
 fn transfer_to_account_multiple_execs(builder: &mut LmdbWasmTestBuilder, account: PublicKey) {
     let amount = U512::one();
 
-    // To see raw numbers take current time
     for _ in 0..TRANSFER_BATCH_SIZE {
         let exec_request = ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
@@ -135,7 +134,6 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
 fn transfer_to_purse_multiple_execs(builder: &mut LmdbWasmTestBuilder, purse_id: PurseId) {
     let amount = U512::one();
 
-    // To see raw numbers take current time
     for _ in 0..TRANSFER_BATCH_SIZE {
         let exec_request = ExecuteRequestBuilder::standard(
             TARGET_ADDR,
@@ -193,7 +191,7 @@ pub fn transfer_bench(c: &mut Criterion) {
         ),
         |b| {
             b.iter(|| {
-                // Execute multiple deploys with one exec request each
+                // Execute multiple deploys with multiple exec requests
                 transfer_to_account_multiple_execs(&mut builder_1, target_account)
             })
         },
@@ -229,7 +227,7 @@ pub fn transfer_bench(c: &mut Criterion) {
         |b| {
             let target_purse = purses_1[0];
             b.iter(|| {
-                // Execute multiple deploys with a single exec request
+                // Execute multiple deploys with mutliple exec request
                 transfer_to_purse_multiple_execs(&mut builder_3, target_purse)
             })
         },

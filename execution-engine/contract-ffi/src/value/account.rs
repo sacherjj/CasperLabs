@@ -45,9 +45,9 @@ impl PurseId {
     }
 }
 
-impl Into<URef> for PurseId {
-    fn into(self) -> URef {
-        self.value()
+impl From<PurseId> for URef {
+    fn from(purse_id: PurseId) -> URef {
+        purse_id.value()
     }
 }
 
