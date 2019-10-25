@@ -322,11 +322,13 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
         ipc_account.set_action_thresholds(action_thresholds);
         let account_activity = {
             let mut tmp = state::Account_AccountActivity::new();
-            tmp.set_deployment_last_used(account.account_activity().deployment_last_used().0);
+            tmp.set_deployment_last_used(account.account_activity().deployment_last_used().into());
             tmp.set_key_management_last_used(
-                account.account_activity().key_management_last_used().0,
+                account.account_activity().key_management_last_used().into(),
             );
-            tmp.set_inactivity_period_limit(account.account_activity().inactivity_period_limit().0);
+            tmp.set_inactivity_period_limit(
+                account.account_activity().inactivity_period_limit().into(),
+            );
             tmp
         };
         let account_named_keys = KnownKeys(account.named_keys().to_owned());
@@ -387,12 +389,14 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
                 );
             };
             let account_activity_ipc = value.get_account_activity();
-            let mut tmp = AccountActivity::new(BlockTime(0), BlockTime(0));
-            tmp.update_deployment_last_used(BlockTime(account_activity_ipc.deployment_last_used));
-            tmp.update_key_management_last_used(BlockTime(
+            let mut tmp = AccountActivity::new(BlockTime::new(0), BlockTime::new(0));
+            tmp.update_deployment_last_used(BlockTime::new(
+                account_activity_ipc.deployment_last_used,
+            ));
+            tmp.update_key_management_last_used(BlockTime::new(
                 account_activity_ipc.key_management_last_used,
             ));
-            tmp.update_inactivity_period_limit(BlockTime(
+            tmp.update_inactivity_period_limit(BlockTime::new(
                 account_activity_ipc.inactivity_period_limit,
             ));
             tmp

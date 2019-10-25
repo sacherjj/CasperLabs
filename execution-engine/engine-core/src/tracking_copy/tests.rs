@@ -219,7 +219,7 @@ fn tracking_copy_add_named_key() {
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
         Default::default(),
-        AccountActivity::new(BlockTime(0), BlockTime(100)),
+        AccountActivity::new(BlockTime::new(0), BlockTime::new(100)),
     );
     let db = CountingDb::new_init(Value::Account(account));
     let mut tc = TrackingCopy::new(db);
@@ -426,7 +426,7 @@ proptest! {
             purse_id,
             associated_keys,
             Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(100))
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(100))
         );
         let account_key = Key::Account(address);
 
@@ -478,7 +478,7 @@ proptest! {
             purse_id,
             associated_keys,
             Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(100))
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(100))
         );
         let account_key = Key::Account(address);
 

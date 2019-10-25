@@ -166,10 +166,9 @@ where
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
 
-        let blocktime = BlockTime(exec_request.get_block_time());
-
         // TODO: don't unwrap
         let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
+        let blocktime = BlockTime::new(exec_request.get_block_time());
 
         let deploys = exec_request.get_deploys();
 

@@ -93,7 +93,7 @@ where
         BTreeSet::new(),
         &account,
         base_key,
-        BlockTime(block_time),
+        BlockTime::new(block_time),
         deploy_hash,
         gas_limit,
         gas_counter,

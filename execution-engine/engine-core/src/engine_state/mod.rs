@@ -104,7 +104,7 @@ where
     ) -> Result<GenesisResult, Error> {
         // Preliminaries
         let executor = Executor;
-        let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
+        let blocktime = BlockTime::new(GENESIS_INITIAL_BLOCKTIME);
         let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 
