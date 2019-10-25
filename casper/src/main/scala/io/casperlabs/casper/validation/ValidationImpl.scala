@@ -480,17 +480,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                 j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
               }
               .flatMap {
-                case None =>
+                case Some(msg) if msg.messageHash == prevBlockHash =>
+                  ().pure[F]
+                case Some(msg) if msg.validatorId == validatorId =>
                   raise(
-                    s"Could not find any previous block hash from the validator in the j-past-cone."
-                  )
-                case Some(msg) if msg.messageHash != prevBlockHash =>
-                  raise(
-                    s"The previous block hash in the j-past-cone is ${PrettyPrinter
+                    s"The previous block hash from this validator in the j-past-cone is ${PrettyPrinter
                       .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
                   )
                 case _ =>
-                  ().pure[F]
+                  raise(
+                    s"Could not find any previous block hash from the validator in the j-past-cone."
+                  )
               }
           }
       }
