@@ -1,13 +1,12 @@
 package io.casperlabs.casper
 
 import cats.Monad
-import cats.implicits._
 import cats.data.NonEmptyList
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -59,10 +58,19 @@ object Estimator {
       lca <- NonEmptyList
               .fromList(latestMessagesFlattened)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
-      newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessagesFlattened, lca)
-      secondaryParents = parents.filter(_ != newMainParent)
+      scores        <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
+      newMainParent <- forkChoiceTip(dag, lca, scores)
+      parents       <- tipsOfLatestMessages(latestMessagesFlattened, lca)
+      secondaryParents = parents.filter(_ != newMainParent).filterNot { message =>
+        // Filter out blocks created by equivocators from the secondary parents.
+        // Secondary parents are not subject to the fork choice rule, the only requirement
+        // is that they don't conflict with the main chain. This opens up possibility for various
+        // kinds of attacks. An example could be a block created in the past, that includes a deploy
+        // that should have expired by now, if that block did not conflict with the main parent
+        // fork-choice would include it in the p-dag.
+        val creator = latestMessageHashes.find(_._2.contains(message)).map(_._1).get
+        equivocators.contains(creator)
+      }
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
         .reverse

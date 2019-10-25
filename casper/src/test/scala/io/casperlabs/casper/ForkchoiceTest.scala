@@ -4,12 +4,12 @@ import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.{EquivocationDetector}
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
-import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.BondingUtil.Bond
+import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
@@ -267,6 +267,26 @@ class ForkchoiceTest
                  equivocators
                )
         _ = tips.head shouldBe c.blockHash
+      } yield ()
+  }
+
+  it should "not use blocks from equivocators as secondary parents" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      val v1    = generateValidator("v1")
+      val v2    = generateValidator("v2")
+      val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        // v1 equivocates
+        a1                  <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        a2                  <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        b                   <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2, bonds)
+        dag                 <- dagStorage.getRepresentation
+        equivocators        <- dag.getEquivocators
+        latestMessageHashes <- dag.latestMessageHashes
+        tips                <- Estimator.tips(dag, genesis.blockHash, latestMessageHashes, equivocators)
+        _                   = tips shouldBe List(b.blockHash)
       } yield ()
   }
 
