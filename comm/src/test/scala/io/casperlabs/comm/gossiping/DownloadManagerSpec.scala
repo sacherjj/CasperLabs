@@ -10,6 +10,7 @@ import eu.timepit.refined.auto._
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
+import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -310,8 +311,8 @@ class DownloadManagerSpec
             _ <- w1
             _ <- w2
           } yield {
-            log.causes should have size 1
-            log.causes.head.getMessage shouldBe "Node A is dying!"
+            log.warns should have size 1
+            log.warns.head should include("Node A is dying!")
             backend.blocks should contain(block.blockHash)
           }
       }
@@ -403,43 +404,71 @@ class DownloadManagerSpec
           }
       }
 
-      "try again later with exponential backoff" in {
+      "try again with another source and start applying exponential backoff if all peers tried" in {
+        val nodeA = sample(arbitrary[Node])
+        val nodeB = sample(arbitrary[Node])
+
         TestFixture(
           remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException()),
-          // * -> 1 second -> * -> 2 seconds -> *  -> fail
-          retriesConf = RetriesConf(2, 1.second, 2.0),
+          retriesConf =
+            RetriesConf(maxRetries = 1, initialBackoffPeriod = 1.second, backoffFactor = 2.0),
           timeout = 10.seconds
         ) {
           case (manager, _) =>
+            // Expected pattern is:
+            // Check stages:        A[0s:1s]       B[1s:2s]           C[2s:4s]           D[4s:6s]
+            //               nodeA -> 1s -> nodeB -> 1s -> node(A|B) -> 2s -> node(A|B) -> 2s -> fail
+            // counter:        0              0                1                 1
+
             for {
-              w <- manager
-                    .scheduleDownload(summaryOf(block), source, false)
-              _ <- Task.sleep(200.millis)
+              w1 <- manager
+                     .scheduleDownload(summaryOf(block), nodeA, relay = false)
+              w2 <- manager
+                     .scheduleDownload(summaryOf(block), nodeB, relay = false)
+              _ <- Task.sleep(500.millis)
               _ <- Task {
-                    log.warns should have size 1
+                    // Stage A, 0.5s
+                    log.warns.size shouldBe 1
+                    log.warns.last should include(nodeA.show)
                     log.warns.last should include("attempt: 1")
+                    log.warns.last should include("delay: 1 second")
                   }
-              _ <- Task.sleep(1800.millis)
+              _ <- Task.sleep(1.second)
               _ <- Task {
-                    log.warns should have size 2
+                    // Stage B, 1.5s
+                    log.warns.size shouldBe 2
+                    log.warns.last should include(nodeB.show)
+                    log.warns.last should include("attempt: 1")
+                    log.warns.last should include("delay: 1 second")
+                  }
+              _ <- Task.sleep(1.second)
+              _ <- Task {
+                    // Stage C, 2.5s
+                    log.warns.size shouldBe 3
                     log.warns.last should include("attempt: 2")
+                    log.warns.last should include("delay: 2 seconds")
                   }
-              _ <- Task.sleep(2000.millis)
+              _ <- Task.sleep(2500.millis)
               _ <- Task {
-                    log.warns should have size 3
-                    log.warns.last should include("attempt: 3")
+                    // Stage D, 5s
+                    log.warns.size shouldBe 4
+                    log.warns.last should include("attempt: 2")
+                    log.warns.last should include("delay: 2 seconds")
                   }
               // Next try would be after 4 second delay, but it shouldn't try any more.
-              _ <- Task.sleep(4000.millis)
+              _ <- Task.sleep(2.seconds)
               _ <- Task {
-                    log.warns should have size 3
-                    log.warns.last should include("attempt: 3")
-                    log.causes should have size 1
+                    // Failure stage, 7s
+                    log.errors.size shouldBe 1
                   }
-              r <- w.attempt
+              r1 <- w1.attempt
+              r2 <- w2.attempt
             } yield {
-              r.isLeft shouldBe true
-              r.left.get shouldBe an[io.grpc.StatusRuntimeException]
+              r1.isLeft shouldBe true
+              r2.isLeft shouldBe true
+
+              r1.left.get shouldBe an[io.grpc.StatusRuntimeException]
+              r2.left.get shouldBe an[io.grpc.StatusRuntimeException]
             }
         }
       }
