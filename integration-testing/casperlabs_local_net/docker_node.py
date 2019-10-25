@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
+import requests
 
 from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
 from casperlabs_local_net.docker_base import LoggingDockerBase
@@ -326,22 +327,20 @@ class DockerNode(LoggingDockerBase):
         ]
         return f"run {bootstrap_flag} {' '.join(options)}"
 
+    @property
+    def metrics_url(self) -> str:
+        server_name = self.container_name if self.is_in_docker else "localhost"
+        return f"http://{server_name}:{self.http_port}/metrics"
+
     def get_metrics(self) -> Tuple[int, str]:
-        if self.config.custom_docker_tag is not None:
-            raise NotImplementedError(
-                "get_metrics not functional on nodes with custom_docker_tags."
-            )
-        cmd = "curl -s http://localhost:40403/metrics"
-        output = self.exec_run(cmd=cmd)
-        return output
+        try:
+            return 0, self.get_metrics_strict()
+        except Exception as e:
+            return -1, str(e)
 
     def get_metrics_strict(self):
-        if self.config.custom_docker_tag is not None:
-            raise NotImplementedError(
-                "get_metrics not functional on nodes with custom_docker_tags."
-            )
-        output = self.shell_out("curl", "-s", "http://localhost:40403/metrics")
-        return output
+        response = requests.get(self.metrics_url)
+        return response.text
 
     def transfer_to_account(
         self,
