@@ -21,7 +21,7 @@ use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_storage::global_state::StateProvider;
 use engine_storage::protocol_data::ProtocolData;
-use engine_wasm_prep::WasmiPreprocessor;
+use engine_wasm_prep::Preprocessor;
 
 use crate::support::test_support::{self, WasmTestBuilder};
 
@@ -113,7 +113,7 @@ where
 
     let wasm_costs = *DEFAULT_WASM_COSTS;
 
-    let preprocessor = WasmiPreprocessor::new(wasm_costs);
+    let preprocessor = Preprocessor::new(wasm_costs);
     let parity_module = builder
         .get_engine_state()
         .get_module(

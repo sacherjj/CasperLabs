@@ -22,74 +22,6 @@ use crate::execution::FN_STORE_ID_INITIAL;
 use crate::runtime_context::{self, RuntimeContext};
 use crate::tracking_copy::TrackingCopy;
 
-pub trait Executor<A> {
-    #[allow(clippy::too_many_arguments)]
-    fn exec<R: StateReader<Key, Value>>(
-        &self,
-        parity_module: A,
-        args: &[u8],
-        base_key: Key,
-        account: &Account,
-        authorized_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        gas_limit: Gas,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        tc: Rc<RefCell<TrackingCopy<R>>>,
-        phase: Phase,
-        protocol_data: ProtocolData,
-    ) -> ExecutionResult
-    where
-        R::Error: Into<Error>;
-
-    #[allow(clippy::too_many_arguments)]
-    fn exec_direct<R: StateReader<Key, Value>>(
-        &self,
-        parity_module: A,
-        args: &[u8],
-        keys: &mut BTreeMap<String, Key>,
-        base_key: Key,
-        account: &Account,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        gas_limit: Gas,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        state: Rc<RefCell<TrackingCopy<R>>>,
-        phase: Phase,
-        protocol_data: ProtocolData,
-    ) -> ExecutionResult
-    where
-        R::Error: Into<Error>;
-
-    #[allow(clippy::too_many_arguments)]
-    fn better_exec<R: StateReader<Key, Value>, T>(
-        &self,
-        module: A,
-        args: &[u8],
-        keys: &mut BTreeMap<String, Key>,
-        base_key: Key,
-        account: &Account,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        gas_limit: Gas,
-        address_generator: Rc<RefCell<AddressGenerator>>,
-        protocol_version: ProtocolVersion,
-        correlation_id: CorrelationId,
-        state: Rc<RefCell<TrackingCopy<R>>>,
-        phase: Phase,
-        protocol_data: ProtocolData,
-    ) -> Result<T, Error>
-    where
-        R::Error: Into<Error>,
-        T: FromBytes;
-}
-
-pub struct WasmiExecutor;
-
 macro_rules! on_fail_charge {
     ($fn:expr) => {
         match $fn {
@@ -128,8 +60,11 @@ macro_rules! on_fail_charge {
     };
 }
 
-impl Executor<Module> for WasmiExecutor {
-    fn exec<R: StateReader<Key, Value>>(
+pub struct Executor;
+
+#[allow(clippy::too_many_arguments)]
+impl Executor {
+    pub fn exec<R: StateReader<Key, Value>>(
         &self,
         parity_module: Module,
         args: &[u8],
@@ -214,7 +149,7 @@ impl Executor<Module> for WasmiExecutor {
         }
     }
 
-    fn exec_direct<R: StateReader<Key, Value>>(
+    pub fn exec_direct<R: StateReader<Key, Value>>(
         &self,
         parity_module: Module,
         args: &[u8],
@@ -333,7 +268,7 @@ impl Executor<Module> for WasmiExecutor {
         }
     }
 
-    fn better_exec<R: StateReader<Key, Value>, T>(
+    pub fn better_exec<R: StateReader<Key, Value>, T>(
         &self,
         module: Module,
         args: &[u8],

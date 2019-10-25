@@ -27,28 +27,21 @@ pub enum PreprocessingError {
 
 use PreprocessingError::*;
 
-pub trait Preprocessor<A> {
-    fn preprocess(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
-    fn deserialize(&self, module_bytes: &[u8]) -> Result<A, PreprocessingError>;
-}
-
-pub struct WasmiPreprocessor {
+pub struct Preprocessor {
     wasm_costs: WasmCosts,
     // Number of memory pages.
     mem_pages: u32,
 }
 
-impl WasmiPreprocessor {
-    pub fn new(wasm_costs: WasmCosts) -> WasmiPreprocessor {
-        WasmiPreprocessor {
+impl Preprocessor {
+    pub fn new(wasm_costs: WasmCosts) -> Self {
+        Self {
             wasm_costs,
             mem_pages: MEM_PAGES,
         }
     }
-}
 
-impl Preprocessor<Module> for WasmiPreprocessor {
-    fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
+    pub fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
         let deserialized_module = self.deserialize(module_bytes)?;
         let ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
@@ -59,7 +52,7 @@ impl Preprocessor<Module> for WasmiPreprocessor {
     }
 
     // returns a parity Module from bytes without making modifications or limits
-    fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
+    pub fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
         let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
         let module =
             parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
