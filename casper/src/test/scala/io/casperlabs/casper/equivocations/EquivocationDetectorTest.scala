@@ -181,9 +181,7 @@ class EquivocationDetectorTest
         } yield ()
   }
 
-  // NOTE: This test will fail b/c validator's message is not required to cite its previous message
-  // in the justifications directly. This work is ticketed as CON-556.
-  ignore should "not report equivocation when block indirectly references previous creator's block" in withStorage {
+  it should "not report equivocation when block indirectly references previous creator's block" in withStorage {
     implicit blockStorage => implicit dagStorage =>
       _ =>
         /*
@@ -210,14 +208,10 @@ class EquivocationDetectorTest
         val v0              = generateValidator("V0")
         val v1              = generateValidator("V1")
         for {
-          implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
-                                                              CasperState()
-                                                            )
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
                  v1,
-                 justifications = HashMap(v1 -> genesis.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           b2 <- createBlockAndTestEquivocateDetector(
