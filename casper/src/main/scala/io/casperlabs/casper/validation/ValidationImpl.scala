@@ -446,7 +446,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             }
       } yield ()
 
-  /** Validate that the j-DAG of the block cites the previous block hash,
+  /** Validate that the j-past-cone of the block cites the previous block hash,
     * except if this is the first block the validator created.
     */
   def validatorPrevBlockHash(
@@ -480,10 +480,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               }
               .flatMap {
                 case None =>
-                  raise(s"Could not find any previous block hash from the validator in the j-DAG.")
+                  raise(
+                    s"Could not find any previous block hash from the validator in the j-past-cone."
+                  )
                 case Some(msg) if msg.messageHash != prevBlockHash =>
                   raise(
-                    s"The previous block hash in the j-DAG is ${PrettyPrinter
+                    s"The previous block hash in the j-past-cone is ${PrettyPrinter
                       .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
                   )
                 case _ =>
@@ -739,7 +741,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               .mkString(",")
             val message =
               s"block parents $parentsString did not match estimate $estimateString based on justification $justificationString."
-            println(s"PARENTS ERROR: $message")
             for {
               _ <- Log[F].warn(
                     ignore(

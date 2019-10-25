@@ -538,7 +538,7 @@ class ValidationTest
       } yield result
   }
 
-  "Previous block hash validation" should "pass if the hash is in the j-DAG" in withStorage {
+  "Previous block hash validation" should "pass if the hash is in the j-past-cone" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
       for {
@@ -580,7 +580,7 @@ class ValidationTest
         result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
       }
   }
-  it should "fail if the hash is not in the j-DAG" in withStorage {
+  it should "fail if the hash is not in the j-past-cone" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
       for {

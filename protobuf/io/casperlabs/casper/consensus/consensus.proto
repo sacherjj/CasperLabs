@@ -139,7 +139,7 @@ message Block {
         bytes validator_public_key = 10;
         // The hash of the previous block (or ballot) from this validator.
         // It has to be stated even if it's part of the justifications directly,
-        // and it must be part of the j-DAG of the block, in case transitive
+        // and it must be part of the j-past-cone of the block, in case transitive
         // justifications are omitted. It must be the one corresponding to
         // validator_block_seq_num - 1.
         bytes validator_prev_block_hash = 14;
