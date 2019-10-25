@@ -244,6 +244,20 @@ impl Value {
             Value::UInt64(_) => String::from("Value::UInt64"),
         }
     }
+
+    pub fn as_account(&self) -> Option<&account::Account> {
+        match self {
+            Value::Account(account) => Some(account),
+            _ => None,
+        }
+    }
+
+    pub fn as_key(&self) -> Option<&key::Key> {
+        match self {
+            Value::Key(key) => Some(key),
+            _ => None,
+        }
+    }
 }
 
 macro_rules! from_try_from_impl {
