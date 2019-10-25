@@ -368,14 +368,15 @@ object GossipServiceCasperTestNodeFactory {
                              for {
                                dag                 <- casper.dag
                                latestMessageHashes <- dag.latestMessageHashes
-                               tipHashes           <- casper.estimator(dag, latestMessageHashes)
+                               equivocators        <- dag.getEquivocators
+                               tipHashes           <- casper.estimator(dag, latestMessageHashes, equivocators)
                              } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =
                              for {
                                dag    <- casper.dag
                                latest <- dag.latestMessageHashes
-                             } yield latest.values.toList
+                             } yield latest.values.flatten.toList
 
                            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
                              for {
