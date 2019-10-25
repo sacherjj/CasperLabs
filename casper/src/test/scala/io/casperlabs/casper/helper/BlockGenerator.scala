@@ -169,7 +169,7 @@ trait BlockGenerator {
       }
       // Allow for indirect justifications by looking it up in the DAG.
       validatorPrevBlockHash <- maybeValidatorPrevBlockHash.map(_.pure[F]).getOrElse {
-                                 justifications.values.flatten.toList
+                                 updatedJustifications.values.flatten.toList
                                    .traverse(dag.lookup)
                                    .map(_.flatten)
                                    .flatMap(

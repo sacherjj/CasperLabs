@@ -4,7 +4,7 @@ import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.{EquivocationDetector}
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
@@ -14,7 +14,7 @@ import io.casperlabs.models.Weight
 import io.casperlabs.storage.dag.DagRepresentation
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalacheck.Gen
+import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -346,6 +346,7 @@ class ForkchoiceTest
       supporterForBlocks: Map[BlockHash, Seq[Validator]],
       latestMessageHashes: Map[Validator, Set[BlockHash]]
   ): Unit = {
+    implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
     assert(latestMessageHashes.size > 1)
     val equivocatorsGen: Gen[Set[Validator]] =
       for {
