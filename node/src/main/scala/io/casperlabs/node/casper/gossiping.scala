@@ -809,7 +809,7 @@ package object gossiping {
       dag            <- DagStorage[F].getRepresentation
       latestMessages <- dag.latestMessages
       minRank = latestMessages.values
-        .map(_.rank)
+        .flatMap(_.map(_.rank))
         .toList
         .minimumOption
         .getOrElse(0L)
