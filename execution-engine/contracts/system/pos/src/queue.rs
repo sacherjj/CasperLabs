@@ -197,15 +197,15 @@ mod tests {
         let val2 = PublicKey::new(KEY2);
         let val3 = PublicKey::new(KEY3);
         let mut queue: Queue = Default::default();
-        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
-        assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime(101)));
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime::new(101)));
         assert_eq!(
             Err(Error::MultipleRequests),
-            queue.push(val1, U512::from(5), BlockTime(102))
+            queue.push(val1, U512::from(5), BlockTime::new(102))
         );
         assert_eq!(
             Err(Error::TimeWentBackwards),
-            queue.push(val3, U512::from(5), BlockTime(100))
+            queue.push(val3, U512::from(5), BlockTime::new(100))
         );
     }
 
@@ -215,19 +215,19 @@ mod tests {
         let val2 = PublicKey::new(KEY2);
         let val3 = PublicKey::new(KEY3);
         let mut queue: Queue = Default::default();
-        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
-        assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime(101)));
-        assert_eq!(Ok(()), queue.push(val3, U512::from(7), BlockTime(102)));
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime::new(101)));
+        assert_eq!(Ok(()), queue.push(val3, U512::from(7), BlockTime::new(102)));
         assert_eq!(
             vec![
-                QueueEntry::new(val1, U512::from(5), BlockTime(100)),
-                QueueEntry::new(val2, U512::from(6), BlockTime(101)),
+                QueueEntry::new(val1, U512::from(5), BlockTime::new(100)),
+                QueueEntry::new(val2, U512::from(6), BlockTime::new(101)),
             ],
-            queue.pop_due(BlockTime(101))
+            queue.pop_due(BlockTime::new(101))
         );
         assert_eq!(
-            vec![QueueEntry::new(val3, U512::from(7), BlockTime(102)),],
-            queue.pop_due(BlockTime(105))
+            vec![QueueEntry::new(val3, U512::from(7), BlockTime::new(102)),],
+            queue.pop_due(BlockTime::new(105))
         );
     }
 }

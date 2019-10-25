@@ -1,5 +1,5 @@
 pub mod engine_config;
-pub mod error;
+mod error;
 pub mod executable_deploy_item;
 pub mod execution_effect;
 pub mod execution_result;
@@ -34,7 +34,7 @@ use engine_wasm_prep::wasm_costs::WasmCosts;
 use engine_wasm_prep::Preprocessor;
 
 pub use self::engine_config::EngineConfig;
-use self::error::{Error, RootNotFound};
+pub use self::error::{Error, RootNotFound};
 use self::executable_deploy_item::ExecutableDeployItem;
 use self::execution_result::ExecutionResult;
 use self::genesis::{
@@ -104,7 +104,7 @@ where
     ) -> Result<GenesisResult, Error> {
         // Preliminaries
         let executor = Executor;
-        let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
+        let blocktime = BlockTime::new(GENESIS_INITIAL_BLOCKTIME);
         let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 

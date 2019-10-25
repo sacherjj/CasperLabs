@@ -285,22 +285,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   }
 
   /** Add a deploy to the buffer, to be executed later. */
-  private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] = {
-    def show(d: Deploy) = PrettyPrinter.buildString(d)
+  private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] =
     (for {
-      processedDeploys <- DeployStorageReader[F].readProcessedByAccount(
-                           deploy.getHeader.accountPublicKey
-                         )
-      _ <- processedDeploys
-            .find(_.deployHash == deploy.deployHash)
-            .map { d =>
-              new IllegalArgumentException(s"${show(d)} supersedes ${show(deploy)}.")
-                .raiseError[F, Unit]
-            } getOrElse ().pure[F]
       _ <- DeployStorageWriter[F].addAsPending(List(deploy))
-      _ <- Log[F].info(s"Received ${show(deploy)}")
+      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()).attempt
-  }
 
   /** Return the list of tips. */
   def estimator(

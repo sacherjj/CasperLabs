@@ -11,10 +11,10 @@ use grpc::SingleResponse;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::ProtocolVersion;
-use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
 use engine_core::engine_state::EngineState;
+use engine_core::engine_state::Error as EngineError;
 use engine_core::execution::Executor;
 use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
@@ -166,10 +166,9 @@ where
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
 
-        let blocktime = BlockTime(exec_request.get_block_time());
-
         // TODO: don't unwrap
         let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
+        let blocktime = BlockTime::new(exec_request.get_block_time());
 
         let deploys = exec_request.get_deploys();
 
