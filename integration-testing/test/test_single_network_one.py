@@ -670,10 +670,11 @@ def test_cli_scala_extended_deploy(scala_cli, temp_dir):
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
-    # Test that replay attacks fail
+    # Test that replay attacks have no effect.
+    cli('send-deploy', '-i', signed_deploy_path)
     with pytest.raises(NonZeroExitCodeError) as excinfo:
-        _ = cli('send-deploy', '-i', signed_deploy_path)
-    assert "supersedes Deploy" in excinfo.value.output
+        cli('propose')
+    assert "No new deploys" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
