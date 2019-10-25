@@ -1,13 +1,12 @@
 package io.casperlabs.casper
 
 import cats.Monad
-import cats.implicits._
 import cats.data.NonEmptyList
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -31,8 +30,8 @@ object Estimator {
     def tipsOfLatestMessages(
         latestMessages: List[BlockHash],
         stopHash: BlockHash
-    ): F[List[BlockHash]] =
-      if (latestMessages.isEmpty) List(genesis).pure[F]
+    ): F[List[Message]] =
+      if (latestMessages.isEmpty) dag.lookup(genesis).map(_.toList)
       else {
         // Start from the highest latest messages and traverse backwards
         implicit val ord = DagOperations.blockTopoOrderingDesc
@@ -46,9 +45,9 @@ object Estimator {
                    // We start with the tips and remove any message
                    // that is reachable through the parent-child link from other tips.
                    // This should leave us only with the tips that cannot be reached from others.
-                   .foldLeft(latestMessagesMeta.map(_.messageHash).toSet) {
+                   .foldLeft(latestMessagesMeta.toSet) {
                      case (tips, message) =>
-                       tips -- message.parents
+                       tips.filterNot(msg => message.parents.toSet.contains(msg.messageHash))
                    }
         } yield tips.toList
       }
@@ -59,14 +58,22 @@ object Estimator {
       lca <- NonEmptyList
               .fromList(latestMessagesFlattened)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
-      newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessagesFlattened, lca)
-      secondaryParents = parents.filter(_ != newMainParent)
+      scores        <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
+      newMainParent <- forkChoiceTip(dag, lca, scores)
+      parents       <- tipsOfLatestMessages(latestMessagesFlattened, lca)
+      secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
+        // Filter out blocks created by equivocators from the secondary parents.
+        // Secondary parents are not subject to the fork choice rule, the only requirement
+        // is that they don't conflict with the main chain. This opens up possibility for various
+        // kinds of attacks. An example could be a block created in the past, that includes a deploy
+        // that should have expired by now, if that block did not conflict with the main parent
+        // fork-choice would include it in the p-dag.
+        equivocators.contains(message.validatorId)
+      }
       sortedSecParents = secondaryParents
-        .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
+        .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
         .reverse
-    } yield newMainParent +: sortedSecParents
+    } yield newMainParent +: sortedSecParents.map(_.messageHash)
   }
 
   /** Computes scores for LMD GHOST.
