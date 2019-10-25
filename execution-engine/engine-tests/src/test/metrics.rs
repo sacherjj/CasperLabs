@@ -34,7 +34,7 @@ fn should_query_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_config = EngineConfig::new();
     let result =
         InMemoryWasmTestBuilder::new(global_state, engine_config, root_hash.to_vec()).finish();
 
@@ -83,7 +83,7 @@ fn should_commit_with_metrics() {
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
 
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_config = EngineConfig::new();
 
     let result =
         InMemoryWasmTestBuilder::new(global_state, engine_config, root_hash.to_vec()).finish();
@@ -127,7 +127,7 @@ fn should_validate_with_metrics() {
     let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
     let (global_state, root_hash) =
         InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_config = EngineConfig::new().set_use_payment_code(true);
+    let engine_config = EngineConfig::new();
 
     let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
 

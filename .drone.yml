@@ -927,6 +927,9 @@ steps:
     status:
     - failure
     - success
+  depends_on:
+  - mac-ee-tarball-tag
+  - rsync-mac-tarball-tag
 
 volumes:
 - name: docker_sock

@@ -23,6 +23,7 @@ message BlockInfo {
         message Stats {
             uint32 block_size_bytes = 1;
             uint32 deploy_error_count = 2;
+            uint64 deploy_cost_total = 3;
         }
     }
 }

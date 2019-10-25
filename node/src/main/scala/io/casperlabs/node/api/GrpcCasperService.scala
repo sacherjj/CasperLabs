@@ -21,13 +21,13 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
@@ -46,8 +46,7 @@ object GrpcCasperService {
               blockHashPrefix =>
                 BlockAPI
                   .getBlockInfo[F](
-                    blockHashPrefix,
-                    full = request.view == BlockInfo.View.FULL
+                    blockHashPrefix
                   )
             }
           }
@@ -56,8 +55,7 @@ object GrpcCasperService {
           val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
-              maxRank = request.maxRank,
-              full = request.view == BlockInfo.View.FULL
+              maxRank = request.maxRank
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)
@@ -68,14 +66,7 @@ object GrpcCasperService {
             validateDeployHash[F](request.deployHashBase16, adaptToInvalidArgument) >>= {
               deployHash =>
                 BlockAPI
-                  .getDeployInfo[F](deployHash) map { info =>
-                  request.view match {
-                    case DeployInfo.View.BASIC =>
-                      info.withDeploy(info.getDeploy.copy(body = None))
-                    case _ =>
-                      info
-                  }
-                }
+                  .getDeployInfo[F](deployHash, request.view)
             }
           }
 
@@ -85,16 +76,7 @@ object GrpcCasperService {
           val deploys = TaskLike[F].apply {
             validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
               blockHashPrefix =>
-                BlockAPI.getBlockDeploys[F](blockHashPrefix) map {
-                  _ map { pd =>
-                    request.view match {
-                      case DeployInfo.View.BASIC =>
-                        pd.withDeploy(pd.getDeploy.copy(body = None))
-                      case _ =>
-                        pd
-                    }
-                  }
-                }
+                BlockAPI.getBlockDeploys[F](blockHashPrefix, request.view)
             }
           }
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)

@@ -20,7 +20,7 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
 
 case class DeploysCheckpoint(
@@ -98,7 +98,7 @@ object ExecEngineUtil {
       // as by default buffer is cleared when deploy gets included in
       // the finalized block. If that strategy ever changes, we will have to
       // put them back into the buffer explicitly.
-      _ <- DeployStorage[F]
+      _ <- DeployStorageWriter[F]
             .markAsDiscarded(
               invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
             ) whenA invalidDeploys.preconditionFailures.nonEmpty

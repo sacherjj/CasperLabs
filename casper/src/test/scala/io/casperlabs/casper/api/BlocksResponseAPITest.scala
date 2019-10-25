@@ -35,7 +35,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
   "showBlocks" should "return all blocks" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
         genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
         b2 <- createAndStoreBlock[Task](
@@ -103,7 +103,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
 
   it should "return until depth" in withStorage {
     implicit blockStorage => implicit dagStorage =>
-      _ =>
+      implicit deployStorage =>
         /**
           * The Dag looks like
           *

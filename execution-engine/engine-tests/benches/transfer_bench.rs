@@ -26,10 +26,6 @@ const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
 const TARGET_ADDR: [u8; 32] = [127; 32];
 
-fn engine_with_payments() -> EngineConfig {
-    EngineConfig::new().set_use_payment_code(true)
-}
-
 fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDir) {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
@@ -46,7 +42,7 @@ fn bootstrap(accounts: &[PublicKey]) -> (WasmTestResult<LmdbGlobalState>, TempDi
     )
     .build();
 
-    let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), engine_with_payments())
+    let result = LmdbWasmTestBuilder::new_with_config(&data_dir.path(), EngineConfig::new())
         .run_genesis(&DEFAULT_GENESIS_CONFIG)
         .exec(exec_request)
         .expect_success()

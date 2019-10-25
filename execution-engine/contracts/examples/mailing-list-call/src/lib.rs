@@ -7,8 +7,8 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::From;
 
+use contract_ffi::contract_api::TURef;
 use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::contract_api::{ContractRef, TURef};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
@@ -31,10 +31,9 @@ impl From<Error> for ApiError {
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key = runtime::get_key("mailing").unwrap_or_revert_with(ApiError::GetKey);
-    let contract_ref = match contract_key {
-        Key::Hash(hash) => ContractRef::Hash(hash),
-        _ => runtime::revert(ApiError::UnexpectedKeyVariant),
-    };
+    let contract_ref = contract_key
+        .to_c_ptr()
+        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let method = "sub";
     let name = "CasperLabs";

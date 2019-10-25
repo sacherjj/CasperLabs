@@ -4,6 +4,7 @@ import cats.Applicative
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -43,7 +44,9 @@ trait BlockStorage[F[_]] {
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 
-  def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]]
+  def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]]
+
+  def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]]
 
   def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
 
@@ -75,10 +78,13 @@ object BlockStorage {
     abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
-    abstract override def getSummaryByPrefix(
+    abstract override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+      incAndMeasure("getBlockInfo", super.getBlockInfo(blockHash))
+
+    abstract override def getBlockInfoByPrefix(
         blockHashPrefix: String
-    ): F[Option[BlockSummary]] =
-      incAndMeasure("getSummaryByPrefix", super.getSummaryByPrefix(blockHashPrefix))
+    ): F[Option[BlockInfo]] =
+      incAndMeasure("getSummaryByPrefix", super.getBlockInfoByPrefix(blockHashPrefix))
 
     abstract override def put(
         blockHash: BlockHash,
