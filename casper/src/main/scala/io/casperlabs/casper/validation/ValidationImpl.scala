@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
@@ -105,7 +105,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainName: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
+  )(
+      implicit bs: BlockStorage[F],
+      versions: CasperLabsProtocolVersions[F],
+      compiler: Fs2Compiler[F]
+  ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -129,6 +133,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
       _ <- deployUniqueness(block, dag)
+      _ <- deployHeaders(block, dag)
     } yield ()
   }
 
@@ -526,6 +531,69 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployCount)
       } yield ()
     }
+
+  def deployHeaders(b: Block, dag: DagRepresentation[F])(
+      implicit blockStorage: BlockStorage[F]
+  ): F[Unit] = {
+    val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
+    val parents: Set[BlockHash] =
+      b.header.toSet.flatMap((h: consensus.Block.Header) => h.parentHashes)
+    val timestamp       = b.getHeader.timestamp
+    val isFromPast      = DeployFilters.timestampBefore(timestamp)
+    val isNotExpired    = DeployFilters.notExpired(timestamp)
+    val dependenciesMet = DeployFilters.dependenciesMet[F](dag, parents)
+
+    def singleDeployValidation(d: consensus.Deploy): F[Unit] =
+      for {
+        staticErrors           <- deployHeader(d)
+        _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
+        header                 = d.getHeader
+        isFromFuture           = !isFromPast(header)
+        _                      <- raiseFutureDeploy(d.deployHash, header).whenA(isFromFuture)
+        isExpired              = !isNotExpired(header)
+        _                      <- raiseExpiredDeploy(d.deployHash, header).whenA(isExpired)
+        hasMissingDependencies <- dependenciesMet(d).map(!_)
+        _                      <- raiseDeployDependencyNotMet(d).whenA(hasMissingDependencies)
+      } yield ()
+
+    def raiseHeaderErrors(errors: List[Errors.DeployHeaderError]): F[Unit] =
+      for {
+        _ <- Log[F].warn(ignore(b, errors.map(_.errorMessage).mkString(". ")))
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHeader)
+      } yield ()
+
+    def raiseFutureDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash = PrettyPrinter.buildString(deployHash)
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is earlier than timestamp of deploy $hash, ${header.timestamp}"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployFromFuture)
+    }
+
+    def raiseExpiredDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash           = PrettyPrinter.buildString(deployHash)
+      val ttl            = ProtoUtil.getTimeToLive(header, MAX_TTL)
+      val expirationTime = header.timestamp + ttl
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is later than expiration time of deploy $hash, $expirationTime"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
+    }
+
+    def raiseDeployDependencyNotMet(deploy: consensus.Deploy): F[Unit] =
+      for {
+        _ <- Log[F].warn(
+              ignore(b, s"${PrettyPrinter.buildString(deploy)} did not have all dependencies met.")
+            )
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployDependencyNotMet)
+      } yield ()
+
+    deploys.traverse(singleDeployValidation).as(())
+  }
 
   def deployHashes(
       b: Block

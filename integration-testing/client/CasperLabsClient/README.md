@@ -65,7 +65,7 @@ To deploy a compiled contract from your account address:
 ```python
 response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7",
                          gas_price=1,
-                         payment="helloname.wasm",
+                         payment_amount=1000000,
                          session="helloname.wasm")
 ```
 

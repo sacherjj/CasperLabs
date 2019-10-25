@@ -99,10 +99,10 @@ trait BlockStorageTest
                               .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                           )
                         }
-                  _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
-                        maybeSummary should not be empty
+                  _ <- storage.getBlockInfoByPrefix(randomPrefix).map { maybeInfo =>
+                        maybeInfo should not be empty
                         assert(
-                          maybeSummary.get.blockHash
+                          maybeInfo.get.getSummary.blockHash
                             .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                         )
                       }

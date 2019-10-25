@@ -33,8 +33,17 @@ object ServiceError {
   }
 
   object NotFound extends StatusError(Status.NOT_FOUND) {
-    def block(blockHash: ByteString) =
-      apply(s"Block ${Base16.encode(blockHash.toByteArray)} could not be found.")
+    def deploy(deployHash: ByteString): ServiceError.Exception =
+      deploy(Base16.encode(deployHash.toByteArray))
+
+    def deploy(deployHashBase16: String): ServiceError.Exception =
+      apply(s"Deploy ${deployHashBase16} could not be found.")
+
+    def block(blockHash: ByteString): ServiceError.Exception =
+      block(Base16.encode(blockHash.toByteArray))
+
+    def block(blockHashBase16: String): ServiceError.Exception =
+      apply(s"Block ${blockHashBase16} could not be found.")
   }
 
   // NOTE: See https://github.com/grpc/grpc/blob/master/doc/statuscodes.md about when to use which one.

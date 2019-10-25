@@ -53,7 +53,6 @@ pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
-const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
 
@@ -750,37 +749,6 @@ where
                 )));
             }
         };
-
-        // --- REMOVE BELOW --- //
-        // If payment logic is turned off, execute only session code
-        if !(self.config.use_payment_code()) {
-            // DEPLOY WITH NO PAYMENT
-
-            let session_motes = Motes::new(U512::from(DEFAULT_SESSION_MOTES));
-
-            let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
-
-            // Session code execution
-            let session_result = executor.exec(
-                session_module,
-                session.args(),
-                address,
-                &account,
-                authorization_keys,
-                blocktime,
-                deploy_hash,
-                gas_limit,
-                protocol_version,
-                correlation_id,
-                Rc::clone(&tracking_copy),
-                Phase::Session,
-                protocol_data,
-            );
-
-            return Ok(session_result);
-        }
-
-        // --- REMOVE ABOVE --- //
 
         let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 

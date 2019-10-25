@@ -10,6 +10,7 @@ import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
@@ -34,7 +35,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
   ): F[Option[BlockMsgWithTransform]] = {
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
-        body <- sql"""|SELECT d.data, dpr.deploy_position, dpr.cost, dpr.execution_error_message
+        body <- sql"""|SELECT d.summary, d.body, dpr.deploy_position, dpr.cost, dpr.execution_error_message
                       |FROM deploy_process_results dpr
                       |INNER JOIN deploys d
                       |ON dpr.deploy_hash=d.hash
@@ -88,19 +89,19 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     )
   }
 
-  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
+  override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
-      sql"""|SELECT data
+      sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
             |FROM block_metadata
             |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
             |LIMIT 1""".stripMargin
-        .query[BlockSummary]
+        .query[BlockInfo]
         .option
         .transact(xa)
 
-    getByPrefix[BlockSummary](
+    getByPrefix[BlockInfo](
       blockHashPrefix,
-      getBlockSummary,
+      getBlockInfo,
       (lowerBound, upperBound) => query(lowerBound, upperBound)
     )
   }
@@ -142,10 +143,13 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
       .void
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    sql"""|SELECT data
+    getBlockInfo(blockHash).map(_.flatMap(_.summary))
+
+  override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+    sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE block_hash=$blockHash""".stripMargin
-      .query[BlockSummary]
+      .query[BlockInfo]
       .option
       .transact(xa)
 

@@ -64,6 +64,10 @@ abstract class HashSetCasperTestNode[F[_]](
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
+  val ownValidatorKey = validatorId match {
+    case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
+  }
+
   val bonds = genesis.getHeader.getState.bonds
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> Weight(b.stake))
     .toMap
@@ -99,7 +103,7 @@ abstract class HashSetCasperTestNode[F[_]](
       _ <- tearDownNode()
       _ <- blockStorage.clear()
       _ <- dagStorage.clear()
-      _ <- deployStorage.clear()
+      _ <- deployStorage.writer.clear()
     } yield ()
 
   /** Close storage. */
@@ -107,7 +111,7 @@ abstract class HashSetCasperTestNode[F[_]](
     for {
       _ <- blockStorage.close()
       _ <- dagStorage.close()
-      _ <- deployStorage.close()
+      _ <- deployStorage.writer.close()
     } yield ()
 
   def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)

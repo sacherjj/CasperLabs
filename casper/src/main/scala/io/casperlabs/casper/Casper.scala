@@ -66,12 +66,11 @@ sealed abstract class MultiParentCasperInstances {
       genesisEffects: ExecEngineUtil.TransformMap
   ) =
     for {
-      _                   <- Validation[F].transactions(genesis, genesisPreState, genesisEffects)
-      blockProcessingLock <- Semaphore[F](1)
+      _ <- Validation[F].transactions(genesis, genesisPreState, genesisEffects)
       casperState <- Cell.mvarCell[F, CasperState](
                       CasperState()
                     )
-    } yield (blockProcessingLock, casperState)
+    } yield casperState
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
   def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocolVersions](
@@ -84,20 +83,21 @@ sealed abstract class MultiParentCasperInstances {
       relaying: gossiping.Relaying[F]
   ): F[MultiParentCasper[F]] =
     for {
-      (blockProcessingLock, implicit0(casperState: Cell[F, CasperState])) <- init(
-                                                                              genesis,
-                                                                              genesisPreState,
-                                                                              genesisEffects
-                                                                            )
+      implicit0(casperState: Cell[F, CasperState]) <- init(
+                                                       genesis,
+                                                       genesisPreState,
+                                                       genesisEffects
+                                                     )
+      semaphoreMap      <- SemaphoreMap[F, ByteString](1)
       statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainName, upgrades)
       casper <- MultiParentCasperImpl.create[F](
+                 semaphoreMap,
                  statelessExecutor,
                  MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,
                  genesis,
                  chainName,
-                 upgrades,
-                 blockProcessingLock
+                 upgrades
                )
     } yield casper
 }

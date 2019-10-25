@@ -36,7 +36,7 @@ class CLI:
             os.environ.get("TAG_NAME", None) and node.container_name or "localhost"
         )
         self.port = node.grpc_external_docker_port
-        self.internal_port = node.grpc_internal_docker_port
+        self.port_internal = node.grpc_internal_docker_port
         self.cli_cmd = cli_cmd
         self.tls_parameters = tls_parameters or {}
         self.default_deploy_args = []
@@ -50,7 +50,14 @@ class CLI:
         return self.resources_directory / file_name
 
     def expand_args(self, args):
-        connection_details = ["--host", f"{self.host}", "--port", f"{self.port}"]
+        connection_details = [
+            "--host",
+            f"{self.host}",
+            "--port",
+            f"{self.port}",
+            "--port-internal",
+            f"{self.port_internal}",
+        ]
         if self.tls_parameters:
             connection_details += reduce(
                 add,
@@ -71,7 +78,7 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command in ("deploy", "send-deploy"):
+        if command in ("deploy", "send-deploy", "bond", "unbond"):
             return output.split()[2]
             # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
@@ -92,7 +99,7 @@ class CLI:
 
     def __call__(self, *args):
         command_line = [str(self.cli_cmd)] + self.expand_args(args)
-        logging.info(f"EXECUTING []: {command_line}")
+        # logging.info(f"EXECUTING []: {command_line}")
         logging.info(f"EXECUTING: {' '.join(command_line)}")
         cp = subprocess.run(
             command_line, stdout=subprocess.PIPE, stderr=subprocess.PIPE

@@ -6,9 +6,7 @@ extern crate contract_ffi;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::ContractRef;
 use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::Value;
 
@@ -18,10 +16,10 @@ const HELLOWORLD_KEY: &str = "helloworld";
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_key = runtime::get_key(HELLO_NAME_KEY).unwrap_or_revert_with(Error::GetKey);
-    let contract_ref = match contract_key {
-        Key::Hash(hash) => ContractRef::Hash(hash),
-        _ => runtime::revert(Error::UnexpectedKeyVariant),
-    };
+    let contract_ref = contract_key
+        .to_c_ptr()
+        .unwrap_or_revert_with(Error::UnexpectedKeyVariant);
+
     let args = ("World",);
     let result: String = runtime::call_contract(contract_ref, &args, &Vec::new());
     assert_eq!("Hello, World", result);
