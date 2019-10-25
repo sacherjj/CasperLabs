@@ -680,7 +680,8 @@ package object gossiping {
                             connector = connectToGossip,
                             downloadManager = downloadManager,
                             step = conf.server.initSyncStep,
-                            rankStartFrom = minRank
+                            rankStartFrom = minRank,
+                            roundPeriod = conf.server.initSyncRoundPeriod
                           )
                         )
                       }

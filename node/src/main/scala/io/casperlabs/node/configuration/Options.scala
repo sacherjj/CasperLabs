@@ -367,6 +367,10 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverInitSyncRoundPeriod =
+      gen[FiniteDuration]("Time to wait between initial synchronization attempts.")
+
+    @scallop
     val serverPeriodicSyncRoundPeriod =
       gen[FiniteDuration]("Time to wait between periodic synchronization attempts.")
 

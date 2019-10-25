@@ -84,6 +84,9 @@ init-sync-skip-failed-nodes = false
 # Depth of DAG slices (by rank) retrieved slice-by-slice until node fully synchronized.
 init-sync-step = 100
 
+# Time to wait between initial synchronization attempts.
+init-sync-round-period = "30second"
+
 # Maximum number of blocks to allow to be synced initially.
 init-sync-max-block-count = 1000000
 

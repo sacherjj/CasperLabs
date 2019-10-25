@@ -15,6 +15,8 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.IterantOps.RichIterant
 import io.casperlabs.shared.Log
 
+import scala.concurrent.duration.FiniteDuration
+
 /**
   * Synchronizes the node with peers in rounds by fetching slices of the DAG
   * as BlockSummaries and then scheduling them in the DownloadManager
@@ -27,8 +29,9 @@ import io.casperlabs.shared.Log
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
   * @param step          Depth of DAG slices (by rank) retrieved slice-by-slice until node fully synchronized
   * @param rankStartFrom Initial value of rank to start syncing with peers. Usually, the minimum rank of latest messages.
+  * @param roundPeriod   Time to wait between period, useful to configure "aggressiveness" of the initial synchronization
   */
-class InitialSynchronizationForwardImpl[F[_]: Parallel: Log](
+class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],
     selectNodes: List[Node] => List[Node],
     memoizeNodes: Boolean,
@@ -37,7 +40,8 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log](
     skipFailedNodesInNextRounds: Boolean,
     downloadManager: DownloadManager[F],
     step: Int,
-    rankStartFrom: Long
+    rankStartFrom: Long,
+    roundPeriod: FiniteDuration
 )(implicit F: Concurrent[F])
     extends InitialSynchronization[F] {
   override def sync(): F[WaitHandle[F]] = {
@@ -151,6 +155,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log](
                       s"Haven't reached required $minSuccessful amount of fully synced nodes, " +
                         "continuing initial synchronization"
                     )
+                _ <- Timer[F].sleep(roundPeriod)
                 _ <- loop(
                       nextRoundNodes,
                       if (skipFailedNodesInNextRounds) newFailed else Set.empty,

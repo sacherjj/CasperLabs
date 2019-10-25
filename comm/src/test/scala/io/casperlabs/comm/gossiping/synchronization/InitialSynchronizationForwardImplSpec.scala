@@ -296,7 +296,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         minSuccessful: Int = Int.MaxValue,
         skipFailedNodesInNextRounds: Boolean = false,
         step: Int = 10,
-        rankStartFrom: Long = 0L
+        rankStartFrom: Long = 0L,
+        roundPeriod: FiniteDuration = Duration.Zero
     )(
         test: (InitialSynchronization[Task], MockDownloadManager) => Task[Unit]
     ): Unit = {
@@ -311,7 +312,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         skipFailedNodesInNextRounds,
         mockDownloadManager,
         step,
-        rankStartFrom
+        rankStartFrom,
+        roundPeriod
       )
       test(effect, mockDownloadManager).runSyncUnsafe(5.seconds)
     }
