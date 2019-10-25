@@ -2,7 +2,7 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block}
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -303,12 +303,12 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                v3,
                bonds
              )
-        b3 <- createAndStoreBlock[Task](
-               Seq(b1.blockHash),
-               v1,
-               bonds,
-               Map(v0 -> b1.blockHash)
-             )
+        _ <- createAndStoreBlock[Task](
+              Seq(b1.blockHash),
+              v1,
+              bonds,
+              Map(v0 -> b1.blockHash)
+            )
         b4 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v0,
@@ -320,7 +320,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                Seq(b2.blockHash),
                v3,
                bonds,
-               Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
+               Map(v3 -> b2.blockHash)
              )
         b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
@@ -338,7 +338,7 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
               Seq(b7.blockHash),
               v1,
               bonds,
-              Map(v1 -> b4.blockHash) // skip v1 last message in justifications
+              Map(v2 -> b4.blockHash) // skip v1 last message in justifications
             )
         dag <- blockDagStorage.getRepresentation
         panoramaM <- FinalityDetectorUtil.panoramaM(
