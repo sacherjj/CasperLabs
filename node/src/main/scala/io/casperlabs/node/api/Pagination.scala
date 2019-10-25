@@ -49,7 +49,7 @@ object DeployInfoPagination extends Pagination {
             (
               pageSize,
               (
-                ByteBuffer.wrap(arr(0)).getLong(),
+                BigInt(arr(0)).longValue(),
                 ByteString.copyFrom(arr(1))
               )
             )
@@ -74,7 +74,7 @@ object DeployInfoPagination extends Pagination {
         val (lastTimestamp, lastDeployHash) = pageTokenParams
         val lastTimestampBase16 =
           Base16.encode(
-            ByteString.copyFromUtf8(lastTimestamp.toString).toByteArray
+            BigInt(lastTimestamp).toByteArray
           )
         val lastDeployHashBase16 = Base16.encode(lastDeployHash.toByteArray)
         s"$lastTimestampBase16:$lastDeployHashBase16"
