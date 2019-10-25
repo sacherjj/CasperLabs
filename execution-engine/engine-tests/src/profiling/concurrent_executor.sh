@@ -49,7 +49,7 @@ run_server() {
 
 run_client() {
     cd ${EE_DIR}/engine-tests/
-    CLIENT_OUTPUT=$(RUST_LOG= cargo run --release --bin=$CLIENT -- \
+    CLIENT_OUTPUT=$(cargo run --release --bin=$CLIENT -- \
         --socket=$SOCKET --pre-state-hash=$PRE_STATE_HASH --threads=$CLIENT_THREAD_COUNT --requests=$MESSAGE_COUNT)
 }
 

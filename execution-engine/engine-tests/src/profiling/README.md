@@ -104,3 +104,16 @@ Then in the first terminal, run the client:
 RUST_LOG=concurrent_executor=info cargo run --release --bin=concurrent-executor -- \
     --socket=/tmp/CasperLabs/Socket --pre-state-hash=$HASH --threads=8 --requests=200
 ```
+
+There is a bash script which automates this process, and which allows specifying the number of server threadpool threads, the number of client threadpool threads, and the number of messages the client should send.
+
+```bash
+cd CasperLabs/execution-engine/engine-tests/src/profiling/
+./concurrent_executor.sh 8 8 200
+```
+
+For logging, again set the `RUST_LOG` env var:
+
+```bash
+RUST_LOG=concurrent_executor=info ./concurrent_executor.sh 8 8 200
+```

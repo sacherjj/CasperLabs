@@ -378,6 +378,7 @@ struct Client {
     ee_client: Arc<ExecutionEngineServiceClient>,
     work_receiver: Receiver<Work>,
     threadpool: CpuPool,
+    thread_count: usize,
     results: Results,
 }
 
@@ -399,22 +400,28 @@ impl Client {
             ee_client,
             work_receiver,
             threadpool,
+            thread_count: args.thread_count,
             results,
         }
     }
 
     /// Using the threadpool to execute tasks, this pulls work off the channel, sends the contained
     /// request to the server and handles the response.
-    fn run(&self) -> CpuFuture<(), ()> {
-        let client = self.clone();
-        let stream = stream::iter_ok::<_, ()>(self.work_receiver.clone());
-        self.threadpool.spawn_fn(|| {
-            stream.for_each(move |work| {
-                client
-                    .send_request(work)
-                    .and_then(move |(work, response)| Self::handle_response(work, response))
-            })
-        })
+    fn run(&self) -> Vec<CpuFuture<(), ()>> {
+        let mut cpu_futures = vec![];
+        for _ in 0..self.thread_count {
+            let client = self.clone();
+            let stream = stream::iter_ok::<_, ()>(self.work_receiver.clone());
+            let cpu_future = self.threadpool.spawn_fn(|| {
+                stream.for_each(move |work| {
+                    client
+                        .send_request(work)
+                        .and_then(move |(work, response)| Self::handle_response(work, response))
+                })
+            });
+            cpu_futures.push(cpu_future);
+        }
+        cpu_futures
     }
 
     fn send_request(&self, work: Work) -> impl Future<Item = (Work, ExecuteResponse), Error = ()> {
@@ -466,11 +473,13 @@ fn main() {
 
     let start = Instant::now();
 
-    let client_future = client.run();
+    let client_futures = client.run();
     let producer_thread = work_producer.produce();
-    client_future
-        .wait()
-        .expect("Expected to join client threadpool");
+    for client_future in client_futures {
+        client_future
+            .wait()
+            .expect("Expected to join client threadpool");
+    }
     producer_thread
         .join()
         .expect("Expected to join the producer thread");
