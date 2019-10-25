@@ -28,13 +28,18 @@ def three_node_network_with_combined_contract(three_node_network):
     tnn = three_node_network
     bootstrap, node1, node2 = tnn.docker_nodes
     node = bootstrap
-    block_hash = bootstrap.p_client.deploy_and_propose(
-        session_contract=Contract.COMBINED_CONTRACTS_DEFINE,
-        from_address=node.genesis_account.public_key_hex,
-        public_key=node.genesis_account.public_key_path,
-        private_key=node.genesis_account.private_key_path,
-    )
-    wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
+    for contract in [
+        Contract.HELLO_NAME_DEFINE,
+        Contract.COUNTER_DEFINE,
+        Contract.MAILING_LIST_DEFINE,
+    ]:
+        block_hash = bootstrap.p_client.deploy_and_propose(
+            session_contract=contract,
+            from_address=node.genesis_account.public_key_hex,
+            public_key=node.genesis_account.public_key_path,
+            private_key=node.genesis_account.private_key_path,
+        )
+        wait_for_block_hash_propagated_to_all_nodes(tnn.docker_nodes, block_hash)
     return tnn
 
 
@@ -107,7 +112,7 @@ def test_call_stored_contract(
         block_hash = deploy_and_propose(node, contract)
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
         cur_state = state(node, path, block_hash)
-        assert expected(cur_state)
+        assert expected(cur_state), f"{cur_state!r}"
 
 
 CONTRACT_1 = "old_wasm/helloname_invalid_just_1.wasm"

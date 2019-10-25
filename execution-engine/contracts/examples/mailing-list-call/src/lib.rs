@@ -12,6 +12,11 @@ use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
 use contract_ffi::key::Key;
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
+const MAIL_FEED_KEY: &str = "mail_feed";
+const MAILING_KEY: &str = "mailing";
+const PUB_METHOD: &str = "pub";
+const SUB_METHOD: &str = "sub";
+
 #[repr(u16)]
 enum Error {
     GetKeyNameURef = 0,
@@ -30,29 +35,27 @@ impl From<Error> for ApiError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key = runtime::get_key("mailing").unwrap_or_revert_with(ApiError::GetKey);
+    let contract_key = runtime::get_key(MAILING_KEY).unwrap_or_revert_with(ApiError::GetKey);
     let contract_ref = contract_key
         .to_c_ptr()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
-    let method = "sub";
     let name = "CasperLabs";
-    let args = (method, name);
+    let args = (SUB_METHOD, name);
     let sub_key =
         runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), &args, &Vec::new())
             .unwrap_or_revert_with(Error::NoSubKey);
 
-    let key_name = "mail_feed";
-    runtime::put_key(key_name, &sub_key);
+    runtime::put_key(MAIL_FEED_KEY, &sub_key);
 
-    let key_name_uref = runtime::get_key(key_name).unwrap_or_revert_with(Error::GetKeyNameURef);
+    let key_name_uref =
+        runtime::get_key(MAIL_FEED_KEY).unwrap_or_revert_with(Error::GetKeyNameURef);
     if sub_key != key_name_uref {
         runtime::revert(Error::BadSubKey);
     }
 
-    let method = "pub";
     let message = "Hello, World!";
-    let args = (method, message);
+    let args = (PUB_METHOD, message);
     runtime::call_contract::<_, ()>(contract_ref, &args, &Vec::new());
 
     let list_key: TURef<Vec<String>> = sub_key
