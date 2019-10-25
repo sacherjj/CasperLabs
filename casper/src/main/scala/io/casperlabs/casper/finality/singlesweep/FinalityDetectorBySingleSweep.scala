@@ -5,7 +5,8 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.{Message, Weight}, Weight.Zero
+import io.casperlabs.models.{Message, Weight}
+import Weight.Zero
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -21,8 +22,10 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
       candidateBlockHash: BlockHash
   ): F[Float] =
     for {
-      weights      <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
-      committeeOpt <- findBestCommittee(dag, candidateBlockHash, weights)
+      weights                   <- ProtoUtil.mainParentWeightMap(dag, candidateBlockHash)
+      equivocators              <- dag.getEquivocators
+      weightsOfHonestValidators = weights.filterKeys(!equivocators.contains(_))
+      committeeOpt              <- findBestCommittee(dag, candidateBlockHash, weightsOfHonestValidators)
     } yield committeeOpt
       .map(committee => FinalityDetector.calculateThreshold(committee.quorum, weights.values.sum))
       .getOrElse(0f)
@@ -275,6 +278,7 @@ class FinalityDetectorBySingleSweepImpl[F[_]: MonadThrowable: Log] extends Final
                               .latestMessageHash(
                                 validator
                               )
+                              .map(s => if (s.size > 1) None else s.headOption)
         result <- latestMessageHash match {
                    case Some(b) =>
                      ProtoUtil.isInMainChain[F](

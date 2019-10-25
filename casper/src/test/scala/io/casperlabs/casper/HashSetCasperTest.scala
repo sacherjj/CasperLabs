@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -8,8 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
+import io.casperlabs.casper.helper._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -19,13 +18,12 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.FilesAPI
+import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers}
+import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 import scala.collection.immutable
 
@@ -34,7 +32,11 @@ class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasper
 
 /** Run tests against whatever kind of test node the inheriting sets up. */
 @silent("match may not be exhaustive")
-abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasperTestNodeFactory {
+abstract class HashSetCasperTest
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with HashSetCasperTestNodeFactory {
 
   import HashSetCasperTest._
 
@@ -49,6 +51,13 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
   private val bonds   = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, 0L)
+
+  private def deployAndCreate(node: HashSetCasperTestNode[Task]) =
+    for {
+      deploy         <- ProtoUtil.basicDeploy[Task]()
+      result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+      Created(block) = result
+    } yield block
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -69,7 +78,10 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield result
   }
 
-  it should "not allow multiple threads to process the same block" in {
+  // Leaving this test around. It won't happen in real life because the download manager
+  // won't attempt the same block on two different fibers, however it's protected by the
+  // mechanism we put in place against equivocating blocks going in at the same time.
+  it should "not allow multiple threads to process the same block at the same time" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)(scheduler)
@@ -96,7 +108,9 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     val threadStatuses: (BlockStatus, BlockStatus) =
       testProgram.unsafeRunSync(scheduler)
 
-    threadStatuses should matchPattern { case (Processed, Valid) | (Valid, Processed) => }
+    threadStatuses should matchPattern {
+      case (Processed, Valid) | (Valid, Processed) =>
+    }
     node.tearDown().unsafeRunSync
   }
 
@@ -135,7 +149,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Task].dag
       latestMessageHashes  <- dag.latestMessageHashes
-      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators         <- dag.getEquivocators
+      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
@@ -180,7 +195,8 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Task].dag
       latestMessageHashes   <- dag.latestMessageHashes
-      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators          <- dag.getEquivocators
+      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ <- node.tearDown()
@@ -389,6 +405,29 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
             )
           }
     } yield result
+  }
+
+  it should "process blocks in parallel" in effectTest {
+    def createBlock(node: HashSetCasperTestNode[Task]) =
+      for {
+        deploy         <- ProtoUtil.basicDeploy[Task]()
+        result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+        Created(block) = result
+      } yield block
+    for {
+      nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
+      // Create blocks on different nodes that can add in parallel.
+      // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
+      blocks <- Task.sequence(nodes.map(createBlock))
+      // Add them all concurrently to the one of the nodes; it shouldn't run into validation problems.
+      results <- Task.gatherUnordered {
+                  blocks.map(nodes.head.casperEff.addBlock(_))
+                }
+    } yield {
+      forAll(results) {
+        _ shouldBe Valid
+      }
+    }
   }
 
   it should "handle multi-parent blocks correctly" in effectTest {
@@ -740,7 +779,7 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
     } yield ()
   }
 
-  it should "adding equivocation blocks" in effectTest {
+  it should "add equivocation blocks" in effectTest {
     for {
       nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
 
@@ -774,6 +813,23 @@ abstract class HashSetCasperTest extends FlatSpec with Matchers with HashSetCasp
             } yield result
           }
     } yield result
+  }
+
+  it should "track equivocating blocks added at the same time" in effectTest {
+    for {
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+
+      blockA <- deployAndCreate(nodes(0))
+      blockB <- deployAndCreate(nodes(0))
+
+      _ <- Task.gatherUnordered {
+            List(blockA, blockB).map(nodes(1).casperEff.addBlock)
+          }
+
+      equivocators <- nodes(1).dagStorage.getRepresentation.flatMap(_.getEquivocators)
+    } yield {
+      equivocators.contains(nodes(0).ownValidatorKey) shouldBe true
+    }
   }
 
   it should "not ignore adding equivocation blocks when a child is revealed later" in effectTest {

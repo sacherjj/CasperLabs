@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -15,9 +15,8 @@ import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, Pro
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.models.Message
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
+import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.models.Weight
@@ -705,8 +704,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       genesisHash: BlockHash,
-      dag: DagRepresentation[F],
-      equivocationsTracker: EquivocationsTracker
+      dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
@@ -717,7 +715,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
+      equivocators <- EquivocationDetector.detectVisibleFromJustifications(
+                       dag,
+                       latestMessagesHashes
+                     )
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -729,14 +731,15 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             Applicative[F].unit
           else {
             val parentsString =
-              parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+              parentHashes.map(PrettyPrinter.buildString).mkString(",")
             val estimateString =
-              computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+              computedParentHashes.map(PrettyPrinter.buildString).mkString(",")
             val justificationString = latestMessagesHashes.values
-              .map(hash => PrettyPrinter.buildString(hash))
+              .map(hashes => hashes.map(PrettyPrinter.buildString).mkString("[", ",", "]"))
               .mkString(",")
             val message =
-              s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
+              s"block parents $parentsString did not match estimate $estimateString based on justification $justificationString."
+            println(s"PARENTS ERROR: $message")
             for {
               _ <- Log[F].warn(
                     ignore(

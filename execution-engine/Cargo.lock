@@ -426,13 +426,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "combined-contracts-define"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
 name = "constant_time_eq"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -632,14 +625,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "direct-revert-call"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
-name = "direct-revert-define"
+name = "direct-revert"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.18.0",
@@ -809,20 +795,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "err-standard-payment"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
-name = "err-transfer-to-account"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
 name = "failure"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -844,13 +816,6 @@ dependencies = [
 
 [[package]]
 name = "faucet"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
-name = "finalize-payment"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.18.0",
@@ -1581,13 +1546,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "payment-purse"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
 name = "pkg-config"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1980,13 +1938,6 @@ dependencies = [
  "rand_os 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "redox_syscall 0.1.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust-argon2 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "refund-purse"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
 ]
 
 [[package]]
@@ -2616,13 +2567,6 @@ dependencies = [
 
 [[package]]
 name = "transfer-to-account-02"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.18.0",
-]
-
-[[package]]
-name = "transfer-to-account-it"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.18.0",

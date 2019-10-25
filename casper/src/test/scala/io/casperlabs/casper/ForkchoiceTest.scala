@@ -4,7 +4,7 @@ import cats.data.NonEmptyList
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
+import io.casperlabs.casper.equivocations.{EquivocationDetector}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
@@ -80,12 +80,13 @@ class ForkchoiceTest
                bonds,
                HashMap(v1 -> b7.blockHash, v2 -> b4.blockHash)
              )
-        dag <- dagStorage.getRepresentation
+        dag          <- dagStorage.getRepresentation
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
-                       Map.empty[Estimator.Validator, Estimator.BlockHash],
-                       EquivocationsTracker.empty
+                       Map.empty,
+                       equivocators
                      )
       } yield forkchoice.head should be(genesis.blockHash)
   }
@@ -144,11 +145,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       EquivocationsTracker.empty
+                       equivocators
                      )
         _      = forkchoice.head should be(b6.blockHash)
         result = forkchoice(1) should be(b8.blockHash)
@@ -211,11 +213,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       EquivocationsTracker.empty
+                       equivocators
                      )
         _      = forkchoice.head should be(b8.blockHash)
         result = forkchoice(1) should be(b7.blockHash)
@@ -239,30 +242,29 @@ class ForkchoiceTest
         c       <- createAndStoreBlock[Task](Seq(b.blockHash), v1, bonds, Map(v1 -> a1.blockHash))
         dag     <- dagStorage.getRepresentation
 
-        latestBlocks <- dag.latestMessageHashes
-        // Set the equivocationsTracker manually
-        equivocationsTracker = new EquivocationsTracker(Map(v2 -> genesis.getHeader.rank))
+        latestMessageHashes <- dag.latestMessageHashes
         equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
                                    dag,
-                                   latestBlocks,
-                                   equivocationsTracker
+                                   latestMessageHashes
                                  )
-        _      = equivocatingValidators shouldBe Set(v1)
-        scores <- Estimator.lmdScoring(dag, genesis.blockHash, latestBlocks, equivocatingValidators)
+        _ = equivocatingValidators shouldBe Set(v1)
+        scores <- Estimator.lmdScoring(
+                   dag,
+                   a2.blockHash,
+                   latestMessageHashes,
+                   equivocatingValidators
+                 )
         _ = scores shouldBe Map(
-          genesis.blockHash -> 3L,
-          a2.blockHash      -> 3L,
-          b.blockHash       -> 3L,
-          c.blockHash       -> 0L
+          a2.blockHash -> 3L,
+          b.blockHash  -> 3L,
+          c.blockHash  -> 0L
         )
-
-        latestMessageHashes <- dag.latestMessageHashes
-
+        equivocators <- dag.getEquivocators
         tips <- Estimator.tips(
                  dag,
                  genesis.blockHash,
                  latestMessageHashes,
-                 equivocationsTracker
+                 equivocators
                )
         _ = tips.head shouldBe c.blockHash
       } yield ()
@@ -316,11 +318,12 @@ class ForkchoiceTest
              )
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
         forkchoice <- Estimator.tips[Task](
                        dag,
                        genesis.blockHash,
                        latestBlocks,
-                       EquivocationsTracker.empty
+                       equivocators
                      )
         _ = forkchoice shouldBe List(b4.blockHash)
       } yield ()
@@ -341,7 +344,7 @@ class ForkchoiceTest
       dag: DagRepresentation[Task],
       bonds: Seq[Bond],
       supporterForBlocks: Map[BlockHash, Seq[Validator]],
-      latestMessageHashes: Map[Validator, BlockHash]
+      latestMessageHashes: Map[Validator, Set[BlockHash]]
   ): Unit = {
     assert(latestMessageHashes.size > 1)
     val equivocatorsGen: Gen[Set[Validator]] =
@@ -353,7 +356,7 @@ class ForkchoiceTest
     val lca = DagOperations
       .latestCommonAncestorsMainParent(
         dag,
-        NonEmptyList.fromListUnsafe(latestMessageHashes.values.toList)
+        NonEmptyList.fromListUnsafe(latestMessageHashes.values.flatten.toList)
       )
       .runSyncUnsafe(1.second)
 
@@ -517,9 +520,9 @@ class ForkchoiceTest
           d       <- createAndStoreBlock[Task](Seq(a.blockHash), v1, bonds)
           e       <- createAndStoreBlock[Task](Seq(b.blockHash, c.blockHash), v2, bonds)
           f       <- createAndStoreBlock[Task](Seq(d.blockHash, e.blockHash), v2, bonds)
-          g       <- createAndStoreBlock[Task](Seq(f.blockHash), v1, bonds)
+          g       <- createAndStoreBlock[Task](Seq(f.blockHash), v1, bonds, Map(v1 -> d.blockHash))
           h       <- createAndStoreBlock[Task](Seq(f.blockHash), v2, bonds)
-          i       <- createAndStoreBlock[Task](Seq(f.blockHash), v3, bonds)
+          i       <- createAndStoreBlock[Task](Seq(f.blockHash), v3, bonds, Map(v3 -> c.blockHash))
           j       <- createAndStoreBlock[Task](Seq(g.blockHash, h.blockHash), v1, bonds)
           k       <- createAndStoreBlock[Task](Seq(h.blockHash), v2, bonds)
           l <- createAndStoreBlock[Task](
@@ -585,7 +588,8 @@ class ForkchoiceTest
           i            <- createAndStoreBlock[Task](Seq(g.blockHash, f.blockHash), v3, bonds)
           dag          <- dagStorage.getRepresentation
           latestBlocks <- dag.latestMessageHashes
-          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, EquivocationsTracker.empty)
+          equivocators <- dag.getEquivocators
+          tips         <- Estimator.tips(dag, genesis.blockHash, latestBlocks, equivocators)
           _            = tips.head shouldEqual i.blockHash
         } yield ()
   }

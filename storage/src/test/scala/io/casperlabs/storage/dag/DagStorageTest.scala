@@ -2,7 +2,9 @@ package io.casperlabs.storage.dag
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.{
@@ -49,18 +51,44 @@ trait DagStorageTest
   def withDagStorage[R](f: DagStorage[Task] => Task[R]): R
 
   "DAG Storage" should "be able to lookup a stored block" in {
-    def setRank(blockMsg: BlockMsgWithTransform, rank: Int): BlockMsgWithTransform =
-      blockMsg.withBlockMessage(
-        blockMsg.getBlockMessage.withHeader(
-          blockMsg.getBlockMessage.getHeader.withRank(rank.toLong)
+    // NOTE: Expects that blocks.size == 2.
+    // Updates 2nd block justification list to point at the 1st block.
+    def updateLastMessageByValidator(
+        blocks: List[BlockMsgWithTransform]
+    ): List[BlockMsgWithTransform] =
+      if (blocks.size == 1) {
+        // That's the last station.
+        blocks
+      } else {
+        val a = blocks(0)
+        val b = blocks(1)
+        List(
+          b.update(
+              _.blockMessage.update(
+                _.header.validatorPublicKey := a.getBlockMessage.getHeader.validatorPublicKey
+              )
+            )
+            .update(
+              _.blockMessage.update(
+                _.header.justifications := Seq(
+                  Justification(
+                    a.getBlockMessage.getHeader.validatorPublicKey,
+                    a.getBlockMessage.blockHash
+                  )
+                )
+              )
+            )
         )
-      )
+      }
 
     forAll(genBlockMsgWithTransformDagFromGenesis) { initial =>
       val validatorsToBlocks = initial
         .groupBy(_.getBlockMessage.getHeader.validatorPublicKey)
-        .mapValues(_.zipWithIndex.map { case (block, i) => setRank(block, i) })
-      val latestBlocksByValidator = validatorsToBlocks.mapValues(_.maxBy(_.getBlockMessage.rank))
+        .mapValues(_.sliding(2).flatMap(updateLastMessageByValidator))
+
+      // Because we've updated validators' messages so that they always cite its previous block
+      // we can just pick the `last` element in each of the validators' swimlanes as the "latest message".
+      val latestBlocksByValidator = validatorsToBlocks.mapValues(msgs => Set(msgs.toList.last))
       val blockElements           = validatorsToBlocks.values.toList.flatten
 
       withDagStorage { dagStorage =>
@@ -69,33 +97,47 @@ trait DagStorageTest
                 blockMsgWithTransform => dagStorage.insert(blockMsgWithTransform.getBlockMessage)
               )
           dag <- dagStorage.getRepresentation
+          // Test that we can lookup all blocks that we've just inserted.
           _ <- blockElements.traverse {
                 case BlockMsgWithTransform(Some(b), _) =>
-                  for {
-                    blockSummary <- dag.lookup(b.blockHash)
-                  } yield blockSummary shouldBe Message.fromBlock(b).toOption
+                  dag.lookup(b.blockHash).map(_ shouldBe Message.fromBlock(b).toOption)
                 case _ => ???
               }
+          // Test that `latestMessageHash(validator)` and `latestMessage(validator)` return
+          // expected results.
           _ <- latestBlocksByValidator.toList.traverse {
-                case (validator, BlockMsgWithTransform(Some(b), _)) =>
+                case (validator, latestBlocks) =>
                   for {
                     latestMessageHash <- dag.latestMessageHash(validator)
                     latestMessage     <- dag.latestMessage(validator)
                   } yield {
-                    latestMessageHash shouldBe Some(b.blockHash)
-                    latestMessage shouldBe Message.fromBlock(b).toOption
+                    latestMessage should contain theSameElementsAs latestBlocks
+                      .map(_.getBlockMessage)
+                      .map(
+                        Message
+                          .fromBlock(_)
+                          .get
+                      )
+
+                    latestMessageHash should contain theSameElementsAs latestBlocks
+                      .map(
+                        _.getBlockMessage.blockHash
+                      )
                   }
                 case _ => ???
               }
           _ <- dag.latestMessageHashes.map { got =>
-                got.toList should contain theSameElementsAs latestBlocksByValidator.toList.map {
-                  case (v, b) => (v, b.getBlockMessage.blockHash)
-                }
+                got.toList should contain theSameElementsAs latestBlocksByValidator
+                  .mapValues(
+                    _.map(_.getBlockMessage.blockHash).toSet
+                  )
               }
           _ <- dag.latestMessages.map { got =>
-                got.toList should contain theSameElementsAs latestBlocksByValidator.toList.map {
-                  case (v, b) => (v, Message.fromBlock(b.getBlockMessage).get)
-                }
+                val expected = latestBlocksByValidator
+                  .mapValues(
+                    _.map(_.getBlockMessage).map(Message.fromBlock(_).get)
+                  )
+                got.toList should contain theSameElementsAs expected.toList
               }
         } yield ()
       }
@@ -129,16 +171,20 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
   override def createTestResource: Task[DagStorage[Task]] =
     SQLiteStorage.create[Task]()
 
-  "SQLite DAG Storage" should "override validator's latest block hash only if rank is higher" in {
+  "SQLite DAG Storage" should "override validator's latest block hash only if new messages quotes the previous one" in {
     forAll { (initial: Block, a: Block, c: Block) =>
       withDagStorage { storage =>
-        def update(b: Block, validator: ByteString, rank: Long): Block =
-          b.withHeader(b.getHeader.withValidatorPublicKey(validator).withRank(rank))
+        def update(b: Block, validator: ByteString, prevHash: ByteString): Block =
+          b.update(_.header.validatorPublicKey := validator)
+            .update(_.header.justifications := Seq(Justification(validator, prevHash)))
 
-        val validator  = initial.validatorPublicKey
-        val rank       = initial.rank
-        val lowerRank  = update(a, validator, rank - 1)
-        val higherRank = update(c, validator, rank + 1)
+        val validator = initial.validatorPublicKey
+        // Block from the same validator that cites its previous block.
+        // Should replace `validator_latest_message` entry in the database.
+        val nextBlock = update(a, validator, initial.blockHash)
+        // Block from the same validator that doesn't cite its previous block.
+        // This is an equivocation. Should not replace `validator_latest_message` entry in the database but add a new one.
+        val equivBlock = update(c, validator, ByteString.EMPTY)
 
         val readLatestMessages = storage.getRepresentation.flatMap(
           dag =>
@@ -152,46 +198,41 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
 
         for {
           _ <- storage.insert(initial)
-          (
-            latestMessageHashesBefore,
-            latestMessagesBefore,
-            latestMessageBefore,
-            latestMessageHashBefore
-          ) <- readLatestMessages
-
-          _ <- storage.insert(lowerRank)
-          // block with lower rank should be ignored
+          _ <- storage.insert(nextBlock)
           _ <- readLatestMessages.map {
                 case (
                     latestMessageHashesGot,
                     latestMessagesGot,
-                    latestMessageGot,
-                    latestMessageHashGot
+                    validatorLatestMessagesGot,
+                    validatorLatestMessageHashGot
                     ) =>
-                  latestMessageHashesGot shouldBe latestMessageHashesBefore
-                  latestMessagesGot shouldBe latestMessagesBefore
-                  latestMessageGot shouldBe latestMessageBefore
-                  latestMessageHashGot shouldBe latestMessageHashBefore
+                  val validatorLatestMessages      = Set(Message.fromBlock(nextBlock).get)
+                  val validatorLatestMessageHashes = validatorLatestMessages.map(_.messageHash)
+                  latestMessageHashesGot shouldBe Map(validator -> validatorLatestMessageHashes)
+                  latestMessagesGot shouldBe Map(validator      -> validatorLatestMessages)
+                  validatorLatestMessagesGot shouldBe validatorLatestMessages
+                  validatorLatestMessageHashGot shouldBe validatorLatestMessageHashes
               }
 
-          // not checking new blocks with same rank because they should be invalidated
-          // before storing because of equivocation
-
-          _ <- storage.insert(higherRank)
-          // only block with higher rank should override previous message
+          _ <- storage.insert(equivBlock)
+          // Equivocating block didn't include the `initial` one in its justifications,
+          // both are validator's "latest messages"
           _ <- readLatestMessages.map {
                 case (
                     latestMessageHashesGot,
                     latestMessagesGot,
-                    latestMessageGot,
-                    latestMessageHashGot
+                    validatorLatestMessageGot,
+                    validatorLatestMessageHashGot
                     ) =>
-                  latestMessageHashesGot shouldBe Map(validator -> higherRank.blockHash)
+                  val validatorLatestMessages =
+                    Set(Message.fromBlock(nextBlock).get, Message.fromBlock(equivBlock).get)
+                  val validatorLatestMessageHashes = validatorLatestMessages.map(_.messageHash)
+                  latestMessageHashesGot shouldBe Map(validator -> validatorLatestMessageHashes)
                   latestMessagesGot shouldBe Map(
-                    validator -> Message.fromBlock(higherRank).get
+                    validator -> validatorLatestMessages
                   )
-                  latestMessageGot shouldBe Message.fromBlock(higherRank).toOption
-                  latestMessageHashGot shouldBe Some(higherRank.blockHash)
+                  validatorLatestMessageGot shouldBe validatorLatestMessages
+                  validatorLatestMessageHashGot shouldBe validatorLatestMessageHashes
               }
         } yield ()
       }

@@ -8,6 +8,9 @@ use alloc::collections::btree_map::BTreeMap;
 use contract_ffi::contract_api::{runtime, storage};
 use contract_ffi::value::account::PublicKey;
 
+const GET_CALLER_EXT: &str = "get_caller_ext";
+const GET_CALLER_KEY: &str = "get_caller";
+
 fn test_get_caller() {
     // Assumes that will be called using test framework genesis account with
     // public key == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
@@ -30,6 +33,6 @@ pub extern "C" fn get_caller_ext() {
 pub extern "C" fn call() {
     // works in session code
     test_get_caller();
-    let pointer = storage::store_function_at_hash("get_caller_ext", BTreeMap::new());
-    runtime::put_key("get_caller", &pointer.into());
+    let pointer = storage::store_function_at_hash(GET_CALLER_EXT, BTreeMap::new());
+    runtime::put_key(GET_CALLER_KEY, &pointer.into());
 }

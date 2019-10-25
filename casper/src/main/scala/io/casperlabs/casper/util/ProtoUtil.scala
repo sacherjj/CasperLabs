@@ -6,8 +6,6 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.votingmatrix
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
@@ -197,12 +195,11 @@ object ProtoUtil {
       }
     }
 
-  def creatorJustification(header: Block.Header): Option[Justification] =
-    header.justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == header.validatorPublicKey
-      }
+  def creatorJustification(header: Block.Header): Set[Justification] =
+    header.justifications.collect {
+      case j @ Justification(validator: Validator, _) if validator == header.validatorPublicKey =>
+        j
+    }.toSet
 
   def weightMap(block: Block): Map[ByteString, Weight] =
     weightMap(block.getHeader)
@@ -283,9 +280,6 @@ object ProtoUtil {
                   .buildString(message.messageHash)}"
               )
             )
-          // For some reason scalac produces a warning that we are missing a case
-          // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
-          case Some(_) => ???
           case None =>
             MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
@@ -348,24 +342,21 @@ object ProtoUtil {
 
   def getJustificationMsgHashes(
       justifications: Seq[Justification]
-  ): immutable.Map[Validator, BlockHash] =
-    justifications.foldLeft(Map.empty[Validator, BlockHash]) {
-      case (acc, Justification(validator, block)) =>
-        acc.updated(validator, block)
-    }
+  ): immutable.Map[Validator, Set[BlockHash]] =
+    justifications.groupBy(_.validatorPublicKey).mapValues(_.map(_.latestBlockHash).toSet)
 
   def getJustificationMsgs[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       justifications: Seq[Justification]
-  ): F[Map[Validator, Message]] =
-    justifications.toList.foldM(Map.empty[Validator, Message]) {
+  ): F[Map[Validator, Set[Message]]] =
+    justifications.toList.foldM(Map.empty[Validator, Set[Message]]) {
       case (acc, Justification(validator, hash)) =>
         dag.lookup(hash).flatMap {
           case Some(meta) =>
-            acc.updated(validator, meta).pure[F]
+            acc.combine(Map(validator -> Set(meta))).pure[F]
 
           case None =>
-            MonadThrowable[F].raiseError[Map[Validator, Message]](
+            MonadThrowable[F].raiseError(
               new NoSuchElementException(
                 s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
               )

@@ -7,7 +7,6 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.{Justification, MessageType}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.{generateHash, generateValidator}
 import io.casperlabs.casper.helper.{
@@ -101,15 +100,15 @@ class ValidationTest
     ) {
       case (block, _) =>
         for {
-          bprev         <- block
-          dag           <- IndexedDagStorage[F].getRepresentation
-          latestMsgs    <- dag.latestMessages
-          justification = latestMsgs.map { case (v, b) => (v, b.messageHash) }
-          bnext <- createAndStoreBlock[F](
+          bprev          <- block
+          dag            <- IndexedDagStorage[F].getRepresentation
+          latestMsgs     <- dag.latestMessages
+          justifications = latestMsgs.mapValues(_.map(_.messageHash))
+          bnext <- createAndStoreBlockNew[F](
                     Seq(bprev.blockHash),
-                    creator = creator,
-                    bonds = bonds,
-                    justifications = justification
+                    creator,
+                    bonds,
+                    justifications
                   )
         } yield bnext
     }
@@ -639,51 +638,53 @@ class ValidationTest
       } yield result
   }
 
+  // Turns sequence of blocks into a mapping between validators and block hashes
+  def latestMessages(messages: Seq[Block]): Map[Validator, Set[BlockHash]] =
+    messages
+      .map(b => b.getHeader.validatorPublicKey -> b.blockHash)
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
+
+  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+      parents: Seq[Block],
+      bonds: Seq[Bond],
+      justifications: Seq[Block],
+      validator: ByteString
+  ): F[Block] =
+    for {
+      deploy <- ProtoUtil.basicProcessedDeploy[F]()
+      block <- createAndStoreBlockNew[F](
+                parents.map(_.blockHash),
+                creator = validator,
+                bonds = bonds,
+                deploys = Seq(deploy),
+                justifications = latestMessages(justifications)
+              )
+    } yield block
+
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      val validators = Vector(
-        generateValidator("V1"),
-        generateValidator("V2"),
-        generateValidator("V3")
-      )
-      val bonds = validators.zipWithIndex.map {
+      val v0 = generateValidator("V1")
+      val v1 = generateValidator("V2")
+      val v2 = generateValidator("V3")
+
+      val bonds = Seq(v0, v1, v2).zipWithIndex.map {
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      val emptyEquivocationsTracker = EquivocationsTracker.empty
-
-      def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
-        messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
-
-      def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
-          parents: Seq[Block],
-          justifications: Seq[Block],
-          validator: Int
-      ): F[Block] =
-        for {
-          deploy <- ProtoUtil.basicProcessedDeploy[F]()
-          block <- createAndStoreBlock[F](
-                    parents.map(_.blockHash),
-                    creator = validators(validator),
-                    bonds = bonds,
-                    deploys = Seq(deploy),
-                    justifications = latestMessages(justifications)
-                  )
-        } yield block
-
       for {
         b0 <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0)
+        b1 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v0)
+        b2 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v1)
+        b3 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v2)
+        b4 <- createValidatorBlock[Task](Seq(b1), bonds, Seq(b1), v0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), bonds, Seq(b1, b2, b3), v1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), bonds, Seq(b1, b4, b5), v0)
+        b7 <- createValidatorBlock[Task](Seq(b4), bonds, Seq(b1, b4, b5), v1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0) //empty justification
         result <- for {
                    dag              <- dagStorage.getRepresentation
                    genesisBlockHash = b0.blockHash
@@ -692,49 +693,43 @@ class ValidationTest
                    _ <- Validation[Task].parents(
                          b1,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b2,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b3,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b4,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b5,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b6,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
 
                    // Not valid
                    _ <- Validation[Task]
-                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b7, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b8, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b9, genesisBlockHash, dag)
                          .attempt
 
                    _ = log.warns should have size 3
@@ -747,11 +742,58 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
+                              .parents(b10, genesisBlockHash, dag)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result
       } yield result
+  }
+
+  // See [[/resources/casper/localDetectedForeignDidnt.jpg]]
+  it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+      val v2 = generateValidator("v2")
+      val v3 = generateValidator("v3")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3,
+        v2 -> 5,
+        v3 -> 2
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
+        e <- {
+          // `b` and `c` create an equivocation. Their scores will be 0 but secondary parents
+          // list is sorted. If two values are the same we sort by hash.
+          // We need to make sure that block we create here has the same order of secondary parents
+          // as will be computed in the validation step.
+          val secondarySorted = Seq(b, c).sortBy(_.blockHash.toStringUtf8).reverse
+          createValidatorBlock[Task](Seq(a) ++ secondarySorted, bonds, Seq(a, b, c), v3)
+        }
+        dag <- dagStorage.getRepresentation
+        // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
+        // It will choose C as a main parent and A as a secondary one.
+        _ <- Validation[Task]
+              .parents(d, genesis.blockHash, dag)
+              .map(_.parents.map(_.blockHash))
+              .attempt shouldBeF Right(
+              Vector(c.blockHash, a.blockHash)
+            )
+        // While v0 has seen everything so it will use 0 as v2's weight when scoring.
+        _ <- Validation[Task]
+              .parents(e, genesis.blockHash, dag)
+              .map(_.parents.map(_.blockHash)) shouldBeF e.getHeader.parentHashes.toVector
+      } yield ()
   }
 
   // Creates a block with an invalid block number and sequence number

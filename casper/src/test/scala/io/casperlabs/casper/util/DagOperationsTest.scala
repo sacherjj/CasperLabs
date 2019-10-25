@@ -135,7 +135,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
       } yield assert(lca == genesis.blockHash)
 
@@ -155,7 +155,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
       } yield assert(lca == genesis.blockHash)
 
@@ -184,7 +184,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
       } yield assert(lca == genesis.blockHash)
 
@@ -213,7 +213,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
       } yield assert(lca == genesis.blockHash)
 
@@ -241,7 +241,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
       } yield assert(lca == b4.blockHash)
 
@@ -268,21 +268,21 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
         b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
         c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
-        d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1)
-        e            <- createAndStoreBlock[Task](Seq(c.blockHash), v2)
-        f            <- createAndStoreBlock[Task](Seq(d.blockHash), v2)
-        g            <- createAndStoreBlock[Task](Seq(f.blockHash), v1)
-        h            <- createAndStoreBlock[Task](Seq(f.blockHash), v2)
-        i            <- createAndStoreBlock[Task](Seq(f.blockHash), v3)
-        j            <- createAndStoreBlock[Task](Seq(g.blockHash), v1)
-        k            <- createAndStoreBlock[Task](Seq(h.blockHash), v2)
-        l            <- createAndStoreBlock[Task](Seq(i.blockHash), v3)
-        m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2)
+        d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1, Seq.empty)
+        e            <- createAndStoreBlock[Task](Seq(c.blockHash), v2, Seq.empty, Map(v2 -> b.blockHash))
+        f            <- createAndStoreBlock[Task](Seq(d.blockHash), v2, Seq.empty, Map(v2 -> e.blockHash))
+        g            <- createAndStoreBlock[Task](Seq(f.blockHash), v1, Seq.empty, Map(v1 -> d.blockHash))
+        h            <- createAndStoreBlock[Task](Seq(f.blockHash), v2, Seq.empty)
+        i            <- createAndStoreBlock[Task](Seq(f.blockHash), v3, Seq.empty, Map(v3 -> c.blockHash))
+        j            <- createAndStoreBlock[Task](Seq(g.blockHash), v1, Seq.empty)
+        k            <- createAndStoreBlock[Task](Seq(h.blockHash), v2, Seq.empty)
+        l            <- createAndStoreBlock[Task](Seq(i.blockHash), v3, Seq.empty)
+        m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2, Seq.empty, Map(v2 -> k.blockHash))
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestBlocks.values.toList)
+                NonEmptyList.fromListUnsafe(latestBlocks.values.flatten.toList)
               )
       } yield assert(lca == f.blockHash)
   }

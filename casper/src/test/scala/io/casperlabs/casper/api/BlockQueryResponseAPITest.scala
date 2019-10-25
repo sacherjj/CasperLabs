@@ -157,20 +157,9 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       dagStorage: DagStorage[Task]
   ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
     for {
-      _ <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
-      _ <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
-      casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap[BlockHash, BlockMsgWithTransform](
-                         (
-                           ProtoUtil.stringToByteString(genesisHashString),
-                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
-                         ),
-                         (
-                           ProtoUtil.stringToByteString(secondHashString),
-                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
-                         )
-                       )
-                     )(Sync[Task], blockStorage, dagStorage)
+      _                      <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
+      _                      <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
+      casperEffect           <- NoOpsCasperEffect[Task]()(Sync[Task], blockStorage, dagStorage)
       logEff                 = new LogStub[Task]()
       casperRef              <- MultiParentCasperRef.of[Task]
       _                      <- casperRef.set(casperEffect)

@@ -119,6 +119,8 @@ cargo-native-packager/%:
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
 	cp -r protobuf $(IT_PATH)/
+	mkdir -p $(IT_PATH)/bundled_contracts
+	cp -r client/src/main/resources/*.wasm $(IT_PATH)/bundled_contracts/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@

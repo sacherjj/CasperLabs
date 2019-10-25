@@ -4,11 +4,11 @@ import cats.Monad
 import cats.implicits._
 import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.equivocations.{EquivocationDetector, EquivocationsTracker}
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.models.Weight
+import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable.Map
@@ -19,26 +19,11 @@ object Estimator {
 
   import Weight._
 
-  implicit val decreasingOrder = Ordering[Long].reverse
-
-  /* Should not be used as long as `DagRepresentation` is not immutable. See NODE-923
   def tips[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       genesis: BlockHash,
-      equivocationsTracker: EquivocationsTracker
-  ): F[List[BlockHash]] =
-    for {
-      latestMessageHashes <- dag.latestMessageHashes
-      result <- Estimator
-                 .tips[F](dag, genesis, latestMessageHashes, equivocationsTracker)
-    } yield result
-   */
-
-  def tips[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
-      genesis: BlockHash,
-      latestMessageHashes: Map[Validator, BlockHash],
-      equivocationsTracker: EquivocationsTracker
+      latestMessageHashes: Map[Validator, Set[BlockHash]],
+      equivocators: Set[Validator]
   ): F[List[BlockHash]] = {
 
     /** Eliminate any latest message which has a descendant which is a latest message
@@ -68,18 +53,15 @@ object Estimator {
         } yield tips.toList
       }
 
+    val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
+
     for {
       lca <- NonEmptyList
-              .fromList(latestMessageHashes.values.toList)
+              .fromList(latestMessagesFlattened)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      equivocatingValidators <- EquivocationDetector.detectVisibleFromJustifications(
-                                 dag,
-                                 latestMessageHashes,
-                                 equivocationsTracker
-                               )
-      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocatingValidators)
+      scores           <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
       newMainParent    <- forkChoiceTip(dag, lca, scores)
-      parents          <- tipsOfLatestMessages(latestMessageHashes.values.toList, lca)
+      parents          <- tipsOfLatestMessages(latestMessagesFlattened, lca)
       secondaryParents = parents.filter(_ != newMainParent)
       sortedSecParents = secondaryParents
         .sortBy(b => scores.getOrElse(b, Zero) -> b.toStringUtf8)
@@ -99,28 +81,35 @@ object Estimator {
   def lmdScoring[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       stopHash: BlockHash,
-      latestMessageHashes: Map[Validator, BlockHash],
+      latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
-  ): F[Map[BlockHash, Weight]] =
+  ): F[Map[BlockHash, Weight]] = {
+    implicit val decreasingOrder = Ordering[Long].reverse
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
-      case (acc, (validator, latestMessageHash)) =>
-        DagOperations
-          .bfTraverseF[F, BlockHash](List(latestMessageHash))(
-            hash => dag.lookup(hash).map(_.get.parents.take(1).toList)
-          )
-          .takeUntil(_ == stopHash)
-          .foldLeftF(acc) {
-            case (acc2, blockHash) =>
-              (if (equivocatingValidators.contains(validator)) {
-                 Zero.pure[F]
-               } else {
-                 weightFromValidatorByDag(dag, blockHash, validator)
-               }).map { realWeight =>
-                val oldValue = acc2.getOrElse(blockHash, Zero)
-                acc2.updated(blockHash, realWeight + oldValue)
-              }
-          }
+      case (acc, (validator, latestMessageHashes)) =>
+        for {
+          sortedMessages <- latestMessageHashes.toList
+                             .traverse(dag.lookup(_))
+                             .map(_.flatten.sortBy(_.rank))
+          lmdScore <- DagOperations
+                       .bfTraverseF[F, Message](sortedMessages)(
+                         _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
+                       )
+                       .takeUntil(_.messageHash == stopHash)
+                       .foldLeftF(acc) {
+                         case (acc2, message) =>
+                           (if (equivocatingValidators.contains(validator)) {
+                              Zero.pure[F]
+                            } else {
+                              weightFromValidatorByDag(dag, message.messageHash, validator)
+                            }).map { realWeight =>
+                             val oldValue = acc2.getOrElse(message.messageHash, Zero)
+                             acc2.updated(message.messageHash, realWeight + oldValue)
+                           }
+                       }
+        } yield lmdScore
     }
+  }
 
   /**
     * Computes fork choice.
