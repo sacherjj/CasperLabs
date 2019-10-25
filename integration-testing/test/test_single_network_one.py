@@ -642,9 +642,20 @@ def test_cli_scala_help(scala_cli):
 
 
 def test_cli_scala_extended_deploy(scala_cli, temp_dir):
-    cli = scala_cli
     account = GENESIS_ACCOUNT
+    public_key = account.public_key_docker_path
+    private_key = account.private_key_docker_path
+    check_extended_deploy(scala_cli, temp_dir, account, public_key, private_key)
 
+
+def test_cli_python_extended_deploy(cli, temp_dir):
+    account = GENESIS_ACCOUNT
+    public_key = account.public_key_path
+    private_key = account.private_key_path
+    check_extended_deploy(cli, temp_dir, account, public_key, private_key)
+
+
+def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
     # TODO: when paralelizing tests, make sure test don't collide
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
@@ -662,8 +673,8 @@ def test_cli_scala_extended_deploy(scala_cli, temp_dir):
     cli('sign-deploy',
         '-i', unsigned_deploy_path,
         '-o', signed_deploy_path,
-        '--private-key', account.private_key_docker_path,
-        '--public-key', account.public_key_docker_path)
+        '--private-key', private_key,
+        '--public-key', public_key)
 
     deploy_hash = cli('send-deploy', '-i', signed_deploy_path)
     cli('propose')
@@ -671,9 +682,10 @@ def test_cli_scala_extended_deploy(scala_cli, temp_dir):
     assert not deploy_info.processing_results[0].is_error
 
     # Test that replay attacks fail
-    with pytest.raises(NonZeroExitCodeError) as excinfo:
+    with pytest.raises(Exception) as excinfo:
         _ = cli('send-deploy', '-i', signed_deploy_path)
-    assert "supersedes Deploy" in excinfo.value.output
+    # Handle both types of exceptions (Scala and Python client wrappers throw different exceptions)
+    assert "supersedes Deploy" in str(excinfo.value) or "supersedes Deploy" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):

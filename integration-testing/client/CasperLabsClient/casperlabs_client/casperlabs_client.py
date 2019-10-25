@@ -273,9 +273,9 @@ def retry_wrapper(function, *args):
             return function(*args)
         except _Rendezvous as e:
             if e.code() == grpc.StatusCode.UNAVAILABLE and i < NUMBER_OF_RETRIES - 1:
+                delay += delay
                 logging.warning(f"Retrying after {e} in {delay} seconds")
                 time.sleep(delay)
-                delay += delay
             else:
                 raise
 
@@ -450,6 +450,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
     ):
         """
+        Create a protobuf deploy object. See deploy for description of parameters.
         """
         # Convert from hex to binary.
         if from_addr and len(from_addr) == 64:
@@ -497,15 +498,15 @@ class CasperLabsClient:
         deploy_hash = blake2b_hash(_serialize(header))
 
         deploy = consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
-        return self.sign_deploy(deploy, approval_public_key, private_key)
+        return deploy
 
     @api
-    def sign_deploy(self, deploy, public_key, private_key):
+    def sign_deploy(self, deploy, public_key, private_key_file):
         deploy.approvals.extend(
             [
                 consensus.Approval(
                     approver_public_key=public_key,
-                    signature=signature(private_key, deploy.deploy_hash),
+                    signature=signature(private_key_file, deploy.deploy_hash),
                 )
             ]
         )
@@ -574,6 +575,9 @@ class CasperLabsClient:
             session_name=session_name,
             session_uref=session_uref,
         )
+
+        approval_public_key = public_key and read_pem_key(public_key)
+        deploy = self.sign_deploy(deploy, approval_public_key, private_key)
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
@@ -854,8 +858,7 @@ def unbond_command(casperlabs_client, args):
     return deploy_command(casperlabs_client, args)
 
 
-@guarded_command
-def deploy_command(casperlabs_client, args):
+def _deploy_kwargs(args):
     from_addr = bytes.fromhex(getattr(args, "from"))
     if len(from_addr) != 32:
         raise Exception(
@@ -870,12 +873,9 @@ def deploy_command(casperlabs_client, args):
         if not any(
             (args.payment, args.payment_name, args.payment_hash, args.payment_uref)
         ):
-            p = pkg_resources.resource_filename(__name__, "standard_payment.wasm")
-            if not os.path.exists(p):
-                raise Exception(f"No bundled contract {p}")
-            args.payment = p
+            args.payment = bundled_contract("standard_payment.wasm")
 
-    kwargs = dict(
+    return dict(
         from_addr=from_addr,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
@@ -895,6 +895,52 @@ def deploy_command(casperlabs_client, args):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
+
+
+@guarded_command
+def make_deploy_command(casperlabs_client, args):
+    kwargs = _deploy_kwargs(args)
+    deploy = casperlabs_client.make_deploy(**kwargs)
+    data = deploy.SerializeToString()
+    if not args.deploy_path:
+        sys.stdout.write(data)
+    else:
+        with open(args.deploy_path, "wb") as f:
+            f.write(data)
+
+
+@guarded_command
+def sign_deploy_command(casperlabs_client, args):
+    deploy = consensus.Deploy()
+    if args.deploy_path:
+        with open(args.deploy_path, "rb") as input_file:
+            deploy.ParseFromString(input_file.read())
+    else:
+        deploy.ParseFromString(sys.stdin.read())
+
+    deploy = casperlabs_client.sign_deploy(
+        deploy, read_pem_key(args.public_key), args.private_key
+    )
+
+    if not args.signed_deploy_path:
+        sys.stdout.write(deploy.SerializeToString())
+    else:
+        with open(args.signed_deploy_path, "wb") as output_file:
+            output_file.write(deploy.SerializeToString())
+
+
+@guarded_command
+def send_deploy_command(casperlabs_client, args):
+    deploy = consensus.Deploy()
+    with open(args.deploy_path, "rb") as f:
+        deploy.ParseFromString(f.read())
+        casperlabs_client.send_deploy(deploy)
+    print(f"Success! Deploy {deploy.deploy_hash.hex()} deployed")
+
+
+@guarded_command
+def deploy_command(casperlabs_client, args):
+    kwargs = _deploy_kwargs(args)
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
@@ -1045,11 +1091,23 @@ def main():
         [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
-        [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]]
+        [('--private-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')],
+        [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
 
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
                       deploy_options)
+
+    parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options)
+
+    parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
+                      [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
+                       [('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the deploy file.")],
+                       [('--private-key',), dict(required=True, help="Path to the file with account private key (Ed25519)")],
+                       [('--public-key',), dict(required=True, help="Path to the file with account public key (Ed25519)")]])
+
+    parser.addCommand('send-deploy', send_deploy_command, "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.",
+                      [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
                       [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options)
