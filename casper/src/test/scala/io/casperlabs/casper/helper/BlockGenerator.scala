@@ -10,7 +10,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
@@ -169,13 +169,15 @@ trait BlockGenerator {
       }
       // Allow for indirect justifications by looking it up in the DAG.
       validatorPrevBlockHash <- maybeValidatorPrevBlockHash.map(_.pure[F]).getOrElse {
-                                 dag
-                                   .latestMessage(creator)
-                                   .map { msgs =>
-                                     if (msgs.isEmpty) ByteString.EMPTY
-                                     else
-                                       msgs.maxBy(_.validatorMsgSeqNum).messageHash
-                                   }
+                                 justifications.values.flatten.toList
+                                   .traverse(dag.lookup)
+                                   .map(_.flatten)
+                                   .flatMap(
+                                     DagOperations
+                                       .toposortJDagDesc(dag, _)
+                                       .find(_.validatorId == creator)
+                                   )
+                                   .map(_.fold(ByteString.EMPTY)(_.messageHash))
                                }
       validatorSeqNum <- maybeValidatorBlockSeqNum.map(_.pure[F]).getOrElse {
                           if (parentsHashList.isEmpty) 0.pure[F]
