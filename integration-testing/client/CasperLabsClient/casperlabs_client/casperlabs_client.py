@@ -571,7 +571,7 @@ class CasperLabsClient:
         )
 
         deploy = self.sign_deploy(
-            deploy, from_addr or read_pem_key(public_key), private_key
+            deploy, (public_key and read_pem_key(public_key)) or from_addr, private_key
         )
 
         # TODO: Return only deploy_hash
