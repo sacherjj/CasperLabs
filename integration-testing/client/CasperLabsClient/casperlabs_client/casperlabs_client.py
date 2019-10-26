@@ -439,7 +439,6 @@ class CasperLabsClient:
         payment: str = None,
         session: str = None,
         public_key: str = None,
-        private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
         payment_hash: bytes = None,
@@ -485,11 +484,8 @@ class CasperLabsClient:
             payment=_encode_contract(payment_options, payment_args),
         )
 
-        approval_public_key = public_key and read_pem_key(public_key)
-        account_public_key = from_addr or approval_public_key
-
         header = consensus.Deploy.Header(
-            account_public_key=account_public_key,
+            account_public_key=from_addr or (public_key and read_pem_key(public_key)),
             timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=blake2b_hash(_serialize(body)),
@@ -497,8 +493,7 @@ class CasperLabsClient:
 
         deploy_hash = blake2b_hash(_serialize(header))
 
-        deploy = consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
-        return deploy
+        return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
@@ -565,7 +560,6 @@ class CasperLabsClient:
             payment=payment,
             session=session,
             public_key=public_key,
-            private_key=private_key,
             session_args=session_args,
             payment_args=payment_args,
             payment_hash=payment_hash,
@@ -576,8 +570,9 @@ class CasperLabsClient:
             session_uref=session_uref,
         )
 
-        approval_public_key = public_key and read_pem_key(public_key)
-        deploy = self.sign_deploy(deploy, approval_public_key, private_key)
+        deploy = self.sign_deploy(
+            deploy, from_addr or read_pem_key(public_key), private_key
+        )
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
@@ -858,7 +853,7 @@ def unbond_command(casperlabs_client, args):
     return deploy_command(casperlabs_client, args)
 
 
-def _deploy_kwargs(args):
+def _deploy_kwargs(args, private_key_accepted=True):
     from_addr = bytes.fromhex(getattr(args, "from"))
     if len(from_addr) != 32:
         raise Exception(
@@ -875,13 +870,12 @@ def _deploy_kwargs(args):
         ):
             args.payment = bundled_contract("standard_payment.wasm")
 
-    return dict(
+    d = dict(
         from_addr=from_addr,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
         session=args.session,
         public_key=args.public_key or None,
-        private_key=args.private_key or None,
         session_args=args.session_args
         and ABI.args_from_json(args.session_args)
         or None,
@@ -895,11 +889,14 @@ def _deploy_kwargs(args):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
     )
+    if private_key_accepted:
+        d["private_key"] = args.private_key or None
+    return d
 
 
 @guarded_command
 def make_deploy_command(casperlabs_client, args):
-    kwargs = _deploy_kwargs(args)
+    kwargs = _deploy_kwargs(args, private_key_accepted=False)
     deploy = casperlabs_client.make_deploy(**kwargs)
     data = deploy.SerializeToString()
     if not args.deploy_path:
@@ -996,6 +993,31 @@ def show_deploys_command(casperlabs_client, args):
     _show_blocks(response, element_name="deploy")
 
 
+# fmt: off
+def deploy_options(keys_required=False, private_key_accepted=True):
+    return ([
+        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        # TODO: handling of dependencies not implemented yet. It is not clear what the format of <arg>... is (list of args).
+        [('--dependencies',), dict(required=False, type=str, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
+        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+        [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
+        [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
+        [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
+        [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
+        [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
+        [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
+        [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
+        [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
+        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
+        [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
+        + (private_key_accepted
+           and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
+           or []))
+# fmt:on
+
+
 def main():
     """
     Parse command line and call an appropriate command.
@@ -1075,30 +1097,11 @@ def main():
     parser = Parser()
 
     # fmt: off
-    deploy_options = [
-        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-        # TODO: handling of dependencies not implemented yet. It is not clear what the format of <arg>... is (list of args).
-        [('--dependencies',), dict(required=False, type=str, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
-        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
-        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
-        [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
-        [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
-        [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
-        [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
-        [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
-        [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
-        [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
-        [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
-        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--private-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')],
-        [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
-
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      deploy_options)
+                      deploy_options(keys_required=True))
 
     parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
-                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options)
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options(keys_required=False, private_key_accepted=False))
 
     parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
                       [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
@@ -1110,11 +1113,11 @@ def main():
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options)
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=True))
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options)
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
