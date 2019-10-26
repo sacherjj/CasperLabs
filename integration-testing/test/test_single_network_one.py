@@ -681,11 +681,11 @@ def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
-    # Test that replay attacks fail
-    with pytest.raises(Exception) as excinfo:
-        _ = cli('send-deploy', '-i', signed_deploy_path)
-    # Handle both types of exceptions (Scala and Python client wrappers throw different exceptions)
-    assert "supersedes Deploy" in str(excinfo.value) or "supersedes Deploy" in excinfo.value.output
+    # Test that replay attacks have no effect.
+    cli('send-deploy', '-i', signed_deploy_path)
+    with pytest.raises(NonZeroExitCodeError) as excinfo:
+        cli('propose')
+    assert "No new deploys" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):

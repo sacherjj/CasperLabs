@@ -69,14 +69,15 @@ trait DagStorageTest
               )
             )
             .update(
-              _.blockMessage.update(
-                _.header.justifications := Seq(
+              _.blockMessage.update(block => {
+                block.header.justifications := Seq(
                   Justification(
                     a.getBlockMessage.getHeader.validatorPublicKey,
                     a.getBlockMessage.blockHash
                   )
                 )
-              )
+                block.header.validatorPrevBlockHash := a.getBlockMessage.blockHash
+              })
             )
         )
       }
@@ -177,6 +178,7 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
         def update(b: Block, validator: ByteString, prevHash: ByteString): Block =
           b.update(_.header.validatorPublicKey := validator)
             .update(_.header.justifications := Seq(Justification(validator, prevHash)))
+            .update(_.header.validatorPrevBlockHash := prevHash)
 
         val validator = initial.validatorPublicKey
         // Block from the same validator that cites its previous block.

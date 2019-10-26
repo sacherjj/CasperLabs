@@ -16,7 +16,7 @@ pub extern "C" fn call() {
 
     assert_eq!(
         actual_block_time,
-        BlockTime(known_block_time),
+        BlockTime::new(known_block_time),
         "actual block time not known block time"
     );
 }

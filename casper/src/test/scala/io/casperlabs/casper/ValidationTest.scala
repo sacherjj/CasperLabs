@@ -8,7 +8,7 @@ import io.casperlabs.casper.consensus.Block.{Justification, MessageType}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.BlockGenerator._
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
+import io.casperlabs.casper.helper.BlockUtil.{generateHash, generateValidator}
 import io.casperlabs.casper.helper.{
   BlockGenerator,
   DeployOps,
@@ -36,6 +36,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -46,7 +47,6 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 
@@ -242,6 +242,7 @@ class ValidationTest
       ProtocolVersion(1),
       Seq.empty,
       1,
+      ByteString.EMPTY,
       "casperlabs",
       1,
       0,
@@ -399,18 +400,18 @@ class ValidationTest
       } yield result
   }
 
-  "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
+  "Block rank validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       for {
         _     <- createChain[Task](1)
         block <- dagStorage.lookupByIdUnsafe(0)
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
-              .blockNumber(block.changeBlockNumber(1), dag)
+              .blockRank(block.changeBlockNumber(1), dag)
               .attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- ValidationImpl[Task].blockNumber(block, dag) shouldBeF Unit
+        _ <- ValidationImpl[Task].blockRank(block, dag) shouldBeF Unit
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no justifications") should be(
           true
@@ -425,15 +426,15 @@ class ValidationTest
       for {
         _   <- createChain[Task](n.toInt, bonds = List(Bond(validator, 1)), creator = validator)
         dag <- dagStorage.getRepresentation
-        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockRank(b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
               (dagStorage.lookupByIdUnsafe(i) >>= (
-                  b => ValidationImpl[Task].blockNumber(b, dag)
+                  b => ValidationImpl[Task].blockRank(b, dag)
               )).map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -463,9 +464,9 @@ class ValidationTest
         b2  <- createBlockWithNumber(7)
         b3  <- createBlockWithNumber(8, Seq(b1, b2))
         dag <- dagStorage.getRepresentation
-        _   <- ValidationImpl[Task].blockNumber(b3, dag) shouldBeF Unit
+        _   <- ValidationImpl[Task].blockRank(b3, dag) shouldBeF Unit
         result <- ValidationImpl[Task]
-                   .blockNumber(b3.changeBlockNumber(4), dag)
+                   .blockRank(b3.changeBlockNumber(4), dag)
                    .attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
@@ -534,6 +535,88 @@ class ValidationTest
             ) shouldBeF true
         result = log.warns should be(Nil)
       } yield result
+  }
+
+  "Previous block hash validation" should "pass if the hash is in the j-past-cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag)
+      } yield ()
+  }
+  it should "pass if the hash is in the justifications" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b1.getSummary, dag)
+      } yield ()
+  }
+  it should "fail if the hash belongs to somebody else" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b0),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash is not in the j-past-cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b2 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b2),
+               List(b2),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b3.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash does not exist" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      val bx = generateHash("non-existent")
+      for {
+        g <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](
+               v1,
+               List(g),
+               Nil,
+               maybeValidatorPrevBlockHash = Some(bx),
+               maybeValidatorBlockSeqNum = Some(1)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b0.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
   }
 
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
@@ -688,15 +771,8 @@ class ValidationTest
         b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
         d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
-        e <- {
-          // `b` and `c` create an equivocation. Their scores will be 0 but secondary parents
-          // list is sorted. If two values are the same we sort by hash.
-          // We need to make sure that block we create here has the same order of secondary parents
-          // as will be computed in the validation step.
-          val secondarySorted = Seq(b, c).sortBy(_.blockHash.toStringUtf8).reverse
-          createValidatorBlock[Task](Seq(a) ++ secondarySorted, bonds, Seq(a, b, c), v3)
-        }
-        dag <- dagStorage.getRepresentation
+        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3)
+        dag     <- dagStorage.getRepresentation
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.
         _ <- Validation[Task]

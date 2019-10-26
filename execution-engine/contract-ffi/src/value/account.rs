@@ -11,9 +11,6 @@ use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
 use failure::Fail;
 
-const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
-const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
-
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug)]
@@ -220,7 +217,26 @@ impl Default for ActionThresholds {
 }
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd)]
-pub struct BlockTime(pub u64);
+pub struct BlockTime(u64);
+
+impl BlockTime {
+    pub fn new(value: u64) -> Self {
+        BlockTime(value)
+    }
+
+    pub fn saturating_sub(self, other: BlockTime) -> Self {
+        BlockTime(self.0.saturating_sub(other.0))
+    }
+
+    pub const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
+    pub const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
+}
+
+impl Into<u64> for BlockTime {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
 
 /// Holds information about last usage time of specific action.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -614,8 +630,10 @@ impl Account {
     ) -> Self {
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
-        let account_activity =
-            AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
+        let account_activity = AccountActivity::new(
+            BlockTime::DEFAULT_CURRENT_BLOCK_TIME,
+            BlockTime::DEFAULT_INACTIVITY_PERIOD_TIME,
+        );
         Account::new(
             account_addr,
             named_keys,
@@ -821,7 +839,7 @@ impl ToBytes for BlockTime {
 impl FromBytes for BlockTime {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (time, rem) = FromBytes::from_bytes(bytes)?;
-        Ok((BlockTime(time), rem))
+        Ok((BlockTime::new(time), rem))
     }
 }
 
@@ -880,7 +898,7 @@ fn account_activity_parser_helper<'a>(
 
 impl FromBytes for AccountActivity {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut acc_activity = AccountActivity::new(BlockTime(0), BlockTime(0));
+        let mut acc_activity = AccountActivity::new(BlockTime::new(0), BlockTime::new(0));
         let rem = account_activity_parser_helper(&mut acc_activity, bytes)?;
         let rem2 = account_activity_parser_helper(&mut acc_activity, rem)?;
         let rem3 = account_activity_parser_helper(&mut acc_activity, rem2)?;
@@ -1019,7 +1037,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_3, key_2, key_1])));
@@ -1087,7 +1105,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // sum: 22, required 33 - can't deploy
@@ -1177,7 +1195,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(11), Weight::new(33))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // sum: 22, required 33 - can't manage
@@ -1259,7 +1277,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert_eq!(
@@ -1300,7 +1318,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 5))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert_eq!(
@@ -1343,7 +1361,7 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // Decreases by 3
@@ -1436,7 +1454,7 @@ mod tests {
             associated_keys,
             ActionThresholds::new(Weight::new(1), Weight::new(254))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         account.remove_associated_key(key_1).expect("should work")
@@ -1472,7 +1490,7 @@ mod tests {
             associated_keys,
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
+            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // decrease so total weight would be changed from 1 + 3 + 255 to 1 + 1 + 255

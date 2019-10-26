@@ -10,6 +10,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
@@ -447,6 +448,26 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         _ <- collect(dag, Set(b2, b4), Set(b1)) shouldBeF Set.empty
         // not to sibling
         _ <- collect(dag, Set(b2), Set(b3)) shouldBeF Set.empty
+      } yield ()
+  }
+
+  "swimlaneV" should "return correct stream of blocks even if they are referenced indirectly" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1    = generateValidator("v1")
+      val v2    = generateValidator("v2")
+      val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        b2      <- createAndStoreBlock[Task](Seq(b1.blockHash), v2, bonds, Map(v1 -> b1.blockHash))
+        b3      <- createAndStoreBlock[Task](Seq(b2.blockHash), v1, bonds, Map(v2 -> b2.blockHash))
+        dag     <- dagStorage.getRepresentation
+        message <- Task.fromTry(Message.fromBlock(b3))
+        _ <- DagOperations
+              .swimlaneV[Task](v1, message, dag)
+              .map(_.messageHash)
+              .toList shouldBeF List(b3.blockHash, b1.blockHash)
       } yield ()
   }
 
