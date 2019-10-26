@@ -683,9 +683,9 @@ def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
 
     # Test that replay attacks have no effect.
     cli('send-deploy', '-i', signed_deploy_path)
-    with pytest.raises(NonZeroExitCodeError) as excinfo:
+    with pytest.raises(Exception) as excinfo:
         cli('propose')
-    assert "No new deploys" in excinfo.value.output
+    assert "No new deploys" in str(excinfo.value) or "No new deploys" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):

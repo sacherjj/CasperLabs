@@ -72,5 +72,7 @@ execution-engine/system-contracts/pos/*.lock
 node/src/main/resources/**/*.wasm
 client/src/main/resources/*.wasm
 explorer/contracts/**/*.wasm
+integration-testing/bundled_contracts/*.wasm
+integration-testing/client/CasperLabsClient/casperlabs_client/*wasm
 
 .make
