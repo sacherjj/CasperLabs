@@ -50,8 +50,8 @@ object Utils {
     Utils
       .check[F, String](
         p,
-        "AccountPublicKey must be 64 characters (32 bytes) long",
-        Base16.tryDecode(_).exists(_.length == 32)
+        "AccountPublicKey must be 64 base16 characters (32 bytes) long",
+        _.matches("[a-f0-9]{64}")
       )
       .adaptError(adaptError)
 
