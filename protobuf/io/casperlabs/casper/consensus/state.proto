@@ -86,6 +86,9 @@ message Contract {
 message Account {
 	// Removed: nonce.
 	reserved 2;
+	// Removed: account_activity
+	reserved 7;
+
 	bytes public_key = 1;
 	Key.URef purse_id = 3;
 	repeated NamedKey named_keys = 4;
