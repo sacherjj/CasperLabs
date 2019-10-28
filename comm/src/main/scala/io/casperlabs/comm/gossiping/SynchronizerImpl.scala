@@ -36,7 +36,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
-    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]]
+    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]],
+    // NODE-984: Experiment to see if doing syncs without extensive checking can avoid LRT getting tangled.
+    skipValidation: Boolean
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
@@ -200,19 +202,27 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         case (Right(syncState), summary) =>
           val effect = for {
             _ <- EitherT.liftF(Metrics[F].incrementCounter("summaries_traversed"))
-            distance <- reachable(
-                         syncState,
-                         summary,
-                         targetBlockHashes.toSet
-                       )
-            newSyncState = syncState.append(summary, distance)
-            _ <- if (isInitial) {
-                  notTooManyInitial(newSyncState, summary)
-                } else {
-                  noCycles(syncState, summary) >>
-                    notTooDeep(newSyncState) >>
-                    notTooWide(newSyncState)
-                }
+            newSyncState <- if (skipValidation) {
+                             EitherT.liftF {
+                               syncState.append(summary, distance = -1).pure[F]
+                             }
+                           } else {
+                             for {
+                               distance <- reachable(
+                                            syncState,
+                                            summary,
+                                            targetBlockHashes.toSet
+                                          )
+                               newSyncState = syncState.append(summary, distance)
+                               _ <- if (isInitial) {
+                                     notTooManyInitial(newSyncState, summary)
+                                   } else {
+                                     noCycles(syncState, summary) >>
+                                       notTooDeep(newSyncState) >>
+                                       notTooWide(newSyncState)
+                                   }
+                             } yield newSyncState
+                           }
             _ <- EitherT(
                   backend
                     .validate(summary)
@@ -387,7 +397,8 @@ object SynchronizerImpl {
       maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
       maxDepthAncestorsRequest: Int Refined Positive,
       maxInitialBlockCount: Int Refined Positive,
-      isInitialRef: Ref[F, Boolean]
+      isInitialRef: Ref[F, Boolean],
+      skipValidation: Boolean = false
   ) =
     for {
       semaphoreMap       <- SemaphoreMap[F, Node](1)
@@ -403,7 +414,8 @@ object SynchronizerImpl {
         maxInitialBlockCount,
         isInitialRef,
         semaphoreMap,
-        syncedSummariesRef
+        syncedSummariesRef,
+        skipValidation
       )
     }
 

@@ -566,7 +566,9 @@ package object gossiping {
                        maxBondingRate = conf.server.syncMaxBondingRate,
                        maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
                        maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                       isInitialRef = isInitialRef
+                       isInitialRef = isInitialRef,
+                       // NODE-984: Confirm the effect of not doing validations and optimize.
+                       skipValidation = true
                      )
     } yield synchronizer
   }
