@@ -61,7 +61,7 @@ export default class CasperService {
       request.setAccountPublicKeyBase16(encodeBase16(accountPublicKey));
       request.setPageSize(pageSize);
       request.setPageToken(pageToken);
-      request.setView(view === undefined ? BlockInfo.View.FULL : view);
+      request.setView(view === undefined ? BlockInfo.View.BASIC : view);
 
       grpc.unary(GrpcCasperService.ListDeployInfos, {
         host: this.url,
