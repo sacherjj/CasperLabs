@@ -1258,7 +1258,7 @@ class ValidationTest
         a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
         b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
-        d       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(b, c), v0)
+        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0)
         dag     <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Left(
               ValidateErrorWrapper(SwimlaneMerged)
@@ -1283,7 +1283,7 @@ class ValidationTest
         a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
         _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
         c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
-        d       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a, c), v0)
+        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0)
         dag     <- dagStorage.getRepresentation
         _       <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Right(())
       } yield ()
