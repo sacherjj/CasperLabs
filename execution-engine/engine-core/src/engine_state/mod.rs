@@ -864,7 +864,6 @@ where
             PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
             Default::default(),
             Default::default(),
-            Default::default(),
         );
 
         // `[ExecutionResultBuilder]` handles merging of multiple execution results
