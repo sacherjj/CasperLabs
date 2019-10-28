@@ -45,21 +45,37 @@ object DeployRuntime {
       ignoreOutput
     )
 
-  def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
+  def showBlock[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
     gracefulExit(
       DeployService[F]
         .showBlock(hash)
-        .map(_.map(Printer.ProtoString.print(_, base16 = true)))
+        .map(_.map(Printer.print(_, bytesStandard, json)))
     )
 
-  def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showDeploys(hash))
+  def showDeploys[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showDeploys(hash, bytesStandard, json))
 
-  def showDeploy[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showDeploy(hash))
+  def showDeploy[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showDeploy(hash, bytesStandard, json))
 
-  def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(depth))
+  def showBlocks[F[_]: Sync: DeployService](
+      depth: Int,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(depth, bytesStandard, json))
 
   private def optionalArg[T](name: String, maybeValue: Option[T])(
       f: T => Deploy.Arg.Value.Value
@@ -141,12 +157,14 @@ object DeployRuntime {
       blockHash: String,
       keyVariant: String,
       keyValue: String,
-      path: String
+      path: String,
+      bytesStandard: Boolean,
+      json: Boolean
   ): F[Unit] =
     gracefulExit(
       DeployService[F]
         .queryState(blockHash, keyVariant, keyValue, path)
-        .map(_.map(Printer.ProtoString.print(_, base16 = true)))
+        .map(_.map(Printer.print(_, bytesStandard, json)))
     )
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
@@ -400,24 +418,18 @@ object DeployRuntime {
 
   /**
     *
-    * @param base16 Use Base16 for bytes encoding instead of
-    *               default Base64 for JSON or ASCII escaped for Protobuf text format
-    * @param proto Use Protobuf text format instead of JSON
+    * @param bytesStandard Use standard Base64 for JSON or ASCII escaped for Protobuf bytes encoding instead of Base16
+    * @param json          Use JSON instead of Protobuf text format
     */
   def printDeploy[F[_]: Sync: DeployService](
       deployBA: Array[Byte],
-      base16: Boolean,
-      proto: Boolean
+      bytesStandard: Boolean,
+      json: Boolean
   ): F[Unit] =
     gracefulExit {
       (for {
         deploy <- MonadThrowable[F].fromTry(Try(Deploy.parseFrom(deployBA)))
-      } yield
-        if (proto) {
-          Printer.ProtoString.print(deploy, base16)
-        } else {
-          Printer.Json.print(deploy, base16)
-        }).attempt
+      } yield Printer.print(deploy, bytesStandard, json)).attempt
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](

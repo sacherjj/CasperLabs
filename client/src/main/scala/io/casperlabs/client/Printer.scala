@@ -2,23 +2,23 @@ package io.casperlabs.client
 
 import java.math.BigInteger
 
-import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
 import io.circe.Json
 import scalapb.GeneratedMessage
 import scalapb.descriptors._
 import scalapb.textformat.TextGenerator
 
-import scala.collection.mutable
-
-sealed trait Printer {
-  def print(m: GeneratedMessage, base16: Boolean): String
-}
-
 object Printer {
 
+  def print(m: GeneratedMessage, bytesStandard: Boolean, json: Boolean): String =
+    if (json) {
+      Json.print(m, bytesStandard)
+    } else {
+      ProtoString.print(m, bytesStandard)
+    }
+
   /** Based on what scalapb-circe `JsonFormat.toJsonString` does but allows to customize Base16/Base64 for bytes. */
-  object Json extends Printer {
+  private object Json {
     private val base16Printer = new scalapb_circe.Printer() {
       override def serializeSingleValue(
           fd: FieldDescriptor,
@@ -34,19 +34,19 @@ object Printer {
     private val base64Printer = new scalapb_circe.Printer()
     private val indent        = ' '.toString * 2
 
-    override def print(m: GeneratedMessage, base16: Boolean): String = {
-      val json = if (base16) base16Printer.toJson(m) else base64Printer.toJson(m)
+    def print(m: GeneratedMessage, bytesStandard: Boolean): String = {
+      val json = if (bytesStandard) base64Printer.toJson(m) else base16Printer.toJson(m)
       json.pretty(io.circe.Printer.indented(indent))
     }
   }
 
-  /** Based on what scalapb `toProtoString` does but but allows to customize Base16/Base64 for bytes. */
-  object ProtoString extends Printer {
-    override def print(m: GeneratedMessage, base16: Boolean): String =
-      if (base16) {
-        this.printToUnicodeString(m)
-      } else {
+  /** Based on what scalapb `toProtoString` does but but allows to customize Base16/ASCII-escaped for bytes. */
+  private object ProtoString {
+    def print(m: GeneratedMessage, bytesStandard: Boolean): String =
+      if (bytesStandard) {
         scalapb.TextFormat.printToUnicodeString(m)
+      } else {
+        this.printToUnicodeString(m)
       }
 
     private def printToUnicodeString(m: GeneratedMessage) = {

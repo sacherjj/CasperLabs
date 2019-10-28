@@ -47,10 +47,14 @@ object Main {
       configuration: Configuration
   ): F[Unit] =
     configuration match {
-      case ShowBlock(hash)   => DeployRuntime.showBlock(hash)
-      case ShowDeploy(hash)  => DeployRuntime.showDeploy(hash)
-      case ShowDeploys(hash) => DeployRuntime.showDeploys(hash)
-      case ShowBlocks(depth) => DeployRuntime.showBlocks(depth)
+      case ShowBlock(hash, bytesStandard, json) =>
+        DeployRuntime.showBlock(hash, bytesStandard, json)
+      case ShowDeploy(hash, bytesStandard, json) =>
+        DeployRuntime.showDeploy(hash, bytesStandard, json)
+      case ShowDeploys(hash, bytesStandard, json) =>
+        DeployRuntime.showDeploys(hash, bytesStandard, json)
+      case ShowBlocks(depth, bytesStandard, json) =>
+        DeployRuntime.showBlocks(depth, bytesStandard, json)
       case Unbond(
           amount,
           contracts,
@@ -134,8 +138,8 @@ object Main {
       case SendDeploy(deploy) =>
         DeployRuntime.sendDeploy(deploy)
 
-      case PrintDeploy(deploy, base16, proto) =>
-        DeployRuntime.printDeploy(deploy, base16, proto)
+      case PrintDeploy(deploy, bytesStandard, json) =>
+        DeployRuntime.printDeploy(deploy, bytesStandard, json)
 
       case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
         DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
@@ -146,8 +150,8 @@ object Main {
       case VisualizeDag(depth, showJustificationLines, out, streaming) =>
         DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
 
-      case Query(hash, keyType, keyValue, path) =>
-        DeployRuntime.queryState(hash, keyType, keyValue, path)
+      case Query(hash, keyType, keyValue, path, bytesStandard, json) =>
+        DeployRuntime.queryState(hash, keyType, keyValue, path, bytesStandard, json)
 
       case Balance(address, blockHash) =>
         DeployRuntime.balance(address, blockHash)
