@@ -737,7 +737,7 @@ object MultiParentCasperImpl {
             InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash | InvalidDeployCount |
             InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
             InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
-            DeployDependencyNotMet | DeployExpired | DeployFromFuture =>
+            DeployDependencyNotMet | DeployExpired | DeployFromFuture | SwimlaneMerged =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -857,7 +857,7 @@ object MultiParentCasperImpl {
               InvalidSequenceNumber | InvalidPrevBlockHash | NeglectedInvalidBlock |
               InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName |
               InvalidBlockHash | InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
-              InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
+              InvalidPreStateHash | InvalidPostStateHash | Processing | Processed | SwimlaneMerged |
               InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
             ().pure[F]
 

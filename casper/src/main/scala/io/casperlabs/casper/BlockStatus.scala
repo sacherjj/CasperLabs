@@ -47,6 +47,7 @@ final case object InvalidDeployCount     extends InvalidBlock with Slashable
 final case object InvalidDeployHash      extends InvalidBlock with Slashable
 final case object InvalidDeploySignature extends InvalidBlock with Slashable
 final case object InvalidDeployHeader    extends InvalidBlock with Slashable
+final case object SwimlaneMerged         extends InvalidBlock with Slashable
 final case object DeployDependencyNotMet extends InvalidBlock with Slashable
 final case object DeployExpired          extends InvalidBlock with Slashable
 final case object DeployFromFuture       extends InvalidBlock with Slashable
