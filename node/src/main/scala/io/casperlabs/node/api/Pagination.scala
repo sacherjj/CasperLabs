@@ -29,6 +29,7 @@ object DeployInfoPagination extends Pagination {
   val MAXSIZE = 50
 
   override type PageTokenParams = (Long, DeployHash)
+
   override def parsePageToken(
       request: RequestWithPagination
   ): Try[(PageSize, PageTokenParams)] = {

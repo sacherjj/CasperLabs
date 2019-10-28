@@ -1,22 +1,20 @@
 package io.casperlabs.node.api
 
-import java.nio.ByteBuffer
-
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.{state, Block, Deploy}
-import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.InvalidArgument
-import io.casperlabs.crypto.codec.{Base16, Base64}
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
@@ -29,14 +27,9 @@ import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.block.BlockStorage.DeployHash
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
-import io.netty.handler.codec.protobuf.ProtobufDecoder
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
-
-import scala.util.Try
 
 object GrpcCasperService {
 
