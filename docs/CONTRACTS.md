@@ -126,10 +126,9 @@ This will read a deploy to sign from STDIN and output signed deploy to STDOUT. T
 ```
 casperlabs-client \
     --host localhost \
-    print-deploy \
-    --base16
+    print-deploy
 ```
-This will print information of a deploy into STDOUT. There are `--proto` and `--base16` flags for, respectively, using standard Protobuf text encoding or JSON and using custom Base16 encoding instead of default ASCII-escaped for `--proto` or Base64 for JSON.
+This will print information of a deploy into STDOUT. There are `--json` and `--bytes-standard` flags for, respectively, using standard JSON vs Protobuf text encoding and standard ASCII-escaped for Protobuf or Base64 for JSON bytes encoding vs custom Base16. The same set of flags also available for all `show-*` and `query-state` commands. 
 
 **Sending deploy to the node**
 ```
