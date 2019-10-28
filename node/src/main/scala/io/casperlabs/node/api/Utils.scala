@@ -22,8 +22,8 @@ object Utils {
     Utils
       .checkString[F](
         p,
-        "BlockHash prefix must be at least 4 characters (2 bytes) long",
-        s => Base16.tryDecode(s).exists(_.length >= 2)
+        "BlockHash prefix must be >= 4 and <= 64 base16 characters (2 to 32 bytes) long",
+        _.matches("[a-f0-9]{4,64}")
       )
       .adaptErr(adaptError)
 
@@ -34,8 +34,8 @@ object Utils {
     Utils
       .checkString[F](
         p,
-        "DeployHash must be 64 characters (32 bytes) long",
-        Base16.tryDecode(_).exists(_.length == 32)
+        "DeployHash must be 64 base16 characters (32 bytes) long",
+        _.matches("[a-f0-9]{64}")
       )
       .adaptError(adaptError)
 
