@@ -369,6 +369,36 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showDeploy)
 
+  val printDeploy = new Subcommand("print-deploy") {
+    descr("Print information of a deploy saved by 'make-deploy' command in JSON/proto format")
+
+    val base16 = opt[Boolean](
+      required = false,
+      descr =
+        "Use Base16 for bytes encoding instead of default Base64 for JSON or ASCII escaped for '--proto'",
+      default = false.some,
+      name = "base16",
+      short = 'b'
+    )
+
+    val proto = opt[Boolean](
+      required = false,
+      descr = "Use Protobuf text format instead of default JSON",
+      default = false.some,
+      name = "proto"
+    )
+
+    val deployPath =
+      opt[File](
+        required = true,
+        descr = "Path to the deploy file.",
+        validate = fileCheck,
+        short = 'i'
+      ).map(file => Files.readAllBytes(file.toPath))
+        .orElse(Some(IOUtils.toByteArray(System.in)))
+  }
+  addSubcommand(printDeploy)
+
   val showBlocks = new Subcommand("show-blocks") {
     descr(
       "View list of blocks in the current Casper view on an existing running node."

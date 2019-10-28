@@ -136,7 +136,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
   def showDeploy(hash: String): Task[Either[Throwable, String]] =
     casperServiceStub
       .getDeployInfo(GetDeployInfoRequest(hash, DeployInfo.View.BASIC))
-      .map(Printer.printToUnicodeString(_))
+      .map(Printer.ProtoString.print(_, base16 = true))
       .attempt
 
   def showDeploys(hash: String): Task[Either[Throwable, String]] =
@@ -147,7 +147,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
         case (d, idx) =>
           s"""
          |------------- deploy # $hash / $idx ---------------
-         |${Printer.printToUnicodeString(d)}
+         |${Printer.ProtoString.print(d, base16 = true)}
          |---------------------------------------------------
          |""".stripMargin
       }
@@ -206,7 +206,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       .map { bi =>
         s"""
          |------------- block @ ${bi.getSummary.rank} ---------------
-         |${Printer.printToUnicodeString(bi)}
+         |${Printer.ProtoString.print(bi, base16 = true)}
          |-----------------------------------------------------
          |""".stripMargin
       }

@@ -134,6 +134,9 @@ object Main {
       case SendDeploy(deploy) =>
         DeployRuntime.sendDeploy(deploy)
 
+      case PrintDeploy(deploy, base16, proto) =>
+        DeployRuntime.printDeploy(deploy, base16, proto)
+
       case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
         DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
 

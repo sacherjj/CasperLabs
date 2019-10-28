@@ -20,6 +20,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.FilesAPI
 import org.apache.commons.io._
+import scalapb_circe.JsonFormat
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
@@ -45,7 +46,11 @@ object DeployRuntime {
     )
 
   def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(hash).map(_.map(Printer.printToUnicodeString)))
+    gracefulExit(
+      DeployService[F]
+        .showBlock(hash)
+        .map(_.map(Printer.ProtoString.print(_, base16 = true)))
+    )
 
   def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
     gracefulExit(DeployService[F].showDeploys(hash))
@@ -141,7 +146,7 @@ object DeployRuntime {
     gracefulExit(
       DeployService[F]
         .queryState(blockHash, keyVariant, keyValue, path)
-        .map(_.map(Printer.printToUnicodeString(_)))
+        .map(_.map(Printer.ProtoString.print(_, base16 = true)))
     )
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
@@ -391,6 +396,28 @@ object DeployRuntime {
         deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
         result <- DeployService[F].deploy(deploy)
       } yield result
+    }
+
+  /**
+    *
+    * @param base16 Use Base16 for bytes encoding instead of
+    *               default Base64 for JSON or ASCII escaped for Protobuf text format
+    * @param proto Use Protobuf text format instead of JSON
+    */
+  def printDeploy[F[_]: Sync: DeployService](
+      deployBA: Array[Byte],
+      base16: Boolean,
+      proto: Boolean
+  ): F[Unit] =
+    gracefulExit {
+      (for {
+        deploy <- MonadThrowable[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+      } yield
+        if (proto) {
+          Printer.ProtoString.print(deploy, base16)
+        } else {
+          Printer.Json.print(deploy, base16)
+        }).attempt
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](

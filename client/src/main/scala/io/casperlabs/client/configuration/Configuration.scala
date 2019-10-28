@@ -139,6 +139,12 @@ final case class SendDeploy(
     deploy: Array[Byte]
 ) extends Configuration
 
+final case class PrintDeploy(
+    deploy: Array[Byte],
+    base16: Boolean,
+    proto: Boolean
+) extends Configuration
+
 final case class Deploy(
     from: Option[String],
     deployConfig: DeployConfig,
@@ -227,6 +233,12 @@ object Configuration {
         )
       case options.sendDeploy =>
         SendDeploy(options.sendDeploy.deployPath())
+      case options.printDeploy =>
+        PrintDeploy(
+          options.printDeploy.deployPath(),
+          options.printDeploy.base16(),
+          options.printDeploy.proto()
+        )
       case options.signDeploy =>
         Sign(
           options.signDeploy.deployPath(),
