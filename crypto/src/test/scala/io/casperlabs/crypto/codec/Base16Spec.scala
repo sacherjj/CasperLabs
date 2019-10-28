@@ -11,12 +11,4 @@ class Base16Spec extends PropSpec with GeneratorDrivenPropertyChecks with Matche
       decoded should equal(input)
     }
   }
-
-  property("tryDecode after encode returns the original input") {
-    forAll { (input: Array[Byte]) =>
-      val encoded = Base16.encode(input)
-      val decoded = Base16.tryDecode(encoded)
-      decoded.get should equal(input)
-    }
-  }
 }

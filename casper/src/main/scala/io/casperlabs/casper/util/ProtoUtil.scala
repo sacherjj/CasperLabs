@@ -6,8 +6,6 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.votingmatrix
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
@@ -178,35 +176,30 @@ object ProtoUtil {
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      justifications: Seq[Justification],
-      creator: Validator
+      validatorPrevBlockHash: ByteString
   ): F[Int] =
-    justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == creator
-      }
-      .foldM(1) {
-        case (_, Justification(_, latestBlockHash)) =>
-          dag.lookup(latestBlockHash).flatMap {
-            case Some(meta) =>
-              (1 + meta.validatorMsgSeqNum).pure[F]
+    if (validatorPrevBlockHash.isEmpty) {
+      1.pure[F]
+    } else {
 
-            case None =>
-              MonadThrowable[F].raiseError[Int](
-                new NoSuchElementException(
-                  s"DagStorage is missing hash ${PrettyPrinter.buildString(latestBlockHash)}"
-                )
-              )
-          }
-      }
+      dag.lookup(validatorPrevBlockHash).flatMap {
+        case Some(meta) =>
+          (1 + meta.validatorMsgSeqNum).pure[F]
 
-  def creatorJustification(header: Block.Header): Option[Justification] =
-    header.justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == header.validatorPublicKey
+        case None =>
+          MonadThrowable[F].raiseError[Int](
+            new NoSuchElementException(
+              s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(validatorPrevBlockHash)}"
+            )
+          )
       }
+    }
+
+  def creatorJustification(header: Block.Header): Set[Justification] =
+    header.justifications.collect {
+      case j @ Justification(validator: Validator, _) if validator == header.validatorPublicKey =>
+        j
+    }.toSet
 
   def weightMap(block: Block): Map[ByteString, Weight] =
     weightMap(block.getHeader)
@@ -287,9 +280,6 @@ object ProtoUtil {
                   .buildString(message.messageHash)}"
               )
             )
-          // For some reason scalac produces a warning that we are missing a case
-          // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
-          case Some(_) => ???
           case None =>
             MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
@@ -352,24 +342,21 @@ object ProtoUtil {
 
   def getJustificationMsgHashes(
       justifications: Seq[Justification]
-  ): immutable.Map[Validator, BlockHash] =
-    justifications.foldLeft(Map.empty[Validator, BlockHash]) {
-      case (acc, Justification(validator, block)) =>
-        acc.updated(validator, block)
-    }
+  ): immutable.Map[Validator, Set[BlockHash]] =
+    justifications.groupBy(_.validatorPublicKey).mapValues(_.map(_.latestBlockHash).toSet)
 
   def getJustificationMsgs[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       justifications: Seq[Justification]
-  ): F[Map[Validator, Message]] =
-    justifications.toList.foldM(Map.empty[Validator, Message]) {
+  ): F[Map[Validator, Set[Message]]] =
+    justifications.toList.foldM(Map.empty[Validator, Set[Message]]) {
       case (acc, Justification(validator, hash)) =>
         dag.lookup(hash).flatMap {
           case Some(meta) =>
-            acc.updated(validator, meta).pure[F]
+            acc.combine(Map(validator -> Set(meta))).pure[F]
 
           case None =>
-            MonadThrowable[F].raiseError[Map[Validator, Message]](
+            MonadThrowable[F].raiseError(
               new NoSuchElementException(
                 s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
               )
@@ -421,6 +408,7 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parents: Seq[ByteString],
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
       rank: Long,
@@ -445,7 +433,8 @@ object ProtoUtil {
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
-      validatorSeqNum = validatorSeqNum
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
@@ -464,6 +453,7 @@ object ProtoUtil {
       state: Block.GlobalState,
       rank: Long,
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainName: String
@@ -477,6 +467,7 @@ object ProtoUtil {
       .withRank(rank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
+      .withValidatorPrevBlockHash(validatorPrevBlockHash)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
       .withChainName(chainName)

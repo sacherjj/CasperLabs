@@ -50,6 +50,7 @@ class DockerConfig:
     behind_proxy: bool = False
     # Function that returns bonds amount for each account to be placed in accounts.csv.
     bond_amount: Callable = default_bond_amount
+    custom_docker_tag: Optional[str] = None
 
     def __post_init__(self):
         if self.rand_str is None:

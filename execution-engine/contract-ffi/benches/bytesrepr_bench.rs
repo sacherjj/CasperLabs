@@ -367,7 +367,7 @@ fn make_account() -> Account {
     let purse_id = make_purse_id();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
     let action_thresholds = Default::default();
-    let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
+    let account_activity = AccountActivity::new(BlockTime::new(0), BlockTime::new(100));
     Account::new(
         [0u8; 32],
         named_keys,

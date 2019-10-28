@@ -10,6 +10,9 @@ use alloc::vec::Vec;
 use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 
+const HELLO_NAME_EXT: &str = "hello_name_ext";
+const HELLO_NAME_KEY: &str = "hello_name";
+
 enum Arg {
     Name = 0,
 }
@@ -31,6 +34,6 @@ pub extern "C" fn hello_name_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pointer = storage::store_function_at_hash("hello_name_ext", BTreeMap::new());
-    runtime::put_key("hello_name", &pointer.into());
+    let pointer = storage::store_function_at_hash(HELLO_NAME_EXT, BTreeMap::new());
+    runtime::put_key(HELLO_NAME_KEY, &pointer.into());
 }

@@ -1,5 +1,5 @@
 pub mod engine_config;
-pub mod error;
+mod error;
 pub mod executable_deploy_item;
 pub mod execution_effect;
 pub mod execution_result;
@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use num_traits::Zero;
+use parity_wasm::elements::Module;
 
 use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
@@ -30,10 +31,10 @@ use engine_shared::transform::Transform;
 use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
+use engine_wasm_prep::Preprocessor;
 
 pub use self::engine_config::EngineConfig;
-use self::error::{Error, RootNotFound};
+pub use self::error::{Error, RootNotFound};
 use self::executable_deploy_item::ExecutableDeployItem;
 use self::execution_result::ExecutionResult;
 use self::genesis::{
@@ -42,7 +43,7 @@ use self::genesis::{
 use crate::engine_state::error::Error::MissingSystemContractError;
 use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
-use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use crate::KnownKeys;
 
@@ -102,8 +103,8 @@ where
         genesis_config: GenesisConfig,
     ) -> Result<GenesisResult, Error> {
         // Preliminaries
-        let executor = WasmiExecutor;
-        let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
+        let executor = Executor;
+        let blocktime = BlockTime::new(GENESIS_INITIAL_BLOCKTIME);
         let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 
@@ -111,7 +112,7 @@ where
         let initial_root_hash = self.state.empty_root();
         let protocol_version = genesis_config.protocol_version();
         let wasm_costs = genesis_config.wasm_costs();
-        let preprocessor = WasmiPreprocessor::new(wasm_costs);
+        let preprocessor = Preprocessor::new(wasm_costs);
 
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
@@ -455,7 +456,7 @@ where
         if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
             // preprocess installer module
             let upgrade_installer_module = {
-                let preprocessor = WasmiPreprocessor::new(new_wasm_costs);
+                let preprocessor = Preprocessor::new(new_wasm_costs);
                 preprocessor.preprocess(bytes)?
             };
 
@@ -507,7 +508,7 @@ where
             };
             let state = Rc::clone(&tracking_copy);
 
-            WasmiExecutor.better_exec(
+            Executor.better_exec(
                 upgrade_installer_module,
                 &args,
                 &mut keys,
@@ -552,14 +553,14 @@ where
         }
     }
 
-    pub fn get_module<A, P: Preprocessor<A>>(
+    pub fn get_module(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,
         account: &Account,
         correlation_id: CorrelationId,
-        preprocessor: &P,
-    ) -> Result<A, error::Error> {
+        preprocessor: &Preprocessor,
+    ) -> Result<Module, error::Error> {
         match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
@@ -655,7 +656,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
+    pub fn deploy(
         &self,
         session: ExecutableDeployItem,
         payment: ExecutableDeployItem,
@@ -666,8 +667,8 @@ where
         prestate_hash: Blake2bHash,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
+        executor: &Executor,
+        preprocessor: &Preprocessor,
     ) -> Result<ExecutionResult, RootNotFound> {
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
 

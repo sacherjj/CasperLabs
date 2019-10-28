@@ -11,17 +11,17 @@ use grpc::SingleResponse;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::{BlockTime, PublicKey};
 use contract_ffi::value::ProtocolVersion;
-use engine_core::engine_state::error::Error as EngineError;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
 use engine_core::engine_state::EngineState;
-use engine_core::execution::{Executor, WasmiExecutor};
+use engine_core::engine_state::Error as EngineError;
+use engine_core::execution::Executor;
 use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
 use engine_shared::logging::{log_duration, log_info};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_storage::global_state::{CommitResult, StateProvider};
-use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
+use engine_wasm_prep::Preprocessor;
 
 use self::ipc_grpc::ExecutionEngineService;
 use self::mappings::*;
@@ -166,16 +166,15 @@ where
         // TODO: don't unwrap
         let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
 
-        let blocktime = BlockTime(exec_request.get_block_time());
-
         // TODO: don't unwrap
         let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
+        let blocktime = BlockTime::new(exec_request.get_block_time());
 
         let deploys = exec_request.get_deploys();
 
-        let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
+        let preprocessor = Preprocessor::new(wasm_costs);
 
-        let executor = WasmiExecutor;
+        let executor = Executor;
 
         let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = execute_deploys(
             &self,
@@ -547,10 +546,10 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_deploys<A, S, E, P>(
+fn execute_deploys<S>(
     engine_state: &EngineState<S>,
-    executor: &E,
-    preprocessor: &P,
+    executor: &Executor,
+    preprocessor: &Preprocessor,
     prestate_hash: Blake2bHash,
     blocktime: BlockTime,
     deploys: &[ipc::DeployItem],
@@ -559,8 +558,6 @@ fn execute_deploys<A, S, E, P>(
 ) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
 where
     S: StateProvider,
-    E: Executor<A>,
-    P: Preprocessor<A>,
     EngineError: From<S::Error>,
     S::Error: Into<engine_core::execution::Error>,
 {
