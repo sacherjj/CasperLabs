@@ -31,6 +31,15 @@ const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
 const TARGET_ADDR: [u8; 32] = [127; 32];
 
+/// Converts an integer into an array of type [u8; 32] by converting integer
+/// into its big endian representation and embedding it at the end of the
+/// range.
+fn make_deploy_hash(i: u64) -> [u8; 32] {
+    let mut result = [128; 32];
+    result[32 - 8..].copy_from_slice(&i.to_be_bytes());
+    result
+}
+
 fn bootstrap(accounts: &[PublicKey], amount: U512) -> (WasmTestResult<LmdbGlobalState>, TempDir) {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
@@ -121,7 +130,7 @@ fn transfer_to_account_multiple_deploys(builder: &mut LmdbWasmTestBuilder, accou
                 (account, U512::one()),
             )
             .with_authorization_keys(&[PublicKey::new(DEFAULT_ACCOUNT_ADDR)])
-            .with_deploy_hash([2 + i as u8; 32]) // deploy_hash
+            .with_deploy_hash(make_deploy_hash(i)) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);
     }
@@ -155,7 +164,7 @@ fn transfer_to_purse_multiple_deploys(builder: &mut LmdbWasmTestBuilder, purse_i
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (U512::from(PER_RUN_FUNDING),))
             .with_session_code(CONTRACT_TRANSFER_TO_PURSE, (purse_id, U512::one()))
             .with_authorization_keys(&[PublicKey::new(TARGET_ADDR)])
-            .with_deploy_hash([2 + i as u8; 32]) // deploy_hash
+            .with_deploy_hash(make_deploy_hash(i)) // deploy_hash
             .build();
         exec_builder = exec_builder.push_deploy(deploy);
     }
