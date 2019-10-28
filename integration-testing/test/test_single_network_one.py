@@ -794,3 +794,18 @@ def test_multiple_deploys_per_block(cli):
     deploys = list(cli("show-deploys", block_hash))
     assert len(deploys) == 2
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
+
+
+def test_dependencies(scala_cli):
+    cli = scala_cli
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+    deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
+    propose_check_no_errors(cli)
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1)
+    propose_check_no_errors(cli)
