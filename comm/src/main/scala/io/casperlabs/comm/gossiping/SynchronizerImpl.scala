@@ -58,16 +58,14 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       tips           <- backend.tips
       justifications <- backend.justifications
       isInitial      <- isInitialRef.get
-      syncStateOrError <- Metrics[F].gauge("syncs_ongoing") {
-                           loop(
-                             source,
-                             service,
-                             targetBlockHashes.toList,
-                             tips ::: justifications,
-                             SyncState.initial(targetBlockHashes),
-                             isInitial
-                           )
-                         }
+      syncStateOrError <- loop(
+                           source,
+                           service,
+                           targetBlockHashes.toList,
+                           tips ::: justifications,
+                           SyncState.initial(targetBlockHashes),
+                           isInitial
+                         )
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F],
               finalizeResult(source, _)
@@ -75,11 +73,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       _ <- Metrics[F].incrementCounter(if (res.isLeft) "syncs_failed" else "syncs_succeeded")
     } yield res
 
-    sourceSemaphoreMap.withPermit(source) {
-      effect.onError {
-        case NonFatal(e) =>
-          Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
-            Metrics[F].incrementCounter("syncs_failed")
+    Metrics[F].gauge("syncs_ongoing") {
+      sourceSemaphoreMap.withPermit(source) {
+        effect.onError {
+          case NonFatal(e) =>
+            Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+              Metrics[F].incrementCounter("syncs_failed")
+        }
       }
     }
   }
