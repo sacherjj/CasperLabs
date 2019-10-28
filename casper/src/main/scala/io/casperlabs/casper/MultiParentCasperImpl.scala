@@ -5,7 +5,7 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Monad}
+import cats.Applicative
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -18,16 +18,16 @@ import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.{MetricsOps, MetricsStreamOps}
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -42,7 +42,6 @@ import scala.util.control.NonFatal
   * Encapsulates mutable state of the MultiParentCasperImpl
   **
   *
-  * @param blockBuffer
   * @param invalidBlockTracker
   */
 final case class CasperState(
@@ -149,7 +148,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                                StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                                dag,
                                block
-                             )
+                             ).timer("validateAndAddBlock")
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
@@ -326,7 +325,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           _ <- Log[F].info(
                 s"Fork-choice tip is block ${PrettyPrinter.buildString(tipHashes.head)}."
               )
-          merged  <- ExecEngineUtil.merge[F](tips, dag)
+          merged  <- ExecEngineUtil.merge[F](tips, dag).timer("mergeTipsEffects")
           parents = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
@@ -385,7 +384,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList
       // Make sure pending deploys have never been processed in the past cone of the new parents.
-      validDeploys <- DeployFilters.filterDeploysNotInPast(dag, parents, unexpiredList).map(_.toSet)
+      validDeploys <- DeployFilters
+                       .filterDeploysNotInPast(dag, parents, unexpiredList)
+                       .map(_.toSet)
+                       .timer("remainingDeploys_filterDeploysNotInPast")
       // anything with timestamp earlier than now and not included in the valid deploys
       // can be discarded as a duplicate and/or expired deploy
       deploysToDiscard <- earlierPendingDeploys.map(_._1).compile.to[Set].map(_ diff validDeploys)
@@ -410,7 +412,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                           dag,
                           merged.parents.map(_.blockHash).toSet,
                           processedDeploys
-                        )
+                        ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
       _ <- DeployStorageWriter[F]
             .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
@@ -427,34 +429,34 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
       timestamp: Long
-  ): F[CreateBlockStatus] =
-    Metrics[F].timer("createProposal") {
-      //We ensure that only the justifications given in the block are those
-      //which are bonded validators in the chosen parent. This is safe because
-      //any latest message not from a bonded validator will not change the
-      //final fork-choice.
-      val bondedValidators = bonds(merged.parents.head).map(_.validatorPublicKey).toSet
-      val bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
-      // TODO: Remove redundant justifications.
-      val justifications = toJustification(latestMessages.values.flatten.toSeq)
-      val deployStream =
-        DeployStorageReader[F]
-          .getByHashes(remainingHashes)
-          .through(
-            DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
-          )
-      (for {
-        // `bondedLatestMsgs` won't include Genesis block
-        // and in the case when it becomes the main parent we want to include its rank
-        // when calculating it for the current block.
-        rank <- MonadThrowable[F].fromTry(
-                 merged.parents.toList
-                   .traverse(Message.fromBlock(_))
-                   .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
-                   .map(set => ProtoUtil.nextRank(set.toList))
-               )
-        protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
-        checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
+  ): F[CreateBlockStatus] = Metrics[F].timer("createProposal") {
+    //We ensure that only the justifications given in the block are those
+    //which are bonded validators in the chosen parent. This is safe because
+    //any latest message not from a bonded validator will not change the
+    //final fork-choice.
+    val bondedValidators = bonds(merged.parents.head).map(_.validatorPublicKey).toSet
+    val bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
+    // TODO: Remove redundant justifications.
+    val justifications = toJustification(latestMessages.values.flatten.toSeq)
+    val deployStream =
+      DeployStorageReader[F]
+        .getByHashes(remainingHashes)
+        .through(
+          DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
+        )
+    (for {
+      // `bondedLatestMsgs` won't include Genesis block
+      // and in the case when it becomes the main parent we want to include its rank
+      // when calculating it for the current block.
+      rank <- MonadThrowable[F].fromTry(
+               merged.parents.toList
+                 .traverse(Message.fromBlock(_))
+                 .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
+                 .map(set => ProtoUtil.nextRank(set.toList))
+             )
+      protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
+      checkpoint <- ExecEngineUtil
+                     .computeDeploysCheckpoint[F](
                        merged,
                        deployStream,
                        timestamp,
@@ -462,50 +464,51 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                        rank,
                        upgrades
                      )
-      } yield {
-        if (checkpoint.deploysForBlock.isEmpty) {
-          CreateBlockStatus.noNewDeploys
-        } else {
-          // Start numbering from 1 (validator's first block seqNum = 1)
-          val latestMessage =
-            latestMessages.get(ByteString.copyFrom(validatorId)).map(_.maxBy(_.validatorMsgSeqNum))
-          val validatorSeqNum        = latestMessage.fold(1)(_.validatorMsgSeqNum + 1)
-          val validatorPrevBlockHash = latestMessage.fold(ByteString.EMPTY)(_.messageHash)
-          val block = ProtoUtil.block(
-            justifications,
-            checkpoint.preStateHash,
-            checkpoint.postStateHash,
-            checkpoint.bondedValidators,
-            checkpoint.deploysForBlock,
-            protocolVersion,
-            merged.parents.map(_.blockHash),
-            validatorSeqNum,
-            validatorPrevBlockHash,
-            chainName,
-            timestamp,
-            rank,
-            validatorId,
-            privateKey,
-            sigAlgorithm
-          )
-          CreateBlockStatus.created(block)
-        }
-      }).handleErrorWith {
-        case ex @ SmartContractEngineError(error_msg) =>
-          Log[F]
-            .error(
-              s"Execution Engine returned an error while processing deploys: $error_msg"
-            )
-            .as(CreateBlockStatus.internalDeployError(ex))
-        case NonFatal(ex) =>
-          Log[F]
-            .error(
-              s"Critical error encountered while processing deploys: ${ex.getMessage}",
-              ex
-            )
-            .as(CreateBlockStatus.internalDeployError(ex))
+                     .timer("computeDeploysCheckpoint")
+    } yield {
+      if (checkpoint.deploysForBlock.isEmpty) {
+        CreateBlockStatus.noNewDeploys
+      } else {
+        // Start numbering from 1 (validator's first block seqNum = 1)
+        val latestMessage =
+          latestMessages.get(ByteString.copyFrom(validatorId)).map(_.maxBy(_.validatorMsgSeqNum))
+        val validatorSeqNum        = latestMessage.fold(1)(_.validatorMsgSeqNum + 1)
+        val validatorPrevBlockHash = latestMessage.fold(ByteString.EMPTY)(_.messageHash)
+        val block = ProtoUtil.block(
+          justifications,
+          checkpoint.preStateHash,
+          checkpoint.postStateHash,
+          checkpoint.bondedValidators,
+          checkpoint.deploysForBlock,
+          protocolVersion,
+          merged.parents.map(_.blockHash),
+          validatorSeqNum,
+          validatorPrevBlockHash,
+          chainName,
+          timestamp,
+          rank,
+          validatorId,
+          privateKey,
+          sigAlgorithm
+        )
+        CreateBlockStatus.created(block)
       }
+    }).handleErrorWith {
+      case ex @ SmartContractEngineError(error_msg) =>
+        Log[F]
+          .error(
+            s"Execution Engine returned an error while processing deploys: $error_msg"
+          )
+          .as(CreateBlockStatus.internalDeployError(ex))
+      case NonFatal(ex) =>
+        Log[F]
+          .error(
+            s"Critical error encountered while processing deploys: ${ex.getMessage}",
+            ex
+          )
+          .as(CreateBlockStatus.internalDeployError(ex))
     }
+  }
 
   // MultiParentCasper Exposes the block DAG to those who need it.
   def dag: F[DagRepresentation[F]] =

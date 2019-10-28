@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper
+import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
@@ -12,6 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -36,6 +38,7 @@ object ExecutionEngineServiceStub {
       override def nanoTime: F[Long]                        = 0L.pure[F]
       override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
     }
+    implicit val metrics    = new MetricsNOP[F]
     implicit val validation = new ValidationImpl[F]
     (for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
