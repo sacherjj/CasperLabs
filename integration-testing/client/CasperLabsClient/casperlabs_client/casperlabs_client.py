@@ -448,8 +448,10 @@ class CasperLabsClient:
         session_hash: bytes = None,
         session_name: str = None,
         session_uref: bytes = None,
+        ttl_millis: int = 0,
     ):
         """
+        Create a deploy message. See deploy documentation.
         """
         # Convert from hex to binary.
         if from_addr and len(from_addr) == 64:
@@ -490,6 +492,7 @@ class CasperLabsClient:
         header = consensus.Deploy.Header(
             account_public_key=account_public_key,
             timestamp=int(1000 * time.time()),
+            ttl_millis=ttl_millis,
             gas_price=gas_price,
             body_hash=blake2b_hash(_serialize(body)),
         )
@@ -528,6 +531,7 @@ class CasperLabsClient:
         session_hash: bytes = None,
         session_name: str = None,
         session_uref: bytes = None,
+        ttl_millis: int = 0,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -555,6 +559,8 @@ class CasperLabsClient:
                               executing account) to be called in the payment.
         :param payment-uref:  URef of the stored contract to be called in the
                               payment; base16 encoded.
+        :ttl_millis:          Time to live. Time (in milliseconds) that the
+                              deploy will remain valid for.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -573,6 +579,7 @@ class CasperLabsClient:
             session_hash=session_hash,
             session_name=session_name,
             session_uref=session_uref,
+            ttl_millis=ttl_millis,
         )
 
         # TODO: Return only deploy_hash

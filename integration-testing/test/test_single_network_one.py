@@ -1,5 +1,6 @@
 import logging
 import pytest
+import time
 from pytest import fixture, raises
 
 from casperlabs_local_net.contract_address import contract_address
@@ -809,3 +810,17 @@ def test_dependencies(scala_cli):
         "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
         "--dependencies", deploy_hash1)
     propose_check_no_errors(cli)
+
+
+def test_ttl(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+    # deploy will only be valiid for 100 miliseconds
+    cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE), "--ttl", 100)
+    time.sleep(0.5)
+    with raises(Exception) as excinfo:
+        propose_check_no_errors(cli)
+    assert excinfo.value.output == ""
