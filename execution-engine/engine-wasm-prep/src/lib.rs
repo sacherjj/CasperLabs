@@ -7,9 +7,11 @@ extern crate engine_shared;
 
 pub mod wasm_costs;
 
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
+
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
-use std::error::Error;
 use wasm_costs::WasmCosts;
 
 //NOTE: size of Wasm memory page is 64 KiB
@@ -23,6 +25,19 @@ pub enum PreprocessingError {
     DeserializeError(String),
     OperationForbiddenByGasRules,
     StackLimiterError,
+}
+
+impl Display for PreprocessingError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            PreprocessingError::InvalidImportsError(error) => write!(f, "Invalid imports error: {}", error),
+            PreprocessingError::NoExportSection => write!(f, "No export section found"),
+            PreprocessingError::NoImportSection => write!(f, "No import section found"),
+            PreprocessingError::DeserializeError(error) => write!(f, "Deserialization error: {}", error),
+            PreprocessingError::OperationForbiddenByGasRules => write!(f, "Encountered operation forbidden by gas rules. Consult instruction -> metering config map"),
+            PreprocessingError::StackLimiterError => write!(f, "Stack limiter error"),
+        }
+    }
 }
 
 use PreprocessingError::*;
