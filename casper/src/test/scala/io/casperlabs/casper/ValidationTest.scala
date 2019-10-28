@@ -644,7 +644,7 @@ class ValidationTest
       .groupBy(_._1)
       .mapValues(_.map(_._2).toSet)
 
-  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parents: Seq[Block],
       bonds: Seq[Bond],
       justifications: Seq[Block],
@@ -662,7 +662,7 @@ class ValidationTest
     } yield block
 
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v0 = generateValidator("V1")
       val v1 = generateValidator("V2")
       val v2 = generateValidator("V3")
@@ -750,7 +750,7 @@ class ValidationTest
 
   // See [[/resources/casper/localDetectedForeignDidnt.jpg]]
   it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v0 = generateValidator("v0")
       val v1 = generateValidator("v1")
       val v2 = generateValidator("v2")
@@ -1239,6 +1239,54 @@ class ValidationTest
                          )
         Right(postStateHash) = validateResult
       } yield postStateHash should be(computedPostStateHash)
+  }
+
+  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _ <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
+      } yield ()
+  }
+
+  it should "not raise errors when j-past-cone does not merge a swmilane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _       <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Right(())
+      } yield ()
   }
 
   // TODO: Bring back once there is an easy way to create a _valid_ block.
