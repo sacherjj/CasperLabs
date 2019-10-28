@@ -336,8 +336,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
           // is that the auto-proposer will not pick up the change in the pending set immediately.
-          requeued <- requeueOrphanedDeploys(dag, tipHashes)
-          _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
+          requeued <- requeueOrphanedDeploys(dag, merged)
+          _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
 
           timestamp       <- Time[F].currentMillis
           remainingHashes <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp)
@@ -401,19 +401,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     */
   private def requeueOrphanedDeploys(
       dag: DagRepresentation[F],
-      tipHashes: List[BlockHash]
+      merged: MergeResult[TransformMap, Block]
   ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
     for {
-      // We actually need the tips which can be merged, the ones which we'd build on if we
-      // attempted to create a new block.
-      tips    <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-      merged  <- ExecEngineUtil.merge[F](tips, dag)
-      parents = merged.parents
       // Consider deploys which this node has processed but hasn't finalized yet.
       processedDeploys <- DeployStorageReader[F].readProcessedHashes
       orphanedDeploys <- filterDeploysNotInPast(
                           dag,
-                          parents.map(_.blockHash).toSet,
+                          merged.parents.map(_.blockHash).toSet,
                           processedDeploys
                         )
       _ <- DeployStorageWriter[F]
