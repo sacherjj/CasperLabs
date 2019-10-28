@@ -84,7 +84,6 @@ object EquivocationDetector {
     *   then when adding B4, this method doesn't work, it return false but actually B4
     *   equivocated with B2.
     */
-  // NOTE: Assumes CON-557 is done i.e. a block is valid if its swimlane has only one tip.
   private def checkEquivocations[F[_]: MonadThrowable: Log](
       dag: DagRepresentation[F],
       block: Block
@@ -96,18 +95,21 @@ object EquivocationDetector {
                         // It is the first message by that validator.
                         false.pure[F]
                       case head :: Nil =>
-                        Monad[F].ifM(citesPreviousMsg(dag, block, head))(
-                          false.pure[F], {
-                            Log[F]
-                              .warn(
-                                s"Found equivocation: justifications of block ${PrettyPrinter
-                                  .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
-                                  .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                                  .buildString(head.messageHash)}"
-                              )
-                              .as(true)
-                          }
-                        )
+                        // Since we've already validated that message.prevBlockHash is correct
+                        // i.e. it correctly cites latest message by the creator.
+                        // And we've also validated that message creator is not merging his swimlane,
+                        // a message creates an equivocation iff latest message (as seen by local node)
+                        // is different from what new message cites as the previous one.
+                        if (block.getHeader.validatorPrevBlockHash != head.messageHash) {
+                          Log[F]
+                            .warn(
+                              s"Found equivocation: justifications of block ${PrettyPrinter
+                                .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
+                                .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
+                                .buildString(head.messageHash)}"
+                            )
+                            .as(true)
+                        } else false.pure[F]
                       case _ =>
                         Log[F]
                           .warn(
@@ -116,34 +118,6 @@ object EquivocationDetector {
                           .as(true)
                     }
     } yield equivocated
-
-  // Util ADT to support finding whether a block cites his previous message.
-  private sealed trait Status
-  private case object Continue   extends Status
-  private case object Cites      extends Status
-  private case object NoCitation extends Status
-
-  // Check whether block cites previous message by the same creator.
-  private def citesPreviousMsg[F[_]: MonadThrowable](
-      dag: DagRepresentation[F],
-      block: Block,
-      latestMessage: Message
-  ): F[Boolean] =
-    for {
-      message <- MonadThrowable[F].fromTry(Message.fromBlock(block))
-      result <- DagOperations
-                 .swimlaneV(message.validatorId, message, dag)
-                 .foldWhileLeft[Status](Continue) {
-                   case (_, message) =>
-                     if (message.messageHash == latestMessage.messageHash) Right(Cites)
-                     else if (message.rank <= latestMessage.rank || message.rank == 0)
-                       Right(NoCitation)
-                     else Left(Continue)
-                 } map {
-                 case Continue | NoCitation => false
-                 case Cites                 => true
-               }
-    } yield result
 
   /**
     * Find equivocating validators that a block can see based on its direct justifications
