@@ -153,16 +153,20 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
-      _ <- updateLastFinalizedBlock(updatedDag)
+      _          <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
+      updatedLFB <- updateLastFinalizedBlock(updatedDag)
       // Remove any deploys from the buffer which are in finalized blocks.
-      _ <- Log[F].debug(s"Removing finalized deploys after adding ${hashPrefix}")
-      _ <- removeFinalizedDeploys(updatedDag)
+      _ <- {
+        Log[F]
+          .debug(s"Removing finalized deploys after adding ${hashPrefix}") *>
+          removeFinalizedDeploys(updatedDag)
+      }.whenA(updatedLFB)
       _ <- Log[F].debug(s"Finished adding ${hashPrefix}")
     } yield List(block -> status)
   }
 
-  private def updateLastFinalizedBlock(dag: DagRepresentation[F]): F[Unit] =
+  /** Update the finalized block; return true if it changed. */
+  private def updateLastFinalizedBlock(dag: DagRepresentation[F]): F[Boolean] =
     Metrics[F].timer("updateLastFinalizedBlock") {
 
       /** Go from the last finalized block and visit all children that can be finalized now.
@@ -187,7 +191,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
         _ <- Log[F].info(
               s"New last finalized block hash is ${PrettyPrinter.buildString(updatedLastFinalizedBlockHash)}."
             )
-      } yield ()
+      } yield (lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
     }
 
   /** Remove deploys from the buffer which are included in block that are finalized. */
