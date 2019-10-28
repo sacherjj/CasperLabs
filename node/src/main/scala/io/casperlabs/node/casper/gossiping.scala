@@ -548,15 +548,6 @@ package object gossiping {
       synchronizer <- SynchronizerImpl[F](
                        connectToGossip,
                        new SynchronizerImpl.Backend[F] {
-                         override def tips: F[List[ByteString]] =
-                           for {
-                             casper         <- unsafeGetCasper[F]
-                             dag            <- casper.dag
-                             latestMessages <- dag.latestMessageHashes
-                             equivocators   <- dag.getEquivocators
-                             tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
-                           } yield tipHashes.toList
-
                          override def justifications: F[List[ByteString]] =
                            for {
                              casper <- unsafeGetCasper[F]

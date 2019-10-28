@@ -55,14 +55,13 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       _              <- Metrics[F].incrementCounter("syncs")
       _              <- Metrics[F].incrementCounter("sync_targets", delta = targetBlockHashes.size.toLong)
       service        <- connectToGossip(source)
-      tips           <- backend.tips
       justifications <- backend.justifications
       isInitial      <- isInitialRef.get
       syncStateOrError <- loop(
                            source,
                            service,
                            targetBlockHashes.toList,
-                           tips ::: justifications,
+                           justifications,
                            SyncState.initial(targetBlockHashes),
                            isInitial
                          )
@@ -420,7 +419,6 @@ object SynchronizerImpl {
     } yield ()
 
   trait Backend[F[_]] {
-    def tips: F[List[ByteString]]
     def justifications: F[List[ByteString]]
     def validate(blockSummary: BlockSummary): F[Unit]
     def notInDag(blockHash: ByteString): F[Boolean]
