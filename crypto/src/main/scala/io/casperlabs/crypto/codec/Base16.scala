@@ -15,12 +15,12 @@ object Base16 {
   }
 
   /* Returns None if can't decode */
-  def tryDecode(input: String): Option[Array[Byte]] =
-    if (input.length % 2 == 0) {
-      Try(input.sliding(2, 2).toArray.map(Integer.parseInt(_, 16).toByte)).toOption
-    } else {
-      None
-    }
+  def tryDecode(input: String): Option[Array[Byte]] = {
+    val paddedInput =
+      if (input.length % 2 == 0) input
+      else "0" + input
+    Try(paddedInput.sliding(2, 2).toArray.map(Integer.parseInt(_, 16).toByte)).toOption
+  }
 
   private def bytes2hex(bytes: Array[Byte], sep: Option[String]): String =
     bytes.map("%02x".format(_)).mkString(sep.getOrElse(""))
