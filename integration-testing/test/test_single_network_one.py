@@ -15,7 +15,8 @@ from casperlabs_local_net.common import (
 from casperlabs_local_net.docker_node import DockerNode
 from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.wait import wait_for_genesis_block
-from casperlabs_client import ABI
+from casperlabs_client import ABI, blake2b_hash
+from casperlabs_client.consensus_pb2 import Deploy
 from casperlabs_local_net.cli import CLI, DockerCLI, CLIErrorExit
 
 """
@@ -823,15 +824,71 @@ def test_dependencies(scala_cli):
     propose_check_no_errors(cli)
 
 
-def test_ttl(cli):
+def test_ttl_ok_scala(scala_cli):
+    check_ttl_ok(scala_cli)
+
+
+def test_ttl_ok_python(cli):
+    check_ttl_ok(cli)
+
+
+def check_ttl_ok(cli):
     account = cli.node.test_account
-    cli.set_default_deploy_args('--from', account.public_key_hex,
-                                '--private-key', cli.private_key_path(account),
-                                '--public-key', cli.public_key_path(account),
-                                "--payment-amount", 10000000)
-    # deploy will only be valiid for 100 miliseconds
-    cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE), "--ttl", 100)
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource(Contract.COUNTER_DEFINE),
+        "--ttl", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
     time.sleep(0.5)
+    propose_check_no_errors(cli)
+
+
+def test_ttl_late_scala(scala_cli, temp_dir):
+    check_ttl_late(scala_cli, temp_dir)
+
+
+def test_ttl_late_python(cli, temp_dir):
+    check_ttl_late(cli, temp_dir)
+
+
+def check_ttl_late(cli, temp_dir):
+    account = cli.node.test_account
+    one_hour = 3600000  # 1h in millliseconds
+
+    deploy_path = f"{temp_dir}/deploy_with_ttl"
+    modified_deploy_path = f"{temp_dir}/deploy_with_ttl.changed_timestamp"
+    signed_deploy_path = f"{temp_dir}/deploy_with_ttl.signed"
+
+    cli("make-deploy",
+        "-o", deploy_path,
+        "--from", account.public_key_hex,
+        "--session", cli.resource(Contract.COUNTER_DEFINE),
+        "--payment-amount", 100000000,
+        "--ttl", 3600000)
+
+    # Modify the deploy and change its timestamp to be more than one hour earlier.
+    deploy = Deploy()
+    with open(deploy_path, "rb") as f:
+        deploy.ParseFromString(f.read())
+
+    deploy.header.timestamp = int(1000 * time.time() - one_hour - 60 * 1000)
+    deploy.deploy_hash = blake2b_hash(deploy.header.SerializeToString())
+
+    with open(modified_deploy_path, "wb") as f:
+        f.write(deploy.SerializeToString())
+
+    cli('sign-deploy',
+        '-i', modified_deploy_path,
+        '-o', signed_deploy_path,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account))
+
+    cli('send-deploy', '-i', signed_deploy_path)
+
     with raises(Exception) as excinfo:
         propose_check_no_errors(cli)
-    assert excinfo.value.output == ""
+
+    expected = "OUT_OF_RANGE: No new deploys"
+    assert expected in str(excinfo.value) or expected in excinfo.value.output
