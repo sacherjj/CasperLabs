@@ -1,17 +1,26 @@
 package io.casperlabs.node.api.graphql.schema
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.node.api.Utils
-import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
-import io.casperlabs.node.api.graphql.RunToFuture.ops._
+import io.casperlabs.node.api.{DeployInfoPagination, Utils}
+import io.casperlabs.node.api.Utils.{
+  validateAccountPublicKey,
+  validateBlockHashPrefix,
+  validateDeployHash
+}
+import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql._
+import io.casperlabs.node.api.graphql.RunToFuture.ops._
+import io.casperlabs.node.api.graphql.schema.blocks.{DeployInfosWithPageInfo, PageInfo}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -85,6 +94,55 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
               (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
                   deployHash => BlockAPI.getDeployInfoOpt[F](deployHash, deployView)
               )).unsafeToFuture
+            }
+          ),
+          Field(
+            "deploys",
+            blocks.types.DeployInfosWithPageInfoType,
+            arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
+            resolve = { c =>
+              val accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+              val first                  = c.arg(blocks.arguments.First)
+              val after                  = c.arg(blocks.arguments.After)
+              val program =
+                for {
+                  accountPublicKeyBase16 <- validateAccountPublicKey[F](
+                                             accountPublicKeyBase16
+                                           )
+                  (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F]
+                                                                  .fromTry(
+                                                                    DeployInfoPagination
+                                                                      .parsePageToken(
+                                                                        ListDeployInfosRequest(
+                                                                          pageSize = first,
+                                                                          pageToken = after
+                                                                        )
+                                                                      )
+                                                                  )
+                  accountPublicKeyBs = PublicKey(
+                    ByteString.copyFrom(
+                      Base16.decode(accountPublicKeyBase16)
+                    )
+                  )
+                  deploys <- DeployStorage[F]
+                              .reader(deployView)
+                              .getDeploysByAccount(
+                                accountPublicKeyBs,
+                                pageSize,
+                                lastTimeStamp,
+                                lastDeployHash
+                              )
+                  deployInfos <- DeployStorage[F]
+                                  .reader(deployView)
+                                  .getDeployInfos(deploys)
+                  endCursor = DeployInfoPagination.createNextPageToken(
+                    deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+                  )
+                  hasNextPage = endCursor.isEmpty
+                  pageInfo    = PageInfo(endCursor, hasNextPage)
+                  result      = DeployInfosWithPageInfo(deployInfos, pageInfo)
+                } yield result
+              program.unsafeToFuture
             }
           ),
           Field(
