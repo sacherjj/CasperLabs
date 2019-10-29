@@ -134,6 +134,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
+      _ <- deployChainNames(block, chainName)
       _ <- deployUniqueness(block, dag)
       _ <- deployHeaders(block, dag)
     } yield ()
@@ -700,6 +701,28 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHash)
         } yield ()
     }
+
+  def deployChainNames(
+      b: Block,
+      chainName: String
+  ): F[Unit] =
+    b.getBody.deploys.toList
+      .find { d =>
+        d.getDeploy.getHeader.chainName.nonEmpty &&
+        d.getDeploy.getHeader.chainName != chainName
+      }
+      .fold(().pure[F]) { d =>
+        for {
+          _ <- Log[F]
+                .warn(
+                  ignore(
+                    b,
+                    s"${PrettyPrinter.buildString(d.getDeploy)} has invalid chain name: ${d.getDeploy.getHeader.chainName}."
+                  )
+                )
+          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployChainName)
+        } yield ()
+      }
 
   def deploySignatures(
       b: Block

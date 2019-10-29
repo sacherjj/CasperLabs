@@ -956,6 +956,48 @@ class ValidationTest
     } yield ()
   }
 
+  it should "fail a block with a deploy having an foreign chain name" in withStorage {
+    _ => _ => _ =>
+      val block = sample {
+        for {
+          b <- arbitrary[consensus.Block]
+        } yield {
+          b.withBody(
+            b.getBody.withDeploys(
+              b.getBody.deploys.map(
+                x =>
+                  x.withDeploy(
+                    x.getDeploy.withHeader(x.getDeploy.getHeader.withChainName("la la land"))
+                  )
+              )
+            )
+          )
+        }
+      }
+      for {
+        result <- ValidationImpl[Task].deployChainNames(block, "no country for old men").attempt
+        _      = result shouldBe Left(ValidateErrorWrapper(InvalidDeployChainName))
+      } yield ()
+  }
+
+  it should "pass a block with a deploy having no chain name" in withStorage { _ => _ => _ =>
+    val block = sample {
+      for {
+        b <- arbitrary[consensus.Block]
+      } yield {
+        b.withBody(
+          b.getBody.withDeploys(
+            b.getBody.deploys
+              .map(
+                x => x.withDeploy(x.getDeploy.withHeader(x.getDeploy.getHeader.withChainName("")))
+              )
+          )
+        )
+      }
+    }
+    ValidationImpl[Task].deployChainNames(block, "area 51")
+  }
+
   "Block hash format validation" should "fail on invalid hash" in withStorage { _ => _ => _ =>
     val (sk, pk) = Ed25519.newKeyPair
     val BlockMsgWithTransform(Some(block), _) =
