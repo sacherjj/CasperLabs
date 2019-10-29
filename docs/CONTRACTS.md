@@ -24,12 +24,12 @@ git clone git@github.com:CasperLabs/CasperLabs.git
 cd CasperLabs/execution-engine
 rustup toolchain install $(cat rust-toolchain)
 rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown
-cd CasperLabs/execution-engine/contracts/examples/
 ```
+
+Source code of contract examples are currently located in `./execution-engine/contracts/examples` directory inside the main repo.
 
 ##### Step 2: Build the example contracts
 ```
-cd CasperLabs/execution-engine/
 make build-example-contracts
 export COUNTER_DEFINE="$(pwd)/target/wasm32-unknown-unknown/release/counter_define.wasm"
 export COUNTER_CALL="$(pwd)/target/wasm32-unknown-unknown/release/counter_call.wasm"
