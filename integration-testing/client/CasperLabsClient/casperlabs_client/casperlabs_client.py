@@ -448,6 +448,7 @@ class CasperLabsClient:
         session_name: str = None,
         session_uref: bytes = None,
         ttl_millis: int = 0,
+        dependencies: list = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -488,9 +489,12 @@ class CasperLabsClient:
         header = consensus.Deploy.Header(
             account_public_key=from_addr or (public_key and read_pem_key(public_key)),
             timestamp=int(1000 * time.time()),
-            ttl_millis=ttl_millis,
             gas_price=gas_price,
             body_hash=blake2b_hash(_serialize(body)),
+            ttl_millis=ttl_millis,
+            dependencies=dependencies
+            and [bytes.fromhex(d) for d in dependencies]
+            or [],
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
@@ -527,6 +531,7 @@ class CasperLabsClient:
         session_name: str = None,
         session_uref: bytes = None,
         ttl_millis: int = 0,
+        dependencies=None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -556,6 +561,8 @@ class CasperLabsClient:
                               payment; base16 encoded.
         :ttl_millis:          Time to live. Time (in milliseconds) that the
                               deploy will remain valid for.
+        :dependencies:        List of deploy hashes (base16 encoded) which
+                              must be executed before this deploy.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -574,6 +581,7 @@ class CasperLabsClient:
             session_name=session_name,
             session_uref=session_uref,
             ttl_millis=ttl_millis,
+            dependencies=dependencies,
         )
 
         deploy = self.sign_deploy(
@@ -866,7 +874,7 @@ def _deploy_kwargs(args, private_key_accepted=True):
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
 
-    if args.payment_amount is not None:
+    if args.payment_amount:
         args.payment_args = ABI.args_to_json(
             ABI.args([ABI.big_int("amount", int(args.payment_amount))])
         )
@@ -895,6 +903,7 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
         ttl_millis=args.ttl,
+        dependencies=args.dependencies,
     )
     if private_key_accepted:
         d["private_key"] = args.private_key or None
@@ -1004,8 +1013,7 @@ def show_deploys_command(casperlabs_client, args):
 def deploy_options(keys_required=False, private_key_accepted=True):
     return ([
         [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-        # TODO: handling of dependencies not implemented yet. It is not clear what the format of <arg>... is (list of args).
-        [('--dependencies',), dict(required=False, type=str, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+        [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
         [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
