@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -8,8 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
+import io.casperlabs.casper.helper._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -19,9 +18,8 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.FilesAPI
+import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -151,7 +149,8 @@ abstract class HashSetCasperTest
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Task].dag
       latestMessageHashes  <- dag.latestMessageHashes
-      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators         <- dag.getEquivocators
+      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
@@ -196,7 +195,8 @@ abstract class HashSetCasperTest
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Task].dag
       latestMessageHashes   <- dag.latestMessageHashes
-      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators          <- dag.getEquivocators
+      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ <- node.tearDown()
@@ -826,9 +826,9 @@ abstract class HashSetCasperTest
             List(blockA, blockB).map(nodes(1).casperEff.addBlock)
           }
 
-      state <- nodes(1).casperState.read
+      equivocators <- nodes(1).dagStorage.getRepresentation.flatMap(_.getEquivocators)
     } yield {
-      state.equivocationsTracker.contains(nodes(0).ownValidatorKey) shouldBe true
+      equivocators.contains(nodes(0).ownValidatorKey) shouldBe true
     }
   }
 

@@ -11,6 +11,7 @@ engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared
 engine-storage = { path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 failure = "0.1.5"
+hex_fmt = "0.3.0"
 itertools = "0.8.0"
 linked-hash-map = "0.5.2"
 num-derive = "0.2.5"

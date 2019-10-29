@@ -130,16 +130,16 @@ object SQLiteStorage {
       override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSortTail(tailLength)
 
-      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+      override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
         dagStorage.latestMessageHash(validator)
 
-      override def latestMessage(validator: Validator): F[Option[Message]] =
+      override def latestMessage(validator: Validator): F[Set[Message]] =
         dagStorage.latestMessage(validator)
 
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+      override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
         dagStorage.latestMessageHashes
 
-      override def latestMessages: F[Map[Validator, Message]] =
+      override def latestMessages: F[Map[Validator, Set[Message]]] =
         dagStorage.latestMessages
 
     }

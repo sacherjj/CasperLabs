@@ -102,6 +102,8 @@ import cats.mtl.ApplicativeAsk
 
   def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
 
+  def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]]
+
   /** @return List of deploys created by specified account*/
   def getDeploysByAccount(
       account: PublicKeyBS,

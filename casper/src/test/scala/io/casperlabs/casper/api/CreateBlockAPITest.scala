@@ -26,6 +26,8 @@ import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.storage.deploy.DeployStorageReader
+import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -321,6 +323,60 @@ class CreateBlockAPITest
       node.tearDown()
     }
   }
+
+  "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
+    // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
+    val node =
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+    val v1 = generateValidator("V1")
+
+    implicit val logEff        = new LogStub[Task]
+    implicit val blockStorage  = node.blockStorage
+    implicit val deployStorage = node.deployStorage
+    implicit val safetyOracle  = node.safetyOracleEff
+
+    val deploys = (1L to 10L)
+      .map(
+        t =>
+          ProtoUtil.basicDeploy(
+            t,
+            ByteString.EMPTY,
+            v1
+          )
+      )
+      .toList
+
+    def testProgram(blockApiLock: Semaphore[Task])(
+        implicit casperRef: MultiParentCasperRef[Task]
+    ): Task[Unit] =
+      for {
+        _ <- deploys.toList.traverse(d => {
+              BlockAPI.deploy[Task](d) *> BlockAPI.propose[Task](blockApiLock)
+            })
+        deployInfos <- DeployStorageReader[Task].getDeployInfos(deploys)
+        _ <- deployInfos.traverse(
+              deployInfo =>
+                DeployStorageReader[Task]
+                  .getDeployInfo(deployInfo.getDeploy.deployHash) shouldBeF deployInfo.some
+            )
+        result <- DeployStorageReader[Task]
+                   .getDeployInfos(
+                     List.empty[Deploy]
+                   )
+        _ = result shouldBe List.empty[DeployInfo]
+      } yield ()
+
+    try {
+      (for {
+        casperRef    <- MultiParentCasperRef.of[Task]
+        _            <- casperRef.set(node.casperEff)
+        blockApiLock <- Semaphore[Task](1)
+        result       <- testProgram(blockApiLock)(casperRef)
+      } yield result).unsafeRunSync
+    } finally {
+      node.tearDown()
+    }
+  }
 }
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
@@ -330,12 +386,11 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
   def estimator(
       dag: DagRepresentation[F],
-      latestMessagesHashes: Map[ByteString, ByteString]
+      latestMessagesHashes: Map[Validator, Set[ByteString]],
+      equivocators: Set[Validator]
   ): F[List[BlockHash]] =
-    underlying.estimator(dag, latestMessagesHashes)
+    underlying.estimator(dag, latestMessagesHashes, equivocators)
   def dag: F[DagRepresentation[F]] = underlying.dag
-  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] =
-    underlying.normalizedInitialFault(weights)
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
   def faultToleranceThreshold      = underlying.faultToleranceThreshold
 

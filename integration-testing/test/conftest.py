@@ -18,6 +18,7 @@ from casperlabs_local_net.casperlabs_network import (
     ReadOnlyNodeNetwork,
     InterceptedTwoNodeNetwork,
     TwoNodeWithDifferentAccountsCSVNetwork,
+    NetworkWithTaggedDev,
 )
 from docker.client import DockerClient
 
@@ -130,6 +131,13 @@ def nodes(three_node_network):
 @pytest.fixture(scope="module")
 def node(one_node_network):
     return one_node_network.docker_nodes[0]
+
+
+@pytest.fixture(scope="module")
+def network_with_dev(docker_client_fixture):
+    with NetworkWithTaggedDev(docker_client_fixture) as nwtd:
+        nwtd.create_cl_network()
+        yield nwtd
 
 
 @pytest.fixture()

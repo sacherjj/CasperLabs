@@ -515,6 +515,30 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             del self.network_names[tuple(connection)]
 
 
+class NetworkWithTaggedDev(CasperLabsNetwork):
+    def create_cl_network(self, node_count=2):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+        )
+        self.add_bootstrap(config)
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            custom_docker_tag="dev",
+        )
+        self.add_cl_node(config)
+
+
 if __name__ == "__main__":
     # For testing adding new networks.
     import sys

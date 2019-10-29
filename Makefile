@@ -139,11 +139,8 @@ cargo-native-packager/%:
 
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
-		.make/docker-build/universal/node \
-		hack/docker/test-node.Dockerfile
-	# Add system contracts so we can use them in integration testing.
-	# For live tests we should mount them from a real source.
-	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
+		.make/docker-build/universal/node
+	docker tag $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.

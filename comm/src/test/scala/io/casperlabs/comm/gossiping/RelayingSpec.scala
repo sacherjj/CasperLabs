@@ -5,6 +5,7 @@ import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -16,6 +17,7 @@ import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
+import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -183,6 +185,9 @@ object RelayingSpec {
           override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
           override def addApproval(request: AddApprovalRequest)                   = ???
           override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
+          override def streamDagSliceBlockSummaries(
+              request: StreamDagSliceBlockSummariesRequest
+          ): Iterant[Task, BlockSummary] = ???
         }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(

@@ -84,7 +84,10 @@ pub fn action_threshold_arb() -> impl Strategy<Value = ActionThresholds> {
 }
 
 pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
-    Just(AccountActivity::new(BlockTime(1), BlockTime(1000)))
+    Just(AccountActivity::new(
+        BlockTime::new(1),
+        BlockTime::new(1000),
+    ))
 }
 
 prop_compose! {

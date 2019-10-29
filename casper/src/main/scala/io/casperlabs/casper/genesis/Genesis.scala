@@ -80,6 +80,7 @@ object Genesis {
         state = state,
         rank = 0,
         validatorSeqNum = 0,
+        validatorPrevBlockHash = ByteString.EMPTY,
         protocolVersion = genesisConfig.getProtocolVersion,
         timestamp = genesisConfig.timestamp,
         chainName = genesisConfig.name

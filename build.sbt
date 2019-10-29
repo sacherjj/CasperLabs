@@ -76,7 +76,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       sqlLite,
-      fs2,
+      fs2Io,
       catsCore,
       catsEffect,
       catsEffectLaws,
@@ -227,6 +227,7 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
+        fs2ReactiveStreams,
         jline,
         scallop,
         scalaUri,

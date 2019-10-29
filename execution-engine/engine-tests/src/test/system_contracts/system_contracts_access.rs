@@ -3,7 +3,7 @@ use contract_ffi::value::U512;
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 use contract_ffi::uref::URef;
-use engine_core::engine_state::error::Error;
+use engine_core::engine_state::Error;
 use engine_core::execution;
 use engine_shared::transform::TypeMismatch;
 

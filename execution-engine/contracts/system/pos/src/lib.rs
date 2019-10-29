@@ -119,8 +119,8 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
-    let bonds = bonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
-    let unbonds = unbonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
+    let bonds = bonding_queue.pop_due(timestamp.saturating_sub(BlockTime::new(BOND_DELAY)));
+    let unbonds = unbonding_queue.pop_due(timestamp.saturating_sub(BlockTime::new(UNBOND_DELAY)));
 
     if !unbonds.is_empty() {
         Q::write_unbonding(&unbonding_queue);
@@ -423,22 +423,26 @@ mod tests {
 
     #[test]
     fn test_bond_step_unbond() {
-        bond::<TestQueues, TestStakes>(U512::from(500), PublicKey::new(KEY2), BlockTime(1))
+        bond::<TestQueues, TestStakes>(U512::from(500), PublicKey::new(KEY2), BlockTime::new(1))
             .expect("bond validator 2");
 
         // Bonding becomes effective only after the delay.
         assert_stakes(&[(KEY1, 1_000)]);
-        step::<TestQueues, TestStakes>(BlockTime(BOND_DELAY)).expect("step 1");
+        step::<TestQueues, TestStakes>(BlockTime::new(BOND_DELAY)).expect("step 1");
         assert_stakes(&[(KEY1, 1_000)]);
-        step::<TestQueues, TestStakes>(BlockTime(1 + BOND_DELAY)).expect("step 2");
+        step::<TestQueues, TestStakes>(BlockTime::new(1 + BOND_DELAY)).expect("step 2");
         assert_stakes(&[(KEY1, 1_000), (KEY2, 500)]);
 
-        unbond::<TestQueues, TestStakes>(Some(U512::from(500)), PublicKey::new(KEY1), BlockTime(2))
-            .expect("partly unbond validator 1");
+        unbond::<TestQueues, TestStakes>(
+            Some(U512::from(500)),
+            PublicKey::new(KEY1),
+            BlockTime::new(2),
+        )
+        .expect("partly unbond validator 1");
 
         // Unbonding becomes effective immediately.
         assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
-        step::<TestQueues, TestStakes>(BlockTime(2 + UNBOND_DELAY)).expect("step 3");
+        step::<TestQueues, TestStakes>(BlockTime::new(2 + UNBOND_DELAY)).expect("step 3");
         assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
     }
 }
