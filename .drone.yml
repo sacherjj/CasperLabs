@@ -398,6 +398,12 @@ steps:
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
+  - docker-build-key-bors
+  - docker-build-ee-int-bors
+  - run-rust-benchmarks-bors
+  - try-cargo-publish-bors
+  - run-rust-lints-bors
+  - run-cargo-fmt-bors
 
 - name: docker-keys-gen-test-bors
   commands:
