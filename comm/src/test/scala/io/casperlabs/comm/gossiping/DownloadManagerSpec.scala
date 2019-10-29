@@ -408,6 +408,27 @@ class DownloadManagerSpec
         val nodeA = sample(arbitrary[Node])
         val nodeB = sample(arbitrary[Node])
 
+        final case class Scheduling(attempt: Int, delay: FiniteDuration, node: Node)
+        final case class Retrying(attempt: Int, node: Node)
+
+        def attempt(logLine: String): Int =
+          ".*attempt: (\\d+).*".r.unapplySeq(logLine).get.head.toInt
+
+        def delay(logLine: String): FiniteDuration =
+          Duration(".*delay: (.+)".r.unapplySeq(logLine).get.head).asInstanceOf[FiniteDuration]
+
+        def node(logLine: String): Node = {
+          val id = ".*casperlabs:\\/\\/([a-f0-9]{64}).*".r.unapplySeq(logLine).get.head
+          List(nodeA, nodeB).find(_.show.contains(id)).get
+        }
+
+        def schedules: Vector[Scheduling] = log.debugs.collect {
+          case s if s.contains("Scheduling") => Scheduling(attempt(s), delay(s), node(s))
+        }
+        def retryings: Vector[Retrying] = log.warns.collect {
+          case s if s.contains("Retrying") => Retrying(attempt(s), node(s))
+        }
+
         TestFixture(
           remote = _ => Task.raiseError(io.grpc.Status.UNAVAILABLE.asRuntimeException()),
           retriesConf =
@@ -415,50 +436,76 @@ class DownloadManagerSpec
           timeout = 10.seconds
         ) {
           case (manager, _) =>
+            // S(n,m): where n - number of schedules, m - A if nodeA, B if nodeB, example SA0, SB3
+            // R(n,m): where n - number of retryings, m - A if nodeA, B if nodeB, example RA2, RB1
+            //
             // Expected pattern is:
-            // Check stages:        A[0s:1s]       B[1s:2s]           C[2s:4s]           D[4s:6s]
-            //               nodeA -> 1s -> nodeB -> 1s -> node(A|B) -> 2s -> node(A|B) -> 2s -> fail
-            // counter:        0              0                1                 1
+            //
+            //  - initially SA0, SB0, RA0, RB0
+            //
+            //  - nodeA scheduled and immediately failed, SA1, RA1
+            //
+            //  - nodeA immediately rescheduled with delay of 1s, SA2, (during delay [0s:1s]: Stage A) and failed (RA2 at 1s),
+            //    nodeA is chosen because adding of nodeB isn't fast enough, nodeB is delayed a bit to make test reproducible,
+            //    otherwise it will be non-deterministic and logic will be difficult to test
+            //
+            //  - nodeB scheduled and immediately failed, SB1 RB1
+            //
+            //  - nodeB rescheduled with delay of 1s, SB2, (during delay [1s:2s]: Stage B) and failed (RB2 at 2s),
+            //    nodeB is chosen because it's queried less than nodeA (has the minimal counter among all sources)
+            //
+            //  - either nodeA OR nodeB is chosen and then checking that the counter is > 1
+            //    and whole block downloading fails, this is Stage C
 
             for {
               w1 <- manager
                      .scheduleDownload(summaryOf(block), nodeA, relay = false)
+              _ <- Task.sleep(100.millis)
               w2 <- manager
                      .scheduleDownload(summaryOf(block), nodeB, relay = false)
               _ <- Task.sleep(500.millis)
               _ <- Task {
                     // Stage A, 0.5s
-                    log.warns.size shouldBe 1
-                    log.warns.last should include(nodeA.show)
-                    log.warns.last should include("attempt: 1")
-                    log.warns.last should include("delay: 1 second")
+                    schedules.size shouldBe 2
+
+                    schedules(0).attempt shouldBe 0
+                    schedules(1).attempt shouldBe 1
+
+                    schedules(0).delay shouldBe Duration.Zero
+                    schedules(1).delay shouldBe 1.second
+
+                    schedules(0).node shouldBe nodeA
+                    schedules(1).node shouldBe nodeA
+
+                    retryings.size shouldBe 1
+                    retryings(0).attempt shouldBe 0
+                    retryings(0).node shouldBe nodeA
                   }
               _ <- Task.sleep(1.second)
               _ <- Task {
                     // Stage B, 1.5s
-                    log.warns.size shouldBe 2
-                    log.warns.last should include(nodeB.show)
-                    log.warns.last should include("attempt: 1")
-                    log.warns.last should include("delay: 1 second")
+                    schedules.size shouldBe 4
+
+                    schedules(2).attempt shouldBe 0
+                    schedules(3).attempt shouldBe 1
+
+                    schedules(2).delay shouldBe Duration.Zero
+                    schedules(3).delay shouldBe 1.second
+
+                    schedules(2).node shouldBe nodeB
+                    schedules(3).node shouldBe nodeB
+
+                    retryings.size shouldBe 3
+                    retryings(1).attempt shouldBe 1
+                    retryings(1).node shouldBe nodeA
+
+                    retryings(2).attempt shouldBe 0
+                    retryings(2).node shouldBe nodeB
                   }
-              _ <- Task.sleep(1.second)
+              _ <- Task.sleep(1500.millis)
               _ <- Task {
-                    // Stage C, 2.5s
-                    log.warns.size shouldBe 3
-                    log.warns.last should include("attempt: 2")
-                    log.warns.last should include("delay: 2 seconds")
-                  }
-              _ <- Task.sleep(2500.millis)
-              _ <- Task {
-                    // Stage D, 5s
-                    log.warns.size shouldBe 4
-                    log.warns.last should include("attempt: 2")
-                    log.warns.last should include("delay: 2 seconds")
-                  }
-              // Next try would be after 4 second delay, but it shouldn't try any more.
-              _ <- Task.sleep(2.seconds)
-              _ <- Task {
-                    // Failure stage, 7s
+                    // Stage C, 3s
+                    retryings.size shouldBe 4
                     log.errors.size shouldBe 1
                   }
               r1 <- w1.attempt
