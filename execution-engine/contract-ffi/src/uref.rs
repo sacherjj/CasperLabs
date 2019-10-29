@@ -1,4 +1,5 @@
 use bitflags;
+use hex_fmt::HexFmt;
 
 use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
@@ -82,11 +83,11 @@ impl core::fmt::Display for URef {
             write!(
                 f,
                 "URef({}, {})",
-                super::key::addr_to_hex(&addr),
+                HexFmt(&addr),
                 access_rights
             )
         } else {
-            write!(f, "URef({}, None)", super::key::addr_to_hex(&addr))
+            write!(f, "URef({}, None)", HexFmt(&addr))
         }
     }
 }

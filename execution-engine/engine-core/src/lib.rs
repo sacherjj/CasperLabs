@@ -7,6 +7,7 @@ extern crate core;
 // third-party dependencies
 extern crate blake2;
 extern crate failure;
+extern crate hex_fmt;
 extern crate itertools;
 extern crate linked_hash_map;
 extern crate parity_wasm;
