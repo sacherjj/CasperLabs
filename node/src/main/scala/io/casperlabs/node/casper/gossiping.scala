@@ -23,6 +23,7 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.grpc._
 import io.casperlabs.comm.{CachedConnections, NodeAsk}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
@@ -34,7 +35,7 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import io.grpc.ManagedChannel
+import io.grpc.{ManagedChannel, Server}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.{ClientAuth, SslContext}
 import monix.eval.TaskLike
@@ -228,6 +229,7 @@ package object gossiping {
 
   /** Validate the genesis candidate or any new block via Casper. */
   private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+      validatorId: Option[Keys.PublicKey],
       spec: ipc.ChainSpec,
       block: Block
   ): F[Unit] =
@@ -241,7 +243,7 @@ package object gossiping {
             _     <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
             state <- Cell.mvarCell[F, CasperState](CasperState())
             executor <- MultiParentCasperImpl.StatelessExecutor
-                         .create[F](chainName = spec.getGenesis.name, spec.upgrades)
+                         .create[F](validatorId, chainName = spec.getGenesis.name, spec.upgrades)
             dag         <- DagStorage[F].getRepresentation
             (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
           } yield status
@@ -376,7 +378,7 @@ package object gossiping {
                                       s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
-                                validateAndAddBlock(spec, block)
+                                validateAndAddBlock(validatorId.map(_.publicKey), spec, block)
 
                             override def storeBlock(block: Block): F[Unit] =
                               // Validation has already stored it.
@@ -388,7 +390,7 @@ package object gossiping {
                               // Storing the block automatically stores the summary as well.
                               ().pure[F]
 
-                            override def onScheduled(summary: consensus.BlockSummary) =
+                            override def onScheduled(summary: consensus.BlockSummary): F[Unit] =
                               // The EquivocationDetector treats equivocations with children differently,
                               // so let Casper know about the DAG dependencies up front.
                               MultiParentCasperRef[F].get.flatMap {
@@ -406,7 +408,7 @@ package object gossiping {
                                 case _ => ().pure[F]
                               }
 
-                            override def onDownloaded(blockHash: ByteString) =
+                            override def onDownloaded(blockHash: ByteString): F[Unit] =
                               // Calling `addBlock` during validation has already stored the block,
                               // so we have nothing more to do here with the consensus.
                               synchronizer.downloaded(blockHash)
@@ -452,6 +454,7 @@ package object gossiping {
                     s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
                   )
               _ <- validateAndAddBlock(
+                    validatorId.map(_.publicKey),
                     spec,
                     genesis
                   )
@@ -602,14 +605,14 @@ package object gossiping {
                         .get(blockHash)
                         .map(_.map(_.getBlockMessage))
 
-                    override def listTips =
+                    override def listTips: F[Seq[BlockSummary]] =
                       for {
                         casper         <- unsafeGetCasper[F]
                         dag            <- casper.dag
                         latestMessages <- dag.latestMessageHashes
                         equivocators   <- dag.getEquivocators
                         tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
-                        tips           <- tipHashes.toList.traverse(BlockStorage[F].getBlockSummary(_))
+                        tips           <- tipHashes.traverse(BlockStorage[F].getBlockSummary(_))
                       } yield tips.flatten
                   }
                 }
@@ -775,7 +778,7 @@ package object gossiping {
       conf: Configuration,
       port: Int,
       ingressScheduler: Scheduler
-  )(implicit m: Metrics[Id], l: Log[Id]) = {
+  )(implicit m: Metrics[Id], l: Log[Id]): Resource[F, Server] = {
     // Start the gRPC server.
     implicit val s = ingressScheduler
     GrpcServer(

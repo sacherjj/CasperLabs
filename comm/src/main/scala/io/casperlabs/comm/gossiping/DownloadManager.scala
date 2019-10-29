@@ -19,7 +19,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.shared.{Compression, Log, SelfEquivocationError}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -376,6 +376,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
 
       def loop(counter: Int): F[Unit] =
         downloadEffect.handleErrorWith {
+          case error @ SelfEquivocationError(ex) =>
+            Log[F].error(ex) *> Concurrent[F].raiseError(error)
+
           case NonFatal(ex) if counter > retriesConf.maxRetries.toInt =>
             // Let's just return the last error, unwrapped, so callers don't have to anticipate
             // whether this component is going to do retries or not.

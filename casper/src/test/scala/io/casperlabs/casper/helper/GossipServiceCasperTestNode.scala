@@ -70,7 +70,11 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       semaphoresMap,
-      new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil),
+      new MultiParentCasperImpl.StatelessExecutor[F](
+        Some(validatorId.publicKey),
+        chainName,
+        upgrades = Nil
+      ),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,

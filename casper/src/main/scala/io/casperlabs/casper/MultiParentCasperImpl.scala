@@ -9,14 +9,14 @@ import cats.{Applicative, Monad}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
-import io.casperlabs.casper.equivocations.{EquivocationDetector}
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
-import io.casperlabs.casper.util.execengine.{ExecEngineUtil}
+import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
@@ -35,6 +35,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 
+import scala.reflect.internal.FatalError
 import scala.util.control.NonFatal
 
 /**
@@ -601,6 +602,7 @@ object MultiParentCasperImpl {
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+      validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ) {
@@ -730,6 +732,17 @@ object MultiParentCasperImpl {
             _ <- Log[F].info(
                   s"Added equivocated block ${PrettyPrinter.buildString(block.blockHash)}"
                 )
+            selfEquivocations = validatorId
+              .map(ByteString.copyFrom(_))
+              .exists(_ == block.getHeader.validatorPublicKey)
+            _ <- MonadThrowable[F]
+                  .raiseError[DagRepresentation[F]](
+                    SelfEquivocationError(
+                      s"Node has detected its own equivocation with block ${PrettyPrinter
+                        .buildString(block.blockHash)}."
+                    )
+                  )
+                  .whenA(selfEquivocations)
           } yield updatedDag
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
@@ -807,10 +820,11 @@ object MultiParentCasperImpl {
     }
 
     def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+        validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
-      establishMetrics[F] as new StatelessExecutor[F](chainName, upgrades)
+      establishMetrics[F] as new StatelessExecutor[F](validatorId, chainName, upgrades)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
