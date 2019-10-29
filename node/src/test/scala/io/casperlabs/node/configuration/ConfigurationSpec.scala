@@ -87,6 +87,7 @@ class ConfigurationSpec
       initSyncMinSuccessful = 1,
       initSyncMemoizeNodes = false,
       initSyncSkipFailedNodes = false,
+      initSyncStep = 1,
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       initSyncMaxBlockCount = 1,
       periodicSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
