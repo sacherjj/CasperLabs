@@ -1155,6 +1155,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "list-named-keys"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.18.0",
+]
+
+[[package]]
 name = "lmdb"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

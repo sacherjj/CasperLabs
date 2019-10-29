@@ -40,8 +40,6 @@ impl Display for PreprocessingError {
     }
 }
 
-use PreprocessingError::*;
-
 pub struct Preprocessor {
     wasm_costs: WasmCosts,
     // Number of memory pages.
@@ -62,13 +60,15 @@ impl Preprocessor {
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
-                .map_err(|_| StackLimiterError)?;
+                .map_err(|_| PreprocessingError::StackLimiterError)?;
         Ok(module)
     }
 
     // returns a parity Module from bytes without making modifications or limits
     pub fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-        let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
+        let from_parity_err = |err: ParityWasmError| {
+            PreprocessingError::DeserializeError(err.description().to_owned())
+        };
         let module =
             parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
         Ok(module)
@@ -104,5 +104,6 @@ fn inject_gas_counters(
     module: Module,
     wasm_costs: &WasmCosts,
 ) -> Result<Module, PreprocessingError> {
-    inject_gas_counter(module, &gas_rules(wasm_costs)).map_err(|_| OperationForbiddenByGasRules)
+    inject_gas_counter(module, &gas_rules(wasm_costs))
+        .map_err(|_| PreprocessingError::OperationForbiddenByGasRules)
 }

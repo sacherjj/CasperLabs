@@ -9,6 +9,8 @@ mod get_caller;
 #[cfg(test)]
 mod get_phase;
 #[cfg(test)]
+mod list_named_keys;
+#[cfg(test)]
 mod local_state;
 #[cfg(test)]
 mod main_purse;
