@@ -303,7 +303,7 @@ class GrpcGossipServiceSpec
         "no compression is supported" should {
           "return a stream of uncompressed chunks" in {
             forAll { block: Block =>
-              runTestUnsafe(TestData.fromBlock(block)) {
+              runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
                 val req = GetBlockChunkedRequest(blockHash = block.blockHash)
                 stub.getBlockChunked(req).toListL.map { chunks =>
                   chunks.head.content.isHeader shouldBe true
