@@ -134,9 +134,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
-      _ <- deployChainNames(block, chainName)
+      _ <- deployHeaders(block, dag, chainName)
       _ <- deployUniqueness(block, dag)
-      _ <- deployHeaders(block, dag)
     } yield ()
   }
 
@@ -226,14 +225,29 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+  private def validateChainName(
+      chainName: String,
+      deployChainName: String,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (deployChainName.nonEmpty && deployChainName != chainName)
+      Errors.DeployHeaderError
+        .invalidChainName(deployHash, deployChainName, chainName)
+        .logged[F]
+        .map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def deployHeader(d: consensus.Deploy, chainName: String): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map2(
+        Applicative[F].map3(
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
-          validateDependencies(header.dependencies, d.deployHash)
+          validateDependencies(header.dependencies, d.deployHash),
+          validateChainName(chainName, header.chainName, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+          case (validTTL, validDependencies, validChainNames) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList
         }
 
       case None =>
@@ -625,7 +639,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield ()
     }
 
-  def deployHeaders(b: Block, dag: DagRepresentation[F])(
+  def deployHeaders(b: Block, dag: DagRepresentation[F], chainName: String)(
       implicit blockStorage: BlockStorage[F]
   ): F[Unit] = {
     val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
@@ -638,7 +652,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        staticErrors           <- deployHeader(d)
+        staticErrors           <- deployHeader(d, chainName)
         _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
         header                 = d.getHeader
         isFromFuture           = !isFromPast(header)
@@ -701,28 +715,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
           _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHash)
         } yield ()
     }
-
-  def deployChainNames(
-      b: Block,
-      chainName: String
-  ): F[Unit] =
-    b.getBody.deploys.toList
-      .find { d =>
-        d.getDeploy.getHeader.chainName.nonEmpty &&
-        d.getDeploy.getHeader.chainName != chainName
-      }
-      .fold(().pure[F]) { d =>
-        for {
-          _ <- Log[F]
-                .warn(
-                  ignore(
-                    b,
-                    s"${PrettyPrinter.buildString(d.getDeploy)} has invalid chain name: ${d.getDeploy.getHeader.chainName}."
-                  )
-                )
-          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployChainName)
-        } yield ()
-      }
 
   def deploySignatures(
       b: Block

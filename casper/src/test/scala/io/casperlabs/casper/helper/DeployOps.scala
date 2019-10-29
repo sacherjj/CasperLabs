@@ -32,6 +32,11 @@ object DeployOps extends ArbitraryConsensus {
         deploy.withHeader(deploy.getHeader.withDependencies(dependencies))
       )
 
+    def withChainName(chainName: String): Deploy =
+      rehash(
+        deploy.withHeader(deploy.getHeader.withChainName(chainName))
+      )
+
     def processed(cost: Long): ProcessedDeploy = ProcessedDeploy().withDeploy(deploy).withCost(cost)
   }
 
@@ -94,6 +99,17 @@ object DeployOps extends ArbitraryConsensus {
         d =>
           d.getHeader.ttlMillis > 0 && d.getHeader.timestamp < (Long.MaxValue - d.getHeader.ttlMillis)
       )
+
+    sample(genDeploy)
+  }
+
+  def randomInvalidChainName(): Deploy = {
+    implicit val c = ConsensusConfig()
+
+    val genDeploy = for {
+      d  <- arbitrary[Deploy]
+      cn <- arbitrary[String]
+    } yield d.withChainName(cn)
 
     sample(genDeploy)
   }
