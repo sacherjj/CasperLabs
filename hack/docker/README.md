@@ -74,7 +74,7 @@ To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#
 
 ## Deploy some WASM code
 
-Assuming that you cloned and compiled the [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples) you can deploy them by running the following:
+Assuming that you compiled the [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples) you can deploy them by running the following:
 
 ```console
 ACCOUNT_ID="$(cat keys/faucet-account/account-id-hex)"
