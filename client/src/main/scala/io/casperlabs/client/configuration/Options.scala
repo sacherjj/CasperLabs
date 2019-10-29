@@ -120,6 +120,14 @@ object Options {
       noshort = true
     )
 
+    val chainName = opt[String](
+      descr =
+        "Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.",
+      required = false,
+      noshort = true,
+      default = "".some
+    )
+
     addValidation {
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)

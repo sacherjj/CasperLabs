@@ -386,6 +386,7 @@ object DeployRuntime {
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
+          .withChainName(deployConfig.chainName)
       )
       .withBody(
         consensus.Deploy
