@@ -275,7 +275,7 @@ class GrpcGossipServiceSpec
 
   object GetBlockChunkedSpec extends WordSpecLike with AuthSpec with RateSpec {
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
-    implicit override val patienceConfig = PatienceConfig(5.seconds, 100.millis)
+    implicit override val patienceConfig = PatienceConfig(15.seconds, 500.millis)
     implicit override val consensusConfig = ConsensusConfig(
       maxSessionCodeBytes = 2500 * 1024,
       minSessionCodeBytes = 1500 * 1024,
@@ -535,7 +535,8 @@ class GrpcGossipServiceSpec
             //TODO: Dirty hack with wrapping into 'eventually'.
             //      This test passes locally, but fails in Drone CI.
             //      I decided just to wrap it for the time being.
-            forAll { block: Block =>
+            {
+              val block = sample(arbitrary[Block])
               eventually {
                 runTestUnsafe(TestData.fromBlock(block), timeout = 15.seconds) {
                   TestEnvironment(
