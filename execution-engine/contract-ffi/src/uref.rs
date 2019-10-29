@@ -80,12 +80,7 @@ impl core::fmt::Display for URef {
         let addr = self.addr();
         let access_rights_o = self.access_rights();
         if let Some(access_rights) = access_rights_o {
-            write!(
-                f,
-                "URef({}, {})",
-                HexFmt(&addr),
-                access_rights
-            )
+            write!(f, "URef({}, {})", HexFmt(&addr), access_rights)
         } else {
             write!(f, "URef({}, None)", HexFmt(&addr))
         }
