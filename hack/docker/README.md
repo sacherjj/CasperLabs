@@ -10,7 +10,7 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 ## Build contract-examples
 
-See instructions [here](https://github.com/CasperLabs/contract-examples/blob/master/README.md).
+See instructions [here](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/README.md).
 
 ## Required: docker-compose
 
@@ -74,15 +74,15 @@ To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#
 
 ## Deploy some WASM code
 
-Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
+Assuming that you cloned and compiled the [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples) you can deploy them by running the following:
 
 ```console
 ACCOUNT_ID="$(cat keys/faucet-account/account-id-hex)"
-./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+./client.sh node-0 deploy $PWD/../execution-engine/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
      --from "$ACCOUNT_ID" \
-     --session /data/helloname.wasm \
-     --payment /data/helloname.wasm \
+     --session /data/hello_name_define.wasm \
+     --payment /data/standard_payment.wasm \
      --public-key /keys/faucet-account/account-public.pem \
      --private-key /keys/faucet-account/account-private.pem
 ```

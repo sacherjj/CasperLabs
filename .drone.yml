@@ -680,28 +680,6 @@ steps:
   - docker-grpcwebproxy-merge
   - package-sbt-artifacts-merge
 
-- name: contract-examples
-  image: plugins/downstream
-  settings:
-    fork: true
-    repositories:
-    - "CasperLabs/contract-examples@master"
-  environment:
-    DOWNSTREAM_SERVER:
-      from_secret: downstream_server
-    DOWNSTREAM_TOKEN:
-      from_secret: downstream_token
-  when:
-    branch:
-    - dev
-    - "release-*"
-    - master
-    event:
-    - push
-  depends_on:
-  - rsync-artifacts
-  - docker-publish
-
 volumes:
 - name: docker_sock
   host:

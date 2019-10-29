@@ -55,9 +55,9 @@ and transfer (free) tokens to the account from the faucet.
    ```
 
 2. Compile a contract to the [WASM](https://webassembly.org) format,
-see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
+see CasperLabs [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples)
 to see example contracts and instructions on
-[how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
+[how to compile](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/README.md)
 them.
 
 To deploy a compiled contract from your account address:
