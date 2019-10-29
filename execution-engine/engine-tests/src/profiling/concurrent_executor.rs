@@ -8,8 +8,6 @@
 extern crate clap;
 extern crate crossbeam_channel;
 extern crate env_logger;
-extern crate futures;
-extern crate futures_cpupool;
 extern crate grpc;
 #[macro_use]
 extern crate log;
@@ -22,20 +20,17 @@ extern crate engine_shared;
 
 use std::env;
 use std::iter::Sum;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use clap::{App, Arg};
-use crossbeam_channel::{Receiver, Sender};
-use futures::future::Future;
-use futures::{stream, Stream};
-use futures_cpupool::{CpuFuture, CpuPool};
+use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 
 use contract_ffi::base16;
 use contract_ffi::value::U512;
-use engine_grpc_server::engine_server::ipc::{ExecuteRequest, ExecuteResponse};
+use engine_grpc_server::engine_server::ipc::ExecuteRequest;
 use engine_grpc_server::engine_server::ipc_grpc::{
     ExecutionEngineService, ExecutionEngineServiceClient,
 };
@@ -76,9 +71,6 @@ const REQUEST_COUNT_ARG_HELP: &str = "Total number of 'ExecuteRequest's to send"
 
 const CONTRACT_NAME: &str = "transfer_to_existing_account.wasm";
 const THREAD_PREFIX: &str = "client-worker-";
-/// The maximum number of work objects which can be enqueued in the channel feeding the threadpool
-/// workers.
-const CHANNEL_BOUND: usize = 1000;
 
 fn socket_arg() -> Arg<'static, 'static> {
     Arg::with_name(SOCKET_ARG_NAME)
@@ -174,276 +166,73 @@ impl Args {
     }
 }
 
-/// A record of the durations it took to receive responses to all requests.
-#[derive(Clone)]
-struct Results {
-    durations: Arc<Mutex<Vec<Vec<Duration>>>>,
-}
-
-impl Results {
-    fn new(args: &Args) -> Self {
-        Self {
-            durations: Arc::new(Mutex::new(vec![Vec::with_capacity(args.request_count)])),
-        }
-    }
-
-    /// Records a new duration for the results at `index`.
-    fn record(&self, index: usize, duration: Duration) {
-        let mut durations = self.durations.lock().expect("Expected to lock mutex");
-        durations[index].push(duration);
-    }
-
-    /// Returns the number of recorded durations and their mean for the results at `index`.
-    fn count_and_mean(&self, index: usize) -> Option<(usize, Duration)> {
-        let all_durations = self.durations.lock().expect("Expected to lock mutex");
-        let durations = all_durations.get(index)?;
-        if durations.is_empty() {
-            return None;
-        }
-        let mean = Duration::sum(durations.iter()) / durations.len() as u32;
-        Some((durations.len(), mean))
-    }
-}
-
-/// A stateful container for the data needed by the client to execute a request and record the
-/// results.
-///
-/// In its initial state, it is passed via the channel to the client to be executed on the
-/// threadpool.  Its state is then changed by the client to hold info while the request is being
-/// processed; i.e. it's passed from the request future to response handler.  Finally, in the
-/// response handler, it's consumed and records the result of the work.
-enum Work {
-    Initial {
-        /// A specific `execute` request to be sent to the server.
+/// Sent via a channel to the worker thread.
+enum Message {
+    /// Instruction to handle the wrapped request.
+    Run {
+        request_num: usize,
         request: ExecuteRequest,
-        /// The index of the request in the `WorkProducer::requests` collection.
-        index: usize,
-        /// The number of request (zero-indexed).
-        request_num: usize,
     },
-    AfterSendingRequest {
-        /// The time at which the request was sent.
-        sent: Instant,
-        /// The index of the request in the `WorkProducer::requests` collection.
-        index: usize,
-        /// The number of request (zero-indexed).
-        request_num: usize,
-        /// The results to be updated in the response handler.
-        results: Results,
-    },
+    /// Instruction to stop processing any further requests.
+    Close,
 }
 
-impl Work {
-    fn new(request: ExecuteRequest, index: usize, request_num: usize) -> Self {
-        Work::Initial {
-            request,
-            index,
-            request_num,
-        }
-    }
+/// A `Worker` represents a thread that waits for `ExecuteRequest`s to arrive on one channel, uses
+/// the EE client to send them to the EE server, and sends the duration for receiving the response
+/// on another channel.
+struct Worker {
+    handle: Option<JoinHandle<()>>,
+}
 
-    /// Transition from initial state, returning the contained `request` for sending by the client,
-    /// and the updated `Work` object.
-    fn transition(self, results: Results) -> (Self, ExecuteRequest) {
-        match self {
-            Work::Initial {
-                request,
-                index,
-                request_num,
-            } => {
-                let work = Work::AfterSendingRequest {
-                    sent: Instant::now(),
-                    index,
-                    request_num,
-                    results,
+impl Worker {
+    fn new(
+        id: usize,
+        message_receiver: Receiver<Message>,
+        result_sender: Sender<Duration>,
+        client: Arc<ExecutionEngineServiceClient>,
+    ) -> Self {
+        let thread_name = format!("{}{}", THREAD_PREFIX, id);
+        let handle = thread::Builder::new()
+            .name(thread_name.clone())
+            .spawn(move || loop {
+                let message = message_receiver
+                    .recv()
+                    .expect("Expected to receive a message");
+                match message {
+                    Message::Run {
+                        request_num,
+                        request,
+                    } => Self::do_work(request_num, request, &thread_name, &result_sender, &client),
+                    Message::Close => {
+                        break;
+                    }
                 };
-                (work, request)
-            }
-            _ => panic!("Can't transition"),
+            })
+            .expect("Expected to spawn worker");
+
+        Worker {
+            handle: Some(handle),
         }
     }
 
-    /// Finish the work, recording the elapsed duration in the results.
-    fn complete(self) {
-        match self {
-            Work::AfterSendingRequest {
-                sent,
-                index,
-                request_num,
-                results,
-            } => {
-                let duration = Instant::now() - sent;
-                results.record(index, duration);
-                info!(
-                    "Client received successful response {} on {} in {:?}",
-                    request_num,
-                    thread::current()
-                        .name()
-                        .expect("Expected current thread to be named"),
-                    duration
-                );
-            }
-            _ => panic!("Can't complete"),
-        }
-    }
-
-    fn request_num(&self) -> usize {
-        match self {
-            Work::Initial { request_num, .. } | Work::AfterSendingRequest { request_num, .. } => {
-                *request_num
-            }
-        }
-    }
-}
-
-/// A pseudo-queue of `count` duplicate `ExecuteRequest`s.
-#[derive(Clone)]
-struct WorkQueue {
-    request: ExecuteRequest,
-    count: usize,
-}
-
-impl WorkQueue {
-    fn new(request: ExecuteRequest, count: usize) -> Self {
-        Self { request, count }
-    }
-}
-
-impl Iterator for WorkQueue {
-    type Item = ExecuteRequest;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.count > 0 {
-            self.count -= 1;
-            Some(self.request.clone())
-        } else {
-            None
-        }
-    }
-}
-
-/// A struct which holds queues of `ExecuteRequest`s and which sends these to the client for
-/// processing.
-struct WorkProducer {
-    queues: Vec<WorkQueue>,
-    // This is optional so it can be dropped in order to terminate the flow of work being received.
-    sender: Option<Sender<Work>>,
-}
-
-impl WorkProducer {
-    fn new(args: &Args) -> (Self, Receiver<Work>) {
-        let amount = U512::one();
-        let account_1_public_key = profiling_common::account_1_public_key();
-        let account_2_public_key = profiling_common::account_2_public_key();
-        let request = ExecuteRequestBuilder::standard(
-            account_1_public_key.value(),
-            CONTRACT_NAME,
-            (account_2_public_key, amount),
-        )
-        .with_pre_state_hash(&args.pre_state_hash)
-        .build();
-
-        let queues = vec![WorkQueue::new(request, args.request_count)];
-        let (sender, receiver) = crossbeam_channel::bounded(CHANNEL_BOUND);
-        let work_producer = Self {
-            queues,
-            sender: Some(sender),
-        };
-        (work_producer, receiver)
-    }
-
-    /// Pops `Work` instances from the `WorkQueues` and sends them on the channel.  The returned
-    /// thread is blocked until all `WorkQueues` are emptied.
-    ///
-    /// Once all queues are empty, the channel sender is dropped, allowing the receivers to
-    /// eventually break out of their receiving loops.
-    fn produce(mut self) -> JoinHandle<()> {
-        thread::spawn(move || {
-            let sender = self.sender.take().expect("Expected self.sender to be Some");
-            let mut request_num = 0;
-            for (index, queue) in self.queues.drain(..).enumerate() {
-                for request in queue {
-                    info!("Producer sending work item {} to Client", request_num);
-                    let work = Work::new(request, index, request_num);
-                    request_num += 1;
-                    sender.send(work).expect("Expected to send work");
-                }
-            }
-        })
-    }
-}
-
-#[derive(Clone)]
-struct Client {
-    ee_client: Arc<ExecutionEngineServiceClient>,
-    work_receiver: Receiver<Work>,
-    threadpool: CpuPool,
-    thread_count: usize,
-    results: Results,
-}
-
-impl Client {
-    fn new(args: &Args, work_receiver: Receiver<Work>, results: Results) -> Self {
-        let client_config = Default::default();
-        let ee_client = Arc::new(
-            ExecutionEngineServiceClient::new_plain_unix(args.socket.as_str(), client_config)
-                .expect("Expected to create Test Client"),
-        );
-        info!("Client connected on Socket({})", args.socket.as_str());
-
-        let threadpool = futures_cpupool::Builder::new()
-            .pool_size(args.thread_count)
-            .name_prefix(THREAD_PREFIX)
-            .create();
-
-        Self {
-            ee_client,
-            work_receiver,
-            threadpool,
-            thread_count: args.thread_count,
-            results,
-        }
-    }
-
-    /// Using the threadpool to execute tasks, this pulls work off the channel, sends the contained
-    /// request to the server and handles the response.
-    fn run(&self) -> Vec<CpuFuture<(), ()>> {
-        let mut cpu_futures = vec![];
-        for _ in 0..self.thread_count {
-            let client = self.clone();
-            let stream = stream::iter_ok::<_, ()>(self.work_receiver.clone());
-            let cpu_future = self.threadpool.spawn_fn(|| {
-                stream.for_each(move |work| {
-                    client
-                        .send_request(work)
-                        .and_then(move |(work, response)| Self::handle_response(work, response))
-                })
-            });
-            cpu_futures.push(cpu_future);
-        }
-        cpu_futures
-    }
-
-    fn send_request(&self, work: Work) -> impl Future<Item = (Work, ExecuteResponse), Error = ()> {
+    fn do_work(
+        request_num: usize,
+        request: ExecuteRequest,
+        thread_name: &str,
+        result_sender: &Sender<Duration>,
+        client: &ExecutionEngineServiceClient,
+    ) {
         info!(
             "Client sending 'execute' request {} on {}",
-            work.request_num(),
-            thread::current()
-                .name()
-                .expect("Expected current thread to be named")
+            request_num, thread_name
         );
-
-        let (work, request) = work.transition(self.results.clone());
-        self.ee_client
+        let start = Instant::now();
+        let response = client
             .execute(RequestOptions::new(), request)
-            .drop_metadata()
-            .map(move |response| (work, response))
-            .map_err(|error| {
-                panic!("Received {:?}", error);
-            })
-    }
+            .wait_drop_metadata()
+            .expect("Expected ExecuteResponse");
+        let duration = Instant::now() - start;
 
-    fn handle_response(work: Work, response: ExecuteResponse) -> Result<(), ()> {
         let deploy_result = response
             .get_success()
             .get_deploy_results()
@@ -458,38 +247,162 @@ impl Client {
                 deploy_result.get_execution_result().get_error(),
             );
         }
-        work.complete();
-        Ok(())
+
+        info!(
+            "Client received successful response {} on {} in {:?}",
+            request_num, thread_name, duration
+        );
+
+        result_sender
+            .send(duration)
+            .expect("Expected to send result");
     }
+
+    /// Takes the value out of the option in the `handle` field, leaving a `None` in its place.
+    fn take(&mut self) -> Option<JoinHandle<()>> {
+        self.handle.take()
+    }
+}
+
+/// Wrapper around `crossbeam_channel::Sender`, used to restrict its API.
+pub struct MessageSender(crossbeam_channel::Sender<Message>);
+
+impl MessageSender {
+    /// Blocks the current thread until a message is sent or the channel is disconnected.
+    pub fn send(&self, request_num: usize, request: ExecuteRequest) {
+        self.0
+            .send(Message::Run {
+                request_num,
+                request,
+            })
+            .expect("Expected to send message");
+    }
+}
+
+/// Wrapper around `crossbeam_channel::Receiver`, used to restrict its API.
+pub struct ResultReceiver(crossbeam_channel::Receiver<Duration>);
+
+impl ResultReceiver {
+    /// A blocking iterator over messages in the channel.
+    pub fn iter(&self) -> Iter<Duration> {
+        self.0.iter()
+    }
+}
+
+/// A thread pool intended to run the client.
+pub struct ClientPool {
+    workers: Vec<Worker>,
+    message_sender: crossbeam_channel::Sender<Message>,
+    result_receiver: crossbeam_channel::Receiver<Duration>,
+}
+
+impl ClientPool {
+    /// Creates a new thread pool with `size` worker threads associated with it.
+    pub fn new(size: usize, client: Arc<ExecutionEngineServiceClient>) -> Self {
+        assert!(size > 0);
+        let mut workers = Vec::with_capacity(size);
+        let (message_sender, message_receiver) = crossbeam_channel::unbounded();
+        let (result_sender, result_receiver) = crossbeam_channel::unbounded();
+        for id in 0..size {
+            let message_receiver = message_receiver.clone();
+            let result_sender = result_sender.clone();
+            let client = Arc::clone(&client);
+            workers.push(Worker::new(id, message_receiver, result_sender, client));
+        }
+        ClientPool {
+            workers,
+            message_sender,
+            result_receiver,
+        }
+    }
+
+    /// Returns the sending side of the channel used to convey `ExecuteRequest`s to the client.
+    pub fn message_sender(&self) -> MessageSender {
+        MessageSender(self.message_sender.clone())
+    }
+
+    /// Returns the receiving side of the channel used to convey `Duration`s from the worker.
+    pub fn result_receiver(&self) -> ResultReceiver {
+        ResultReceiver(self.result_receiver.clone())
+    }
+}
+
+impl Drop for ClientPool {
+    fn drop(&mut self) {
+        for _ in &self.workers {
+            self.message_sender
+                .send(Message::Close)
+                .expect("Expected to send Close");
+        }
+
+        for worker in &mut self.workers {
+            if let Some(handle) = worker.take() {
+                handle.join().expect("Expected to join worker");
+            }
+        }
+    }
+}
+
+fn new_execute_request(args: &Args) -> ExecuteRequest {
+    let amount = U512::one();
+    let account_1_public_key = profiling_common::account_1_public_key();
+    let account_2_public_key = profiling_common::account_2_public_key();
+    ExecuteRequestBuilder::standard(
+        account_1_public_key.value(),
+        CONTRACT_NAME,
+        (account_2_public_key, amount),
+    )
+    .with_pre_state_hash(&args.pre_state_hash)
+    .build()
 }
 
 fn main() {
     env_logger::init();
 
     let args = Args::new();
-    let (work_producer, receiver) = WorkProducer::new(&args);
-    let results = Results::new(&args);
-    let client = Client::new(&args, receiver, results.clone());
+    let client_config = Default::default();
+    let client = Arc::new(
+        ExecutionEngineServiceClient::new_plain_unix(args.socket.as_str(), client_config)
+            .expect("Expected to create Test Client"),
+    );
+    let pool = ClientPool::new(args.thread_count, client);
 
+    let message_sender = pool.message_sender();
+    let result_receiver = pool.result_receiver();
+
+    let result_consumer = thread::Builder::new()
+        .name("result-consumer".to_string())
+        .spawn(move || result_receiver.iter().collect::<Vec<Duration>>())
+        .expect("Expected to spawn result-consumer");
+
+    let execute_request = new_execute_request(&args);
+    let request_count = args.request_count;
     let start = Instant::now();
+    let message_producer = thread::Builder::new()
+        .name("message-producer".to_string())
+        .spawn(move || {
+            for request_num in 0..request_count {
+                message_sender.send(request_num, execute_request.clone());
+            }
+        })
+        .expect("Expected to spawn message-producer");
 
-    let client_futures = client.run();
-    let producer_thread = work_producer.produce();
-    for client_future in client_futures {
-        client_future
-            .wait()
-            .expect("Expected to join client threadpool");
-    }
-    producer_thread
+    message_producer
         .join()
-        .expect("Expected to join the producer thread");
+        .expect("Expected to join message-producer");
 
+    drop(pool);
+
+    let durations = result_consumer
+        .join()
+        .expect("Expected to join response-consumer");
     let overall_duration = Instant::now() - start;
 
-    if let Some((response_count, mean_duration)) = results.count_and_mean(0) {
-        println!(
-            "Server handled {} requests in {:?} with an average response time of {:?}",
-            response_count, overall_duration, mean_duration
-        );
-    }
+    assert_eq!(durations.len(), args.request_count);
+
+    let mean_duration = Duration::sum(durations.iter()) / durations.len() as u32;
+    println!(
+        "Server handled {} requests in {:?} with an average response time of {:?}",
+        args.request_count, overall_duration, mean_duration
+    );
 }
