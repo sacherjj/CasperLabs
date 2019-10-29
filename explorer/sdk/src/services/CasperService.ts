@@ -67,7 +67,7 @@ export default class CasperService {
         host: this.url,
         request,
         onEnd: res => {
-          if (res.status == grpc.Code.OK) {
+          if (res.status === grpc.Code.OK) {
             resolve(res.message as ListDeployInfosResponse);
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
