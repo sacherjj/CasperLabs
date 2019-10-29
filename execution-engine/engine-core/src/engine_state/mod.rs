@@ -1128,7 +1128,7 @@ where
         let bonded_validators = contract
             .named_keys()
             .keys()
-            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+            .filter_map(|entry| utils::pos_validator_key_name_to_tuple(entry))
             .collect::<HashMap<PublicKey, U512>>();
 
         Ok(bonded_validators)
