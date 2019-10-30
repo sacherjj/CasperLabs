@@ -25,17 +25,16 @@ class DockerClarity(LoggingDockerBase):
         return {
             str(account_public_key.absolute()): {
                 "bind": "/app/keys/public.key",
-                "mode": "ro"
+                "mode": "ro",
             },
             str(account_private_key.absolute()): {
                 "bind": "/app/keys/private.key",
-                "mode": "ro"
-            }
+                "mode": "ro",
+            },
         }
 
     @property
     def environment(self) -> dict:
-        print(self.grpc_proxy_name)
         return {
             "FAUCET_ACCOUNT_PUBLIC_KEY_PATH": "/app/keys/public.key",
             "FAUCET_ACCOUNT_PRIVATE_KEY_PATH": "/app/keys/private.key",
@@ -43,12 +42,10 @@ class DockerClarity(LoggingDockerBase):
             "SERVER_PORT": "8080",
             "SERVER_USE_TLS": "false",
             "UI_GRPC_URL": "http://localhost:8401",
-            "NODE_TLS_REJECT_UNAUTHORIZED": 0
+            "NODE_TLS_REJECT_UNAUTHORIZED": 0,
         }
 
     def _get_container(self):
-        print("clarity started")
-        print(self.environment)
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
@@ -58,7 +55,7 @@ class DockerClarity(LoggingDockerBase):
             volumes=self.volumes,
             hostname=self.container_name,
             environment=self.environment,
-            ports={'8080/tcp': 8080}
+            ports={"8080/tcp": 8080},
         )
         return container
 
@@ -71,6 +68,7 @@ class DockerGrpcWebProxy(LoggingDockerBase):
     browser(or headless selenium)  -> grpcwebproxy  -> node
                                   8041            40401(via docker hostname)
     """
+
     def __init__(self, config: DockerConfig, docker_node_name: str):
         self.docker_node_name = docker_node_name
         super().__init__(config)
@@ -90,25 +88,24 @@ class DockerGrpcWebProxy(LoggingDockerBase):
         return {
             str(tls_certificate.absolute()): {
                 "bind": "/etc/tls/certificate.pem",
-                "mode": "ro"
+                "mode": "ro",
             },
-            str(tls_key.absolute()): {
-                "bind": "/etc/tls/key.pem",
-                "mode": "ro"
-            }
+            str(tls_key.absolute()): {"bind": "/etc/tls/key.pem", "mode": "ro"},
         }
 
     @property
     def command(self) -> str:
-        return "/grpcwebproxy" \
-               f" --backend_addr={self.docker_node_name}:40401" \
-               f" --backend_tls={self.config.grpc_encryption}" \
-               " --backend_tls_noverify" \
-               " --backend_max_call_recv_msg_size=16777216" \
-               " --allow_all_origins" \
-               " --server_tls_cert_file=/etc/tls/certificate.pem" \
-               " --server_tls_key_file=/etc/tls/key.pem"\
-               " --server_http_debug_port 8401"
+        return (
+            "/grpcwebproxy"
+            f" --backend_addr={self.docker_node_name}:40401"
+            f" --backend_tls={self.config.grpc_encryption}"
+            " --backend_tls_noverify"
+            " --backend_max_call_recv_msg_size=16777216"
+            " --allow_all_origins"
+            " --server_tls_cert_file=/etc/tls/certificate.pem"
+            " --server_tls_key_file=/etc/tls/key.pem"
+            " --server_http_debug_port 8401"
+        )
 
     def _get_container(self):
         print("clarity started")
@@ -121,8 +118,7 @@ class DockerGrpcWebProxy(LoggingDockerBase):
             network=self.config.network,
             volumes=self.volumes,
             hostname=self.container_name,
-
-            ports = {'8401/tcp': 8401}
+            ports={"8401/tcp": 8401},
         )
 
         return container

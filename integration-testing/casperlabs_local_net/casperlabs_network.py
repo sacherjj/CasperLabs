@@ -178,7 +178,9 @@ class CasperLabsNetwork:
         with self._lock:
             node_name = self.cl_nodes[0].node.container_name
             self.grpc_web_proxy_node = DockerGrpcWebProxy(config, node_name)
-            self.clarity_node = DockerClarity(config, self.grpc_web_proxy_node.container_name)
+            self.clarity_node = DockerClarity(
+                config, self.grpc_web_proxy_node.container_name
+            )
 
     def add_cl_node(
         self, config: DockerConfig, network_with_bootstrap: bool = True
