@@ -188,6 +188,7 @@ where
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.better_exec(
                 mint_installer_module,
@@ -205,7 +206,7 @@ where
                 tracking_copy,
                 phase,
                 ProtocolData::default(),
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )?
         };
 
@@ -233,6 +234,7 @@ where
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // Constructs a partial protocol data with already known urefs to pass the validation
             // step
@@ -259,7 +261,7 @@ where
                 tracking_copy,
                 phase,
                 partial_protocol_data,
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )?
         };
 
@@ -351,6 +353,7 @@ where
                     let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
                     Rc::new(RefCell::new(generator))
                 };
+                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
                 let mint_result: Result<URef, mint::Error> = executor.better_exec(
@@ -369,7 +372,7 @@ where
                     tracking_copy_exec,
                     phase,
                     protocol_data,
-                    self.system_contract_cache.clone(),
+                    system_contract_cache,
                 )?;
 
                 // ...and write that account to global state...
@@ -519,6 +522,7 @@ where
                 Rc::new(RefCell::new(generator))
             };
             let state = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             Executor.better_exec(
                 upgrade_installer_module,
@@ -536,7 +540,7 @@ where
                 state,
                 phase,
                 new_protocol_data,
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )?
         };
 
@@ -914,6 +918,7 @@ where
                     return Ok(ExecutionResult::precondition_failure(error));
                 }
             };
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // payment_code_spec_2: execute payment code
             executor.exec(
@@ -930,7 +935,7 @@ where
                 Rc::clone(&tracking_copy),
                 Phase::Payment,
                 protocol_data,
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )
         };
 
@@ -997,6 +1002,7 @@ where
             let session_gas_limit: Gas = Gas::from_motes(payment_purse_balance, CONV_RATE)
                 .unwrap_or_default()
                 - payment_result_cost;
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.exec(
                 session_module,
@@ -1012,7 +1018,7 @@ where
                 Rc::clone(&session_tc),
                 Phase::Session,
                 protocol_data,
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )
         };
 
@@ -1077,6 +1083,7 @@ where
 
             let base_key = proof_of_stake_info.key();
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.exec_direct(
                 proof_of_stake_module,
@@ -1093,7 +1100,7 @@ where
                 finalization_tc,
                 Phase::FinalizePayment,
                 protocol_data,
-                self.system_contract_cache.clone(),
+                system_contract_cache,
             )
         };
 

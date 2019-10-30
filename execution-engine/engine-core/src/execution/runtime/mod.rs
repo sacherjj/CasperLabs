@@ -147,8 +147,10 @@ where
         extract_access_rights_from_keys(keys)
     };
 
+    let system_contract_cache = SystemContractCache::clone(&current_runtime.system_contract_cache);
+
     let mut runtime = Runtime {
-        system_contract_cache: current_runtime.system_contract_cache.clone(),
+        system_contract_cache,
         memory,
         module: parity_module,
         result: Vec::new(),
