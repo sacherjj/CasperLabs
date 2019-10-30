@@ -1037,12 +1037,8 @@ where
             let proof_of_stake_module = {
                 let proof_of_stake_uref = *proof_of_stake_info.key().as_uref().unwrap();
                 match self.system_contract_cache.get_clone(&proof_of_stake_uref) {
-                    Some(module) => {
-                        println!("GOT MODULE PoS");
-                        module
-                    }
+                    Some(module) => module,
                     None => {
-                        println!("DIDN'T GET MODULE PoS");
                         let module =
                             match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
                                 Err(error) => {

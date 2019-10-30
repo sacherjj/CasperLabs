@@ -479,14 +479,8 @@ where
                         };
 
                         let module = match maybe_module {
-                            Some(module) => {
-                                println!("GOT MODULE Runtime");
-                                module
-                            }
-                            None => {
-                                println!("DIDN'T GET MODULE Runtime");
-                                parity_wasm::deserialize_buffer(contract.bytes())?
-                            }
+                            Some(module) => module,
+                            None => parity_wasm::deserialize_buffer(contract.bytes())?,
                         };
 
                         Ok((
