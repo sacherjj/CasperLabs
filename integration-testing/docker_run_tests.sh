@@ -3,9 +3,9 @@
 set -e
 
 if [[ -n $DRONE_BUILD_NUMBER ]]; then
-    export TAG_NAME=test-DRONE-${DRONE_BUILD_NUMBER}
+    export TAG_NAME=DRONE-${DRONE_BUILD_NUMBER}
 else
-    export TAG_NAME="test"
+    export TAG_NAME="latest"
 fi
 
 export TEST_RUN_ARGS=$@
