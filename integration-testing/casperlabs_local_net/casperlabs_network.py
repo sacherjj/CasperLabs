@@ -20,6 +20,7 @@ from casperlabs_local_net.wait import (
     wait_for_node_started,
     wait_for_peers_count_at_least,
     wait_for_genesis_block,
+    wait_for_clarity_started,
 )
 from typing import Callable, Dict, List
 from docker import DockerClient
@@ -181,6 +182,7 @@ class CasperLabsNetwork:
             self.clarity_node = DockerClarity(
                 config, self.grpc_web_proxy_node.container_name
             )
+            wait_for_clarity_started(self.clarity_node, config.command_timeout, 1)
 
     def add_cl_node(
         self, config: DockerConfig, network_with_bootstrap: bool = True
@@ -247,6 +249,10 @@ class CasperLabsNetwork:
         with self._lock:
             for node in self.cl_nodes:
                 node.cleanup()
+            if self.clarity_node:
+                self.clarity_node.cleanup()
+            if self.grpc_web_proxy_node:
+                self.grpc_web_proxy_node.cleanup()
             self.cleanup()
 
         return True

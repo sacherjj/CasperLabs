@@ -128,6 +128,15 @@ class RequestedForkTip(LogsContainMessage):
         super().__init__(node, "Requested fork tip from peers", times)
 
 
+class ClarityServerStarted(LogsContainMessage):
+    def __init__(self, node: DockerNode, times: int) -> None:
+        super().__init__(node, "server started at", times)
+
+    def is_satisfied(self) -> bool:
+        print(self.node.logs())
+        return self.node.logs().count(self.message) >= self.times
+
+
 class WaitForGoodBye(LogsContainMessage):
     def __init__(self, node: DockerNode) -> None:
         super().__init__(node, "Goodbye.")
@@ -544,3 +553,8 @@ def wait_for_connected_to_node(
 ) -> None:
     predicate = ConnectedToOtherNode(node, other_node_name, times)
     wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_clarity_started(node: DockerNode, startup_timeout: int, times: int = 1):
+    predicate = ClarityServerStarted(node, times)
+    wait_on_using_wall_clock_time(predicate, startup_timeout)
