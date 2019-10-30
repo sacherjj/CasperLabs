@@ -60,10 +60,10 @@ docker-push-all: \
 	docker-push/key-generator \
 	docker-push/explorer
 
-docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
-docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
-docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
-docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
+docker-build/node: .make/docker-build/universal/node
+docker-build/client: .make/docker-build/universal/client
+docker-build/execution-engine: .make/docker-build/execution-engine
+docker-build/integration-testing: .make/docker-build/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
 docker-build/explorer: .make/docker-build/explorer
 docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
@@ -135,24 +135,6 @@ cargo-native-packager/%:
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
-	mkdir -p $(dir $@) && touch $@
-
-# Make a node that has some extras installed for testing.
-.make/docker-build/test/node: \
-		.make/docker-build/universal/node
-	docker tag $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make a test version for the execution engine as well just so we can swith version easily.
-.make/docker-build/test/execution-engine: \
-		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make a test tagged version of client so all tags exist for integration-testing.
-.make/docker-build/test/client: \
-		.make/docker-build/universal/client
-	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image to run Python tests under integration-testing.

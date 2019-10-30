@@ -78,7 +78,7 @@ class DockerBase:
         elif self.config.custom_docker_tag is not None:
             return self.config.custom_docker_tag
         else:
-            return "test"
+            return "latest"
 
     @property
     def is_in_docker(self) -> bool:
