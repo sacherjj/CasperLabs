@@ -996,31 +996,19 @@ class ValidationTest
 
   it should "pass a block with a deploy having no chain name" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
-      val now = System.currentTimeMillis
       val block = sample {
-        for {
-          b <- arbitrary[consensus.Block]
-        } yield {
-          b.withHeader(
-              b.getHeader.withTimestamp(now)
-            )
-            .withBody(
-              b.getBody.withDeploys(
-                b.getBody.deploys
-                  .map(
-                    x =>
-                      x.withDeploy(
-                        x.getDeploy
-                          .withHeader(
-                            x.getDeploy.getHeader
-                              .withChainName("")
-                              .withTimestamp(now)
-                              .clearDependencies
-                          )
-                      )
-                  )
-              )
-            )
+        arbitrary[consensus.Block] map { b =>
+          b.update(
+            _.body.deploys :=
+              b.getBody.deploys.map { pd =>
+                pd.update(
+                  _.deploy.header :=
+                    pd.getDeploy.getHeader
+                      .withChainName("")
+                      .clearDependencies
+                )
+              }
+          )
         }
       }
       for {
