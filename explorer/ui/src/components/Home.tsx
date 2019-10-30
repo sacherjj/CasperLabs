@@ -51,7 +51,7 @@ const Home = observer((props: Props) => {
         <h3>Looking for help?</h3>
         <p>
           To write contracts have a look at the{' '}
-          <a href="https://github.com/CasperLabs/contract-examples/tree/master">
+          <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples">
             contract examples
           </a>
           , the{' '}
