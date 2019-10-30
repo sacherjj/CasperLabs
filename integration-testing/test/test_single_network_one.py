@@ -809,11 +809,11 @@ def test_multiple_deploys_per_block(cli):
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
 
 
-def test_dependencies_ok_scala(scala_cli):
+def disabled_test_dependencies_ok_scala(scala_cli):
     check_dependencies_ok(scala_cli)
 
 
-def test_dependencies_ok_python(cli):
+def disabled_test_dependencies_ok_python(cli):
     check_dependencies_ok(cli)
 
 
@@ -831,11 +831,11 @@ def check_dependencies_ok(cli):
     propose_check_no_errors(cli)
 
 
-def test_dependencies_multiple_ok_scala(scala_cli):
+def disabled_test_dependencies_multiple_ok_scala(scala_cli):
     check_dependencies_multiple_ok(scala_cli)
 
 
-def test_dependencies_multiple_ok_python(cli):
+def disabled_test_dependencies_multiple_ok_python(cli):
     check_dependencies_multiple_ok(cli)
 
 
@@ -857,11 +857,11 @@ def check_dependencies_multiple_ok(cli):
     propose_check_no_errors(cli)
 
 
-def test_dependencies_not_met_scala(scala_cli):
+def disabled_test_dependencies_not_met_scala(scala_cli):
     check_dependencies_not_met(scala_cli)
 
 
-def test_dependencies_not_met_python(cli):
+def disabled_test_dependencies_not_met_python(cli):
     check_dependencies_not_met(cli)
 
 
