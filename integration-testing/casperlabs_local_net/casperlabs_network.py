@@ -9,6 +9,7 @@ from casperlabs_local_net.common import (
     TEST_ACCOUNT_INITIAL_BALANCE,
 )
 from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.docker_clarity import DockerClarity, DockerGrpcWebProxy
 from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
 from casperlabs_local_net.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
 from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
@@ -52,6 +53,8 @@ class CasperLabsNetwork:
         self._next_key_number = FIRST_VALIDATOR_ACCOUNT
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
+        self.clarity_node: DockerClarity = None
+        self.grpc_web_proxy_node: DockerGrpcWebProxy = None
         self._created_networks: List[str] = []
         self._lock = (
             threading.RLock()
@@ -168,6 +171,14 @@ class CasperLabsNetwork:
         self._add_cl_node(config)
         self.wait_method(wait_for_node_started, 0)
         wait_for_genesis_block(self.docker_nodes[0])
+
+    def add_clarity(self, config: DockerConfig):
+        if self.node_count < 1:
+            raise Exception("There must be at lease one casperlabs node")
+        with self._lock:
+            node_name = self.cl_nodes[0].node.container_name
+            self.grpc_web_proxy_node = DockerGrpcWebProxy(config, node_name)
+            self.clarity_node = DockerClarity(config, self.grpc_web_proxy_node.container_name)
 
     def add_cl_node(
         self, config: DockerConfig, network_with_bootstrap: bool = True
@@ -303,6 +314,14 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+
+
+class OneNodeWithClarity(OneNodeNetwork):
+    def create_cl_network(self):
+        account = self.get_key()
+        config = self.docker_config(account)
+        self.add_bootstrap(config)
+        self.add_clarity(config)
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
