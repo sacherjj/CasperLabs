@@ -809,8 +809,15 @@ def test_multiple_deploys_per_block(cli):
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
 
 
-def test_dependencies(cli):
-    # cli = scala_cli
+def test_dependencies_ok_scala(scala_cli):
+    check_dependencies_ok(scala_cli)
+
+
+def test_dependencies_ok_python(cli):
+    check_dependencies_ok(cli)
+
+
+def check_dependencies_ok(cli):
     account = cli.node.test_account
     cli.set_default_deploy_args('--from', account.public_key_hex,
                                 '--private-key', cli.private_key_path(account),
@@ -822,6 +829,60 @@ def test_dependencies(cli):
         "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
         "--dependencies", deploy_hash1)
     propose_check_no_errors(cli)
+
+
+def test_dependencies_multiple_ok_scala(scala_cli):
+    check_dependencies_multiple_ok(scala_cli)
+
+
+def test_dependencies_multiple_ok_python(cli):
+    check_dependencies_multiple_ok(cli)
+
+
+def check_dependencies_multiple_ok(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+    deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
+    propose_check_no_errors(cli)
+
+    deploy_hash2 = cli("deploy", "--session", cli.resource(Contract.COUNTER_CALL))
+    propose_check_no_errors(cli)
+
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1, deploy_hash2)
+    propose_check_no_errors(cli)
+
+
+def test_dependencies_not_met_scala(scala_cli):
+    check_dependencies_not_met(scala_cli)
+
+
+def test_dependencies_not_met_python(cli):
+    check_dependencies_not_met(cli)
+
+
+def check_dependencies_not_met(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+
+    # Make a deploy with dependency on a non-existing deploy.
+    deploy_hash1 = bytes(range(32)).hex()
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1)
+
+    with raises(Exception) as excinfo:
+        propose_check_no_errors(cli)
+
+    expected = "OUT_OF_RANGE: No new deploys"
+    assert expected in str(excinfo.value) or expected in excinfo.value.output
 
 
 def test_ttl_ok_scala(scala_cli):
