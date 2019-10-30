@@ -102,15 +102,4 @@ object DeployOps extends ArbitraryConsensus {
 
     sample(genDeploy)
   }
-
-  def randomInvalidChainName(): Deploy = {
-    implicit val c = ConsensusConfig()
-
-    val genDeploy = for {
-      d  <- arbitrary[Deploy]
-      cn <- arbitrary[String]
-    } yield d.withChainName(cn)
-
-    sample(genDeploy)
-  }
 }

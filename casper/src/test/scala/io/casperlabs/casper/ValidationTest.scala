@@ -344,8 +344,11 @@ class ValidationTest
   }
 
   it should "not accept invalid chain names" in withoutStorage {
-    val deploy    = DeployOps.randomInvalidChainName()
     val chainName = "nevernet"
+    val deploy    = sample {
+      arbitrary[consensus.Deploy].map(_.withChainName(s"never say $chainName"))
+    }
+
     Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
         .invalidChainName(deploy.deployHash, deploy.getHeader.chainName, chainName)
