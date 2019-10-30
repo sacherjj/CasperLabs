@@ -225,6 +225,7 @@ dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex_fmt 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-derive 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "proptest 0.9.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -243,6 +244,7 @@ dependencies = [
  "casperlabs-engine-storage 0.1.0",
  "casperlabs-engine-wasm-prep 0.1.0",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex_fmt 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "matches 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -998,6 +1000,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex_fmt"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "hostname"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1149,6 +1156,13 @@ dependencies = [
 
 [[package]]
 name = "list-known-urefs-define"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.18.0",
+]
+
+[[package]]
+name = "list-named-keys"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.18.0",
@@ -2858,6 +2872,7 @@ dependencies = [
 "checksum grpc 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8e530ef7894a104a1c8525ce68787b3491efa2098ce5e5454e8324ea78893548"
 "checksum grpc-compiler 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b07f140d998d8940880e464f3fd291052618199432e91e59ae5c5075c0c8a40c"
 "checksum h2 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b34c246847f938a410a03c5458c7fee2274436675e76d8b903c08efc29c462"
+"checksum hex_fmt 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b07f60793ff0a4d9cef0f18e63b5357e06209987153a64648c972c1e5aff336f"
 "checksum hostname 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "21ceb46a83a85e824ef93669c8b390009623863b5c195d1ba747292c0c72f94e"
 "checksum http 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)" = "372bcb56f939e449117fb0869c2e8fd8753a8223d92a172c6e808cf123a5b6e4"
 "checksum http-body 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6741c859c1b2463a423a1dbce98d418e6c3c3fc720fb0d45528657320920292d"

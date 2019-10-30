@@ -1,15 +1,18 @@
-use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::contract_api::runtime;
-use crate::contract_api::Error as ApiError;
-use crate::key::{addr_to_hex, Key, UREF_SIZE};
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::convert::TryFrom;
 use core::fmt::{Debug, Display, Formatter};
+
 use failure::Fail;
+use hex_fmt::HexFmt;
+
+use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
+use crate::contract_api::runtime;
+use crate::contract_api::Error as ApiError;
+use crate::key::{Key, UREF_SIZE};
+use crate::unwrap_or_revert::UnwrapOrRevert;
+use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
@@ -316,7 +319,7 @@ pub struct PublicKey([u8; KEY_SIZE]);
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "PublicKey({})", addr_to_hex(&self.0))
+        write!(f, "PublicKey({})", HexFmt(&self.0))
     }
 }
 

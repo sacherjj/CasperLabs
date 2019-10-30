@@ -127,6 +127,10 @@ object DeployConfig {
 }
 
 sealed trait Configuration
+sealed trait Formatting {
+  def bytesStandard: Boolean
+  def json: Boolean
+}
 
 final case class MakeDeploy(
     from: Option[String],
@@ -138,6 +142,13 @@ final case class MakeDeploy(
 final case class SendDeploy(
     deploy: Array[Byte]
 ) extends Configuration
+
+final case class PrintDeploy(
+    deploy: Array[Byte],
+    bytesStandard: Boolean,
+    json: Boolean
+) extends Configuration
+    with Formatting
 
 final case class Deploy(
     from: Option[String],
@@ -157,10 +168,18 @@ final case class Sign(
 
 final case object Propose extends Configuration
 
-final case class ShowBlock(blockHash: String)   extends Configuration
-final case class ShowDeploys(blockHash: String) extends Configuration
-final case class ShowDeploy(deployHash: String) extends Configuration
-final case class ShowBlocks(depth: Int)         extends Configuration
+final case class ShowBlock(blockHash: String, bytesStandard: Boolean, json: Boolean)
+    extends Configuration
+    with Formatting
+final case class ShowDeploys(blockHash: String, bytesStandard: Boolean, json: Boolean)
+    extends Configuration
+    with Formatting
+final case class ShowDeploy(deployHash: String, bytesStandard: Boolean, json: Boolean)
+    extends Configuration
+    with Formatting
+final case class ShowBlocks(depth: Int, bytesStandard: Boolean, json: Boolean)
+    extends Configuration
+    with Formatting
 final case class Bond(
     amount: Long,
     deployConfig: DeployConfig,
@@ -195,8 +214,11 @@ final case class Query(
     blockHash: String,
     keyType: String,
     key: String,
-    path: String
+    path: String,
+    bytesStandard: Boolean,
+    json: Boolean
 ) extends Configuration
+    with Formatting
 
 object Configuration {
 
@@ -227,6 +249,12 @@ object Configuration {
         )
       case options.sendDeploy =>
         SendDeploy(options.sendDeploy.deployPath())
+      case options.printDeploy =>
+        PrintDeploy(
+          options.printDeploy.deployPath(),
+          options.printDeploy.bytesStandard(),
+          options.printDeploy.json()
+        )
       case options.signDeploy =>
         Sign(
           options.signDeploy.deployPath(),
@@ -237,13 +265,29 @@ object Configuration {
       case options.propose =>
         Propose
       case options.showBlock =>
-        ShowBlock(options.showBlock.hash())
+        ShowBlock(
+          options.showBlock.hash(),
+          options.showBlock.bytesStandard(),
+          options.showBlock.json()
+        )
       case options.showDeploys =>
-        ShowDeploys(options.showDeploys.hash())
+        ShowDeploys(
+          options.showDeploys.hash(),
+          options.showDeploys.bytesStandard(),
+          options.showDeploys.json()
+        )
       case options.showDeploy =>
-        ShowDeploy(options.showDeploy.hash())
+        ShowDeploy(
+          options.showDeploy.hash(),
+          options.showDeploy.bytesStandard(),
+          options.showDeploy.json()
+        )
       case options.showBlocks =>
-        ShowBlocks(options.showBlocks.depth())
+        ShowBlocks(
+          options.showBlocks.depth(),
+          options.showBlocks.bytesStandard(),
+          options.showBlocks.json()
+        )
       case options.unbond =>
         Unbond(
           options.unbond.amount.toOption,
@@ -275,7 +319,9 @@ object Configuration {
           options.query.blockHash(),
           options.query.keyType(),
           options.query.key(),
-          options.query.path()
+          options.query.path(),
+          options.query.bytesStandard(),
+          options.query.json()
         )
       case options.balance =>
         Balance(

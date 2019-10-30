@@ -248,6 +248,9 @@ class MockDeployStorage[F[_]: Sync: Log](
     ): F[Option[DeployInfo]] =
       none[DeployInfo].pure[F]
 
+    override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] =
+      List.empty[DeployInfo].pure[F]
+
     override def getDeploysByAccount(
         account: PublicKeyBS,
         limit: Int,

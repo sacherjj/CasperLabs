@@ -284,11 +284,10 @@ trait ArbitraryConsensus {
     }
     // Always start from the Genesis block.
     arbitrary[BlockSummary] map { summary =>
-      summary.withHeader(
-        summary.getHeader
-          .withJustifications(Seq.empty)
-          .withParentHashes(Seq.empty)
-      )
+      summary
+        .update(_.header.parentHashes := Seq.empty)
+        .update(_.header.justifications := Seq.empty)
+        .update(_.header.rank := 0)
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }

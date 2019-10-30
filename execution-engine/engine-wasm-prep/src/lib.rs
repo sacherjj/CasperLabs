@@ -7,9 +7,11 @@ extern crate engine_shared;
 
 pub mod wasm_costs;
 
+use std::error::Error;
+use std::fmt::{self, Display, Formatter};
+
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};
-use std::error::Error;
 use wasm_costs::WasmCosts;
 
 //NOTE: size of Wasm memory page is 64 KiB
@@ -25,7 +27,18 @@ pub enum PreprocessingError {
     StackLimiterError,
 }
 
-use PreprocessingError::*;
+impl Display for PreprocessingError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            PreprocessingError::InvalidImportsError(error) => write!(f, "Invalid imports error: {}", error),
+            PreprocessingError::NoExportSection => write!(f, "No export section found"),
+            PreprocessingError::NoImportSection => write!(f, "No import section found"),
+            PreprocessingError::DeserializeError(error) => write!(f, "Deserialization error: {}", error),
+            PreprocessingError::OperationForbiddenByGasRules => write!(f, "Encountered operation forbidden by gas rules. Consult instruction -> metering config map"),
+            PreprocessingError::StackLimiterError => write!(f, "Stack limiter error"),
+        }
+    }
+}
 
 pub struct Preprocessor {
     wasm_costs: WasmCosts,
@@ -47,13 +60,15 @@ impl Preprocessor {
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
             pwasm_utils::stack_height::inject_limiter(gas_mod, self.wasm_costs.max_stack_height)
-                .map_err(|_| StackLimiterError)?;
+                .map_err(|_| PreprocessingError::StackLimiterError)?;
         Ok(module)
     }
 
     // returns a parity Module from bytes without making modifications or limits
     pub fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-        let from_parity_err = |err: ParityWasmError| DeserializeError(err.description().to_owned());
+        let from_parity_err = |err: ParityWasmError| {
+            PreprocessingError::DeserializeError(err.description().to_owned())
+        };
         let module =
             parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
         Ok(module)
@@ -89,5 +104,6 @@ fn inject_gas_counters(
     module: Module,
     wasm_costs: &WasmCosts,
 ) -> Result<Module, PreprocessingError> {
-    inject_gas_counter(module, &gas_rules(wasm_costs)).map_err(|_| OperationForbiddenByGasRules)
+    inject_gas_counter(module, &gas_rules(wasm_costs))
+        .map_err(|_| PreprocessingError::OperationForbiddenByGasRules)
 }
