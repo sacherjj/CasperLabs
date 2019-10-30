@@ -230,66 +230,11 @@ impl BlockTime {
     pub fn saturating_sub(self, other: BlockTime) -> Self {
         BlockTime(self.0.saturating_sub(other.0))
     }
-
-    pub const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
-    pub const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
 }
 
 impl Into<u64> for BlockTime {
     fn into(self) -> u64 {
         self.0
-    }
-}
-
-/// Holds information about last usage time of specific action.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct AccountActivity {
-    // Last time `KeyManagementAction` was used.
-    key_management_last_used: BlockTime,
-    // Last time `Deployment` action was used.
-    deployment_last_used: BlockTime,
-    // Inactivity period set for the account.
-    inactivity_period_limit: BlockTime,
-}
-
-impl AccountActivity {
-    // TODO: We need default for inactivity_period_limit.
-    // `current_block_time` value is passed in from the node and is coming from the
-    // parent block. [inactivity_period_limit] block time period after which
-    // account is eligible for recovery.
-    pub fn new(
-        current_block_time: BlockTime,
-        inactivity_period_limit: BlockTime,
-    ) -> AccountActivity {
-        AccountActivity {
-            key_management_last_used: current_block_time,
-            deployment_last_used: current_block_time,
-            inactivity_period_limit,
-        }
-    }
-
-    pub fn update_key_management_last_used(&mut self, last_used: BlockTime) {
-        self.key_management_last_used = last_used;
-    }
-
-    pub fn update_deployment_last_used(&mut self, last_used: BlockTime) {
-        self.deployment_last_used = last_used;
-    }
-
-    pub fn update_inactivity_period_limit(&mut self, new_inactivity_period_limit: BlockTime) {
-        self.inactivity_period_limit = new_inactivity_period_limit;
-    }
-
-    pub fn key_management_last_used(&self) -> BlockTime {
-        self.key_management_last_used
-    }
-
-    pub fn deployment_last_used(&self) -> BlockTime {
-        self.deployment_last_used
-    }
-
-    pub fn inactivity_period_limit(&self) -> BlockTime {
-        self.inactivity_period_limit
     }
 }
 
@@ -604,7 +549,6 @@ pub struct Account {
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
-    account_activity: AccountActivity,
 }
 
 impl Account {
@@ -614,7 +558,6 @@ impl Account {
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
-        account_activity: AccountActivity,
     ) -> Self {
         Account {
             public_key,
@@ -622,7 +565,6 @@ impl Account {
             purse_id,
             associated_keys,
             action_thresholds,
-            account_activity,
         }
     }
 
@@ -633,17 +575,12 @@ impl Account {
     ) -> Self {
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
-        let account_activity = AccountActivity::new(
-            BlockTime::DEFAULT_CURRENT_BLOCK_TIME,
-            BlockTime::DEFAULT_INACTIVITY_PERIOD_TIME,
-        );
         Account::new(
             account_addr,
             named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
-            account_activity,
         )
     }
 
@@ -680,10 +617,6 @@ impl Account {
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
         &self.action_thresholds
-    }
-
-    pub fn account_activity(&self) -> &AccountActivity {
-        &self.account_activity
     }
 
     pub fn add_associated_key(
@@ -867,52 +800,9 @@ impl FromBytes for ActionThresholds {
     }
 }
 
-const KEY_MANAGEMENT_LAST_USED_ID: u8 = 0;
-const DEPLOYMENT_LAST_USED_ID: u8 = 1;
-const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
-
-impl ToBytes for AccountActivity {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
-        result.push(KEY_MANAGEMENT_LAST_USED_ID);
-        result.extend(&self.key_management_last_used.to_bytes()?);
-        result.push(DEPLOYMENT_LAST_USED_ID);
-        result.extend(&self.deployment_last_used.to_bytes()?);
-        result.push(INACTIVITY_PERIOD_LIMIT_ID);
-        result.extend(&self.inactivity_period_limit.to_bytes()?);
-        Ok(result)
-    }
-}
-
-fn account_activity_parser_helper<'a>(
-    acc_activity: &mut AccountActivity,
-    bytes: &'a [u8],
-) -> Result<&'a [u8], Error> {
-    let (id, rem) = FromBytes::from_bytes(bytes)?;
-    let (block_time, rest): (BlockTime, &[u8]) = FromBytes::from_bytes(rem)?;
-    match id {
-        KEY_MANAGEMENT_LAST_USED_ID => acc_activity.update_key_management_last_used(block_time),
-        DEPLOYMENT_LAST_USED_ID => acc_activity.update_deployment_last_used(block_time),
-        INACTIVITY_PERIOD_LIMIT_ID => acc_activity.update_inactivity_period_limit(block_time),
-        _ => return Err(Error::FormattingError),
-    };
-    Ok(rest)
-}
-
-impl FromBytes for AccountActivity {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut acc_activity = AccountActivity::new(BlockTime::new(0), BlockTime::new(0));
-        let rem = account_activity_parser_helper(&mut acc_activity, bytes)?;
-        let rem2 = account_activity_parser_helper(&mut acc_activity, rem)?;
-        let rem3 = account_activity_parser_helper(&mut acc_activity, rem2)?;
-        Ok((acc_activity, rem3))
-    }
-}
-
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
@@ -921,8 +811,7 @@ impl ToBytes for Account {
             + named_keys_size
             + purse_id_size
             + associated_keys_size
-            + action_thresholds_size
-            + account_activity_size;
+            + action_thresholds_size;
         if serialized_account_size >= u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
@@ -932,7 +821,6 @@ impl ToBytes for Account {
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
-        result.append(&mut self.account_activity.to_bytes()?);
         Ok(result)
     }
 }
@@ -944,7 +832,6 @@ impl FromBytes for Account {
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (account_activity, rem): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem)?;
         let purse_id = PurseId::new(purse_id);
         Ok((
             Account {
@@ -953,7 +840,6 @@ impl FromBytes for Account {
                 purse_id,
                 associated_keys,
                 action_thresholds,
-                account_activity,
             },
             rem,
         ))
@@ -964,9 +850,8 @@ impl FromBytes for Account {
 mod tests {
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
-        Account, AccountActivity, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys,
-        BlockTime, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-        Weight, KEY_SIZE, MAX_KEYS,
+        Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey, PurseId,
+        RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE, MAX_KEYS,
     };
     use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
     use alloc::vec::Vec;
@@ -1040,7 +925,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_3, key_2, key_1])));
@@ -1108,7 +992,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // sum: 22, required 33 - can't deploy
@@ -1198,7 +1081,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(11), Weight::new(33))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // sum: 22, required 33 - can't manage
@@ -1280,7 +1162,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert_eq!(
@@ -1321,7 +1202,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 5))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         assert_eq!(
@@ -1364,7 +1244,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // Decreases by 3
@@ -1457,7 +1336,6 @@ mod tests {
             associated_keys,
             ActionThresholds::new(Weight::new(1), Weight::new(254))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         account.remove_associated_key(key_1).expect("should work")
@@ -1493,7 +1371,6 @@ mod tests {
             associated_keys,
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime::new(0), BlockTime::new(0)),
         );
 
         // decrease so total weight would be changed from 1 + 3 + 255 to 1 + 1 + 255

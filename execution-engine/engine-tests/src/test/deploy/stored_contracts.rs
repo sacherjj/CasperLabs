@@ -815,7 +815,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 assert_eq!(la.pub_key(), ra.pub_key());
                 assert_eq!(la.purse_id(), ra.purse_id());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
-                assert_eq!(la.account_activity(), ra.account_activity());
 
                 assert!(Iterator::eq(
                     la.get_associated_keys(),
