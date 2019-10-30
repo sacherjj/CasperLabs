@@ -345,7 +345,7 @@ class ValidationTest
 
   it should "not accept invalid chain names" in withoutStorage {
     val chainName = "nevernet"
-    val deploy    = sample {
+    val deploy = sample {
       arbitrary[consensus.Deploy].map(_.withChainName(s"never say $chainName"))
     }
 
@@ -972,19 +972,12 @@ class ValidationTest
   it should "fail a block with a deploy having an foreign chain name" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val block = sample {
-        for {
-          b <- arbitrary[consensus.Block]
-        } yield {
-          b.withBody(
-            b.getBody.withDeploys(
-              b.getBody.deploys.map(
-                x =>
-                  x.withDeploy(
-                    x.getDeploy.withHeader(x.getDeploy.getHeader.withChainName("la la land"))
-                  )
-              )
-            )
-          )
+        arbitrary[consensus.Block] map { block =>
+          block.update {
+            _.body.deploys := block.getBody.deploys.map { pd =>
+              pd.withDeploy(pd.getDeploy.withChainName("la la land"))
+            }
+          }
         }
       }
       for {
