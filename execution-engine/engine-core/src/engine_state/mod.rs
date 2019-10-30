@@ -74,9 +74,10 @@ where
     S::Error: Into<execution::Error>,
 {
     pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
+        let system_contract_cache = Default::default();
         EngineState {
             config,
-            system_contract_cache: Default::default(),
+            system_contract_cache,
             state,
         }
     }
