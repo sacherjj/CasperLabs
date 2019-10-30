@@ -46,12 +46,12 @@ def _hex(text, as_utf8):
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
-from .control_pb2_grpc import ControlServiceStub
+from . import control_pb2_grpc
 from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2 as casper
-from .casper_pb2_grpc import CasperServiceStub
+from . import casper_pb2_grpc
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 from . import consensus_pb2 as consensus, state_pb2 as state
@@ -410,7 +410,7 @@ class CasperLabsClient:
 
         if node_id:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, node_id, certificate_file
+                host, port, casper_pb2_grpc.CasperServiceStub, node_id, certificate_file
             )
             self.controlService = SecureGRPCService(
                 # We currently assume that if node_id is given then
@@ -421,14 +421,16 @@ class CasperLabsClient:
                 # certificate on the client side.
                 host,
                 port_internal,
-                ControlServiceStub,
+                control_pb2_grpc.ControlServiceStub,
                 node_id,
                 certificate_file,
             )
         else:
-            self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
+            self.casperService = InsecureGRPCService(
+                host, port, casper_pb2_grpc.CasperServiceStub
+            )
             self.controlService = InsecureGRPCService(
-                host, port_internal, ControlServiceStub
+                host, port_internal, control_pb2_grpc.ControlServiceStub
             )
 
     @api
