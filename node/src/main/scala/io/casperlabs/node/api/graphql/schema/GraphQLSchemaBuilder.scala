@@ -101,11 +101,16 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             blocks.types.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
-              val accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
-              val first                  = c.arg(blocks.arguments.First)
-              val after                  = c.arg(blocks.arguments.After)
               val program =
                 for {
+                  first <- Utils
+                            .check[F, Int](
+                              c.arg(blocks.arguments.First),
+                              "First must be greater than 0",
+                              _ > 0
+                            )
+                  accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+                  after                  = c.arg(blocks.arguments.After)
                   accountPublicKeyBase16 <- validateAccountPublicKey[F](
                                              accountPublicKeyBase16
                                            )
