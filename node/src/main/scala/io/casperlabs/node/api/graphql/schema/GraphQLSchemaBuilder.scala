@@ -124,23 +124,27 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                       Base16.decode(accountPublicKeyBase16)
                     )
                   )
-                  deploys <- DeployStorage[F]
-                              .reader(deployView)
-                              .getDeploysByAccount(
-                                accountPublicKeyBs,
-                                pageSize,
-                                lastTimeStamp,
-                                lastDeployHash
-                              )
+                  deploysWithOneMoreElem <- DeployStorage[F]
+                                             .reader(deployView)
+                                             .getDeploysByAccount(
+                                               accountPublicKeyBs,
+                                               pageSize + 1,
+                                               lastTimeStamp,
+                                               lastDeployHash
+                                             )
+                  (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
+                    (deploysWithOneMoreElem.take(pageSize), true)
+                  } else {
+                    (deploysWithOneMoreElem, false)
+                  }
                   deployInfos <- DeployStorage[F]
                                   .reader(deployView)
                                   .getDeployInfos(deploys)
                   endCursor = DeployInfoPagination.createNextPageToken(
                     deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
                   )
-                  hasNextPage = endCursor.isEmpty
-                  pageInfo    = PageInfo(endCursor, hasNextPage)
-                  result      = DeployInfosWithPageInfo(deployInfos, pageInfo)
+                  pageInfo = PageInfo(endCursor, hasNextPage)
+                  result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
                 } yield result
               program.unsafeToFuture
             }
