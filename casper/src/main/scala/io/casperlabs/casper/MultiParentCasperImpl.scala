@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.data.NonEmptyList
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{Applicative, Monad}
@@ -536,7 +536,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   ): F[Unit] = {
     val addedBlocks = attempts.collect {
       case (block, status) if canRemove(status) => block
-    }.toSet
+    }.toList
 
     val addedBlockHashes = addedBlocks.map(_.blockHash)
 
@@ -545,14 +545,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       addedBlocks.flatMap(block => block.getBody.deploys.map(_.getDeploy)).toList
 
     DeployStorageWriter[F].markAsProcessed(processedDeploys) >>
-      Cell[F, CasperState].modify { s =>
-        s.copy(
-          dependencyDag = addedBlocks.foldLeft(s.dependencyDag) {
-            case (dag, block) =>
-              dag.remove(block.blockHash)
-          }
-        )
-      }
+      statelessExecutor.removeDependencies(addedBlockHashes)
   }
 
   /** The new gossiping first syncs the missing DAG, then downloads and adds the blocks in topological order.
@@ -560,10 +553,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
     * be tracked, i.e. Casper will know about the pending graph.  */
   def addMissingDependencies(block: Block): F[Unit] =
-    for {
-      dag <- dag
-      _   <- statelessExecutor.addMissingDependencies(block, dag)
-    } yield ()
+    statelessExecutor.addMissingDependencies(block, dag)
 }
 
 object MultiParentCasperImpl {
@@ -606,7 +596,12 @@ object MultiParentCasperImpl {
     * Even the Genesis, to create it in the first place. */
   class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
       chainName: String,
-      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+      // NOTE: There was a race condition where probably a block was being removed at the same time
+      // as its child was scheduled. The parent was still not in the DAG database, so it was considered
+      // a missing dependency. It got removed and immediately added back, which later caused an assertion failure.
+      // This semaphore should protect against state mutations that should be serialised, including reads.
+      semaphore: Semaphore[F]
   ) {
     //TODO pull out
     implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
@@ -725,7 +720,7 @@ object MultiParentCasperImpl {
           } yield updatedDag
 
         case MissingBlocks =>
-          addMissingDependencies(block, dag) *>
+          addMissingDependencies(block, dag.pure[F]) *>
             dag.pure[F]
 
         case EquivocatedBlock =>
@@ -773,33 +768,47 @@ object MultiParentCasperImpl {
         block: Block,
         effects: Seq[ipc.TransformEntry]
     ): F[DagRepresentation[F]] =
-      for {
-        _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-        updatedDag <- DagStorage[F].getRepresentation
-      } yield updatedDag
+      semaphore.withPermit {
+        for {
+          _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+          updatedDag <- DagStorage[F].getRepresentation
+        } yield updatedDag
+      }
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
     def addMissingDependencies(
         block: Block,
-        dag: DagRepresentation[F]
+        dagRepresentation: F[DagRepresentation[F]]
     )(implicit state: Cell[F, CasperState]): F[Unit] =
-      for {
-        missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
-        _                   <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
-      } yield ()
+      semaphore.withPermit {
+        for {
+          dag                 <- dagRepresentation
+          missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
+          _ <- Cell[F, CasperState].modify { s =>
+                s.copy(
+                  dependencyDag = missingDependencies.foldLeft(s.dependencyDag) {
+                    case (deps, ancestorHash) => deps.add(ancestorHash, block.blockHash)
+                  }
+                )
+              }
+        } yield ()
+      }
 
-    /** Keep track of a block depending on another one, so we know when we can start processing. */
-    private def addMissingDependency(
-        ancestorHash: BlockHash,
-        childHash: BlockHash
+    /** Remove block relationships we scheduled earlier after blocks have been added. */
+    def removeDependencies(
+        addedBlocksHashes: List[ByteString]
     )(implicit state: Cell[F, CasperState]): F[Unit] =
-      Cell[F, CasperState].modify(
-        s =>
+      semaphore.withPermit {
+        Cell[F, CasperState].modify { s =>
           s.copy(
-            dependencyDag = s.dependencyDag.add(ancestorHash, childHash)
+            dependencyDag = addedBlocksHashes.foldLeft(s.dependencyDag) {
+              case (dag, blockHash) =>
+                dag.remove(blockHash)
+            }
           )
-      )
+        }
+      }
   }
 
   object StatelessExecutor {
@@ -810,11 +819,14 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]
     ): F[StatelessExecutor[F]] =
-      establishMetrics[F] as new StatelessExecutor[F](chainName, upgrades)
+      for {
+        _ <- establishMetrics[F]
+        s <- Semaphore[F](1)
+      } yield new StatelessExecutor[F](chainName, upgrades, s)
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */

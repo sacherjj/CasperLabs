@@ -35,6 +35,7 @@ class GossipServiceCasperTestNode[F[_]](
     genesis: consensus.Block,
     sk: PrivateKey,
     semaphoresMap: SemaphoreMap[F, ByteString],
+    semaphore: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainName: String = "casperlabs",
@@ -70,7 +71,7 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       semaphoresMap,
-      new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil),
+      new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil, semaphore),
       MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
@@ -132,11 +133,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
+          semaphore    <- Semaphore[F](1)
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
             sk,
             semaphoreMap,
+            semaphore,
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
@@ -215,11 +218,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                                 CasperState()
                               )
                 semaphoreMap <- SemaphoreMap[F, ByteString](1)
+                semaphore    <- Semaphore[F](1)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
                   sk,
                   semaphoreMap,
+                  semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
