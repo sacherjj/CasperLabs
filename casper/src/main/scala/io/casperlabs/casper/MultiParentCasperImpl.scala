@@ -34,15 +34,14 @@ import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
+import simulacrum.typeclass
 
 import scala.reflect.internal.FatalError
 import scala.util.control.NonFatal
 
 /**
   * Encapsulates mutable state of the MultiParentCasperImpl
-  **
   *
-  * @param blockBuffer
   * @param invalidBlockTracker
   */
 final case class CasperState(
@@ -80,41 +79,37 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     def addBlock(
         validateAndAddBlock: (
             Option[StatelessExecutor.Context],
-            DagRepresentation[F],
             Block
-        ) => F[(BlockStatus, DagRepresentation[F])]
-    ) =
+        ) => F[BlockStatus]
+    ): F[BlockStatus] =
       validatorSemaphoreMap.withPermit(block.getHeader.validatorPublicKey) {
         for {
-          dag       <- dag
+          dag       <- DagStorage[F].getRepresentation
           blockHash = block.blockHash
           inDag     <- dag.contains(blockHash)
-          attempts <- if (inDag) {
-                       Log[F]
-                         .info(
-                           s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
-                         ) *>
-                         List(block -> BlockStatus.processed).pure[F]
-                     } else {
-                       // This might be the first time we see this block, or it may not have been added to the state
-                       // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
-                       internalAddBlock(block, dag, validateAndAddBlock)
-                     }
+          status <- if (inDag) {
+                     Log[F]
+                       .info(
+                         s"Block ${PrettyPrinter.buildString(blockHash)} has already been processed by another thread."
+                       ) *>
+                       BlockStatus.processed.pure[F]
+                   } else {
+                     // This might be the first time we see this block, or it may not have been added to the state
+                     // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
+                     internalAddBlock(block, dag, validateAndAddBlock)
+                   }
           // This method could just return the block hashes it created,
           // but for now it does gossiping as well. The methods return the full blocks
           // because for missing blocks it's not yet saved to the database.
-          _ <- attempts.traverse {
-                case (attemptedBlock, status) =>
-                  broadcaster.networkEffects(attemptedBlock, status)
-              }
-        } yield attempts.head._2
+          _ <- broadcaster.networkEffects(block, status)
+        } yield status
       }
 
     val handleInvalidTimestamp =
-      (_: Option[StatelessExecutor.Context], dag: DagRepresentation[F], block: Block) =>
+      (_: Option[StatelessExecutor.Context], block: Block) =>
         statelessExecutor
-          .addEffects(InvalidUnslashableBlock, block, Seq.empty, dag)
-          .tupleLeft(InvalidUnslashableBlock: BlockStatus)
+          .addEffects(InvalidUnslashableBlock, block, Seq.empty)
+          .as(InvalidUnslashableBlock: BlockStatus)
 
     // If the block timestamp is in the future, wait some time before adding it,
     // so we won't include it as a justification from the future.
@@ -140,27 +135,25 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
       dag: DagRepresentation[F],
       validateAndAddBlock: (
           Option[StatelessExecutor.Context],
-          DagRepresentation[F],
           Block
-      ) => F[(BlockStatus, DagRepresentation[F])]
-  ): F[List[(Block, BlockStatus)]] = Metrics[F].timer("addBlock") {
+      ) => F[BlockStatus]
+  ): F[BlockStatus] = Metrics[F].timer("addBlock") {
     for {
       lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-      (status, updatedDag) <- validateAndAddBlock(
-                               StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
-                               dag,
-                               block
-                             )
+      status <- validateAndAddBlock(
+                 StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
+                 block
+               )
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
-      _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix}")
-      _ <- updateLastFinalizedBlock(updatedDag)
+      _ <- Log[F].debug(s"Updating last finalized block after adding $hashPrefix")
+      _ <- updateLastFinalizedBlock(dag)
       // Remove any deploys from the buffer which are in finalized blocks.
-      _ <- Log[F].debug(s"Removing finalized deploys after adding ${hashPrefix}")
-      _ <- removeFinalizedDeploys(updatedDag)
-      _ <- Log[F].debug(s"Finished adding ${hashPrefix}")
-    } yield List(block -> status)
+      _ <- Log[F].debug(s"Removing finalized deploys after adding $hashPrefix")
+      _ <- removeFinalizedDeploys(dag)
+      _ <- Log[F].debug(s"Finished adding $hashPrefix")
+    } yield status
   }
 
   private def updateLastFinalizedBlock(dag: DagRepresentation[F]): F[Unit] =
@@ -557,10 +550,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
     * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
     * be tracked, i.e. Casper will know about the pending graph.  */
   def addMissingDependencies(block: Block): F[Unit] =
-    for {
-      dag <- dag
-      _   <- statelessExecutor.addMissingDependencies(block, dag)
-    } yield ()
+    statelessExecutor.addMissingDependencies(block)
 }
 
 object MultiParentCasperImpl {
@@ -616,11 +606,11 @@ object MultiParentCasperImpl {
      * the equivocation is otherwise valid. */
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
-        dag: DagRepresentation[F],
         block: Block
-    )(implicit state: Cell[F, CasperState]): F[(BlockStatus, DagRepresentation[F])] =
+    )(implicit state: Cell[F, CasperState]): F[BlockStatus] =
       Metrics[F].timer("validateAndAddBlock") {
         val validationStatus = (for {
+          dag <- DagStorage[F].getRepresentation
           _ <- Log[F].info(
                 s"Attempting to add ${PrettyPrinter.buildString(block)} to the DAG."
               )
@@ -680,16 +670,15 @@ object MultiParentCasperImpl {
 
         validationStatus.flatMap {
           case Right(effects) =>
-            addEffects(Valid, block, effects, dag).tupleLeft(Valid)
+            addEffects(Valid, block, effects).as(Valid)
 
           case Left(DropErrorWrapper(invalid)) =>
             // These exceptions are coming from the validation checks that used to happen outside attemptAdd,
             // the ones that returned boolean values.
-            (invalid: BlockStatus, dag).pure[F]
+            (invalid: BlockStatus).pure[F]
 
           case Left(ValidateErrorWrapper(invalid)) =>
-            addEffects(invalid, block, Seq.empty, dag)
-              .tupleLeft(invalid)
+            addEffects(invalid, block, Seq.empty).as(invalid)
 
           case Left(unexpected) =>
             for {
@@ -699,7 +688,7 @@ object MultiParentCasperImpl {
                     unexpected
                   )
               _ <- unexpected.raiseError[F, BlockStatus]
-            } yield (UnexpectedBlockException(unexpected), dag)
+            } yield UnexpectedBlockException(unexpected)
         }
       }
 
@@ -709,26 +698,24 @@ object MultiParentCasperImpl {
     def addEffects(
         status: BlockStatus,
         block: Block,
-        transforms: Seq[ipc.TransformEntry],
-        dag: DagRepresentation[F]
-    )(implicit state: Cell[F, CasperState]): F[DagRepresentation[F]] =
+        transforms: Seq[ipc.TransformEntry]
+    )(implicit state: Cell[F, CasperState]): F[Unit] =
       status match {
         //Add successful! Send block to peers, log success, try to add other blocks
         case Valid =>
           for {
-            updatedDag <- addToState(block, transforms)
+            _ <- addToState(block, transforms)
             _ <- Log[F].info(
                   s"Added ${PrettyPrinter.buildString(block.blockHash)}"
                 )
-          } yield updatedDag
+          } yield ()
 
         case MissingBlocks =>
-          addMissingDependencies(block, dag) *>
-            dag.pure[F]
+          addMissingDependencies(block)
 
         case EquivocatedBlock =>
           for {
-            updatedDag <- addToState(block, transforms)
+            _ <- addToState(block, transforms)
             _ <- Log[F].info(
                   s"Added equivocated block ${PrettyPrinter.buildString(block.blockHash)}"
                 )
@@ -743,7 +730,7 @@ object MultiParentCasperImpl {
                     )
                   )
                   .whenA(selfEquivocations)
-          } yield updatedDag
+          } yield ()
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
             InvalidPrevBlockHash | NeglectedInvalidBlock | InvalidTransaction | InvalidBondsCache |
@@ -751,14 +738,14 @@ object MultiParentCasperImpl {
             InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
             InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
             DeployDependencyNotMet | DeployExpired | DeployFromFuture | SwimlaneMerged =>
-          handleInvalidBlockEffect(status, block) *> dag.pure[F]
+          handleInvalidBlockEffect(status, block)
 
         case Processing | Processed =>
           throw new RuntimeException(s"A block should not be processing at this stage.")
 
         case UnexpectedBlockException(ex) =>
           Log[F].error(s"Encountered exception in while processing block ${PrettyPrinter
-            .buildString(block.blockHash)}: ${ex.getMessage}") *> dag.pure[F]
+            .buildString(block.blockHash)}: ${ex.getMessage}")
       }
 
     /** Remember a block as being invalid, then save it to storage. */
@@ -781,19 +768,15 @@ object MultiParentCasperImpl {
     private def addToState(
         block: Block,
         effects: Seq[ipc.TransformEntry]
-    ): F[DagRepresentation[F]] =
-      for {
-        _          <- BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-        updatedDag <- DagStorage[F].getRepresentation
-      } yield updatedDag
+    ): F[Unit] = BlockStorage[F].put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
     def addMissingDependencies(
-        block: Block,
-        dag: DagRepresentation[F]
+        block: Block
     )(implicit state: Cell[F, CasperState]): F[Unit] =
       for {
+        dag                 <- DagStorage[F].getRepresentation
         missingDependencies <- dependenciesHashesOf(block).filterA(dag.contains(_).map(!_))
         _                   <- missingDependencies.traverse(hash => addMissingDependency(hash, block.blockHash))
       } yield ()
@@ -828,7 +811,7 @@ object MultiParentCasperImpl {
   }
 
   /** Encapsulating all methods that might use peer-to-peer communication. */
-  trait Broadcaster[F[_]] {
+  @typeclass trait Broadcaster[F[_]] {
     def networkEffects(
         block: Block,
         status: BlockStatus

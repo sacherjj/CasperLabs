@@ -244,8 +244,7 @@ package object gossiping {
             state <- Cell.mvarCell[F, CasperState](CasperState())
             executor <- MultiParentCasperImpl.StatelessExecutor
                          .create[F](validatorId, chainName = spec.getGenesis.name, spec.upgrades)
-            dag         <- DagStorage[F].getRepresentation
-            (status, _) <- executor.validateAndAddBlock(None, dag, block)(state)
+            status <- executor.validateAndAddBlock(None, block)(state)
           } yield status
 
         case None =>

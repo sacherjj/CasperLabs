@@ -1,10 +1,9 @@
 package io.casperlabs.casper.api
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Concurrent, Resource}
+import cats.effect.{Bracket, Resource}
 import cats.implicits._
-import cats.{Functor, Monad}
-import com.github.ghik.silencer.silent
+import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -12,9 +11,8 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
@@ -23,10 +21,8 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
-import io.casperlabs.casper.util.execengine.ProcessedDeployResult
 
 object BlockAPI {
 
