@@ -853,13 +853,20 @@ object MultiParentCasperImpl {
           status: BlockStatus
       ): F[Unit] =
         status match {
-          case Valid | EquivocatedBlock =>
+          case Valid =>
             maybeOwnPublickKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
                 relaying.relay(List(block.blockHash)).void
               case _ =>
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]
+            }
+          case EquivocatedBlock =>
+            maybeOwnPublickKey match {
+              case Some(key) if key == block.getHeader.validatorPublicKey =>
+                // Don't relay block with which a node has equivocated.
+                ().pure[F]
+              case _ => relaying.relay(List(block.blockHash)).void
             }
 
           case MissingBlocks =>
