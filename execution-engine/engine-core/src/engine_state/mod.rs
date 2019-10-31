@@ -1028,23 +1028,22 @@ where
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
 
             // validation_spec_1: valid wasm bytes
-            let proof_of_stake_module = match self
-                .system_contract_cache
-                .get_clone(&proof_of_stake_reference)
-            {
-                Some(module) => module,
-                None => {
-                    let module = match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
-                        Ok(module) => module,
-                        Err(error) => {
-                            return Ok(ExecutionResult::precondition_failure(error.into()))
-                        }
-                    };
-                    self.system_contract_cache
-                        .insert(proof_of_stake_reference, module.clone());
-                    module
-                }
-            };
+            let proof_of_stake_module =
+                match self.system_contract_cache.get(&proof_of_stake_reference) {
+                    Some(module) => module,
+                    None => {
+                        let module =
+                            match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                                Ok(module) => module,
+                                Err(error) => {
+                                    return Ok(ExecutionResult::precondition_failure(error.into()))
+                                }
+                            };
+                        self.system_contract_cache
+                            .insert(proof_of_stake_reference, module.clone());
+                        module
+                    }
+                };
 
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate

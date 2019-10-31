@@ -29,7 +29,7 @@ impl SystemContractCache {
     }
 
     /// Returns a clone of the contract corresponding to `uref`.
-    pub fn get_clone(&self, uref: &URef) -> Option<Module> {
+    pub fn get(&self, uref: &URef) -> Option<Module> {
         let guarded_map = self.0.read().unwrap();
         let uref = uref.remove_access_rights();
         guarded_map.get(&uref).cloned()

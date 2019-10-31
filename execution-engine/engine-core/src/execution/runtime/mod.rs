@@ -474,7 +474,7 @@ where
                         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
 
                         let maybe_module = match key {
-                            Key::URef(uref) => self.system_contract_cache.get_clone(&uref),
+                            Key::URef(uref) => self.system_contract_cache.get(&uref),
                             _ => None,
                         };
 
