@@ -705,9 +705,10 @@ impl Account {
 
     /// Checks whether all authorization keys are associated with this account
     pub fn can_authorize(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
-        authorization_keys
-            .iter()
-            .all(|e| self.associated_keys.contains_key(e))
+        !authorization_keys.is_empty()
+            && authorization_keys
+                .iter()
+                .all(|e| self.associated_keys.contains_key(e))
     }
 
     /// Checks whether the sum of the weights of all authorization keys is
@@ -948,6 +949,7 @@ mod tests {
             PublicKey::new([44; 32]),
             PublicKey::new([42; 32])
         ])));
+        assert!(!account.can_authorize(&BTreeSet::new()));
     }
 
     #[test]

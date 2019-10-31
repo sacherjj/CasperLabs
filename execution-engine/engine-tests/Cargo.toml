@@ -28,6 +28,9 @@ criterion = "0.3"
 lmdb = "0.8.0"
 protobuf = "2"
 
+[lib]
+bench = false
+
 [[bench]]
 name = "transfer_bench"
 harness = false

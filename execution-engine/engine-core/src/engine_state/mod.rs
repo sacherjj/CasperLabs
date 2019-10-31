@@ -711,7 +711,7 @@ where
 
         // Authorize using provided authorization keys
         // validation_spec_3: account validity
-        if authorization_keys.is_empty() || !account.can_authorize(authorization_keys) {
+        if !account.can_authorize(authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 crate::engine_state::error::Error::AuthorizationError,
             ));
