@@ -8,7 +8,6 @@ pub mod utils;
 use std::collections::{BTreeMap, HashMap};
 
 use linked_hash_map::LinkedHashMap;
-use parking_lot::Mutex;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
@@ -34,7 +33,7 @@ pub enum QueryResult {
 /// because we want to invalidate Reads' cache so it doesn't grow too fast.
 pub struct TrackingCopyCache<M> {
     max_cache_size: usize,
-    current_cache_size: Mutex<usize>,
+    current_cache_size: usize,
     reads_cached: LinkedHashMap<Key, Value>,
     muts_cached: HashMap<Key, Value>,
     meter: M,
@@ -48,7 +47,7 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     pub fn new(max_cache_size: usize, meter: M) -> TrackingCopyCache<M> {
         TrackingCopyCache {
             max_cache_size,
-            current_cache_size: Mutex::new(0),
+            current_cache_size: 0,
             reads_cached: LinkedHashMap::new(),
             muts_cached: HashMap::new(),
             meter,
@@ -59,12 +58,12 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
     pub fn insert_read(&mut self, key: Key, value: Value) {
         let element_size = Meter::measure(&self.meter, &key, &value);
         self.reads_cached.insert(key, value);
-        *self.current_cache_size.lock() += element_size;
-        while *self.current_cache_size.lock() > self.max_cache_size {
+        self.current_cache_size += element_size;
+        while self.current_cache_size > self.max_cache_size {
             match self.reads_cached.pop_front() {
                 Some((k, v)) => {
                     let element_size = Meter::measure(&self.meter, &k, &v);
-                    *self.current_cache_size.lock() -= element_size;
+                    self.current_cache_size -= element_size;
                 }
                 None => break,
             }

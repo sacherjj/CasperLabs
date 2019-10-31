@@ -11,7 +11,6 @@ extern crate hex_fmt;
 extern crate itertools;
 extern crate linked_hash_map;
 extern crate parity_wasm;
-extern crate parking_lot;
 extern crate pwasm_utils;
 extern crate rand;
 extern crate rand_chacha;
