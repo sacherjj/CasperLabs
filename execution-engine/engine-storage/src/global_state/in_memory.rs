@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::{ProtocolVersion, Value};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
 
@@ -147,7 +147,7 @@ impl StateProvider for InMemoryGlobalState {
         &self,
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<InMemoryEnvironment, InMemoryTrieStore, _, Self::Error>(
             &self.environment,
@@ -263,7 +263,7 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = test_pairs_updated
+        let effects: AdditiveMap<Key, Transform> = test_pairs_updated
             .iter()
             .cloned()
             .map(|TestPair { key, value }| (key, Transform::Write(value)))
@@ -291,8 +291,8 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = {
-            let mut tmp = HashMap::new();
+        let effects: AdditiveMap<Key, Transform> = {
+            let mut tmp = AdditiveMap::new();
             for TestPair { key, value } in &test_pairs_updated {
                 tmp.insert(*key, Transform::Write(value.to_owned()));
             }

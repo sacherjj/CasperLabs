@@ -25,6 +25,7 @@ use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
 use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -1077,7 +1078,7 @@ where
         correlation_id: CorrelationId,
         protocol_version: ProtocolVersion,
         pre_state_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Error>
     where
         Error: From<S::Error>,
