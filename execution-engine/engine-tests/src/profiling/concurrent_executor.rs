@@ -12,12 +12,6 @@ extern crate grpc;
 #[macro_use]
 extern crate log;
 
-extern crate casperlabs_engine_tests as engine_tests;
-extern crate contract_ffi;
-extern crate engine_core;
-extern crate engine_grpc_server;
-extern crate engine_shared;
-
 use std::env;
 use std::iter::Sum;
 use std::sync::Arc;
@@ -28,14 +22,14 @@ use clap::{App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 
+use casperlabs_engine_tests::support::profiling_common;
+use casperlabs_engine_tests::support::test_support::ExecuteRequestBuilder;
 use contract_ffi::base16;
 use contract_ffi::value::U512;
 use engine_grpc_server::engine_server::ipc::ExecuteRequest;
 use engine_grpc_server::engine_server::ipc_grpc::{
     ExecutionEngineService, ExecutionEngineServiceClient,
 };
-use engine_tests::support::profiling_common;
-use engine_tests::support::test_support::ExecuteRequestBuilder;
 
 const APP_NAME: &str = "Concurrent Executor";
 const ABOUT: &str =
@@ -116,9 +110,7 @@ fn parse_count(encoded_thread_count: &str) -> usize {
     let count: usize = encoded_thread_count
         .parse()
         .expect("Expected an integral count");
-    if count == 0 {
-        panic!("Expected count > 0");
-    }
+    assert!(count > 0, "Expected count > 0");
     count
 }
 
