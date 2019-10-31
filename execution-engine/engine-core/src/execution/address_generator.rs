@@ -30,7 +30,7 @@ impl AddressGenerator {
 
 /// A builder for [`AddressGenerator`].
 #[derive(Default)]
-struct AddressGeneratorBuilder {
+pub struct AddressGeneratorBuilder {
     data: Vec<u8>,
 }
 
