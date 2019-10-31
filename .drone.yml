@@ -338,7 +338,6 @@ steps:
   - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine"
   - "make docker-build/integration-testing"
-  - "make docker-build/grpcwebproxy"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -381,6 +380,7 @@ steps:
   - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
   - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
   - "make docker-build/explorer"
+  - "make docker-build/grpcwebproxy"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"

@@ -65,8 +65,8 @@ docker-build/client: .make/docker-build/universal/client .make/docker-build/test
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
-docker-build/explorer: .make/docker-build/explorer
-docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
+docker-build/explorer: .make/docker-build/explorer .make/docker-build/test/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy .make/docker-build/test/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
