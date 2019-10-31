@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::OsStr;
+use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -60,6 +61,10 @@ pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 ///
 /// This default value should give 1MiB initial map size by default.
 const DEFAULT_LMDB_PAGES: usize = 2560;
+
+/// This is appended to the data dir path provided to the `LmdbWasmTestBuilder` in order to match
+/// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
+const GLOBAL_STATE_DIR: &str = "global_state";
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -518,8 +523,9 @@ impl LmdbWasmTestBuilder {
         engine_config: EngineConfig,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
@@ -578,8 +584,9 @@ impl LmdbWasmTestBuilder {
         post_state_hash: Vec<u8>,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store =
@@ -604,6 +611,17 @@ impl LmdbWasmTestBuilder {
             pos_contract_uref: None,
             genesis_transforms: None,
         }
+    }
+
+    fn create_and_get_global_state_dir<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> PathBuf {
+        let global_state_path = {
+            let mut path = PathBuf::from(data_dir);
+            path.push(GLOBAL_STATE_DIR);
+            path
+        };
+        fs::create_dir_all(&global_state_path)
+            .unwrap_or_else(|_| panic!("Expected to create {}", global_state_path.display()));
+        global_state_path
     }
 }
 
