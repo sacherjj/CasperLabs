@@ -258,6 +258,11 @@ package object gossiping {
             s"Detected block ${show(block.blockHash)} equivocated"
           )
 
+        case Processed =>
+          Log[F].warn(
+            s"Block ${show(block.blockHash)} seems to have been processed before."
+          )
+
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>
             MonadThrowable[F].raiseError[Unit](
