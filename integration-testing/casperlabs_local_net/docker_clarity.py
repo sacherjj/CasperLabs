@@ -78,13 +78,13 @@ class DockerGrpcWebProxy(LoggingDockerBase):
         return "grpcwebproxy"
 
     @property
-    def grpc_web_roxy_path(self) -> Path:
+    def grpc_web_proxy_path(self) -> Path:
         return resources_path() / "grpcwebproxy"
 
     @property
     def volumes(self) -> dict:
-        tls_certificate = self.grpc_web_roxy_path / "certificate.pem"
-        tls_key = self.grpc_web_roxy_path / "key.pem"
+        tls_certificate = self.grpc_web_proxy_path / "certificate.pem"
+        tls_key = self.grpc_web_proxy_path / "key.pem"
         return {
             str(tls_certificate.absolute()): {
                 "bind": "/etc/tls/certificate.pem",
