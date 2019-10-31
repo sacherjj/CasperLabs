@@ -328,7 +328,7 @@ where
             let module = {
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, Key::URef(mint_reference).normalize())?;
+                    .get_contract(correlation_id, Key::URef(mint_reference))?;
                 let (bytes, _, _) = contract.destructure();
                 preprocessor.deserialize(&bytes)?
             };
@@ -617,7 +617,7 @@ where
                 }
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key.normalize())?;
+                    .get_contract(correlation_id, *stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
                 let module = preprocessor.deserialize(&ret)?;
                 Ok(module)
@@ -779,46 +779,39 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = Key::from(protocol_data.mint()).normalize();
+            let mint_reference = protocol_data.mint();
 
-            // FIXME: This is inefficient; we don't need to get the entire contract.
-            let mint_info = match tracking_copy
+            let mint_contract = match tracking_copy
                 .borrow_mut()
-                .get_system_contract_info(correlation_id, mint_public_uref)
+                .get_contract(correlation_id, Key::URef(mint_reference))
             {
-                Ok(contract_info) => contract_info,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
+                Ok(contract) => contract,
+                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             };
 
-            // Safe to unwrap here, as `get_system_contract_info` checks that the key is
-            // the proper variant.
-            let mint_uref = *mint_info.key().as_uref().unwrap();
-
-            if !self.system_contract_cache.has(&mint_uref) {
-                let module = match preprocessor.deserialize(mint_info.contract().bytes()) {
+            if !self.system_contract_cache.has(&mint_reference) {
+                let module = match preprocessor.deserialize(mint_contract.bytes()) {
                     Ok(module) => module,
                     Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
                 };
-                let _ = self.system_contract_cache.insert(mint_uref, module);
+                self.system_contract_cache.insert(mint_reference, module);
             }
 
-            mint_uref
+            mint_reference
         };
 
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = Key::from(protocol_data.proof_of_stake()).normalize();
+        let proof_of_stake_reference = protocol_data.proof_of_stake();
 
         // Get proof of stake system contract details
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_info = match tracking_copy
+        let proof_of_stake_contract = match tracking_copy
             .borrow_mut()
-            .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+            .get_contract(correlation_id, Key::from(proof_of_stake_reference))
         {
-            Ok(contract_info) => contract_info,
+            Ok(contract) => contract,
             Err(error) => {
                 return Ok(ExecutionResult::precondition_failure(error.into()));
             }
@@ -829,16 +822,13 @@ where
         let rewards_purse_balance_key: Key = {
             // Get reward purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
-            let rewards_purse_key: Key = match proof_of_stake_info
-                .contract()
-                .named_keys()
-                .get(POS_REWARDS_PURSE)
-            {
-                Some(key) => *key,
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(Error::DeployError));
-                }
-            };
+            let rewards_purse_key: Key =
+                match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
+                    Some(key) => *key,
+                    None => {
+                        return Ok(ExecutionResult::precondition_failure(Error::DeployError));
+                    }
+                };
 
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
@@ -947,14 +937,11 @@ where
         let payment_purse_balance: Motes = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
-            let payment_purse: Key = match proof_of_stake_info
-                .contract()
-                .named_keys()
-                .get(POS_PAYMENT_PURSE)
-            {
-                Some(key) => *key,
-                None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
-            };
+            let payment_purse: Key =
+                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
+                    Some(key) => *key,
+                    None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
+                };
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
@@ -1041,23 +1028,21 @@ where
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
 
             // validation_spec_1: valid wasm bytes
-            let proof_of_stake_module = {
-                let proof_of_stake_uref = *proof_of_stake_info.key().as_uref().unwrap();
-                match self.system_contract_cache.get_clone(&proof_of_stake_uref) {
-                    Some(module) => module,
-                    None => {
-                        let module =
-                            match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
-                                Err(error) => {
-                                    return Ok(ExecutionResult::precondition_failure(error.into()))
-                                }
-                                Ok(module) => module,
-                            };
-                        let _ = self
-                            .system_contract_cache
-                            .insert(proof_of_stake_uref, module.clone());
-                        module
-                    }
+            let proof_of_stake_module = match self
+                .system_contract_cache
+                .get_clone(&proof_of_stake_reference)
+            {
+                Some(module) => module,
+                None => {
+                    let module = match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                        Ok(module) => module,
+                        Err(error) => {
+                            return Ok(ExecutionResult::precondition_failure(error.into()))
+                        }
+                    };
+                    self.system_contract_cache
+                        .insert(proof_of_stake_reference, module.clone());
+                    module
                 }
             };
 
@@ -1072,17 +1057,17 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or
             // session, so we need to look them up again from the tracking copy
-            let proof_of_stake_info = match finalization_tc
+            let proof_of_stake_contract = match finalization_tc
                 .borrow_mut()
-                .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+                .get_contract(correlation_id, Key::URef(proof_of_stake_reference))
             {
                 Ok(info) => info,
                 Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             };
 
-            let mut proof_of_stake_keys = proof_of_stake_info.contract().named_keys().clone();
+            let mut proof_of_stake_keys = proof_of_stake_contract.named_keys().to_owned();
 
-            let base_key = proof_of_stake_info.key();
+            let base_key = Key::from(proof_of_stake_reference);
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 

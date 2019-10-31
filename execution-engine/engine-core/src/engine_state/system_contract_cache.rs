@@ -13,7 +13,8 @@ impl SystemContractCache {
     /// Returns `true` if the cache has a contract corresponding to `uref`.
     pub fn has(&self, uref: &URef) -> bool {
         let guarded_map = self.0.read().unwrap();
-        guarded_map.contains_key(uref)
+        let uref = uref.remove_access_rights();
+        guarded_map.contains_key(&uref)
     }
 
     /// Inserts `contract` into the cache under `uref`.
@@ -23,12 +24,14 @@ impl SystemContractCache {
     /// If the cache did have this key present, the value is updated, and the old value is returned.
     pub fn insert(&self, uref: URef, contract: Module) -> Option<Module> {
         let mut guarded_map = self.0.write().unwrap();
+        let uref = uref.remove_access_rights();
         guarded_map.insert(uref, contract)
     }
 
     /// Returns a clone of the contract corresponding to `uref`.
     pub fn get_clone(&self, uref: &URef) -> Option<Module> {
         let guarded_map = self.0.read().unwrap();
-        guarded_map.get(uref).cloned()
+        let uref = uref.remove_access_rights();
+        guarded_map.get(&uref).cloned()
     }
 }
