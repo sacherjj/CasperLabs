@@ -13,7 +13,7 @@ pub struct DeployItem {
     session: ExecutableDeployItem,
     payment: ExecutableDeployItem,
     gas_price: GasPrice,
-    authorization_keys: Vec<PublicKey>,
+    authorization_keys: BTreeSet<PublicKey>,
     deploy_hash: DeployHash,
 }
 
@@ -24,7 +24,7 @@ impl DeployItem {
         session: ExecutableDeployItem,
         payment: ExecutableDeployItem,
         gas_price: GasPrice,
-        authorization_keys: Vec<PublicKey>,
+        authorization_keys: BTreeSet<PublicKey>,
         deploy_hash: DeployHash,
     ) -> Self {
         DeployItem {
@@ -52,8 +52,8 @@ impl DeployItem {
         self.gas_price
     }
 
-    pub fn authorization_keys(&self) -> BTreeSet<PublicKey> {
-        self.authorization_keys.iter().cloned().collect()
+    pub fn authorization_keys(&self) -> &BTreeSet<PublicKey> {
+        &self.authorization_keys
     }
 
     pub fn deploy_hash(&self) -> DeployHash {

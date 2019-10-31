@@ -711,7 +711,7 @@ where
 
         // Authorize using provided authorization keys
         // validation_spec_3: account validity
-        if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
+        if authorization_keys.is_empty() || !account.can_authorize(authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 crate::engine_state::error::Error::AuthorizationError,
             ));
@@ -719,7 +719,7 @@ where
 
         // Check total key weight against deploy threshold
         // validation_spec_4: deploy validity
-        if !account.can_deploy_with(&authorization_keys) {
+        if !account.can_deploy_with(authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 // TODO?:this doesn't happen in execution any longer, should error variant be moved
                 execution::Error::DeploymentAuthorizationFailure.into(),

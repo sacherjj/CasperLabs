@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::string::ToString;
@@ -1229,11 +1229,12 @@ impl TryFrom<&ipc::DeployItem> for DeployItem {
         let authorization_keys = value
             .get_authorization_keys()
             .iter()
-            .map(|raw: &Vec<u8>| match raw.as_slice().try_into() {
-                Ok(public_key) => Ok(public_key),
-                Err(_) => Err(MappingError::invalid_public_key_length(raw.len())),
+            .map(|raw: &Vec<u8>| {
+                raw.as_slice()
+                    .try_into()
+                    .map_err(|_| MappingError::invalid_public_key_length(raw.len()))
             })
-            .collect::<Result<Vec<PublicKey>, Self::Error>>()?;
+            .collect::<Result<BTreeSet<PublicKey>, Self::Error>>()?;
         let deploy_hash = {
             let source = value.get_deploy_hash();
             let length = source.len();
