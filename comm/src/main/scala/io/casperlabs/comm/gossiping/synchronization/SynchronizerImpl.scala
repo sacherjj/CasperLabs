@@ -106,7 +106,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                     service,
                     missing,
                     knownBlockHashes,
-                    newSyncState.nextIteration
+                    newSyncState
                   )
             )
       }
@@ -133,7 +133,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       source: Node,
       parentToChildren: Map[ByteString, Set[ByteString]]
   ): F[List[ByteString]] =
-    danglingParents(parentToChildren).toList.filterA { blockHash =>
+    greatestParents(parentToChildren).toList.filterA { blockHash =>
       for {
         syncedSummaries <- syncedSummariesRef.get
         // TODO: We could say that if we have it from *any* source, but not this,
@@ -144,8 +144,10 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       } yield isMissing
     }
 
-  /** Find parents which have no children. */
-  private def danglingParents(
+  /** Find parents which have no children, which form the leftmost edge of the DAG.
+    * We should have these locally, otherwise we have to traverse further back.
+    */
+  private def greatestParents(
       parentToChildren: Map[ByteString, Set[ByteString]]
   ): Set[ByteString] = {
     val allParents = parentToChildren.keySet
@@ -175,7 +177,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
       prevSyncState: SyncState
-  ): F[Either[SyncError, SyncState]] =
+  ): F[Either[SyncError, SyncState]] = {
+    val currentTargets = targetBlockHashes.toSet
     service
       .streamAncestorBlockSummaries(
         StreamAncestorBlockSummariesRequest(
@@ -192,16 +195,16 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                 )
             _ <- validate(summary)
             _ <- noCycles(syncState, summary)
-            distance <- reachable(
-                         syncState,
-                         summary,
-                         targetBlockHashes.toSet
-                       )
-            newSyncState = syncState.append(summary, distance)
-            _            <- notTooDeep(newSyncState)
+            (iterDist, origDist) <- reachable(
+                                     syncState,
+                                     summary,
+                                     currentTargets
+                                   )
+            newSyncState = syncState.append(summary, iterDist, origDist)
             _            <- notTooWide(newSyncState)
           } yield newSyncState
 
+          // If it's an error, stop the fold, otherwise carry on.
           effect.value.map {
             case x @ Left(_) =>
               (x: Either[SyncError, SyncState])
@@ -212,7 +215,10 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
           }
         // Never happens
         case _ => Sync[F].raiseError(new RuntimeException)
-      }
+      } map {
+      _.map(_.endIteration)
+    }
+  }
 
   /** Formal validation of the block summary fields. It should weed out complete rubbish,
     * which should make certain forgeries like dependency cycles impossible.
@@ -240,24 +246,10 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       syncState: SyncState,
       summary: BlockSummary
   ): EitherT[F, SyncError, Unit] =
-    if (syncState.visitedInIteration(summary.blockHash)) {
+    if (syncState.iterationState.visited(summary.blockHash)) {
       EitherT((Cycle(summary): SyncError).asLeft[Unit].pure[F])
     } else {
       EitherT(().asRight[SyncError].pure[F])
-    }
-
-  private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
-    if (syncState.distanceFromOriginalTarget.isEmpty) {
-      EitherT(().asRight[SyncError].pure[F])
-    } else {
-      val exceeded = syncState.distanceFromOriginalTarget.collect {
-        case (hash, distance) if distance > maxPossibleDepth => hash
-      }.toSet
-      if (exceeded.isEmpty) {
-        EitherT(().asRight[SyncError].pure[F])
-      } else {
-        EitherT((TooDeep(exceeded, maxPossibleDepth): SyncError).asLeft[Unit].pure[F])
-      }
     }
 
   /** Checks that at the current depth we are observing we haven't received so many blocks that it would indicate
@@ -304,44 +296,50 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 
   /** Check that the new block can be reached from the current target hashes,
     * within the iterations we have are doing, using our depth-per-request setting.
+    * Also check that it can be reached from the original targets within the overall limit.
     */
   private def reachable(
       syncState: SyncState,
       summary: BlockSummary,
       targetBlockHashes: Set[ByteString]
-  ): EitherT[F, SyncError, Int] = {
+  ): EitherT[F, SyncError, (Int, Int)] = {
+    val hash = summary.blockHash
     def unreachable(msg: String) =
-      EitherT((Unreachable(summary, maxDepthAncestorsRequest, msg): SyncError).asLeft[Int].pure[F])
+      EitherT(
+        (Unreachable(summary, maxDepthAncestorsRequest, msg): SyncError).asLeft[(Int, Int)].pure[F]
+      )
 
-    // Check that we can reach a target within the request depth.
-    def targetReachable(i: Int, front: Set[ByteString]): Boolean =
-      if (front.intersect(targetBlockHashes).nonEmpty) {
-        true
-      } else if (i > maxDepthAncestorsRequest) {
-        false
-      } else {
-        val nextFront =
-          front.flatMap(syncState.parentToChildren.getOrElse(_, Set.empty)).diff(front)
-        targetReachable(i + 1, nextFront)
-      }
+    def tooDeep =
+      EitherT(
+        (TooDeep(Set(hash), maxPossibleDepth): SyncError).asLeft[(Int, Int)].pure[F]
+      )
 
-    if (syncState.originalTargets(summary.blockHash)) {
-      EitherT(0.asRight[SyncError].pure[F])
+    // If we got here through previous children, they should already point at their parent.
+    val children =
+      syncState.iterationState.parentToChildren.getOrElse(hash, Set.empty)
+    val iterDist = distance(hash, children, syncState.iterationState.distanceFromTargets)
+    val origDist = distance(hash, children, syncState.distanceFromOriginalTargets)
+    val reached  = EitherT((iterDist -> origDist).asRight[SyncError].pure[F])
+
+    if (targetBlockHashes(hash)) {
+      reached
+    } else if (children.isEmpty) {
+      unreachable("No children lead to this block in this iteration.")
+    } else if (iterDist > maxDepthAncestorsRequest) {
+      unreachable("Iteration targets too far.")
+    } else if (origDist > maxPossibleDepth) {
+      tooDeep
     } else {
-      // If we got here it should have been through a child, which should already have a distance.
-      val children = syncState.parentToChildren.getOrElse(summary.blockHash, Set.empty)
-      if (children.isEmpty) {
-        unreachable("No children lead to this block.")
-      } else {
-        if (!targetReachable(0, Set(summary.blockHash))) {
-          unreachable("None of the iteration targets are reachable.")
-        } else {
-          val distFromOriginal = children.map(syncState.distanceFromOriginalTarget).min + 1
-          EitherT((distFromOriginal).asRight[SyncError].pure[F])
-        }
-      }
+      reached
     }
   }
+
+  private def distance(
+      hash: ByteString,
+      children: Set[ByteString],
+      distances: Map[ByteString, Int]
+  ) =
+    distances.getOrElse(hash, if (children.isEmpty) 0 else (children.map(distances).min + 1))
 }
 
 object SynchronizerImpl {
@@ -401,55 +399,60 @@ object SynchronizerImpl {
   }
 
   final case class SyncState(
-      iteration: Int,
-      visitedInIteration: Set[ByteString],
       originalTargets: Set[ByteString],
       summaries: Map[ByteString, BlockSummary],
+      ranks: Set[Long],
+      distanceFromOriginalTargets: Map[ByteString, Int],
       parentToChildren: Map[ByteString, Set[ByteString]],
-      childToParents: Map[ByteString, Set[ByteString]],
-      distanceFromOriginalTarget: Map[ByteString, Int],
-      ranks: Set[Long]
+      iterationState: IterationState
   ) {
-    def append(summary: BlockSummary, distance: Int): SyncState = {
-      val deps = dependencies(summary)
+    def append(summary: BlockSummary, iterationDistance: Int, originalDistance: Int): SyncState =
+      copy(
+        summaries = summaries + (summary.blockHash -> summary),
+        ranks = ranks + summary.rank,
+        iterationState = iterationState.append(summary, iterationDistance),
+        distanceFromOriginalTargets =
+          distanceFromOriginalTargets.updated(summary.blockHash, originalDistance)
+      )
+
+    def endIteration = copy(
+      iterationState = IterationState.empty,
+      // Collect final parent relationships so we can detect missing ones.
+      parentToChildren = parentToChildren |+| iterationState.parentToChildren
+    )
+  }
+  object SyncState {
+    def initial(originalTargets: Set[ByteString]) =
       SyncState(
-        iteration,
-        visitedInIteration = visitedInIteration + summary.blockHash,
         originalTargets,
-        summaries + (summary.blockHash -> summary),
-        parentToChildren = deps.foldLeft(parentToChildren) {
-          case (acc, dependency) =>
-            acc + (dependency -> (acc(dependency) + summary.blockHash))
-        },
-        childToParents = deps.foldLeft(childToParents) {
-          case (acc, dependency) =>
-            acc + (summary.blockHash -> (acc(summary.blockHash) + dependency))
-        },
-        distanceFromOriginalTarget.updated(summary.blockHash, distance),
-        ranks = ranks + summary.rank
+        summaries = Map.empty,
+        ranks = Set.empty,
+        distanceFromOriginalTargets = Map.empty,
+        parentToChildren = Map.empty,
+        iterationState = IterationState.empty
+      )
+  }
+
+  // Rules about how we got to see a summary are easier to check within an iteration
+  // of streaming ancestors, but difficult to reason about across iterations.
+  final case class IterationState(
+      visited: Set[ByteString],
+      distanceFromTargets: Map[ByteString, Int],
+      parentToChildren: Map[ByteString, Set[ByteString]]
+  ) {
+    def append(summary: BlockSummary, distance: Int): IterationState = {
+      val depsToChild = dependencies(summary).map(p => p -> Set(summary.blockHash)).toMap
+      IterationState(
+        visited = visited + summary.blockHash,
+        parentToChildren = parentToChildren |+| depsToChild,
+        distanceFromTargets = distanceFromTargets.updated(summary.blockHash, distance)
       )
     }
-
-    def nextIteration = copy(
-      iteration = iteration + 1,
-      visitedInIteration = Set.empty
-    )
+  }
+  object IterationState {
+    val empty = IterationState(Set.empty, Map.empty, Map.empty)
   }
 
   private def dependencies(summary: BlockSummary): List[ByteString] =
     (summary.justifications.map(_.latestBlockHash) ++ summary.parentHashes).toList
-
-  object SyncState {
-    def initial(originalTargets: Set[ByteString]) =
-      SyncState(
-        iteration = 1,
-        visitedInIteration = Set.empty,
-        originalTargets,
-        summaries = Map.empty,
-        parentToChildren = Map.empty.withDefaultValue(Set.empty),
-        childToParents = Map.empty.withDefaultValue(Set.empty),
-        distanceFromOriginalTarget = Map.empty,
-        ranks = Set.empty
-      )
-  }
 }
