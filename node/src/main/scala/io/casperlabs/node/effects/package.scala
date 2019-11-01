@@ -91,8 +91,8 @@ package object effects {
     val config = new HikariConfig()
     config.setDriverClassName("org.sqlite.JDBC")
     config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
-    config.setMinimumIdle(1)
-    config.setMaximumPoolSize(1)
+    config.setMinimumIdle(2)
+    config.setMaximumPoolSize(2)
     // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
     // From doobie's docs:
     // * - Auto-commit will be set to `false`;
@@ -101,6 +101,12 @@ package object effects {
     // Using a connection pool with maximum size of 1 becuase with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
+
+    // UPDATE: Set connection pool size to 2 because
+    // we use fs2.Stream as a return type in some places which hold an opened connection
+    // preventing acquiring a connection in other places.
+    // If SQLITE_BUSY errors happen again then we need to find another solution.
+    // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking.
     HikariTransactor
       .fromHikariConfig[Task](
         config,
