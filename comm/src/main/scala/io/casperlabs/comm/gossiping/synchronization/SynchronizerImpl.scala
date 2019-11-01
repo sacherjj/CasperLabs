@@ -268,29 +268,29 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     * at any given depth.
     */
   private def notTooWide(syncState: SyncState): EitherT[F, SyncError, Unit] = {
-    // Dependencies can be scattered across many different ranks and still be at the same
-    // distance when measured in hops along the j-DAG, so to use the "bonding per rank"
-    // limit we need to have a different estimate for the number of depth as in ranks.
-    // The max-min rank distance could be faked, but we can perhaps get an estimate by just
-    // seeing how many different values we observed so far.
-    val depth = syncState.ranks.size
-    val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
-      syncState.summaries.get(t).fold(1)(s => s.state.bonds.size)
-    }.max
-    // Validators can come and leave at a certain rate. If someone unbonded at every step along
-    // the way we'd get as wide a graph as we can get (looking back).
-    val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
-    // Use the most conservative estimate by allowing 33% of the validators all equivocating
-    // at every rank, and using the average maximum validator count as a higher bound.
-    val maxTotal =
-      Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2.0 * depth * 1.33).toInt
     val total = syncState.summaries.size
-    if (total > minBlockCountToCheckWidth &&
-        total > syncState.originalTargets.size &&
-        total > maxTotal) {
-      EitherT((TooWide(maxBondingRate, depth, maxTotal, total): SyncError).asLeft[Unit].pure[F])
-    } else {
+    if (total < minBlockCountToCheckWidth || total <= syncState.originalTargets.size) {
       EitherT(().asRight[SyncError].pure[F])
+    } else {
+      // Dependencies can be scattered across many different ranks and still be at the same
+      // distance when measured in hops along the j-DAG, so to use the "bonding per rank"
+      // limit we need to have a different estimate for the number of depth as in ranks.
+      // The max-min rank distance could be faked, but we can perhaps get an estimate by just
+      // seeing how many different values we observed so far.
+      val depth = syncState.ranks.size
+      val maxValidatorCountAtTargets = syncState.originalTargets.map { t =>
+        syncState.summaries.get(t).fold(1)(s => s.state.bonds.size)
+      }.max
+      // Validators can come and leave at a certain rate. If someone unbonded at every step along
+      // the way we'd get as wide a graph as we can get (looking back).
+      val maxValidators = maxValidatorCountAtTargets + Math.ceil(depth * maxBondingRate).toInt
+      // Use the most conservative estimate by allowing 33% of the validators all equivocating
+      // at every rank, and using the average maximum validator count as a higher bound.
+      val maxTotal =
+        Math.ceil((maxValidators + maxValidatorCountAtTargets) / 2.0 * depth * 1.33).toInt
+
+      EitherT((TooWide(maxBondingRate, depth, maxTotal, total): SyncError).asLeft[Unit].pure[F])
+        .whenA(total > maxTotal)
     }
   }
 
