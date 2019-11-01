@@ -1,9 +1,10 @@
-use std::collections::hash_map::{IntoIter, Iter, IterMut, RandomState};
+use std::borrow::Borrow;
+use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys, RandomState, Values};
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Formatter};
 use std::hash::{BuildHasher, Hash};
 use std::iter::{FromIterator, IntoIterator};
-use std::ops::{AddAssign, Deref, DerefMut};
+use std::ops::{AddAssign, Index};
 
 #[derive(Clone)]
 pub struct AdditiveMap<K, V, S = RandomState>(HashMap<K, V, S>);
@@ -14,26 +15,64 @@ impl<K: Eq + Hash, V> AdditiveMap<K, V, RandomState> {
     }
 }
 
-impl<K, V, S> Deref for AdditiveMap<K, V, S> {
-    type Target = HashMap<K, V, S>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<K, V, S> DerefMut for AdditiveMap<K, V, S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl<K: Eq + Hash, V: AddAssign + Default, S: BuildHasher> AdditiveMap<K, V, S> {
     /// Modifies the existing value stored under `key`, or the default value for `V` if none, by
     /// adding `value_to_add`.
     pub fn insert_add(&mut self, key: K, value_to_add: V) {
         let current_value = self.0.entry(key).or_insert_with(Default::default);
         *current_value += value_to_add;
+    }
+}
+
+impl<K, V, S> AdditiveMap<K, V, S> {
+    pub fn keys(&self) -> Keys<'_, K, V> {
+        self.0.keys()
+    }
+
+    pub fn values(&self) -> Values<'_, K, V> {
+        self.0.values()
+    }
+
+    pub fn iter(&self) -> Iter<'_, K, V> {
+        self.0.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl<K: Eq + Hash, V, S: BuildHasher> AdditiveMap<K, V, S> {
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        self.0.get(key)
+    }
+
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        self.0.insert(key, value)
+    }
+
+    pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        self.0.remove(key)
+    }
+
+    pub fn remove_entry<Q>(&mut self, key: &Q) -> Option<(K, V)>
+    where
+        K: Borrow<Q>,
+        Q: Eq + Hash + ?Sized,
+    {
+        self.0.remove_entry(key)
     }
 }
 
@@ -73,6 +112,19 @@ impl<K, V, S> IntoIterator for AdditiveMap<K, V, S> {
 impl<K: Eq + Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for AdditiveMap<K, V, S> {
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         Self(HashMap::from_iter(iter))
+    }
+}
+
+impl<K, Q, V, S> Index<&Q> for AdditiveMap<K, V, S>
+where
+    K: Eq + Hash + Borrow<Q>,
+    Q: Eq + Hash + ?Sized,
+    S: BuildHasher,
+{
+    type Output = V;
+
+    fn index(&self, key: &Q) -> &V {
+        &self.0[key]
     }
 }
 
