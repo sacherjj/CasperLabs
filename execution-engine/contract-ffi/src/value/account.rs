@@ -17,10 +17,20 @@ use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug)]
-pub struct TryFromIntError(());
+pub struct TryFromIntError;
+
+impl<T> UnwrapOrRevert<T> for Result<T, TryFromIntError> {
+    fn unwrap_or_revert(self) -> T {
+        self.unwrap_or_else(|_| runtime::revert(ApiError::Logic))
+    }
+
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
+        self.unwrap_or_else(|_| runtime::revert(error.into()))
+    }
+}
 
 #[derive(Debug)]
-pub struct TryFromSliceForPublicKeyError(());
+pub struct TryFromSliceForPublicKeyError;
 
 impl<T> UnwrapOrRevert<T> for Result<T, TryFromSliceForPublicKeyError> {
     fn unwrap_or_revert(self) -> T {
@@ -77,7 +87,7 @@ impl TryFrom<u32> for ActionType {
         match value {
             d if d == ActionType::Deployment as u32 => Ok(ActionType::Deployment),
             d if d == ActionType::KeyManagement as u32 => Ok(ActionType::KeyManagement),
-            _ => Err(TryFromIntError(())),
+            _ => Err(TryFromIntError),
         }
     }
 }
@@ -135,7 +145,7 @@ impl TryFrom<i32> for SetThresholdFailure {
             d if d == SetThresholdFailure::InsufficientTotalWeight as i32 => {
                 Ok(SetThresholdFailure::InsufficientTotalWeight)
             }
-            _ => Err(TryFromIntError(())),
+            _ => Err(TryFromIntError),
         }
     }
 }
@@ -307,7 +317,7 @@ impl TryFrom<&[u8]> for PublicKey {
     type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         if bytes.len() != KEY_SIZE {
-            return Err(TryFromSliceForPublicKeyError(()));
+            return Err(TryFromSliceForPublicKeyError);
         }
         let mut public_key = [0u8; 32];
         public_key.copy_from_slice(bytes);
@@ -361,7 +371,7 @@ impl TryFrom<i32> for AddKeyFailure {
             d if d == AddKeyFailure::MaxKeysLimit as i32 => Ok(AddKeyFailure::MaxKeysLimit),
             d if d == AddKeyFailure::DuplicateKey as i32 => Ok(AddKeyFailure::DuplicateKey),
             d if d == AddKeyFailure::PermissionDenied as i32 => Ok(AddKeyFailure::PermissionDenied),
-            _ => Err(TryFromIntError(())),
+            _ => Err(TryFromIntError),
         }
     }
 }
@@ -404,7 +414,7 @@ impl TryFrom<i32> for RemoveKeyFailure {
             d if d == RemoveKeyFailure::ThresholdViolation as i32 => {
                 Ok(RemoveKeyFailure::ThresholdViolation)
             }
-            _ => Err(TryFromIntError(())),
+            _ => Err(TryFromIntError),
         }
     }
 }
@@ -444,7 +454,7 @@ impl TryFrom<i32> for UpdateKeyFailure {
             d if d == UpdateKeyFailure::ThresholdViolation as i32 => {
                 Ok(UpdateKeyFailure::ThresholdViolation)
             }
-            _ => Err(TryFromIntError(())),
+            _ => Err(TryFromIntError),
         }
     }
 }
