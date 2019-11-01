@@ -27,9 +27,6 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     minBlockCountToCheckWidth: Int,
     maxBondingRate: Double,
     maxDepthAncestorsRequest: Int,
-    maxInitialBlockCount: Int,
-    // Before the initial sync has succeeded we allow more depth.
-    isInitialRef: Ref[F, Boolean],
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
@@ -55,14 +52,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       _              <- Metrics[F].incrementCounter("sync_targets", delta = targetBlockHashes.size.toLong)
       service        <- connectToGossip(source)
       justifications <- backend.justifications
-      isInitial      <- isInitialRef.get
       syncStateOrError <- loop(
                            source,
                            service,
                            targetBlockHashes.toList,
                            justifications,
-                           SyncState.initial(targetBlockHashes),
-                           isInitial
+                           SyncState.initial(targetBlockHashes)
                          )
       res <- syncStateOrError.fold(
               _.asLeft[Vector[BlockSummary]].pure[F],
@@ -87,8 +82,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState,
-      isInitial: Boolean
+      prevSyncState: SyncState
   ): F[Either[SyncError, SyncState]] =
     if (targetBlockHashes.isEmpty) {
       prevSyncState.asRight[SyncError].pure[F]
@@ -97,8 +91,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         service,
         targetBlockHashes,
         knownBlockHashes,
-        prevSyncState,
-        isInitial
+        prevSyncState
       ).flatMap {
         case left @ Left(_) => (left: Either[SyncError, SyncState]).pure[F]
         case Right(newSyncState) =>
@@ -115,8 +108,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                     service,
                     missing,
                     knownBlockHashes,
-                    newSyncState.copy(iteration = prevSyncState.iteration + 1),
-                    isInitial
+                    newSyncState.copy(iteration = prevSyncState.iteration + 1)
                   )
             )
       }
@@ -184,8 +176,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       service: GossipService[F],
       targetBlockHashes: List[ByteString],
       knownBlockHashes: List[ByteString],
-      prevSyncState: SyncState,
-      isInitial: Boolean
+      prevSyncState: SyncState
   ): F[Either[SyncError, SyncState]] =
     service
       .streamAncestorBlockSummaries(
@@ -211,13 +202,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                                             targetBlockHashes.toSet
                                           )
                                newSyncState = syncState.append(summary, distance)
-                               _ <- if (isInitial) {
-                                     notTooManyInitial(newSyncState, summary)
-                                   } else {
-                                     noCycles(syncState, summary) >>
-                                       notTooDeep(newSyncState) >>
-                                       notTooWide(newSyncState)
-                                   }
+                               _ <- noCycles(syncState, summary) >>
+                                     notTooDeep(newSyncState) >>
+                                     notTooWide(newSyncState)
                              } yield newSyncState
                            }
             _ <- EitherT(
@@ -262,16 +249,6 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       EitherT(().asRight[SyncError].pure[F])
     }
   }
-
-  private def notTooManyInitial(
-      syncState: SyncState,
-      last: BlockSummary
-  ): EitherT[F, SyncError, Unit] =
-    if (syncState.summaries.size <= maxInitialBlockCount) {
-      EitherT(().asRight[SyncError].pure[F])
-    } else {
-      EitherT((TooMany(last.blockHash, maxInitialBlockCount): SyncError).asLeft[Unit].pure[F])
-    }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
     if (syncState.distanceFromOriginalTarget.isEmpty) {
@@ -393,8 +370,6 @@ object SynchronizerImpl {
       minBlockCountToCheckWidth: Int,
       maxBondingRate: Double,
       maxDepthAncestorsRequest: Int,
-      maxInitialBlockCount: Int,
-      isInitialRef: Ref[F, Boolean],
       skipValidation: Boolean = false
   ) =
     for {
@@ -408,8 +383,6 @@ object SynchronizerImpl {
         minBlockCountToCheckWidth,
         maxBondingRate,
         maxDepthAncestorsRequest,
-        maxInitialBlockCount,
-        isInitialRef,
         semaphoreMap,
         syncedSummariesRef,
         skipValidation

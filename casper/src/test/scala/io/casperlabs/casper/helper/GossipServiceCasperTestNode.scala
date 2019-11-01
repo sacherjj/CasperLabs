@@ -393,9 +393,7 @@ object GossipServiceCasperTestNodeFactory {
                          maxPossibleDepth = Int.MaxValue,
                          minBlockCountToCheckWidth = Int.MaxValue,
                          maxBondingRate = 1.0,
-                         maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
-                         maxInitialBlockCount = Int.MaxValue,
-                         isInitialRef = Ref.unsafe[F, Boolean](false)
+                         maxDepthAncestorsRequest = 1 // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
                        )
 
         server <- GossipServiceServer[F](

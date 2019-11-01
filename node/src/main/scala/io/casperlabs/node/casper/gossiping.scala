@@ -114,14 +114,9 @@ package object gossiping {
 
       validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[F](conf.casper))
 
-      isInitialRef <- Resource.liftF(
-                       Ref.of[F, Boolean](conf.server.bootstrap.nonEmpty && !conf.casper.standalone)
-                     )
-
       synchronizer <- makeSynchronizer(
                        conf,
                        connectToGossip,
-                       isInitialRef,
                        genesis.getHeader.chainName
                      )
 
@@ -180,18 +175,23 @@ package object gossiping {
 
       // Start syncing with the bootstrap and/or some others in the background.
       awaitSynchronization <- Resource
-                               .liftF(isInitialRef.get)
+                               .pure[F, Boolean](
+                                 conf.server.bootstrap.nonEmpty && !conf.casper.standalone
+                               )
                                .ifM(
                                  makeInitialSynchronizer(
                                    conf,
                                    downloadManager,
                                    connectToGossip,
-                                   awaitApproval.join,
-                                   isInitialRef
+                                   awaitApproval.join
                                  ),
                                  Resource.liftF(().pure[F].start)
                                )
 
+      // The stashing synchronizer waits for Genesis approval and the initial synchronization
+      // to complete before actually syncing anything. We had to create the underlying
+      // synchronizer earlier because the Download Manager needs a reference to it,
+      // and the Download Manager is needed by the Initial Synchronizer.
       stashingSynchronizer <- Resource.liftF {
                                StashingSynchronizer.wrap(
                                  synchronizer,
@@ -222,8 +222,7 @@ package object gossiping {
             conf,
             gossipServiceServer,
             connectToGossip,
-            awaitApproval.join,
-            isInitialRef
+            awaitApproval.join >> awaitSynchronization.join
           )
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
@@ -556,13 +555,10 @@ package object gossiping {
   def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
-      isInitialRef: Ref[F, Boolean],
       chainName: String
   ): Resource[F, Synchronizer[F]] = Resource.liftF {
     for {
-      _         <- SynchronizerImpl.establishMetrics[F]
-      isInitial <- isInitialRef.get
-      _         <- Log[F].info(s"Creating synchronizer in initial mode: $isInitial")
+      _ <- SynchronizerImpl.establishMetrics[F]
       synchronizer <- SynchronizerImpl[F](
                        connectToGossip,
                        new SynchronizerImpl.Backend[F] {
@@ -584,8 +580,6 @@ package object gossiping {
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
                        maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                       maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                       isInitialRef = isInitialRef,
                        // NODE-984: Confirm the effect of not doing validations and optimize.
                        skipValidation = true
                      )
@@ -662,8 +656,7 @@ package object gossiping {
       conf: Configuration,
       downloadManager: DownloadManager[F],
       connectToGossip: GossipService.Connector[F],
-      awaitApproved: F[Unit],
-      isInitialRef: Ref[F, Boolean]
+      awaitApproved: F[Unit]
   ): Resource[F, Fiber[F, Unit]] =
     for {
       initialSync <- Resource.liftF {
@@ -690,7 +683,6 @@ package object gossiping {
                   _         <- awaitApproved
                   awaitSync <- initialSync.sync()
                   _         <- awaitSync
-                  _         <- isInitialRef.set(false)
                   _         <- Log[F].info("Initial synchronization complete.")
                 } yield ()
               }
@@ -701,16 +693,13 @@ package object gossiping {
       conf: Configuration,
       gossipServiceServer: GossipServiceServer[F],
       connectToGossip: GossipService.Connector[F],
-      awaitApproved: F[Unit],
-      isInitialRef: Ref[F, Boolean]
+      awaitApproved: F[Unit]
   ): Resource[F, Unit] = {
     def loop(synchronizer: InitialSynchronization[F]): F[Unit] = {
       val syncOne: F[Unit] = for {
-        _         <- Time[F].sleep(conf.server.periodicSyncRoundPeriod)
-        hasPeers  <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.nonEmpty)
-        isInitial <- isInitialRef.get
-        // While the initial sync is running let's not pile on top.
-        _ <- synchronizer.sync().flatMap(identity).whenA(hasPeers && !isInitial)
+        _        <- Time[F].sleep(conf.server.periodicSyncRoundPeriod)
+        hasPeers <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.nonEmpty)
+        _        <- synchronizer.sync().flatMap(identity).whenA(hasPeers)
       } yield ()
 
       syncOne.attempt >> loop(synchronizer)
