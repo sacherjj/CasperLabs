@@ -129,7 +129,7 @@ where
         execution::instance_and_memory(parity_module.clone(), protocol_version)
             .expect("should be able to make wasm instance from module");
 
-    let mut runtime = execution::Runtime::new(memory, parity_module, context);
+    let mut runtime = execution::Runtime::new(Default::default(), memory, parity_module, context);
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,
