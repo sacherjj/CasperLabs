@@ -306,16 +306,16 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     }
   }
 
-  /** Check that `toCheck` can be reached from the current original target
-    * within the iterations we have done using our depth-per-request setting.
+  /** Check that the new block can be reached from the current target hashes,
+    * within the iterations we have are doing, using our depth-per-request setting.
     */
   private def reachable(
       syncState: SyncState,
-      toCheck: BlockSummary,
+      summary: BlockSummary,
       targetBlockHashes: Set[ByteString]
   ): EitherT[F, SyncError, Int] = {
     def unreachable(msg: String) =
-      EitherT((Unreachable(toCheck, maxDepthAncestorsRequest, msg): SyncError).asLeft[Int].pure[F])
+      EitherT((Unreachable(summary, maxDepthAncestorsRequest, msg): SyncError).asLeft[Int].pure[F])
 
     // Check that we can reach a target within the request depth.
     def targetReachable(i: Int, front: Set[ByteString]): Boolean =
@@ -329,15 +329,15 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         targetReachable(i + 1, nextFront)
       }
 
-    if (syncState.originalTargets(toCheck.blockHash)) {
+    if (syncState.originalTargets(summary.blockHash)) {
       EitherT(0.asRight[SyncError].pure[F])
     } else {
       // If we got here it should have been through a child, which should already have a distance.
-      val children = syncState.parentToChildren.getOrElse(toCheck.blockHash, Set.empty)
+      val children = syncState.parentToChildren.getOrElse(summary.blockHash, Set.empty)
       if (children.isEmpty) {
         unreachable("No children lead to this block.")
       } else {
-        if (!targetReachable(0, Set(toCheck.blockHash))) {
+        if (!targetReachable(0, Set(summary.blockHash))) {
           unreachable("None of the iteration targets are reachable.")
         } else {
           val distFromOriginal = children.map(syncState.distanceFromOriginalTarget).min + 1
