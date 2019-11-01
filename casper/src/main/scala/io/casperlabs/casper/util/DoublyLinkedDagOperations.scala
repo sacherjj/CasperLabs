@@ -33,8 +33,14 @@ final class DoublyLinkedDag[A](
 
   // If the element doesn't exist in the dag, the dag is returned as is
   def remove(element: A): DoublyLinkedDag[A] = {
-    assert(!childToParentAdjacencyList.contains(element))
-    assert(!parentToChildAdjacencyList.values.toSet.contains(element))
+    assert(
+      !childToParentAdjacencyList.contains(element),
+      "Cannot remove the element from the DAG: it still points to its parents."
+    )
+    assert(
+      !parentToChildAdjacencyList.values.toSet.contains(element),
+      "Cannot remove the element from the DAG: its parents still point at it."
+    )
     val maybeChildren = parentToChildAdjacencyList.get(element)
     val initAcc       = (childToParentAdjacencyList, Set.empty[A])
     val (updatedChildToParentAdjacencyList, newDependencyFree) = maybeChildren match {

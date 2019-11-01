@@ -271,6 +271,11 @@ package object gossiping {
             s"Detected block ${show(block.blockHash)} equivocated"
           )
 
+        case Processed =>
+          Log[F].warn(
+            s"Block ${show(block.blockHash)} seems to have been processed before."
+          )
+
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>
             MonadThrowable[F].raiseError[Unit](
@@ -561,14 +566,6 @@ package object gossiping {
       synchronizer <- SynchronizerImpl[F](
                        connectToGossip,
                        new SynchronizerImpl.Backend[F] {
-                         override def tips: F[List[ByteString]] =
-                           for {
-                             casper         <- unsafeGetCasper[F]
-                             dag            <- casper.dag
-                             latestMessages <- dag.latestMessageHashes
-                             equivocators   <- dag.getEquivocators
-                             tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
-                           } yield tipHashes
 
                          override def justifications: F[List[ByteString]] =
                            for {
@@ -588,7 +585,9 @@ package object gossiping {
                        maxBondingRate = conf.server.syncMaxBondingRate,
                        maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
                        maxInitialBlockCount = conf.server.initSyncMaxBlockCount,
-                       isInitialRef = isInitialRef
+                       isInitialRef = isInitialRef,
+                       // NODE-984: Confirm the effect of not doing validations and optimize.
+                       skipValidation = true
                      )
     } yield synchronizer
   }

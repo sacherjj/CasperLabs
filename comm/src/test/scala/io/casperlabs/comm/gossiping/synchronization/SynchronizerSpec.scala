@@ -312,17 +312,15 @@ class SynchronizerSpec
         }
       }
 
-      "include tips and justifications as known hashes" in forAll(
+      "include justifications as known hashes" in forAll(
         genPartialDagFromTips,
-        genHash,
         genHash
-      ) { (dag, tip, justification) =>
+      ) { (dag, justification) =>
         log.reset()
-        TestFixture(dag)(tips = List(tip), justifications = List(justification)) {
-          (synchronizer, variables) =>
-            synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { _ =>
-              variables.knownHashes should contain allElementsOf (tip :: justification :: Nil)
-            }
+        TestFixture(dag)(justifications = List(justification)) { (synchronizer, variables) =>
+          synchronizer.syncDag(Node(), Set(dag.head.blockHash)).foreachL { _ =>
+            variables.knownHashes should contain allElementsOf List(justification)
+          }
         }
       }
 
@@ -400,13 +398,11 @@ object SynchronizerSpec {
 
   object MockBackend {
     def apply(
-        mockTips: List[ByteString],
         mockJustifications: List[ByteString],
         mockNotInDag: ByteString => Task[Boolean],
         mockValidate: BlockSummary => Task[Unit]
     ): SynchronizerImpl.Backend[Task] =
       new SynchronizerImpl.Backend[Task] {
-        def tips: Task[List[ByteString]]                     = Task.now(mockTips)
         def justifications: Task[List[ByteString]]           = Task.now(mockJustifications)
         def validate(blockSummary: BlockSummary): Task[Unit] = mockValidate(blockSummary)
         def notInDag(blockHash: ByteString): Task[Boolean]   = mockNotInDag(blockHash)
@@ -470,7 +466,6 @@ object SynchronizerSpec {
         validate: BlockSummary => Task[Unit] = _ => Task.unit,
         notInDag: ByteString => Task[Boolean] = _ => Task.now(false),
         error: Option[RuntimeException] = None,
-        tips: List[ByteString] = Nil,
         justifications: List[ByteString] = Nil
     )(test: (Synchronizer[Task], TestVariables) => Task[Unit]): Unit = {
       val requestsCounter = AtomicInt(0)
@@ -480,7 +475,7 @@ object SynchronizerSpec {
       SynchronizerImpl[Task](
         connectToGossip =
           _ => MockGossipService(requestsCounter, requestsGauge, error, knownHashes, dags: _*),
-        backend = MockBackend(tips, justifications, notInDag, validate),
+        backend = MockBackend(justifications, notInDag, validate),
         maxPossibleDepth = maxPossibleDepth,
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
