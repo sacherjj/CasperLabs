@@ -120,15 +120,17 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       })
 
       def writeToBufferedDeploysTable(currentTimeEpochMillis: Long) =
-        Update[(ByteString, Int, ByteString, Long, Long)](
-          "INSERT OR IGNORE INTO buffered_deploys (hash, status, account, update_time_millis, receive_time_millis) VALUES (?, ?, ?, ?, ?)"
+        Update[(ByteString, Int, ByteString, Long, Long, ByteString, ByteString)](
+          "INSERT OR IGNORE INTO buffered_deploys (hash, status, account, update_time_millis, receive_time_millis, summary, body) VALUES (?, ?, ?, ?, ?, ?, ?)"
         ).updateMany(deploys.map { d =>
             (
               d.deployHash,
               status,
               d.getHeader.accountPublicKey,
               currentTimeEpochMillis,
-              currentTimeEpochMillis
+              currentTimeEpochMillis,
+              d.clearBody.toByteString,
+              d.getBody.toByteString
             )
           })
           .void
@@ -259,9 +261,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
           readHashesAndHeadersByStatus(PendingStatusCode)
 
         private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
-          sql"""|SELECT summary, null FROM deploys
-                |INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-                |WHERE bd.status=$status""".stripMargin
+          sql"""|SELECT summary, null
+                |FROM buffered_deploys
+                |WHERE  status=$status""".stripMargin
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -270,18 +272,18 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         private def readHashesAndHeadersByStatus(
             status: Int
         ): fs2.Stream[F, (ByteString, Deploy.Header)] =
-          sql"""|SELECT dh.summary, null FROM deploys dh
-                |INNER JOIN buffered_deploys bd on dh.hash = bd.hash
-                |WHERE bd.status=$status""".stripMargin
+          sql"""|SELECT summary, null
+                |FROM buffered_deploys
+                |WHERE  status=$status""".stripMargin
             .query[Deploy]
             .streamWithChunkSize(chunkSize)
             .transact(xa)
             .map(d => d.deployHash -> d.getHeader)
 
         private def readByStatus(status: Int): F[List[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-              WHERE bd.status=$status""")
+          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+              FROM buffered_deploys
+              WHERE  status=$status""")
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -290,9 +292,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
           readByAccountAndStatus(account, ProcessedStatusCode)
 
         private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-              WHERE bd.account=$account AND bd.status=$status""")
+          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+              FROM buffered_deploys
+              WHERE account=$account AND status=$status""")
             .query[Deploy]
             .to[List]
             .transact(xa)
@@ -319,9 +321,9 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             .transact(xa)
 
         override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-              INNER JOIN buffered_deploys bd on deploys.hash = bd.hash
-              WHERE bd.hash=$deployHash AND (bd.status=$PendingStatusCode OR bd.status=$ProcessedStatusCode)""")
+          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+              FROM buffered_deploys
+              WHERE hash=$deployHash AND (status=$PendingStatusCode OR status=$ProcessedStatusCode)""")
             .query[Deploy]
             .option
             .transact(xa)
