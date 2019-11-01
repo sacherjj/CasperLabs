@@ -11,12 +11,12 @@ engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared
 engine-storage = { path = "../engine-storage", package = "casperlabs-engine-storage" }
 engine-wasm-prep = { path = "../engine-wasm-prep", package = "casperlabs-engine-wasm-prep" }
 failure = "0.1.5"
+hex_fmt = "0.3.0"
 itertools = "0.8.0"
 linked-hash-map = "0.5.2"
 num-derive = "0.2.5"
 num-traits = "0.2.8"
 parity-wasm = "0.31"
-parking_lot = "0.7.1"
 pwasm-utils = "0.6"
 rand = "0.6.1"
 rand_chacha = "0.1.1"

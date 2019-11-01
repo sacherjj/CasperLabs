@@ -31,4 +31,21 @@ package object arguments {
       StringType,
       description = "Base-16 hash of a deploy, must be 64 characters long"
     )
+
+  val AccountPublicKeyBase16 =
+    Argument(
+      "accountPublicKeyBase16",
+      StringType,
+      description = "Base-16 public key of a account, must be 64 characters long"
+    )
+
+  val First = Argument("first", IntType, description = "The maximum number of items to return.")
+
+  val After =
+    Argument(
+      "after",
+      OptionInputType(StringType),
+      description = "The endCursor value returned from a previous request, if any.",
+      ""
+    )
 }

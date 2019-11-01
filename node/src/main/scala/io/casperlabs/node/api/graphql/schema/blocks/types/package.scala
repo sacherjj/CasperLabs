@@ -11,6 +11,11 @@ import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
 import sangria.schema._
+import sangria.macros.derive._
+
+case class PageInfo(endCursor: String, hasNextPage: Boolean)
+
+case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
 package object types {
 
@@ -267,6 +272,34 @@ package object types {
         "Deploys in the block".some,
         resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
       )
+    )
+  )
+
+  val PageInfoType = ObjectType(
+    "PageInfo",
+    "Cursor based pagination information",
+    fields[Unit, PageInfo](
+      Field(
+        "endCursor",
+        StringType,
+        "The cursor of the last item in result".some,
+        resolve = _.value.endCursor
+      ),
+      Field(
+        "hasNextPage",
+        BooleanType,
+        "Whether there is another page of data available".some,
+        resolve = _.value.hasNextPage
+      )
+    )
+  )
+
+  val DeployInfosWithPageInfoType = ObjectType(
+    "deploys",
+    "A list of deploys for the specified account",
+    fields[Unit, DeployInfosWithPageInfo](
+      Field("deployInfos", ListType(DeployInfoType), resolve = _.value.deployInfos),
+      Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
     )
   )
 }

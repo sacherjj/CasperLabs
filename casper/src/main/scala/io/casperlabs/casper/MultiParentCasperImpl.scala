@@ -273,24 +273,40 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
   /** Add a deploy to the buffer, if the code passes basic validation. */
   def deploy(deploy: Deploy): F[Either[Throwable, Unit]] = validatorId match {
     case Some(_) =>
-      (deploy.getBody.session, deploy.getBody.payment) match {
-        case (None, _) | (_, None) | (Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)), _) |
-            (_, Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty))) =>
-          new IllegalArgumentException(s"Deploy was missing session and/or payment code.")
-            .asLeft[Unit]
-            .pure[F]
-            .widen
-
-        case _ =>
-          addDeploy(deploy)
-      }
+      addDeploy(deploy)
     case None =>
       new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen
+  }
+
+  private def validateDeploy(deploy: Deploy): F[Unit] = {
+    def illegal(msg: String): F[Unit] =
+      MonadThrowable[F].raiseError(new IllegalArgumentException(msg))
+
+    def check(msg: String)(f: F[Boolean]): F[Unit] =
+      f flatMap { ok =>
+        illegal(msg).whenA(!ok)
+      }
+
+    for {
+      _ <- (deploy.getBody.session, deploy.getBody.payment) match {
+            case (None, _) | (_, None) | (Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)), _) |
+                (_, Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty))) =>
+              illegal(s"Deploy was missing session and/or payment code.")
+            case _ => ().pure[F]
+          }
+      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(deploy))
+      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(deploy))
+      _ <- Validation[F].deployHeader(deploy, chainName) >>= { headerErrors =>
+            illegal(headerErrors.map(_.errorMessage).mkString("\n"))
+              .whenA(headerErrors.nonEmpty)
+          }
+    } yield ()
   }
 
   /** Add a deploy to the buffer, to be executed later. */
   private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] =
     (for {
+      _ <- validateDeploy(deploy)
       _ <- DeployStorageWriter[F].addAsPending(List(deploy))
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield ()).attempt
@@ -736,7 +752,8 @@ object MultiParentCasperImpl {
             InvalidRepeatDeploy | InvalidChainName | InvalidBlockHash | InvalidDeployCount |
             InvalidDeployHash | InvalidDeploySignature | InvalidPreStateHash |
             InvalidPostStateHash | InvalidTargetHash | InvalidDeployHeader |
-            DeployDependencyNotMet | DeployExpired | DeployFromFuture =>
+            InvalidDeployChainName | DeployDependencyNotMet | DeployExpired | DeployFromFuture |
+            SwimlaneMerged =>
           handleInvalidBlockEffect(status, block) *> dag.pure[F]
 
         case Processing | Processed =>
@@ -871,10 +888,14 @@ object MultiParentCasperImpl {
 
           case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents |
               InvalidSequenceNumber | InvalidPrevBlockHash | NeglectedInvalidBlock |
-              InvalidTransaction | InvalidBondsCache | InvalidRepeatDeploy | InvalidChainName |
-              InvalidBlockHash | InvalidDeployCount | InvalidDeployHash | InvalidDeploySignature |
-              InvalidPreStateHash | InvalidPostStateHash | Processing | Processed |
-              InvalidTargetHash | InvalidDeployHeader | DeployDependencyNotMet | DeployExpired =>
+              InvalidTransaction | InvalidBondsCache | InvalidChainName | InvalidBlockHash |
+              InvalidDeployCount | InvalidPreStateHash | InvalidPostStateHash | SwimlaneMerged |
+              InvalidTargetHash | Processing | Processed =>
+            ().pure[F]
+
+          case InvalidRepeatDeploy | InvalidChainName | InvalidDeployHash | InvalidDeploySignature |
+              InvalidDeployChainName | InvalidDeployHeader | DeployDependencyNotMet |
+              DeployExpired =>
             ().pure[F]
 
           case UnexpectedBlockException(_) | DeployFromFuture =>

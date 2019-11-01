@@ -32,6 +32,11 @@ object DeployOps extends ArbitraryConsensus {
         deploy.withHeader(deploy.getHeader.withDependencies(dependencies))
       )
 
+    def withChainName(chainName: String): Deploy =
+      rehash(
+        deploy.withHeader(deploy.getHeader.withChainName(chainName))
+      )
+
     def processed(cost: Long): ProcessedDeploy = ProcessedDeploy().withDeploy(deploy).withCost(cost)
   }
 

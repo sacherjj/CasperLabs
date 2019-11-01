@@ -1,33 +1,25 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
-import cats.Parallel
 import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
+import io.casperlabs.comm.discovery.{Node, NodeDiscovery}
+import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.shared.Log
 
 import scala.concurrent.duration.FiniteDuration
 
-trait InitialSynchronization[F[_]] {
-
-  /**
-    * Synchronizes the node with the last tips.
-    *
-    * @return Handle which will be resolved when node is considered to be fully synced
-    */
-  def sync(): F[WaitHandle[F]]
-}
-
 /**
   * Synchronizes the node with peers in rounds until [[minSuccessful]] nodes
   * respond successfully in some round.
+  *
+  * Uses backward walking algorithm:
+  *  1. Ask a peer for tips
+  *  2. Notify ourselves about tips as new blocks
+  *  3. Local GossipServiceServer will schedule backward synchronization using [[Synchronizer]].
   *
   * @param selectNodes   Filtering function to select nodes to synchronize with in a round.
   *                      Second arg is a list of all known peers excluding bootstrap
@@ -36,13 +28,13 @@ trait InitialSynchronization[F[_]] {
   * @param minSuccessful Minimal number of successful responses in a round to consider synchronisation as successful
   * @param roundPeriod   Delay between synchronisation rounds
   */
-class InitialSynchronizationImpl[F[_]: Concurrent: Parallel: Log: Timer](
+class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
     nodeDiscovery: NodeDiscovery[F],
     selfGossipService: GossipServiceServer[F],
     selectNodes: List[Node] => List[Node],
     memoizeNodes: Boolean,
     connector: GossipService.Connector[F],
-    minSuccessful: Int Refined Positive,
+    minSuccessful: Int,
     skipFailedNodesInNextRounds: Boolean,
     roundPeriod: FiniteDuration
 ) extends InitialSynchronization[F] {
@@ -115,8 +107,4 @@ class InitialSynchronizationImpl[F[_]: Concurrent: Parallel: Log: Timer](
       .map(_.join)
 
   }
-}
-
-object InitialSynchronizationImpl {
-  final case class SynchronizationError() extends Exception
 }

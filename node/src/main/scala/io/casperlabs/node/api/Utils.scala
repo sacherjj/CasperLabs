@@ -11,8 +11,12 @@ import io.casperlabs.crypto.hash.Blake2b256
 import scala.util.Try
 
 object Utils {
-  def checkString[F[_]: MonadThrowable](s: String, desc: String, b: String => Boolean): F[String] =
-    MonadThrowable[F].raiseError[String](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
+  def check[F[_]: MonadThrowable, A](
+      s: A,
+      desc: String,
+      b: A => Boolean
+  ): F[A] =
+    MonadThrowable[F].raiseError[A](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
       .pure[F]
 
   def validateBlockHashPrefix[F[_]: MonadThrowable](
@@ -20,10 +24,10 @@ object Utils {
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
-      .checkString[F](
+      .check[F, String](
         p,
-        "BlockHash prefix must be at least 4 characters (2 bytes) long",
-        s => Base16.tryDecode(s).exists(_.length >= 2)
+        "BlockHash prefix must be >= 4 and <= 64 base16 characters (2 to 32 bytes) long",
+        _.matches("[a-f0-9]{4,64}")
       )
       .adaptErr(adaptError)
 
@@ -32,10 +36,22 @@ object Utils {
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
-      .checkString[F](
+      .check[F, String](
         p,
-        "DeployHash must be 64 characters (32 bytes) long",
-        Base16.tryDecode(_).exists(_.length == 32)
+        "DeployHash must be 64 base16 characters (32 bytes) long",
+        _.matches("[a-f0-9]{64}")
+      )
+      .adaptError(adaptError)
+
+  def validateAccountPublicKey[F[_]: MonadThrowable](
+      p: String,
+      adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
+  ): F[String] =
+    Utils
+      .check[F, String](
+        p,
+        "AccountPublicKey must be 64 base16 characters (32 bytes) long",
+        _.matches("[a-f0-9]{64}")
       )
       .adaptError(adaptError)
 

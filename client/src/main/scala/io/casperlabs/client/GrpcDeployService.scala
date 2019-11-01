@@ -133,23 +133,35 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
       .attempt
 
-  def showDeploy(hash: String): Task[Either[Throwable, String]] =
+  def showDeploy(
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): Task[Either[Throwable, String]] =
     casperServiceStub
       .getDeployInfo(GetDeployInfoRequest(hash, DeployInfo.View.BASIC))
-      .map(Printer.printToUnicodeString(_))
+      .map(Printer.print(_, bytesStandard, json))
       .attempt
 
-  def showDeploys(hash: String): Task[Either[Throwable, String]] =
+  def showDeploys(
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): Task[Either[Throwable, String]] =
     casperServiceStub
       .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.BASIC))
       .zipWithIndex
       .map {
         case (d, idx) =>
-          s"""
-         |------------- deploy # $hash / $idx ---------------
-         |${Printer.printToUnicodeString(d)}
-         |---------------------------------------------------
-         |""".stripMargin
+          if (json) {
+            Printer.print(d, bytesStandard, json = true)
+          } else {
+            s"""
+               |------------- deploy # $hash / $idx ---------------
+               |${Printer.print(d, bytesStandard, json = false)}
+               |---------------------------------------------------
+               |""".stripMargin
+          }
       }
       .toListL
       .map { xs =>
@@ -200,15 +212,23 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       }
       .attempt
 
-  def showBlocks(depth: Int): Task[Either[Throwable, String]] =
+  def showBlocks(
+      depth: Int,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): Task[Either[Throwable, String]] =
     casperServiceStub
       .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .map { bi =>
-        s"""
-         |------------- block @ ${bi.getSummary.rank} ---------------
-         |${Printer.printToUnicodeString(bi)}
-         |-----------------------------------------------------
-         |""".stripMargin
+        if (json) {
+          Printer.print(bi, bytesStandard, json = true)
+        } else {
+          s"""
+           |------------- block @ ${bi.getSummary.rank} ---------------
+           |${Printer.print(bi, bytesStandard, json = false)}
+           |-----------------------------------------------------
+           |""".stripMargin
+        }
       }
       .toListL
       .map { xs =>

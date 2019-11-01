@@ -51,6 +51,10 @@ message Deploy {
         // List of `Deploy.deploy_hash`s  that must be executed in past blocks
         // before this deploy can be executed.
         repeated bytes dependencies = 7;
+        // If present, the deploy can only be included in a block on the right chain.
+        // This can be used to preotect against accidental or malicious cross chain
+        // deploys, in case the same account exists on multiple networks.
+        string chain_name = 8;
     }
 
     message Body {

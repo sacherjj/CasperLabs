@@ -1,4 +1,4 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import cats.Monad
 import cats.data._
@@ -7,17 +7,14 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.kernel.Monoid
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.shared.SemaphoreMap
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError._
+import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError._
 import io.casperlabs.comm.gossiping.Utils.hex
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
@@ -26,11 +23,11 @@ import scala.util.control.NonFatal
 class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     connectToGossip: Node => F[GossipService[F]],
     backend: SynchronizerImpl.Backend[F],
-    maxPossibleDepth: Int Refined Positive,
-    minBlockCountToCheckWidth: Int Refined NonNegative,
-    maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
-    maxDepthAncestorsRequest: Int Refined Positive,
-    maxInitialBlockCount: Int Refined Positive,
+    maxPossibleDepth: Int,
+    minBlockCountToCheckWidth: Int,
+    maxBondingRate: Double,
+    maxDepthAncestorsRequest: Int,
+    maxInitialBlockCount: Int,
     // Before the initial sync has succeeded we allow more depth.
     isInitialRef: Ref[F, Boolean],
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
@@ -42,7 +39,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
-  import io.casperlabs.comm.gossiping.SynchronizerImpl._
+  import io.casperlabs.comm.gossiping.synchronization.SynchronizerImpl._
 
   // This is supposed to be called every time a scheduled download is finished,
   // even when the resolution is that we already had it, so there should be no leaks.
@@ -392,11 +389,11 @@ object SynchronizerImpl {
   def apply[F[_]: Concurrent: Log: Metrics](
       connectToGossip: Node => F[GossipService[F]],
       backend: SynchronizerImpl.Backend[F],
-      maxPossibleDepth: Int Refined Positive,
-      minBlockCountToCheckWidth: Int Refined NonNegative,
-      maxBondingRate: Double Refined GreaterEqual[W.`0.0`.T],
-      maxDepthAncestorsRequest: Int Refined Positive,
-      maxInitialBlockCount: Int Refined Positive,
+      maxPossibleDepth: Int,
+      minBlockCountToCheckWidth: Int,
+      maxBondingRate: Double,
+      maxDepthAncestorsRequest: Int,
+      maxInitialBlockCount: Int,
       isInitialRef: Ref[F, Boolean],
       skipValidation: Boolean = false
   ) =

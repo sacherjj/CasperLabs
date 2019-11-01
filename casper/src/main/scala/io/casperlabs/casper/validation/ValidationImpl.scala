@@ -1,6 +1,6 @@
 package io.casperlabs.casper.validation
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
@@ -128,13 +128,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- blockRank(summary, dag)
       _ <- validatorPrevBlockHash(summary, dag)
       _ <- sequenceNumber(summary, dag)
+      _ <- swimlane(summary, dag)
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
+      _ <- deployHeaders(block, dag, chainName)
       _ <- deployUniqueness(block, dag)
-      _ <- deployHeaders(block, dag)
     } yield ()
   }
 
@@ -224,14 +225,29 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+  private def validateChainName(
+      chainName: String,
+      deployChainName: String,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (deployChainName.nonEmpty && deployChainName != chainName)
+      Errors.DeployHeaderError
+        .invalidChainName(deployHash, deployChainName, chainName)
+        .logged[F]
+        .map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def deployHeader(d: consensus.Deploy, chainName: String): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map2(
+        Applicative[F].map3(
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
-          validateDependencies(header.dependencies, d.deployHash)
+          validateDependencies(header.dependencies, d.deployHash),
+          validateChainName(chainName, header.chainName, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+          case (validTTL, validDependencies, validChainNames) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList
         }
 
       case None =>
@@ -409,6 +425,46 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
 
+  // Check whether message merges its creator swimlane.
+  // A block cannot have more than one latest message in its j-past-cone from its creator.
+  // i.e. an equivocator cannot cite multiple of its latest messages.
+  def swimlane(b: BlockSummary, dag: DagRepresentation[F]): F[Unit] =
+    for {
+      equivocators <- dag.getEquivocators
+      message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
+            for {
+              equivocations       <- dag.getEquivocations.map(_(message.validatorId))
+              equivocationsHashes = equivocations.map(_.messageHash)
+              minRank = EquivocationDetector
+                .findMinBaseRank(Map(message.validatorId -> equivocations))
+                .getOrElse(0L) // We know it has to be defined by this point.
+              seenEquivocations <- DagOperations
+                                    .swimlaneV[F](message.validatorId, message, dag)
+                                    .foldWhileLeft(Set.empty[BlockHash]) {
+                                      case (seenEquivocations, message) =>
+                                        if (message.rank <= minRank) {
+                                          Right(seenEquivocations)
+                                        } else {
+                                          if (equivocationsHashes.contains(message.messageHash)) {
+                                            if (seenEquivocations.nonEmpty) {
+                                              Right(seenEquivocations + message.messageHash)
+                                            } else Left(Set(message.messageHash))
+                                          } else Left(seenEquivocations)
+                                        }
+                                    }
+              _ <- Monad[F].whenA(seenEquivocations.size > 1) {
+                    val msg =
+                      s"${message.messageHash} cites multiple latest message by its creator ${message.validatorId}: ${seenEquivocations
+                        .map(PrettyPrinter.buildString)
+                        .mkString("[", ",", "]")}"
+                    Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
+                      .raise[Unit](SwimlaneMerged)
+                  }
+            } yield ()
+          }
+    } yield ()
+
   /**
     * Works with either efficient justifications or full explicit justifications.
     * Specifically, with efficient justifications, if a block B doesn't update its
@@ -583,7 +639,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield ()
     }
 
-  def deployHeaders(b: Block, dag: DagRepresentation[F])(
+  def deployHeaders(b: Block, dag: DagRepresentation[F], chainName: String)(
       implicit blockStorage: BlockStorage[F]
   ): F[Unit] = {
     val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
@@ -596,7 +652,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        staticErrors           <- deployHeader(d)
+        staticErrors           <- deployHeader(d, chainName)
         _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
         header                 = d.getHeader
         isFromFuture           = !isFromPast(header)

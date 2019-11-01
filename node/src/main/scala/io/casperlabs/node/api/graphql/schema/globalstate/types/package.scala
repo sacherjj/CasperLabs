@@ -162,15 +162,6 @@ package object types {
     )
   )
 
-  lazy val AccountAccountActivity = ObjectType(
-    "AccountAccountActivity",
-    fields[Unit, state.Account.AccountActivity](
-      Field("keyManagementLastUsed", LongType, resolve = _.value.keyManagementLastUsed),
-      Field("deploymentLastUsed", LongType, resolve = _.value.deploymentLastUsed),
-      Field("inactivityPeriodLimit", LongType, resolve = _.value.inactivityPeriodLimit)
-    )
-  )
-
   lazy val Account = ObjectType(
     "Account",
     fields[Unit, state.Account](
@@ -178,8 +169,7 @@ package object types {
       Field("purseId", KeyURef, resolve = _.value.purseId.get),
       Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys),
       Field("associatedKeys", ListType(AccountAssociatedKey), resolve = _.value.associatedKeys),
-      Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds.get),
-      Field("accountActivity", AccountAccountActivity, resolve = _.value.accountActivity.get)
+      Field("actionThreshold", AccountActionThresholds, resolve = _.value.actionThresholds.get)
     )
   )
 

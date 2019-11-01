@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::string::ToString;
@@ -7,10 +7,10 @@ use protobuf::{ProtobufEnum, RepeatedField};
 
 use contract_ffi::uref::URef;
 use contract_ffi::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
-    KEY_SIZE,
+    ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE,
 };
 use contract_ffi::value::{ProtocolVersion, U512};
+use engine_core::engine_state::deploy_item::DeployItem;
 use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
 use engine_core::engine_state::execution_effect::ExecutionEffect;
 use engine_core::engine_state::execution_result::ExecutionResult;
@@ -20,11 +20,11 @@ use engine_core::engine_state::upgrade::UpgradeConfig;
 use engine_core::engine_state::{Error as EngineError, RootNotFound};
 use engine_core::execution::Error as ExecutionError;
 use engine_core::tracking_copy::utils;
+use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
 use engine_shared::motes::Motes;
 use engine_shared::transform::{self, TypeMismatch};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
-use crate::engine_server::ipc::{ChainSpec_CostTable, ChainSpec_GenesisAccount};
 use crate::engine_server::{ipc, state, transforms};
 
 mod uint;
@@ -36,15 +36,23 @@ fn transform_write(v: contract_ffi::value::Value) -> Result<transform::Transform
 
 #[derive(Debug)]
 pub enum MappingError {
+    InvalidHashLength { expected: usize, actual: usize },
     InvalidPublicKeyLength { expected: usize, actual: usize },
+    InvalidDeployHashLength { expected: usize, actual: usize },
     ParsingError(ParsingError),
-    InvalidHash(String),
+    InvalidStateHash(String),
+    MissingPayload,
 }
 
 impl MappingError {
     pub fn invalid_public_key_length(actual: usize) -> Self {
         let expected = KEY_SIZE;
         MappingError::InvalidPublicKeyLength { expected, actual }
+    }
+
+    pub fn invalid_deploy_hash_length(actual: usize) -> Self {
+        let expected = DEPLOY_HASH_LENGTH;
+        MappingError::InvalidDeployHashLength { expected, actual }
     }
 }
 
@@ -54,18 +62,41 @@ impl From<ParsingError> for MappingError {
     }
 }
 
+// This is whackadoodle, we know
+impl From<MappingError> for engine_state::Error {
+    fn from(error: MappingError) -> Self {
+        match error {
+            MappingError::InvalidHashLength { expected, actual } => {
+                engine_state::Error::InvalidHashLength { expected, actual }
+            }
+            _ => engine_state::Error::DeployError,
+        }
+    }
+}
+
 impl Display for MappingError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
+            MappingError::InvalidHashLength { expected, actual } => write!(
+                f,
+                "Invalid hash length: expected {}, actual {}",
+                expected, actual
+            ),
             MappingError::InvalidPublicKeyLength { expected, actual } => write!(
                 f,
                 "Invalid public key length: expected {}, actual {}",
                 expected, actual
             ),
+            MappingError::InvalidDeployHashLength { expected, actual } => write!(
+                f,
+                "Invalid deploy hash length: expected {}, actual {}",
+                expected, actual
+            ),
             MappingError::ParsingError(ParsingError(message)) => {
                 write!(f, "Parsing error: {}", message)
             }
-            MappingError::InvalidHash(message) => write!(f, "Invalid hash: {}", message),
+            MappingError::InvalidStateHash(message) => write!(f, "Invalid hash: {}", message),
+            MappingError::MissingPayload => write!(f, "Missing payload"),
         }
     }
 }
@@ -320,22 +351,10 @@ impl From<contract_ffi::value::account::Account> for super::state::Account {
             tmp
         };
         ipc_account.set_action_thresholds(action_thresholds);
-        let account_activity = {
-            let mut tmp = state::Account_AccountActivity::new();
-            tmp.set_deployment_last_used(account.account_activity().deployment_last_used().into());
-            tmp.set_key_management_last_used(
-                account.account_activity().key_management_last_used().into(),
-            );
-            tmp.set_inactivity_period_limit(
-                account.account_activity().inactivity_period_limit().into(),
-            );
-            tmp
-        };
         let account_named_keys = KnownKeys(account.named_keys().to_owned());
         let ipc_urefs: Vec<super::state::NamedKey> = account_named_keys.into();
         ipc_account.set_named_keys(ipc_urefs.into());
         ipc_account.set_associated_keys(associated_keys.into());
-        ipc_account.set_account_activity(account_activity);
         ipc_account
     }
 }
@@ -382,32 +401,13 @@ impl TryFrom<&super::state::Account> for contract_ffi::value::account::Account {
             )
             .map_err(ParsingError::custom)?
         };
-        let account_activity: AccountActivity = {
-            if !value.has_account_activity() {
-                return parse_error(
-                    "Missing AccountActivity object of the Account IPC message.".to_string(),
-                );
-            };
-            let account_activity_ipc = value.get_account_activity();
-            let mut tmp = AccountActivity::new(BlockTime::new(0), BlockTime::new(0));
-            tmp.update_deployment_last_used(BlockTime::new(
-                account_activity_ipc.deployment_last_used,
-            ));
-            tmp.update_key_management_last_used(BlockTime::new(
-                account_activity_ipc.key_management_last_used,
-            ));
-            tmp.update_inactivity_period_limit(BlockTime::new(
-                account_activity_ipc.inactivity_period_limit,
-            ));
-            tmp
-        };
+
         Ok(contract_ffi::value::Account::new(
             pub_key,
             named_keys.0,
             purse_id,
             associated_keys,
             action_thresholds,
-            account_activity,
         ))
     }
 }
@@ -1034,11 +1034,11 @@ impl From<GenesisConfig> for ipc::ChainSpec_GenesisConfig {
                 .iter()
                 .cloned()
                 .map(Into::into)
-                .collect::<Vec<ChainSpec_GenesisAccount>>();
+                .collect::<Vec<ipc::ChainSpec_GenesisAccount>>();
             ret.set_accounts(RepeatedField::from(accounts));
         }
         {
-            let mut cost_table = ChainSpec_CostTable::new();
+            let mut cost_table = ipc::ChainSpec_CostTable::new();
             cost_table.set_wasm(genesis_config.wasm_costs().into());
             ret.set_costs(cost_table);
         }
@@ -1053,7 +1053,7 @@ impl TryFrom<ipc::UpgradeRequest> for UpgradeConfig {
         let pre_state_hash = upgrade_request
             .get_parent_state_hash()
             .try_into()
-            .map_err(|_| MappingError::InvalidHash("pre_state_hash".to_string()))?;
+            .map_err(|_| MappingError::InvalidStateHash("pre_state_hash".to_string()))?;
 
         let current_protocol_version = upgrade_request.get_protocol_version().into();
 
@@ -1171,6 +1171,57 @@ impl TryFrom<&ipc::Bond> for (PublicKey, U512) {
         };
         let stake = bond.get_stake().try_into()?;
         Ok((public_key, stake))
+    }
+}
+
+impl TryFrom<&ipc::DeployItem> for DeployItem {
+    type Error = MappingError;
+
+    fn try_from(value: &ipc::DeployItem) -> Result<Self, Self::Error> {
+        let address = {
+            let tmp = value.get_address();
+            match tmp.try_into() {
+                Ok(public_key) => public_key,
+                Err(_) => return Err(MappingError::invalid_public_key_length(tmp.len())),
+            }
+        };
+        let session = match &(value.get_session()).payload {
+            Some(payload) => payload.to_owned().into(),
+            None => return Err(MappingError::MissingPayload),
+        };
+        let payment = match &(value.get_payment()).payload {
+            Some(payload) => payload.to_owned().into(),
+            None => return Err(MappingError::MissingPayload),
+        };
+        let gas_price = value.get_gas_price();
+        let authorization_keys = value
+            .get_authorization_keys()
+            .iter()
+            .map(|raw: &Vec<u8>| {
+                raw.as_slice()
+                    .try_into()
+                    .map_err(|_| MappingError::invalid_public_key_length(raw.len()))
+            })
+            .collect::<Result<BTreeSet<PublicKey>, Self::Error>>()?;
+        let deploy_hash = {
+            let source = value.get_deploy_hash();
+            let length = source.len();
+            if length != DEPLOY_HASH_LENGTH {
+                return Err(MappingError::invalid_deploy_hash_length(length));
+            }
+            let mut ret = [0u8; DEPLOY_HASH_LENGTH];
+            ret.copy_from_slice(source);
+            ret
+        };
+
+        Ok(DeployItem::new(
+            address,
+            session,
+            payment,
+            gas_price,
+            authorization_keys,
+            deploy_hash,
+        ))
     }
 }
 

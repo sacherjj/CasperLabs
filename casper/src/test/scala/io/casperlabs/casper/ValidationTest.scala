@@ -76,7 +76,8 @@ class ValidationTest
 
   implicit val consensusConfig = ConsensusConfig()
 
-  val ed25519 = "ed25519"
+  val ed25519   = "ed25519"
+  val chainName = "testnet"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -303,13 +304,13 @@ class ValidationTest
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
 
     forAll { (deploy: consensus.Deploy) =>
-      withoutStorage { Validation[Task].deployHeader(deploy) } shouldBe Nil
+      withoutStorage { Validation[Task].deployHeader(deploy, chainName) } shouldBe Nil
     }
   }
 
   it should "not accept too short time to live" in withoutStorage {
     val deploy = DeployOps.randomTooShortTTL()
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
         .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MIN_TTL)
     )
@@ -317,7 +318,7 @@ class ValidationTest
 
   it should "not accept too long time to live" in withoutStorage {
     val deploy = DeployOps.randomTooLongTTL()
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
         .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MAX_TTL)
     )
@@ -325,7 +326,7 @@ class ValidationTest
 
   it should "not accept too many dependencies" in withoutStorage {
     val deploy = DeployOps.randomTooManyDependencies()
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
@@ -336,9 +337,21 @@ class ValidationTest
 
   it should "not accept invalid dependencies" in withoutStorage {
     val deploy = DeployOps.randomInvalidDependency()
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
         .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
+    )
+  }
+
+  it should "not accept invalid chain names" in withoutStorage {
+    val chainName = "nevernet"
+    val deploy = sample {
+      arbitrary[consensus.Deploy].map(_.withChainName(s"never say $chainName"))
+    }
+
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
+      DeployHeaderError
+        .invalidChainName(deploy.deployHash, deploy.getHeader.chainName, chainName)
     )
   }
 
@@ -644,7 +657,7 @@ class ValidationTest
       .groupBy(_._1)
       .mapValues(_.map(_._2).toSet)
 
-  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parents: Seq[Block],
       bonds: Seq[Bond],
       justifications: Seq[Block],
@@ -662,7 +675,7 @@ class ValidationTest
     } yield block
 
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v0 = generateValidator("V1")
       val v1 = generateValidator("V2")
       val v2 = generateValidator("V3")
@@ -750,7 +763,7 @@ class ValidationTest
 
   // See [[/resources/casper/localDetectedForeignDidnt.jpg]]
   it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+    implicit blockStorage => implicit dagStorage => _ =>
       val v0 = generateValidator("v0")
       val v1 = generateValidator("v1")
       val v2 = generateValidator("v2")
@@ -956,6 +969,54 @@ class ValidationTest
     } yield ()
   }
 
+  it should "fail a block with a deploy having an foreign chain name" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val block = sample {
+        arbitrary[consensus.Block] map { block =>
+          block.update {
+            _.body.deploys := block.getBody.deploys.map { pd =>
+              pd.withDeploy(pd.getDeploy.withChainName("la la land"))
+            }
+          }
+        }
+      }
+      for {
+        dag <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task]
+                   .deployHeaders(
+                     block,
+                     dag,
+                     chainName = "no country for old men"
+                   )
+                   .attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
+      }
+  }
+
+  it should "pass a block with a deploy having no chain name" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val block = sample {
+        arbitrary[consensus.Block] map { b =>
+          b.update(
+            _.body.deploys :=
+              b.getBody.deploys.map { pd =>
+                pd.update(
+                  _.deploy.header :=
+                    pd.getDeploy.getHeader
+                      .withChainName("")
+                      .clearDependencies
+                )
+              }
+          )
+        }
+      }
+      for {
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].deployHeaders(block, dag, chainName = "area 51")
+      } yield ()
+  }
+
   "Block hash format validation" should "fail on invalid hash" in withStorage { _ => _ => _ =>
     val (sk, pk) = Ed25519.newKeyPair
     val BlockMsgWithTransform(Some(block), _) =
@@ -1050,7 +1111,7 @@ class ValidationTest
       for {
         block  <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
         dag    <- dagStorage.getRepresentation
-        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
   }
 
@@ -1079,7 +1140,7 @@ class ValidationTest
                   .map(_.changeTimestamp(blockTimestamp))
         _      <- blockStorage.put(block.blockHash, block, Seq.empty)
         dag    <- dagStorage.getRepresentation
-        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployFromFuture))
   }
 
@@ -1092,7 +1153,7 @@ class ValidationTest
                   .map(_.changeTimestamp(blockTimestamp))
         _      <- blockStorage.put(block.blockHash, block, Seq.empty)
         dag    <- dagStorage.getRepresentation
-        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
   }
 
@@ -1106,7 +1167,7 @@ class ValidationTest
                   .map(_.changeTimestamp(blockTimestamp))
         _      <- blockStorage.put(block.blockHash, block, Seq.empty)
         dag    <- dagStorage.getRepresentation
-        result <- ValidationImpl[Task].deployHeaders(block, dag).attempt
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
   }
 
@@ -1135,7 +1196,7 @@ class ValidationTest
                    .map(_.changeTimestamp(timeC))
         _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
         dag    <- dagStorage.getRepresentation
-        result <- ValidationImpl[Task].deployHeaders(blockC, dag).attempt
+        result <- ValidationImpl[Task].deployHeaders(blockC, dag, chainName).attempt
       } yield result shouldBe Right(())
   }
 
@@ -1239,6 +1300,54 @@ class ValidationTest
                          )
         Right(postStateHash) = validateResult
       } yield postStateHash should be(computedPostStateHash)
+  }
+
+  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _ <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
+      } yield ()
+  }
+
+  it should "not raise errors when j-past-cone does not merge a swmilane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _       <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Right(())
+      } yield ()
   }
 
   // TODO: Bring back once there is an easy way to create a _valid_ block.
