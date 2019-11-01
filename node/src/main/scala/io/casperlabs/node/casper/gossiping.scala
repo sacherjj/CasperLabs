@@ -579,9 +579,7 @@ package object gossiping {
                        maxPossibleDepth = conf.server.syncMaxPossibleDepth,
                        minBlockCountToCheckWidth = conf.server.syncMinBlockCountToCheckWidth,
                        maxBondingRate = conf.server.syncMaxBondingRate,
-                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest,
-                       // NODE-984: Confirm the effect of not doing validations and optimize.
-                       skipValidation = true
+                       maxDepthAncestorsRequest = conf.server.syncMaxDepthAncestorsRequest
                      )
     } yield synchronizer
   }

@@ -30,9 +30,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     // Only allow 1 sync per node at a time to not traverse the same thing twice.
     sourceSemaphoreMap: SemaphoreMap[F, Node],
     // Keep the synced DAG in memory so we can avoid traversing them repeatedly.
-    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]],
-    // NODE-984: Experiment to see if doing syncs without extensive checking can avoid LRT getting tangled.
-    skipValidation: Boolean
+    syncedSummariesRef: Ref[F, Map[ByteString, SynchronizerImpl.SyncedSummary]]
 ) extends Synchronizer[F] {
   type Effect[A] = EitherT[F, SyncError, A]
 
@@ -193,23 +191,15 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                   Metrics[F].incrementCounter("summaries_traversed")
                 )
             _ <- validate(summary)
-            newSyncState <- if (skipValidation) {
-                             EitherT(
-                               syncState.append(summary, distance = -1).asRight[SyncError].pure[F]
-                             )
-                           } else {
-                             for {
-                               distance <- reachable(
-                                            syncState,
-                                            summary,
-                                            targetBlockHashes.toSet
-                                          )
-                               _            <- noCycles(syncState, summary)
-                               newSyncState = syncState.append(summary, distance)
-                               _            <- notTooDeep(newSyncState)
-                               _            <- notTooWide(newSyncState)
-                             } yield newSyncState
-                           }
+            _ <- noCycles(syncState, summary)
+            distance <- reachable(
+                         syncState,
+                         summary,
+                         targetBlockHashes.toSet
+                       )
+            newSyncState = syncState.append(summary, distance)
+            _            <- notTooDeep(newSyncState)
+            _            <- notTooWide(newSyncState)
           } yield newSyncState
 
           effect.value.map {
@@ -375,8 +365,7 @@ object SynchronizerImpl {
       maxPossibleDepth: Int,
       minBlockCountToCheckWidth: Int,
       maxBondingRate: Double,
-      maxDepthAncestorsRequest: Int,
-      skipValidation: Boolean = false
+      maxDepthAncestorsRequest: Int
   ) =
     for {
       semaphoreMap       <- SemaphoreMap[F, Node](1)
@@ -390,8 +379,7 @@ object SynchronizerImpl {
         maxBondingRate,
         maxDepthAncestorsRequest,
         semaphoreMap,
-        syncedSummariesRef,
-        skipValidation
+        syncedSummariesRef
       )
     }
 
