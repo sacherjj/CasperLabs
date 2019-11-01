@@ -51,19 +51,7 @@ class SynchronizerSpec
     "streamed DAG contains cycle" should {
       "return SyncError.Cycle" in forAll(genPartialDagFromTips) { dag =>
         log.reset()
-        val withCycleInParents =
-          dag.updated(
-            dag.size - 1,
-            dag.last.withHeader(dag.last.getHeader.withParentHashes(Seq(dag.head.blockHash)))
-          )
-        val withCycleInJustifications =
-          dag.updated(
-            dag.size - 1,
-            dag.last.withHeader(
-              dag.last.getHeader
-                .withJustifications(Seq(Justification(ByteString.EMPTY, dag.head.blockHash)))
-            )
-          )
+        val withCycle = dag ++ dag.take(1)
 
         def test(cycledDag: Vector[BlockSummary]): Unit = TestFixture(cycledDag)() {
           (synchronizer, _) =>
@@ -75,8 +63,7 @@ class SynchronizerSpec
                 .summary shouldBe cycledDag.last
             }
         }
-        test(withCycleInParents)
-        test(withCycleInJustifications)
+        test(withCycle)
       }
     }
     "streamed DAG is too deep" should {

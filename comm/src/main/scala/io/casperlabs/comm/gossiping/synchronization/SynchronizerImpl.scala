@@ -108,7 +108,7 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                     service,
                     missing,
                     knownBlockHashes,
-                    newSyncState.copy(iteration = prevSyncState.iteration + 1)
+                    newSyncState.nextIteration
                   )
             )
       }
@@ -189,11 +189,14 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       .foldWhileLeftEvalL(prevSyncState.asRight[SyncError].pure[F]) {
         case (Right(syncState), summary) =>
           val effect = for {
-            _ <- EitherT.liftF(Metrics[F].incrementCounter("summaries_traversed"))
+            _ <- EitherT.liftF(
+                  Metrics[F].incrementCounter("summaries_traversed")
+                )
+            _ <- validate(summary)
             newSyncState <- if (skipValidation) {
-                             EitherT.liftF {
-                               syncState.append(summary, distance = -1).pure[F]
-                             }
+                             EitherT(
+                               syncState.append(summary, distance = -1).asRight[SyncError].pure[F]
+                             )
                            } else {
                              for {
                                distance <- reachable(
@@ -201,18 +204,12 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
                                             summary,
                                             targetBlockHashes.toSet
                                           )
+                               _            <- noCycles(syncState, summary)
                                newSyncState = syncState.append(summary, distance)
-                               _ <- noCycles(syncState, summary) >>
-                                     notTooDeep(newSyncState) >>
-                                     notTooWide(newSyncState)
+                               _            <- notTooDeep(newSyncState)
+                               _            <- notTooWide(newSyncState)
                              } yield newSyncState
                            }
-            _ <- EitherT(
-                  backend
-                    .validate(summary)
-                    .as(().asRight[SyncError])
-                    .handleError(e => ValidationError(summary, e).asLeft[Unit])
-                )
           } yield newSyncState
 
           effect.value.map {
@@ -227,28 +224,37 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
         case _ => Sync[F].raiseError(new RuntimeException)
       }
 
-  private def noCycles(syncState: SyncState, summary: BlockSummary): EitherT[F, SyncError, Unit] = {
-    def loop(current: Set[ByteString]): EitherT[F, SyncError, Unit] =
-      if (current.isEmpty) {
-        EitherT(().asRight[SyncError].pure[F])
-      } else {
-        if (current(summary.blockHash)) {
-          EitherT((Cycle(summary): SyncError).asLeft[Unit].pure[F])
-        } else {
-          val next = current.flatMap(syncState.childToParents(_))
-          loop(next)
-        }
-      }
+  /** Formal validation of the block summary fields. It should weed out complete rubbish,
+    * which should make certain forgeries like dependency cycles impossible.
+    */
+  private def validate(summary: BlockSummary): EitherT[F, SyncError, Unit] =
+    EitherT(
+      backend
+        .validate(summary)
+        .as(().asRight[SyncError])
+        .handleError(e => (ValidationError(summary, e): SyncError).asLeft[Unit])
+    )
 
-    val deps = dependencies(summary).toSet
-
-    val existingDeps = syncState.summaries.keySet intersect deps
-    if (existingDeps.nonEmpty) {
-      loop(existingDeps)
+  /** Check that we are not on a loop, that we we haven't seen the same summary in this
+    * traversal iteration. We might have seen it already because of the BFS nature and
+    * repeated traversals, but that will be caught by it not being an ancestor of the
+    * current targets, which will go backwards in the DAG all the time.
+    *
+    * Forging summaries where a hash appears as an ancestor should not be possible,
+    * because you'd have to put the hash of the descendant into the justifications
+    * of the ancestor, but doing so changes the hash of the ancestor, and thus
+    * also changes the hash of the descendant. As long as we check the correctness
+    * of the hash first, all we'd have to detect is if the stream itself is looping.
+    */
+  private def noCycles(
+      syncState: SyncState,
+      summary: BlockSummary
+  ): EitherT[F, SyncError, Unit] =
+    if (syncState.visitedInIteration(summary.blockHash)) {
+      EitherT((Cycle(summary): SyncError).asLeft[Unit].pure[F])
     } else {
       EitherT(().asRight[SyncError].pure[F])
     }
-  }
 
   private def notTooDeep(syncState: SyncState): EitherT[F, SyncError, Unit] =
     if (syncState.distanceFromOriginalTarget.isEmpty) {
@@ -408,6 +414,7 @@ object SynchronizerImpl {
 
   final case class SyncState(
       iteration: Int,
+      visitedInIteration: Set[ByteString],
       originalTargets: Set[ByteString],
       summaries: Map[ByteString, BlockSummary],
       parentToChildren: Map[ByteString, Set[ByteString]],
@@ -419,6 +426,7 @@ object SynchronizerImpl {
       val deps = dependencies(summary)
       SyncState(
         iteration,
+        visitedInIteration = visitedInIteration + summary.blockHash,
         originalTargets,
         summaries + (summary.blockHash -> summary),
         parentToChildren = deps.foldLeft(parentToChildren) {
@@ -433,6 +441,11 @@ object SynchronizerImpl {
         ranks = ranks + summary.rank
       )
     }
+
+    def nextIteration = copy(
+      iteration = iteration + 1,
+      visitedInIteration = Set.empty
+    )
   }
 
   private def dependencies(summary: BlockSummary): List[ByteString] =
@@ -442,6 +455,7 @@ object SynchronizerImpl {
     def initial(originalTargets: Set[ByteString]) =
       SyncState(
         iteration = 1,
+        visitedInIteration = Set.empty,
         originalTargets,
         summaries = Map.empty,
         parentToChildren = Map.empty.withDefaultValue(Set.empty),
