@@ -8,10 +8,9 @@ import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
@@ -19,11 +18,16 @@ import io.casperlabs.shared.Time
 import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.DeployHash
 import io.casperlabs.storage.util.DoobieCodecs
+
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
-class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
-    implicit val xa: Transactor[F],
+class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](
+    chunkSize: Int,
+    readXa: Transactor[F],
+    writeXa: Transactor[F]
+)(
+    implicit val
     metricsSource: Source
 ) extends DeployStorage[F]
     with DoobieCodecs {
@@ -94,7 +98,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
           }.toList
         )
 
-      (writeToDeploysTable >> writeToProcessResultsTable).transact(xa).void
+      (writeToDeploysTable >> writeToProcessResultsTable).transact(writeXa).void
     }
 
     override def addAsPending(deploys: List[Deploy]): F[Unit] =
@@ -138,7 +142,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       for {
         t <- Time[F].currentMillis
         _ <- (writeToDeploysTable >> writeToBufferedDeploysTable(t))
-              .transact(xa)
+              .transact(writeXa)
         _ <- updateMetrics()
       } yield ()
     }
@@ -153,7 +157,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       Update[(ByteString, Int)](
         s"DELETE FROM buffered_deploys WHERE hash=? AND status=?"
       ).updateMany(hashes.map(h => (h, ProcessedStatusCode)))
-        .transact(xa)
+        .transact(writeXa)
         .void
 
     private def setStatus(
@@ -169,7 +173,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                 case (hash, maybeStatusMessage) =>
                   (newStatus, t, maybeStatusMessage, hash, prevStatus)
               })
-              .transact(xa)
+              .transact(writeXa)
         _ <- updateMetrics()
       } yield ()
 
@@ -199,7 +203,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
       for {
         now        <- Time[F].currentMillis
         threshold  = now - expirationPeriod.toMillis
-        deletedNum <- transaction(threshold).transact(xa)
+        deletedNum <- transaction(threshold).transact(writeXa)
       } yield deletedNum
     }
 
@@ -210,14 +214,14 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         _ <- sql"""|UPDATE buffered_deploys
                    |SET status=$DiscardedStatusCode, update_time_millis=$now, status_message=$StatusMessageTtlExpired
                    |WHERE status=$PendingStatusCode AND receive_time_millis<$threshold""".stripMargin.update.run
-              .transact(xa)
+              .transact(writeXa)
       } yield ()
 
     private def countByStatus(status: Int): F[Long] =
       sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$status"
         .query[Long]
         .unique
-        .transact(xa)
+        .transact(readXa)
 
     private def updateMetrics(): F[Unit] =
       for {
@@ -232,7 +236,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
         _ <- sql"DELETE FROM deploys".update.run
         _ <- sql"DELETE FROM buffered_deploys".update.run
         _ <- sql"DELETE FROM deploy_process_results".update.run
-      } yield ()).transact(xa)
+      } yield ()).transact(writeXa)
 
     override def close(): F[Unit] = ().pure[F]
   }
@@ -266,7 +270,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                 |WHERE  status=$status""".stripMargin
             .query[Deploy]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
             .map(_.map(_.getHeader))
 
         private def readHashesAndHeadersByStatus(
@@ -277,7 +281,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                 |WHERE  status=$status""".stripMargin
             .query[Deploy]
             .streamWithChunkSize(chunkSize)
-            .transact(xa)
+            .transact(readXa)
             .map(d => d.deployHash -> d.getHeader)
 
         private def readByStatus(status: Int): F[List[Deploy]] =
@@ -286,7 +290,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               WHERE  status=$status""")
             .query[Deploy]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
 
         override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
           readByAccountAndStatus(account, ProcessedStatusCode)
@@ -297,7 +301,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               WHERE account=$account AND status=$status""")
             .query[Deploy]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
 
         override def readProcessedHashes: F[List[ByteString]] =
           readHashesByStatus(ProcessedStatusCode)
@@ -312,13 +316,13 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
           sql"SELECT hash FROM buffered_deploys WHERE status=$status"
             .query[ByteString]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
 
         override def sizePendingOrProcessed(): F[Long] =
           sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
             .query[Long]
             .unique
-            .transact(xa)
+            .transact(readXa)
 
         override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
           (fr"SELECT summary, " ++ bodyCol() ++ fr"""
@@ -326,7 +330,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               WHERE hash=$deployHash AND (status=$PendingStatusCode OR status=$ProcessedStatusCode)""")
             .query[Deploy]
             .option
-            .transact(xa)
+            .transact(readXa)
 
         override def getByHashes(
             deployHashes: Set[DeployHash]
@@ -336,7 +340,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
               val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
                 .in(fr"hash", nel) // "hash IN (…)"
-              q.query[Deploy].streamWithChunkSize(chunkSize).transact(xa)
+              q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
             })
 
         def getByHash(deployHash: DeployHash): F[Option[Deploy]] =
@@ -351,7 +355,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               ORDER BY deploy_position""")
             .query[ProcessedDeploy]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
 
         override def getProcessingResults(
             deployHash: DeployHash
@@ -360,7 +364,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
             (fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE hash=$deployHash")
               .query[Deploy]
               .unique
-              .transact(xa)
+              .transact(readXa)
 
           val readProcessingResults =
             sql"""|SELECT block_hash, cost, execution_error_message
@@ -369,7 +373,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                   |ORDER BY execute_time_millis DESC""".stripMargin
               .query[(ByteString, ProcessedDeploy)]
               .to[List]
-              .transact(xa)
+              .transact(readXa)
 
           for {
             blockHashesAndProcessingResults <- readProcessingResults
@@ -392,7 +396,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                 |WHERE hash=$deployHash """.stripMargin
             .query[(Int, Option[String])]
             .option
-            .transact(xa)
+            .transact(readXa)
             .map(_.map {
               case (status, maybeMessage) =>
                 DeployInfo.Status(
@@ -425,7 +429,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
               LIMIT $limit""")
             .query[Deploy]
             .to[List]
-            .transact(xa)
+            .transact(readXa)
 
         override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] = {
           val deployHashes = deploys.map(_.deployHash)
@@ -441,7 +445,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                              |WHERE """.stripMargin ++ Fragments.in(fr"dpr.deploy_hash", nel)
                 q.query[(DeployHash, ProcessingResult)]
                   .to[List]
-                  .transact(xa)
+                  .transact(readXa)
                   .map(_.groupBy(_._1).map {
                     case (deployHash: DeployHash, l: Seq[(DeployHash, ProcessingResult)]) =>
                       (deployHash, l.map(_._2))
@@ -460,7 +464,7 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](chunkSize: Int)(
                 statusSql
                   .query[(Array[Byte], Int, Option[String])]
                   .to[List]
-                  .transact(xa)
+                  .transact(readXa)
                   .map(_.map {
                     case (deployHash, status, maybeMessage) =>
                       (
@@ -501,11 +505,13 @@ object SQLiteDeployStorage {
   private implicit val metricsSource: Source = Metrics.Source(DeployStorageMetricsSource, "sqlite")
 
   private[storage] def create[F[_]: Metrics: Time: Sync](
-      deployStorageChunkSize: Int
-  )(implicit xa: Transactor[F]): F[DeployStorage[F]] =
+      deployStorageChunkSize: Int,
+      readXa: Transactor[F],
+      writeXa: Transactor[F]
+  ): F[DeployStorage[F]] =
     for {
       _ <- establishMetrics[F]
-    } yield new SQLiteDeployStorage[F](deployStorageChunkSize): DeployStorage[F]
+    } yield new SQLiteDeployStorage[F](deployStorageChunkSize, readXa, writeXa): DeployStorage[F]
 
   /** Export base 0 values so we have non-empty series for charts. */
   private def establishMetrics[F[_]: Monad: Metrics]: F[Unit] =
