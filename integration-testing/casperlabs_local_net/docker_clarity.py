@@ -1,8 +1,5 @@
-import os
 from pathlib import Path
 
-import logging
-from casperlabs_local_net.common import resources_path, testing_root_path
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_config import DockerConfig
 
@@ -18,18 +15,12 @@ class DockerClarity(LoggingDockerBase):
 
     @property
     def faucet_account_path(self) -> Path:
-        return resources_path() / "faucet-account"
+        return Path(self.host_mount_dir) / "faucet-account"
 
     @property
     def volumes(self) -> dict:
         account_public_key = self.faucet_account_path / "account-public.pem"
         account_private_key = self.faucet_account_path / "account-private.pem"
-        logging.info("path")
-        for root, dirs, files in os.walk(testing_root_path()):
-            path = root.split(os.sep)
-            logging.info((len(path) - 1) * "---" + os.path.basename(root))
-            for file in files:
-                logging.info(len(path) * "---" + file)
 
         return {
             str(account_public_key.absolute()): {
@@ -88,7 +79,7 @@ class DockerGrpcWebProxy(LoggingDockerBase):
 
     @property
     def grpc_web_proxy_path(self) -> Path:
-        return resources_path() / "grpcwebproxy"
+        return Path(self.host_mount_dir) / "grpcwebproxy"
 
     @property
     def volumes(self) -> dict:
