@@ -70,7 +70,8 @@ const DEFAULT_PAGES: usize = 196_608_000;
 
 // socket
 const ARG_SOCKET: &str = "socket";
-const ARG_SOCKET_HELP: &str = "socket file";
+const ARG_SOCKET_HELP: &str =
+    "Path to socket.  Note that this path is independent of the data directory.";
 const ARG_SOCKET_EXPECT: &str = "socket required";
 const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
 const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
