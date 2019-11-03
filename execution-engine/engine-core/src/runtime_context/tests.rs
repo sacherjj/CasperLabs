@@ -13,6 +13,7 @@ use contract_ffi::value::account::{
     SetThresholdFailure, Weight,
 };
 use contract_ffi::value::{self, Account, Contract, ProtocolVersion, Value};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
@@ -35,7 +36,7 @@ fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemory
     let root_hash = hist.empty_root_hash;
     let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
-    let mut m = HashMap::new();
+    let mut m = AdditiveMap::new();
     m.insert(init_key, transform);
     let commit_result = hist
         .commit(correlation_id, root_hash, m)

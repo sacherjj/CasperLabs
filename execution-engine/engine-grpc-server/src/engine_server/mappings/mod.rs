@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::{TryFrom, TryInto};
 use std::fmt::{self, Display, Formatter};
 use std::string::ToString;
@@ -19,8 +19,8 @@ use engine_core::engine_state::op::Op;
 use engine_core::engine_state::upgrade::UpgradeConfig;
 use engine_core::engine_state::{Error as EngineError, RootNotFound};
 use engine_core::execution::Error as ExecutionError;
-use engine_core::tracking_copy::utils;
 use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::motes::Motes;
 use engine_shared::transform::{self, TypeMismatch};
 use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -627,14 +627,14 @@ impl From<Op> for super::ipc::Op {
 // Newtype wrapper as rustc requires because trait impl have to be defined in
 // the crate of the type.
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct CommitTransforms(HashMap<contract_ffi::key::Key, transform::Transform>);
+pub struct CommitTransforms(AdditiveMap<contract_ffi::key::Key, transform::Transform>);
 
 impl CommitTransforms {
     pub fn get(&self, key: &contract_ffi::key::Key) -> Option<&transform::Transform> {
         self.0.get(&key)
     }
 
-    pub fn value(self) -> HashMap<contract_ffi::key::Key, transform::Transform> {
+    pub fn value(self) -> AdditiveMap<contract_ffi::key::Key, transform::Transform> {
         self.0
     }
 }
@@ -643,12 +643,12 @@ impl TryFrom<&[super::transforms::TransformEntry]> for CommitTransforms {
     type Error = ParsingError;
 
     fn try_from(value: &[super::transforms::TransformEntry]) -> Result<Self, Self::Error> {
-        let mut transforms_merged: HashMap<contract_ffi::key::Key, transform::Transform> =
-            HashMap::new();
+        let mut transforms_merged: AdditiveMap<contract_ffi::key::Key, transform::Transform> =
+            AdditiveMap::new();
         for named_key in value.iter() {
             let (key, transform): (contract_ffi::key::Key, transform::Transform) =
                 named_key.try_into()?;
-            utils::add(&mut transforms_merged, key, transform);
+            transforms_merged.insert_add(key, transform);
         }
         Ok(CommitTransforms(transforms_merged))
     }
@@ -1227,7 +1227,6 @@ impl TryFrom<&ipc::DeployItem> for DeployItem {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::convert::TryInto;
 
     use proptest::prelude::*;
@@ -1239,6 +1238,7 @@ mod tests {
     use engine_core::engine_state::execution_result::ExecutionResult;
     use engine_core::engine_state::{Error as EngineError, RootNotFound};
     use engine_core::execution::Error;
+    use engine_shared::additive_map::AdditiveMap;
     use engine_shared::gas::Gas;
     use engine_shared::newtypes::Blake2bHash;
     use engine_shared::transform::gens::transform_arb;
@@ -1278,8 +1278,8 @@ mod tests {
 
     #[test]
     fn deploy_result_to_ipc_success() {
-        let input_transforms: HashMap<Key, Transform> = {
-            let mut tmp_map = HashMap::new();
+        let input_transforms: AdditiveMap<Key, Transform> = {
+            let mut tmp_map = AdditiveMap::new();
             tmp_map.insert(
                 Key::URef(URef::new([1u8; 32], AccessRights::ADD)),
                 Transform::AddInt32(10),
@@ -1287,7 +1287,7 @@ mod tests {
             tmp_map
         };
         let execution_effect: ExecutionEffect =
-            ExecutionEffect::new(HashMap::new(), input_transforms.clone());
+            ExecutionEffect::new(AdditiveMap::new(), input_transforms.clone());
         let cost: Gas = Gas::new(U512::from(123));
         let execution_result: ExecutionResult = ExecutionResult::Success {
             effect: execution_effect,
@@ -1300,13 +1300,13 @@ mod tests {
         assert_eq!(execution_cost, cost.value());
 
         // Extract transform map from the IPC message and parse it back to the domain
-        let ipc_transforms: HashMap<Key, Transform> = {
+        let ipc_transforms: AdditiveMap<Key, Transform> = {
             let mut ipc_effects = success.take_effects();
             let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
             ipc_effects_tnfs
                 .iter()
                 .map(|e| e.try_into())
-                .collect::<Result<HashMap<Key, Transform>, _>>()
+                .collect::<Result<AdditiveMap<Key, Transform>, _>>()
                 .unwrap()
         };
         assert_eq!(&input_transforms, &ipc_transforms);

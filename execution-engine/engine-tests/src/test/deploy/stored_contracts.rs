@@ -1,10 +1,11 @@
 use std::collections::hash_map::RandomState;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{Value, U512};
 use engine_core::engine_state::CONV_RATE;
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::transform::Transform;
@@ -586,7 +587,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
-    let transforms: &HashMap<Key, Transform, RandomState> =
+    let transforms: &AdditiveMap<Key, Transform, RandomState> =
         &test_result.builder().get_transforms()[0];
 
     let stored_payment_contract_uref = {

@@ -3,7 +3,6 @@ mod ext;
 pub(self) mod meter;
 #[cfg(test)]
 mod tests;
-pub mod utils;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -11,6 +10,7 @@ use linked_hash_map::LinkedHashMap;
 
 use contract_ffi::key::Key;
 use contract_ffi::value::Value;
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::newtypes::{CorrelationId, Validated};
 use engine_shared::transform::{self, Transform, TypeMismatch};
 use engine_storage::global_state::StateReader;
@@ -92,8 +92,8 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
 pub struct TrackingCopy<R> {
     reader: R,
     cache: TrackingCopyCache<HeapSize>,
-    ops: HashMap<Key, Op>,
-    fns: HashMap<Key, Transform>,
+    ops: AdditiveMap<Key, Op>,
+    fns: AdditiveMap<Key, Transform>,
 }
 
 #[derive(Debug)]
@@ -110,8 +110,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
             cache: TrackingCopyCache::new(1024 * 16, HeapSize), /* TODO: Should `max_cache_size`
                                                                  * be fraction of wasm memory
                                                                  * limit? */
-            ops: HashMap::new(),
-            fns: HashMap::new(),
+            ops: AdditiveMap::new(),
+            fns: AdditiveMap::new(),
         }
     }
 
@@ -158,8 +158,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     ) -> Result<Option<Value>, R::Error> {
         let k = k.normalize();
         if let Some(value) = self.get(correlation_id, &k)? {
-            utils::add(&mut self.ops, k, Op::Read);
-            utils::add(&mut self.fns, k, Transform::Identity);
+            self.ops.insert_add(k, Op::Read);
+            self.fns.insert_add(k, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
@@ -170,8 +170,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         let v_local = v.into_raw();
         let k = k.normalize();
         self.cache.insert_write(k, v_local.clone());
-        utils::add(&mut self.ops, k, Op::Write);
-        utils::add(&mut self.fns, k, Transform::Write(v_local));
+        self.ops.insert_add(k, Op::Write);
+        self.fns.insert_add(k, Transform::Write(v_local));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -208,8 +208,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 match t.clone().apply(current_value) {
                     Ok(new_value) => {
                         self.cache.insert_write(k, new_value);
-                        utils::add(&mut self.ops, k, Op::Add);
-                        utils::add(&mut self.fns, k, t);
+                        self.ops.insert_add(k, Op::Add);
+                        self.fns.insert_add(k, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
