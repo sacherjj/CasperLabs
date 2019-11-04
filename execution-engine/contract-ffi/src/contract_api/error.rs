@@ -97,9 +97,9 @@ pub enum Error {
     DuplicateKey,
     /// Unable to add/update/remove new associated key due to insufficient permissions.
     PermissionDenied,
-    /// Unable to update/remove a key that does exist
+    /// Unable to update/remove a key that does exist.
     MissingKey,
-    /// Unable to update/remove a key which would violate action threshold constraints
+    /// Unable to update/remove a key which would violate action threshold constraints.
     ThresholdViolation,
     /// New threshold should be lower or equal than deployment threshold.
     KeyManagementThresholdError,
@@ -111,8 +111,10 @@ pub enum Error {
     InsufficientTotalWeight,
     /// Returns when contract tries to obtain URef to a system contract that does not exist.
     InvalidSystemContract,
-    /// A logic error, likely representing a bug in the code.
-    Logic,
+    /// Failed to create a new purse.
+    PurseNotCreated,
+    /// An unhandled value, likely representing a bug in the code.
+    Unhandled,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -228,7 +230,8 @@ impl From<Error> for u32 {
             Error::PermissionDeniedError => 29,
             Error::InsufficientTotalWeight => 30,
             Error::InvalidSystemContract => 31,
-            Error::Logic => 32,
+            Error::PurseNotCreated => 32,
+            Error::Unhandled => 33,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -272,7 +275,8 @@ impl Debug for Error {
             Error::PermissionDeniedError => write!(f, "Error::PermissionDeniedError")?,
             Error::InsufficientTotalWeight => write!(f, "Error::InsufficientTotalWeight")?,
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
-            Error::Logic => write!(f, "Error::Logic")?,
+            Error::PurseNotCreated => write!(f, "Error::PurseNotCreated")?,
+            Error::Unhandled => write!(f, "Error::Unhandled")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -322,7 +326,8 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         29 => Err(Error::PermissionDeniedError),
         30 => Err(Error::InsufficientTotalWeight),
         31 => Err(Error::InvalidSystemContract),
-        32 => Err(Error::Logic),
+        32 => Err(Error::PurseNotCreated),
+        33 => Err(Error::Unhandled),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -331,7 +336,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
             } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
                 Err(Error::Mint(value as u8))
             } else {
-                Err(Error::Logic)
+                Err(Error::Unhandled)
             }
         }
     }
@@ -376,10 +381,13 @@ mod tests {
             &format!("{:?}", Error::User(u16::MAX))
         );
 
-        assert_eq!(Err(Error::Logic), result_from(i32::MAX));
-        assert_eq!(Err(Error::Logic), result_from(MINT_ERROR_OFFSET as i32 - 1));
-        assert_eq!(Err(Error::Logic), result_from(-1));
-        assert_eq!(Err(Error::Logic), result_from(i32::MIN));
+        assert_eq!(Err(Error::Unhandled), result_from(i32::MAX));
+        assert_eq!(
+            Err(Error::Unhandled),
+            result_from(MINT_ERROR_OFFSET as i32 - 1)
+        );
+        assert_eq!(Err(Error::Unhandled), result_from(-1));
+        assert_eq!(Err(Error::Unhandled), result_from(i32::MIN));
 
         round_trip(Ok(()));
         round_trip(Err(Error::None));
@@ -413,7 +421,8 @@ mod tests {
         round_trip(Err(Error::PermissionDeniedError));
         round_trip(Err(Error::InsufficientTotalWeight));
         round_trip(Err(Error::InvalidSystemContract));
-        round_trip(Err(Error::Logic));
+        round_trip(Err(Error::PurseNotCreated));
+        round_trip(Err(Error::Unhandled));
         round_trip(Err(Error::Mint(0)));
         round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));

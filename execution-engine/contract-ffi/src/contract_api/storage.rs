@@ -166,6 +166,6 @@ pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap_or_revert()
     } else {
-        runtime::revert(Error::Logic);
+        runtime::revert(Error::UnexpectedKeyVariant);
     }
 }

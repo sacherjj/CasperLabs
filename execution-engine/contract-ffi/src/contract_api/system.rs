@@ -67,7 +67,7 @@ pub fn create_purse() -> PurseId {
             );
             deserialize(&bytes).unwrap_or_revert()
         } else {
-            runtime::revert(Error::Logic)
+            runtime::revert(Error::PurseNotCreated)
         }
     }
 }
