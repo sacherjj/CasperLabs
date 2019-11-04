@@ -14,6 +14,7 @@ drone -v foo >/dev/null 2>&1 || { echo >&2 "I require drone but it's not install
 cd ../..
 make docker-build-all
 make docker-build/grpcwebproxy
+make docker-build/selenium-chrome
 
 docker tag casperlabs/node:test casperlabs/node:test-DRONE-1
 docker tag casperlabs/execution-engine:test casperlabs/execution-engine:test-DRONE-1

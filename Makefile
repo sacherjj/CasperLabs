@@ -67,6 +67,7 @@ docker-build/integration-testing: .make/docker-build/integration-testing .make/d
 docker-build/key-generator: .make/docker-build/key-generator
 docker-build/explorer: .make/docker-build/explorer .make/docker-build/test/explorer
 docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy .make/docker-build/test/grpcwebproxy
+docker-build/selenium-chrome: .make/docker-build/selenium-chrome
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -253,6 +254,11 @@ cargo-native-packager/%:
 .make/docker-build/test/grpcwebproxy: \
 		.make/docker-build/grpcwebproxy
 	docker tag $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_TEST_TAG)
+	mkdir -p $(dir $@) && touch $@
+
+.make/docker-build/selenium-chrome:
+	docker pull selenium/standalone-chrome:3.141.59-xenon
+	docker tag selenium/standalone-chrome:3.141.59-xenon selenium/standalone-chrome
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
