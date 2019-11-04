@@ -1,12 +1,13 @@
 package io.casperlabs.storage.deploy
 
-import io.casperlabs.casper.consensus.info.DeployInfo
-import io.casperlabs.storage.{SQLiteFixture, SQLiteStorage}
-import io.casperlabs.shared.Sorting.byteStringOrdering
-import io.casperlabs.crypto.Keys.PublicKey
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.shared.Sorting.byteStringOrdering
+import io.casperlabs.storage.{SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
 import org.scalacheck.Gen
+
 import scala.concurrent.duration._
 
 class SQLiteDeployStorageSpec
@@ -36,7 +37,7 @@ class SQLiteDeployStorageSpec
       deployView: DeployInfo.View
   ): Task[(DeployStorageReader[Task], DeployStorageWriter[Task])] =
     SQLiteStorage
-      .create[Task]()
+      .create[Task](readXa = xa, writeXa = xa)
       .map(s => (s.reader(deployView), s.writer))
 
   "SQLiteDeployStorage" should {

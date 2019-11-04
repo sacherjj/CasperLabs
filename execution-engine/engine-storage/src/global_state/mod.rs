@@ -9,6 +9,7 @@ use std::time::Instant;
 use contract_ffi::key::Key;
 use contract_ffi::value::account::PublicKey;
 use contract_ffi::value::{ProtocolVersion, Value, U512};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::logging::{log_duration, log_metric, GAUGE};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::{self, Transform, TypeMismatch};
@@ -89,7 +90,7 @@ pub trait StateProvider {
         &self,
         correlation_id: CorrelationId,
         state_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error>;
 
     fn put_protocol_data(
@@ -111,7 +112,7 @@ pub fn commit<'a, R, S, H, E>(
     store: &S,
     correlation_id: CorrelationId,
     prestate_hash: Blake2bHash,
-    effects: HashMap<Key, Transform, H>,
+    effects: AdditiveMap<Key, Transform, H>,
 ) -> Result<CommitResult, E>
 where
     R: TransactionSource<'a, Handle = S::Handle>,
