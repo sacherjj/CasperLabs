@@ -164,8 +164,7 @@ where
                     account
                 };
                 self.named_keys.remove(name);
-                let account_value = Value::Account(account);
-                self.validate_keys(&account_value)?;
+                let account_value = self.make_validated_value(account)?;
                 self.state.borrow_mut().write(public_key, account_value);
                 Ok(())
             }
@@ -406,9 +405,7 @@ where
     pub fn write_account(&mut self, key: Key, account: Account) -> Result<(), Error> {
         if let Key::Account(_) = key {
             self.validate_key(&key)?;
-            let account_value = Value::Account(account);
-            self.validate_keys(&account_value)?;
-
+            let account_value = self.make_validated_value(account)?;
             self.state.borrow_mut().write(key, account_value);
             Ok(())
         } else {
@@ -656,8 +653,7 @@ where
             account
         };
 
-        let account_value = Value::Account(account);
-        self.validate_keys(&account_value)?;
+        let account_value = self.make_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -691,8 +687,7 @@ where
             .remove_associated_key(public_key)
             .map_err(Error::from)?;
 
-        let account_value = Value::Account(account);
-        self.validate_keys(&account_value)?;
+        let account_value = self.make_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -730,8 +725,7 @@ where
             .update_associated_key(public_key, weight)
             .map_err(Error::from)?;
 
-        let account_value = Value::Account(account);
-        self.validate_keys(&account_value)?;
+        let account_value = self.make_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -769,8 +763,7 @@ where
             .set_action_threshold(action_type, threshold)
             .map_err(Error::from)?;
 
-        let account_value = Value::Account(account);
-        self.validate_keys(&account_value)?;
+        let account_value = self.make_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -804,5 +797,15 @@ where
     /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
     pub(crate) fn attenuate_uref(&mut self, uref: URef) -> URef {
         attenuate_uref_for_account(&self.account(), uref)
+    }
+
+    /// Creates validated instance of [Value].
+    ///
+    /// First, it is converting a value into [Value] type through [Into](std::convert::Into) trait,
+    /// and then validates the keys it may contain.
+    fn make_validated_value(&self, input: impl Into<Value>) -> Result<Value, Error> {
+        let value = input.into();
+        self.validate_keys(&value)?;
+        Ok(value)
     }
 }
