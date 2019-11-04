@@ -7,6 +7,7 @@ use super::runtime::revert;
 use super::{alloc_bytes, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::deserialize;
 use crate::contract_api::error::result_from;
+use crate::contract_api::runtime;
 use crate::ext_ffi;
 use crate::system_contracts::SystemContract;
 use crate::unwrap_or_revert::UnwrapOrRevert;
@@ -66,7 +67,7 @@ pub fn create_purse() -> PurseId {
             );
             deserialize(&bytes).unwrap_or_revert()
         } else {
-            panic!("could not create purse_id")
+            runtime::revert(Error::PurseNotCreated)
         }
     }
 }
