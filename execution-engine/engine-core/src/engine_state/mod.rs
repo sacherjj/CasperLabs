@@ -29,7 +29,7 @@ use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
 use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
+use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 use engine_shared::transform::Transform;
 use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_storage::protocol_data::ProtocolData;
@@ -141,14 +141,10 @@ where
 
         // Persist the "virtual system account".  It will get overwritten with the actual system
         // account below.
-        let key = {
-            let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-            Validated::new(key, Validated::valid).unwrap() // safe to unwrap
-        };
+        let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let value = {
             let virtual_system_account = virtual_system_account.clone();
-            let value = Value::Account(virtual_system_account);
-            Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+            Value::Account(virtual_system_account)
         };
 
         tracking_copy.borrow_mut().write(key, value);
@@ -378,19 +374,15 @@ where
                 )?;
 
                 // ...and write that account to global state...
-                let key = {
-                    let key = Key::Account(account_public_key.value());
-                    Validated::new(key, Validated::valid).unwrap() // safe to unwrap
-                };
+                let key = Key::Account(account_public_key.value());
                 let value = {
                     let account_main_purse = mint_result?;
                     let purse_id = PurseId::new(account_main_purse);
-                    let value = Value::Account(Account::create(
+                    Value::Account(Account::create(
                         account_public_key.value(),
                         named_keys,
                         purse_id,
-                    ));
-                    Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+                    ))
                 };
 
                 tracking_copy_write.borrow_mut().write(key, value);
@@ -485,9 +477,7 @@ where
 
             // execute as system account
             let system_account = {
-                // safe to unwrap (Validated::valid is always true)
-                let key =
-                    Validated::new(Key::Account(SYSTEM_ACCOUNT_ADDR), Validated::valid).unwrap();
+                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 match tracking_copy.borrow_mut().read(correlation_id, &key) {
                     Ok(Some(Value::Account(account))) => account,
                     Ok(_) => panic!("system account must exist"),
