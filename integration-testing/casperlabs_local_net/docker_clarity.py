@@ -42,7 +42,6 @@ class DockerClarity(LoggingDockerBase):
             "SERVER_PORT": "8080",
             "SERVER_USE_TLS": "false",
             "UI_GRPC_URL": "http://localhost:8401",
-            "NODE_TLS_REJECT_UNAUTHORIZED": 0,
         }
 
     def _get_container(self):
