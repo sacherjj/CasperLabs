@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
@@ -46,7 +47,8 @@ class CreateBlockAPITest
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff      = new LogStub[Task]
+  implicit val broadcaster = Broadcaster.noop[Task]
 
   implicit val validation: Validation[Task] = HashSetCasperTestNode.makeValidation[Task]
 

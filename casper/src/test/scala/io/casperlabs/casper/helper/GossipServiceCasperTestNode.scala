@@ -8,6 +8,7 @@ import cats.mtl.DefaultApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -61,6 +62,8 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
+  implicit val broadcaster: Broadcaster[F] =
+    Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
 
   // `addBlock` called in many ways:
@@ -75,7 +78,6 @@ class GossipServiceCasperTestNode[F[_]](
         chainName,
         upgrades = Nil
       ),
-      MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
       Some(validatorId),
       genesis,
       chainName,

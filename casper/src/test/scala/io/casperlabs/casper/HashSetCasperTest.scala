@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
@@ -371,10 +372,12 @@ abstract class HashSetCasperTest
       deploy               <- ProtoUtil.basicDeploy[Task]()
       createBlockResult    <- nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
       Created(signedBlock) = createBlockResult
-      _                    <- nodes(0).casperEff.addBlock(signedBlock)
-      _                    <- nodes(1).receive()
-      result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
-      _                    <- nodes.map(_.tearDownNode()).toList.sequence
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock, _))
+      _      <- nodes(1).receive()
+      result <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
+      _      <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage {
               _.getBlockMessage(signedBlock.blockHash)
@@ -392,11 +395,13 @@ abstract class HashSetCasperTest
       deploy                     <- ProtoUtil.basicDeploy[Task]()
       createBlockResult          <- nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult
-      _                          <- nodes(0).casperEff.addBlock(signedBlock1Prime)
-      _                          <- nodes(1).receive()
-      _                          = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
-      result                     = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
-      _                          <- nodes.map(_.tearDownNode()).toList.sequence
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1Prime)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1Prime, _))
+      _      <- nodes(1).receive()
+      _      = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
+      result = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
+      _      <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage(
               _.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
@@ -445,19 +450,25 @@ abstract class HashSetCasperTest
       createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
       Created(block0)    = createBlockResult0
       Created(block1)    = createBlockResult1
-      _                  <- nodes(0).casperEff.addBlock(block0)
-      _                  <- nodes(1).casperEff.addBlock(block1)
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+      _ <- nodes(0).casperEff
+            .addBlock(block0)
+            .flatTap(nodes(0).broadcaster.networkEffects(block0, _))
+      _ <- nodes(1).casperEff
+            .addBlock(block1)
+            .flatTap(nodes(1).broadcaster.networkEffects(block1, _))
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       //multiparent block joining block0 and block1 since they do not conflict
       multiparentCreateBlockResult <- nodes(0).casperEff
                                        .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
       Created(multiparentBlock) = multiparentCreateBlockResult
-      _                         <- nodes(0).casperEff.addBlock(multiparentBlock)
-      _                         <- nodes(1).receive()
+      _ <- nodes(0).casperEff
+            .addBlock(multiparentBlock)
+            .flatTap(nodes(0).broadcaster.networkEffects(multiparentBlock, _))
+      _ <- nodes(1).receive()
 
       _ = nodes(0).logEff.warns shouldBe empty
       _ = nodes(1).logEff.warns shouldBe empty
@@ -504,6 +515,7 @@ abstract class HashSetCasperTest
 
       bondedBlockStatus <- nodes.head.casperEff
                             .addBlock(bondedBlock)
+                            .flatTap(nodes.head.broadcaster.networkEffects(bondedBlock, _))
       _ <- nodes(1).receive()
       _ <- nodes.head.receive()
       _ <- nodes(2).clearMessages() //nodes(2) misses bonding
@@ -514,10 +526,12 @@ abstract class HashSetCasperTest
         (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
       }
       Created(block2) = createBlockResult2
-      status2         <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes.head.receive()
-      _               <- nodes(1).receive()
-      _               <- nodes(2).clearMessages() //nodes(2) misses block built on bonding
+      status2 <- nodes(1).casperEff
+                  .addBlock(block2)
+                  .flatTap(nodes(1).broadcaster.networkEffects(block2, _))
+      _ <- nodes.head.receive()
+      _ <- nodes(1).receive()
+      _ <- nodes(2).clearMessages() //nodes(2) misses block built on bonding
 
       createBlockResult3 <- { //nodes(2) proposes a block
         val n = nodes(2)
@@ -525,8 +539,10 @@ abstract class HashSetCasperTest
         (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
       }
       Created(block3) = createBlockResult3
-      status3         <- nodes(2).casperEff.addBlock(block3)
-      _               <- nodes.toList.traverse_(_.receive())
+      status3 <- nodes(2).casperEff
+                  .addBlock(block3)
+                  .flatTap(nodes(2).broadcaster.networkEffects(block3, _))
+      _ <- nodes.toList.traverse_(_.receive())
       //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
       //their fork-choice changes, thus the new validator
       //is no longer bonded
@@ -537,8 +553,10 @@ abstract class HashSetCasperTest
         (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
       }
       Created(block4) = createBlockResult4
-      status4         <- nodes.head.casperEff.addBlock(block4)
-      _               <- nodes.toList.traverse_(_.receive())
+      status4 <- nodes.head.casperEff
+                  .addBlock(block4)
+                  .flatTap(nodes.head.broadcaster.networkEffects(block4, _))
+      _ <- nodes.toList.traverse_(_.receive())
 
       _      = bondedBlockStatus shouldBe Valid
       _      = status2 shouldBe Valid
@@ -564,8 +582,10 @@ abstract class HashSetCasperTest
       createdBlockResult1 <- nodes(0).casperEff
                               .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
       Created(signedBlock1) = createdBlockResult1
-      _                     <- nodes(0).casperEff.addBlock(signedBlock1)
-      _                     <- nodes(1).receive() // receive block1
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1, _))
+      _ <- nodes(1).receive() // receive block1
 
       createBlockResult2 <- nodes(0).casperEff
                              .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
@@ -629,7 +649,9 @@ abstract class HashSetCasperTest
                              .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
       Created(signedBlock2) = createBlockResult2
 
-      _ <- nodes(0).casperEff.addBlock(signedBlock2)
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock2)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock2, _))
       _ <- nodes(1).receive() //receives block2
       _ <- nodes(2).receive() //receives block2; asks for block1
       _ <- nodes(1).receive() //receives request for block1; sends block1
@@ -716,7 +738,8 @@ abstract class HashSetCasperTest
       for {
         _                     <- node.casperEff.deploy(dd)
         Created(signedBlock1) <- node.casperEff.createBlock
-        _                     <- node.casperEff.addBlock(signedBlock1)
+        status                <- node.casperEff.addBlock(signedBlock1)
+        _                     <- node.broadcaster.networkEffects(signedBlock1, status)
       } yield signedBlock1
 
     /** nodes 0 and 1 create blocks in parallel; node 2 misses both, e.g. a1 and a2. */
@@ -793,9 +816,9 @@ abstract class HashSetCasperTest
                                   .deploy(basicDeployData1) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
 
-      _ <- nodes(0).casperEff.addBlock(signedBlock1)
+      _ <- nodes(0).casperEff.addBlock(signedBlock1).attempt
       _ <- nodes(1).receive()
-      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime)
+      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime).attempt
       _ <- nodes(1).receive()
 
       _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
@@ -931,7 +954,9 @@ abstract class HashSetCasperTest
                                     .deploy(deploy) *> nodes(0).casperEff.createBlock
               Created(block) = createBlockResult
 
-              _ <- nodes(0).casperEff.addBlock(block)
+              _ <- nodes(0).casperEff
+                    .addBlock(block)
+                    .flatTap(nodes(0).broadcaster.networkEffects(block, _))
               _ <- nodes(1).clearMessages() //nodes(1) misses this block
             } yield ()
           }
@@ -940,7 +965,9 @@ abstract class HashSetCasperTest
                               0
                             ).casperEff.createBlock
       Created(block11) = createBlock11Result
-      _                <- nodes(0).casperEff.addBlock(block11)
+      _ <- nodes(0).casperEff
+            .addBlock(block11)
+            .flatTap(nodes(0).broadcaster.networkEffects(block11, _))
 
       // Cycle of requesting and passing blocks until block #9 from nodes(0) to nodes(1)
       _ <- (0 to 8).toList.traverse_[Task, Unit] { _ =>
@@ -978,23 +1005,29 @@ abstract class HashSetCasperTest
         block1.withHeader(block1.getHeader.withTimestamp(Long.MaxValue)),
         nodes(0).validatorId.privateKey
       )
-      _ <- nodes(0).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(0).casperEff
+            .addBlock(invalidBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(invalidBlock1, _))
       _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
       // nodes(0) won't send invalid blocks
       _ <- nodes(1).receive()
       _ <- nodes(1).casperEff
             .contains(invalidBlock1) shouldBeF false
       // we manually add this invalid block to node1
-      _ <- nodes(1).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(1).casperEff
+            .addBlock(invalidBlock1)
+            .flatTap(nodes(1).broadcaster.networkEffects(invalidBlock1, _))
       _ <- nodes(1).casperEff
             .contains(invalidBlock1) shouldBeF false
       deployData2 <- ProtoUtil.basicDeploy[Task]()
       createBlock2Result <- nodes(1).casperEff
                              .deploy(deployData2) *> nodes(1).casperEff.createBlock
       Created(block2) = createBlock2Result
-      _               <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes(0).receive()
-      _               <- nodes.map(_.tearDownNode()).toList.sequence
+      _ <- nodes(1).casperEff
+            .addBlock(block2)
+            .flatTap(nodes(1).broadcaster.networkEffects(block2, _))
+      _ <- nodes(0).receive()
+      _ <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage { blockStorage =>
               for {
@@ -1032,37 +1065,49 @@ abstract class HashSetCasperTest
 
       Created(block1) <- nodes(0).casperEff
                           .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block1)
+      _ <- nodes(0).casperEff
+            .addBlock(block1)
+            .flatTap(nodes(0).broadcaster.networkEffects(block1, _))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
       Created(block2) <- nodes(1).casperEff
                           .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block2)
+      _ <- nodes(1).casperEff
+            .addBlock(block2)
+            .flatTap(nodes(1).broadcaster.networkEffects(block2, _))
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
       Created(block3) <- nodes(2).casperEff
                           .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block3)
+      _ <- nodes(2).casperEff
+            .addBlock(block3)
+            .flatTap(nodes(2).broadcaster.networkEffects(block3, _))
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
       Created(block4) <- nodes(0).casperEff
                           .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block4)
+      _ <- nodes(0).casperEff
+            .addBlock(block4)
+            .flatTap(nodes(0).broadcaster.networkEffects(block4, _))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
       Created(block5) <- nodes(1).casperEff
                           .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block5)
+      _ <- nodes(1).casperEff
+            .addBlock(block5)
+            .flatTap(nodes(1).broadcaster.networkEffects(block5, _))
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
       Created(block6) <- nodes(2).casperEff
                           .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block6)
+      _ <- nodes(2).casperEff
+            .addBlock(block6)
+            .flatTap(nodes(2).broadcaster.networkEffects(block6, _))
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
@@ -1072,7 +1117,9 @@ abstract class HashSetCasperTest
 
       Created(block7) <- nodes(0).casperEff
                           .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block7)
+      _ <- nodes(0).casperEff
+            .addBlock(block7)
+            .flatTap(nodes(0).broadcaster.networkEffects(block7, _))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
@@ -1082,7 +1129,9 @@ abstract class HashSetCasperTest
 
       Created(block8) <- nodes(1).casperEff
                           .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block8)
+      _ <- nodes(1).casperEff
+            .addBlock(block8)
+            .flatTap(nodes(1).broadcaster.networkEffects(block8, _))
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
@@ -1092,7 +1141,9 @@ abstract class HashSetCasperTest
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block9)
+      _ <- nodes(2).casperEff
+            .addBlock(block9)
+            .flatTap(nodes(2).broadcaster.networkEffects(block9, _))
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
@@ -1102,7 +1153,9 @@ abstract class HashSetCasperTest
 
       Created(block10) <- nodes(0).casperEff
                            .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block10)
+      _ <- nodes(0).casperEff
+            .addBlock(block10)
+            .flatTap(nodes(0).broadcaster.networkEffects(block10, _))
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 

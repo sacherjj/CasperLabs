@@ -53,7 +53,6 @@ final case class CasperState(
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocolVersions](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
-    broadcaster: MultiParentCasperImpl.Broadcaster[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainName: String,
@@ -98,10 +97,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: FinalityDetector: Bl
                      // because it was an IgnorableEquivocation, but then we saw a child and now we got it again.
                      internalAddBlock(block, dag, validateAndAddBlock)
                    }
-          // This method could just return the block hashes it created,
-          // but for now it does gossiping as well. The methods return the full blocks
-          // because for missing blocks it's not yet saved to the database.
-          _ <- broadcaster.networkEffects(block, status)
         } yield status
       }
 
@@ -561,7 +556,6 @@ object MultiParentCasperImpl {
   ]: DeploySelection](
       semaphoreMap: SemaphoreMap[F, ByteString],
       statelessExecutor: StatelessExecutor[F],
-      broadcaster: Broadcaster[F],
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       chainName: String,
@@ -581,7 +575,6 @@ object MultiParentCasperImpl {
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,
       statelessExecutor,
-      broadcaster,
       validatorId,
       genesis,
       chainName,
@@ -824,9 +817,9 @@ object MultiParentCasperImpl {
     def fromGossipServices[F[_]: Applicative](
         validatorId: Option[ValidatorIdentity],
         relaying: gossiping.Relaying[F]
-    ) = new Broadcaster[F] {
+    ): Broadcaster[F] = new Broadcaster[F] {
 
-      val maybeOwnPublickKey = validatorId map {
+      private val maybeOwnPublickKey = validatorId map {
         case ValidatorIdentity(publicKey, _, _) =>
           ByteString.copyFrom(publicKey)
       }
@@ -868,6 +861,10 @@ object MultiParentCasperImpl {
           case UnexpectedBlockException(_) | DeployFromFuture =>
             ().pure[F]
         }
+    }
+
+    def noop[F[_]: Applicative]: Broadcaster[F] = new Broadcaster[F] {
+      override def networkEffects(block: Block, status: BlockStatus): F[Unit] = Applicative[F].unit
     }
   }
 

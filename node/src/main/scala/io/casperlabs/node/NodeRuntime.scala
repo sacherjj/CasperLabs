@@ -13,6 +13,7 @@ import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
 import doobie.util.transactor.Transactor
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
@@ -216,6 +217,15 @@ class NodeRuntime private[node] (
 
       blockApiLock <- Resource.liftF(Semaphore[Task](1))
 
+      implicit0(broadcaster: Broadcaster[Task]) <- casper.gossiping.apply[Task](
+                                                    port,
+                                                    conf,
+                                                    chainSpec,
+                                                    genesis,
+                                                    ingressScheduler,
+                                                    egressScheduler
+                                                  )
+
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
       // so that the operator can turn it on/off on the fly.
@@ -247,15 +257,6 @@ class NodeRuntime private[node] (
             conf,
             id,
             ingressScheduler
-          )
-
-      _ <- casper.gossiping.apply[Task](
-            port,
-            conf,
-            chainSpec,
-            genesis,
-            ingressScheduler,
-            egressScheduler
           )
     } yield (nodeAsk, nodeDiscovery, storage.writer)
 

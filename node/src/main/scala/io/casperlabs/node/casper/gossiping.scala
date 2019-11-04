@@ -10,6 +10,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper.DeploySelection.DeploySelection
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
@@ -58,13 +59,13 @@ package object gossiping {
       genesis: Block,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
-  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
+  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Broadcaster[F]] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
     // SSL context to use when connecting to another node.
     val clientSslContext = SslContexts.forClient(cert, key)
-    // SSL context to use when another node connects to us.
+    // SSL context to use when another node connects to us.Unit
     val serverSslContext = SslContexts.forServer(cert, key, ClientAuth.REQUIRE)
 
     // For client stub to GossipService conversions.
@@ -116,6 +117,11 @@ package object gossiping {
                        genesis.getHeader.chainName
                      )
 
+      implicit0(broadcaster: Broadcaster[F]) <- Resource.pure[F, Broadcaster[F]](
+                                                 MultiParentCasperImpl.Broadcaster
+                                                   .fromGossipServices(validatorId, relaying)
+                                               )
+
       downloadManager <- makeDownloadManager(
                           conf,
                           connectToGossip,
@@ -150,18 +156,16 @@ package object gossiping {
                                                s"Cannot retrieve Genesis ${show(genesisBlockHash)}"
                                              )
                                            )
-                            validatorId <- ValidatorIdentity.fromConfig[F](conf.casper)
-                            genesis     = genesisStore.getBlockMessage
-                            prestate    = ProtoUtil.preStateHash(genesis)
-                            transforms  = genesisStore.transformEntry
+                            genesis    = genesisStore.getBlockMessage
+                            prestate   = ProtoUtil.preStateHash(genesis)
+                            transforms = genesisStore.transformEntry
                             casper <- MultiParentCasper.fromGossipServices(
                                        validatorId,
                                        genesis,
                                        prestate,
                                        transforms,
                                        genesis.getHeader.chainName,
-                                       chainSpec.upgrades,
-                                       relaying
+                                       chainSpec.upgrades
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
                             _ <- Log[F].info("Making the transition to block processing.")
@@ -216,8 +220,7 @@ package object gossiping {
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
-
-    } yield ()
+    } yield broadcaster
   }
 
   /** Check if we have a block yet. */
@@ -228,7 +231,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster](
       validatorId: Option[Keys.PublicKey],
       spec: ipc.ChainSpec,
       block: Block
@@ -236,7 +239,7 @@ package object gossiping {
     MultiParentCasperRef[F].get
       .flatMap {
         case Some(casper) =>
-          casper.addBlock(block)
+          casper.addBlock(block).flatTap(Broadcaster[F].networkEffects(block, _))
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
@@ -348,7 +351,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -424,7 +427,7 @@ package object gossiping {
   // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
   // which could be based on the presence of other known validators, signaled by their approvals.
   // That just gives us the assurance that we are using the right chain spec because other are as well.
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: FinalityDetector: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F],

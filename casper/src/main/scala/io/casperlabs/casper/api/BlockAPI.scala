@@ -23,6 +23,7 @@ import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 
 object BlockAPI {
 
@@ -83,7 +84,7 @@ object BlockAPI {
     } yield ()
   }
 
-  def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
+  def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics: Broadcaster](
       blockApiLock: Semaphore[F]
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
@@ -99,6 +100,7 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
+                           _      <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]
