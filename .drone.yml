@@ -442,7 +442,6 @@ steps:
     - trying
   depends_on:
   - docker-build-ee-int-bors
-  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
