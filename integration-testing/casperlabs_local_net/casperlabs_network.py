@@ -95,6 +95,10 @@ class CasperLabsNetwork:
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
 
+    @property
+    def in_docker(self) -> bool:
+        return os.getenv("IN_DOCKER") == "true"
+
     def lookup_node(self, node_id):
         m = {node.node_id: node for node in self.docker_nodes}
         return m[node_id]
@@ -197,8 +201,7 @@ class CasperLabsNetwork:
             self.selenium_node = DockerSelenium(config)
             wait_for_clarity_started(self.clarity_node, config.command_timeout, 1)
             wait_for_selenium_started(self.selenium_node, config.command_timeout, 1)
-            in_docker = os.getenv("IN_DOCKER") == "true"
-            if in_docker:
+            if self.in_docker:
                 # If these integration tests are running in a docker container, then we need connect the docker container
                 # to the network of selenium
                 network = self.selenium_node.network_from_name(config.network)
@@ -284,8 +287,7 @@ class CasperLabsNetwork:
                 self.grpc_web_proxy_node.cleanup()
             if self.selenium_node:
                 self.selenium_node.cleanup()
-            in_docker = os.getenv("IN_DOCKER") == "true"
-            if in_docker:
+            if self.in_docker:
                 # If these integration tests are running in a docker container,
                 # then we need disconnect the docker container from the network of selenium
                 network = self.selenium_node.network_from_name(
