@@ -223,6 +223,14 @@ package object effects {
               r  <- r0.fold(Sync[F].raiseError[A], Sync[F].pure)
             } yield r
         }
+
+      def timerS[A](
+          name: String
+      )(stream: fs2.Stream[F, A])(implicit ev: Metrics.Source): fs2.Stream[F, A] =
+        m.getOrElseUpdate(source(name), Kamon.timer(source(name))) match {
+          case c: metric.Timer =>
+            fs2.Stream.bracket(Sync[F].delay(c.start()))(t => Sync[F].delay(t.stop())) >> stream
+        }
     }
 
   def diagnosticsService(
