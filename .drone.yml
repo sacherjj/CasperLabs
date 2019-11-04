@@ -391,11 +391,6 @@ steps:
     branch:
     - staging
     - trying
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "**/**.proto"
-      - "explorer/**"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -442,6 +437,7 @@ steps:
     - trying
   depends_on:
   - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
