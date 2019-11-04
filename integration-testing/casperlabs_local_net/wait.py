@@ -133,7 +133,6 @@ class ClarityServerStarted(LogsContainMessage):
         super().__init__(node, "server started at", times)
 
     def is_satisfied(self) -> bool:
-        print(self.node.logs())
         return self.node.logs().count(self.message) >= self.times
 
 

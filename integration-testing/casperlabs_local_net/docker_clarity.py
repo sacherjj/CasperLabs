@@ -66,7 +66,7 @@ class DockerGrpcWebProxy(LoggingDockerBase):
     This container exposes port 8401.
 
     browser(or headless selenium)  -> grpcwebproxy  -> node
-                                  8041            40401(via docker hostname)
+                                  8401            40401(via docker hostname)
     """
 
     def __init__(self, config: DockerConfig, docker_node_name: str):
