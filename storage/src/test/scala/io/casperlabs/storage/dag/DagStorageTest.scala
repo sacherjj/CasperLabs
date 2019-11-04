@@ -4,7 +4,6 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.{
@@ -170,7 +169,7 @@ class SQLiteDagStorageTest extends DagStorageTest with SQLiteFixture[DagStorage[
   override def db: String = "/tmp/dag_storage.db"
 
   override def createTestResource: Task[DagStorage[Task]] =
-    SQLiteStorage.create[Task]()
+    SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 
   "SQLite DAG Storage" should "override validator's latest block hash only if new messages quotes the previous one" in {
     forAll { (initial: Block, a: Block, c: Block) =>

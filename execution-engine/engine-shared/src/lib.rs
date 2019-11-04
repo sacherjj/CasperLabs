@@ -11,6 +11,7 @@ extern crate log;
 extern crate num;
 extern crate parity_wasm;
 
+pub mod additive_map;
 #[macro_use]
 pub mod gas;
 pub mod logging;

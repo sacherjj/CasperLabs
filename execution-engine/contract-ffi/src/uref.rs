@@ -119,6 +119,11 @@ impl URef {
         self.1
     }
 
+    /// Returns a new URef with updated access rights.
+    pub fn with_access_rights(self, access_rights: AccessRights) -> Self {
+        URef(self.0, Some(access_rights))
+    }
+
     /// Removes the access rights from this URef.
     pub fn remove_access_rights(self) -> Self {
         URef(self.0, None)
