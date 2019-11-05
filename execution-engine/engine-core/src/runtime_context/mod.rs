@@ -310,8 +310,7 @@ where
         // No need to perform actual validation on the base key because an account or
         // contract (i.e. the element stored under `base_key`) is allowed to add
         // new named keys to itself.
-        let named_key_value = Value::NamedKey(name.clone(), key);
-        self.validate_keys(&named_key_value)?;
+        let named_key_value = self.make_validated_value((name.clone(), key))?;
 
         self.add_gs_unsafe(self.base_key(), named_key_value)?;
         self.insert_key(name, key);
