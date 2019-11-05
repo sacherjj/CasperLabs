@@ -64,14 +64,17 @@ object DagStorage {
         startBlockNumber: Long,
         endBlockNumber: Long
     ): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
-        .topoSort(startBlockNumber, endBlockNumber)
+      super.incAndMeasure(
+        "topoSort",
+        super
+          .topoSort(startBlockNumber, endBlockNumber)
+      )
 
     abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
+      super.incAndMeasure("topoSort", super.topoSort(startBlockNumber))
 
     abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSortTail")) >> super.topoSortTail(tailLength)
+      super.incAndMeasure("topoSortTail", super.topoSortTail(tailLength))
   }
 
   def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
