@@ -4,23 +4,15 @@
 //! For details of how to run this executable, see the README in this directory or at
 //! https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/engine-tests/src/profiling/README.md#concurrent-executor
 
-#[macro_use]
-extern crate clap;
-extern crate crossbeam_channel;
-extern crate env_logger;
-extern crate grpc;
-#[macro_use]
-extern crate log;
-
-use std::env;
 use std::iter::Sum;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
+use log::info;
 
 use casperlabs_engine_tests::support::profiling_common;
 use casperlabs_engine_tests::support::test_support::ExecuteRequestBuilder;

@@ -1,9 +1,7 @@
 #![no_std]
 #![feature(cell_update)]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 mod capabilities;
 
@@ -15,6 +13,7 @@ pub mod internal_purse_id;
 pub mod mint;
 
 use alloc::string::String;
+use alloc::vec;
 use core::convert::TryInto;
 
 use contract_ffi::contract_api::{runtime, storage, Error as ApiError};

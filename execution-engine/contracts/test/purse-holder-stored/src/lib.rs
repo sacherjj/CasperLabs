@@ -1,12 +1,11 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 #[cfg(not(feature = "lib"))]
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
+use alloc::vec;
 
 use contract_ffi::contract_api::{runtime, storage, system, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;

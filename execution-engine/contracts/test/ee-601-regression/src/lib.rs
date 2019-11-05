@@ -1,10 +1,9 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
+use alloc::vec;
 
 use contract_ffi::contract_api::{account, runtime, storage, system, Error as ApiError};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;

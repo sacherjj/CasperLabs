@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+
 use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
 use contract_ffi::contract_api::Error;
 use contract_ffi::key::Key;

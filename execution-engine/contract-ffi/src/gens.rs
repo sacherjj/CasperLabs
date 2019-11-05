@@ -1,3 +1,11 @@
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec;
+
+use proptest::collection::{btree_map, vec};
+use proptest::prelude::*;
+use proptest::{array, bits, option, result};
+
 use crate::execution::Phase;
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
@@ -5,11 +13,6 @@ use crate::value::account::{
     ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, MAX_KEYS,
 };
 use crate::value::*;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use proptest::collection::{btree_map, vec};
-use proptest::prelude::*;
-use proptest::{array, bits, option, result};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {

@@ -1,11 +1,13 @@
-use contract_ffi::value::U512;
+use lazy_static::lazy_static;
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 use contract_ffi::uref::URef;
+use contract_ffi::value::U512;
 use engine_core::engine_state::Error;
 use engine_core::execution;
 use engine_shared::transform::TypeMismatch;
+
+use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";

@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+
 use contract_ffi::value::U512;
 
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};

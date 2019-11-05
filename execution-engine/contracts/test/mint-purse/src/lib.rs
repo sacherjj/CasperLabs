@@ -1,8 +1,8 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
+
+use alloc::vec;
 
 use contract_ffi::contract_api::{runtime, system, Error as ApiError};
 use contract_ffi::key::Key;

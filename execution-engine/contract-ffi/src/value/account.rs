@@ -859,15 +859,17 @@ impl FromBytes for Account {
 
 #[cfg(test)]
 mod tests {
+    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use core::convert::TryFrom;
+    use core::iter::FromIterator;
+
     use crate::uref::{AccessRights, URef};
     use crate::value::account::{
         Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey, PurseId,
         RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE, MAX_KEYS,
     };
-    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-    use alloc::vec::Vec;
-    use core::convert::TryFrom;
-    use core::iter::FromIterator;
 
     #[test]
     fn associated_keys_add() {

@@ -2,10 +2,8 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::borrow::ToOwned;
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 use core::iter;
 

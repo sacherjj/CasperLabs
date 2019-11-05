@@ -344,8 +344,10 @@ pub fn result_from(value: i32) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use alloc::format;
     use core::{i32, u16, u8};
+
+    use super::*;
 
     fn round_trip(result: Result<(), Error>) {
         let code = i32_from(result);

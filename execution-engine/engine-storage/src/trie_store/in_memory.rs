@@ -3,9 +3,6 @@
 //! # Usage
 //!
 //! ```
-//! # extern crate casperlabs_engine_storage;
-//! # extern crate contract_ffi;
-//! # extern crate engine_shared;
 //! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::in_memory::InMemoryEnvironment;

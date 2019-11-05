@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-extern crate local_state_stored_upgraded;
-
 use contract_ffi::contract_api::{runtime, Error, TURef};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;

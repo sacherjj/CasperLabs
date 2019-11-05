@@ -1,6 +1,8 @@
 use std::thread;
 use std::time::{Instant, SystemTime};
 
+use lazy_static::lazy_static;
+
 use crate::logging::log_settings::{
     get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
 };

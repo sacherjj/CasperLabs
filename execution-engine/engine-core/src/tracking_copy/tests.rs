@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::iter;
 use std::rc::Rc;
 
+use matches::assert_matches;
 use proptest::collection::vec;
 use proptest::prelude::*;
 
