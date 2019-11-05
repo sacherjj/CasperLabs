@@ -70,7 +70,8 @@ const DEFAULT_PAGES: usize = 196_608_000;
 
 // socket
 const ARG_SOCKET: &str = "socket";
-const ARG_SOCKET_HELP: &str = "socket file";
+const ARG_SOCKET_HELP: &str =
+    "Path to socket.  Note that this path is independent of the data directory.";
 const ARG_SOCKET_EXPECT: &str = "socket required";
 const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
 const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
@@ -80,10 +81,13 @@ const ARG_LOG_LEVEL: &str = "loglevel";
 const ARG_LOG_LEVEL_VALUE: &str = "LOGLEVEL";
 const ARG_LOG_LEVEL_HELP: &str = "[ fatal | error | warning | info | debug ]";
 
-// use-payment-code feature flag
-const ARG_USE_PAYMENT_CODE: &str = "use-payment-code";
-const ARG_USE_PAYMENT_CODE_SHORT: &str = "x";
-const ARG_USE_PAYMENT_CODE_HELP: &str = "Enables the use of payment code";
+// thread count
+const ARG_THREAD_COUNT: &str = "threads";
+const ARG_THREAD_COUNT_SHORT: &str = "t";
+const ARG_THREAD_COUNT_DEFAULT: &str = "1";
+const ARG_THREAD_COUNT_VALUE: &str = "NUM";
+const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
+const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
 
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
@@ -119,9 +123,11 @@ fn main() {
 
     let map_size = get_map_size(matches);
 
+    let thread_count = get_thread_count(matches);
+
     let engine_config: EngineConfig = get_engine_config(matches);
 
-    let _server = get_grpc_server(&socket, data_dir, map_size, engine_config);
+    let _server = get_grpc_server(&socket, data_dir, map_size, thread_count, engine_config);
 
     log_listening_message(&socket);
 
@@ -185,10 +191,13 @@ fn get_args() -> ArgMatches<'static> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name(ARG_USE_PAYMENT_CODE)
-                .short(ARG_USE_PAYMENT_CODE_SHORT)
-                .long(ARG_USE_PAYMENT_CODE)
-                .help(ARG_USE_PAYMENT_CODE_HELP),
+            Arg::with_name(ARG_THREAD_COUNT)
+                .short(ARG_THREAD_COUNT_SHORT)
+                .long(ARG_THREAD_COUNT)
+                .takes_value(true)
+                .default_value(ARG_THREAD_COUNT_DEFAULT)
+                .value_name(ARG_THREAD_COUNT_VALUE)
+                .help(ARG_THREAD_COUNT_HELP),
         )
         .arg(
             Arg::with_name(ARG_SOCKET)
@@ -242,10 +251,18 @@ fn get_map_size(matches: &ArgMatches) -> usize {
     page_size * pages
 }
 
-/// Parses `use-payment-code` argument and returns an [`EngineConfig`].
-fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
-    let use_payment_code = matches.is_present(ARG_USE_PAYMENT_CODE);
-    EngineConfig::new().set_use_payment_code(use_payment_code)
+fn get_thread_count(matches: &ArgMatches) -> usize {
+    matches
+        .value_of(ARG_THREAD_COUNT)
+        .map(str::parse)
+        .expect(ARG_THREAD_COUNT_EXPECT)
+        .expect(ARG_THREAD_COUNT_EXPECT)
+}
+
+/// Returns an [`EngineConfig`].
+fn get_engine_config(_matches: &ArgMatches) -> EngineConfig {
+    // feature flags go here
+    EngineConfig::new()
 }
 
 /// Builds and returns a gRPC server.
@@ -253,11 +270,12 @@ fn get_grpc_server(
     socket: &socket::Socket,
     data_dir: PathBuf,
     map_size: usize,
+    thread_count: usize,
     engine_config: EngineConfig,
 ) -> grpc::Server {
     let engine_state = get_engine_state(data_dir, map_size, engine_config);
 
-    engine_server::new(socket.as_str(), engine_state)
+    engine_server::new(socket.as_str(), thread_count, engine_state)
         .build()
         .expect(SERVER_START_EXPECT)
 }

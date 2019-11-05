@@ -16,7 +16,7 @@ from casperlabs_client import hexify, extract_common_name
 
 class RemoveSignatureGossipInterceptor(grpc_proxy.GossipInterceptor):
     def post_request_stream(self, name, request, response):
-        logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
+        logging.debug(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
 
         if name == "GetBlockChunked":
             block = block_from_chunks(response)
@@ -29,7 +29,7 @@ class RemoveSignatureGossipInterceptor(grpc_proxy.GossipInterceptor):
             response = block_to_chunks(block)
 
         for r in response:
-            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
+            logging.debug(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)}")
             yield r
 
 

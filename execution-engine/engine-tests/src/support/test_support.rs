@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::OsStr;
+use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
 use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
 use engine_grpc_server::engine_server::state::ProtocolVersion;
 use engine_grpc_server::engine_server::{state, transforms};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::Blake2bHash;
 use engine_shared::os::get_page_size;
@@ -60,6 +62,10 @@ pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 ///
 /// This default value should give 1MiB initial map size by default.
 const DEFAULT_LMDB_PAGES: usize = 2560;
+
+/// This is appended to the data dir path provided to the `LmdbWasmTestBuilder` in order to match
+/// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
+const GLOBAL_STATE_DIR: &str = "global_state";
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -431,12 +437,12 @@ pub struct WasmTestBuilder<S> {
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
-    transforms: Vec<HashMap<Key, Transform>>,
+    transforms: Vec<AdditiveMap<Key, Transform>>,
     bonded_validators: Vec<HashMap<PublicKey, U512>>,
     /// Cached genesis transforms
     genesis_account: Option<Account>,
     /// Genesis transforms
-    genesis_transforms: Option<HashMap<Key, Transform>>,
+    genesis_transforms: Option<AdditiveMap<Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<URef>,
     /// PoS contract uref
@@ -445,7 +451,7 @@ pub struct WasmTestBuilder<S> {
 
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
-        let engine_config = EngineConfig::new().set_use_payment_code(true);
+        let engine_config = EngineConfig::new();
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
 
@@ -518,8 +524,9 @@ impl LmdbWasmTestBuilder {
         engine_config: EngineConfig,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
@@ -578,8 +585,9 @@ impl LmdbWasmTestBuilder {
         post_state_hash: Vec<u8>,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store =
@@ -604,6 +612,17 @@ impl LmdbWasmTestBuilder {
             pos_contract_uref: None,
             genesis_transforms: None,
         }
+    }
+
+    fn create_and_get_global_state_dir<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> PathBuf {
+        let global_state_path = {
+            let mut path = PathBuf::from(data_dir);
+            path.push(GLOBAL_STATE_DIR);
+            path
+        };
+        fs::create_dir_all(&global_state_path)
+            .unwrap_or_else(|_| panic!("Expected to create {}", global_state_path.display()));
+        global_state_path
     }
 }
 
@@ -639,7 +658,7 @@ where
 
         let genesis_response = self
             .engine_state
-            .run_genesis_with_chainspec(RequestOptions::new(), genesis_config_proto)
+            .run_genesis(RequestOptions::new(), genesis_config_proto)
             .wait_drop_metadata()
             .expect("Unable to get genesis response");
 
@@ -755,7 +774,7 @@ where
     pub fn commit_transforms(
         &self,
         prestate_hash: Vec<u8>,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> CommitResponse {
         let commit_request = create_commit_request(&prestate_hash, &effects);
 
@@ -779,7 +798,7 @@ where
     pub fn commit_effects(
         &mut self,
         prestate_hash: Vec<u8>,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> &mut Self {
         let commit_response = self.commit_transforms(prestate_hash, effects);
         if !commit_response.has_success() {
@@ -866,7 +885,7 @@ where
     }
 
     /// Gets the transform map that's cached between runs
-    pub fn get_transforms(&self) -> Vec<HashMap<Key, Transform>> {
+    pub fn get_transforms(&self) -> Vec<AdditiveMap<Key, Transform>> {
         self.transforms.clone()
     }
 
@@ -891,7 +910,7 @@ where
             .expect("Unable to obtain pos contract uref. Please run genesis first.")
     }
 
-    pub fn get_genesis_transforms(&self) -> &HashMap<Key, engine_shared::transform::Transform> {
+    pub fn get_genesis_transforms(&self) -> &AdditiveMap<Key, engine_shared::transform::Transform> {
         &self
             .genesis_transforms
             .as_ref()
@@ -1049,7 +1068,7 @@ pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String
 #[allow(clippy::implicit_hasher)]
 pub fn create_commit_request(
     prestate_hash: &[u8],
-    effects: &HashMap<Key, Transform>,
+    effects: &AdditiveMap<Key, Transform>,
 ) -> CommitRequest {
     let effects: Vec<TransformEntry> = effects
         .iter()
@@ -1063,7 +1082,7 @@ pub fn create_commit_request(
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
+pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
     let commit_transforms: CommitTransforms = genesis_response
         .get_success()
         .get_effect()
@@ -1090,7 +1109,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
+pub fn get_account(transforms: &AdditiveMap<Key, Transform>, account: &Key) -> Option<Account> {
     transforms.get(account).and_then(|transform| {
         if let Transform::Write(Value::Account(account)) = transform {
             Some(account.to_owned())
@@ -1135,14 +1154,14 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
 /// Represents the difference between two [`HashMap`]s.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Diff {
-    left: HashMap<Key, Transform>,
-    both: HashMap<Key, Transform>,
-    right: HashMap<Key, Transform>,
+    left: AdditiveMap<Key, Transform>,
+    both: AdditiveMap<Key, Transform>,
+    right: AdditiveMap<Key, Transform>,
 }
 
 impl Diff {
     /// Creates a diff from two [`HashMap`]s.
-    pub fn new(left: HashMap<Key, Transform>, right: HashMap<Key, Transform>) -> Diff {
+    pub fn new(left: AdditiveMap<Key, Transform>, right: AdditiveMap<Key, Transform>) -> Diff {
         let both = Default::default();
         let left_clone = left.clone();
         let mut ret = Diff { left, both, right };
@@ -1174,17 +1193,17 @@ impl Diff {
     }
 
     /// Returns the entries that are unique to the `left` input.
-    pub fn left(&self) -> &HashMap<Key, Transform> {
+    pub fn left(&self) -> &AdditiveMap<Key, Transform> {
         &self.left
     }
 
     /// Returns the entries that are unique to the `right` input.
-    pub fn right(&self) -> &HashMap<Key, Transform> {
+    pub fn right(&self) -> &AdditiveMap<Key, Transform> {
         &self.right
     }
 
     /// Returns the entries shared by both inputs.
-    pub fn both(&self) -> &HashMap<Key, Transform> {
+    pub fn both(&self) -> &AdditiveMap<Key, Transform> {
         &self.both
     }
 }

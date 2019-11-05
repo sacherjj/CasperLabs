@@ -5,10 +5,12 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import simulacrum.typeclass
 
 import scala.concurrent.duration._
+import cats.mtl.ApplicativeAsk
 
 @typeclass trait DeployStorageWriter[F[_]] {
   private[storage] def addAsExecuted(block: Block): F[Unit]
@@ -72,31 +74,36 @@ import scala.concurrent.duration._
 
   def readProcessedByAccount(account: ByteString): F[List[Deploy]]
 
-  def readProcessedHashes: F[List[ByteString]]
+  def readProcessedHashes: F[List[DeployHash]]
 
   def readPending: F[List[Deploy]]
 
-  def readPendingHashes: F[List[ByteString]]
+  def readPendingHashes: F[List[DeployHash]]
 
   def readPendingHeaders: F[List[Deploy.Header]]
 
-  def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)]
+  def readPendingHashesAndHeaders: fs2.Stream[F, (DeployHash, Deploy.Header)]
 
-  def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]]
+  def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]]
 
   def sizePendingOrProcessed(): F[Long]
 
-  def getByHash(hash: ByteString): F[Option[Deploy]]
+  def getByHash(deployHash: DeployHash): F[Option[Deploy]]
 
-  def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy]
+  def getByHashes(deployHashes: Set[DeployHash]): fs2.Stream[F, Deploy]
 
   /** @return List of blockHashes and processing results in descendant order by execution time (block creation timestamp)*/
-  def getProcessingResults(hash: ByteString): F[List[(BlockHash, ProcessedDeploy)]]
+  def getProcessingResults(deployHash: DeployHash): F[List[(BlockHash, ProcessedDeploy)]]
+
+  /** Read all the processsed deploys in a block. */
+  def getProcessedDeploys(blockHash: BlockHash): F[List[ProcessedDeploy]]
 
   /** Read the status of a deploy from the buffer, if it's still in it. */
-  def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]]
+  def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]]
 
   def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]]
+
+  def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]]
 
   /** @return List of deploys created by specified account*/
   def getDeploysByAccount(
@@ -107,92 +114,115 @@ import scala.concurrent.duration._
   ): F[List[Deploy]]
 }
 
-@typeclass trait DeployStorage[F[_]] extends DeployStorageWriter[F] with DeployStorageReader[F] {}
+@typeclass trait DeployStorage[F[_]] {
+  def writer: DeployStorageWriter[F]
+  def reader(implicit dv: DeployInfo.View = DeployInfo.View.FULL): DeployStorageReader[F]
+}
 
-object DeployStorage {
-  implicit def deriveDeployStorage[F[_]](
-      implicit writer: DeployStorageWriter[F],
-      reader: DeployStorageReader[F]
-  ): DeployStorage[F] = new DeployStorage[F] {
-    override def addAsExecuted(block: Block): F[Unit] =
-      writer.addAsExecuted(block)
+object DeployStorageWriter {
+  implicit def fromStorage[F[_]](implicit ev: DeployStorage[F]): DeployStorageWriter[F] =
+    ev.writer
 
-    override def addAsPending(deploys: List[Deploy]): F[Unit] =
-      writer.addAsPending(deploys)
+  trait MeteredDeployStorageWriter[F[_]] extends DeployStorageWriter[F] with Metered[F] {
+    private[storage] abstract override def addAsExecuted(block: Block) =
+      incAndMeasure("addAsExecuted", super.addAsExecuted(block))
 
-    override def addAsProcessed(deploys: List[Deploy]): F[Unit] =
-      writer.addAsProcessed(deploys)
+    abstract override def addAsPending(deploys: List[Deploy]) =
+      incAndMeasure("addAsPending", super.addAsPending(deploys))
 
-    override def markAsProcessedByHashes(hashes: List[BlockHash]): F[Unit] =
-      writer.markAsProcessedByHashes(hashes)
+    abstract override def addAsProcessed(deploys: List[Deploy]) =
+      incAndMeasure("addAsProcessed", super.addAsProcessed(deploys))
 
-    override def markAsPendingByHashes(hashes: List[BlockHash]): F[Unit] =
-      writer.markAsPendingByHashes(hashes)
+    abstract override def markAsProcessedByHashes(hashes: List[ByteString]) =
+      incAndMeasure("markAsProcessedByHashes", super.markAsProcessedByHashes(hashes))
 
-    override def markAsFinalizedByHashes(hashes: List[BlockHash]): F[Unit] =
-      writer.markAsFinalizedByHashes(hashes)
+    abstract override def markAsPendingByHashes(hashes: List[ByteString]) =
+      incAndMeasure("markAsPendingByHashes", super.markAsPendingByHashes(hashes))
 
-    override def markAsDiscardedByHashes(hashesAndReasons: List[(BlockHash, String)]): F[Unit] =
-      writer.markAsDiscardedByHashes(hashesAndReasons)
+    abstract override def markAsFinalizedByHashes(hashes: List[ByteString]) =
+      incAndMeasure("markAsFinalizedByHashes", super.markAsFinalizedByHashes(hashes))
 
-    override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
-      writer.markAsDiscarded(expirationPeriod)
+    abstract override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]) =
+      incAndMeasure("markAsDiscardedByHashes", super.markAsDiscardedByHashes(hashesAndReasons))
 
-    override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] =
-      writer.cleanupDiscarded(expirationPeriod)
+    abstract override def markAsDiscarded(expirationPeriod: FiniteDuration) =
+      incAndMeasure("markAsDiscarded", super.markAsDiscarded(expirationPeriod))
 
-    override def readProcessed: F[List[Deploy]] =
-      reader.readProcessed
+    abstract override def cleanupDiscarded(expirationPeriod: FiniteDuration) =
+      incAndMeasure("cleanupDiscarded", super.cleanupDiscarded(expirationPeriod))
+  }
+}
 
-    override def readProcessedByAccount(account: BlockHash): F[List[Deploy]] =
-      reader.readProcessedByAccount(account)
+object DeployStorageReader {
+  implicit def fromStorage[F[_]](
+      implicit ev: DeployStorage[F],
+      dv: DeployInfo.View = DeployInfo.View.FULL
+  ): DeployStorageReader[F] =
+    ev.reader
 
-    override def readProcessedHashes: F[List[BlockHash]] =
-      reader.readProcessedHashes
+  trait MeteredDeployStorageReader[F[_]] extends DeployStorageReader[F] with Metered[F] {
+    abstract override def readProcessed =
+      incAndMeasure("readProcessed", super.readProcessed)
 
-    override def readPending: F[List[Deploy]] =
-      reader.readPending
+    abstract override def readProcessedByAccount(account: ByteString) =
+      incAndMeasure("readProcessedByAccount", super.readProcessedByAccount(account))
 
-    override def readPendingHashes: F[List[BlockHash]] =
-      reader.readPendingHashes
+    abstract override def readProcessedHashes =
+      incAndMeasure("readProcessedHashes", super.readProcessedHashes)
 
-    override def readPendingHeaders: F[List[Deploy.Header]] =
-      reader.readPendingHeaders
+    abstract override def readPending =
+      incAndMeasure("readPending", super.readPending)
 
-    override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
-      reader.readPendingHashesAndHeaders
+    abstract override def readPendingHashes =
+      incAndMeasure("readPendingHashes", super.readPendingHashes)
 
-    override def getPendingOrProcessed(hash: BlockHash): F[Option[Deploy]] =
-      reader.getPendingOrProcessed(hash)
+    abstract override def readPendingHeaders =
+      incAndMeasure("readPendingHeaders", super.readPendingHeaders)
 
-    override def sizePendingOrProcessed(): F[Long] =
-      reader.sizePendingOrProcessed()
+    abstract override def readPendingHashesAndHeaders: fs2.Stream[F, (DeployHash, Deploy.Header)] =
+      incAndMeasure("readPendingHashesAndHeaders", super.readPendingHashesAndHeaders)
 
-    override def getByHash(hash: ByteString): F[Option[Deploy]] =
-      reader.getByHash(hash)
+    abstract override def getPendingOrProcessed(deployHash: DeployHash) =
+      incAndMeasure("getPendingOrProcessed", super.getPendingOrProcessed(deployHash))
 
-    override def getByHashes(hashes: Set[ByteString]): fs2.Stream[F, Deploy] =
-      reader.getByHashes(hashes)
+    abstract override def sizePendingOrProcessed() =
+      incAndMeasure("sizePendingOrProcessed", super.sizePendingOrProcessed())
 
-    override def getProcessingResults(hash: BlockHash): F[List[(BlockHash, ProcessedDeploy)]] =
-      reader.getProcessingResults(hash)
+    abstract override def getByHash(deployHash: DeployHash) =
+      incAndMeasure("getByHash", super.getByHash(deployHash))
 
-    override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
-      reader.getBufferedStatus(hash)
+    abstract override def getByHashes(deployHashes: Set[DeployHash]): fs2.Stream[F, Deploy] =
+      incAndMeasure("getByHashes", super.getByHashes(deployHashes))
 
-    override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
-      reader.getDeployInfo(deployHash)
+    abstract override def getProcessingResults(deployHash: DeployHash) =
+      incAndMeasure("getProcessingResults", super.getProcessingResults(deployHash))
 
-    override def clear(): F[Unit] = writer.clear()
+    abstract override def getProcessedDeploys(blockHash: BlockHash) =
+      incAndMeasure("getProcessedDeploys", super.getProcessedDeploys(blockHash))
 
-    override def close(): F[Unit] = writer.close()
+    abstract override def getBufferedStatus(deployHash: DeployHash) =
+      incAndMeasure("getBufferedStatus", super.getBufferedStatus(deployHash))
 
-    override def getDeploysByAccount(
+    abstract override def getDeployInfo(deployHash: DeployHash) =
+      incAndMeasure("getDeployInfo", super.getDeployInfo(deployHash))
+
+    abstract override def getDeployInfos(deploys: List[Deploy]) =
+      incAndMeasure("getDeployInfos", super.getDeployInfos(deploys))
+
+    abstract override def getDeploysByAccount(
         account: PublicKeyBS,
         limit: Int,
         lastTimeStamp: Long,
         lastDeployHash: DeployHash
-    ): F[List[Deploy]] =
-      reader.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
+    ) =
+      incAndMeasure(
+        "getDeploysByAccount",
+        super.getDeploysByAccount(
+          account,
+          limit,
+          lastTimeStamp,
+          lastDeployHash
+        )
+      )
   }
 }

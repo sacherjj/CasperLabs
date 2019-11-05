@@ -99,10 +99,10 @@ trait BlockStorageTest
                               .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                           )
                         }
-                  _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
-                        maybeSummary should not be empty
+                  _ <- storage.getBlockInfoByPrefix(randomPrefix).map { maybeInfo =>
+                        maybeInfo should not be empty
                         assert(
-                          maybeSummary.get.blockHash
+                          maybeInfo.get.getSummary.blockHash
                             .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                         )
                       }
@@ -191,5 +191,5 @@ class SQLiteBlockStorageTest extends BlockStorageTest with SQLiteFixture[BlockSt
   override def db: String = "/tmp/block_storage.db"
 
   override def createTestResource: Task[BlockStorage[Task]] =
-    SQLiteStorage.create[Task]()
+    SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 }

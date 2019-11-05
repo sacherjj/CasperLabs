@@ -69,7 +69,17 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
 
 class NewForkChoiceTipBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"New fork-choice tip is block {block[:10]}....")
+        super().__init__(node, f"Fork-choice tip is block {block[:10]}....")
+
+
+class FinishedAddingBlock(LogsContainMessage):
+    def __init__(self, node: DockerNode, block: str) -> None:
+        super().__init__(node, f"Finished adding {block[:10]}...")
+
+
+class AddedBlock(LogsContainMessage):
+    def __init__(self, node: DockerNode, block: str) -> None:
+        super().__init__(node, f"Added {block[:10]}...")
 
 
 class RegexBlockRequest:
@@ -116,6 +126,14 @@ class ApprovedBlockReceived(LogsContainMessage):
 class RequestedForkTip(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "Requested fork tip from peers", times)
+
+
+class ClarityServerStarted(LogsContainMessage):
+    def __init__(self, node: DockerNode, times: int) -> None:
+        super().__init__(node, "server started at", times)
+
+    def is_satisfied(self) -> bool:
+        return self.node.logs().count(self.message) >= self.times
 
 
 class WaitForGoodBye(LogsContainMessage):
@@ -381,6 +399,16 @@ def wait_for_new_fork_choice_tip_block(
     wait_on_using_wall_clock_time(predicate, timeout_seconds)
 
 
+def wait_for_finished_adding_block(node: DockerNode, block: str, timeout_seconds: int):
+    predicate = FinishedAddingBlock(node, block)
+    wait_on_using_wall_clock_time(predicate, timeout_seconds)
+
+
+def wait_for_added_block(node: DockerNode, block: str, timeout_seconds: int):
+    predicate = AddedBlock(node, block)
+    wait_on_using_wall_clock_time(predicate, timeout_seconds)
+
+
 def wait_for_genesis_block(node: DockerNode, timeout_seconds: int = 60):
     predicate = BlocksCountAtLeast(node, 1, 1)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
@@ -524,3 +552,8 @@ def wait_for_connected_to_node(
 ) -> None:
     predicate = ConnectedToOtherNode(node, other_node_name, times)
     wait_on_using_wall_clock_time(predicate, timeout)
+
+
+def wait_for_clarity_started(node: DockerNode, startup_timeout: int, times: int = 1):
+    predicate = ClarityServerStarted(node, times)
+    wait_on_using_wall_clock_time(predicate, startup_timeout)

@@ -60,8 +60,15 @@ service CasperService {
     // Execute multiple state queries at once.
     rpc BatchGetBlockState(BatchGetBlockStateRequest) returns (BatchGetBlockStateResponse) {
         option (google.api.http) = {
-            post: "v2/blocks/{block_hash_base16=*}/state:batchGet",
+            post: "v2/blocks/{block_hash_base16=*}/state:batchGet"
             body: "*"
+        };
+    }
+
+    // Get deploys list of a given account
+    rpc ListDeployInfos (ListDeployInfosRequest) returns (ListDeployInfosResponse) {
+        option (google.api.http) = {
+            get: "v2/accounts/{account_public_key_base16=*}/deploys"
         };
     }
 }
@@ -127,4 +134,16 @@ message BatchGetBlockStateRequest {
 
 message BatchGetBlockStateResponse {
     repeated io.casperlabs.casper.consensus.state.Value values = 1;
+}
+
+message ListDeployInfosRequest {
+    string account_public_key_base16 = 1;
+    io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
+    uint32 page_size = 3;
+    string page_token = 4;
+}
+
+message ListDeployInfosResponse {
+    repeated io.casperlabs.casper.consensus.info.DeployInfo deploy_infos = 1;
+    string next_page_token = 2;
 }

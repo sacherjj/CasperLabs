@@ -2,6 +2,7 @@ package io.casperlabs.node.api.graphql.schema.blocks
 
 import cats.syntax.either._
 import cats.syntax.option._
+import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
@@ -10,6 +11,11 @@ import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
 import sangria.schema._
+import sangria.macros.derive._
+
+case class PageInfo(endCursor: String, hasNextPage: Boolean)
+
+case class DeployInfosWithPageInfo(deployInfos: List[DeployInfo], pageInfo: PageInfo)
 
 package object types {
 
@@ -125,7 +131,7 @@ package object types {
   val BlockInfoInterface = InterfaceType(
     "BlockInfo",
     "Basic block information which doesn't require reading a full block",
-    fields[Unit, (BlockInfo, Option[Block])](
+    fields[Unit, BlockAndMaybeDeploys](
       Field(
         "blockHash",
         StringType,
@@ -198,7 +204,7 @@ package object types {
         "deploys",
         ListType(ProcessedDeployType),
         "Deploys in the block".some,
-        resolve = c => c.value._2.get.getBody.deploys.toList.map(_.asLeft[ProcessingResult])
+        resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
       ),
       Field(
         "faultTolerance",
@@ -214,6 +220,11 @@ package object types {
         "deployErrorCount",
         OptionType(IntType),
         resolve = c => c.value._1.getStatus.stats.map(_.deployErrorCount)
+      ),
+      Field(
+        "deployCostTotal",
+        OptionType(LongType),
+        resolve = c => c.value._1.getStatus.stats.map(_.deployCostTotal)
       )
     )
   )
@@ -228,7 +239,8 @@ package object types {
       Field(
         "block",
         BlockInfoInterface,
-        resolve = c => (c.value.right.get.getBlockInfo, none[Block])
+        // Producing the BlockInfo from the one embedded in `DeployInfo.ProcessingResult`; it won't have further deploys with it for the block.
+        resolve = c => (c.value.right.get.getBlockInfo, none[List[Block.ProcessedDeploy]])
       )
     )
   )
@@ -252,14 +264,42 @@ package object types {
 
   val BlockType = ObjectType(
     "Block",
-    interfaces[Unit, (BlockInfo, Option[Block])](BlockInfoInterface),
-    fields[Unit, (BlockInfo, Option[Block])](
+    interfaces[Unit, BlockAndMaybeDeploys](BlockInfoInterface),
+    fields[Unit, BlockAndMaybeDeploys](
       Field(
         "deploys",
         ListType(ProcessedDeployType),
         "Deploys in the block".some,
-        resolve = c => c.value._2.get.getBody.deploys.toList.map(_.asLeft[ProcessingResult])
+        resolve = c => c.value._2.get.map(_.asLeft[ProcessingResult])
       )
+    )
+  )
+
+  val PageInfoType = ObjectType(
+    "PageInfo",
+    "Cursor based pagination information",
+    fields[Unit, PageInfo](
+      Field(
+        "endCursor",
+        StringType,
+        "The cursor of the last item in result".some,
+        resolve = _.value.endCursor
+      ),
+      Field(
+        "hasNextPage",
+        BooleanType,
+        "Whether there is another page of data available".some,
+        resolve = _.value.hasNextPage
+      )
+    )
+  )
+
+  val DeployInfosWithPageInfoType = ObjectType(
+    "deploys",
+    "A list of deploys for the specified account",
+    fields[Unit, DeployInfosWithPageInfo](
+      Field("deployInfos", ListType(DeployInfoType), resolve = _.value.deployInfos),
+      Field("pageInfo", PageInfoType, resolve = _.value.pageInfo)
     )
   )
 }

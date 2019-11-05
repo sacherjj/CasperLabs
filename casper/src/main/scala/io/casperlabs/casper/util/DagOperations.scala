@@ -1,14 +1,16 @@
 package io.casperlabs.casper.util
 
 import cats.implicits._
-import cats.{Eq, Eval, Monad, Show}
+import cats.data.NonEmptyList
+import cats.{Eq, Eval, Monad}
+import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.casper.util.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.shared.StreamT
+import io.casperlabs.shared.{Log, StreamT}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
@@ -36,6 +38,43 @@ object DagOperations {
     implicit val blockSummaryKey   = instance[BlockSummary, BlockHash](_.blockHash)
     implicit val messageSummaryKey = instance[Message, BlockHash](_.messageHash)
     implicit val blockHashKey      = identity[BlockHash]
+  }
+
+  /** Starts from the list of messages and follows their justifications,
+    * sorting them by their rank value.
+    *
+    * Returns a stream.
+    */
+  def toposortJDagDesc[F[_]: Monad](
+      dag: DagRepresentation[F],
+      msgs: List[Message]
+  ): StreamT[F, Message] = {
+    implicit val blockTopoOrdering: Ordering[Message] = DagOperations.blockTopoOrderingDesc
+    DagOperations.bfToposortTraverseF(
+      msgs
+    )(
+      _.justifications.toList
+        .traverse(j => dag.lookup(j.latestBlockHash))
+        .map(_.flatten)
+    )
+  }
+
+  /** Traverses j-past-cone of the block and returns messages by specified validator.
+    */
+  def swimlaneV[F[_]: Monad](
+      validator: ByteString,
+      message: Message,
+      dag: DagRepresentation[F]
+  ): StreamT[F, Message] = {
+    // Messages visible in the direct justifications of the block.
+    val messagePanorama =
+      message.justifications.toList.traverse(j => dag.lookup(j.latestBlockHash)).map(_.flatten)
+    val tail = StreamT.lift(messagePanorama).flatMap { jTips =>
+      toposortJDagDesc[F](dag, jTips).filter(_.validatorId == validator)
+    }
+    if (message.validatorId == validator) {
+      StreamT.pure[F, Message](message) ++ tail
+    } else tail
   }
 
   def bfTraverseF[F[_]: Monad, A](
@@ -324,7 +363,7 @@ object DagOperations {
   /** Computes Latest Common Ancestor of the set of elements.
     */
   def latestCommonAncestorF[F[_]: MonadThrowable, A: Eq: Ordering](
-      starters: List[A]
+      starters: NonEmptyList[A]
   )(next: A => F[A]): F[A] =
     starters.foldLeftM(starters.head)(latestCommonAncestorF(_, _)(next))
 
@@ -338,26 +377,29 @@ object DagOperations {
     */
   def latestCommonAncestorsMainParent[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      starters: List[BlockHash]
+      starters: NonEmptyList[BlockHash]
   ): F[BlockHash] = {
     implicit val blocksOrdering = DagOperations.blockTopoOrderingDesc
-    import io.casperlabs.casper.util.implicits.{eqMessageSummary, showBlockHash}
-    def lookup[A](f: A => BlockHash): A => F[Message] =
-      el =>
-        dag
-          .lookup(f(el))
-          .flatMap(
-            MonadThrowable[F].fromOption(
-              _,
-              new IllegalStateException(s"Missing ${PrettyPrinter.buildString(f(el))} dependency.")
-            )
+    import io.casperlabs.casper.util.implicits.eqMessageSummary
+
+    def lookup(hash: BlockHash): F[Message] =
+      dag
+        .lookup(hash)
+        .flatMap(
+          MonadThrowable[F].fromOption(
+            _,
+            new IllegalStateException(s"Missing dependency: ${PrettyPrinter.buildString(hash)}")
           )
+        )
 
     starters
-      .traverse(lookup(identity))
-      .flatMap(
-        latestCommonAncestorF[F, Message](_)(lookup[Message](_.parents.head)(_))
-      )
+      .traverse(lookup)
+      .flatMap {
+        latestCommonAncestorF[F, Message](_) { block =>
+          // Genesis doesn't have parents, so just return itself until it's recognised as LCA.
+          block.parents.headOption.fold(block.pure[F])(lookup)
+        }
+      }
       .map(_.messageHash)
   }
 

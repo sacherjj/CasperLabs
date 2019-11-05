@@ -380,6 +380,7 @@ steps:
   - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
   - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
   - "make docker-build/explorer"
+  - "make docker-build/grpcwebproxy"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -390,11 +391,6 @@ steps:
     branch:
     - staging
     - trying
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "**/**.proto"
-      - "explorer/**"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -441,6 +437,7 @@ steps:
     - trying
   depends_on:
   - docker-build-ee-int-bors
+  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
@@ -680,28 +677,6 @@ steps:
   - docker-grpcwebproxy-merge
   - package-sbt-artifacts-merge
 
-- name: contract-examples
-  image: plugins/downstream
-  settings:
-    fork: true
-    repositories:
-    - "CasperLabs/contract-examples@master"
-  environment:
-    DOWNSTREAM_SERVER:
-      from_secret: downstream_server
-    DOWNSTREAM_TOKEN:
-      from_secret: downstream_token
-  when:
-    branch:
-    - dev
-    - "release-*"
-    - master
-    event:
-    - push
-  depends_on:
-  - rsync-artifacts
-  - docker-publish
-
 volumes:
 - name: docker_sock
   host:
@@ -927,6 +902,9 @@ steps:
     status:
     - failure
     - success
+  depends_on:
+  - mac-ee-tarball-tag
+  - rsync-mac-tarball-tag
 
 volumes:
 - name: docker_sock

@@ -65,8 +65,8 @@ docker-build/client: .make/docker-build/universal/client .make/docker-build/test
 docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
-docker-build/explorer: .make/docker-build/explorer
-docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
+docker-build/explorer: .make/docker-build/explorer .make/docker-build/test/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy .make/docker-build/test/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -119,6 +119,8 @@ cargo-native-packager/%:
 		integration-testing/Dockerfile
 	$(eval IT_PATH = integration-testing)
 	cp -r protobuf $(IT_PATH)/
+	mkdir -p $(IT_PATH)/bundled_contracts
+	cp -r client/src/main/resources/*.wasm $(IT_PATH)/bundled_contracts/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
@@ -137,11 +139,8 @@ cargo-native-packager/%:
 
 # Make a node that has some extras installed for testing.
 .make/docker-build/test/node: \
-		.make/docker-build/universal/node \
-		hack/docker/test-node.Dockerfile
-	# Add system contracts so we can use them in integration testing.
-	# For live tests we should mount them from a real source.
-	docker build -f hack/docker/test-node.Dockerfile -t $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG) hack/docker
+		.make/docker-build/universal/node
+	docker tag $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make a test version for the execution engine as well just so we can swith version easily.
@@ -175,6 +174,12 @@ cargo-native-packager/%:
 		explorer/Dockerfile \
 		build-explorer
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test tagged version of explorer for integration-testing.
+.make/docker-build/test/explorer: \
+		.make/docker-build/explorer
+	docker tag $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/explorer:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm/explorer: \
@@ -242,6 +247,12 @@ cargo-native-packager/%:
 .make/docker-build/grpcwebproxy: hack/docker/grpcwebproxy/Dockerfile
 	cd hack/docker && docker-compose build grpcwebproxy
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test tagged version of grpcwebproxy for integration-testing.
+.make/docker-build/test/grpcwebproxy: \
+		.make/docker-build/grpcwebproxy
+	docker tag $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.

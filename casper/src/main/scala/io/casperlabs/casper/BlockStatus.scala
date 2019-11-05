@@ -35,6 +35,7 @@ final case object InvalidBlockNumber     extends InvalidBlock with Slashable
 final case object InvalidRepeatDeploy    extends InvalidBlock with Slashable
 final case object InvalidParents         extends InvalidBlock with Slashable
 final case object InvalidSequenceNumber  extends InvalidBlock with Slashable
+final case object InvalidPrevBlockHash   extends InvalidBlock with Slashable
 final case object InvalidChainName       extends InvalidBlock with Slashable
 final case object NeglectedInvalidBlock  extends InvalidBlock with Slashable
 final case object InvalidTransaction     extends InvalidBlock with Slashable
@@ -45,6 +46,13 @@ final case object InvalidBlockHash       extends InvalidBlock with Slashable
 final case object InvalidDeployCount     extends InvalidBlock with Slashable
 final case object InvalidDeployHash      extends InvalidBlock with Slashable
 final case object InvalidDeploySignature extends InvalidBlock with Slashable
+final case object InvalidDeployHeader    extends InvalidBlock with Slashable
+final case object InvalidDeployChainName extends InvalidBlock with Slashable
+final case object SwimlaneMerged         extends InvalidBlock with Slashable
+final case object DeployDependencyNotMet extends InvalidBlock with Slashable
+final case object DeployExpired          extends InvalidBlock with Slashable
+final case object DeployFromFuture       extends InvalidBlock with Slashable
+
 // Raised only for Ballot message type when parents.size != 1
 final case object InvalidTargetHash extends InvalidBlock
 

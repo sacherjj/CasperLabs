@@ -9,9 +9,7 @@ use proptest::prelude::*;
 use contract_ffi::gens::*;
 use contract_ffi::key::Key;
 use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{
-    AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight, KEY_SIZE,
-};
+use contract_ffi::value::account::{AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE};
 use contract_ffi::value::{Account, Contract, ProtocolVersion, Value};
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
@@ -219,7 +217,6 @@ fn tracking_copy_add_named_key() {
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
         Default::default(),
-        AccountActivity::new(BlockTime(0), BlockTime(100)),
     );
     let db = CountingDb::new_init(Value::Account(account));
     let mut tc = TrackingCopy::new(db);
@@ -426,7 +423,6 @@ proptest! {
             purse_id,
             associated_keys,
             Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(100))
         );
         let account_key = Key::Account(address);
 
@@ -478,7 +474,6 @@ proptest! {
             purse_id,
             associated_keys,
             Default::default(),
-            AccountActivity::new(BlockTime(0), BlockTime(100))
         );
         let account_key = Key::Account(address);
 

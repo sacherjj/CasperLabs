@@ -27,16 +27,15 @@ trait DeployStorageSpec
   /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
   protected def testFixture(
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
-      timeout: FiniteDuration = 5.seconds,
-      deployBufferChunkSize: Int = 100
+      timeout: FiniteDuration = 5.seconds
   ): Unit
 
-  private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+  protected implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  private implicit val consensusConfig: ConsensusConfig =
+  protected implicit val consensusConfig: ConsensusConfig =
     ConsensusConfig(maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
 
-  private def deploysGen(min: Int = 1): Gen[List[Deploy]] =
+  protected def deploysGen(min: Int = 1): Gen[List[Deploy]] =
     for {
       n       <- Gen.choose(min, 10)
       deploys <- Gen.listOfN(n, arbDeploy.arbitrary)

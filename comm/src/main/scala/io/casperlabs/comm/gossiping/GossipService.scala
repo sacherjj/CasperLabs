@@ -25,6 +25,10 @@ trait GossipService[F[_]] {
   def getGenesisCandidate(request: GetGenesisCandidateRequest): F[GenesisCandidate]
 
   def addApproval(request: AddApprovalRequest): F[Unit]
+
+  def streamDagSliceBlockSummaries(
+      request: StreamDagSliceBlockSummariesRequest
+  ): Iterant[F, BlockSummary]
 }
 
 object GossipService {

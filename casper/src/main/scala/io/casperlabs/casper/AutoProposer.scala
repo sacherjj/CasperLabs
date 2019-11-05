@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.storage.deploy.DeployStorageReader
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
 
@@ -15,13 +15,12 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
+class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorage](
     checkInterval: FiniteDuration,
     accInterval: FiniteDuration,
     accCount: Int,
     blockApiLock: Semaphore[F]
 ) {
-
   private def run(): F[Unit] = {
     val accElapsedMillis = accInterval.toMillis
 
@@ -75,7 +74,7 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage](
       checkInterval: FiniteDuration,
       accInterval: FiniteDuration,
       accCount: Int,

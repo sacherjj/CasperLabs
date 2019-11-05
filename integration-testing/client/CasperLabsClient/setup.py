@@ -17,6 +17,10 @@ from setuptools.command.install import install as InstallCommand
 from distutils.spawn import find_executable
 
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+
+# Directory with Scala client's bundled contracts
+
+CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../../client/src/main/resources"
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
@@ -149,6 +153,42 @@ def run_codegen():
         glob(f"{PACKAGE_DIR}/*pb2*py"),
     )
 
+    pattern = (
+        os.environ.get("TAG_NAME")
+        and "/root/bundled_contracts/*.wasm"
+        or os.path.join(CONTRACTS_DIR, "*.wasm")
+    )
+    bundled_contracts = list(glob(pattern))
+    if len(bundled_contracts) == 0:
+        raise Exception(
+            f"Could not find wasm files that should be bundled with the client. {pattern}"
+        )
+    for filename in bundled_contracts:
+        shutil.copy(filename, PACKAGE_DIR)
+
+
+def prepare_sdist():
+    bundled_contracts = [
+        f"{CONTRACTS_DIR}/{f}"
+        for f in [
+            "bonding.wasm",
+            "standard_payment.wasm",
+            "transfer_to_account.wasm",
+            "unbonding.wasm",
+        ]
+    ]
+    for file_name in bundled_contracts:
+        if not os.path.exists(file_name):
+            raise Exception(f"Contract file {file_name} does not exit")
+        base_name = os.path.basename(file_name)
+        copyfile(file_name, os.path.join(PACKAGE_DIR, base_name))
+        print(f"Copied contract {base_name}")
+    run_codegen()
+
+
+if len(sys.argv) > 1 and sys.argv[1] == "sdist":
+    prepare_sdist()
+
 
 with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
     long_description = fh.read()
@@ -168,7 +208,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.4.3",
+    version="0.5.1",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
@@ -187,6 +227,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
@@ -201,6 +242,7 @@ setup(
         "Intended Audience :: Developers",
     ],
     python_requires=">=3.6.0",
+    url="https://casperlabs.io/",
     project_urls={
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/client/CasperLabsClient/README.md",

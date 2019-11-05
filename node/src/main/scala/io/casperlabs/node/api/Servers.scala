@@ -24,7 +24,7 @@ import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMe
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.DeployStorage
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
@@ -86,7 +86,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
@@ -113,7 +113,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

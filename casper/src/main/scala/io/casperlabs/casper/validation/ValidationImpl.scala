@@ -1,22 +1,22 @@
 package io.casperlabs.casper.validation
 
-import cats.Applicative
+import cats.{Applicative, Monad}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors._
-import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, Signature}
+import io.casperlabs.models.Message
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.models.Weight
@@ -105,7 +105,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       dag: DagRepresentation[F],
       chainName: String,
       maybeGenesis: Option[Block]
-  )(implicit bs: BlockStorage[F], versions: CasperLabsProtocolVersions[F]): F[Unit] = {
+  )(
+      implicit bs: BlockStorage[F],
+      versions: CasperLabsProtocolVersions[F],
+      compiler: Fs2Compiler[F]
+  ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
     for {
       _ <- checkDroppable(
@@ -121,13 +125,16 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       // Checks that need dependencies.
       _ <- missingBlocks(summary)
       _ <- timestamp(summary)
-      _ <- blockNumber(summary, dag)
+      _ <- blockRank(summary, dag)
+      _ <- validatorPrevBlockHash(summary, dag)
       _ <- sequenceNumber(summary, dag)
+      _ <- swimlane(summary, dag)
       // Checks that need the body.
       _ <- blockHash(block)
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
+      _ <- deployHeaders(block, dag, chainName)
       _ <- deployUniqueness(block, dag)
     } yield ()
   }
@@ -218,14 +225,29 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+  private def validateChainName(
+      chainName: String,
+      deployChainName: String,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (deployChainName.nonEmpty && deployChainName != chainName)
+      Errors.DeployHeaderError
+        .invalidChainName(deployHash, deployChainName, chainName)
+        .logged[F]
+        .map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def deployHeader(d: consensus.Deploy, chainName: String): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map2(
+        Applicative[F].map3(
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
-          validateDependencies(header.dependencies, d.deployHash)
+          validateDependencies(header.dependencies, d.deployHash),
+          validateChainName(chainName, header.chainName, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+          case (validTTL, validDependencies, validChainNames) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList
         }
 
       case None =>
@@ -362,22 +384,23 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               }
     } yield delay
 
-  // Block number is 1 plus the maximum of block number of its justifications.
-  def blockNumber(
+  // Block rank is 1 plus the maximum of the rank of its justifications.
+  def blockRank(
       b: BlockSummary,
       dag: DagRepresentation[F]
   ): F[Unit] =
     for {
-      justificationMsgs <- b.justifications.toList.traverse { justification =>
-                            dag.lookup(justification.latestBlockHash).flatMap {
-                              MonadThrowable[F].fromOption(
-                                _,
-                                new Exception(
-                                  s"Block dag store was missing ${PrettyPrinter.buildString(justification.latestBlockHash)}."
+      justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
+                            .traverse { messageHash =>
+                              dag.lookup(messageHash).flatMap {
+                                MonadThrowable[F].fromOption(
+                                  _,
+                                  new Exception(
+                                    s"Block dag store was missing ${PrettyPrinter.buildString(messageHash)}."
+                                  )
                                 )
-                              )
+                              }
                             }
-                          }
       calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
@@ -402,6 +425,46 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .raise[Unit](InvalidTargetHash)
       .whenA(b.getHeader.messageType.isBallot && b.getHeader.parentHashes.size != 1)
 
+  // Check whether message merges its creator swimlane.
+  // A block cannot have more than one latest message in its j-past-cone from its creator.
+  // i.e. an equivocator cannot cite multiple of its latest messages.
+  def swimlane(b: BlockSummary, dag: DagRepresentation[F]): F[Unit] =
+    for {
+      equivocators <- dag.getEquivocators
+      message      <- MonadThrowable[F].fromTry(Message.fromBlockSummary(b))
+      _ <- Monad[F].whenA(equivocators.contains(message.validatorId)) {
+            for {
+              equivocations       <- dag.getEquivocations.map(_(message.validatorId))
+              equivocationsHashes = equivocations.map(_.messageHash)
+              minRank = EquivocationDetector
+                .findMinBaseRank(Map(message.validatorId -> equivocations))
+                .getOrElse(0L) // We know it has to be defined by this point.
+              seenEquivocations <- DagOperations
+                                    .swimlaneV[F](message.validatorId, message, dag)
+                                    .foldWhileLeft(Set.empty[BlockHash]) {
+                                      case (seenEquivocations, message) =>
+                                        if (message.rank <= minRank) {
+                                          Right(seenEquivocations)
+                                        } else {
+                                          if (equivocationsHashes.contains(message.messageHash)) {
+                                            if (seenEquivocations.nonEmpty) {
+                                              Right(seenEquivocations + message.messageHash)
+                                            } else Left(Set(message.messageHash))
+                                          } else Left(seenEquivocations)
+                                        }
+                                    }
+              _ <- Monad[F].whenA(seenEquivocations.size > 1) {
+                    val msg =
+                      s"${message.messageHash} cites multiple latest message by its creator ${message.validatorId}: ${seenEquivocations
+                        .map(PrettyPrinter.buildString)
+                        .mkString("[", ",", "]")}"
+                    Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
+                      .raise[Unit](SwimlaneMerged)
+                  }
+            } yield ()
+          }
+    } yield ()
+
   /**
     * Works with either efficient justifications or full explicit justifications.
     * Specifically, with efficient justifications, if a block B doesn't update its
@@ -420,8 +483,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         creatorJustificationSeqNumber <- ProtoUtil.nextValidatorBlockSeqNum(
                                           dag,
-                                          b.getHeader.justifications,
-                                          b.getHeader.validatorPublicKey
+                                          b.getHeader.validatorPrevBlockHash
                                         )
         number = b.validatorBlockSeqNum
         ok     = creatorJustificationSeqNumber == number
@@ -439,6 +501,57 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
               } yield ()
             }
       } yield ()
+
+  /** Validate that the j-past-cone of the block cites the previous block hash,
+    * except if this is the first block the validator created.
+    */
+  def validatorPrevBlockHash(
+      b: BlockSummary,
+      dag: DagRepresentation[F]
+  ): F[Unit] = {
+    val prevBlockHash = b.getHeader.validatorPrevBlockHash
+    val validatorId   = b.getHeader.validatorPublicKey
+    if (prevBlockHash.isEmpty) {
+      ().pure[F]
+    } else {
+      def raise(msg: String) =
+        Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
+          .raise[Unit](InvalidPrevBlockHash)
+
+      dag.lookup(prevBlockHash).flatMap {
+        case None =>
+          raise(
+            s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
+          )
+        case Some(meta) if meta.validatorId != validatorId =>
+          raise(
+            s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
+              .buildString(validatorId)}"
+          )
+        case Some(meta) =>
+          MonadThrowable[F].fromTry(Message.fromBlockSummary(b)) flatMap { blockMsg =>
+            DagOperations
+              .toposortJDagDesc(dag, List(blockMsg))
+              .find { j =>
+                j.validatorId == validatorId && j.messageHash != b.blockHash || j.rank < meta.rank
+              }
+              .flatMap {
+                case Some(msg) if msg.messageHash == prevBlockHash =>
+                  ().pure[F]
+                case Some(msg) if msg.validatorId == validatorId =>
+                  raise(
+                    s"The previous block hash from this validator in the j-past-cone is ${PrettyPrinter
+                      .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
+                  )
+                case _ =>
+                  raise(
+                    s"Could not find any previous block hash from the validator in the j-past-cone."
+                  )
+              }
+          }
+      }
+    }
+  }
 
   // Agnostic of justifications
   def chainIdentifier(
@@ -526,6 +639,69 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield ()
     }
 
+  def deployHeaders(b: Block, dag: DagRepresentation[F], chainName: String)(
+      implicit blockStorage: BlockStorage[F]
+  ): F[Unit] = {
+    val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
+    val parents: Set[BlockHash] =
+      b.header.toSet.flatMap((h: consensus.Block.Header) => h.parentHashes)
+    val timestamp       = b.getHeader.timestamp
+    val isFromPast      = DeployFilters.timestampBefore(timestamp)
+    val isNotExpired    = DeployFilters.notExpired(timestamp)
+    val dependenciesMet = DeployFilters.dependenciesMet[F](dag, parents)
+
+    def singleDeployValidation(d: consensus.Deploy): F[Unit] =
+      for {
+        staticErrors           <- deployHeader(d, chainName)
+        _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
+        header                 = d.getHeader
+        isFromFuture           = !isFromPast(header)
+        _                      <- raiseFutureDeploy(d.deployHash, header).whenA(isFromFuture)
+        isExpired              = !isNotExpired(header)
+        _                      <- raiseExpiredDeploy(d.deployHash, header).whenA(isExpired)
+        hasMissingDependencies <- dependenciesMet(d).map(!_)
+        _                      <- raiseDeployDependencyNotMet(d).whenA(hasMissingDependencies)
+      } yield ()
+
+    def raiseHeaderErrors(errors: List[Errors.DeployHeaderError]): F[Unit] =
+      for {
+        _ <- Log[F].warn(ignore(b, errors.map(_.errorMessage).mkString(". ")))
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHeader)
+      } yield ()
+
+    def raiseFutureDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash = PrettyPrinter.buildString(deployHash)
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is earlier than timestamp of deploy $hash, ${header.timestamp}"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployFromFuture)
+    }
+
+    def raiseExpiredDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+      val hash           = PrettyPrinter.buildString(deployHash)
+      val ttl            = ProtoUtil.getTimeToLive(header, MAX_TTL)
+      val expirationTime = header.timestamp + ttl
+      val message = ignore(
+        b,
+        s"block timestamp $timestamp is later than expiration time of deploy $hash, $expirationTime"
+      )
+
+      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
+    }
+
+    def raiseDeployDependencyNotMet(deploy: consensus.Deploy): F[Unit] =
+      for {
+        _ <- Log[F].warn(
+              ignore(b, s"${PrettyPrinter.buildString(deploy)} did not have all dependencies met.")
+            )
+        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployDependencyNotMet)
+      } yield ()
+
+    deploys.traverse(singleDeployValidation).as(())
+  }
+
   def deployHashes(
       b: Block
   ): F[Unit] =
@@ -572,8 +748,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   def parents(
       b: Block,
       genesisHash: BlockHash,
-      dag: DagRepresentation[F],
-      equivocationsTracker: EquivocationsTracker
+      dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
@@ -584,7 +759,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       .getJustificationMsgHashes(b.getHeader.justifications)
 
     for {
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocationsTracker)
+      equivocators <- EquivocationDetector.detectVisibleFromJustifications(
+                       dag,
+                       latestMessagesHashes
+                     )
+      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
@@ -596,14 +775,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             Applicative[F].unit
           else {
             val parentsString =
-              parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+              parentHashes.map(PrettyPrinter.buildString).mkString(",")
             val estimateString =
-              computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+              computedParentHashes.map(PrettyPrinter.buildString).mkString(",")
             val justificationString = latestMessagesHashes.values
-              .map(hash => PrettyPrinter.buildString(hash))
+              .map(hashes => hashes.map(PrettyPrinter.buildString).mkString("[", ",", "]"))
               .mkString(",")
             val message =
-              s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
+              s"block parents $parentsString did not match estimate $estimateString based on justification $justificationString."
             for {
               _ <- Log[F].warn(
                     ignore(

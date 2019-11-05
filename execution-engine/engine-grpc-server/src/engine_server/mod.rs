@@ -1,6 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::convert::TryFrom;
-use std::convert::TryInto;
+pub mod ipc;
+pub mod ipc_grpc;
+pub mod mappings;
+pub mod state;
+pub mod transforms;
+
+use std::collections::BTreeMap;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::marker::{Send, Sync};
@@ -8,33 +13,25 @@ use std::time::Instant;
 
 use grpc::SingleResponse;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{ProtocolVersion, U512};
-use engine_core::engine_state::error::Error as EngineError;
+use contract_ffi::value::account::BlockTime;
+use contract_ffi::value::ProtocolVersion;
+use engine_core::engine_state::deploy_item::DeployItem;
 use engine_core::engine_state::execution_result::ExecutionResult;
 use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
+use engine_core::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use engine_core::engine_state::EngineState;
-use engine_core::execution::{Executor, WasmiExecutor};
+use engine_core::engine_state::Error as EngineError;
+use engine_core::execution::Executor;
 use engine_core::tracking_copy::QueryResult;
 use engine_shared::logging;
+use engine_shared::logging::log_level::LogLevel;
 use engine_shared::logging::{log_duration, log_info};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
+use engine_shared::newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH};
 use engine_storage::global_state::{CommitResult, StateProvider};
-use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
+use engine_wasm_prep::Preprocessor;
 
 use self::ipc_grpc::ExecutionEngineService;
-use self::mappings::*;
-use engine_core::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
-use engine_shared::logging::log_level::LogLevel;
-
-pub mod ipc;
-pub mod ipc_grpc;
-pub mod mappings;
-pub mod state;
-pub mod transforms;
-
-const EXPECTED_PUBLIC_KEY_LENGTH: usize = 32;
+use self::mappings::{CommitTransforms, MappingError, ParsingError};
 
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";
@@ -161,56 +158,77 @@ where
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
-        let protocol_version = exec_request.get_protocol_version().into();
-
-        // TODO: don't unwrap
-        let prestate_hash: Blake2bHash = exec_request.get_parent_state_hash().try_into().unwrap();
-
-        let blocktime = BlockTime(exec_request.get_block_time());
-
-        // TODO: don't unwrap
-        let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
-
-        let deploys = exec_request.get_deploys();
-
-        let preprocessor: WasmiPreprocessor = WasmiPreprocessor::new(wasm_costs);
-
-        let executor = WasmiExecutor;
-
-        let deploys_result: Result<Vec<ipc::DeployResult>, ipc::RootNotFound> = execute_deploys(
-            &self,
-            &executor,
-            &preprocessor,
-            prestate_hash,
-            blocktime,
-            deploys,
-            protocol_version,
-            correlation_id,
-        );
-
-        let exec_response = match deploys_result {
-            Ok(deploy_results) => {
-                let mut exec_response = ipc::ExecuteResponse::new();
-                let mut exec_result = ipc::ExecResult::new();
-                exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(deploy_results));
-                exec_response.set_success(exec_result);
-                exec_response
-            }
-            Err(error) => {
-                logging::log_error("deploy results error: RootNotFound");
-                let mut exec_response = ipc::ExecuteResponse::new();
-                exec_response.set_missing_parent(error);
-                exec_response
+        let parent_state_hash = {
+            let parent_state_hash = exec_request.get_parent_state_hash();
+            match Blake2bHash::try_from(parent_state_hash) {
+                Ok(hash) => hash,
+                Err(_) => {
+                    // TODO: do not panic
+                    let length = parent_state_hash.len();
+                    panic!(
+                        "Invalid hash. Expected length: {:?}, actual length: {:?}",
+                        BLAKE2B_DIGEST_LENGTH, length
+                    )
+                }
             }
         };
+        let block_time = BlockTime::new(exec_request.get_block_time());
+        let protocol_version = exec_request.get_protocol_version().into();
+        // TODO: do not unwrap
+        let wasm_costs = self.wasm_costs(protocol_version).unwrap().unwrap();
+        let executor = Executor;
+        let preprocessor = Preprocessor::new(wasm_costs);
 
+        let mut exec_response = ipc::ExecuteResponse::new();
+        let mut results: Vec<ExecutionResult> = Vec::new();
+
+        for result in exec_request
+            .get_deploys()
+            .iter()
+            .map::<Result<DeployItem, MappingError>, _>(TryInto::try_into)
+        {
+            match result {
+                Ok(deploy_item) => {
+                    let result = self.deploy(
+                        correlation_id,
+                        &executor,
+                        &preprocessor,
+                        protocol_version,
+                        parent_state_hash,
+                        block_time,
+                        deploy_item,
+                    );
+                    match result {
+                        Ok(result) => results.push(result),
+                        Err(error) => {
+                            logging::log_error("deploy results error: RootNotFound");
+                            exec_response.set_missing_parent(error.into());
+                            log_duration(
+                                correlation_id,
+                                METRIC_DURATION_EXEC,
+                                TAG_RESPONSE_EXEC,
+                                start.elapsed(),
+                            );
+                            return grpc::SingleResponse::completed(exec_response);
+                        }
+                    };
+                }
+                Err(mapping_error) => {
+                    results.push(ExecutionResult::precondition_failure(mapping_error.into()))
+                }
+            }
+        }
+
+        let results: Vec<ipc::DeployResult> = results.into_iter().map(Into::into).collect();
+        let mut exec_result = ipc::ExecResult::new();
+        exec_result.set_deploy_results(protobuf::RepeatedField::from_vec(results));
+        exec_response.set_success(exec_result);
         log_duration(
             correlation_id,
             METRIC_DURATION_EXEC,
             TAG_RESPONSE_EXEC,
             start.elapsed(),
         );
-
         grpc::SingleResponse::completed(exec_response)
     }
 
@@ -395,161 +413,12 @@ where
         grpc::SingleResponse::completed(validate_result)
     }
 
-    #[allow(dead_code)]
     fn run_genesis(
-        &self,
-        _request_options: ::grpc::RequestOptions,
-        genesis_request: ipc::GenesisRequest,
-    ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
-        let start = Instant::now();
-        let correlation_id = CorrelationId::new();
-
-        let genesis_account_addr = {
-            let address = genesis_request.get_address();
-            if address.len() != 32 {
-                let err_msg =
-                    "genesis account public key has to be exactly 32 bytes long.".to_string();
-                logging::log_error(&err_msg);
-
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-
-            let mut ret = [0u8; 32];
-            ret.clone_from_slice(address);
-            ret
-        };
-
-        let initial_motes: U512 = match genesis_request.get_initial_motes().try_into() {
-            Ok(initial_motes) => initial_motes,
-            Err(err) => {
-                let err_msg = format!("{:?}", err);
-                logging::log_error(&err_msg);
-
-                let mut genesis_response = ipc::GenesisResponse::new();
-                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                genesis_deploy_error.set_message(err_msg);
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-        };
-
-        let mint_code_bytes = genesis_request.get_mint_code().get_code();
-
-        let proof_of_stake_code_bytes = genesis_request.get_proof_of_stake_code().get_code();
-
-        let genesis_validators_result: Result<Vec<(PublicKey, U512)>, MappingError> =
-            genesis_request
-                .get_genesis_validators()
-                .iter()
-                .map(TryInto::try_into)
-                .collect();
-
-        let genesis_validators = match genesis_validators_result {
-            Ok(validators) => validators,
-            Err(error) => {
-                logging::log_error(&error.to_string());
-
-                let genesis_deploy_error = {
-                    let mut tmp = ipc::GenesisDeployError::new();
-                    tmp.set_message(error.to_string());
-                    tmp
-                };
-                let mut genesis_response = ipc::GenesisResponse::new();
-                genesis_response.set_failed_deploy(genesis_deploy_error);
-
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_GENESIS,
-                    TAG_RESPONSE_GENESIS,
-                    start.elapsed(),
-                );
-
-                return grpc::SingleResponse::completed(genesis_response);
-            }
-        };
-
-        let protocol_version = genesis_request.get_protocol_version().into();
-
-        let genesis_response = {
-            let mut genesis_response = ipc::GenesisResponse::new();
-
-            match self.commit_genesis(
-                correlation_id,
-                genesis_account_addr,
-                initial_motes,
-                mint_code_bytes,
-                proof_of_stake_code_bytes,
-                genesis_validators,
-                protocol_version,
-            ) {
-                Ok(GenesisResult::Success {
-                    post_state_hash,
-                    effect,
-                }) => {
-                    let success_message = format!("run_genesis successful: {}", post_state_hash);
-                    log_info(&success_message);
-
-                    let mut genesis_result = ipc::GenesisResult::new();
-                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
-                    genesis_result.set_effect(effect.into());
-                    genesis_response.set_success(genesis_result);
-                }
-                Ok(genesis_result) => {
-                    let err_msg = genesis_result.to_string();
-                    logging::log_error(&err_msg);
-
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                }
-                Err(err) => {
-                    let err_msg = err.to_string();
-                    logging::log_error(&err_msg);
-
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                }
-            }
-
-            genesis_response
-        };
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_GENESIS,
-            TAG_RESPONSE_GENESIS,
-            start.elapsed(),
-        );
-
-        grpc::SingleResponse::completed(genesis_response)
-    }
-
-    fn run_genesis_with_chainspec(
         &self,
         _request_options: ::grpc::RequestOptions,
         genesis_config: ipc::ChainSpec_GenesisConfig,
     ) -> ::grpc::SingleResponse<ipc::GenesisResponse> {
+        let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
         let genesis_config: GenesisConfig = match genesis_config.try_into() {
@@ -566,44 +435,49 @@ where
             }
         };
 
-        let genesis_response =
-            match self.commit_genesis_with_chainspec(correlation_id, genesis_config) {
-                Ok(GenesisResult::Success {
-                    post_state_hash,
-                    effect,
-                }) => {
-                    let success_message =
-                        format!("run_genesis_with_chainspec successful: {}", post_state_hash);
-                    log_info(&success_message);
+        let genesis_response = match self.commit_genesis(correlation_id, genesis_config) {
+            Ok(GenesisResult::Success {
+                post_state_hash,
+                effect,
+            }) => {
+                let success_message = format!("run_genesis successful: {}", post_state_hash);
+                log_info(&success_message);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_result = ipc::GenesisResult::new();
-                    genesis_result.set_poststate_hash(post_state_hash.to_vec());
-                    genesis_result.set_effect(effect.into());
-                    genesis_response.set_success(genesis_result);
-                    genesis_response
-                }
-                Ok(genesis_result) => {
-                    let err_msg = genesis_result.to_string();
-                    logging::log_error(&err_msg);
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_result = ipc::GenesisResult::new();
+                genesis_result.set_poststate_hash(post_state_hash.to_vec());
+                genesis_result.set_effect(effect.into());
+                genesis_response.set_success(genesis_result);
+                genesis_response
+            }
+            Ok(genesis_result) => {
+                let err_msg = genesis_result.to_string();
+                logging::log_error(&err_msg);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                    genesis_response
-                }
-                Err(err) => {
-                    let err_msg = err.to_string();
-                    logging::log_error(&err_msg);
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                genesis_deploy_error.set_message(err_msg);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
+                genesis_response
+            }
+            Err(err) => {
+                let err_msg = err.to_string();
+                logging::log_error(&err_msg);
 
-                    let mut genesis_response = ipc::GenesisResponse::new();
-                    let mut genesis_deploy_error = ipc::GenesisDeployError::new();
-                    genesis_deploy_error.set_message(err_msg);
-                    genesis_response.set_failed_deploy(genesis_deploy_error);
-                    genesis_response
-                }
-            };
+                let mut genesis_response = ipc::GenesisResponse::new();
+                let mut genesis_deploy_error = ipc::GenesisDeployError::new();
+                genesis_deploy_error.set_message(err_msg);
+                genesis_response.set_failed_deploy(genesis_deploy_error);
+                genesis_response
+            }
+        };
+
+        log_duration(
+            correlation_id,
+            METRIC_DURATION_GENESIS,
+            TAG_RESPONSE_GENESIS,
+            start.elapsed(),
+        );
 
         grpc::SingleResponse::completed(genesis_response)
     }
@@ -689,119 +563,11 @@ where
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn execute_deploys<A, S, E, P>(
-    engine_state: &EngineState<S>,
-    executor: &E,
-    preprocessor: &P,
-    prestate_hash: Blake2bHash,
-    blocktime: BlockTime,
-    deploys: &[ipc::DeployItem],
-    protocol_version: ProtocolVersion,
-    correlation_id: CorrelationId,
-) -> Result<Vec<ipc::DeployResult>, ipc::RootNotFound>
-where
-    S: StateProvider,
-    E: Executor<A>,
-    P: Preprocessor<A>,
-    EngineError: From<S::Error>,
-    S::Error: Into<engine_core::execution::Error>,
-{
-    // We want to treat RootNotFound error differently b/c it should short-circuit
-    // the execution of ALL deploys within the block. This is because all of them
-    // share the same prestate and all of them would fail.
-    // Iterator (Result<_, _> + collect()) will short circuit the execution
-    // when run_deploy returns Err.
-    deploys
-        .iter()
-        .map(|deploy| {
-            let session = match deploy.get_session().to_owned().payload {
-                Some(payload) => payload.into(),
-                None => {
-                    return Ok(
-                        ExecutionResult::precondition_failure(EngineError::DeployError).into(),
-                    )
-                }
-            };
-
-            let payment = match deploy.get_payment().to_owned().payload {
-                Some(payload) => payload.into(),
-                None => {
-                    return Ok(
-                        ExecutionResult::precondition_failure(EngineError::DeployError).into(),
-                    )
-                }
-            };
-
-            let address = {
-                let address_len = deploy.address.len();
-                if address_len != EXPECTED_PUBLIC_KEY_LENGTH {
-                    let err = EngineError::InvalidPublicKeyLength {
-                        expected: EXPECTED_PUBLIC_KEY_LENGTH,
-                        actual: address_len,
-                    };
-                    let failure = ExecutionResult::precondition_failure(err);
-                    return Ok(failure.into());
-                }
-                let mut dest = [0; EXPECTED_PUBLIC_KEY_LENGTH];
-                dest.copy_from_slice(&deploy.address);
-                Key::Account(dest)
-            };
-
-            // Parse all authorization keys from IPC into a vector
-            let authorization_keys: BTreeSet<PublicKey> = {
-                let maybe_keys: Result<BTreeSet<_>, EngineError> = deploy
-                    .authorization_keys
-                    .iter()
-                    .map(|key_bytes| {
-                        // Try to convert an element of bytes into a possibly
-                        // valid PublicKey with error handling
-                        PublicKey::try_from(key_bytes.as_slice()).map_err(|_| {
-                            EngineError::InvalidPublicKeyLength {
-                                expected: EXPECTED_PUBLIC_KEY_LENGTH,
-                                actual: key_bytes.len(),
-                            }
-                        })
-                    })
-                    .collect();
-
-                match maybe_keys {
-                    Ok(keys) => keys,
-                    Err(error) => return Ok(ExecutionResult::precondition_failure(error).into()),
-                }
-            };
-
-            let deploy_hash = {
-                let mut buff = [0u8; 32];
-                let hash_slice = deploy.get_deploy_hash();
-                buff.copy_from_slice(hash_slice);
-                buff
-            };
-
-            engine_state
-                .deploy(
-                    session,
-                    payment,
-                    address,
-                    authorization_keys,
-                    blocktime,
-                    deploy_hash,
-                    prestate_hash,
-                    protocol_version,
-                    correlation_id,
-                    executor,
-                    preprocessor,
-                )
-                .map(Into::into)
-                .map_err(Into::into)
-        })
-        .collect()
-}
-
 // Helper method which returns single DeployResult that is set to be a
 // WasmError.
 pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
     socket: &str,
+    thread_count: usize,
     e: E,
 ) -> grpc::ServerBuilder {
     let socket_path = std::path::Path::new(socket);
@@ -814,7 +580,7 @@ pub fn new<E: ExecutionEngineService + Sync + Send + 'static>(
 
     let mut server = grpc::ServerBuilder::new_plain();
     server.http.set_unix_addr(socket.to_owned()).unwrap();
-    server.http.set_cpu_pool_threads(1);
+    server.http.set_cpu_pool_threads(thread_count);
     server.add_service(ipc_grpc::ExecutionEngineServiceServer::new_service_def(e));
     server
 }

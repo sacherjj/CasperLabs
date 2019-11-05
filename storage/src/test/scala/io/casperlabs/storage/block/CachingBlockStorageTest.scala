@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.CachingBlockStorageTest.{
@@ -207,9 +208,9 @@ object CachingBlockStorageTest {
       xa: Transactor[Task]
   ): Task[BlockStorage[Task]] =
     for {
-      underlyingBlockStorage <- SQLiteBlockStorage.create[Task]
-      dagStorage             <- SQLiteDagStorage.create[Task]
-      deployStorage          <- SQLiteDeployStorage.create[Task](100)
+      underlyingBlockStorage <- SQLiteBlockStorage.create[Task](xa, xa)
+      dagStorage             <- SQLiteDagStorage.create[Task](xa, xa)
+      deployStorage          <- SQLiteDeployStorage.create[Task](100, xa, xa)
     } yield new BlockStorage[Task] {
       override def get(blockHash: BlockHash): Task[Option[BlockMsgWithTransform]] =
         underlyingBlockStorage.get(blockHash)
@@ -225,16 +226,19 @@ object CachingBlockStorageTest {
       ): Task[Unit] =
         for {
           _ <- blockMsgWithTransform.blockMessage.fold(().pure[Task])(
-                b => deployStorage.addAsExecuted(b) >> dagStorage.insert(b).void
+                b => deployStorage.writer.addAsExecuted(b) >> dagStorage.insert(b).void
               )
           _ <- underlyingBlockStorage.put(blockHash, blockMsgWithTransform)
         } yield ()
 
+      override def getBlockInfo(blockHash: BlockHash): Task[Option[BlockInfo]] =
+        underlyingBlockStorage.getBlockInfo(blockHash)
+
       override def getBlockSummary(blockHash: BlockHash): Task[Option[BlockSummary]] =
         underlyingBlockStorage.getBlockSummary(blockHash)
 
-      override def getSummaryByPrefix(blockHashPrefix: String): Task[Option[BlockSummary]] =
-        underlyingBlockStorage.getSummaryByPrefix(blockHashPrefix)
+      override def getBlockInfoByPrefix(blockHashPrefix: String): Task[Option[BlockInfo]] =
+        underlyingBlockStorage.getBlockInfoByPrefix(blockHashPrefix)
 
       override def findBlockHashesWithDeployHash(deployHash: BlockHash): Task[Seq[BlockHash]] =
         underlyingBlockStorage.findBlockHashesWithDeployHash(deployHash)

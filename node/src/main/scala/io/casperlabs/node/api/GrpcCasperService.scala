@@ -6,28 +6,34 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.InvalidArgument
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.node.api.Utils.{
+  validateAccountPublicKey,
+  validateBlockHashPrefix,
+  validateDeployHash
+}
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
@@ -46,8 +52,7 @@ object GrpcCasperService {
               blockHashPrefix =>
                 BlockAPI
                   .getBlockInfo[F](
-                    blockHashPrefix,
-                    full = request.view == BlockInfo.View.FULL
+                    blockHashPrefix
                   )
             }
           }
@@ -56,8 +61,7 @@ object GrpcCasperService {
           val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
-              maxRank = request.maxRank,
-              full = request.view == BlockInfo.View.FULL
+              maxRank = request.maxRank
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)
@@ -68,14 +72,7 @@ object GrpcCasperService {
             validateDeployHash[F](request.deployHashBase16, adaptToInvalidArgument) >>= {
               deployHash =>
                 BlockAPI
-                  .getDeployInfo[F](deployHash) map { info =>
-                  request.view match {
-                    case DeployInfo.View.BASIC =>
-                      info.withDeploy(info.getDeploy.copy(body = None))
-                    case _ =>
-                      info
-                  }
-                }
+                  .getDeployInfo[F](deployHash, request.view)
             }
           }
 
@@ -85,16 +82,7 @@ object GrpcCasperService {
           val deploys = TaskLike[F].apply {
             validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
               blockHashPrefix =>
-                BlockAPI.getBlockDeploys[F](blockHashPrefix) map {
-                  _ map { pd =>
-                    request.view match {
-                      case DeployInfo.View.BASIC =>
-                        pd.withDeploy(pd.getDeploy.copy(body = None))
-                      case _ =>
-                        pd
-                    }
-                  }
-                }
+                BlockAPI.getBlockDeploys[F](blockHashPrefix, request.view)
             }
           }
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
@@ -140,6 +128,45 @@ object GrpcCasperService {
                         MonadThrowable[F].raiseError(InvalidArgument(msg))
                     }
           } yield value
+
+        override def listDeployInfos(
+            request: ListDeployInfosRequest
+        ): Task[ListDeployInfosResponse] =
+          TaskLike[F].apply {
+            for {
+              accountPublicKeyBase16 <- validateAccountPublicKey[F](
+                                         request.accountPublicKeyBase16,
+                                         adaptToInvalidArgument
+                                       )
+              (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F].fromTry(
+                                                              DeployInfoPagination.parsePageToken(
+                                                                request
+                                                              )
+                                                            )
+              accountPublicKeyBs = PublicKey(
+                ByteString.copyFrom(
+                  Base16.decode(accountPublicKeyBase16)
+                )
+              )
+              deploys <- DeployStorage[F]
+                          .reader(request.view)
+                          .getDeploysByAccount(
+                            accountPublicKeyBs,
+                            pageSize,
+                            lastTimeStamp,
+                            lastDeployHash
+                          )
+              deployInfos <- DeployStorage[F]
+                              .reader(request.view)
+                              .getDeployInfos(deploys)
+              nextPageToken = DeployInfoPagination.createNextPageToken(
+                deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+              )
+              result = ListDeployInfosResponse()
+                .withDeployInfos(deployInfos)
+                .withNextPageToken(nextPageToken)
+            } yield result
+          }
       }
     }
 

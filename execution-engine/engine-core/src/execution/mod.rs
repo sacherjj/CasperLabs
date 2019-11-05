@@ -6,9 +6,9 @@ mod runtime;
 #[cfg(test)]
 mod tests;
 
-pub use self::address_generator::AddressGenerator;
+pub use self::address_generator::{AddressGenerator, AddressGeneratorBuilder};
 pub use self::error::Error;
-pub use self::executor::{Executor, WasmiExecutor};
+pub use self::executor::Executor;
 pub use self::runtime::{
     extract_access_rights_from_keys, extract_access_rights_from_urefs, instance_and_memory, Runtime,
 };

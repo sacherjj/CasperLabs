@@ -1,108 +1,59 @@
 package io.casperlabs.storage
 
+import io.casperlabs.storage.deploy.{
+  DeployStorage,
+  DeployStorageReader,
+  DeployStorageWriter,
+  SQLiteDeployStorage
+}
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie.util.transactor.Transactor
-import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
-import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
-import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.storage.dag.DagRepresentation.Validator
-import io.casperlabs.storage.deploy.{DeployStorage, SQLiteDeployStorage}
+import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
 import fs2._
 
-import scala.concurrent.duration.FiniteDuration
-
 object SQLiteStorage {
-  def create[F[_]: Sync: Transactor: Metrics: Time](
-      deployStorageChunkSize: Int = 100
+  def create[F[_]: Sync: Metrics: Time](
+      deployStorageChunkSize: Int = 100,
+      readXa: Transactor[F],
+      writeXa: Transactor[F]
   ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F]] =
     create[F](
       deployStorageChunkSize = deployStorageChunkSize,
+      readXa = readXa,
+      writeXa = writeXa,
       wrapBlockStorage = (_: BlockStorage[F]).pure[F],
       wrapDagStorage = (_: DagStorage[F] with DagRepresentation[F]).pure[F]
     )
 
-  def create[F[_]: Sync: Transactor: Metrics: Time](
+  def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int,
+      readXa: Transactor[F],
+      writeXa: Transactor[F],
       wrapBlockStorage: BlockStorage[F] => F[BlockStorage[F]],
       wrapDagStorage: DagStorage[F] with DagRepresentation[F] => F[
         DagStorage[F] with DagRepresentation[F]
       ]
   ): F[BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F]] =
     for {
-      blockStorage  <- SQLiteBlockStorage.create[F] >>= wrapBlockStorage
-      dagStorage    <- SQLiteDagStorage.create[F] >>= wrapDagStorage
-      deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize)
+      blockStorage  <- SQLiteBlockStorage.create[F](readXa, writeXa) >>= wrapBlockStorage
+      dagStorage    <- SQLiteDagStorage.create[F](readXa, writeXa) >>= wrapDagStorage
+      deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize, readXa, writeXa)
     } yield new BlockStorage[F] with DagStorage[F] with DeployStorage[F] with DagRepresentation[F] {
 
-      override def addAsExecuted(block: Block): F[Unit] =
-        deployStorage.addAsExecuted(block)
-
-      override def addAsPending(deploys: List[Deploy]): F[Unit] =
-        deployStorage.addAsPending(deploys)
-
-      override def addAsProcessed(deploys: List[Deploy]): F[Unit] =
-        deployStorage.addAsProcessed(deploys)
-
-      override def markAsProcessedByHashes(hashes: List[ByteString]): F[Unit] =
-        deployStorage.markAsProcessedByHashes(hashes)
-
-      override def markAsPendingByHashes(hashes: List[ByteString]): F[Unit] =
-        deployStorage.markAsPendingByHashes(hashes)
-
-      override def markAsFinalizedByHashes(hashes: List[ByteString]): F[Unit] =
-        deployStorage.markAsFinalizedByHashes(hashes)
-
-      override def markAsDiscardedByHashes(hashesAndReasons: List[(ByteString, String)]): F[Unit] =
-        deployStorage.markAsDiscardedByHashes(hashesAndReasons)
-
-      override def markAsDiscarded(expirationPeriod: FiniteDuration): F[Unit] =
-        deployStorage.markAsDiscarded(expirationPeriod)
-
-      override def cleanupDiscarded(expirationPeriod: FiniteDuration): F[Int] =
-        deployStorage.cleanupDiscarded(expirationPeriod)
-
-      override def readProcessed: F[List[Deploy]] = deployStorage.readProcessed
-
-      override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
-        deployStorage.readProcessedByAccount(account)
-
-      override def readProcessedHashes: F[List[ByteString]] = deployStorage.readProcessedHashes
-
-      override def readPending: F[List[Deploy]] = deployStorage.readPending
-
-      override def readPendingHashes: F[List[ByteString]] = deployStorage.readPendingHashes
-
-      override def readPendingHeaders: F[List[Deploy.Header]] =
-        deployStorage.readPendingHeaders
-
-      override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
-        deployStorage.readPendingHashesAndHeaders
-
-      override def getPendingOrProcessed(hash: ByteString): F[Option[Deploy]] =
-        deployStorage.getPendingOrProcessed(hash)
-
-      override def sizePendingOrProcessed(): F[Long] = deployStorage.sizePendingOrProcessed()
-
-      override def getByHash(hash: ByteString): F[Option[Deploy]] = deployStorage.getByHash(hash)
-
-      override def getByHashes(hashes: Set[ByteString]): Stream[F, Deploy] =
-        deployStorage.getByHashes(hashes)
-
-      override def getProcessingResults(
-          hash: ByteString
-      ): F[List[(BlockHash, Block.ProcessedDeploy)]] = deployStorage.getProcessingResults(hash)
-
-      override def getBufferedStatus(hash: ByteString): F[Option[DeployInfo.Status]] =
-        deployStorage.getBufferedStatus(hash)
+      override def writer: DeployStorageWriter[F] =
+        deployStorage.writer
+      override def reader(implicit dv: DeployInfo.View): DeployStorageReader[F] =
+        deployStorage.reader
 
       override def getRepresentation: F[DagRepresentation[F]] = dagStorage.getRepresentation
 
@@ -113,14 +64,14 @@ object SQLiteStorage {
 
       override def clear(): F[Unit] =
         for {
-          _ <- deployStorage.clear()
+          _ <- deployStorage.writer.clear()
           _ <- dagStorage.clear()
           _ <- blockStorage.clear()
         } yield ()
 
       override def close(): F[Unit] =
         for {
-          _ <- deployStorage.close()
+          _ <- deployStorage.writer.close()
           _ <- dagStorage.close()
           _ <- blockStorage.close()
         } yield ()
@@ -133,8 +84,11 @@ object SQLiteStorage {
 
       override def isEmpty: F[Boolean] = blockStorage.isEmpty
 
-      override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
-        blockStorage.getSummaryByPrefix(blockHashPrefix)
+      override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] =
+        blockStorage.getBlockInfoByPrefix(blockHashPrefix)
+
+      override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+        blockStorage.getBlockInfo(blockHash)
 
       override def put(
           blockHash: BlockHash,
@@ -142,7 +96,7 @@ object SQLiteStorage {
       ): F[Unit] =
         for {
           _ <- blockMsgWithTransform.blockMessage.fold(().pure[F])(
-                b => deployStorage.addAsExecuted(b) >> dagStorage.insert(b).void
+                b => deployStorage.writer.addAsExecuted(b) >> dagStorage.insert(b).void
               )
           _ <- blockStorage.put(blockHash, blockMsgWithTransform)
         } yield ()
@@ -168,36 +122,26 @@ object SQLiteStorage {
       override def topoSort(
           startBlockNumber: Long,
           endBlockNumber: Long
-      ): Stream[F, Vector[BlockSummary]] =
+      ): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSort(startBlockNumber, endBlockNumber)
 
-      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockSummary]] =
+      override def topoSort(startBlockNumber: Long): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSort(startBlockNumber)
 
-      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockSummary]] =
+      override def topoSortTail(tailLength: Int): Stream[F, Vector[BlockInfo]] =
         dagStorage.topoSortTail(tailLength)
 
-      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+      override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
         dagStorage.latestMessageHash(validator)
 
-      override def latestMessage(validator: Validator): F[Option[Message]] =
+      override def latestMessage(validator: Validator): F[Set[Message]] =
         dagStorage.latestMessage(validator)
 
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+      override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
         dagStorage.latestMessageHashes
 
-      override def latestMessages: F[Map[Validator, Message]] =
+      override def latestMessages: F[Map[Validator, Set[Message]]] =
         dagStorage.latestMessages
 
-      override def getDeployInfo(deployHash: DeployHash): F[Option[DeployInfo]] =
-        deployStorage.getDeployInfo(deployHash)
-
-      override def getDeploysByAccount(
-          account: PublicKeyBS,
-          limit: Int,
-          lastTimeStamp: Long,
-          lastDeployHash: DeployHash
-      ): F[List[Deploy]] =
-        deployStorage.getDeploysByAccount(account, limit, lastTimeStamp, lastDeployHash)
     }
 }

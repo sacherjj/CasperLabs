@@ -1,10 +1,12 @@
+pub mod deploy_item;
 pub mod engine_config;
-pub mod error;
+mod error;
 pub mod executable_deploy_item;
 pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
 
@@ -13,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use num_traits::Zero;
+use parity_wasm::elements::Module;
 
 use contract_ffi::args_parser::ArgsParser;
 use contract_ffi::bytesrepr::ToBytes;
@@ -22,7 +25,8 @@ use contract_ffi::system_contracts::mint;
 use contract_ffi::uref::URef;
 use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
 use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, SemVer, Value, U512};
+use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::motes::Motes;
 use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
@@ -30,19 +34,21 @@ use engine_shared::transform::Transform;
 use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
 use engine_storage::protocol_data::ProtocolData;
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::{Preprocessor, WasmiPreprocessor};
+use engine_wasm_prep::Preprocessor;
 
+use self::deploy_item::DeployItem;
 pub use self::engine_config::EngineConfig;
-use self::error::{Error, RootNotFound};
+pub use self::error::{Error, RootNotFound};
 use self::executable_deploy_item::ExecutableDeployItem;
 use self::execution_result::ExecutionResult;
 use self::genesis::{
     GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
 };
+use self::system_contract_cache::SystemContractCache;
 use crate::engine_state::error::Error::MissingSystemContractError;
 use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
 use crate::execution::AddressGenerator;
-use crate::execution::{self, Executor, WasmiExecutor, MINT_NAME, POS_NAME};
+use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
 use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
 use crate::KnownKeys;
 
@@ -53,21 +59,13 @@ pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
 
-const DEFAULT_SESSION_MOTES: u64 = 1_000_000_000;
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const MINT_METHOD_NAME: &str = "mint";
-
-// TODO: delete the following after migration to new genesis
-const LEGACY_CHAIN_NAME: &str = "gerald";
-const LEGACY_TIMESTAMP: u64 = 0;
-const MINT_INSTALL_BYTES: &[u8] =
-    include_bytes!("../../../target/wasm32-unknown-unknown/release/mint_install.wasm");
-const PROOF_OF_STAKE_INSTALL_BYTES: &[u8] =
-    include_bytes!("../../../target/wasm32-unknown-unknown/release/pos_install.wasm");
 
 #[derive(Debug)]
 pub struct EngineState<S> {
     config: EngineConfig,
+    system_contract_cache: SystemContractCache,
     state: S,
 }
 
@@ -77,7 +75,12 @@ where
     S::Error: Into<execution::Error>,
 {
     pub fn new(state: S, config: EngineConfig) -> EngineState<S> {
-        EngineState { config, state }
+        let system_contract_cache = Default::default();
+        EngineState {
+            config,
+            system_contract_cache,
+            state,
+        }
     }
 
     pub fn config(&self) -> &EngineConfig {
@@ -105,79 +108,14 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn commit_genesis(
-        &self,
-        correlation_id: CorrelationId,
-        genesis_account_addr: [u8; 32],
-        initial_motes: U512,
-        _mint_code_bytes: &[u8],
-        _proof_of_stake_code_bytes: &[u8],
-        genesis_validators: Vec<(PublicKey, U512)>,
-        protocol_version: ProtocolVersion,
-    ) -> Result<GenesisResult, Error> {
-        assert_eq!(
-            protocol_version.value(),
-            SemVer::V1_0_0,
-            "legacy genesis only supports protocol version 1"
-        );
-
-        let wasm_costs = WasmCosts {
-            regular: 1,
-            div: 16,
-            mul: 4,
-            mem: 2,
-            initial_mem: 4096,
-            grow_mem: 8192,
-            memcpy: 1,
-            max_stack_height: 64 * 1024,
-            opcodes_mul: 3,
-            opcodes_div: 8,
-        };
-
-        let mut accounts = Vec::new();
-
-        {
-            let genesis_account = GenesisAccount::new(
-                PublicKey::new(genesis_account_addr),
-                Motes::new(initial_motes),
-                Motes::zero(),
-            );
-            accounts.push(genesis_account);
-        }
-
-        for (key, bonded_amount) in genesis_validators {
-            let balance = Motes::new(bonded_amount); // this is bullshit
-            let bonded_amount = Motes::new(bonded_amount);
-            let account = GenesisAccount::new(key, balance, bonded_amount);
-            accounts.push(account);
-        }
-
-        let legacy_chain_name = LEGACY_CHAIN_NAME.to_string();
-        let mint_install_bytes = MINT_INSTALL_BYTES.to_vec();
-        let proof_of_stake_install_bytes = PROOF_OF_STAKE_INSTALL_BYTES.to_vec();
-
-        let genesis_config = GenesisConfig::new(
-            legacy_chain_name,
-            LEGACY_TIMESTAMP,
-            protocol_version,
-            mint_install_bytes,
-            proof_of_stake_install_bytes,
-            accounts,
-            wasm_costs,
-        );
-
-        self.commit_genesis_with_chainspec(correlation_id, genesis_config)
-    }
-
-    pub fn commit_genesis_with_chainspec(
         &self,
         correlation_id: CorrelationId,
         genesis_config: GenesisConfig,
     ) -> Result<GenesisResult, Error> {
         // Preliminaries
-        let executor = WasmiExecutor;
-        let blocktime = BlockTime(GENESIS_INITIAL_BLOCKTIME);
+        let executor = Executor;
+        let blocktime = BlockTime::new(GENESIS_INITIAL_BLOCKTIME);
         let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 
@@ -185,7 +123,7 @@ where
         let initial_root_hash = self.state.empty_root();
         let protocol_version = genesis_config.protocol_version();
         let wasm_costs = genesis_config.wasm_costs();
-        let preprocessor = WasmiPreprocessor::new(wasm_costs);
+        let preprocessor = Preprocessor::new(wasm_costs);
 
         // Spec #3: Create "virtual system account" object.
         let virtual_system_account = {
@@ -252,6 +190,7 @@ where
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.better_exec(
                 mint_installer_module,
@@ -269,6 +208,7 @@ where
                 tracking_copy,
                 phase,
                 ProtocolData::default(),
+                system_contract_cache,
             )?
         };
 
@@ -296,6 +236,7 @@ where
             let install_deploy_hash = install_deploy_hash.into();
             let address_generator = Rc::clone(&address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // Constructs a partial protocol data with already known urefs to pass the validation
             // step
@@ -322,6 +263,7 @@ where
                 tracking_copy,
                 phase,
                 partial_protocol_data,
+                system_contract_cache,
             )?
         };
 
@@ -387,7 +329,7 @@ where
             let module = {
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, Key::URef(mint_reference).normalize())?;
+                    .get_contract(correlation_id, Key::URef(mint_reference))?;
                 let (bytes, _, _) = contract.destructure();
                 preprocessor.deserialize(&bytes)?
             };
@@ -413,6 +355,7 @@ where
                     let generator = AddressGenerator::new(purse_creation_deploy_hash, phase);
                     Rc::new(RefCell::new(generator))
                 };
+                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
                 // ...call the Mint's "mint" endpoint to create purse with tokens...
                 let mint_result: Result<URef, mint::Error> = executor.better_exec(
@@ -431,6 +374,7 @@ where
                     tracking_copy_exec,
                     phase,
                     protocol_data,
+                    system_contract_cache,
                 )?;
 
                 // ...and write that account to global state...
@@ -529,7 +473,7 @@ where
         if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
             // preprocess installer module
             let upgrade_installer_module = {
-                let preprocessor = WasmiPreprocessor::new(new_wasm_costs);
+                let preprocessor = Preprocessor::new(new_wasm_costs);
                 preprocessor.preprocess(bytes)?
             };
 
@@ -580,8 +524,9 @@ where
                 Rc::new(RefCell::new(generator))
             };
             let state = Rc::clone(&tracking_copy);
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            WasmiExecutor.better_exec(
+            Executor.better_exec(
                 upgrade_installer_module,
                 &args,
                 &mut keys,
@@ -597,6 +542,7 @@ where
                 state,
                 phase,
                 new_protocol_data,
+                system_contract_cache,
             )?
         };
 
@@ -626,14 +572,14 @@ where
         }
     }
 
-    pub fn get_module<A, P: Preprocessor<A>>(
+    pub fn get_module(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
         deploy_item: &ExecutableDeployItem,
         account: &Account,
         correlation_id: CorrelationId,
-        preprocessor: &P,
-    ) -> Result<A, error::Error> {
+        preprocessor: &Preprocessor,
+    ) -> Result<Module, error::Error> {
         match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
@@ -672,7 +618,7 @@ where
                 }
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key.normalize())?;
+                    .get_contract(correlation_id, *stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
                 let module = preprocessor.deserialize(&ret)?;
                 Ok(module)
@@ -729,21 +675,23 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn deploy<A, P: Preprocessor<A>, E: Executor<A>>(
+    pub fn deploy(
         &self,
-        session: ExecutableDeployItem,
-        payment: ExecutableDeployItem,
-        address: Key,
-        authorization_keys: BTreeSet<PublicKey>,
-        blocktime: BlockTime,
-        deploy_hash: [u8; 32],
-        prestate_hash: Blake2bHash,
-        protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        executor: &E,
-        preprocessor: &P,
+        executor: &Executor,
+        preprocessor: &Preprocessor,
+        protocol_version: ProtocolVersion,
+        prestate_hash: Blake2bHash,
+        blocktime: BlockTime,
+        deploy_item: DeployItem,
     ) -> Result<ExecutionResult, RootNotFound> {
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
+
+        let session = deploy_item.session();
+        let payment = deploy_item.payment();
+        let address = Key::Account(deploy_item.address().value());
+        let authorization_keys = deploy_item.authorization_keys();
+        let deploy_hash = deploy_item.deploy_hash();
 
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
@@ -780,7 +728,7 @@ where
 
         // Authorize using provided authorization keys
         // validation_spec_3: account validity
-        if authorization_keys.is_empty() || !account.can_authorize(&authorization_keys) {
+        if !account.can_authorize(authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 crate::engine_state::error::Error::AuthorizationError,
             ));
@@ -788,7 +736,7 @@ where
 
         // Check total key weight against deploy threshold
         // validation_spec_4: deploy validity
-        if !account.can_deploy_with(&authorization_keys) {
+        if !account.can_deploy_with(authorization_keys) {
             return Ok(ExecutionResult::precondition_failure(
                 // TODO?:this doesn't happen in execution any longer, should error variant be moved
                 execution::Error::DeploymentAuthorizationFailure.into(),
@@ -824,37 +772,6 @@ where
             }
         };
 
-        // --- REMOVE BELOW --- //
-        // If payment logic is turned off, execute only session code
-        if !(self.config.use_payment_code()) {
-            // DEPLOY WITH NO PAYMENT
-
-            let session_motes = Motes::new(U512::from(DEFAULT_SESSION_MOTES));
-
-            let gas_limit = Gas::from_motes(session_motes, CONV_RATE).unwrap_or_default();
-
-            // Session code execution
-            let session_result = executor.exec(
-                session_module,
-                session.args(),
-                address,
-                &account,
-                authorization_keys,
-                blocktime,
-                deploy_hash,
-                gas_limit,
-                protocol_version,
-                correlation_id,
-                Rc::clone(&tracking_copy),
-                Phase::Session,
-                protocol_data,
-            );
-
-            return Ok(session_result);
-        }
-
-        // --- REMOVE ABOVE --- //
-
         let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 
         // Get mint system contract details
@@ -863,36 +780,39 @@ where
             // Get mint system contract URef from account (an account on a different network
             // may have a mint contract other than the CLMint)
             // payment_code_spec_6: system contract validity
-            let mint_public_uref: Key = Key::from(protocol_data.mint()).normalize();
+            let mint_reference = protocol_data.mint();
 
-            // FIXME: This is inefficient; we don't need to get the entire contract.
-            let mint_info = match tracking_copy
+            let mint_contract = match tracking_copy
                 .borrow_mut()
-                .get_system_contract_info(correlation_id, mint_public_uref)
+                .get_contract(correlation_id, Key::URef(mint_reference))
             {
-                Ok(contract_info) => contract_info,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
+                Ok(contract) => contract,
+                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             };
 
-            // Safe to unwrap here, as `get_system_contract_info` checks that the key is
-            // the proper variant.
-            *mint_info.key().as_uref().unwrap()
+            if !self.system_contract_cache.has(&mint_reference) {
+                let module = match preprocessor.deserialize(mint_contract.bytes()) {
+                    Ok(module) => module,
+                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+                };
+                self.system_contract_cache.insert(mint_reference, module);
+            }
+
+            mint_reference
         };
 
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_public_uref: Key = Key::from(protocol_data.proof_of_stake()).normalize();
+        let proof_of_stake_reference = protocol_data.proof_of_stake();
 
         // Get proof of stake system contract details
         // payment_code_spec_6: system contract validity
-        let proof_of_stake_info = match tracking_copy
+        let proof_of_stake_contract = match tracking_copy
             .borrow_mut()
-            .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+            .get_contract(correlation_id, Key::from(proof_of_stake_reference))
         {
-            Ok(contract_info) => contract_info,
+            Ok(contract) => contract,
             Err(error) => {
                 return Ok(ExecutionResult::precondition_failure(error.into()));
             }
@@ -903,16 +823,13 @@ where
         let rewards_purse_balance_key: Key = {
             // Get reward purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
-            let rewards_purse_key: Key = match proof_of_stake_info
-                .contract()
-                .named_keys()
-                .get(POS_REWARDS_PURSE)
-            {
-                Some(key) => *key,
-                None => {
-                    return Ok(ExecutionResult::precondition_failure(Error::DeployError));
-                }
-            };
+            let rewards_purse_key: Key =
+                match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
+                    Some(key) => *key,
+                    None => {
+                        return Ok(ExecutionResult::precondition_failure(Error::DeployError));
+                    }
+                };
 
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
@@ -968,7 +885,6 @@ where
             PurseId::new(URef::new(Default::default(), AccessRights::READ_ADD_WRITE)),
             Default::default(),
             Default::default(),
-            Default::default(),
         );
 
         // `[ExecutionResultBuilder]` handles merging of multiple execution results
@@ -994,6 +910,7 @@ where
                     return Ok(ExecutionResult::precondition_failure(error));
                 }
             };
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // payment_code_spec_2: execute payment code
             executor.exec(
@@ -1010,6 +927,7 @@ where
                 Rc::clone(&tracking_copy),
                 Phase::Payment,
                 protocol_data,
+                system_contract_cache,
             )
         };
 
@@ -1020,14 +938,11 @@ where
         let payment_purse_balance: Motes = {
             // Get payment purse Key from proof of stake contract
             // payment_code_spec_6: system contract validity
-            let payment_purse: Key = match proof_of_stake_info
-                .contract()
-                .named_keys()
-                .get(POS_PAYMENT_PURSE)
-            {
-                Some(key) => *key,
-                None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
-            };
+            let payment_purse: Key =
+                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
+                    Some(key) => *key,
+                    None => return Ok(ExecutionResult::precondition_failure(Error::DeployError)),
+                };
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
@@ -1076,6 +991,7 @@ where
             let session_gas_limit: Gas = Gas::from_motes(payment_purse_balance, CONV_RATE)
                 .unwrap_or_default()
                 - payment_result_cost;
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.exec(
                 session_module,
@@ -1091,6 +1007,7 @@ where
                 Rc::clone(&session_tc),
                 Phase::Session,
                 protocol_data,
+                system_contract_cache,
             )
         };
 
@@ -1113,9 +1030,20 @@ where
 
             // validation_spec_1: valid wasm bytes
             let proof_of_stake_module =
-                match preprocessor.deserialize(&proof_of_stake_info.module_bytes()) {
-                    Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-                    Ok(module) => module,
+                match self.system_contract_cache.get(&proof_of_stake_reference) {
+                    Some(module) => module,
+                    None => {
+                        let module =
+                            match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                                Ok(module) => module,
+                                Err(error) => {
+                                    return Ok(ExecutionResult::precondition_failure(error.into()))
+                                }
+                            };
+                        self.system_contract_cache
+                            .insert(proof_of_stake_reference, module.clone());
+                        module
+                    }
                 };
 
             let proof_of_stake_args = {
@@ -1129,18 +1057,19 @@ where
 
             // The PoS keys may have changed because of effects during payment and/or
             // session, so we need to look them up again from the tracking copy
-            let proof_of_stake_info = match finalization_tc
+            let proof_of_stake_contract = match finalization_tc
                 .borrow_mut()
-                .get_system_contract_info(correlation_id, proof_of_stake_public_uref)
+                .get_contract(correlation_id, Key::URef(proof_of_stake_reference))
             {
                 Ok(info) => info,
                 Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
             };
 
-            let mut proof_of_stake_keys = proof_of_stake_info.contract().named_keys().clone();
+            let mut proof_of_stake_keys = proof_of_stake_contract.named_keys().to_owned();
 
-            let base_key = proof_of_stake_info.key();
+            let base_key = Key::from(proof_of_stake_reference);
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             executor.exec_direct(
                 proof_of_stake_module,
@@ -1157,6 +1086,7 @@ where
                 finalization_tc,
                 Phase::FinalizePayment,
                 protocol_data,
+                system_contract_cache,
             )
         };
 
@@ -1178,7 +1108,7 @@ where
         correlation_id: CorrelationId,
         protocol_version: ProtocolVersion,
         pre_state_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Error>
     where
         Error: From<S::Error>,
@@ -1232,7 +1162,7 @@ where
         let bonded_validators = contract
             .named_keys()
             .keys()
-            .filter_map(|entry| utils::pos_validator_to_tuple(entry))
+            .filter_map(|entry| utils::pos_validator_key_name_to_tuple(entry))
             .collect::<HashMap<PublicKey, U512>>();
 
         Ok(bonded_validators)

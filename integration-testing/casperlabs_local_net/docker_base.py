@@ -69,10 +69,16 @@ class DockerBase:
         self.config = config
         self.connected_networks = []
 
-        self.docker_tag: str = "test"
-        if self.is_in_docker:
-            self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
+
+    @property
+    def docker_tag(self) -> str:
+        if self.is_in_docker:
+            return os.environ.get("TAG_NAME")
+        elif self.config.custom_docker_tag is not None:
+            return self.config.custom_docker_tag
+        else:
+            return "test"
 
     @property
     def is_in_docker(self) -> bool:

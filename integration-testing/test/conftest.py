@@ -14,10 +14,12 @@ from casperlabs_local_net.casperlabs_network import (
     PaymentNodeNetworkWithNoMinBalance,
     TrillionPaymentNodeNetwork,
     OneNodeWithGRPCEncryption,
+    OneNodeWithClarity,
     EncryptedTwoNodeNetwork,
     ReadOnlyNodeNetwork,
     InterceptedTwoNodeNetwork,
     TwoNodeWithDifferentAccountsCSVNetwork,
+    NetworkWithTaggedDev,
 )
 from docker.client import DockerClient
 
@@ -89,6 +91,13 @@ def encrypted_one_node_network(docker_client_fixture):
 
 
 @pytest.fixture()
+def one_node_network_with_clarity(docker_client_fixture):
+    with OneNodeWithClarity(docker_client_fixture) as net:
+        net.create_cl_network()
+        yield net
+
+
+@pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
@@ -130,6 +139,13 @@ def nodes(three_node_network):
 @pytest.fixture(scope="module")
 def node(one_node_network):
     return one_node_network.docker_nodes[0]
+
+
+@pytest.fixture(scope="module")
+def network_with_dev(docker_client_fixture):
+    with NetworkWithTaggedDev(docker_client_fixture) as nwtd:
+        nwtd.create_cl_network()
+        yield nwtd
 
 
 @pytest.fixture()

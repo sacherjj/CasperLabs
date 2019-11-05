@@ -9,6 +9,7 @@ use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
 use crate::execution::{Phase, PHASE_SIZE};
 use crate::ext_ffi;
 use crate::key::Key;
+use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::URef;
 use crate::value::account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE};
 use crate::value::{Contract, Value};
@@ -45,7 +46,9 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 ) -> T {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
-    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args).map(|args| to_ptr(&args)).unwrap();
+    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
+        .map(|args| to_ptr(&args))
+        .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
     let res_size = unsafe {
         ext_ffi::call_contract(
@@ -57,7 +60,7 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
         ext_ffi::get_call_result(res_ptr);
         Vec::from_raw_parts(res_ptr, res_size, res_size)
     };
-    deserialize(&res_bytes).unwrap()
+    deserialize(&res_bytes).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -108,7 +111,7 @@ pub fn get_caller() -> PublicKey {
     let dest_ptr = alloc_bytes(36);
     unsafe { ext_ffi::get_caller(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
-    deserialize(&bytes).unwrap()
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn get_blocktime() -> BlockTime {
@@ -117,14 +120,14 @@ pub fn get_blocktime() -> BlockTime {
         ext_ffi::get_blocktime(dest_ptr);
         Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
     };
-    deserialize(&bytes).unwrap()
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn get_phase() -> Phase {
     let dest_ptr = alloc_bytes(PHASE_SIZE);
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
-    deserialize(&bytes).unwrap()
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 /// Return the unforgable reference known by the current module under the given
@@ -141,7 +144,7 @@ pub fn get_key(name: &str) -> Option<Key> {
         Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap()
+    deserialize(&key_bytes).unwrap_or_revert()
 }
 
 /// Check if the given name corresponds to a known unforgable reference
@@ -171,7 +174,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
-    deserialize(&bytes).unwrap()
+    deserialize(&bytes).unwrap_or_revert()
 }
 
 /// Checks if all the keys contained in the given `Value`

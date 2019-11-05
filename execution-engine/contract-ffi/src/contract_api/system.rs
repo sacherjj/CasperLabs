@@ -7,8 +7,10 @@ use super::runtime::revert;
 use super::{alloc_bytes, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::deserialize;
 use crate::contract_api::error::result_from;
+use crate::contract_api::runtime;
 use crate::ext_ffi;
 use crate::system_contracts::SystemContract;
+use crate::unwrap_or_revert::UnwrapOrRevert;
 use crate::uref::UREF_SIZE_SERIALIZED;
 use crate::value::account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED};
 use crate::value::U512;
@@ -35,7 +37,7 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
         // Revert for any possible error that happened on host side
         let uref_bytes = result.unwrap_or_else(|e| revert(e));
         // Deserializes a valid URef passed from the host side
-        deserialize(&uref_bytes).unwrap_or_else(|_| revert(Error::Deserialize))
+        deserialize(&uref_bytes).unwrap_or_revert()
     };
     let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
     ContractRef::TURef(reference)
@@ -63,9 +65,9 @@ pub fn create_purse() -> PurseId {
                 PURSE_ID_SIZE_SERIALIZED,
                 PURSE_ID_SIZE_SERIALIZED,
             );
-            deserialize(&bytes).unwrap()
+            deserialize(&bytes).unwrap_or_revert()
         } else {
-            panic!("could not create purse_id")
+            runtime::revert(Error::PurseNotCreated)
         }
     }
 }
@@ -84,7 +86,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_else(|_| revert(Error::Deserialize));
+    let balance: U512 = deserialize(&balance_bytes).unwrap_or_revert();
 
     Some(balance)
 }

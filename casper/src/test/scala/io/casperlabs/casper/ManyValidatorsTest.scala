@@ -5,7 +5,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
@@ -23,7 +22,7 @@ import scala.util.Random
 @silent("deprecated")
 class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
   "Show blocks" should "be processed quickly for a node with 300 validators" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val bonds = Seq
         .fill(300)(
           ByteString.copyFromUtf8(Random.nextString(20)).substring(0, 32)
@@ -37,11 +36,12 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
             }.toMap)
         dag                 <- dagStorage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
+        equivocators        <- dag.getEquivocators
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
                  latestMessageHashes,
-                 EquivocationsTracker.empty
+                 equivocators
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],

@@ -55,9 +55,9 @@ and transfer (free) tokens to the account from the faucet.
    ```
 
 2. Compile a contract to the [WASM](https://webassembly.org) format,
-see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
+see CasperLabs [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples)
 to see example contracts and instructions on
-[how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
+[how to compile](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/README.md)
 them.
 
 To deploy a compiled contract from your account address:
@@ -65,7 +65,7 @@ To deploy a compiled contract from your account address:
 ```python
 response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7",
                          gas_price=1,
-                         payment="helloname.wasm",
+                         payment_amount=1000000,
                          session="helloname.wasm")
 ```
 

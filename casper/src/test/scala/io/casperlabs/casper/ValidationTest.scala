@@ -7,10 +7,15 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.{Justification, MessageType}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.helper.BlockGenerator._
-import io.casperlabs.casper.helper.BlockUtil.generateValidator
-import io.casperlabs.casper.helper.{BlockGenerator, HashSetCasperTestNode, StorageFixture}
+import io.casperlabs.casper.helper.BlockUtil.{generateHash, generateValidator}
+import io.casperlabs.casper.helper.{
+  BlockGenerator,
+  DeployOps,
+  HashSetCasperTestNode,
+  StorageFixture
+}
+import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
@@ -31,6 +36,7 @@ import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -41,7 +47,6 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 
@@ -71,7 +76,8 @@ class ValidationTest
 
   implicit val consensusConfig = ConsensusConfig()
 
-  val ed25519 = "ed25519"
+  val ed25519   = "ed25519"
+  val chainName = "testnet"
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -94,15 +100,15 @@ class ValidationTest
     ) {
       case (block, _) =>
         for {
-          bprev         <- block
-          dag           <- IndexedDagStorage[F].getRepresentation
-          latestMsgs    <- dag.latestMessages
-          justification = latestMsgs.map { case (v, b) => (v, b.messageHash) }
-          bnext <- createAndStoreBlock[F](
+          bprev          <- block
+          dag            <- IndexedDagStorage[F].getRepresentation
+          latestMsgs     <- dag.latestMessages
+          justifications = latestMsgs.mapValues(_.map(_.messageHash))
+          bnext <- createAndStoreBlockNew[F](
                     Seq(bprev.blockHash),
-                    creator = creator,
-                    bonds = bonds,
-                    justifications = justification
+                    creator,
+                    bonds,
+                    justifications
                   )
         } yield bnext
     }
@@ -163,6 +169,12 @@ class ValidationTest
       val newHeader = header.withValidatorPublicKey(key)
       // NOTE: blockHash should be recalculated.
       b.withHeader(newHeader)
+    }
+    def changeTimestamp(t: Long): Block = {
+      val header    = b.getHeader
+      val newHeader = header.withTimestamp(t)
+
+      ProtoUtil.unsignedBlockProto(b.getBody, newHeader)
     }
     def changeSigAlgorithm(sigAlgorithm: String): Block =
       b.withSignature(b.getSignature.withSigAlgorithm(sigAlgorithm))
@@ -231,6 +243,7 @@ class ValidationTest
       ProtocolVersion(1),
       Seq.empty,
       1,
+      ByteString.EMPTY,
       "casperlabs",
       1,
       0,
@@ -291,75 +304,54 @@ class ValidationTest
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
 
     forAll { (deploy: consensus.Deploy) =>
-      withoutStorage { Validation[Task].deployHeader(deploy) } shouldBe Nil
+      withoutStorage { Validation[Task].deployHeader(deploy, chainName) } shouldBe Nil
     }
   }
 
   it should "not accept too short time to live" in withoutStorage {
-    val minTTL = 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(1, minTTL - 1)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    val deploy = DeployOps.randomTooShortTTL()
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTTL)
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MIN_TTL)
     )
   }
 
   it should "not accept too long time to live" in withoutStorage {
-    val maxTTL = 24 * 60 * 60 * 1000
-    val genDeploy = for {
-      d   <- arbitrary[consensus.Deploy]
-      ttl <- Gen.choose(maxTTL + 1, Int.MaxValue)
-    } yield d.withHeader(
-      d.getHeader.withTtlMillis(ttl)
-    )
-
-    val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    val deploy = DeployOps.randomTooLongTTL()
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, maxTTL)
+        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, ValidationImpl.MAX_TTL)
     )
   }
 
   it should "not accept too many dependencies" in withoutStorage {
-    val maxDependencies = 10
-    val genDeploy = for {
-      d               <- arbitrary[consensus.Deploy]
-      numDependencies <- Gen.chooseNum(maxDependencies + 1, 50)
-      dependencies    <- Gen.listOfN(numDependencies, genHash)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(dependencies)
-    )
-
-    val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    val deploy = DeployOps.randomTooManyDependencies()
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        maxDependencies
+        ValidationImpl.MAX_DEPENDENCIES
       )
     )
   }
 
   it should "not accept invalid dependencies" in withoutStorage {
-    val genDeploy = for {
-      d          <- arbitrary[consensus.Deploy]
-      nBytes     <- Gen.oneOf(Gen.chooseNum(0, 31), Gen.chooseNum(33, 100))
-      dependency <- genBytes(nBytes)
-    } yield d.withHeader(
-      d.getHeader.withDependencies(List(dependency))
-    )
-
-    val deploy = sample(genDeploy)
-    Validation[Task].deployHeader(deploy) shouldBeF List(
+    val deploy = DeployOps.randomInvalidDependency()
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
       DeployHeaderError
         .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
+    )
+  }
+
+  it should "not accept invalid chain names" in withoutStorage {
+    val chainName = "nevernet"
+    val deploy = sample {
+      arbitrary[consensus.Deploy].map(_.withChainName(s"never say $chainName"))
+    }
+
+    Validation[Task].deployHeader(deploy, chainName) shouldBeF List(
+      DeployHeaderError
+        .invalidChainName(deploy.deployHash, deploy.getHeader.chainName, chainName)
     )
   }
 
@@ -421,18 +413,18 @@ class ValidationTest
       } yield result
   }
 
-  "Block number validation" should "only accept 0 as the number for a block with no parents" in withStorage {
+  "Block rank validation" should "only accept 0 as the number for a block with no parents" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       for {
         _     <- createChain[Task](1)
         block <- dagStorage.lookupByIdUnsafe(0)
         dag   <- dagStorage.getRepresentation
         _ <- ValidationImpl[Task]
-              .blockNumber(block.changeBlockNumber(1), dag)
+              .blockRank(block.changeBlockNumber(1), dag)
               .attempt shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- ValidationImpl[Task].blockNumber(block, dag) shouldBeF Unit
+        _ <- ValidationImpl[Task].blockRank(block, dag) shouldBeF Unit
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no justifications") should be(
           true
@@ -447,15 +439,15 @@ class ValidationTest
       for {
         _   <- createChain[Task](n.toInt, bonds = List(Bond(validator, 1)), creator = validator)
         dag <- dagStorage.getRepresentation
-        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
-        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockNumber(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(0) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(1) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(2) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(3) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(4) >>= (b => ValidationImpl[Task].blockRank(b, dag))
+        _   <- dagStorage.lookupByIdUnsafe(5) >>= (b => ValidationImpl[Task].blockRank(b, dag))
         _ <- (0 until n).toList.forallM[Task] { i =>
               (dagStorage.lookupByIdUnsafe(i) >>= (
-                  b => ValidationImpl[Task].blockNumber(b, dag)
+                  b => ValidationImpl[Task].blockRank(b, dag)
               )).map(_ => true)
             } shouldBeF true
         result = log.warns should be(Nil)
@@ -485,9 +477,9 @@ class ValidationTest
         b2  <- createBlockWithNumber(7)
         b3  <- createBlockWithNumber(8, Seq(b1, b2))
         dag <- dagStorage.getRepresentation
-        _   <- ValidationImpl[Task].blockNumber(b3, dag) shouldBeF Unit
+        _   <- ValidationImpl[Task].blockRank(b3, dag) shouldBeF Unit
         result <- ValidationImpl[Task]
-                   .blockNumber(b3.changeBlockNumber(4), dag)
+                   .blockRank(b3.changeBlockNumber(4), dag)
                    .attempt shouldBeF Left(
                    InvalidBlockNumber
                  )
@@ -558,6 +550,88 @@ class ValidationTest
       } yield result
   }
 
+  "Previous block hash validation" should "pass if the hash is in the j-past-cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2  <- createAndStoreBlockFull[Task](v1, List(b1), List(b1))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag)
+      } yield ()
+  }
+  it should "pass if the hash is in the justifications" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      for {
+        g   <- createAndStoreBlock[Task](Nil)
+        b0  <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1  <- createAndStoreBlockFull[Task](v1, List(b0), List(b0))
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].validatorPrevBlockHash(b1.getSummary, dag)
+      } yield ()
+  }
+  it should "fail if the hash belongs to somebody else" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b2 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b1),
+               List(b1, b0),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b2.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash is not in the j-past-cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val List(v1, v2) = List(1, 2).map(i => generateValidator(s"v$i"))
+      for {
+        g  <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b1 <- createAndStoreBlockFull[Task](v1, List(g), Nil)
+        b2 <- createAndStoreBlockFull[Task](v2, List(b0), List(b0))
+        b3 <- createAndStoreBlockFull[Task](
+               v1,
+               List(b2),
+               List(b2),
+               maybeValidatorPrevBlockHash = Some(b1.blockHash)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b3.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+  it should "fail if the hash does not exist" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1 = generateValidator("v1")
+      val bx = generateHash("non-existent")
+      for {
+        g <- createAndStoreBlock[Task](Nil)
+        b0 <- createAndStoreBlockFull[Task](
+               v1,
+               List(g),
+               Nil,
+               maybeValidatorPrevBlockHash = Some(bx),
+               maybeValidatorBlockSeqNum = Some(1)
+             )
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].validatorPrevBlockHash(b0.getSummary, dag).attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidPrevBlockHash))
+      }
+  }
+
   "Sender validation" should "return true for genesis and blocks from bonded validators and false otherwise" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val validator = generateValidator("Validator")
@@ -576,51 +650,53 @@ class ValidationTest
       } yield result
   }
 
+  // Turns sequence of blocks into a mapping between validators and block hashes
+  def latestMessages(messages: Seq[Block]): Map[Validator, Set[BlockHash]] =
+    messages
+      .map(b => b.getHeader.validatorPublicKey -> b.blockHash)
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
+
+  def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
+      parents: Seq[Block],
+      bonds: Seq[Bond],
+      justifications: Seq[Block],
+      validator: ByteString
+  ): F[Block] =
+    for {
+      deploy <- ProtoUtil.basicProcessedDeploy[F]()
+      block <- createAndStoreBlockNew[F](
+                parents.map(_.blockHash),
+                creator = validator,
+                bonds = bonds,
+                deploys = Seq(deploy),
+                justifications = latestMessages(justifications)
+              )
+    } yield block
+
   "Parent validation" should "return true for proper justifications and false otherwise" in withStorage {
-    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      val validators = Vector(
-        generateValidator("V1"),
-        generateValidator("V2"),
-        generateValidator("V3")
-      )
-      val bonds = validators.zipWithIndex.map {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("V1")
+      val v1 = generateValidator("V2")
+      val v2 = generateValidator("V3")
+
+      val bonds = Seq(v0, v1, v2).zipWithIndex.map {
         case (v, i) => Bond(v, 2 * i + 1)
       }
 
-      val emptyEquivocationsTracker = EquivocationsTracker.empty
-
-      def latestMessages(messages: Seq[Block]): Map[Validator, BlockHash] =
-        messages.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap
-
-      def createValidatorBlock[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
-          parents: Seq[Block],
-          justifications: Seq[Block],
-          validator: Int
-      ): F[Block] =
-        for {
-          deploy <- ProtoUtil.basicProcessedDeploy[F]()
-          block <- createAndStoreBlock[F](
-                    parents.map(_.blockHash),
-                    creator = validators(validator),
-                    bonds = bonds,
-                    deploys = Seq(deploy),
-                    justifications = latestMessages(justifications)
-                  )
-        } yield block
-
       for {
         b0 <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 0)
-        b2 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), Seq(b0), 2)
-        b4 <- createValidatorBlock[Task](Seq(b1), Seq(b1), 0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), Seq(b1, b2, b3), 1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), Seq(b1, b4, b5), 0)
-        b7 <- createValidatorBlock[Task](Seq(b4), Seq(b1, b4, b5), 1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), Seq(b1, b2, b3), 2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), Seq.empty, 0)
+        b1 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v0)
+        b2 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v1)
+        b3 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v2)
+        b4 <- createValidatorBlock[Task](Seq(b1), bonds, Seq(b1), v0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), bonds, Seq(b1, b2, b3), v1)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), bonds, Seq(b1, b4, b5), v0)
+        b7 <- createValidatorBlock[Task](Seq(b4), bonds, Seq(b1, b4, b5), v1) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, Seq.empty, 0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0) //empty justification
         result <- for {
                    dag              <- dagStorage.getRepresentation
                    genesisBlockHash = b0.blockHash
@@ -629,49 +705,43 @@ class ValidationTest
                    _ <- Validation[Task].parents(
                          b1,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b2,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b3,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b4,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b5,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
                    _ <- Validation[Task].parents(
                          b6,
                          genesisBlockHash,
-                         dag,
-                         emptyEquivocationsTracker
+                         dag
                        )
 
                    // Not valid
                    _ <- Validation[Task]
-                         .parents(b7, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b7, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b8, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b8, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b9, genesisBlockHash, dag, emptyEquivocationsTracker)
+                         .parents(b9, genesisBlockHash, dag)
                          .attempt
 
                    _ = log.warns should have size 3
@@ -684,11 +754,51 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, genesisBlockHash, dag, emptyEquivocationsTracker)
+                              .parents(b10, genesisBlockHash, dag)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result
       } yield result
+  }
+
+  // See [[/resources/casper/localDetectedForeignDidnt.jpg]]
+  it should "use only j-past-cone of the block when detecting equivocators" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+      val v2 = generateValidator("v2")
+      val v3 = generateValidator("v3")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3,
+        v2 -> 5,
+        v3 -> 2
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
+        d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
+        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3)
+        dag     <- dagStorage.getRepresentation
+        // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
+        // It will choose C as a main parent and A as a secondary one.
+        _ <- Validation[Task]
+              .parents(d, genesis.blockHash, dag)
+              .map(_.parents.map(_.blockHash))
+              .attempt shouldBeF Right(
+              Vector(c.blockHash, a.blockHash)
+            )
+        // While v0 has seen everything so it will use 0 as v2's weight when scoring.
+        _ <- Validation[Task]
+              .parents(e, genesis.blockHash, dag)
+              .map(_.parents.map(_.blockHash)) shouldBeF e.getHeader.parentHashes.toVector
+      } yield ()
   }
 
   // Creates a block with an invalid block number and sequence number
@@ -859,6 +969,54 @@ class ValidationTest
     } yield ()
   }
 
+  it should "fail a block with a deploy having an foreign chain name" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val block = sample {
+        arbitrary[consensus.Block] map { block =>
+          block.update {
+            _.body.deploys := block.getBody.deploys.map { pd =>
+              pd.withDeploy(pd.getDeploy.withChainName("la la land"))
+            }
+          }
+        }
+      }
+      for {
+        dag <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task]
+                   .deployHeaders(
+                     block,
+                     dag,
+                     chainName = "no country for old men"
+                   )
+                   .attempt
+      } yield {
+        result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
+      }
+  }
+
+  it should "pass a block with a deploy having no chain name" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val block = sample {
+        arbitrary[consensus.Block] map { b =>
+          b.update(
+            _.body.deploys :=
+              b.getBody.deploys.map { pd =>
+                pd.update(
+                  _.deploy.header :=
+                    pd.getDeploy.getHeader
+                      .withChainName("")
+                      .clearDependencies
+                )
+              }
+          )
+        }
+      }
+      for {
+        dag <- dagStorage.getRepresentation
+        _   <- ValidationImpl[Task].deployHeaders(block, dag, chainName = "area 51")
+      } yield ()
+  }
+
   "Block hash format validation" should "fail on invalid hash" in withStorage { _ => _ => _ =>
     val (sk, pk) = Ed25519.newKeyPair
     val BlockMsgWithTransform(Some(block), _) =
@@ -947,6 +1105,101 @@ class ValidationTest
       } yield postState shouldBe Left(ValidateErrorWrapper(InvalidPreStateHash))
   }
 
+  private def shouldBeInvalidDeployHeader(deploy: consensus.Deploy) = withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploysWithCost = Vector(deploy.processed(1))
+      for {
+        block  <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
+  }
+
+  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooShortTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too long a TTL" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooLongTTL())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has too many dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomTooManyDependencies())
+  }
+
+  it should "return InvalidDeployHeader when a deploy has invalid dependencies" in {
+    shouldBeInvalidDeployHeader(DeployOps.randomInvalidDependency())
+  }
+
+  it should "return DeployFromFuture when a deploy timestamp is later than the block timestamp" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployFromFuture))
+  }
+
+  it should "return DeployExpired when a deploy is past its TTL" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deploy         = DeployOps.randomNonzeroTTL()
+      val blockTimestamp = deploy.getHeader.timestamp + deploy.getHeader.ttlMillis + 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deploy.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployExpired))
+  }
+
+  it should "return DeployDependencyNotMet when a deploy has a dependency not in the p-past cone" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA        = DeployOps.randomNonzeroTTL()
+      val deployB        = deployA.withDependencies(List(deployA.deployHash))
+      val blockTimestamp = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      for {
+        block <- createBlock[Task](Seq.empty, deploys = Vector(deployB.processed(1)))
+                  .map(_.changeTimestamp(blockTimestamp))
+        _      <- blockStorage.put(block.blockHash, block, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(block, dag, chainName).attempt
+      } yield result shouldBe Left(ValidateErrorWrapper(DeployDependencyNotMet))
+  }
+
+  it should "work for valid deploys" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val deployA = DeployOps.randomNonzeroTTL()
+      val deployB = DeployOps
+        .randomNonzeroTTL()
+        .withTimestamp(deployA.getHeader.timestamp + deployA.getHeader.ttlMillis)
+      val deployC = DeployOps
+        .randomNonzeroTTL()
+        .withDependencies(List(deployA.deployHash, deployB.deployHash))
+        .withTimestamp(deployB.getHeader.timestamp + deployB.getHeader.ttlMillis)
+      val timeA = deployA.getHeader.timestamp + deployA.getHeader.ttlMillis - 1
+      val timeB = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+      val timeC = deployC.getHeader.timestamp + deployC.getHeader.ttlMillis - 1
+
+      for {
+        blockA <- createBlock[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
+                   .map(_.changeTimestamp(timeA))
+        _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
+        blockB <- createBlock[Task](List(blockA.blockHash), deploys = Vector(deployB.processed(1)))
+                   .map(_.changeTimestamp(timeB))
+        _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
+        blockC <- createBlock[Task](List(blockB.blockHash), deploys = Vector(deployC.processed(1)))
+                   .map(_.changeTimestamp(timeC))
+        _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
+        dag    <- dagStorage.getRepresentation
+        result <- ValidationImpl[Task].deployHeaders(blockC, dag, chainName).attempt
+      } yield result shouldBe Right(())
+  }
+
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
       val contract        = ByteString.copyFromUtf8("some contract")
@@ -1015,7 +1268,7 @@ class ValidationTest
         5 * 1024 * 1024
       )
       for {
-        _ <- deployStorage.addAsPending(deploys.toList)
+        _ <- deployStorage.writer.addAsPending(deploys.toList)
         deploysCheckpoint <- ExecEngineUtil.computeDeploysCheckpoint[Task](
                               ExecEngineUtil.MergeResult.empty,
                               fs2.Stream.fromIterator[Task](deploys.toIterator),
@@ -1047,6 +1300,54 @@ class ValidationTest
                          )
         Right(postStateHash) = validateResult
       } yield postStateHash should be(computedPostStateHash)
+  }
+
+  "j-past-cone of the block" should "not merge equivocator's swimlane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _ <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Left(
+              ValidateErrorWrapper(SwimlaneMerged)
+            )
+      } yield ()
+  }
+
+  it should "not raise errors when j-past-cone does not merge a swmilane" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v0 = generateValidator("v0")
+      val v1 = generateValidator("v1")
+
+      val bondsMap = Map(
+        v0 -> 2,
+        v1 -> 3
+      )
+
+      val bonds = bondsMap.map(b => Bond(b._1, b._2)).toSeq
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
+        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0)
+        dag     <- dagStorage.getRepresentation
+        _       <- ValidationImpl[Task].swimlane(d, dag).attempt shouldBeF Right(())
+      } yield ()
   }
 
   // TODO: Bring back once there is an easy way to create a _valid_ block.
