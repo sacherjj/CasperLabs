@@ -376,8 +376,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
 
       def loop(counter: Int): F[Unit] =
         downloadEffect.handleErrorWith {
-          case error @ SelfEquivocationError(ex) =>
-            Log[F].error(ex) *> Concurrent[F].raiseError(error)
+          case error @ SelfEquivocationError(_) =>
+            Log[F].error(error.getLocalizedMessage) *> Concurrent[F].raiseError(error)
 
           case NonFatal(ex) if counter > retriesConf.maxRetries.toInt =>
             // Let's just return the last error, unwrapped, so callers don't have to anticipate

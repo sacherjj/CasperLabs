@@ -104,6 +104,11 @@ object BlockAPI {
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]
+                                   case SelfEquivocatedBlock =>
+                                     raise(
+                                       Internal(s"Node has equivocated with block ${PrettyPrinter
+                                         .buildString(block.blockHash)}")
+                                     )
                                    case _: InvalidBlock =>
                                      raise(InvalidArgument(s"Invalid block: $status"))
                                    case UnexpectedBlockException(ex) =>

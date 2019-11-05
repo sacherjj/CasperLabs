@@ -816,9 +816,16 @@ abstract class HashSetCasperTest
                                   .deploy(basicDeployData1) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
 
-      _ <- nodes(0).casperEff.addBlock(signedBlock1).attempt
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1, _)) shouldBeF Valid
       _ <- nodes(1).receive()
-      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime).attempt
+      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime) shouldBeF SelfEquivocatedBlock
+      // NOTE: Actual implementation would NOT DO THIS.
+      // signedBlock1Prime and signedBlock1 create a self-equivocation (node-0) sees itself equivocating
+      // with this pair of blocks. We don't gossip self-equivocating blocks but we want to test
+      // that a node adds to its DAG blocks that create an equivocation.
+      _ <- nodes(0).broadcaster.networkEffects(signedBlock1Prime, EquivocatedBlock)
       _ <- nodes(1).receive()
 
       _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
@@ -872,7 +879,7 @@ abstract class HashSetCasperTest
       block1Prime <- makeDeploy(0)
 
       _ <- nodes(0).casperEff.addBlock(block1) shouldBeF Valid
-      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF EquivocatedBlock
+      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF SelfEquivocatedBlock
       _ <- nodes(1).clearMessages()
       _ <- nodes(1).casperEff.addBlock(block1Prime) shouldBeF Valid
       _ <- nodes(0).receive()
@@ -881,8 +888,10 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
 
       block2Prime <- makeDeploy(1)
-      _           <- nodes(1).casperEff.addBlock(block2Prime) shouldBeF Valid
-      _           <- nodes(0).receive()
+      _ <- nodes(1).casperEff
+            .addBlock(block2Prime)
+            .flatTap(nodes(1).broadcaster.networkEffects(block2Prime, _)) shouldBeF Valid
+      _ <- nodes(0).receive()
       // Process dependencies
       _ <- nodes(1).receive()
       _ <- nodes(0).receive()

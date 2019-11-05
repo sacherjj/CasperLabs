@@ -31,7 +31,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FilesAPI, Log, Time}
+import io.casperlabs.shared.{Cell, FilesAPI, Log, SelfEquivocationError, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -261,6 +261,12 @@ package object gossiping {
           Log[F].debug(
             s"Detected block ${show(block.blockHash)} equivocated"
           )
+
+        case SelfEquivocatedBlock =>
+          MonadThrowable[F]
+            .raiseError[Unit](
+              SelfEquivocationError(block.blockHash)
+            )
 
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>

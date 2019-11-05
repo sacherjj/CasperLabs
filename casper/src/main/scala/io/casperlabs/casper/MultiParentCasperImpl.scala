@@ -1,15 +1,14 @@
 package io.casperlabs.casper
 
 import cats.data.NonEmptyList
-import cats.effect.concurrent.Semaphore
-import cats.effect.{Resource, Sync}
+import cats.effect.Sync
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Monad}
+import cats.Applicative
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.EquivocationDetector
@@ -22,12 +21,10 @@ import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
+import io.casperlabs.models.{Message, SmartContractEngineError}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -35,6 +32,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
+import io.casperlabs.models.BlockImplicits._
 
 import scala.reflect.internal.FatalError
 import scala.util.control.NonFatal
@@ -670,6 +668,10 @@ object MultiParentCasperImpl {
             // the ones that returned boolean values.
             (invalid: BlockStatus).pure[F]
 
+          case Left(ValidateErrorWrapper(EquivocatedBlock))
+              if validatorId.map(ByteString.copyFrom).exists(_ == block.validatorPublicKey) =>
+            addEffects(SelfEquivocatedBlock, block, Seq.empty).as(SelfEquivocatedBlock)
+
           case Left(ValidateErrorWrapper(invalid)) =>
             addEffects(invalid, block, Seq.empty).as(invalid)
 
@@ -706,23 +708,12 @@ object MultiParentCasperImpl {
         case MissingBlocks =>
           addMissingDependencies(block)
 
-        case EquivocatedBlock =>
+        case EquivocatedBlock | SelfEquivocatedBlock =>
           for {
             _ <- addToState(block, transforms)
             _ <- Log[F].info(
                   s"Added equivocated block ${PrettyPrinter.buildString(block.blockHash)}"
                 )
-            selfEquivocations = validatorId
-              .map(ByteString.copyFrom(_))
-              .exists(_ == block.getHeader.validatorPublicKey)
-            _ <- MonadThrowable[F]
-                  .raiseError[DagRepresentation[F]](
-                    SelfEquivocationError(
-                      s"Node has detected its own equivocation with block ${PrettyPrinter
-                        .buildString(block.blockHash)}."
-                    )
-                  )
-                  .whenA(selfEquivocations)
           } yield ()
 
         case InvalidUnslashableBlock | InvalidBlockNumber | InvalidParents | InvalidSequenceNumber |
@@ -829,7 +820,7 @@ object MultiParentCasperImpl {
           status: BlockStatus
       ): F[Unit] =
         status match {
-          case Valid =>
+          case Valid | EquivocatedBlock =>
             maybeOwnPublickKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
                 relaying.relay(List(block.blockHash)).void
@@ -837,13 +828,10 @@ object MultiParentCasperImpl {
                 // We were adding somebody else's block. The DownloadManager did the gossiping.
                 ().pure[F]
             }
-          case EquivocatedBlock =>
-            maybeOwnPublickKey match {
-              case Some(key) if key == block.getHeader.validatorPublicKey =>
-                // Don't relay block with which a node has equivocated.
-                ().pure[F]
-              case _ => relaying.relay(List(block.blockHash)).void
-            }
+
+          case SelfEquivocatedBlock =>
+            // Don't relay block with which a node has equivocated.
+            ().pure[F]
 
           case MissingBlocks =>
             throw new RuntimeException(
