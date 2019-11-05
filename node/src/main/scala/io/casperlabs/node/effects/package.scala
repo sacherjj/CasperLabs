@@ -113,7 +113,7 @@ package object effects {
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
     val writeXaconfig = mkConfig(poolSize = 1)
 
-    // Useing a separate Transactor for read operations because
+    // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
     val readXaconfig = mkConfig(poolSize = 10)
