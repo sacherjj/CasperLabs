@@ -391,11 +391,6 @@ steps:
     branch:
     - staging
     - trying
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "**/**.proto"
-      - "explorer/**"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
