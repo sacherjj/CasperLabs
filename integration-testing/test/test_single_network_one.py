@@ -75,6 +75,19 @@ def test_account_state(node):
     assert "counter" in names
 
 
+def test_logging_enabled_for_node_and_execution_engine(one_node_network):
+    """
+    Verify both Node and EE are outputting logs.
+    """
+    assert (
+        "Listening for traffic on casperlabs://"
+        in one_node_network.docker_nodes[0].logs()
+    )
+    assert (
+        '"host_name":"execution-engine-' in one_node_network.execution_engines[0].logs()
+    )
+
+
 def test_transfer_with_overdraft(node):
     # Notated uses of account ids in common.py
     a_id = 297
@@ -804,11 +817,11 @@ def test_multiple_deploys_per_block(cli):
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
 
 
-def disabled_test_dependencies_ok_scala(scala_cli):
+def test_dependencies_ok_scala(scala_cli):
     check_dependencies_ok(scala_cli)
 
 
-def disabled_test_dependencies_ok_python(cli):
+def test_dependencies_ok_python(cli):
     check_dependencies_ok(cli)
 
 
@@ -826,11 +839,11 @@ def check_dependencies_ok(cli):
     propose_check_no_errors(cli)
 
 
-def disabled_test_dependencies_multiple_ok_scala(scala_cli):
+def test_dependencies_multiple_ok_scala(scala_cli):
     check_dependencies_multiple_ok(scala_cli)
 
 
-def disabled_test_dependencies_multiple_ok_python(cli):
+def test_dependencies_multiple_ok_python(cli):
     check_dependencies_multiple_ok(cli)
 
 
@@ -852,11 +865,11 @@ def check_dependencies_multiple_ok(cli):
     propose_check_no_errors(cli)
 
 
-def disabled_test_dependencies_not_met_scala(scala_cli):
+def test_dependencies_not_met_scala(scala_cli):
     check_dependencies_not_met(scala_cli)
 
 
-def disabled_test_dependencies_not_met_python(cli):
+def test_dependencies_not_met_python(cli):
     check_dependencies_not_met(cli)
 
 
