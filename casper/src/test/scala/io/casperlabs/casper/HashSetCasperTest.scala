@@ -412,18 +412,19 @@ abstract class HashSetCasperTest
     } yield result
   }
 
+  def createTestBlock(node: HashSetCasperTestNode[Task]) =
+    for {
+      deploy         <- ProtoUtil.basicDeploy[Task]()
+      result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+      Created(block) = result
+    } yield block
+
   it should "process blocks in parallel" in effectTest {
-    def createBlock(node: HashSetCasperTestNode[Task]) =
-      for {
-        deploy         <- ProtoUtil.basicDeploy[Task]()
-        result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
-        Created(block) = result
-      } yield block
     for {
       nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
       // Create blocks on different nodes that can add in parallel.
       // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
-      blocks <- Task.sequence(nodes.map(createBlock))
+      blocks <- Task.sequence(nodes.map(createTestBlock))
       // Add them all concurrently to the one of the nodes; it shouldn't run into validation problems.
       results <- Task.gatherUnordered {
                   blocks.map(nodes.head.casperEff.addBlock(_))
@@ -900,6 +901,47 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
 
       _ <- nodes.toList.traverse(_.tearDown())
+    } yield ()
+  }
+
+  it should "detect self equivocation when validating an incoming block" in effectTest {
+    for {
+      nodes <- networkEff(IndexedSeq(validatorKeys.head, validatorKeys.head), genesis, transforms)
+      // Creates a pair that constitutes equivocation blocks
+      signedBlock1 <- createTestBlock(nodes(0))
+      signedBlock2 <- createTestBlock(nodes(1))
+
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1, _)) shouldBeF Valid
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
+
+      _ <- nodes(1).casperEff
+            .addBlock(signedBlock2) shouldBeF SelfEquivocatedBlock
+    } yield ()
+  }
+
+  it should "not relay blocks that create a self equivocation" in effectTest {
+    for {
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      // Creates a pair that constitutes equivocation blocks
+      signedBlock1      <- createTestBlock(nodes(0))
+      signedBlock1Prime <- createTestBlock(nodes(0))
+
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1, _)) shouldBeF Valid
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
+
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1Prime)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1Prime, _)) shouldBeF SelfEquivocatedBlock
+      _ <- nodes(1).receive()
+
+      _ <- nodes(1).casperEff
+            .contains(signedBlock1Prime) shouldBeF false
     } yield ()
   }
 
