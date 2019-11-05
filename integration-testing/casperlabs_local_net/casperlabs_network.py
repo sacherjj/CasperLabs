@@ -279,14 +279,14 @@ class CasperLabsNetwork:
             )
 
         with self._lock:
-            for node in self.cl_nodes:
-                node.cleanup()
             if self.clarity_node:
                 self.clarity_node.cleanup()
             if self.grpc_web_proxy_node:
                 self.grpc_web_proxy_node.cleanup()
             if self.selenium_node:
                 self.selenium_node.cleanup()
+            for node in self.cl_nodes:
+                node.cleanup()
             if self.in_docker:
                 # If these integration tests are running in a docker container,
                 # then we need disconnect the docker container from the network of selenium
