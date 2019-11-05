@@ -1,16 +1,3 @@
-extern crate clap;
-extern crate ctrlc;
-extern crate dirs;
-extern crate grpc;
-#[macro_use]
-extern crate lazy_static;
-extern crate lmdb;
-
-extern crate casperlabs_engine_grpc_server;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-
 use std::collections::btree_map::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -22,6 +9,7 @@ use std::time::Duration;
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
 
 use engine_shared::logging::log_settings::{LogLevelFilter, LogSettings};

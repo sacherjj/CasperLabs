@@ -1,8 +1,10 @@
-use bitflags;
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use bitflags::bitflags;
 use hex_fmt::HexFmt;
 
-use crate::alloc::string::String;
-use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr;
 use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};

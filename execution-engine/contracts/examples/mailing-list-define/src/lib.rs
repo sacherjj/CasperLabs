@@ -1,12 +1,10 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-
-extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api::{runtime, storage, Error as ApiError, TURef};

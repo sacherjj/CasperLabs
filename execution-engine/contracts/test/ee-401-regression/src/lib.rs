@@ -1,9 +1,8 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::BTreeMap;
 use alloc::string::String;
 
 use contract_ffi::contract_api::{runtime, storage, ContractRef};

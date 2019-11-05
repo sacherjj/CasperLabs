@@ -1,13 +1,10 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-
-extern crate contract_ffi;
-extern crate pos;
 
 use alloc::collections::BTreeMap;
 use alloc::string::String;
+use alloc::vec;
 use core::fmt::Write;
 
 use contract_ffi::contract_api::{runtime, storage, ContractRef, Error, TURef};

@@ -1,7 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-
 use contract_ffi::contract_api::{account, runtime, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::value::account::{

@@ -3,11 +3,6 @@
 //! # Usage
 //!
 //! ```
-//! # extern crate casperlabs_engine_storage;
-//! # extern crate contract_ffi;
-//! # extern crate lmdb;
-//! # extern crate engine_shared;
-//! # extern crate tempfile;
 //! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::lmdb::LmdbEnvironment;

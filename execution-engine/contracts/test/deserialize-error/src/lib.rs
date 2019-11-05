@@ -1,12 +1,9 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate core;
 
-extern crate contract_ffi;
-
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::BTreeMap;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use contract_ffi::args_parser::ArgsParser;

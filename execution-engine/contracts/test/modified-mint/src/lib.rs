@@ -1,12 +1,9 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
-extern crate mint_token;
-
 use alloc::string::{String, ToString};
+use alloc::vec;
 
 use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
 use contract_ffi::system_contracts::mint::Error;

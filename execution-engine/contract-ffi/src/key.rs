@@ -1,8 +1,10 @@
+use alloc::format;
+use alloc::vec::Vec;
+
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
 use hex_fmt::HexFmt;
 
-use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::{ContractRef, TURef};
@@ -274,11 +276,14 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use crate::bytesrepr::{Error, FromBytes};
     use crate::key::Key;
     use crate::uref::{AccessRights, URef};
-    use alloc::string::String;
-    use alloc::vec::Vec;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)

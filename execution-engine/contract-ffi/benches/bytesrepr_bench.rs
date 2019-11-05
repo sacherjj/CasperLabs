@@ -1,11 +1,10 @@
 #![feature(test)]
 
-extern crate casperlabs_contract_ffi;
+extern crate test;
 
 use std::collections::BTreeMap;
 use std::iter;
 
-extern crate test;
 use test::black_box;
 use test::Bencher;
 

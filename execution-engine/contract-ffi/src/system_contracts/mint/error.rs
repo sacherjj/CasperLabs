@@ -3,6 +3,8 @@
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 
+use failure::Fail;
+
 use crate::bytesrepr::{self, FromBytes, ToBytes};
 use crate::system_contracts::mint::purse_id::PurseIdError;
 

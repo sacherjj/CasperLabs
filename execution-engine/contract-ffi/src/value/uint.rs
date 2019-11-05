@@ -1,13 +1,18 @@
-use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
+
 use num_traits::{Bounded, Num, One, Unsigned, WrappingAdd, WrappingSub, Zero};
 
-// Clippy generates a ton of warnings/errors for the code the macro generates.
-// As of uint v0.8.1 and using nightly-2019-08-25, this also generates the
-// following warning: "use of deprecated item 'core::mem::uninitialized': use
-// `mem::MaybeUninit` instead"
-#[allow(deprecated, clippy::all)]
+use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
+
+#[allow(
+    clippy::assign_op_pattern,
+    clippy::ptr_offset_with_cast,
+    clippy::range_plus_one,
+    clippy::transmute_ptr_to_ptr
+)]
 mod macro_code {
+    use uint::construct_uint;
+
     construct_uint! {
         pub struct U512(8);
     }

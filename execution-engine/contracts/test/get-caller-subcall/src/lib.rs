@@ -1,10 +1,9 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::collections::btree_map::BTreeMap;
-use alloc::prelude::v1::Vec;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;

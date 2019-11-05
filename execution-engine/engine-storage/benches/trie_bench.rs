@@ -1,7 +1,5 @@
 #![feature(test)]
-extern crate casperlabs_engine_storage;
-extern crate contract_ffi;
-extern crate engine_shared;
+
 extern crate test;
 
 use test::black_box;

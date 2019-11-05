@@ -1,10 +1,10 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::prelude::v1::{String, Vec};
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 use contract_ffi::contract_api::{account, runtime, system, ContractRef, Error as ApiError};
 use contract_ffi::key::Key;

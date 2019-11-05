@@ -2,9 +2,6 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-extern crate local_state;
-
 use alloc::string::String;
 
 use contract_ffi::contract_api::{storage, Error};

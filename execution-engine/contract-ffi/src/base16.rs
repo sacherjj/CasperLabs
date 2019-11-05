@@ -1,7 +1,10 @@
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::num::ParseIntError;
 use core::str;
+
+use failure::Fail;
 
 /// Encodes a slice of bytes in base16 form in lower case
 pub fn encode_lower(input: &[u8]) -> String {
@@ -37,22 +40,29 @@ pub fn decode_lower(input: &str) -> Result<Vec<u8>, Error> {
     }
 }
 
-#[test]
-fn test_encode_lower() {
-    assert_eq!(encode_lower(&[1, 2, 3, 254, 255]), "010203feff");
-    assert_eq!(encode_lower(&[]), "");
-}
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
 
-#[test]
-fn test_decode_lower() {
-    assert!(decode_lower("Hello world!").is_err());
-    assert_eq!(
-        decode_lower("010203feff").expect("should decode"),
-        &[0x01, 0x02, 0x03, 0xfe, 0xff]
-    );
-    // invalid length
-    assert!(decode_lower("010").is_err());
-    assert_eq!(decode_lower("").expect("should decode empty"), vec![]);
-    // invalid characters
-    assert!(decode_lower("\u{012345}deadbeef").is_err());
+    use super::*;
+
+    #[test]
+    fn test_encode_lower() {
+        assert_eq!(encode_lower(&[1, 2, 3, 254, 255]), "010203feff");
+        assert_eq!(encode_lower(&[]), "");
+    }
+
+    #[test]
+    fn test_decode_lower() {
+        assert!(decode_lower("Hello world!").is_err());
+        assert_eq!(
+            decode_lower("010203feff").expect("should decode"),
+            &[0x01, 0x02, 0x03, 0xfe, 0xff]
+        );
+        // invalid length
+        assert!(decode_lower("010").is_err());
+        assert_eq!(decode_lower("").expect("should decode empty"), vec![]);
+        // invalid characters
+        assert!(decode_lower("\u{012345}deadbeef").is_err());
+    }
 }
