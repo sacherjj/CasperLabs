@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 
-const BLAKE2B_DIGEST_LENGTH: usize = 32;
+pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
 /// Represents a 32-byte BLAKE2b hash digest
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

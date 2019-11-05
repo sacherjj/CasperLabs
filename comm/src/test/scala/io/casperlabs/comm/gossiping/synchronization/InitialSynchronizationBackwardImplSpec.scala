@@ -1,19 +1,16 @@
-package io.casperlabs.comm.gossiping
+package io.casperlabs.comm.gossiping.synchronization
 
 import java.util.concurrent.TimeoutException
 
 import cats.effect.concurrent.Semaphore
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import eu.timepit.refined._
-import eu.timepit.refined.api.Refined
-import eu.timepit.refined.auto._
-import eu.timepit.refined.numeric._
-import io.casperlabs.casper.consensus.{Approval, BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Approval, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
-import io.casperlabs.comm.gossiping.InitialSynchronizationImpl.SynchronizationError
-import io.casperlabs.comm.gossiping.InitialSynchronizationSpec.TestFixture
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
+import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationBackwardImplSpec.TestFixture
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.shared.Log.NOPLog
@@ -27,7 +24,7 @@ import org.scalatest.{BeforeAndAfterEach, Inspectors, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
-class InitialSynchronizationSpec
+class InitialSynchronizationBackwardImplSpec
     extends WordSpecLike
     with Matchers
     with BeforeAndAfterEach
@@ -41,8 +38,6 @@ class InitialSynchronizationSpec
     Gen.choose(min, max).flatMap(n => Gen.listOfN(n, arbNode.arbitrary))
 
   def genTips(n: Int = 10) = Gen.listOfN(n, arbBlockSummary.arbitrary)
-
-  def pos(n: Int): Int Refined Positive = refineV[Positive](n).right.get
 
   "InitialSynchronization" when {
     "doesn't have nodes in the initial round" should {
@@ -79,7 +74,7 @@ class InitialSynchronizationSpec
               counter.increment()
               nodes
             },
-            minSuccessful = pos(nodes.size),
+            minSuccessful = nodes.size,
             sync = (_, _) => Task.raiseError(new RuntimeException),
             skipFailedNodesInNextRounds = skipFailedNodesInNextRound
           ) { (initialSynchronizer, _) =>
@@ -179,7 +174,7 @@ class InitialSynchronizationSpec
               Task.raiseError(new RuntimeException)
             }
           },
-          minSuccessful = pos(nodes.size)
+          minSuccessful = nodes.size
         ) { (initialSynchronizer, _) =>
           for {
             w1 <- initialSynchronizer.sync()
@@ -203,7 +198,7 @@ class InitialSynchronizationSpec
   }
 }
 
-object InitialSynchronizationSpec extends ArbitraryConsensus {
+object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   implicit val logNoOp = new NOPLog[Task]
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
@@ -215,10 +210,11 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {
-    def hasBlock(blockHash: ByteString)        = ???
-    def getBlockSummary(blockHash: ByteString) = ???
-    def getBlock(blockHash: ByteString)        = ???
-    def listTips                               = ???
+    def hasBlock(blockHash: ByteString)             = ???
+    def getBlockSummary(blockHash: ByteString)      = ???
+    def getBlock(blockHash: ByteString)             = ???
+    def listTips                                    = ???
+    def dagTopoSort(startRank: Long, endRank: Long) = ???
   }
 
   object MockSynchronizer extends Synchronizer[Task] {
@@ -260,20 +256,15 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
   }
 
   class MockGossipService(tips: List[BlockSummary]) extends GossipService[Task] {
-    def newBlocks(request: NewBlocksRequest): Task[NewBlocksResponse] = ???
-    def streamAncestorBlockSummaries(
-        request: StreamAncestorBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] = ???
-    def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[Task, BlockSummary] =
+    def newBlocks(request: NewBlocksRequest)                                       = ???
+    def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
+    def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
       Iterant.fromList[Task, BlockSummary](tips)
-    def streamBlockSummaries(request: StreamBlockSummariesRequest): Iterant[Task, BlockSummary] =
-      ???
-    def getBlockChunked(request: GetBlockChunkedRequest): Iterant[Task, Chunk] = ???
-    def getGenesisCandidate(request: GetGenesisCandidateRequest): Task[GenesisCandidate] =
-      ???
-    def addApproval(request: AddApprovalRequest): Task[Unit] = ???
+    def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
+    def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
+    def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
+    def addApproval(request: AddApprovalRequest): Task[Unit]                       = ???
+    def streamDagSliceBlockSummaries(request: StreamDagSliceBlockSummariesRequest) = ???
   }
 
   object TestFixture {
@@ -283,13 +274,13 @@ object InitialSynchronizationSpec extends ArbitraryConsensus {
         sync: (Node, Seq[ByteString]) => Task[Boolean] = (_, _) => Task(true),
         selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
-        minSuccessful: Int Refined Positive = Int.MaxValue,
+        minSuccessful: Int = Int.MaxValue,
         skipFailedNodesInNextRounds: Boolean = false,
         roundPeriod: FiniteDuration = 25.millis
     )(test: (InitialSynchronization[Task], MockGossipServiceServer) => Task[Unit]): Unit = {
       val mockGossipServiceServer                = new MockGossipServiceServer(sync)
       val mockGossipService: GossipService[Task] = new MockGossipService(tips)
-      val effect = new InitialSynchronizationImpl(
+      val effect = new InitialSynchronizationBackwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
         mockGossipServiceServer,
         selectNodes,

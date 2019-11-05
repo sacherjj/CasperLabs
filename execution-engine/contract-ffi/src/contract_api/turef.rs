@@ -1,8 +1,9 @@
+use hex_fmt::HexFmt;
+
 use core::any::type_name;
 use core::fmt;
 use core::marker::PhantomData;
 
-use crate::key::addr_to_hex;
 use crate::uref::AccessRights;
 use crate::uref::URef;
 use crate::value::Value;
@@ -75,7 +76,7 @@ impl<T> core::fmt::Display for TURef<T> {
         write!(
             f,
             "TURef({}, {}; {})",
-            addr_to_hex(&self.addr()),
+            HexFmt(&self.addr()),
             self.access_rights(),
             type_name::<T>()
         )

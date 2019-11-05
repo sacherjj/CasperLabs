@@ -6,7 +6,7 @@ use core::u8;
 
 use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
 use crate::bytesrepr::{self, deserialize, ToBytes};
-use crate::contract_api::Error;
+use crate::contract_api::{runtime, Error};
 use crate::ext_ffi;
 use crate::key::{Key, UREF_SIZE};
 use crate::unwrap_or_revert::UnwrapOrRevert;
@@ -97,7 +97,7 @@ where
     K: ToBytes,
     V: Into<Value>,
 {
-    let key_bytes = key.to_bytes().unwrap();
+    let key_bytes = key.to_bytes().unwrap_or_revert();
     write_untyped_local(&key_bytes, &value.into());
 }
 
@@ -164,8 +164,8 @@ pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
     };
     let key: Key = deserialize(&bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
-        TURef::from_uref(uref).unwrap()
+        TURef::from_uref(uref).unwrap_or_revert()
     } else {
-        panic!("URef FFI did not return a valid URef!");
+        runtime::revert(Error::UnexpectedKeyVariant);
     }
 }

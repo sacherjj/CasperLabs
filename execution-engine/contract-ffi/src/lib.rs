@@ -9,21 +9,19 @@
 
 #[macro_use]
 extern crate alloc;
-
 extern crate binascii;
-
-#[macro_use]
-extern crate uint;
-#[macro_use]
-extern crate failure;
-extern crate wee_alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
+extern crate failure;
+extern crate hex_fmt;
+#[macro_use]
 extern crate num_derive;
-
 #[cfg(any(test, feature = "gens"))]
 extern crate proptest;
+#[macro_use]
+extern crate uint;
+extern crate wee_alloc;
 
 #[cfg(not(feature = "std"))]
 #[global_allocator]

@@ -6,7 +6,7 @@ mod runtime;
 #[cfg(test)]
 mod tests;
 
-pub use self::address_generator::AddressGenerator;
+pub use self::address_generator::{AddressGenerator, AddressGeneratorBuilder};
 pub use self::error::Error;
 pub use self::executor::Executor;
 pub use self::runtime::{

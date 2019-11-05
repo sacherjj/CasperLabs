@@ -44,7 +44,8 @@ final case class DeployConfig(
     gasPrice: Long,
     paymentAmount: Option[BigInt],
     timeToLive: Option[Int],
-    dependencies: List[ByteString]
+    dependencies: List[ByteString],
+    chainName: String
 ) {
   def session(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(sessionOptions, defaultArgs)
   def payment(defaultArgs: Seq[Arg] = Nil) = DeployConfig.toCode(paymentOptions, defaultArgs)
@@ -77,10 +78,11 @@ object DeployConfig {
       timeToLive = args.ttl.toOption,
       dependencies = args.dependencies.toOption
         .getOrElse(List.empty)
-        .map(d => ByteString.copyFrom(Base16.decode(d)))
+        .map(d => ByteString.copyFrom(Base16.decode(d))),
+      chainName = args.chainName()
     )
 
-  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, None, None, List.empty)
+  val empty = DeployConfig(CodeConfig.empty, CodeConfig.empty, 0, None, None, List.empty, "")
 
   /** Produce a Deploy.Code DTO from the options.
     * 'defaultArgs' can be used by specialized commands such as `transfer` and `unbond`

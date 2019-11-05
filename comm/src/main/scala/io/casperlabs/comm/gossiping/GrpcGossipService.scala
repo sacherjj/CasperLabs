@@ -104,6 +104,10 @@ object GrpcGossipService {
 
       def addApproval(request: AddApprovalRequest): Task[Empty] =
         TaskLike[F].apply(service.addApproval(request).map(_ => Empty()))
+
+      def streamDagSliceBlockSummaries(
+          request: StreamDagSliceBlockSummariesRequest
+      ): Observable[BlockSummary] = service.streamDagSliceBlockSummaries(request).toObservable
     }
 
   /** Create the internal interface from the Monix specific instance,
@@ -152,5 +156,9 @@ object GrpcGossipService {
 
       def addApproval(request: AddApprovalRequest): F[Unit] =
         withErrorCallback(stub.addApproval(request).map(_ => ()))
+
+      def streamDagSliceBlockSummaries(
+          request: StreamDagSliceBlockSummariesRequest
+      ): Iterant[F, BlockSummary] = withErrorCallback(stub.streamDagSliceBlockSummaries(request))
     }
 }

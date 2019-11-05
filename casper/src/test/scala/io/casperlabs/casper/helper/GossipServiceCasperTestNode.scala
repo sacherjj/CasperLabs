@@ -8,17 +8,17 @@ import cats.mtl.DefaultApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper
+import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.singlesweep.{
   FinalityDetector,
   FinalityDetectorBySingleSweepImpl
 }
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.{consensus, _}
-import io.casperlabs.casper.validation.ValidationImpl
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
+import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
@@ -36,6 +36,7 @@ class GossipServiceCasperTestNode[F[_]](
     genesis: consensus.Block,
     sk: PrivateKey,
     semaphoresMap: SemaphoreMap[F, ByteString],
+    semaphore: Semaphore[F],
     faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainName: String = "casperlabs",
@@ -76,7 +77,8 @@ class GossipServiceCasperTestNode[F[_]](
       new MultiParentCasperImpl.StatelessExecutor[F](
         Some(validatorId.publicKey),
         chainName,
-        upgrades = Nil
+        upgrades = Nil,
+        semaphore
       ),
       Some(validatorId),
       genesis,
@@ -138,11 +140,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
+          semaphore    <- Semaphore[F](1)
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
             sk,
             semaphoreMap,
+            semaphore,
             faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
@@ -221,11 +225,13 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                                 CasperState()
                               )
                 semaphoreMap <- SemaphoreMap[F, ByteString](1)
+                semaphore    <- Semaphore[F](1)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
                   sk,
                   semaphoreMap,
+                  semaphore,
                   faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
@@ -370,13 +376,6 @@ object GossipServiceCasperTestNodeFactory {
         synchronizer <- SynchronizerImpl[F](
                          connectToGossip = connectToGossip,
                          backend = new SynchronizerImpl.Backend[F] {
-                           override def tips: F[List[ByteString]] =
-                             for {
-                               dag                 <- casper.dag
-                               latestMessageHashes <- dag.latestMessageHashes
-                               equivocators        <- dag.getEquivocators
-                               tipHashes           <- casper.estimator(dag, latestMessageHashes, equivocators)
-                             } yield tipHashes.toList
 
                            override def justifications: F[List[ByteString]] =
                              for {
@@ -401,9 +400,7 @@ object GossipServiceCasperTestNodeFactory {
                          maxPossibleDepth = Int.MaxValue,
                          minBlockCountToCheckWidth = Int.MaxValue,
                          maxBondingRate = 1.0,
-                         maxDepthAncestorsRequest = 1, // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
-                         maxInitialBlockCount = Int.MaxValue,
-                         isInitialRef = Ref.unsafe[F, Boolean](false)
+                         maxDepthAncestorsRequest = 1 // Just so we don't see the full DAG being synced all the time. We should have justifications for early stop.
                        )
 
         server <- GossipServiceServer[F](
@@ -426,8 +423,9 @@ object GossipServiceCasperTestNodeFactory {
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
 
-                     override def listTips =
-                       ???
+                     override def listTips = ???
+
+                     override def dagTopoSort(startRank: Long, endRank: Long) = ???
                    },
                    synchronizer = synchronizer,
                    downloadManager = downloadManager,
@@ -548,5 +546,8 @@ object GossipServiceCasperTestNodeFactory {
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] = ???
+    override def streamDagSliceBlockSummaries(
+        request: StreamDagSliceBlockSummariesRequest
+    ): Iterant[F, BlockSummary] = ???
   }
 }

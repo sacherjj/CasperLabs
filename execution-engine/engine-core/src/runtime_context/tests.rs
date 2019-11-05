@@ -9,10 +9,11 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{
-    AccountActivity, ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
-    RemoveKeyFailure, SetThresholdFailure, Weight,
+    ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+    SetThresholdFailure, Weight,
 };
 use contract_ffi::value::{self, Account, Contract, ProtocolVersion, Value};
+use engine_shared::additive_map::AdditiveMap;
 use engine_shared::gas::Gas;
 use engine_shared::newtypes::CorrelationId;
 use engine_shared::transform::Transform;
@@ -35,7 +36,7 @@ fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemory
     let root_hash = hist.empty_root_hash;
     let transform = Transform::Write(value::Value::Account(init_account.clone()));
 
-    let mut m = HashMap::new();
+    let mut m = AdditiveMap::new();
     m.insert(init_key, transform);
     let commit_result = hist
         .commit(correlation_id, root_hash, m)
@@ -62,7 +63,6 @@ fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value
         PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
         associated_keys,
         Default::default(),
-        AccountActivity::new(BlockTime::new(0), BlockTime::new(100)),
     );
     let key = Key::Account(addr);
 

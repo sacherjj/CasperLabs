@@ -41,7 +41,7 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
@@ -119,11 +119,11 @@ class NodeRuntime private[node] (
                                                                           conf.server.maxMessageSize
                                                                         )
       //TODO: We may want to adjust threading model for better performance
-      implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
-                                                        connectEC = dbConnScheduler,
-                                                        transactEC = dbIOScheduler,
-                                                        conf.server.dataDir
-                                                      )
+      (writeTransactor, readTransactor) <- effects.doobieTransactors(
+                                            connectEC = dbConnScheduler,
+                                            transactEC = dbIOScheduler,
+                                            conf.server.dataDir
+                                          )
       deployStorageChunkSize = 20 //TODO: Move to config
 
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
@@ -133,6 +133,8 @@ class NodeRuntime private[node] (
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = deployStorageChunkSize,
+              readXa = readTransactor,
+              writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
                 CachingBlockStorage[Task](
                   underlyingBlockStorage,

@@ -903,7 +903,7 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  it should "reject blocks that include a invalid block pointer" in effectTest {
+  it should "reject blocks that include an invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (1L to 6L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
@@ -1174,28 +1174,6 @@ abstract class HashSetCasperTest
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
-  }
-
-  it should "fail when deploying with insufficient gas" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Task]
-
-    for {
-      deploy <- ProtoUtil.basicDeploy[Task]().map { d =>
-                 d.withBody(
-                   d.getBody.withPayment(
-                     Deploy.Code().withWasm(ByteString.copyFromUtf8("some payment code"))
-                   )
-                 )
-               }
-      _                 <- node.casperEff.deploy(deploy)
-      createBlockResult <- MultiParentCasper[Task].createBlock
-      Created(block)    = createBlockResult
-    } yield {
-      cancelUntilFixed("FIXME: Implement cost accounting!")
-      //assert(block.body.get.deploys.head.isError)
-    }
   }
 
   it should "succeed if given enough gas for deploy" in effectTest {

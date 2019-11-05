@@ -55,14 +55,13 @@ object PrettyPrinter {
           urefs,
           purseId,
           associatedKeys,
-          actionThresholds,
-          accountActivity
+          actionThresholds
         )
         ) =>
       s"Account(${buildString(pk)}, {${urefs.map(buildString).mkString(",")}}, ${purseId
         .map(buildString)}, {${associatedKeys
         .map(buildString)
-        .mkString(",")}, {${actionThresholds.map(buildString)}}, {${accountActivity.map(buildString)})"
+        .mkString(",")}, {${actionThresholds.map(buildString)}})"
     case Value.Value.BytesValue(bytes) => s"ByteArray(${buildString(bytes)})"
     case Value.Value.Contract(Contract(body, urefs, protocolVersion)) =>
       s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
@@ -128,9 +127,6 @@ object PrettyPrinter {
 
   private def buildString(at: Account.ActionThresholds): String =
     s"Deployment threshold ${at.deploymentThreshold}, Key management threshold: ${at.keyManagementThreshold}"
-
-  private def buildString(ac: Account.AccountActivity): String =
-    s"Last deploy: ${ac.deploymentLastUsed}, last key management change: ${ac.keyManagementLastUsed}, inactivity period limit: ${ac.inactivityPeriodLimit}"
 
   def buildString(d: consensus.Deploy): String =
     s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)})"

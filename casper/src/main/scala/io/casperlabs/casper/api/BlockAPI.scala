@@ -55,21 +55,8 @@ object BlockAPI {
   def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: FinalityDetector: Log: Metrics](
       d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
-    def check(msg: String)(f: F[Boolean]): F[Unit] =
-      f flatMap { ok =>
-        MonadThrowable[F].raiseError(InvalidArgument(msg)).whenA(!ok)
-      }
-
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
-      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
-      _ <- Validation[F].deployHeader(d) >>= { headerErrors =>
-            MonadThrowable[F]
-              .raiseError(InvalidArgument(headerErrors.map(_.errorMessage).mkString("\n")))
-              .whenA(headerErrors.nonEmpty)
-          }
-
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
