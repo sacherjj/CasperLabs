@@ -1226,9 +1226,9 @@ abstract class HashSetCasperTest
       deploy <- deploySomething(nodes, 0)
       // Deploy a few more things to both nodes so things get finalized.
       // NOTE: A single node currently doesn't finalize anything.
-      _      <- deploySomething(nodes, 1)
-      _      <- deploySomething(nodes, 0)
-      _      <- deploySomething(nodes, 1)
+      _ <- deploySomething(nodes, 1)
+      _ <- deploySomething(nodes, 0)
+      _ <- deploySomething(nodes, 1)
 
       // The first deploy should be finalized, so not stop it appearing again as pending.
       processedDeploys <- nodes(0).deployStorage.reader.readProcessed
