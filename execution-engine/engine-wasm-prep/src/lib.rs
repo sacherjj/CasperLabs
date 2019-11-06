@@ -50,7 +50,7 @@ impl Preprocessor {
     }
 
     pub fn preprocess(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-        let deserialized_module = self.deserialize(module_bytes)?;
+        let deserialized_module = deserialize(module_bytes)?;
         let ext_mod = externalize_mem(deserialized_module, None, self.mem_pages);
         let gas_mod = inject_gas_counters(ext_mod, &self.wasm_costs)?;
         let module =
@@ -58,16 +58,15 @@ impl Preprocessor {
                 .map_err(|_| PreprocessingError::StackLimiterError)?;
         Ok(module)
     }
+}
 
-    // returns a parity Module from bytes without making modifications or limits
-    pub fn deserialize(&self, module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-        let from_parity_err = |err: ParityWasmError| {
-            PreprocessingError::DeserializeError(err.description().to_owned())
-        };
-        let module =
-            parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
-        Ok(module)
-    }
+// Returns a parity Module from bytes without making modifications or limits
+pub fn deserialize(module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
+    let from_parity_err =
+        |err: ParityWasmError| PreprocessingError::DeserializeError(err.description().to_owned());
+    let module =
+        parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(from_parity_err)?;
+    Ok(module)
 }
 
 fn gas_rules(wasm_costs: &WasmCosts) -> rules::Set {
