@@ -1,9 +1,10 @@
-use core::fmt::Write;
+use alloc::format;
+use alloc::vec::Vec;
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
+use hex_fmt::HexFmt;
 
-use crate::alloc::vec::Vec;
 use crate::base16;
 use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
 use crate::contract_api::{ContractRef, TURef};
@@ -60,25 +61,14 @@ impl Key {
     }
 }
 
-// There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
-// I can't impl them b/c they're not living in current crate.
-/// Creates a hex string from [u8; 32] table.
-pub fn addr_to_hex(addr: &[u8; 32]) -> String {
-    let mut str = String::with_capacity(64);
-    for b in addr {
-        write!(&mut str, "{:02x}", b).unwrap();
-    }
-    str
-}
-
 impl core::fmt::Display for Key {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Key::Account({})", addr_to_hex(addr)),
-            Key::Hash(addr) => write!(f, "Key::Hash({})", addr_to_hex(addr)),
+            Key::Account(addr) => write!(f, "Key::Account({})", HexFmt(addr)),
+            Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
             // URef(…).
-            Key::Local(hash) => write!(f, "Key::Local({})", addr_to_hex(hash)),
+            Key::Local(hash) => write!(f, "Key::Local({})", HexFmt(hash)),
         }
     }
 }
@@ -286,11 +276,14 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
+    use alloc::format;
+    use alloc::string::String;
+    use alloc::vec;
+    use alloc::vec::Vec;
+
     use crate::bytesrepr::{Error, FromBytes};
     use crate::key::Key;
     use crate::uref::{AccessRights, URef};
-    use alloc::string::String;
-    use alloc::vec::Vec;
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)

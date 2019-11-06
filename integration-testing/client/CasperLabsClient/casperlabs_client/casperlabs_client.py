@@ -46,12 +46,12 @@ def _hex(text, as_utf8):
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
-from .control_pb2_grpc import ControlServiceStub
+from . import control_pb2_grpc
 from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2 as casper
-from .casper_pb2_grpc import CasperServiceStub
+from . import casper_pb2_grpc
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 from . import consensus_pb2 as consensus, state_pb2 as state
@@ -410,7 +410,7 @@ class CasperLabsClient:
 
         if node_id:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, node_id, certificate_file
+                host, port, casper_pb2_grpc.CasperServiceStub, node_id, certificate_file
             )
             self.controlService = SecureGRPCService(
                 # We currently assume that if node_id is given then
@@ -421,14 +421,16 @@ class CasperLabsClient:
                 # certificate on the client side.
                 host,
                 port_internal,
-                ControlServiceStub,
+                control_pb2_grpc.ControlServiceStub,
                 node_id,
                 certificate_file,
             )
         else:
-            self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
+            self.casperService = InsecureGRPCService(
+                host, port, casper_pb2_grpc.CasperServiceStub
+            )
             self.controlService = InsecureGRPCService(
-                host, port_internal, ControlServiceStub
+                host, port_internal, control_pb2_grpc.ControlServiceStub
             )
 
     @api
@@ -447,6 +449,8 @@ class CasperLabsClient:
         session_hash: bytes = None,
         session_name: str = None,
         session_uref: bytes = None,
+        ttl_millis: int = 0,
+        dependencies: list = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -489,6 +493,10 @@ class CasperLabsClient:
             timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=blake2b_hash(_serialize(body)),
+            ttl_millis=ttl_millis,
+            dependencies=dependencies
+            and [bytes.fromhex(d) for d in dependencies]
+            or [],
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
@@ -524,6 +532,8 @@ class CasperLabsClient:
         session_hash: bytes = None,
         session_name: str = None,
         session_uref: bytes = None,
+        ttl_millis: int = 0,
+        dependencies=None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -551,6 +561,10 @@ class CasperLabsClient:
                               executing account) to be called in the payment.
         :param payment-uref:  URef of the stored contract to be called in the
                               payment; base16 encoded.
+        :ttl_millis:          Time to live. Time (in milliseconds) that the
+                              deploy will remain valid for.
+        :dependencies:        List of deploy hashes (base16 encoded) which
+                              must be executed before this deploy.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -568,6 +582,8 @@ class CasperLabsClient:
             session_hash=session_hash,
             session_name=session_name,
             session_uref=session_uref,
+            ttl_millis=ttl_millis,
+            dependencies=dependencies,
         )
 
         deploy = self.sign_deploy(
@@ -860,7 +876,7 @@ def _deploy_kwargs(args, private_key_accepted=True):
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
 
-    if args.payment_amount is not None:
+    if args.payment_amount:
         args.payment_args = ABI.args_to_json(
             ABI.args([ABI.big_int("amount", int(args.payment_amount))])
         )
@@ -888,6 +904,8 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
+        ttl_millis=args.ttl,
+        dependencies=args.dependencies,
     )
     if private_key_accepted:
         d["private_key"] = args.private_key or None
@@ -997,8 +1015,7 @@ def show_deploys_command(casperlabs_client, args):
 def deploy_options(keys_required=False, private_key_accepted=True):
     return ([
         [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-        # TODO: handling of dependencies not implemented yet. It is not clear what the format of <arg>... is (list of args).
-        [('--dependencies',), dict(required=False, type=str, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+        [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
         [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
@@ -1011,6 +1028,7 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
+        [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
         [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
            and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]

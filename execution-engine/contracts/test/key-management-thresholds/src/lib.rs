@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::string::String;
 
 use contract_ffi::contract_api::{account, runtime, Error};

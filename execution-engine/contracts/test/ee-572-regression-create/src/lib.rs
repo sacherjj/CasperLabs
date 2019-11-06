@@ -1,11 +1,9 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::string::{String, ToString};
+use alloc::vec;
 use core::clone::Clone;
 use core::convert::Into;
 

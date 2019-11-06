@@ -1,5 +1,3 @@
-extern crate protoc_rust_grpc;
-
 fn main() {
     println!("cargo:rerun-if-changed=../../protobuf/io/casperlabs/casper/consensus/state.proto");
     println!("cargo:rerun-if-changed=../../protobuf/io/casperlabs/ipc/ipc.proto");

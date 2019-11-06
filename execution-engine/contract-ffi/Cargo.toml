@@ -1,6 +1,6 @@
 [package]
 name = "casperlabs-contract-ffi"
-version = "0.18.0"
+version = "0.19.0"
 authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mateusz@protonmail.ch>"]
 edition = "2018"
 description = "Library for developing CasperLabs smart contracts."
@@ -17,10 +17,11 @@ failure = { version = "0.1.5", default-features = false, features = ["failure_de
 num-traits = { version = "0.2.8", default-features = false }
 num-derive = { version = "0.2.5", default-features = false }
 wee_alloc = "0.4.3"
-uint = { version = "0.7.1", default-features = false, features = [] }
+uint = { version = "0.8.2", default-features = false, features = [] }
 proptest = { version = "0.9.2", default-features = false, optional = true }
 bitflags = "1.0.4"
 binascii = "0.1.2"
+hex_fmt = "0.3.0"
 
 [dev-dependencies]
 proptest = { version = "0.9.2", default-features = false }

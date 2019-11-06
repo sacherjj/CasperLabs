@@ -1,16 +1,18 @@
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec;
+
+use proptest::collection::{btree_map, vec};
+use proptest::prelude::*;
+use proptest::{array, bits, option, result};
+
 use crate::execution::Phase;
 use crate::key::*;
 use crate::uref::{AccessRights, URef};
 use crate::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
-    MAX_KEYS,
+    ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, MAX_KEYS,
 };
 use crate::value::*;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use proptest::collection::{btree_map, vec};
-use proptest::prelude::*;
-use proptest::{array, bits, option, result};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -83,20 +85,12 @@ pub fn action_threshold_arb() -> impl Strategy<Value = ActionThresholds> {
     Just(Default::default())
 }
 
-pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
-    Just(AccountActivity::new(
-        BlockTime::new(1),
-        BlockTime::new(1000),
-    ))
-}
-
 prop_compose! {
     pub fn account_arb()(
         pub_key in u8_slice_32(),
         urefs in named_keys_arb(3),
         purse_id in uref_arb(),
         thresholds in action_threshold_arb(),
-        account_activity in account_activity_arb(),
         mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
     ) -> Account {
             let purse_id = PurseId::new(purse_id);
@@ -107,7 +101,6 @@ prop_compose! {
                 purse_id,
                 associated_keys.clone(),
                 thresholds.clone(),
-                account_activity.clone(),
             )
     }
 }

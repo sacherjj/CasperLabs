@@ -1,6 +1,10 @@
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use alloc::vec;
 use alloc::vec::Vec;
+
+use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
+
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
 
 pub const PHASE_SIZE: usize = 1;
 

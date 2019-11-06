@@ -1,5 +1,7 @@
-use num_traits::{FromPrimitive, ToPrimitive};
 use std::convert::TryFrom;
+
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 
 #[derive(Debug, PartialEq, FromPrimitive, ToPrimitive)]
 #[repr(usize)]

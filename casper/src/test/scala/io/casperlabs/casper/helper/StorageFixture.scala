@@ -69,12 +69,12 @@ object StorageFixture {
         )
 
     for {
-      db                                     <- createDbFile
-      jdbcUrl                                = createJdbcUrl(db)
-      implicit0(xa: Transactor.Aux[F, Unit]) = createTransactor(jdbcUrl)
-      _                                      <- initTables(jdbcUrl)
-      storage                                <- SQLiteStorage.create[F]()
-      indexedDagStorage                      <- IndexedDagStorage.create[F](storage)
+      db                <- createDbFile
+      jdbcUrl           = createJdbcUrl(db)
+      xa                = createTransactor(jdbcUrl)
+      _                 <- initTables(jdbcUrl)
+      storage           <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
+      indexedDagStorage <- IndexedDagStorage.create[F](storage)
     } yield (storage, indexedDagStorage, storage)
   }
 }

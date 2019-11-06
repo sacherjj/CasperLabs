@@ -1,11 +1,4 @@
-#[macro_use]
-extern crate criterion;
-extern crate contract_ffi;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-
-use criterion::{Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
 use casperlabs_engine_tests::support::test_support::{

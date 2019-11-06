@@ -46,7 +46,9 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 ) -> T {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
-    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args).map(|args| to_ptr(&args)).unwrap();
+    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
+        .map(|args| to_ptr(&args))
+        .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
     let res_size = unsafe {
         ext_ffi::call_contract(

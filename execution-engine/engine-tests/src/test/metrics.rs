@@ -1,4 +1,4 @@
-use lazy_static;
+use lazy_static::lazy_static;
 
 use contract_ffi::key::Key;
 use engine_core::engine_state::EngineConfig;

@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-extern crate create_purse_01;
-
 use contract_ffi::contract_api::{runtime, Error, TURef};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 use contract_ffi::uref::URef;

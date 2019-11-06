@@ -20,6 +20,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.FilesAPI
 import org.apache.commons.io._
+import scalapb_circe.JsonFormat
 
 import scala.concurrent.duration._
 import scala.language.higherKinds
@@ -44,17 +45,37 @@ object DeployRuntime {
       ignoreOutput
     )
 
-  def showBlock[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showBlock(hash).map(_.map(Printer.printToUnicodeString)))
+  def showBlock[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(
+      DeployService[F]
+        .showBlock(hash)
+        .map(_.map(Printer.print(_, bytesStandard, json)))
+    )
 
-  def showDeploys[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showDeploys(hash))
+  def showDeploys[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showDeploys(hash, bytesStandard, json))
 
-  def showDeploy[F[_]: Sync: DeployService](hash: String): F[Unit] =
-    gracefulExit(DeployService[F].showDeploy(hash))
+  def showDeploy[F[_]: Sync: DeployService](
+      hash: String,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showDeploy(hash, bytesStandard, json))
 
-  def showBlocks[F[_]: Sync: DeployService](depth: Int): F[Unit] =
-    gracefulExit(DeployService[F].showBlocks(depth))
+  def showBlocks[F[_]: Sync: DeployService](
+      depth: Int,
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit(DeployService[F].showBlocks(depth, bytesStandard, json))
 
   private def optionalArg[T](name: String, maybeValue: Option[T])(
       f: T => Deploy.Arg.Value.Value
@@ -136,12 +157,14 @@ object DeployRuntime {
       blockHash: String,
       keyVariant: String,
       keyValue: String,
-      path: String
+      path: String,
+      bytesStandard: Boolean,
+      json: Boolean
   ): F[Unit] =
     gracefulExit(
       DeployService[F]
         .queryState(blockHash, keyVariant, keyValue, path)
-        .map(_.map(Printer.printToUnicodeString(_)))
+        .map(_.map(Printer.print(_, bytesStandard, json)))
     )
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
@@ -363,6 +386,7 @@ object DeployRuntime {
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
+          .withChainName(deployConfig.chainName)
       )
       .withBody(
         consensus.Deploy
@@ -391,6 +415,22 @@ object DeployRuntime {
         deploy <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
         result <- DeployService[F].deploy(deploy)
       } yield result
+    }
+
+  /**
+    *
+    * @param bytesStandard Use standard Base64 for JSON or ASCII escaped for Protobuf bytes encoding instead of Base16
+    * @param json          Use JSON instead of Protobuf text format
+    */
+  def printDeploy[F[_]: Sync: DeployService](
+      deployBA: Array[Byte],
+      bytesStandard: Boolean,
+      json: Boolean
+  ): F[Unit] =
+    gracefulExit {
+      (for {
+        deploy <- MonadThrowable[F].fromTry(Try(Deploy.parseFrom(deployBA)))
+      } yield Printer.print(deploy, bytesStandard, json)).attempt
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](

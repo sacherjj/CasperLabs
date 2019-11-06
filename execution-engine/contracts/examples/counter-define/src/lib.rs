@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;

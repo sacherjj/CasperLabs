@@ -2,7 +2,6 @@
 use core::array::TryFromSliceError;
 use std::convert::TryFrom;
 use std::fmt;
-use std::ops::Deref;
 
 use blake2::digest::{Input, VariableOutput};
 use blake2::VarBlake2b;
@@ -11,7 +10,7 @@ use uuid::Uuid;
 
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 
-const BLAKE2B_DIGEST_LENGTH: usize = 32;
+pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
 
 /// Represents a 32-byte BLAKE2b hash digest
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -97,42 +96,6 @@ impl ToBytes for Blake2bHash {
 impl FromBytes for Blake2bHash {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         FromBytes::from_bytes(bytes).map(|(arr, rem)| (Blake2bHash(arr), rem))
-    }
-}
-
-/// Represents a validated value.  Validation is user-specified.
-pub struct Validated<T>(T);
-
-impl<T> Validated<T> {
-    /// Creates a validated value from a given value and validation function.
-    pub fn new<E, F>(v: T, guard: F) -> Result<Validated<T>, E>
-    where
-        F: Fn(&T) -> Result<(), E>,
-    {
-        guard(&v).map(|_| Validated(v))
-    }
-
-    /// A validation function which always succeeds.
-    pub fn valid(_v: &T) -> Result<(), !> {
-        Ok(())
-    }
-
-    pub fn into_raw(self) -> T {
-        self.0
-    }
-}
-
-impl<T: Clone> Clone for Validated<T> {
-    fn clone(&self) -> Self {
-        Validated(self.0.clone())
-    }
-}
-
-impl<T: Clone> Deref for Validated<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.0
     }
 }
 

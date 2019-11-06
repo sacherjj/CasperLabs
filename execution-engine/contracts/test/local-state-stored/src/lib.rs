@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-extern crate local_state;
-
 use contract_ffi::contract_api::{runtime, storage, Error};
 use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
 

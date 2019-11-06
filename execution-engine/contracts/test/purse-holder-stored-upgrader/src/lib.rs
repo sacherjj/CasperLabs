@@ -1,10 +1,9 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::string::{String, ToString};
+use alloc::vec;
 
 use contract_ffi::contract_api::TURef;
 use contract_ffi::contract_api::{runtime, storage, system, Error};

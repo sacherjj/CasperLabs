@@ -1,13 +1,12 @@
 #![cfg_attr(not(test), no_std)]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 mod queue;
 mod stakes;
 
 use alloc::string::String;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use contract_ffi::contract_api::{runtime, system};

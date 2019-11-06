@@ -97,12 +97,12 @@ pub enum Error {
     DuplicateKey,
     /// Unable to add/update/remove new associated key due to insufficient permissions.
     PermissionDenied,
-    /// Unable to update/remove a key that does exist
+    /// Unable to update/remove a key that does exist.
     MissingKey,
-    /// Unable to update/remove a key which would violate action threshold constraints
+    /// Unable to update/remove a key which would violate action threshold constraints.
     ThresholdViolation,
     /// New threshold should be lower or equal than deployment threshold.
-    KeyManagmentThresholdError,
+    KeyManagementThresholdError,
     /// New threshold should be lower or equal than key management threshold.
     DeploymentThresholdError,
     /// Unable to set action threshold due to insufficient permissions.
@@ -111,6 +111,10 @@ pub enum Error {
     InsufficientTotalWeight,
     /// Returns when contract tries to obtain URef to a system contract that does not exist.
     InvalidSystemContract,
+    /// Failed to create a new purse.
+    PurseNotCreated,
+    /// An unhandled value, likely representing a bug in the code.
+    Unhandled,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -164,7 +168,7 @@ impl From<RemoveKeyFailure> for Error {
 impl From<SetThresholdFailure> for Error {
     fn from(error: SetThresholdFailure) -> Self {
         match error {
-            SetThresholdFailure::KeyManagementThresholdError => Error::KeyManagmentThresholdError,
+            SetThresholdFailure::KeyManagementThresholdError => Error::KeyManagementThresholdError,
             SetThresholdFailure::DeploymentThresholdError => Error::DeploymentThresholdError,
             SetThresholdFailure::PermissionDeniedError => Error::PermissionDeniedError,
             SetThresholdFailure::InsufficientTotalWeight => Error::InsufficientTotalWeight,
@@ -221,11 +225,13 @@ impl From<Error> for u32 {
             Error::PermissionDenied => 24,
             Error::MissingKey => 25,
             Error::ThresholdViolation => 26,
-            Error::KeyManagmentThresholdError => 27,
+            Error::KeyManagementThresholdError => 27,
             Error::DeploymentThresholdError => 28,
             Error::PermissionDeniedError => 29,
             Error::InsufficientTotalWeight => 30,
             Error::InvalidSystemContract => 31,
+            Error::PurseNotCreated => 32,
+            Error::Unhandled => 33,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -264,11 +270,13 @@ impl Debug for Error {
             Error::PermissionDenied => write!(f, "Error::PermissionDenied")?,
             Error::MissingKey => write!(f, "Error::MissingKey")?,
             Error::ThresholdViolation => write!(f, "Error::ThresholdViolation")?,
-            Error::KeyManagmentThresholdError => write!(f, "Error::KeyManagementThresholdError")?,
+            Error::KeyManagementThresholdError => write!(f, "Error::KeyManagementThresholdError")?,
             Error::DeploymentThresholdError => write!(f, "Error::DeploymentThresholdError")?,
             Error::PermissionDeniedError => write!(f, "Error::PermissionDeniedError")?,
             Error::InsufficientTotalWeight => write!(f, "Error::InsufficientTotalWeight")?,
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
+            Error::PurseNotCreated => write!(f, "Error::PurseNotCreated")?,
+            Error::Unhandled => write!(f, "Error::Unhandled")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -313,21 +321,22 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         24 => Err(Error::PermissionDenied),
         25 => Err(Error::MissingKey),
         26 => Err(Error::ThresholdViolation),
-        27 => Err(Error::KeyManagmentThresholdError),
+        27 => Err(Error::KeyManagementThresholdError),
         28 => Err(Error::DeploymentThresholdError),
         29 => Err(Error::PermissionDeniedError),
         30 => Err(Error::InsufficientTotalWeight),
         31 => Err(Error::InvalidSystemContract),
+        32 => Err(Error::PurseNotCreated),
+        33 => Err(Error::Unhandled),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
+            } else if value >= POS_ERROR_OFFSET as i32 && value <= RESERVED_ERROR_MAX as i32 {
+                Err(Error::ProofOfStake(value as u8))
             } else if value >= MINT_ERROR_OFFSET as i32 && value < POS_ERROR_OFFSET as i32 {
                 Err(Error::Mint(value as u8))
-            } else if value >= POS_ERROR_OFFSET as i32 {
-                Err(Error::ProofOfStake(value as u8))
             } else {
-                // TODO: rethink this
-                panic!("unhandled value: {}", value)
+                Err(Error::Unhandled)
             }
         }
     }
@@ -335,8 +344,10 @@ pub fn result_from(value: i32) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
+    use core::{i32, u16, u8};
+
     use super::*;
-    use core::{u16, u8};
 
     fn round_trip(result: Result<(), Error>) {
         let code = i32_from(result);
@@ -372,6 +383,14 @@ mod tests {
             &format!("{:?}", Error::User(u16::MAX))
         );
 
+        assert_eq!(Err(Error::Unhandled), result_from(i32::MAX));
+        assert_eq!(
+            Err(Error::Unhandled),
+            result_from(MINT_ERROR_OFFSET as i32 - 1)
+        );
+        assert_eq!(Err(Error::Unhandled), result_from(-1));
+        assert_eq!(Err(Error::Unhandled), result_from(i32::MIN));
+
         round_trip(Ok(()));
         round_trip(Err(Error::None));
         round_trip(Err(Error::MissingArgument));
@@ -399,11 +418,13 @@ mod tests {
         round_trip(Err(Error::PermissionDenied));
         round_trip(Err(Error::MissingKey));
         round_trip(Err(Error::ThresholdViolation));
-        round_trip(Err(Error::KeyManagmentThresholdError));
+        round_trip(Err(Error::KeyManagementThresholdError));
         round_trip(Err(Error::DeploymentThresholdError));
         round_trip(Err(Error::PermissionDeniedError));
         round_trip(Err(Error::InsufficientTotalWeight));
         round_trip(Err(Error::InvalidSystemContract));
+        round_trip(Err(Error::PurseNotCreated));
+        round_trip(Err(Error::Unhandled));
         round_trip(Err(Error::Mint(0)));
         round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));

@@ -1,4 +1,4 @@
-use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder};
+use lazy_static::lazy_static;
 
 use contract_ffi::base16;
 use contract_ffi::key::Key;
@@ -6,6 +6,7 @@ use contract_ffi::value::account::PurseId;
 use contract_ffi::value::U512;
 use engine_shared::transform::Transform;
 
+use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder};
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";

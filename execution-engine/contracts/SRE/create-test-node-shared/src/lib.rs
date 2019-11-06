@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate binascii;
-extern crate contract_ffi;
-
 use binascii::ConvertError;
 
 use contract_ffi::contract_api::system::TransferredTo;

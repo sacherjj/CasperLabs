@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Mutex, Once};
 
+use lazy_static::lazy_static;
 use log::{Metadata, Record};
 use serde::Deserialize;
 use serde::Serialize;
