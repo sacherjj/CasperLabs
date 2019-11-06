@@ -6,7 +6,7 @@ activation-point-rank = 20
 protocol-version = "1.0.2"
 
 # Optional path to the file containing wasm bytecode installing new system contracts.
-installer-code-path = "installer.wasm"
+# installer-code-path = "installer.wasm"
 
 [wasm-costs]
 # Default opcode cost
