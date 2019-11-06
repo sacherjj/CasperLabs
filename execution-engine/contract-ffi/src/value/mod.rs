@@ -281,9 +281,9 @@ from_try_from_impl!(Key, Key);
 from_try_from_impl!(Account, Account);
 from_try_from_impl!(Contract, Contract);
 
-impl From<(String, key::Key)> for Value {
-    fn from(named_key: (String, key::Key)) -> Value {
-        Value::NamedKey(named_key.0, named_key.1)
+impl From<(String, Key)> for Value {
+    fn from((name, key): (String, Key)) -> Value {
+        Value::NamedKey(name, key)
     }
 }
 
