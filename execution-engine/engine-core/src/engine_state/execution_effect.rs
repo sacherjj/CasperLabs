@@ -1,6 +1,5 @@
 use contract_ffi::key::Key;
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::transform::Transform;
+use engine_shared::{additive_map::AdditiveMap, transform::Transform};
 
 use super::op::Op;
 

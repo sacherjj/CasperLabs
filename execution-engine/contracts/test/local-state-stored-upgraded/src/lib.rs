@@ -4,8 +4,10 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract_ffi::contract_api::{storage, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{storage, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 pub const ENTRY_FUNCTION_NAME: &str = "delegate";
 pub const CONTRACT_NAME: &str = "local_state_stored";

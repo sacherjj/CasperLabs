@@ -1,5 +1,7 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use parity_wasm::elements::Module;
 
@@ -45,8 +47,10 @@ mod tests {
 
     use contract_ffi::uref::{AccessRights, URef};
 
-    use crate::engine_state::system_contract_cache::SystemContractCache;
-    use crate::execution::{AddressGenerator, AddressGeneratorBuilder};
+    use crate::{
+        engine_state::system_contract_cache::SystemContractCache,
+        execution::{AddressGenerator, AddressGeneratorBuilder},
+    };
 
     lazy_static! {
         static ref ADDRESS_GENERATOR: Mutex<AddressGenerator> = Mutex::new(

@@ -1,8 +1,10 @@
 use engine_shared::newtypes::Blake2bHash;
 
 use super::*;
-use crate::error::{self, in_memory};
-use crate::trie_store::operations::{scan, TrieScan};
+use crate::{
+    error::{self, in_memory},
+    trie_store::operations::{scan, TrieScan},
+};
 
 fn check_scan<'a, R, S, E>(
     correlation_id: CorrelationId,

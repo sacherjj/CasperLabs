@@ -1,11 +1,11 @@
 //! Some newtypes.
 use core::array::TryFromSliceError;
-use std::convert::TryFrom;
-use std::fmt;
-use std::ops::Deref;
+use std::{convert::TryFrom, fmt, ops::Deref};
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -157,8 +157,10 @@ impl fmt::Display for CorrelationId {
 
 #[cfg(test)]
 mod tests {
-    use crate::newtypes::{Blake2bHash, CorrelationId};
-    use crate::utils;
+    use crate::{
+        newtypes::{Blake2bHash, CorrelationId},
+        utils,
+    };
     use std::hash::{Hash, Hasher};
 
     #[test]

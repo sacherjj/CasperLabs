@@ -1,5 +1,4 @@
-use std::io;
-use std::io::BufRead;
+use std::io::{self, BufRead};
 
 use engine_shared::logging::logger;
 

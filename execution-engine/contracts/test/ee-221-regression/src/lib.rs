@@ -1,7 +1,9 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, storage};
-use contract_ffi::key::Key;
+use contract_ffi::{
+    contract_api::{runtime, storage},
+    key::Key,
+};
 
 #[no_mangle]
 pub extern "C" fn call() {

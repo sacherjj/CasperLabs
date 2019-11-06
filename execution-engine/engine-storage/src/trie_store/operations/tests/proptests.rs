@@ -1,8 +1,10 @@
 use std::ops::RangeInclusive;
 
-use proptest::array;
-use proptest::collection::vec;
-use proptest::prelude::{any, proptest, Strategy};
+use proptest::{
+    array,
+    collection::vec,
+    prelude::{any, proptest, Strategy},
+};
 
 use super::*;
 

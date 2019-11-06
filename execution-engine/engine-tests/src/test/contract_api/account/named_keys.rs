@@ -1,5 +1,7 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    key::Key,
+    value::{Value, U512},
+};
 use engine_shared::transform::Transform;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};

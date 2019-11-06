@@ -109,11 +109,13 @@ use lmdb::{Database, DatabaseFlags};
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::store::Store;
-use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::trie::Trie;
-use crate::trie_store::TrieStore;
-use crate::{error, trie_store};
+use crate::{
+    error,
+    store::Store,
+    transaction_source::lmdb::LmdbEnvironment,
+    trie::Trie,
+    trie_store::{self, TrieStore},
+};
 
 /// An LMDB-backed trie store.
 ///

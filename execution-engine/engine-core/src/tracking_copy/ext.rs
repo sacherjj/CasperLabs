@@ -1,14 +1,16 @@
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::{Account, Contract, Value};
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::TypeMismatch;
+use contract_ffi::{
+    bytesrepr::ToBytes,
+    key::Key,
+    uref::URef,
+    value::{Account, Contract, Value},
+};
+use engine_shared::{motes::Motes, newtypes::CorrelationId, transform::TypeMismatch};
 use engine_storage::global_state::StateReader;
 
-use crate::execution;
-use crate::tracking_copy::{QueryResult, TrackingCopy};
+use crate::{
+    execution,
+    tracking_copy::{QueryResult, TrackingCopy},
+};
 
 pub trait TrackingCopyExt<R> {
     type Error;

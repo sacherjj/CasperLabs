@@ -1,7 +1,9 @@
 use engine_core::engine_state::Error;
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::DEFAULT_GENESIS_CONFIG;
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::DEFAULT_GENESIS_CONFIG,
+};
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
 const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];

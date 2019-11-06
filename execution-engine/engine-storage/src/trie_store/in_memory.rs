@@ -101,9 +101,9 @@
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::*;
-use crate::error::in_memory::Error;
-use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::trie_store;
+use crate::{
+    error::in_memory::Error, transaction_source::in_memory::InMemoryEnvironment, trie_store,
+};
 
 /// An in-memory trie store.
 pub struct InMemoryTrieStore {

@@ -4,12 +4,16 @@ mod tests;
 use std::time::Instant;
 
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
-use engine_shared::logging::{log_duration, log_metric, GAUGE};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
+use engine_shared::{
+    logging::{log_duration, log_metric, GAUGE},
+    newtypes::{Blake2bHash, CorrelationId},
+};
 
-use crate::transaction_source::{Readable, Writable};
-use crate::trie::{self, Parents, Pointer, Trie};
-use crate::trie_store::TrieStore;
+use crate::{
+    transaction_source::{Readable, Writable},
+    trie::{self, Parents, Pointer, Trie},
+    trie_store::TrieStore,
+};
 
 const TRIE_STORE_READ_DURATION: &str = "trie_store_read_duration";
 const TRIE_STORE_READ_GETS: &str = "trie_store_read_gets";

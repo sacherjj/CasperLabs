@@ -2,15 +2,17 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
 use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, vec::Vec};
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::contract_api::storage;
-use contract_ffi::contract_api::ContractRef;
-use contract_ffi::key::Key;
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::ToBytes,
+    contract_api::{storage, ContractRef},
+    key::Key,
+};
 
 #[no_mangle]
 pub extern "C" fn do_nothing() {

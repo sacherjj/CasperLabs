@@ -1,5 +1,7 @@
-use std::process;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    process,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use lazy_static::lazy_static;
 use serde::Serialize;

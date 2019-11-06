@@ -10,47 +10,60 @@ pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap},
+    rc::Rc,
+};
 
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, HASH_SIZE};
-use contract_ffi::system_contracts::mint;
-use contract_ffi::uref::URef;
-use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
-use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
-use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
-use engine_storage::protocol_data::ProtocolData;
-use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::Preprocessor;
-
-use self::deploy_item::DeployItem;
-pub use self::engine_config::EngineConfig;
-pub use self::error::{Error, RootNotFound};
-use self::executable_deploy_item::ExecutableDeployItem;
-use self::execution_result::ExecutionResult;
-use self::genesis::{
-    GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::ToBytes,
+    execution::Phase,
+    key::{Key, HASH_SIZE},
+    system_contracts::mint,
+    uref::{AccessRights, URef, UREF_ADDR_SIZE},
+    value::{
+        account::{BlockTime, PublicKey, PurseId},
+        Account, ProtocolVersion, Value, U512,
+    },
 };
-use self::system_contract_cache::SystemContractCache;
-use crate::engine_state::error::Error::MissingSystemContractError;
-use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
-use crate::execution::AddressGenerator;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
-use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
-use crate::KnownKeys;
+use engine_shared::{
+    additive_map::AdditiveMap,
+    gas::Gas,
+    motes::Motes,
+    newtypes::{Blake2bHash, CorrelationId, Validated},
+    transform::Transform,
+};
+use engine_storage::{
+    global_state::{CommitResult, StateProvider, StateReader},
+    protocol_data::ProtocolData,
+};
+use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+
+use self::{
+    deploy_item::DeployItem,
+    executable_deploy_item::ExecutableDeployItem,
+    execution_result::ExecutionResult,
+    genesis::{GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
+    system_contract_cache::SystemContractCache,
+};
+pub use self::{
+    engine_config::EngineConfig,
+    error::{Error, RootNotFound},
+};
+use crate::{
+    engine_state::{
+        error::Error::MissingSystemContractError,
+        upgrade::{UpgradeConfig, UpgradeResult},
+    },
+    execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
+    tracking_copy::{TrackingCopy, TrackingCopyExt},
+    KnownKeys,
+};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes

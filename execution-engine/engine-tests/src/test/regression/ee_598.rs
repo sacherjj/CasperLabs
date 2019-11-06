@@ -1,16 +1,19 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::contract_api::Error;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::Error,
+    value::{account::PublicKey, U512},
+};
 use engine_core::engine_state::genesis::GenesisAccount;
 use engine_shared::motes::Motes;
 
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    STANDARD_PAYMENT_CONTRACT,
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        STANDARD_PAYMENT_CONTRACT,
+    },
+    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT},
 };
-use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [7u8; 32];

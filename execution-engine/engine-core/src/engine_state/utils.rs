@@ -1,5 +1,4 @@
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
+use contract_ffi::value::{account::PublicKey, U512};
 
 /// In PoS, the validators are stored under named keys with names formatted as
 /// "v_<hex-formatted-PublicKey>_<bond-amount>".  This function attempts to parse such a string back
@@ -33,8 +32,7 @@ pub fn pos_validator_key_name_to_tuple(pos_key_name: &str) -> Option<(PublicKey,
 mod tests {
     use hex_fmt::HexFmt;
 
-    use contract_ffi::value::account::PublicKey;
-    use contract_ffi::value::U512;
+    use contract_ffi::value::{account::PublicKey, U512};
 
     use super::pos_validator_key_name_to_tuple;
 

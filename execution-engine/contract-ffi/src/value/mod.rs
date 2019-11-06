@@ -4,23 +4,26 @@ pub mod protocol_version;
 mod semver;
 pub mod uint;
 
-use alloc::string::String;
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
 use alloc::vec;
-use alloc::vec::Vec;
-use core::convert::TryFrom;
-use core::iter;
-use core::mem::size_of;
+use alloc::{string::String, vec::Vec};
+use core::{convert::TryFrom, iter, mem::size_of};
 
-pub use self::account::Account;
-pub use self::contract::Contract;
-pub use self::protocol_version::ProtocolVersion;
-pub use self::semver::SemVer;
-pub use self::uint::{U128, U256, U512};
-use crate::bytesrepr::{
-    Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
+pub use self::{
+    account::Account,
+    contract::Contract,
+    protocol_version::ProtocolVersion,
+    semver::SemVer,
+    uint::{U128, U256, U512},
 };
-use crate::key::{self, Key, UREF_SIZE};
-use crate::uref::URef;
+use crate::{
+    bytesrepr::{
+        Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
+    },
+    key::{self, Key, UREF_SIZE},
+    uref::URef,
+};
 
 const INT32_ID: u8 = 0;
 const BYTEARRAY_ID: u8 = 1;

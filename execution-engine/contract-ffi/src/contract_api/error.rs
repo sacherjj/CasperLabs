@@ -1,11 +1,13 @@
-use core::fmt::{self, Debug, Formatter};
-use core::{u16, u8};
+use core::{
+    fmt::{self, Debug, Formatter},
+    u16, u8,
+};
 
-use crate::bytesrepr;
-use crate::contract_api::turef::AccessRightsError;
-use crate::system_contracts::{mint, pos};
-use crate::value::account::{
-    AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
+use crate::{
+    bytesrepr,
+    contract_api::turef::AccessRightsError,
+    system_contracts::{mint, pos},
+    value::account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
 };
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`

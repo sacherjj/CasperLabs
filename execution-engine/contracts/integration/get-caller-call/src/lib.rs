@@ -4,9 +4,11 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::{runtime, ContractRef, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, ContractRef, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const GET_CALLER_KEY: &str = "get_caller";
 

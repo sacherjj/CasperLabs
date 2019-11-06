@@ -1,10 +1,14 @@
-use std::borrow::Borrow;
-use std::collections::hash_map::{IntoIter, Iter, IterMut, Keys, RandomState, Values};
-use std::collections::HashMap;
-use std::fmt::{self, Debug, Formatter};
-use std::hash::{BuildHasher, Hash};
-use std::iter::{FromIterator, IntoIterator};
-use std::ops::{AddAssign, Index};
+use std::{
+    borrow::Borrow,
+    collections::{
+        hash_map::{IntoIter, Iter, IterMut, Keys, RandomState, Values},
+        HashMap,
+    },
+    fmt::{self, Debug, Formatter},
+    hash::{BuildHasher, Hash},
+    iter::{FromIterator, IntoIterator},
+    ops::{AddAssign, Index},
+};
 
 #[derive(Clone)]
 pub struct AdditiveMap<K, V, S = RandomState>(HashMap<K, V, S>);

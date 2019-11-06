@@ -2,15 +2,17 @@
 
 extern crate alloc;
 
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
 use alloc::vec;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::ContractRef;
-use contract_ffi::contract_api::{account, runtime, system, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, ContractRef, Error as ApiError},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 #[repr(u16)]
 enum Error {
