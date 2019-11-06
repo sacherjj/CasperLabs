@@ -1,8 +1,5 @@
-use alloc::format;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::num::ParseIntError;
-use core::str;
+use alloc::{format, string::String, vec::Vec};
+use core::{num::ParseIntError, str};
 
 use failure::Fail;
 

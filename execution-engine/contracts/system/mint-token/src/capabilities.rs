@@ -1,12 +1,12 @@
-use core::convert::TryFrom;
-use core::marker::PhantomData;
+use core::{convert::TryFrom, marker::PhantomData};
 
 use contract_api::storage;
-use contract_ffi::contract_api;
-use contract_ffi::contract_api::TURef;
-use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::Value;
+use contract_ffi::{
+    contract_api::{self, TURef},
+    key::Key,
+    uref::{AccessRights, URef},
+    value::Value,
+};
 
 /// Trait representing the ability to read a value. Use case: a key
 /// for the blockdag global state (`TURef`) is obviously Readable,

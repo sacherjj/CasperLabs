@@ -4,10 +4,11 @@ extern crate alloc;
 
 use alloc::vec;
 
-use contract_ffi::contract_api::{account, runtime, system, ContractRef};
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, ContractRef},
+    key::Key,
+    value::{account::PurseId, U512},
+};
 
 fn purse_to_key(p: PurseId) -> Key {
     Key::URef(p.value())

@@ -2,14 +2,14 @@
 
 extern crate alloc;
 
-use alloc::format;
-use alloc::string::String;
+use alloc::{format, string::String};
 
-use contract_ffi::contract_api::{account, runtime, storage, system, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, storage, system, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 #[no_mangle]
 pub extern "C" fn call() {

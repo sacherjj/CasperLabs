@@ -1,27 +1,22 @@
-use std::cell::Cell;
-use std::collections::BTreeMap;
-use std::iter;
-use std::rc::Rc;
+use std::{cell::Cell, collections::BTreeMap, iter, rc::Rc};
 
 use matches::assert_matches;
-use proptest::collection::vec;
-use proptest::prelude::*;
+use proptest::{collection::vec, prelude::*};
 
-use contract_ffi::gens::*;
-use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE};
-use contract_ffi::value::{Account, Contract, ProtocolVersion, Value};
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::Transform;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::{StateProvider, StateReader};
+use contract_ffi::{
+    gens::*,
+    key::Key,
+    uref::{AccessRights, URef},
+    value::{
+        account::{AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE},
+        Account, Contract, ProtocolVersion, Value,
+    },
+};
+use engine_shared::{newtypes::CorrelationId, transform::Transform};
+use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 
+use super::{meter::count_meter::Count, AddResult, QueryResult, TrackingCopy, TrackingCopyCache};
 use crate::engine_state::op::Op;
-
-use super::meter::count_meter::Count;
-use super::{AddResult, QueryResult};
-use super::{TrackingCopy, TrackingCopyCache};
 
 struct CountingDb {
     count: Rc<Cell<i32>>,

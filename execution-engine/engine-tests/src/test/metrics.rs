@@ -2,11 +2,15 @@ use lazy_static::lazy_static;
 
 use contract_ffi::key::Key;
 use engine_core::engine_state::EngineConfig;
-use engine_shared::logging::log_level::LogLevel;
-use engine_shared::logging::log_settings::{self, LogLevelFilter, LogSettings};
-use engine_shared::logging::logger::{self, LogBufferProvider, BUFFERED_LOGGER};
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::test_utils;
+use engine_shared::{
+    logging::{
+        log_level::LogLevel,
+        log_settings::{self, LogLevelFilter, LogSettings},
+        logger::{self, LogBufferProvider, BUFFERED_LOGGER},
+    },
+    newtypes::CorrelationId,
+    test_utils,
+};
 use engine_storage::global_state::in_memory::InMemoryGlobalState;
 
 use crate::support::test_support::{self, InMemoryWasmTestBuilder};

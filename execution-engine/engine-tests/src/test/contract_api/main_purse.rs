@@ -1,6 +1,5 @@
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::{key::Key, value::Value};
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 

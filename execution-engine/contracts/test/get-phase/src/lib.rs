@@ -1,8 +1,10 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, Error};
-use contract_ffi::execution::Phase;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, Error},
+    execution::Phase,
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 #[no_mangle]
 pub extern "C" fn call() {

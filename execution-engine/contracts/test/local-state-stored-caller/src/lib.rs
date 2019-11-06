@@ -4,10 +4,11 @@ extern crate alloc;
 
 use alloc::vec;
 
-use contract_ffi::contract_api::{runtime, Error};
-use contract_ffi::contract_api::{ContractRef, TURef};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
+use contract_ffi::{
+    contract_api::{runtime, ContractRef, Error, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+};
 
 #[repr(u32)]
 enum Args {

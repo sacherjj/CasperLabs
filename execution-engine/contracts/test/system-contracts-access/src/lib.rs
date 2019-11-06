@@ -1,9 +1,10 @@
 #![no_std]
 
-use contract_ffi::contract_api::ContractRef;
-use contract_ffi::contract_api::{runtime, system, Error as ApiError};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{
+    contract_api::{runtime, system, ContractRef, Error as ApiError},
+    uref::{AccessRights, URef},
+    value::account::PublicKey,
+};
 
 #[repr(u16)]
 enum Error {

@@ -1,10 +1,10 @@
-use proptest::collection::vec;
-use proptest::option;
-use proptest::prelude::*;
+use proptest::{collection::vec, option, prelude::*};
 
-use contract_ffi::gens::{key_arb, value_arb};
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::{
+    gens::{key_arb, value_arb},
+    key::Key,
+    value::Value,
+};
 use engine_shared::newtypes::Blake2bHash;
 
 use super::{Pointer, PointerBlock, Trie};

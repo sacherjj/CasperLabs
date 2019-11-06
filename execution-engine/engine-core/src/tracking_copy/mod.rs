@@ -8,19 +8,18 @@ use std::collections::{BTreeMap, HashMap};
 
 use linked_hash_map::LinkedHashMap;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::{self, Transform, TypeMismatch};
+use contract_ffi::{key::Key, value::Value};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    newtypes::CorrelationId,
+    transform::{self, Transform, TypeMismatch},
+};
 use engine_storage::global_state::StateReader;
 
-use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::engine_state::op::Op;
+use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
 pub use self::ext::TrackingCopyExt;
-use self::meter::heap_meter::HeapSize;
-use self::meter::Meter;
+use self::meter::{heap_meter::HeapSize, Meter};
 
 #[derive(Debug)]
 pub enum QueryResult {

@@ -2,12 +2,13 @@
 
 extern crate alloc;
 
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::Value;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::Value,
+};
 
 const HELLO_NAME_KEY: &str = "hello_name";
 const HELLOWORLD_KEY: &str = "helloworld";

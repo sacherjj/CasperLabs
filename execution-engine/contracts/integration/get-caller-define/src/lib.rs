@@ -4,8 +4,10 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 
-use contract_ffi::contract_api::{runtime, storage};
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{
+    contract_api::{runtime, storage},
+    value::account::PublicKey,
+};
 
 const GET_CALLER_EXT: &str = "get_caller_ext";
 const GET_CALLER_KEY: &str = "get_caller";
