@@ -7,7 +7,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil

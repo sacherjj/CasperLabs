@@ -14,7 +14,6 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._

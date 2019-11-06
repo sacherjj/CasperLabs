@@ -9,10 +9,6 @@ import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.BlockSummary
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}

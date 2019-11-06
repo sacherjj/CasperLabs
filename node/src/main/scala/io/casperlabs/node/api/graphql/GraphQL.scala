@@ -7,7 +7,6 @@ import cats.implicits._
 import fs2.concurrent.Queue
 import fs2.{Pipe, Stream}
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.GraphQLQuery._
