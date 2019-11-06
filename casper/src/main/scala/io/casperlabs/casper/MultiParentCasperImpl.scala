@@ -177,9 +177,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                    block,
                    lastFinalizedBlockHash
                  )
-        changed <- result.fold(
-                    LastFinalizedBlockHashContainer[F].set(lastFinalizedBlockHash).as(false)
-                  ) {
+        changed <- result.fold(false.pure[F]) {
                     case CommitteeWithConsensusValue(validator, quorum, consensusValue) =>
                       Log[F].info(
                         s"New last finalized block hash is ${PrettyPrinter.buildString(consensusValue)}."
