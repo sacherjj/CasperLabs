@@ -12,14 +12,14 @@ const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
 const DONATION_AMOUNT: u64 = 1;
 const VICTIM_ADDR: [u8; 32] = [42; 32];
 
-#[ignore]
-#[test]
-fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
-    let victim_initial_funds = DEFAULT_PAYMENT.as_u64() * 10;
+lazy_static! {
+    static ref VICTIM_INITIAL_FUNDS: U512 = *DEFAULT_PAYMENT * 10;
+}
 
+fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), victim_initial_funds);
+        let args = (PublicKey::new(VICTIM_ADDR), VICTIM_INITIAL_FUNDS.as_u64());
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };
@@ -41,14 +41,20 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
         .commit()
         .finish();
 
-    let victim_account = result
-        .builder()
+    InMemoryWasmTestBuilder::from_result(result)
+}
+
+#[ignore]
+#[test]
+fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
+    let mut builder = setup();
+
+    let victim_account = builder
         .get_account(VICTIM_ADDR)
         .expect("should have victim account");
     let victim_purse_id = victim_account.purse_id();
 
-    let default_account = result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have default account");
     let steal_funds = default_account
@@ -74,7 +80,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
-    let result_2 = InMemoryWasmTestBuilder::from_result(result)
+    let result_2 = builder
         .exec(exec_request_3)
         .expect_success()
         .commit()
@@ -92,7 +98,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
 
     assert_eq!(
         victim_balance,
-        U512::from(victim_initial_funds) - gas_cost.value() - DONATION_AMOUNT,
+        *VICTIM_INITIAL_FUNDS - gas_cost.value() - DONATION_AMOUNT,
     );
 
     assert_eq!(
@@ -104,45 +110,17 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
 #[ignore]
 #[test]
 fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
-    let victim_initial_funds = DEFAULT_PAYMENT.as_u64() * 10;
+    let mut builder = setup();
 
-    // Creates victim account
-    let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), victim_initial_funds);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
-            .build()
-    };
-
-    // Deploy contract
-    let exec_request_2 = {
-        let args = ("install".to_string(),);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_599_REGRESSION, args)
-            .build()
-    };
-
-    let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .expect_success()
-        .commit()
-        .finish();
-
-    let victim_account = result
-        .builder()
+    let victim_account = builder
         .get_account(VICTIM_ADDR)
         .expect("should have victim account");
 
-    let default_account = result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have default account");
 
-    let default_account_balance = result
-        .builder()
-        .get_purse_balance(default_account.purse_id());
+    let default_account_balance = builder.get_purse_balance(default_account.purse_id());
 
     let steal_funds = default_account
         .named_keys()
@@ -167,8 +145,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
-    println!("main transfer");
-    let result_2 = InMemoryWasmTestBuilder::from_result(result)
+    let result_2 = builder
         .exec(exec_request_3)
         .expect_success()
         .commit()
@@ -188,7 +165,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
 
     assert_eq!(
         victim_balance,
-        U512::from(victim_initial_funds) - gas_cost.value() - DONATION_AMOUNT,
+        *VICTIM_INITIAL_FUNDS - gas_cost.value() - DONATION_AMOUNT,
     );
 
     // In this variant of test `donation_box` is left unchanged i.e. zero balance
@@ -211,45 +188,17 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
 #[ignore]
 #[test]
 fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
-    let victim_initial_funds = DEFAULT_PAYMENT.as_u64() * 10;
+    let mut builder = setup();
 
-    // Creates victim account
-    let exec_request_1 = {
-        let args = (PublicKey::new(VICTIM_ADDR), victim_initial_funds);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
-            .build()
-    };
-
-    // Deploy contract
-    let exec_request_2 = {
-        let args = ("install".to_string(),);
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_599_REGRESSION, args)
-            .build()
-    };
-
-    let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&DEFAULT_GENESIS_CONFIG)
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .expect_success()
-        .commit()
-        .finish();
-
-    let victim_account = result
-        .builder()
+    let victim_account = builder
         .get_account(VICTIM_ADDR)
         .expect("should have victim account");
 
-    let default_account = result
-        .builder()
+    let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have default account");
 
-    let default_account_balance = result
-        .builder()
-        .get_purse_balance(default_account.purse_id());
+    let default_account_balance = builder.get_purse_balance(default_account.purse_id());
 
     let steal_funds = default_account
         .named_keys()
@@ -270,7 +219,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
-    let result_2 = InMemoryWasmTestBuilder::from_result(result)
+    let result_2 = builder
         .exec(exec_request_3)
         .expect_success()
         .commit()
@@ -290,7 +239,7 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
 
     assert_eq!(
         victim_balance,
-        U512::from(victim_initial_funds) - gas_cost.value() - DONATION_AMOUNT,
+        *VICTIM_INITIAL_FUNDS - gas_cost.value() - DONATION_AMOUNT,
     );
 
     // In this variant of test `donation_box` is left unchanged i.e. zero balance

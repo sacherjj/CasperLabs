@@ -26,8 +26,8 @@ const TRANSFER_TO_ACCOUNT: &str = "transfer_to_account";
 
 enum DelegateArg {
     Method = 0,
-    ContractKey,
-    SubContractMethodFwd,
+    ContractKey = 1,
+    SubContractMethodFwd = 2,
 }
 
 enum TransferFunds {
