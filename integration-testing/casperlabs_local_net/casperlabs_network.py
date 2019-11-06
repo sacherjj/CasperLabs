@@ -291,6 +291,13 @@ class OneNodeNetwork(CasperLabsNetwork):
         return config
 
 
+class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
+    def docker_config(self, account):
+        config = super().docker_config(account)
+        config.chainspec_directory = "test-chainspec"
+        return config
+
+
 class ReadOnlyNodeNetwork(OneNodeNetwork):
     is_payment_code_enabled = True
 
