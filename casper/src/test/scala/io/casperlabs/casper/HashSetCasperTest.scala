@@ -1201,40 +1201,53 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  ignore should "not execute deploys which are already in the past" in effectTest {
-    val (validatorKey, validator) = Ed25519.newKeyPair
-    val wallets                   = Map(validator -> 10000L)
-    val bonds                     = createBonds(Seq(validator))
-    val BlockMsgWithTransform(Some(genesisL), transforms) =
-      buildGenesis(wallets, bonds, 0L)
+  it should "not execute deploys which are already in the past" in effectTest {
+    val bonds = createBonds(validators.take(2))
+    val BlockMsgWithTransform(Some(genesis), transforms) =
+      buildGenesis(Map.empty, bonds, 0L)
 
-    val node =
-      standaloneEff(genesisL, transforms, validatorKey, faultToleranceThreshold = 0.1)
+    def deploySomething(nodes: IndexedSeq[TestNode[Task]], i: Int) =
+      for {
+        deploy         <- ProtoUtil.basicDeploy[Task]()
+        _              <- nodes(i).casperEff.deploy(deploy)
+        create         <- nodes(i).casperEff.createBlock
+        Created(block) = create
+        _              <- nodes(i).casperEff.addBlock(block) shouldBeF Valid
+        _              <- nodes(1 - i).casperEff.addBlock(block) shouldBeF Valid
+      } yield deploy
+
     for {
-      deploy          <- ProtoUtil.basicDeploy[Task]()
-      _               <- node.casperEff.deploy(deploy)
-      create1         <- node.casperEff.createBlock
-      Created(block1) = create1
-      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms
+              )
 
-      // Should be finalized, so not stop it appearing again as pending.
-      processedDeploys <- node.deployStorage.reader.readProcessed
-      _                = processedDeploys shouldBe empty
+      deploy <- deploySomething(nodes, 0)
+      // Deploy a few more things to both nodes so things get finalized.
+      // NOTE: A single node currently doesn't finalize anything.
+      _      <- deploySomething(nodes, 1)
+      _      <- deploySomething(nodes, 0)
+      _      <- deploySomething(nodes, 1)
+
+      // The first deploy should be finalized, so not stop it appearing again as pending.
+      processedDeploys <- nodes(0).deployStorage.reader.readProcessed
+      _                = processedDeploys should not contain (deploy)
 
       // Should be able to enqueue the deploy again.
-      _               <- node.casperEff.deploy(deploy)
-      pendingDeploys1 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys1 should not be empty
+      _               <- nodes(0).casperEff.deploy(deploy)
+      pendingDeploys1 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys1 should contain(deploy)
 
       // Should not put it in a block.
-      createB <- node.casperEff.createBlock
+      createB <- nodes(0).casperEff.createBlock
       _       = createB shouldBe CreateBlockStatus.noNewDeploys
 
       // Should discard the deploy.
-      pendingDeploys2 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys2 shouldBe empty
+      pendingDeploys2 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys2 should not contain (deploy)
 
-      _ <- node.tearDown()
+      _ <- nodes.toList.traverse(_.tearDown())
     } yield ()
   }
 
