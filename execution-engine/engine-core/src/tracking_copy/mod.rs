@@ -154,23 +154,23 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn read(
         &mut self,
         correlation_id: CorrelationId,
-        k: &Key,
+        key: &Key,
     ) -> Result<Option<Value>, R::Error> {
-        let k = k.normalize();
-        if let Some(value) = self.get(correlation_id, &k)? {
-            self.ops.insert_add(k, Op::Read);
-            self.fns.insert_add(k, Transform::Identity);
+        let normalized_key = key.normalize();
+        if let Some(value) = self.get(correlation_id, &normalized_key)? {
+            self.ops.insert_add(normalized_key, Op::Read);
+            self.fns.insert_add(normalized_key, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
         }
     }
 
-    pub fn write(&mut self, k: Key, v: Value) {
-        let k = k.normalize();
-        self.cache.insert_write(k, v.clone());
-        self.ops.insert_add(k, Op::Write);
-        self.fns.insert_add(k, Transform::Write(v));
+    pub fn write(&mut self, key: Key, value: Value) {
+        let normalized_key = key.normalize();
+        self.cache.insert_write(normalized_key, value.clone());
+        self.ops.insert_add(normalized_key, Op::Write);
+        self.fns.insert_add(normalized_key, Transform::Write(value));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -180,14 +180,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn add(
         &mut self,
         correlation_id: CorrelationId,
-        k: Key,
-        v: Value,
+        key: Key,
+        value: Value,
     ) -> Result<AddResult, R::Error> {
-        let k = k.normalize();
-        match self.get(correlation_id, &k)? {
-            None => Ok(AddResult::KeyNotFound(k)),
+        let normalized_key = key.normalize();
+        match self.get(correlation_id, &normalized_key)? {
+            None => Ok(AddResult::KeyNotFound(normalized_key)),
             Some(current_value) => {
-                let t = match v {
+                let t = match value {
                     Value::Int32(i) => Transform::AddInt32(i),
                     Value::UInt128(i) => Transform::AddUInt128(i),
                     Value::UInt256(i) => Transform::AddUInt256(i),
@@ -206,9 +206,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(current_value) {
                     Ok(new_value) => {
-                        self.cache.insert_write(k, new_value);
-                        self.ops.insert_add(k, Op::Add);
-                        self.fns.insert_add(k, t);
+                        self.cache.insert_write(normalized_key, new_value);
+                        self.ops.insert_add(normalized_key, Op::Add);
+                        self.fns.insert_add(normalized_key, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {

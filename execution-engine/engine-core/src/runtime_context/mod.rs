@@ -798,10 +798,9 @@ where
         attenuate_uref_for_account(&self.account(), uref)
     }
 
-    /// Creates validated instance of [Value].
+    /// Creates validated instance of [`Value`].
     ///
-    /// First, it is converting a value into [Value] type through [Into](std::convert::Into) trait,
-    /// and then validates the keys it may contain.
+    /// Converts its argument into a [`Value`] and validates any keys it may contain.
     fn make_validated_value(&self, input: impl Into<Value>) -> Result<Value, Error> {
         let value = input.into();
         self.validate_value(&value)?;
