@@ -19,7 +19,7 @@ pub use self::uint::{U128, U256, U512};
 use crate::bytesrepr::{
     Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
 };
-use crate::key::{self, Key, UREF_SIZE};
+use crate::key::{Key, UREF_SIZE};
 use crate::uref::URef;
 
 const INT32_ID: u8 = 0;
@@ -48,10 +48,10 @@ pub enum Value {
     ListInt32(Vec<i32>),
     String(String),
     ListString(Vec<String>),
-    NamedKey(String, key::Key),
-    Key(key::Key),
-    Account(account::Account),
-    Contract(contract::Contract),
+    NamedKey(String, Key),
+    Key(Key),
+    Account(Account),
+    Contract(Contract),
     Unit,
 }
 
@@ -196,20 +196,20 @@ impl FromBytes for Value {
                 Ok((Value::String(s), rem))
             }
             ACCT_ID => {
-                let (a, rem): (account::Account, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (a, rem): (Account, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Value::Account(a), rem))
             }
             CONTRACT_ID => {
-                let (contract, rem): (contract::Contract, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (contract, rem): (Contract, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Value::Contract(contract), rem))
             }
             NAMEDKEY_ID => {
                 let (name, rem1): (String, &[u8]) = FromBytes::from_bytes(rest)?;
-                let (key, rem2): (key::Key, &[u8]) = FromBytes::from_bytes(rem1)?;
+                let (key, rem2): (Key, &[u8]) = FromBytes::from_bytes(rem1)?;
                 Ok((Value::NamedKey(name, key), rem2))
             }
             KEY_ID => {
-                let (key, rem): (key::Key, &[u8]) = FromBytes::from_bytes(rest)?;
+                let (key, rem): (Key, &[u8]) = FromBytes::from_bytes(rest)?;
                 Ok((Value::Key(key), rem))
             }
             LISTSTRING_ID => {
@@ -281,6 +281,12 @@ from_try_from_impl!(String, String);
 from_try_from_impl!(Key, Key);
 from_try_from_impl!(Account, Account);
 from_try_from_impl!(Contract, Contract);
+
+impl From<(String, Key)> for Value {
+    fn from((name, key): (String, Key)) -> Value {
+        Value::NamedKey(name, key)
+    }
+}
 
 impl From<()> for Value {
     fn from(_: ()) -> Self {
