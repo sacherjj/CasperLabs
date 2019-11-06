@@ -384,7 +384,7 @@ where
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
-        self.validate_keys(&value)?;
+        self.validate_value(&value)?;
         self.state.borrow_mut().write(key, value);
         Ok(())
     }
@@ -413,7 +413,7 @@ where
     }
 
     pub fn store_function(&mut self, contract: Value) -> Result<[u8; 32], Error> {
-        self.validate_keys(&contract)?;
+        self.validate_value(&contract)?;
         if let Key::URef(contract_ref) = self.new_uref(contract)? {
             Ok(contract_ref.addr())
         } else {
@@ -424,7 +424,7 @@ where
 
     pub fn store_function_at_hash(&mut self, contract: Value) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
-        self.validate_keys(&contract)?;
+        self.validate_value(&contract)?;
         let hash_key = Key::Hash(new_hash);
         self.state.borrow_mut().write(hash_key, contract);
         Ok(new_hash)
@@ -452,7 +452,7 @@ where
     }
 
     /// Validates whether keys used in the `value` are not forged.
-    pub fn validate_keys(&self, value: &Value) -> Result<(), Error> {
+    pub fn validate_value(&self, value: &Value) -> Result<(), Error> {
         match value {
             Value::Int32(_)
             | Value::UInt128(_)
@@ -606,7 +606,7 @@ where
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
         self.validate_addable(&key)?;
         self.validate_key(&key)?;
-        self.validate_keys(&value)?;
+        self.validate_value(&value)?;
         self.add_gs_unsafe(key, value)
     }
 
@@ -804,7 +804,7 @@ where
     /// and then validates the keys it may contain.
     fn make_validated_value(&self, input: impl Into<Value>) -> Result<Value, Error> {
         let value = input.into();
-        self.validate_keys(&value)?;
+        self.validate_value(&value)?;
         Ok(value)
     }
 }
