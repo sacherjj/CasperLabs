@@ -176,7 +176,7 @@ class CreateBlockAPITest
   "deploy" should "reject replayed deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
@@ -209,7 +209,7 @@ class CreateBlockAPITest
   "getDeployInfo" should "return DeployInfo for specified deployHash" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
@@ -281,7 +281,7 @@ class CreateBlockAPITest
 
   "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
@@ -322,7 +322,7 @@ class CreateBlockAPITest
   "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
@@ -386,7 +386,6 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
     underlying.estimator(dag, latestMessagesHashes, equivocators)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
-  def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
   override def createBlock: F[CreateBlockStatus] =
     for {

@@ -59,8 +59,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainName: String,
-    upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-    val faultToleranceThreshold: Float = 0f
+    upgrades: Seq[ipc.ChainSpec.UpgradePoint]
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -560,7 +559,7 @@ object MultiParentCasperImpl {
       genesis: Block,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      faultToleranceThreshold: Float = 0.1f
+      faultToleranceThreshold: Double = 0.1
   ): F[MultiParentCasper[F]] =
     for {
       dag <- DagStorage[F].getRepresentation
@@ -572,7 +571,11 @@ object MultiParentCasperImpl {
                 DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
             }
       implicit0(finalizer: FinalityDetectorVotingMatrix[F]) <- FinalityDetectorVotingMatrix
-                                                                .of[F](dag, lca, faultToleranceThreshold)
+                                                                .of[F](
+                                                                  dag,
+                                                                  lca,
+                                                                  faultToleranceThreshold
+                                                                )
       _ <- LastFinalizedBlockHashContainer[F].set(lca)
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,
@@ -581,8 +584,7 @@ object MultiParentCasperImpl {
       validatorId,
       genesis,
       chainName,
-      upgrades,
-      faultToleranceThreshold
+      upgrades
     )
 
   /** Component purely to validate, execute and store blocks.

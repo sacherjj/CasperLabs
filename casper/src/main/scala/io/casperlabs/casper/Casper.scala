@@ -39,7 +39,6 @@ trait MultiParentCasper[F[_]] {
   def dag: F[DagRepresentation[F]]
 
   def lastFinalizedBlock: F[Block]
-  def faultToleranceThreshold: Float
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
