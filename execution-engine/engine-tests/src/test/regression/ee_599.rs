@@ -1,9 +1,12 @@
-use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use lazy_static::lazy_static;
+
 use contract_ffi::value::account::{PublicKey, PurseId};
 use contract_ffi::value::U512;
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
+
+use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
+use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";

@@ -799,7 +799,7 @@ dependencies = [
 name = "ee-599-regression"
 version = "0.1.0"
 dependencies = [
- "casperlabs-contract-ffi 0.18.0",
+ "casperlabs-contract-ffi 0.19.0",
 ]
 
 [[package]]
