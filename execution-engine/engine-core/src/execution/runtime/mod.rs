@@ -319,7 +319,7 @@ where
     pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?;
 
-        Ok(self.context.validate_keys(&value).is_ok())
+        Ok(self.context.validate_value(&value).is_ok())
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into

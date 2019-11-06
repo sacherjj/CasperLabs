@@ -28,7 +28,7 @@ use engine_storage::global_state::{
     CommitResult, StateProvider,
 };
 
-use super::{attenuate_uref_for_account, Address, Error, RuntimeContext, Validated};
+use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
 use crate::{
     engine_state::SYSTEM_ACCOUNT_ADDR,
     execution::{extract_access_rights_from_keys, AddressGenerator},
@@ -420,10 +420,7 @@ fn contract_key_addable_valid() {
         Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
-    tc.borrow_mut().write(
-        Validated::new(contract_key, Validated::valid).unwrap(),
-        Validated::new(contract, Validated::valid).unwrap(),
-    );
+    tc.borrow_mut().write(contract_key, contract);
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);
@@ -483,10 +480,7 @@ fn contract_key_addable_invalid() {
         Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
-    tc.borrow_mut().write(
-        Validated::new(contract_key, Validated::valid).unwrap(),
-        Validated::new(contract, Validated::valid).unwrap(),
-    );
+    tc.borrow_mut().write(contract_key, contract);
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);

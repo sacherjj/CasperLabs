@@ -15,11 +15,8 @@ use contract_ffi::{
 use engine_shared::{newtypes::CorrelationId, transform::Transform};
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 
+use super::{meter::count_meter::Count, AddResult, QueryResult, TrackingCopy, TrackingCopyCache};
 use crate::engine_state::op::Op;
-
-use super::{
-    meter::count_meter::Count, AddResult, QueryResult, TrackingCopy, TrackingCopyCache, Validated,
-};
 
 struct CountingDb {
     count: Rc<Cell<i32>>,
@@ -80,24 +77,12 @@ fn tracking_copy_caching() {
 
     let zero = Value::Int32(0);
     // first read
-    let value = tc
-        .read(
-            correlation_id,
-            &Validated::new(k, Validated::valid).unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+    let value = tc.read(correlation_id, &k).unwrap().unwrap();
     assert_eq!(value, zero);
 
     // second read; should use cache instead
     // of going back to the DB
-    let value = tc
-        .read(
-            correlation_id,
-            &Validated::new(k, Validated::valid).unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+    let value = tc.read(correlation_id, &k).unwrap().unwrap();
     let db_value = counter.get();
     assert_eq!(value, zero);
     assert_eq!(db_value, 1);
@@ -112,13 +97,7 @@ fn tracking_copy_read() {
     let k = Key::Hash([0u8; 32]);
 
     let zero = Value::Int32(0);
-    let value = tc
-        .read(
-            correlation_id,
-            &Validated::new(k, Validated::valid).unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+    let value = tc.read(correlation_id, &k).unwrap().unwrap();
     // value read correctly
     assert_eq!(value, zero);
     // read produces an identity transform
@@ -140,10 +119,7 @@ fn tracking_copy_write() {
     let two = Value::Int32(2);
 
     // writing should work
-    tc.write(
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(one.clone(), Validated::valid).unwrap(),
-    );
+    tc.write(k, one.clone());
     // write does not need to query the DB
     let db_value = counter.get();
     assert_eq!(db_value, 0);
@@ -155,10 +131,7 @@ fn tracking_copy_write() {
     assert_eq!(tc.ops.get(&k), Some(&Op::Write));
 
     // writing again should update the values
-    tc.write(
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(two.clone(), Validated::valid).unwrap(),
-    );
+    tc.write(k, two.clone());
     let db_value = counter.get();
     assert_eq!(db_value, 0);
     assert_eq!(tc.fns.len(), 1);
@@ -178,11 +151,7 @@ fn tracking_copy_add_i32() {
     let three = Value::Int32(3);
 
     // adding should work
-    let add = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(three.clone(), Validated::valid).unwrap(),
-    );
+    let add = tc.add(correlation_id, k, three.clone());
     assert_matches!(add, Ok(_));
 
     // add creates a Transfrom
@@ -193,11 +162,7 @@ fn tracking_copy_add_i32() {
     assert_eq!(tc.ops.get(&k), Some(&Op::Add));
 
     // adding again should update the values
-    let add = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(three, Validated::valid).unwrap(),
-    );
+    let add = tc.add(correlation_id, k, three);
     assert_matches!(add, Ok(_));
     assert_eq!(tc.fns.len(), 1);
     assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(6)));
@@ -233,21 +198,13 @@ fn tracking_copy_add_named_key() {
     }
 
     // adding the wrong type should fail
-    let failed_add = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(Value::Int32(3), Validated::valid).unwrap(),
-    );
+    let failed_add = tc.add(correlation_id, k, Value::Int32(3));
     assert_matches!(failed_add, Ok(AddResult::TypeMismatch(_)));
     assert_eq!(tc.ops.is_empty(), true);
     assert_eq!(tc.fns.is_empty(), true);
 
     // adding correct type works
-    let add = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(named_key, Validated::valid).unwrap(),
-    );
+    let add = tc.add(correlation_id, k, named_key);
     assert_matches!(add, Ok(_));
     // add creates a Transfrom
     assert_eq!(tc.fns.len(), 1);
@@ -260,11 +217,7 @@ fn tracking_copy_add_named_key() {
     if let Value::NamedKey(name, key) = other_named_key.clone() {
         map.insert(name, key);
     }
-    let add = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(other_named_key, Validated::valid).unwrap(),
-    );
+    let add = tc.add(correlation_id, k, other_named_key);
     assert_matches!(add, Ok(_));
     assert_eq!(tc.fns.len(), 1);
     assert_eq!(tc.fns.get(&k), Some(&Transform::AddKeys(map)));
@@ -282,14 +235,8 @@ fn tracking_copy_rw() {
 
     // reading then writing should update the op
     let value = Value::Int32(3);
-    let _ = tc.read(
-        correlation_id,
-        &Validated::new(k, Validated::valid).unwrap(),
-    );
-    tc.write(
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(value.clone(), Validated::valid).unwrap(),
-    );
+    let _ = tc.read(correlation_id, &k);
+    tc.write(k, value.clone());
     assert_eq!(tc.fns.len(), 1);
     assert_eq!(tc.fns.get(&k), Some(&Transform::Write(value)));
     assert_eq!(tc.ops.len(), 1);
@@ -306,15 +253,8 @@ fn tracking_copy_ra() {
 
     // reading then adding should update the op
     let value = Value::Int32(3);
-    let _ = tc.read(
-        correlation_id,
-        &Validated::new(k, Validated::valid).unwrap(),
-    );
-    let _ = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(value, Validated::valid).unwrap(),
-    );
+    let _ = tc.read(correlation_id, &k);
+    let _ = tc.add(correlation_id, k, value);
     assert_eq!(tc.fns.len(), 1);
     assert_eq!(tc.fns.get(&k), Some(&Transform::AddInt32(3)));
     assert_eq!(tc.ops.len(), 1);
@@ -333,15 +273,8 @@ fn tracking_copy_aw() {
     // adding then writing should update the op
     let value = Value::Int32(3);
     let write_value = Value::Int32(7);
-    let _ = tc.add(
-        correlation_id,
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(value, Validated::valid).unwrap(),
-    );
-    tc.write(
-        Validated::new(k, Validated::valid).unwrap(),
-        Validated::new(write_value.clone(), Validated::valid).unwrap(),
-    );
+    let _ = tc.add(correlation_id, k, value);
+    tc.write(k, write_value.clone());
     assert_eq!(tc.fns.len(), 1);
     assert_eq!(tc.fns.get(&k), Some(&Transform::Write(write_value)));
     assert_eq!(tc.ops.len(), 1);

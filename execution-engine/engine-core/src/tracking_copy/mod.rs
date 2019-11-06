@@ -11,7 +11,7 @@ use linked_hash_map::LinkedHashMap;
 use contract_ffi::{key::Key, value::Value};
 use engine_shared::{
     additive_map::AdditiveMap,
-    newtypes::{CorrelationId, Validated},
+    newtypes::CorrelationId,
     transform::{self, Transform, TypeMismatch},
 };
 use engine_storage::global_state::StateReader;
@@ -137,13 +137,13 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn get(
         &mut self,
         correlation_id: CorrelationId,
-        k: &Key,
+        key: &Key,
     ) -> Result<Option<Value>, R::Error> {
-        if let Some(value) = self.cache.get(k) {
+        if let Some(value) = self.cache.get(key) {
             return Ok(Some(value.to_owned()));
         }
-        if let Some(value) = self.reader.read(correlation_id, k)? {
-            self.cache.insert_read(*k, value.to_owned());
+        if let Some(value) = self.reader.read(correlation_id, key)? {
+            self.cache.insert_read(*key, value.to_owned());
             Ok(Some(value))
         } else {
             Ok(None)
@@ -153,24 +153,23 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn read(
         &mut self,
         correlation_id: CorrelationId,
-        k: &Validated<Key>,
+        key: &Key,
     ) -> Result<Option<Value>, R::Error> {
-        let k = k.normalize();
-        if let Some(value) = self.get(correlation_id, &k)? {
-            self.ops.insert_add(k, Op::Read);
-            self.fns.insert_add(k, Transform::Identity);
+        let normalized_key = key.normalize();
+        if let Some(value) = self.get(correlation_id, &normalized_key)? {
+            self.ops.insert_add(normalized_key, Op::Read);
+            self.fns.insert_add(normalized_key, Transform::Identity);
             Ok(Some(value))
         } else {
             Ok(None)
         }
     }
 
-    pub fn write(&mut self, k: Validated<Key>, v: Validated<Value>) {
-        let v_local = v.into_raw();
-        let k = k.normalize();
-        self.cache.insert_write(k, v_local.clone());
-        self.ops.insert_add(k, Op::Write);
-        self.fns.insert_add(k, Transform::Write(v_local));
+    pub fn write(&mut self, key: Key, value: Value) {
+        let normalized_key = key.normalize();
+        self.cache.insert_write(normalized_key, value.clone());
+        self.ops.insert_add(normalized_key, Op::Write);
+        self.fns.insert_add(normalized_key, Transform::Write(value));
     }
 
     /// Ok(None) represents missing key to which we want to "add" some value.
@@ -180,14 +179,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     pub fn add(
         &mut self,
         correlation_id: CorrelationId,
-        k: Validated<Key>,
-        v: Validated<Value>,
+        key: Key,
+        value: Value,
     ) -> Result<AddResult, R::Error> {
-        let k = k.normalize();
-        match self.get(correlation_id, &k)? {
-            None => Ok(AddResult::KeyNotFound(k)),
+        let normalized_key = key.normalize();
+        match self.get(correlation_id, &normalized_key)? {
+            None => Ok(AddResult::KeyNotFound(normalized_key)),
             Some(current_value) => {
-                let t = match v.into_raw() {
+                let t = match value {
                     Value::Int32(i) => Transform::AddInt32(i),
                     Value::UInt128(i) => Transform::AddUInt128(i),
                     Value::UInt256(i) => Transform::AddUInt256(i),
@@ -206,9 +205,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 };
                 match t.clone().apply(current_value) {
                     Ok(new_value) => {
-                        self.cache.insert_write(k, new_value);
-                        self.ops.insert_add(k, Op::Add);
-                        self.fns.insert_add(k, t);
+                        self.cache.insert_write(normalized_key, new_value);
+                        self.ops.insert_add(normalized_key, Op::Add);
+                        self.fns.insert_add(normalized_key, t);
                         Ok(AddResult::Success)
                     }
                     Err(transform::Error::TypeMismatch(type_mismatch)) => {
@@ -229,8 +228,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         base_key: Key,
         path: &[String],
     ) -> Result<QueryResult, R::Error> {
-        let validated_key = Validated::new(base_key, Validated::valid)?;
-        match self.read(correlation_id, &validated_key)? {
+        match self.read(correlation_id, &base_key)? {
             None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
                 base_key,
                 path,
@@ -249,8 +247,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                         match current_value {
                             Value::Account(account) => {
                                 if let Some(key) = account.named_keys().get(name) {
-                                    let validated_key = Validated::new(*key, Validated::valid)?;
-                                    self.read_key_or_stop(correlation_id, validated_key, i)
+                                    self.read_key_or_stop(correlation_id, *key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Account at path:", name))))
                                 }
@@ -258,8 +255,7 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
 
                             Value::Contract(contract) => {
                                 if let Some(key) = contract.named_keys().get(name) {
-                                    let validated_key = Validated::new(*key, Validated::valid)?;
-                                    self.read_key_or_stop(correlation_id, validated_key, i)
+                                    self.read_key_or_stop(correlation_id, *key, i)
                                 } else {
                                     Err(Ok((i, format!("Name {} not found in Contract at path:", name))))
                                 }
@@ -286,14 +282,14 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
     fn read_key_or_stop(
         &mut self,
         correlation_id: CorrelationId,
-        key: Validated<Key>,
+        key: Key,
         i: usize,
     ) -> Result<Value, Result<(usize, String), R::Error>> {
         match self.read(correlation_id, &key) {
             // continue recursion
             Ok(Some(value)) => Ok(value),
             // key not found in the global state; stop recursion
-            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", *key)))),
+            Ok(None) => Err(Ok((i, format!("Name {:?} not found: ", key)))),
             // global state access error; stop recursion
             Err(error) => Err(Err(error)),
         }
