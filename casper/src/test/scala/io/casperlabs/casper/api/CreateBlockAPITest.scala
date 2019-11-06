@@ -78,7 +78,6 @@ class CreateBlockAPITest
 
     implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
-    implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -121,7 +120,6 @@ class CreateBlockAPITest
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val bs = node.blockStorage
-    implicit val fd = node.safetyOracleEff
 
     def deployAndPropose(
         blockApiLock: Semaphore[Task]
@@ -182,7 +180,6 @@ class CreateBlockAPITest
 
     implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
-    implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -218,7 +215,6 @@ class CreateBlockAPITest
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     val deploy = ProtoUtil.basicDeploy(
       0,
@@ -291,7 +287,6 @@ class CreateBlockAPITest
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code), v1)
 
@@ -333,7 +328,6 @@ class CreateBlockAPITest
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     val deploys = (1L to 10L)
       .map(
