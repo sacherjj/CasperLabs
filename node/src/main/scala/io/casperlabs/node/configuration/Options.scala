@@ -121,7 +121,9 @@ private[configuration] final case class Options private (
 
   val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
-  version(s"CasperLabs Node ${BuildInfo.version}")
+  version(
+    s"CasperLabs Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+  )
   printedName = "casperlabs"
   banner(
     """
