@@ -1,10 +1,10 @@
 use alloc::{format, string::String, vec::Vec};
 
+use base16;
 use bitflags::bitflags;
 use hex_fmt::HexFmt;
 
 use crate::{
-    base16,
     bytesrepr::{self, OPTION_SIZE, U32_SIZE},
     contract_api::TURef,
 };

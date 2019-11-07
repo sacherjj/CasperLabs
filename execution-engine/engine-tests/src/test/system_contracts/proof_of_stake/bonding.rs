@@ -1,5 +1,6 @@
+use base16;
+
 use contract_ffi::{
-    base16,
     contract_api::Error,
     key::Key,
     value::{
