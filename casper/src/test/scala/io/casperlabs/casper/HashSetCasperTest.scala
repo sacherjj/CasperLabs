@@ -1096,21 +1096,6 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  //TODO: Remove
-  it should "succeed if given enough gas for deploy" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Task]
-
-    for {
-      deploy <- ProtoUtil.basicDeploy[Task]()
-      _      <- node.casperEff.deploy(deploy)
-
-      createBlockResult <- MultiParentCasper[Task].createBlock
-      Created(block)    = createBlockResult
-    } yield assert(!block.body.get.deploys.head.isError)
-  }
-
   it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
     for {
       nodes <- networkEff(
