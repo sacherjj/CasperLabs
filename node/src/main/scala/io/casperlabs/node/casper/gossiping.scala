@@ -74,7 +74,7 @@ package object gossiping {
 
     // SSL context to use when connecting to another node.
     val clientSslContext = SslContexts.forClient(cert, key)
-    // SSL context to use when another node connects to us.Unit
+    // SSL context to use when another node connects to us.
     val serverSslContext = SslContexts.forServer(cert, key, ClientAuth.REQUIRE)
 
     // For client stub to GossipService conversions.
