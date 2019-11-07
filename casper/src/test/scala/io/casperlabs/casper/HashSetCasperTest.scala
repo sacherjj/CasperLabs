@@ -906,6 +906,7 @@ abstract class HashSetCasperTest
 
   it should "detect self equivocation when validating an incoming block" in effectTest {
     for {
+      // Starting 2 nodes with the same validator key.
       nodes <- networkEff(IndexedSeq(validatorKeys.head, validatorKeys.head), genesis, transforms)
       // Creates a pair that constitutes equivocation blocks
       signedBlock1 <- createTestBlock(nodes(0))
