@@ -1,32 +1,41 @@
 mod args;
 mod externals;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::TryFrom;
-use std::iter::IntoIterator;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    convert::TryFrom,
+    iter::IntoIterator,
+};
 
 use itertools::Itertools;
 use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::{deserialize, ToBytes, U32_SIZE};
-use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
-use contract_ffi::contract_api::Error as ApiError;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::{self, mint, SystemContract};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE};
-use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::{deserialize, ToBytes, U32_SIZE},
+    contract_api::{
+        system::{TransferResult, TransferredTo},
+        Error as ApiError,
+    },
+    key::Key,
+    system_contracts::{self, mint, SystemContract},
+    uref::{AccessRights, URef},
+    value::{
+        account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE},
+        Account, ProtocolVersion, Value, U512,
+    },
+};
 use engine_shared::gas::Gas;
 use engine_storage::global_state::StateReader;
 
 use super::{Error, MINT_NAME, POS_NAME};
-use crate::engine_state::system_contract_cache::SystemContractCache;
-use crate::resolvers::create_module_resolver;
-use crate::resolvers::memory_resolver::MemoryResolver;
-use crate::runtime_context::RuntimeContext;
-use crate::Address;
+use crate::{
+    engine_state::system_contract_cache::SystemContractCache,
+    resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
+    runtime_context::RuntimeContext,
+    Address,
+};
 
 pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
@@ -310,7 +319,7 @@ where
     pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
         let value = self.value_from_mem(value_ptr, value_size)?;
 
-        Ok(self.context.validate_keys(&value).is_ok())
+        Ok(self.context.validate_value(&value).is_ok())
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into

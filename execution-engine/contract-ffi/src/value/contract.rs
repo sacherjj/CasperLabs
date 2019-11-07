@@ -1,9 +1,10 @@
-use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE};
-use crate::key::{Key, UREF_SIZE};
-use crate::value::ProtocolVersion;
-use alloc::collections::btree_map::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+
+use crate::{
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE},
+    key::{Key, UREF_SIZE},
+    value::ProtocolVersion,
+};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Contract {

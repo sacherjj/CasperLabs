@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+};
 
 const CONTRACT_UREF: u32 = 0;
 

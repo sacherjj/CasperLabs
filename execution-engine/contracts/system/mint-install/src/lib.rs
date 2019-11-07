@@ -1,12 +1,13 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
-extern crate mint_token;
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use alloc::vec;
+
+use contract_ffi::{
+    contract_api::{runtime, storage, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const MINT_FUNCTION_NAME: &str = "mint_ext";
 

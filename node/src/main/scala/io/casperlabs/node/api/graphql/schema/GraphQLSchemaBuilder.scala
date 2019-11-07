@@ -6,7 +6,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
@@ -27,7 +26,7 @@ import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: FinalityDetector: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
 
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC

@@ -1,6 +1,8 @@
 #![no_std]
 
-extern crate contract_ffi;
+// Required to bring `#[panic_handler]` from `contract_ffi::handlers` into scope.
+#[allow(unused_imports)]
+use contract_ffi;
 
 #[no_mangle]
 pub extern "C" fn call() {

@@ -1,11 +1,15 @@
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
-use std::default::Default;
-use std::fmt::{self, Display, Formatter};
-use std::ops::{Add, AddAssign};
+use std::{
+    collections::BTreeMap,
+    convert::TryFrom,
+    default::Default,
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign},
+};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::{Value, U128, U256, U512};
+use contract_ffi::{
+    key::Key,
+    value::{Value, U128, U256, U512},
+};
 use num::traits::{ToPrimitive, WrappingAdd, WrappingSub};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -303,8 +307,7 @@ impl Default for Transform {
 pub mod gens {
     use super::Transform;
     use contract_ffi::gens::value_arb;
-    use proptest::collection::vec;
-    use proptest::prelude::*;
+    use proptest::{collection::vec, prelude::*};
 
     pub fn transform_arb() -> impl Strategy<Value = Transform> {
         prop_oneof![

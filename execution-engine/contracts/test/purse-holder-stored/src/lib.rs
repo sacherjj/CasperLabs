@@ -1,15 +1,18 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 #[cfg(not(feature = "lib"))]
 use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
-use contract_ffi::contract_api::{runtime, storage, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, storage, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
 const CONTRACT_NAME: &str = "purse_holder_stored";

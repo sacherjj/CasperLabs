@@ -1,7 +1,9 @@
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
-use crate::store::Store;
-use crate::transaction_source::{Readable, Writable};
+use crate::{
+    store::Store,
+    transaction_source::{Readable, Writable},
+};
 
 pub trait StoreExt<K, V>: Store<K, V> {
     fn get_many<'a, T>(

@@ -1,15 +1,17 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::{String, ToString};
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::{runtime, storage, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
+use contract_ffi::{
+    contract_api::{runtime, storage, system, Error, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+};
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
 pub const METHOD_ADD: &str = "add";

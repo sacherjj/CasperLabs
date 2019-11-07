@@ -1,8 +1,10 @@
 use contract_ffi::value::Value;
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+};
 
 const CONTRACT_EE_584_REGRESSION: &str = "ee_584_regression.wasm";
 

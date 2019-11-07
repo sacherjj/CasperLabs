@@ -1,9 +1,11 @@
-use std::collections::BTreeMap;
-use std::sync::{Mutex, Once};
+use std::{
+    collections::BTreeMap,
+    sync::{Mutex, Once},
+};
 
+use lazy_static::lazy_static;
 use log::{Metadata, Record};
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(crate) static LOGGER_INIT: Once = Once::new();
 pub(crate) const LOG_MAX_LEVEL: log::LevelFilter = log::LevelFilter::Trace;
@@ -210,15 +212,17 @@ pub fn initialize_buffered_logger() {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::thread;
+    use std::{sync::Arc, thread};
 
-    use crate::logging::log_level;
-    use crate::logging::log_message;
-    use crate::logging::log_settings::{
-        get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
+    use crate::{
+        logging::{
+            log_level, log_message,
+            log_settings::{
+                get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
+            },
+        },
+        utils::jsonify,
     };
-    use crate::utils::jsonify;
 
     use super::*;
 

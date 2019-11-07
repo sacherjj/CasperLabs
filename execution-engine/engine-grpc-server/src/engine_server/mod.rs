@@ -4,34 +4,40 @@ pub mod mappings;
 pub mod state;
 pub mod transforms;
 
-use std::collections::BTreeMap;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Debug;
-use std::io::ErrorKind;
-use std::marker::{Send, Sync};
-use std::time::Instant;
+use std::{
+    collections::BTreeMap,
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    io::ErrorKind,
+    marker::{Send, Sync},
+    time::Instant,
+};
 
 use grpc::SingleResponse;
 
-use contract_ffi::value::account::BlockTime;
-use contract_ffi::value::ProtocolVersion;
-use engine_core::engine_state::deploy_item::DeployItem;
-use engine_core::engine_state::execution_result::ExecutionResult;
-use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
-use engine_core::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
-use engine_core::engine_state::EngineState;
-use engine_core::engine_state::Error as EngineError;
-use engine_core::execution::Executor;
-use engine_core::tracking_copy::QueryResult;
-use engine_shared::logging;
-use engine_shared::logging::log_level::LogLevel;
-use engine_shared::logging::{log_duration, log_info};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH};
+use contract_ffi::value::{account::BlockTime, ProtocolVersion};
+use engine_core::{
+    engine_state::{
+        deploy_item::DeployItem,
+        execution_result::ExecutionResult,
+        genesis::{GenesisConfig, GenesisResult},
+        upgrade::{UpgradeConfig, UpgradeResult},
+        EngineState, Error as EngineError,
+    },
+    execution::Executor,
+    tracking_copy::QueryResult,
+};
+use engine_shared::{
+    logging::{self, log_duration, log_info, log_level::LogLevel},
+    newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH},
+};
 use engine_storage::global_state::{CommitResult, StateProvider};
 use engine_wasm_prep::Preprocessor;
 
-use self::ipc_grpc::ExecutionEngineService;
-use self::mappings::{CommitTransforms, MappingError, ParsingError};
+use self::{
+    ipc_grpc::ExecutionEngineService,
+    mappings::{CommitTransforms, MappingError, ParsingError},
+};
 
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";

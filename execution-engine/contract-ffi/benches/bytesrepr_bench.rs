@@ -1,23 +1,21 @@
 #![feature(test)]
 
-extern crate casperlabs_contract_ffi;
-
-use std::collections::BTreeMap;
-use std::iter;
-
 extern crate test;
-use test::black_box;
-use test::Bencher;
 
-use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use casperlabs_contract_ffi::key::Key;
-use casperlabs_contract_ffi::uref::{AccessRights, URef};
-use casperlabs_contract_ffi::value::account::{AssociatedKeys, PublicKey, PurseId, Weight};
-use casperlabs_contract_ffi::value::{
-    account::Account,
-    contract::Contract,
-    uint::{U128, U256, U512},
-    ProtocolVersion, Value,
+use std::{collections::BTreeMap, iter};
+
+use test::{black_box, Bencher};
+
+use casperlabs_contract_ffi::{
+    bytesrepr::{FromBytes, ToBytes},
+    key::Key,
+    uref::{AccessRights, URef},
+    value::{
+        account::{Account, AssociatedKeys, PublicKey, PurseId, Weight},
+        contract::Contract,
+        uint::{U128, U256, U512},
+        ProtocolVersion, Value,
+    },
 };
 
 static KB: usize = 1024;
