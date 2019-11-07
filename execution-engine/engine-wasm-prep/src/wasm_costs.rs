@@ -36,7 +36,7 @@ pub struct WasmCosts {
 }
 
 impl WasmCosts {
-    pub(crate) fn as_set(&self) -> Set {
+    pub(crate) fn to_set(&self) -> Set {
         let meterings = {
             let mut tmp = BTreeMap::new();
             tmp.insert(InstructionType::Load, Metering::Fixed(self.mem));
