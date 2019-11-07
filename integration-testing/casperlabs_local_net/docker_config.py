@@ -74,7 +74,7 @@ class DockerConfig:
     def tls_certificate_local_path(self):
         return f"{str(testing_root_path())}/resources/bootstrap_certificate/node-{self.number}.certificate.pem"
 
-    def node_command_options(self, server_host: str) -> dict:
+    def node_command_options(self, node, server_host: str) -> dict:
         options = {
             "--server-default-timeout": "10second",
             "--server-approval-poll-interval": "10second",
@@ -99,4 +99,11 @@ class DockerConfig:
             options["--server-bootstrap"] = self.bootstrap_address
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
+        if self.chainspec_directory != "chainspec":
+            # If the chainspec_directory doesn't match the name of directory with chainspec
+            # in resources bundled with node, then we have to provide the
+            # option --casper-chain-spec-path pointing to it.
+            # In this case we have to provide full chainspec,
+            # including manifest.toml and the system contracts.
+            options["--casper-chain-spec-path"] = node.CL_CHAINSPEC_DIR
         return options

@@ -326,7 +326,7 @@ class DockerNode(LoggingDockerBase):
         options = [
             f"{opt} {arg}"
             for opt, arg in self.config.node_command_options(
-                self.container_name
+                self, self.container_name
             ).items()
         ]
         return f"run {bootstrap_flag} {' '.join(options)}"
