@@ -1,7 +1,5 @@
 use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::contract_api::Error;
-use contract_ffi::value::U512;
+use contract_ffi::{args_parser::ArgsParser, contract_api::Error, value::U512};
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 

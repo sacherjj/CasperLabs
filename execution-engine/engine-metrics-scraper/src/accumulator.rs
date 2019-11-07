@@ -1,7 +1,9 @@
-use std::collections::vec_deque::VecDeque;
-use std::fmt;
-use std::sync::{Arc, Mutex, PoisonError, RwLock};
-use std::time::{Duration, Instant};
+use std::{
+    collections::vec_deque::VecDeque,
+    fmt,
+    sync::{Arc, Mutex, PoisonError, RwLock},
+    time::{Duration, Instant},
+};
 
 pub trait Pusher<T> {
     type Error: fmt::Debug;

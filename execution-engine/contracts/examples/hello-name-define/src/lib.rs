@@ -1,14 +1,13 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const HELLO_NAME_EXT: &str = "hello_name_ext";
 const HELLO_NAME_KEY: &str = "hello_name";

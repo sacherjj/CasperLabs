@@ -1,14 +1,9 @@
-extern crate parity_wasm;
-extern crate pwasm_utils;
-
-extern crate contract_ffi;
-#[cfg(test)]
-extern crate engine_shared;
-
 pub mod wasm_costs;
 
-use std::error::Error;
-use std::fmt::{self, Display, Formatter};
+use std::{
+    error::Error,
+    fmt::{self, Display, Formatter},
+};
 
 use parity_wasm::elements::{Error as ParityWasmError, Module};
 use pwasm_utils::{externalize_mem, inject_gas_counter, rules};

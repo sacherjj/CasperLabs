@@ -35,8 +35,7 @@ impl fmt::Display for ProtocolVersion {
 
 #[cfg(test)]
 mod tests {
-    use crate::value::semver::SemVer;
-    use crate::value::ProtocolVersion;
+    use crate::value::{semver::SemVer, ProtocolVersion};
 
     #[test]
     fn should_be_able_to_get_instance() {

@@ -14,4 +14,7 @@ trait Metered[F[_]] {
 
   def incAndMeasure[A](name: String, fa: F[A]): F[A] =
     m.incrementCounter(name) *> fa.timer(s"$name-time")
+
+  def incAndMeasure[A](name: String, fs: fs2.Stream[F, A]): fs2.Stream[F, A] =
+    fs2.Stream.eval(m.incrementCounter(name)) >> fs.timer(s"$name-time")
 }

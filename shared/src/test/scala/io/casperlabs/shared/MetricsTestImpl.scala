@@ -49,4 +49,7 @@ class MetricsTestImpl[F[_]: Sync] extends Metrics[F] {
     }
 
   override def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] = block
+  override def timerS[A](name: String)(stream: fs2.Stream[F, A])(
+      implicit ev: Metrics.Source
+  ): fs2.Stream[F, A] = stream
 }

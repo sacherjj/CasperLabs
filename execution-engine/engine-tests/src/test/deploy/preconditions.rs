@@ -1,10 +1,9 @@
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
+use contract_ffi::value::{account::PublicKey, U512};
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use crate::{
+    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
 };
-use crate::test::{CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 

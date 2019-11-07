@@ -2,14 +2,15 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 
 use super::to_ptr;
-use crate::bytesrepr::deserialize;
-use crate::contract_api;
-use crate::ext_ffi;
-use crate::unwrap_or_revert::UnwrapOrRevert;
 pub use crate::value::account::PublicKey;
-use crate::value::account::{
-    ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    Weight, PURSE_ID_SIZE_SERIALIZED,
+use crate::{
+    bytesrepr::deserialize,
+    contract_api, ext_ffi,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::{
+        ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure, Weight, PURSE_ID_SIZE_SERIALIZED,
+    },
 };
 
 pub fn get_main_purse() -> PurseId {

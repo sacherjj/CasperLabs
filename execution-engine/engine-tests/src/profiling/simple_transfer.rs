@@ -7,19 +7,18 @@
 //! By avoiding setting up global state as part of this executable, it will allow profiling to be
 //! done only on meaningful code, rather than including test setup effort in the profile results.
 
-use std::env;
-use std::io;
-use std::path::PathBuf;
+use std::{env, io, path::PathBuf};
 
 use clap::{crate_version, App, Arg};
 
-use casperlabs_engine_tests::support::profiling_common;
-use casperlabs_engine_tests::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
+use casperlabs_engine_tests::{
+    support::{
+        profiling_common,
+        test_support::{DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder},
+    },
+    test::DEFAULT_PAYMENT,
 };
-use casperlabs_engine_tests::test::DEFAULT_PAYMENT;
-use contract_ffi::base16;
-use contract_ffi::value::U512;
+use contract_ffi::{base16, value::U512};
 use engine_core::engine_state::EngineConfig;
 
 const ABOUT: &str =

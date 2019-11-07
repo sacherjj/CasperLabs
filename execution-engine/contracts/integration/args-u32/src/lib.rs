@@ -1,9 +1,9 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{runtime, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 enum Arg {
     Number = 0,

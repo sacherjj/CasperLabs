@@ -6,7 +6,6 @@ import cats.effect.{Effect => _, _}
 import cats.implicits._
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
@@ -86,7 +85,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
@@ -113,7 +112,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

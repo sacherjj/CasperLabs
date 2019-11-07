@@ -2,20 +2,18 @@
 //! standalone test executable(s).  This will allow profiling to be done on executables running only
 //! meaningful code, rather than including test setup effort in the profile results.
 
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use clap::{crate_version, App};
 
-use casperlabs_engine_tests::support::profiling_common;
-use casperlabs_engine_tests::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
+use casperlabs_engine_tests::{
+    support::{
+        profiling_common,
+        test_support::{DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder},
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
 };
-use casperlabs_engine_tests::test::{
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
-};
-use contract_ffi::base16;
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{base16, value::account::PublicKey};
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";

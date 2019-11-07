@@ -1,8 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-extern crate modified_mint;
-
 use contract_ffi::contract_api::{runtime, system, ContractRef, Error};
 
 #[repr(u16)]

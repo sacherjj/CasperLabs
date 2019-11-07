@@ -9,7 +9,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
@@ -60,7 +59,6 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
-  implicit val safetyOracleEff: FinalityDetector[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -127,7 +125,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -141,7 +139,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
@@ -157,7 +155,7 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f,
+      faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -172,7 +170,7 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f,
+      faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
   ): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](

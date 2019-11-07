@@ -1,11 +1,13 @@
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::Value;
+use contract_ffi::{key::Key, uref::URef, value::Value};
 use engine_shared::transform::Transform;
 
-use crate::support::exec_with_return;
-use crate::support::test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::{
+    support::{
+        exec_with_return,
+        test_support::{WasmTestBuilder, DEFAULT_BLOCK_TIME},
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+};
 
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 

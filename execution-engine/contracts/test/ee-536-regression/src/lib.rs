@@ -1,11 +1,11 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{account, runtime, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{
-    ActionType, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
+use contract_ffi::{
+    contract_api::{account, runtime, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::{
+        ActionType, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight,
+    },
 };
 
 #[no_mangle]

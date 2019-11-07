@@ -3,9 +3,6 @@
 //! # Usage
 //!
 //! ```
-//! # extern crate casperlabs_engine_storage;
-//! # extern crate contract_ffi;
-//! # extern crate engine_shared;
 //! use casperlabs_engine_storage::store::Store;
 //! use casperlabs_engine_storage::transaction_source::{Transaction, TransactionSource};
 //! use casperlabs_engine_storage::transaction_source::in_memory::InMemoryEnvironment;
@@ -104,9 +101,9 @@
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::*;
-use crate::error::in_memory::Error;
-use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::trie_store;
+use crate::{
+    error::in_memory::Error, transaction_source::in_memory::InMemoryEnvironment, trie_store,
+};
 
 /// An in-memory trie store.
 pub struct InMemoryTrieStore {

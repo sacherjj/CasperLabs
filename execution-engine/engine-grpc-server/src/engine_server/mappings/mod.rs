@@ -1,28 +1,39 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{self, Display, Formatter};
-use std::string::ToString;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    convert::{TryFrom, TryInto},
+    fmt::{self, Display, Formatter},
+    string::ToString,
+};
 
 use protobuf::{ProtobufEnum, RepeatedField};
 
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::{
-    ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE,
+use contract_ffi::{
+    uref::URef,
+    value::{
+        account::{ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE},
+        ProtocolVersion, U512,
+    },
 };
-use contract_ffi::value::{ProtocolVersion, U512};
-use engine_core::engine_state::deploy_item::DeployItem;
-use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
-use engine_core::engine_state::execution_effect::ExecutionEffect;
-use engine_core::engine_state::execution_result::ExecutionResult;
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::op::Op;
-use engine_core::engine_state::upgrade::UpgradeConfig;
-use engine_core::engine_state::{Error as EngineError, RootNotFound};
-use engine_core::execution::Error as ExecutionError;
-use engine_core::{engine_state, DEPLOY_HASH_LENGTH};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::motes::Motes;
-use engine_shared::transform::{self, TypeMismatch};
+use engine_core::{
+    engine_state::{
+        self,
+        deploy_item::DeployItem,
+        executable_deploy_item::ExecutableDeployItem,
+        execution_effect::ExecutionEffect,
+        execution_result::ExecutionResult,
+        genesis::{GenesisAccount, GenesisConfig},
+        op::Op,
+        upgrade::UpgradeConfig,
+        Error as EngineError, RootNotFound,
+    },
+    execution::Error as ExecutionError,
+    DEPLOY_HASH_LENGTH,
+};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    motes::Motes,
+    transform::{self, TypeMismatch},
+};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::engine_server::{ipc, state, transforms};
@@ -1231,25 +1242,28 @@ mod tests {
 
     use proptest::prelude::*;
 
-    use contract_ffi::gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb};
-    use contract_ffi::key::Key;
-    use contract_ffi::uref::{AccessRights, URef};
-    use engine_core::engine_state::execution_effect::ExecutionEffect;
-    use engine_core::engine_state::execution_result::ExecutionResult;
-    use engine_core::engine_state::{Error as EngineError, RootNotFound};
-    use engine_core::execution::Error;
-    use engine_shared::additive_map::AdditiveMap;
-    use engine_shared::gas::Gas;
-    use engine_shared::newtypes::Blake2bHash;
-    use engine_shared::transform::gens::transform_arb;
-    use engine_shared::transform::Transform;
+    use contract_ffi::{
+        gens::{account_arb, contract_arb, key_arb, named_keys_arb, value_arb},
+        key::Key,
+        uref::{AccessRights, URef},
+    };
+    use engine_core::{
+        engine_state::{
+            execution_effect::ExecutionEffect, execution_result::ExecutionResult,
+            Error as EngineError, RootNotFound,
+        },
+        execution::Error,
+    };
+    use engine_shared::{
+        additive_map::AdditiveMap,
+        gas::Gas,
+        newtypes::Blake2bHash,
+        transform::{gens::transform_arb, Transform},
+    };
 
     use crate::engine_server::mappings::CommitTransforms;
 
-    use super::execution_error;
-    use super::ipc;
-    use super::state;
-    use super::transforms;
+    use super::{execution_error, ipc, state, transforms};
     use contract_ffi::value::U512;
 
     // Test that wasm_error function actually returns DeployResult with result set

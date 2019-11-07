@@ -1,5 +1,4 @@
-use contract_ffi::system_contracts::mint::Error;
-use contract_ffi::value::U512;
+use contract_ffi::{system_contracts::mint::Error, value::U512};
 
 use crate::capabilities::{Addable, Readable, Writable};
 
@@ -41,15 +40,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use alloc::collections::BTreeMap;
-    use alloc::rc::Rc;
-    use core::cell::{Cell, RefCell};
-    use core::ops::Add;
+    use alloc::{collections::BTreeMap, rc::Rc};
+    use core::{
+        cell::{Cell, RefCell},
+        ops::Add,
+    };
 
     use contract_ffi::value::U512;
 
-    use crate::capabilities::{Addable, Readable, Writable};
-    use crate::mint::{Error, Mint};
+    use crate::{
+        capabilities::{Addable, Readable, Writable},
+        mint::{Error, Mint},
+    };
 
     const GENESIS_PURSE_AMOUNT: u32 = 150;
     const GENESIS_PURSE: FullId = FullId(0);

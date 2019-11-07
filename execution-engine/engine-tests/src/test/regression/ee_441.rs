@@ -1,11 +1,13 @@
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
-};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{key::Key, uref::URef, value::account::PublicKey};
 use engine_shared::transform::Transform;
+
+use crate::{
+    support::test_support::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        STANDARD_PAYMENT_CONTRACT,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 fn get_uref(key: Key) -> URef {
     match key {
