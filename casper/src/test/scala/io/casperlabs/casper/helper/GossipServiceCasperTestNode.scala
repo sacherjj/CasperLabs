@@ -10,10 +10,7 @@ import eu.timepit.refined.auto._
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
+import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -37,7 +34,6 @@ class GossipServiceCasperTestNode[F[_]](
     sk: PrivateKey,
     semaphoresMap: SemaphoreMap[F, ByteString],
     semaphore: Semaphore[F],
-    faultToleranceThreshold: Float = 0f,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
     chainName: String = "casperlabs",
     relaying: Relaying[F],
@@ -48,6 +44,7 @@ class GossipServiceCasperTestNode[F[_]](
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
     deployStorage: DeployStorage[F],
+    finalityDetector: FinalityDetectorVotingMatrix[F],
     val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -58,7 +55,6 @@ class GossipServiceCasperTestNode[F[_]](
       genesis,
       maybeMakeEE
     ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
-  implicit val safetyOracleEff: FinalityDetector[F] = new FinalityDetectorBySingleSweepImpl[F]
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
@@ -83,8 +79,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
-      upgrades = Nil,
-      faultToleranceThreshold = faultToleranceThreshold
+      upgrades = Nil
     )
 
   /** Allow RPC calls intended for this node to be processed and enqueue responses. */
@@ -110,7 +105,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -141,13 +136,16 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
           semaphore    <- Semaphore[F](1)
+          dag          <- dagStorage.getRepresentation
+          _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+          finalityDetector <- FinalityDetectorVotingMatrix
+                               .of[F](dag, genesis.blockHash, faultToleranceThreshold)
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
             sk,
             semaphoreMap,
             semaphore,
-            faultToleranceThreshold,
             relaying = relaying,
             gossipService = new TestGossipService[F]()
           ) (
@@ -155,6 +153,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             blockStorage,
             dagStorage,
             deployStorage,
+            finalityDetector,
             timeEff,
             metricEff,
             casperState,
@@ -170,7 +169,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       genesis: consensus.Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f,
+      faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -224,15 +223,17 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
                               )
-                semaphoreMap <- SemaphoreMap[F, ByteString](1)
-                semaphore    <- Semaphore[F](1)
+                semaphoreMap     <- SemaphoreMap[F, ByteString](1)
+                semaphore        <- Semaphore[F](1)
+                _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
+                dag              <- dagStorage.getRepresentation
+                finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
                   sk,
                   semaphoreMap,
                   semaphore,
-                  faultToleranceThreshold,
                   relaying = relaying,
                   gossipService = gossipService,
                   maybeMakeEE = maybeMakeEE
@@ -241,6 +242,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   blockStorage,
                   dagStorage,
                   deployStorage,
+                  finalityDetector,
                   timeEff,
                   metricEff,
                   casperState,

@@ -1,12 +1,15 @@
 use alloc::vec::Vec;
-use core::convert::TryFrom;
-use core::result;
+use core::{convert::TryFrom, result};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
-use contract_ffi::contract_api::storage;
-use contract_ffi::system_contracts::pos::{Error, Result};
-use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    contract_api::storage,
+    system_contracts::pos::{Error, Result},
+    value::{
+        account::{BlockTime, PublicKey},
+        Value, U512,
+    },
+};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -181,9 +184,13 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::system_contracts::pos::Error;
-    use contract_ffi::value::account::{BlockTime, PublicKey};
-    use contract_ffi::value::U512;
+    use contract_ffi::{
+        system_contracts::pos::Error,
+        value::{
+            account::{BlockTime, PublicKey},
+            U512,
+        },
+    };
 
     use crate::queue::{Queue, QueueEntry};
 

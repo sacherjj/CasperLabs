@@ -80,7 +80,6 @@ class CreateBlockAPITest
 
     implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
-    implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -123,7 +122,6 @@ class CreateBlockAPITest
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val bs = node.blockStorage
-    implicit val fd = node.safetyOracleEff
 
     def deployAndPropose(
         blockApiLock: Semaphore[Task]
@@ -180,11 +178,10 @@ class CreateBlockAPITest
   "deploy" should "reject replayed deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val logEff       = new LogStub[Task]
     implicit val blockStorage = node.blockStorage
-    implicit val safetyOracle = node.safetyOracleEff
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -214,13 +211,12 @@ class CreateBlockAPITest
   "getDeployInfo" should "return DeployInfo for specified deployHash" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     val deploy = ProtoUtil.basicDeploy(
       0,
@@ -287,13 +283,12 @@ class CreateBlockAPITest
 
   "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code), v1)
 
@@ -329,13 +324,12 @@ class CreateBlockAPITest
   "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -2.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
     implicit val logEff        = new LogStub[Task]
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
-    implicit val safetyOracle  = node.safetyOracleEff
 
     val deploys = (1L to 10L)
       .map(
@@ -394,7 +388,6 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
     underlying.estimator(dag, latestMessagesHashes, equivocators)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
-  def faultToleranceThreshold      = underlying.faultToleranceThreshold
 
   override def createBlock: F[CreateBlockStatus] =
     for {

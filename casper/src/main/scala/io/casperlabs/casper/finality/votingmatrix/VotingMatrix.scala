@@ -94,9 +94,9 @@ object VotingMatrix {
         validatorsToIndex,
         firstLevelZeroVotes.get
       )
-      latestMessagesToUpdated = latestMessagesOfHonestVoters.filterKeys(
-        firstLevelZeroVotes.contains
-      )
+      latestMessagesToUpdated = latestMessagesOfHonestVoters.filterKeys { k =>
+        firstLevelZeroVotes.contains(k) && validatorsToIndex.contains(k)
+      }
       state = VotingMatrixState(
         MutableSeq.fill(n, n)(0),
         firstLevelZeroVotesArray,

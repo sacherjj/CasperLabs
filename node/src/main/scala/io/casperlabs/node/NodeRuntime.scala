@@ -17,10 +17,6 @@ import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
@@ -212,10 +208,6 @@ class NodeRuntime private[node] (
                                                                       MultiParentCasperRef
                                                                         .of[Task]
                                                                     )
-
-      implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-        Task
-      ]()
 
       blockApiLock <- Resource.liftF(Semaphore[Task](1))
 

@@ -2,8 +2,7 @@ use std::collections::BTreeSet;
 
 use contract_ffi::value::account::PublicKey;
 
-use crate::engine_state::executable_deploy_item::ExecutableDeployItem;
-use crate::DeployHash;
+use crate::{engine_state::executable_deploy_item::ExecutableDeployItem, DeployHash};
 
 type GasPrice = u64;
 

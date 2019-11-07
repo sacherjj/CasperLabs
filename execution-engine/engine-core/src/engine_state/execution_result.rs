@@ -1,15 +1,11 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::Transform;
+use contract_ffi::{key::Key, value::Value};
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
+    transform::Transform,
+};
 use engine_storage::global_state::StateReader;
 
-use super::execution_effect::ExecutionEffect;
-use super::op::Op;
-use super::{error, CONV_RATE};
+use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
 
 #[derive(Debug)]
 pub enum ExecutionResult {

@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use lmdb::{self, Database, Environment, RoTransaction, RwTransaction, WriteFlags};
 
-use crate::transaction_source::{Readable, Transaction, TransactionSource, Writable};
-use crate::{error, MAX_DBS};
+use crate::{
+    error,
+    transaction_source::{Readable, Transaction, TransactionSource, Writable},
+    MAX_DBS,
+};
 
 impl<'a> Transaction for RoTransaction<'a> {
     type Error = lmdb::Error;

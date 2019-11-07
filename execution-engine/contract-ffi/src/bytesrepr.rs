@@ -1,13 +1,13 @@
-use super::alloc::collections::BTreeMap;
-use super::alloc::collections::TryReserveError;
-use super::alloc::string::String;
-use super::alloc::vec::Vec;
+use super::alloc::{
+    collections::{BTreeMap, TryReserveError},
+    string::String,
+    vec::Vec,
+};
 
 use core::mem::{size_of, MaybeUninit};
 use failure::Fail;
 
-use crate::value::ProtocolVersion;
-use crate::value::SemVer;
+use crate::value::{ProtocolVersion, SemVer};
 
 pub const I32_SIZE: usize = size_of::<i32>();
 pub const U8_SIZE: usize = size_of::<u8>();
@@ -533,11 +533,9 @@ where
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod proptests {
-    use proptest::collection::vec;
-    use proptest::prelude::*;
+    use proptest::{collection::vec, prelude::*};
 
-    use crate::bytesrepr;
-    use crate::gens::*;
+    use crate::{bytesrepr, gens::*};
 
     proptest! {
         #[test]

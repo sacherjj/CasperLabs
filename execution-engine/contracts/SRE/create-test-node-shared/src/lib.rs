@@ -1,15 +1,16 @@
 #![no_std]
 
-extern crate binascii;
-extern crate contract_ffi;
-
 use binascii::ConvertError;
 
-use contract_ffi::contract_api::system::TransferredTo;
-use contract_ffi::contract_api::{runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::uint::U512;
+use contract_ffi::{
+    contract_api::{
+        runtime,
+        system::{self, TransferredTo},
+        Error,
+    },
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PublicKey, uint::U512},
+};
 
 fn parse_public_key(hex: &[u8]) -> Result<PublicKey, ConvertError> {
     let mut buff = [0u8; 32];

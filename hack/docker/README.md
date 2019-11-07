@@ -78,7 +78,7 @@ Assuming that you compiled the [contract examples](https://github.com/CasperLabs
 
 ```console
 ACCOUNT_ID="$(cat keys/faucet-account/account-id-hex)"
-./client.sh node-0 deploy $PWD/../execution-engine/target/wasm32-unknown-unknown/release\
+./client.sh node-0 deploy $PWD/../../execution-engine/target/wasm32-unknown-unknown/release\
      --gas-price 1 \
      --from "$ACCOUNT_ID" \
      --session /data/hello_name_define.wasm \

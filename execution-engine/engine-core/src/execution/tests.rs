@@ -39,8 +39,7 @@ fn on_fail_charge_err_laziness_test() {
 }
 #[test]
 fn on_fail_charge_with_action() {
-    use crate::engine_state::execution_effect::ExecutionEffect;
-    use crate::engine_state::op::Op;
+    use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
     use contract_ffi::key::Key;
     use engine_shared::transform::Transform;
     let f = || {

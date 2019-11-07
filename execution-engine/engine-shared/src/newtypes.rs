@@ -1,11 +1,11 @@
 //! Some newtypes.
 use core::array::TryFromSliceError;
-use std::convert::TryFrom;
-use std::fmt;
-use std::ops::Deref;
+use std::{convert::TryFrom, fmt};
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -100,42 +100,6 @@ impl FromBytes for Blake2bHash {
     }
 }
 
-/// Represents a validated value.  Validation is user-specified.
-pub struct Validated<T>(T);
-
-impl<T> Validated<T> {
-    /// Creates a validated value from a given value and validation function.
-    pub fn new<E, F>(v: T, guard: F) -> Result<Validated<T>, E>
-    where
-        F: Fn(&T) -> Result<(), E>,
-    {
-        guard(&v).map(|_| Validated(v))
-    }
-
-    /// A validation function which always succeeds.
-    pub fn valid(_v: &T) -> Result<(), !> {
-        Ok(())
-    }
-
-    pub fn into_raw(self) -> T {
-        self.0
-    }
-}
-
-impl<T: Clone> Clone for Validated<T> {
-    fn clone(&self) -> Self {
-        Validated(self.0.clone())
-    }
-}
-
-impl<T: Clone> Deref for Validated<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.0
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Serialize)]
 pub struct CorrelationId(Uuid);
 
@@ -157,8 +121,10 @@ impl fmt::Display for CorrelationId {
 
 #[cfg(test)]
 mod tests {
-    use crate::newtypes::{Blake2bHash, CorrelationId};
-    use crate::utils;
+    use crate::{
+        newtypes::{Blake2bHash, CorrelationId},
+        utils,
+    };
     use std::hash::{Hash, Hasher};
 
     #[test]

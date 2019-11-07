@@ -1,18 +1,23 @@
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use super::error::{result_from, Error};
-use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
-use crate::args_parser::ArgsParser;
-use crate::bytesrepr::{self, deserialize, FromBytes, ToBytes};
-use crate::execution::{Phase, PHASE_SIZE};
-use crate::ext_ffi;
-use crate::key::Key;
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::URef;
-use crate::value::account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE};
-use crate::value::{Contract, Value};
+use super::{
+    alloc_bytes,
+    error::{result_from, Error},
+    str_ref_to_ptr, to_ptr, ContractRef, TURef,
+};
+use crate::{
+    args_parser::ArgsParser,
+    bytesrepr::{self, deserialize, FromBytes, ToBytes},
+    execution::{Phase, PHASE_SIZE},
+    ext_ffi,
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+    value::{
+        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE},
+        Contract, Value,
+    },
+};
 
 /// Return `t` to the host, terminating the currently running module.
 /// Note this function is only relevant to contracts stored on chain which

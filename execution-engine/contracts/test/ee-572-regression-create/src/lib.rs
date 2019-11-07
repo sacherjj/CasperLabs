@@ -1,17 +1,18 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
+use core::{clone::Clone, convert::Into};
 
-use alloc::string::{String, ToString};
-use core::clone::Clone;
-use core::convert::Into;
-
-use contract_ffi::contract_api::{runtime, storage, TURef};
-use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::{
+    contract_api::{runtime, storage, TURef},
+    key::Key,
+    uref::{AccessRights, URef},
+};
 
 const DATA: &str = "data";
 const CONTRACT_NAME: &str = "create";

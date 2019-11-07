@@ -200,6 +200,5 @@ object AutoProposerTest {
     ): F[List[ByteString]]                    = ???
     override def dag: F[DagRepresentation[F]] = ???
     override def lastFinalizedBlock: F[Block] = ???
-    override def faultToleranceThreshold      = 0f
   }
 }

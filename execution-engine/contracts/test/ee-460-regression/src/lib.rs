@@ -1,11 +1,10 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PublicKey, U512},
+};
 
 #[no_mangle]
 pub extern "C" fn call() {

@@ -1,25 +1,31 @@
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::{ProtocolVersion, Value};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::Transform;
+use contract_ffi::{
+    key::Key,
+    value::{ProtocolVersion, Value},
+};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    newtypes::{Blake2bHash, CorrelationId},
+    transform::Transform,
+};
 
-use crate::error::{self, in_memory};
-use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, StateProvider};
-use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::in_memory::InMemoryProtocolDataStore;
-use crate::store::Store;
-use crate::transaction_source::in_memory::{InMemoryEnvironment, InMemoryReadTransaction};
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::operations::create_hashed_empty_trie;
-use crate::trie::Trie;
-use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::operations;
-use crate::trie_store::operations::{read, ReadResult, WriteResult};
+use crate::{
+    error::{self, in_memory},
+    global_state::{commit, CommitResult, StateProvider, StateReader},
+    protocol_data::ProtocolData,
+    protocol_data_store::in_memory::InMemoryProtocolDataStore,
+    store::Store,
+    transaction_source::{
+        in_memory::{InMemoryEnvironment, InMemoryReadTransaction},
+        Transaction, TransactionSource,
+    },
+    trie::{operations::create_hashed_empty_trie, Trie},
+    trie_store::{
+        in_memory::InMemoryTrieStore,
+        operations::{self, read, ReadResult, WriteResult},
+    },
+};
 
 pub struct InMemoryGlobalState {
     pub environment: Arc<InMemoryEnvironment>,
