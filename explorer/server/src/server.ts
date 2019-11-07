@@ -9,6 +9,7 @@ import path from "path";
 import { decodeBase64 } from "tweetnacl-util";
 // TODO: Everything in config.json could come from env vars.
 import config from "./config.json";
+import { Faucet } from "./lib/Contracts";
 import DeployService from "./services/DeployService";
 
 // https://auth0.com/docs/quickstart/spa/vanillajs/02-calling-an-api
@@ -36,6 +37,7 @@ const faucet = new Contracts.BoundContract(
 
 // Constant payment amount.
 const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
+const faucetAmount = BigInt(process.env.FAUCET_AMOUNT)!;
 
 // gRPC client to the node.
 const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
@@ -114,7 +116,7 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
   // Prepare the signed deploy.
   const accountPublicKey = decodeBase64(accountPublicKeyBase64);
-  const deploy = faucet.deploy(Contracts.Faucet.args(accountPublicKey), paymentAmount);
+  const deploy = faucet.deploy(Faucet.args(accountPublicKey, faucetAmount), paymentAmount);
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService

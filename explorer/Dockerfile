@@ -14,6 +14,7 @@ COPY ui/build /app/ui
 WORKDIR /app/server
 ENV STATIC_ROOT=/app/ui
 ENV PAYMENT_AMOUNT=10000000
+ENV FAUCET_AMOUNT=1000000000
 ENV PAYMENT_CONTRACT_PATH=/app/contracts/payment.wasm
 ENV FAUCET_CONTRACT_PATH=/app/contracts/faucet.wasm
 ENTRYPOINT node server.js
