@@ -200,7 +200,8 @@ class CasperLabsNetwork:
             )
             self.selenium_node = DockerSelenium(config)
             wait_for_clarity_started(self.clarity_node, config.command_timeout, 1)
-            wait_for_selenium_started(self.selenium_node, config.command_timeout, 1)
+            # Since we need pull selenium images from docker hub, it will take more time
+            wait_for_selenium_started(self.selenium_node, 5 * 60, 1)
             if self.in_docker:
                 # If these integration tests are running in a docker container, then we need connect the docker container
                 # to the network of selenium
@@ -287,7 +288,7 @@ class CasperLabsNetwork:
                 self.selenium_node.cleanup()
             for node in self.cl_nodes:
                 node.cleanup()
-            if self.in_docker:
+            if self.in_docker and self.selenium_node:
                 # If these integration tests are running in a docker container,
                 # then we need disconnect the docker container from the network of selenium
                 network = self.selenium_node.network_from_name(

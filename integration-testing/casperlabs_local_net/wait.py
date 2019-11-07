@@ -132,16 +132,10 @@ class ClarityServerStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "server started at", times)
 
-    def is_satisfied(self) -> bool:
-        return self.node.logs().count(self.message) >= self.times
-
 
 class SeleniumServerStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "Selenium Server is up and running on port", times)
-
-    def is_satisfied(self) -> bool:
-        return self.node.logs().count(self.message) >= self.times
 
 
 class WaitForGoodBye(LogsContainMessage):

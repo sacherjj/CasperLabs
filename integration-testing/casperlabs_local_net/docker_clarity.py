@@ -133,7 +133,7 @@ class DockerSelenium(LoggingDockerBase):
 
     @property
     def image_name(self) -> str:
-        return "selenium/standalone-chrome"
+        return "selenium/standalone-chrome:3.141.59-xenon"
 
     @property
     def volumes(self) -> dict:
