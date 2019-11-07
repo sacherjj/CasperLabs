@@ -1,4 +1,5 @@
 import pytest
+import logging
 from casperlabs_local_net.cli import CLI
 from casperlabs_local_net.common import Contract
 
@@ -30,18 +31,31 @@ def test_upgrades_applied(cli):
         "--public-key", cli.public_key_path(account),
     )
 
+    # When activation-point-rank of an upgrade is reached, and upgrade is executed,
+    # the cost of execution should change.
+
     cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
     propose_and_get_cost(cli)
 
-    cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
-    cost = propose_and_get_cost(cli)
+    # We have spec of genesis, upgrade-1 and upgrade-2 in our custom chainspec
+    # (in integration-testing/resources/test-chainspec)
+    # Upgrades change cost of excuting opcodes, so cost of execution of the same contract should change
+    # after the upgrades are applied.
+    costs = []
 
+    # Currently test-chainspec activation points configured like below:
+
+    # upgrade-1/manifest.toml:activation-point-rank = 20
+    # upgrade-2/manifest.toml:activation-point-rank = 30
+
+    # So, a number of deploys above 30 should be enough to activate both upgrades.
     for i in range(1, 35):
         cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
-        c = propose_and_get_cost(cli)
-        if c != cost:
-            # TODO:
-            # When activation-point-rank of an upgrade is reached,
-            # and upgrade is executed,
-            # cost of execution should change
-            raise Exception(f"Cost different at iteration {i}, was {cost}, now {c}. ")
+        cost = propose_and_get_cost(cli)
+        if cost not in costs:
+            logging.info(f"Execution cost at iteration {i}, is {cost}. ")
+            costs.append(cost)
+
+    logging.info(f"Costs of execution: {' '.join(costs)}")
+
+    assert len(costs) == 3, "For 2 upgrades after genesis that change opcodes' cost we should see 3 different execution costs"
