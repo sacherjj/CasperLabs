@@ -43,6 +43,7 @@ pub enum Error {
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
+    InvalidContext,
 }
 
 impl fmt::Display for Error {

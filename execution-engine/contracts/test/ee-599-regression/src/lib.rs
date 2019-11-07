@@ -17,6 +17,7 @@ const DONATION_AMOUNT: u64 = 1;
 // sources wouldn't overlap (if ever that's possible)
 const DONATION_BOX_COPY: &str = "donation_box_copy";
 const DONATION_BOX: &str = "donation_box";
+const GET_MAIN_PURSE: &str = "get_main_purse";
 const MAINTAINER: &str = "maintainer";
 const TRANSFER_FROM_PURSE_TO_ACCOUNT: &str = "transfer_from_purse_to_account";
 const TRANSFER_FROM_PURSE_TO_PURSE: &str = "transfer_from_purse_to_purse";
@@ -93,6 +94,9 @@ fn transfer_funds() -> Result<(), Error> {
         TRANSFER_TO_ACCOUNT => {
             let _transferred_to =
                 system::transfer_to_account(maintainer_public_key, U512::from(DONATION_AMOUNT))?;
+        }
+        GET_MAIN_PURSE => {
+            let _main_purse = account::get_main_purse();
         }
         _ => return Err(ContractError::InvalidTransferFundsMethod.into()),
     }

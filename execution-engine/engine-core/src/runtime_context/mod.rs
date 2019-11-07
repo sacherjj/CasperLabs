@@ -12,7 +12,7 @@ use contract_ffi::execution::Phase;
 use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
 use contract_ffi::uref::{AccessRights, URef};
 use contract_ffi::value::account::{
-    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
+    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
     SetThresholdFailure, UpdateKeyFailure, Weight,
 };
 use contract_ffi::value::{Contract, ProtocolVersion, Value};
@@ -625,7 +625,7 @@ where
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(self.account().pub_key()) {
+        if !self.is_valid_context() {
             // Exit early with error to avoid mutations
             return Err(AddKeyFailure::PermissionDenied.into());
         }
@@ -661,7 +661,7 @@ where
 
     pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(self.account().pub_key()) {
+        if !self.is_valid_context() {
             // Exit early with error to avoid mutations
             return Err(RemoveKeyFailure::PermissionDenied.into());
         }
@@ -699,7 +699,7 @@ where
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(self.account().pub_key()) {
+        if !self.is_valid_context() {
             // Exit early with error to avoid mutations
             return Err(UpdateKeyFailure::PermissionDenied.into());
         }
@@ -737,7 +737,7 @@ where
         threshold: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
-        if self.base_key() != Key::Account(self.account().pub_key()) {
+        if !self.is_valid_context() {
             // Exit early with error to avoid mutations
             return Err(SetThresholdFailure::PermissionDeniedError.into());
         }
@@ -805,5 +805,18 @@ where
         let value = input.into();
         self.validate_value(&value)?;
         Ok(value)
+    }
+
+    /// Checks if the account context is valid.
+    fn is_valid_context(&self) -> bool {
+        self.base_key() == Key::Account(self.account().pub_key())
+    }
+
+    /// Gets main purse id
+    pub fn get_main_purse(&self) -> Result<PurseId, Error> {
+        if !self.is_valid_context() {
+            return Err(Error::InvalidContext);
+        }
+        Ok(self.account().purse_id())
     }
 }

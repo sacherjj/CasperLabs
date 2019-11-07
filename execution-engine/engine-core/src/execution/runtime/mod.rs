@@ -379,14 +379,10 @@ where
 
     /// Writes runtime context's account main purse to [dest_ptr] in the Wasm memory.
     fn get_main_purse(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let purse_id = self
-            .context
-            .account()
-            .purse_id()
-            .to_bytes()
-            .map_err(Error::BytesRepr)?;
+        let purse_id = self.context.get_main_purse()?;
+        let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
         self.memory
-            .set(dest_ptr, &purse_id)
+            .set(dest_ptr, &purse_id_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
