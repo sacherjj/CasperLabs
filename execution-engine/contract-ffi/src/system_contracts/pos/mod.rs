@@ -1,5 +1,3 @@
 mod error;
 
-pub use error::Error;
-pub use error::PurseLookupError;
-pub use error::Result;
+pub use error::{Error, PurseLookupError, Result};

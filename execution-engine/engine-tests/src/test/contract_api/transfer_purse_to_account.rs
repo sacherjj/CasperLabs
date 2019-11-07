@@ -1,15 +1,21 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::contract_api::system::{TransferResult, TransferredTo};
-use contract_ffi::contract_api::Error;
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    contract_api::{
+        system::{TransferResult, TransferredTo},
+        Error,
+    },
+    key::Key,
+    value::{account::PublicKey, Value, U512},
+};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{
+        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_GENESIS_CONFIG,
+        DEFAULT_PAYMENT,
+    },
 };
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";

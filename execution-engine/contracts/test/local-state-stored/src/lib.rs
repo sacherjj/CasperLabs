@@ -1,7 +1,9 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const CONTRACT_NAME: &str = "local_state_stored";

@@ -1,12 +1,11 @@
 use hex_fmt::HexFmt;
 
-use core::any::type_name;
-use core::fmt;
-use core::marker::PhantomData;
+use core::{any::type_name, fmt, marker::PhantomData};
 
-use crate::uref::AccessRights;
-use crate::uref::URef;
-use crate::value::Value;
+use crate::{
+    uref::{AccessRights, URef},
+    value::Value,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum AccessRightsError {
@@ -87,9 +86,7 @@ impl<T> core::fmt::Display for TURef<T> {
 mod tests {
     use alloc::string::{String, ToString};
 
-    use crate::contract_api::TURef;
-    use crate::uref::AccessRights;
-    use crate::value::Value;
+    use crate::{contract_api::TURef, uref::AccessRights, value::Value};
 
     #[test]
     fn turef_as_string() {

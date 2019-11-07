@@ -2,13 +2,13 @@
 
 extern crate alloc;
 
-use alloc::string::String;
-use alloc::vec;
+use alloc::{string::String, vec};
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::contract_api::{ContractRef, TURef};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
+use contract_ffi::{
+    contract_api::{runtime, storage, ContractRef, Error, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+};
 
 pub const METHOD_VERSION: &str = "version";
 

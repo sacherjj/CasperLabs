@@ -1,11 +1,17 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{PublicKey, Weight};
-use contract_ffi::value::{Account, U512};
+use contract_ffi::{
+    key::Key,
+    value::{
+        account::{PublicKey, Weight},
+        Account, U512,
+    },
+};
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
 const CONTRACT_REMOVE_ASSOCIATED_KEY: &str = "remove_associated_key.wasm";

@@ -2,15 +2,15 @@
 
 extern crate alloc;
 
-use alloc::borrow::ToOwned;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::{borrow::ToOwned, collections::BTreeMap, string::String};
 use core::iter;
 
-use contract_ffi::contract_api::{runtime, storage, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::Value;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::Value,
+};
 
 const BAR_KEY: &str = "Bar";
 const FOO_KEY: &str = "Foo";

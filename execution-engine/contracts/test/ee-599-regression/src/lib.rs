@@ -3,14 +3,16 @@
 extern crate alloc;
 extern crate contract_ffi;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
-use contract_ffi::contract_api::{account, runtime, storage, system, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use contract_ffi::{
+    contract_api::{account, runtime, storage, system, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{
+        account::{PublicKey, PurseId},
+        U512,
+    },
+};
 
 const DONATION_AMOUNT: u64 = 1;
 // Different name just to make sure any routine that deals with named keys coming from different

@@ -1,6 +1,7 @@
-use contract_ffi::bytesrepr;
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use contract_ffi::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
+use contract_ffi::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+};
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SIZE_SERIALIZED};
 
 const PROTOCOL_DATA_SIZE_SERIALIZED: usize =
@@ -118,8 +119,10 @@ pub(crate) mod gens {
 mod tests {
     use proptest::proptest;
 
-    use contract_ffi::bytesrepr;
-    use contract_ffi::uref::{AccessRights, URef};
+    use contract_ffi::{
+        bytesrepr,
+        uref::{AccessRights, URef},
+    };
     use engine_shared::test_utils;
 
     use super::{gens, ProtocolData};

@@ -1,8 +1,12 @@
-use contract_ffi::contract_api::system::{MINT_NAME, POS_NAME};
-use contract_ffi::key::Key;
+use contract_ffi::{
+    contract_api::system::{MINT_NAME, POS_NAME},
+    key::Key,
+};
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+};
 use std::collections::BTreeMap;
 
 const CONTRACT_LIST_NAMED_KEYS: &str = "list_named_keys.wasm";

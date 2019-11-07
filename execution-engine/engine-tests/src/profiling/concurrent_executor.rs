@@ -4,23 +4,23 @@
 //! For details of how to run this executable, see the README in this directory or at
 //! https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/engine-tests/src/profiling/README.md#concurrent-executor
 
-use std::iter::Sum;
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::{
+    iter::Sum,
+    sync::Arc,
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
 
 use clap::{crate_version, App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 use log::info;
 
-use casperlabs_engine_tests::support::profiling_common;
-use casperlabs_engine_tests::support::test_support::ExecuteRequestBuilder;
-use contract_ffi::base16;
-use contract_ffi::value::U512;
-use engine_grpc_server::engine_server::ipc::ExecuteRequest;
-use engine_grpc_server::engine_server::ipc_grpc::{
-    ExecutionEngineService, ExecutionEngineServiceClient,
+use casperlabs_engine_tests::support::{profiling_common, test_support::ExecuteRequestBuilder};
+use contract_ffi::{base16, value::U512};
+use engine_grpc_server::engine_server::{
+    ipc::ExecuteRequest,
+    ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceClient},
 };
 
 const APP_NAME: &str = "Concurrent Executor";

@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError, TURef},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const COUNT_KEY: &str = "count";
 const COUNTER_EXT: &str = "counter_ext";

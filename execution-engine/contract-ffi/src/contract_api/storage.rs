@@ -1,17 +1,19 @@
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::convert::{From, TryFrom, TryInto};
-use core::u8;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::{
+    convert::{From, TryFrom, TryInto},
+    u8,
+};
 
 use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
-use crate::bytesrepr::{self, deserialize, ToBytes};
-use crate::contract_api::{runtime, Error};
-use crate::ext_ffi;
-use crate::key::{Key, UREF_SIZE};
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::AccessRights;
-use crate::value::{Contract, Value};
+use crate::{
+    bytesrepr::{self, deserialize, ToBytes},
+    contract_api::{runtime, Error},
+    ext_ffi,
+    key::{Key, UREF_SIZE},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::AccessRights,
+    value::{Contract, Value},
+};
 
 pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error> {
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is

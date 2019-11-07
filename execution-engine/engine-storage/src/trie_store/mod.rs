@@ -10,8 +10,7 @@ mod tests;
 
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::store::Store;
-use crate::trie::Trie;
+use crate::{store::Store, trie::Trie};
 
 const NAME: &str = "TRIE_STORE";
 

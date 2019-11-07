@@ -1,8 +1,12 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    key::Key,
+    value::{Value, U512},
+};
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_CREATE: &str = "ee_572_regression_create.wasm";
 const CONTRACT_ESCALATE: &str = "ee_572_regression_escalate.wasm";

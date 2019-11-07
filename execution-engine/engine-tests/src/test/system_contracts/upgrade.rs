@@ -1,14 +1,18 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::{ProtocolVersion, Value, U512};
+use contract_ffi::{
+    key::Key,
+    value::{ProtocolVersion, Value, U512},
+};
 use engine_core::engine_state::upgrade::ActivationPoint;
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::transform::Transform;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
-use crate::support::test_support::{
-    self, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
+use crate::{
+    support::test_support::{
+        self, ExecuteRequestBuilder, InMemoryWasmTestBuilder, UpgradeRequestBuilder,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_WASM_COSTS};
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;

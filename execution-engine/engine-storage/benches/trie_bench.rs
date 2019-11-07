@@ -2,13 +2,14 @@
 
 extern crate test;
 
-use test::black_box;
-use test::Bencher;
+use test::{black_box, Bencher};
 
 use casperlabs_engine_storage::trie::{Pointer, PointerBlock, Trie};
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::{
+    bytesrepr::{FromBytes, ToBytes},
+    key::Key,
+    value::Value,
+};
 use engine_shared::newtypes::Blake2bHash;
 
 #[bench]

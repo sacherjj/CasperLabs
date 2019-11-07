@@ -1,10 +1,14 @@
-use std::collections::btree_map::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
@@ -12,13 +16,18 @@ use engine_core::engine_state::{EngineConfig, EngineState};
 use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
 
-use engine_shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use engine_shared::logging::{log_level, log_settings};
-use engine_shared::os::get_page_size;
-use engine_shared::{logging, socket};
-use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_storage::transaction_source::lmdb::LmdbEnvironment;
-use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_shared::{
+    logging::{
+        self, log_level,
+        log_settings::{self, LogLevelFilter, LogSettings},
+    },
+    os::get_page_size,
+    socket,
+};
+use engine_storage::{
+    global_state::lmdb::LmdbGlobalState, transaction_source::lmdb::LmdbEnvironment,
+    trie_store::lmdb::LmdbTrieStore,
+};
 
 use casperlabs_engine_grpc_server::engine_server;
 use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;

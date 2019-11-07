@@ -1,10 +1,10 @@
 use contract_ffi::value::account::PublicKey;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-};
-use crate::test::{
-    CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use crate::{
+    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{
+        CONTRACT_STANDARD_PAYMENT, DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+    },
 };
 
 const PASS_INIT_REMOVE: &str = "init_remove";

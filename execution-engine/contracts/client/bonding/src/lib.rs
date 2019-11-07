@@ -4,10 +4,12 @@ extern crate alloc;
 
 use alloc::vec;
 
-use contract_ffi::contract_api::{account, runtime, system, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::uint::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::uint::U512,
+};
 
 const BOND_METHOD_NAME: &str = "bond";
 

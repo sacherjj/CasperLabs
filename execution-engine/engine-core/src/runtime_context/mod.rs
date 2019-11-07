@@ -1,31 +1,38 @@
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Display;
-use std::rc::Rc;
-
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-
-use contract_ffi::bytesrepr::{deserialize, ToBytes};
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{
-    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, UpdateKeyFailure, Weight,
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    convert::{TryFrom, TryInto},
+    fmt::Display,
+    rc::Rc,
 };
-use contract_ffi::value::{Contract, ProtocolVersion, Value};
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::CorrelationId;
-use engine_storage::global_state::StateReader;
-use engine_storage::protocol_data::ProtocolData;
 
-use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
-use crate::execution::{AddressGenerator, Error};
-use crate::tracking_copy::{AddResult, TrackingCopy};
-use crate::Address;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
+
+use contract_ffi::{
+    bytesrepr::{deserialize, ToBytes},
+    execution::Phase,
+    key::{Key, LOCAL_SEED_SIZE},
+    uref::{AccessRights, URef},
+    value::{
+        account::{
+            Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
+            SetThresholdFailure, UpdateKeyFailure, Weight,
+        },
+        Contract, ProtocolVersion, Value,
+    },
+};
+use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+
+use crate::{
+    engine_state::{execution_effect::ExecutionEffect, SYSTEM_ACCOUNT_ADDR},
+    execution::{AddressGenerator, Error},
+    tracking_copy::{AddResult, TrackingCopy},
+    Address,
+};
 
 #[cfg(test)]
 mod tests;

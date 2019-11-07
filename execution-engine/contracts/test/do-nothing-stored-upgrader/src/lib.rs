@@ -1,9 +1,11 @@
 #![no_std]
 
-use contract_ffi::contract_api::{runtime, Error, TURef};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
-use contract_ffi::value::Contract;
+use contract_ffi::{
+    contract_api::{runtime, Error, TURef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+    value::Contract,
+};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 

@@ -2,15 +2,17 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
-use alloc::string::String;
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
 use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError, TURef};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError, TURef},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+};
 
 const LIST_KEY: &str = "list";
 const MAILING_KEY: &str = "mailing";
