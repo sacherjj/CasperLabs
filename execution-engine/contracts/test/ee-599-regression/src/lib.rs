@@ -71,20 +71,24 @@ fn transfer_funds() -> Result<(), Error> {
         .ok_or(Error::MissingArgument)?
         .map_err(|_| Error::InvalidArgument)?;
 
-    // Caller's main purse (different from the owner of the contract)
-    let main_purse = account::get_main_purse();
     // Donation box is the purse funds will be transferred into
     let donation_box_purse = get_donation_box_purse()?;
     // This is the address of account which installed the contract
     let maintainer_public_key = get_maintainer_public_key()?;
 
     match method.as_str() {
-        TRANSFER_FROM_PURSE_TO_PURSE => system::transfer_from_purse_to_purse(
-            main_purse,
-            donation_box_purse,
-            U512::from(DONATION_AMOUNT),
-        )?,
+        TRANSFER_FROM_PURSE_TO_PURSE => {
+            let main_purse = account::get_main_purse();
+
+            system::transfer_from_purse_to_purse(
+                main_purse,
+                donation_box_purse,
+                U512::from(DONATION_AMOUNT),
+            )?
+        }
         TRANSFER_FROM_PURSE_TO_ACCOUNT => {
+            let main_purse = account::get_main_purse();
+
             let _transferred_to = system::transfer_from_purse_to_account(
                 main_purse,
                 maintainer_public_key,

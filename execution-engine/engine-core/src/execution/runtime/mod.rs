@@ -875,7 +875,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let source = self.context.account().purse_id();
+        let source = self.context.get_main_purse()?;
         self.transfer_from_purse_to_account(source, target, amount)
     }
 
