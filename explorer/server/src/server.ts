@@ -37,7 +37,8 @@ const faucet = new Contracts.BoundContract(
 
 // Constant payment amount.
 const paymentAmount = BigInt(process.env.PAYMENT_AMOUNT!);
-const faucetAmount = BigInt(process.env.FAUCET_AMOUNT)!;
+// How much to send to a user in a faucet request.
+const transferAmount = BigInt(process.env.TRANSFER_AMOUNT)!;
 
 // gRPC client to the node.
 const deployService = new DeployService(process.env.CASPER_SERVICE_URL!);
@@ -116,7 +117,7 @@ app.post("/api/faucet", checkJwt, (req, res) => {
 
   // Prepare the signed deploy.
   const accountPublicKey = decodeBase64(accountPublicKeyBase64);
-  const deploy = faucet.deploy(Faucet.args(accountPublicKey, faucetAmount), paymentAmount);
+  const deploy = faucet.deploy(Faucet.args(accountPublicKey, transferAmount), paymentAmount);
 
   // Send the deploy to the node and return the deploy hash to the browser.
   deployService
