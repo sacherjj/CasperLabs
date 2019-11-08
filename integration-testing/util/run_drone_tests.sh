@@ -15,6 +15,8 @@ cd ../..
 make docker-build-all
 make docker-build/grpcwebproxy
 
+docker pull selenium/standalone-chrome:3.141.59-xenon
+
 docker tag casperlabs/node:test casperlabs/node:test-DRONE-1
 docker tag casperlabs/execution-engine:test casperlabs/execution-engine:test-DRONE-1
 docker tag casperlabs/client:test casperlabs/client:test-DRONE-1
