@@ -1,18 +1,16 @@
-use std::collections::HashMap;
-
 use contract_ffi::key::Key;
-use engine_shared::transform::Transform;
+use engine_shared::{additive_map::AdditiveMap, transform::Transform};
 
 use super::op::Op;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionEffect {
-    pub ops: HashMap<Key, Op>,
-    pub transforms: HashMap<Key, Transform>,
+    pub ops: AdditiveMap<Key, Op>,
+    pub transforms: AdditiveMap<Key, Transform>,
 }
 
 impl ExecutionEffect {
-    pub fn new(ops: HashMap<Key, Op>, transforms: HashMap<Key, Transform>) -> Self {
+    pub fn new(ops: AdditiveMap<Key, Op>, transforms: AdditiveMap<Key, Transform>) -> Self {
         ExecutionEffect { ops, transforms }
     }
 }

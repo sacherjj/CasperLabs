@@ -6,17 +6,22 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
+import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.consensus.{state, Block}
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.InvalidArgument
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.node.api.Utils.{validateBlockHashPrefix, validateDeployHash}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
+import io.casperlabs.node.api.Utils.{
+  validateAccountPublicKey,
+  validateBlockHashPrefix,
+  validateDeployHash
+}
 import io.casperlabs.node.api.casper._
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -27,7 +32,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
@@ -122,6 +127,45 @@ object GrpcCasperService {
                         MonadThrowable[F].raiseError(InvalidArgument(msg))
                     }
           } yield value
+
+        override def listDeployInfos(
+            request: ListDeployInfosRequest
+        ): Task[ListDeployInfosResponse] =
+          TaskLike[F].apply {
+            for {
+              accountPublicKeyBase16 <- validateAccountPublicKey[F](
+                                         request.accountPublicKeyBase16,
+                                         adaptToInvalidArgument
+                                       )
+              (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F].fromTry(
+                                                              DeployInfoPagination.parsePageToken(
+                                                                request
+                                                              )
+                                                            )
+              accountPublicKeyBs = PublicKey(
+                ByteString.copyFrom(
+                  Base16.decode(accountPublicKeyBase16)
+                )
+              )
+              deploys <- DeployStorage[F]
+                          .reader(request.view)
+                          .getDeploysByAccount(
+                            accountPublicKeyBs,
+                            pageSize,
+                            lastTimeStamp,
+                            lastDeployHash
+                          )
+              deployInfos <- DeployStorage[F]
+                              .reader(request.view)
+                              .getDeployInfos(deploys)
+              nextPageToken = DeployInfoPagination.createNextPageToken(
+                deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+              )
+              result = ListDeployInfosResponse()
+                .withDeployInfos(deployInfos)
+                .withNextPageToken(nextPageToken)
+            } yield result
+          }
       }
     }
 

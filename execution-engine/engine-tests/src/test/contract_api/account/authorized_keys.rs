@@ -1,10 +1,12 @@
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+use crate::{
+    support::test_support::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        STANDARD_PAYMENT_CONTRACT,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 use contract_ffi::value::account::{PublicKey, Weight};
-use engine_core::engine_state;
-use engine_core::execution;
+use engine_core::{engine_state, execution};
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
 const CONTRACT_AUTHORIZED_KEYS: &str = "authorized_keys.wasm";
 
@@ -69,7 +71,7 @@ fn should_raise_auth_failure_with_invalid_key() {
 
     assert_eq!(
         message,
-        format!("{}", engine_state::error::Error::AuthorizationError)
+        format!("{}", engine_state::Error::AuthorizationError)
     )
 }
 
@@ -121,7 +123,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
 
     assert_eq!(
         message,
-        format!("{}", engine_state::error::Error::AuthorizationError)
+        format!("{}", engine_state::Error::AuthorizationError)
     )
 }
 

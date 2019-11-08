@@ -1,18 +1,24 @@
 use std::convert::TryInto;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{Account, PublicKey, PurseId};
-use contract_ffi::value::U512;
-
-use engine_core::engine_state::genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE};
-use engine_core::engine_state::CONV_RATE;
-
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use contract_ffi::{
+    key::Key,
+    value::{
+        account::{Account, PublicKey, PurseId},
+        U512,
+    },
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
+use engine_core::engine_state::{
+    genesis::{POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
+    CONV_RATE,
+};
+use engine_shared::{gas::Gas, motes::Motes};
+
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";

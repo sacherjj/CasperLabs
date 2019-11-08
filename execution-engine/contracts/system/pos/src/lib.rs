@@ -1,26 +1,32 @@
 #![cfg_attr(not(test), no_std)]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 mod queue;
 mod stakes;
 
-use alloc::string::String;
-use alloc::vec::Vec;
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
+use alloc::vec;
+use alloc::{string::String, vec::Vec};
 
-use contract_ffi::contract_api::{runtime, system};
-use contract_ffi::execution::Phase;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::pos::{Error, PurseLookupError, Result};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, system},
+    execution::Phase,
+    key::Key,
+    system_contracts::pos::{Error, PurseLookupError, Result},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+    value::{
+        account::{BlockTime, PublicKey, PurseId},
+        U512,
+    },
+};
 
-use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
-use crate::stakes::{ContractStakes, StakesProvider};
+use crate::{
+    queue::{QueueEntry, QueueLocal, QueueProvider},
+    stakes::{ContractStakes, StakesProvider},
+};
 
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
@@ -119,8 +125,8 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     let mut bonding_queue = Q::read_bonding();
     let mut unbonding_queue = Q::read_unbonding();
 
-    let bonds = bonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(BOND_DELAY)));
-    let unbonds = unbonding_queue.pop_due(BlockTime(timestamp.0.saturating_sub(UNBOND_DELAY)));
+    let bonds = bonding_queue.pop_due(timestamp.saturating_sub(BlockTime::new(BOND_DELAY)));
+    let unbonds = unbonding_queue.pop_due(timestamp.saturating_sub(BlockTime::new(UNBOND_DELAY)));
 
     if !unbonds.is_empty() {
         Q::write_unbonding(&unbonding_queue);
@@ -355,18 +361,22 @@ pub extern "C" fn call() {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::iter;
+    use std::{cell::RefCell, iter};
 
-    use contract_ffi::system_contracts::pos::Result;
-    use contract_ffi::value::{
-        account::{BlockTime, PublicKey},
-        U512,
+    use contract_ffi::{
+        system_contracts::pos::Result,
+        value::{
+            account::{BlockTime, PublicKey},
+            U512,
+        },
     };
 
-    use crate::queue::{Queue, QueueProvider};
-    use crate::stakes::{Stakes, StakesProvider};
-    use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};
+    use crate::{
+        bond,
+        queue::{Queue, QueueProvider},
+        stakes::{Stakes, StakesProvider},
+        step, unbond, BOND_DELAY, UNBOND_DELAY,
+    };
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];
@@ -423,22 +433,26 @@ mod tests {
 
     #[test]
     fn test_bond_step_unbond() {
-        bond::<TestQueues, TestStakes>(U512::from(500), PublicKey::new(KEY2), BlockTime(1))
+        bond::<TestQueues, TestStakes>(U512::from(500), PublicKey::new(KEY2), BlockTime::new(1))
             .expect("bond validator 2");
 
         // Bonding becomes effective only after the delay.
         assert_stakes(&[(KEY1, 1_000)]);
-        step::<TestQueues, TestStakes>(BlockTime(BOND_DELAY)).expect("step 1");
+        step::<TestQueues, TestStakes>(BlockTime::new(BOND_DELAY)).expect("step 1");
         assert_stakes(&[(KEY1, 1_000)]);
-        step::<TestQueues, TestStakes>(BlockTime(1 + BOND_DELAY)).expect("step 2");
+        step::<TestQueues, TestStakes>(BlockTime::new(1 + BOND_DELAY)).expect("step 2");
         assert_stakes(&[(KEY1, 1_000), (KEY2, 500)]);
 
-        unbond::<TestQueues, TestStakes>(Some(U512::from(500)), PublicKey::new(KEY1), BlockTime(2))
-            .expect("partly unbond validator 1");
+        unbond::<TestQueues, TestStakes>(
+            Some(U512::from(500)),
+            PublicKey::new(KEY1),
+            BlockTime::new(2),
+        )
+        .expect("partly unbond validator 1");
 
         // Unbonding becomes effective immediately.
         assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
-        step::<TestQueues, TestStakes>(BlockTime(2 + UNBOND_DELAY)).expect("step 3");
+        step::<TestQueues, TestStakes>(BlockTime::new(2 + UNBOND_DELAY)).expect("step 3");
         assert_stakes(&[(KEY1, 500), (KEY2, 500)]);
     }
 }

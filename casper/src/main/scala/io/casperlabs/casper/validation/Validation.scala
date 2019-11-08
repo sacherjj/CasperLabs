@@ -1,14 +1,12 @@
 package io.casperlabs.casper.validation
 
-import io.casperlabs.casper.consensus
-import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus
 import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -32,15 +30,14 @@ trait Validation[F[_]] {
   def parents(
       b: Block,
       lastFinalizedBlockHash: BlockHash,
-      dag: DagRepresentation[F],
-      equivocationsTracker: EquivocationsTracker
+      dag: DagRepresentation[F]
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
   def blockSignature(b: BlockSummary): F[Boolean]
 
   def deployHash(d: consensus.Deploy): F[Boolean]
 
-  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]]
+  def deployHeader(d: consensus.Deploy, chainName: String): F[List[Errors.DeployHeaderError]]
 
   def deploySignature(d: consensus.Deploy): F[Boolean]
 

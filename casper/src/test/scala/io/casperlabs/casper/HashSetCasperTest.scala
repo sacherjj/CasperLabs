@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.data.EitherT
 import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -8,8 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
-import io.casperlabs.casper.helper._
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
+import io.casperlabs.casper.helper._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
@@ -19,9 +18,8 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import io.casperlabs.shared.FilesAPI
+import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.{BlockMsgWithTransform, SQLiteStorage}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
@@ -46,11 +44,8 @@ abstract class HashSetCasperTest
 
   private val (otherSk, _)                = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  //private val (ethPivKeys, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  //private val ethAddresses = ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.drop(1)).takeRight(20)))
-  //private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val wallets = validators.map(key => (key, 10001L)).toMap
-  private val bonds   = createBonds(validators)
+  private val wallets                     = validators.map(key => (key, 10001L)).toMap
+  private val bonds                       = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, 0L)
 
@@ -151,7 +146,8 @@ abstract class HashSetCasperTest
       _                    = logEff.warns.isEmpty should be(true)
       dag                  <- MultiParentCasper[Task].dag
       latestMessageHashes  <- dag.latestMessageHashes
-      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators         <- dag.getEquivocators
+      estimate             <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
       _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
@@ -196,7 +192,8 @@ abstract class HashSetCasperTest
       _                     = ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
       dag                   <- MultiParentCasper[Task].dag
       latestMessageHashes   <- dag.latestMessageHashes
-      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes)
+      equivocators          <- dag.getEquivocators
+      estimate              <- MultiParentCasper[Task].estimator(dag, latestMessageHashes, equivocators)
 
       _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
       _ <- node.tearDown()
@@ -321,7 +318,7 @@ abstract class HashSetCasperTest
 
   it should "start numbering validators' blocks from 1" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     val validator = ByteString.copyFrom(validators.head)
 
     for {
@@ -826,9 +823,9 @@ abstract class HashSetCasperTest
             List(blockA, blockB).map(nodes(1).casperEff.addBlock)
           }
 
-      state <- nodes(1).casperState.read
+      equivocators <- nodes(1).dagStorage.getRepresentation.flatMap(_.getEquivocators)
     } yield {
-      state.equivocationsTracker.contains(nodes(0).ownValidatorKey) shouldBe true
+      equivocators.contains(nodes(0).ownValidatorKey) shouldBe true
     }
   }
 
@@ -871,7 +868,7 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
-  it should "reject blocks that include a invalid block pointer" in effectTest {
+  it should "reject blocks that include an invalid block pointer" in effectTest {
     for {
       nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
       deploys         <- (1L to 6L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
@@ -1066,7 +1063,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block1)
+      _                     <- checkLastFinalizedBlock(nodes(0), block2)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
@@ -1076,7 +1073,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block2)
+      _                     <- checkLastFinalizedBlock(nodes(0), block3)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
@@ -1086,9 +1083,9 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block3)
+      _                     <- checkLastFinalizedBlock(nodes(0), block4)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
+      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
@@ -1096,7 +1093,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block4)
+      _                     <- checkLastFinalizedBlock(nodes(0), block5)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1106,34 +1103,12 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block5)
+      _                     <- checkLastFinalizedBlock(nodes(0), block6)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
-  }
-
-  it should "fail when deploying with insufficient gas" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Task]
-
-    for {
-      deploy <- ProtoUtil.basicDeploy[Task]().map { d =>
-                 d.withBody(
-                   d.getBody.withPayment(
-                     Deploy.Code().withWasm(ByteString.copyFromUtf8("some payment code"))
-                   )
-                 )
-               }
-      _                 <- node.casperEff.deploy(deploy)
-      createBlockResult <- MultiParentCasper[Task].createBlock
-      Created(block)    = createBlockResult
-    } yield {
-      cancelUntilFixed("FIXME: Implement cost accounting!")
-      //assert(block.body.get.deploys.head.isError)
-    }
   }
 
   it should "succeed if given enough gas for deploy" in effectTest {
@@ -1186,7 +1161,7 @@ abstract class HashSetCasperTest
 
   it should "not execute deploys until dependencies are met" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     for {
       deploy1         <- ProtoUtil.basicDeploy[Task]()
       deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withDependencies(Seq(deploy1.deployHash)))
@@ -1203,7 +1178,7 @@ abstract class HashSetCasperTest
 
   it should "only execute deploys during the appropriate time window" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     val minTTL = 60 * 60 * 1000
     for {
       deploy1         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(3L).withTtl(minTTL))
@@ -1227,33 +1202,52 @@ abstract class HashSetCasperTest
   }
 
   it should "not execute deploys which are already in the past" in effectTest {
-    val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    val bonds = createBonds(validators.take(2))
+    val BlockMsgWithTransform(Some(genesis), transforms) =
+      buildGenesis(Map.empty, bonds, 0L)
+
+    def deploySomething(nodes: IndexedSeq[TestNode[Task]], i: Int) =
+      for {
+        deploy         <- ProtoUtil.basicDeploy[Task]()
+        _              <- nodes(i).casperEff.deploy(deploy)
+        create         <- nodes(i).casperEff.createBlock
+        Created(block) = create
+        _              <- nodes(i).casperEff.addBlock(block) shouldBeF Valid
+        _              <- nodes(1 - i).casperEff.addBlock(block) shouldBeF Valid
+      } yield deploy
+
     for {
-      deploy          <- ProtoUtil.basicDeploy[Task]()
-      _               <- node.casperEff.deploy(deploy)
-      create1         <- node.casperEff.createBlock
-      Created(block1) = create1
-      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms
+              )
 
-      // Should be finalized, so not stop it appearing again as pending.
-      processedDeploys <- node.deployStorage.reader.readProcessed
-      _                = processedDeploys shouldBe empty
+      deploy <- deploySomething(nodes, 0)
+      // Deploy a few more things to both nodes so things get finalized.
+      // NOTE: A single node currently doesn't finalize anything.
+      _ <- deploySomething(nodes, 1)
+      _ <- deploySomething(nodes, 0)
+      _ <- deploySomething(nodes, 1)
 
-      // Should be able to enquee the deploy again.
-      _               <- node.casperEff.deploy(deploy)
-      pendingDeploys1 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys1 should not be empty
+      // The first deploy should be finalized, so not stop it appearing again as pending.
+      processedDeploys <- nodes(0).deployStorage.reader.readProcessed
+      _                = processedDeploys should not contain (deploy)
+
+      // Should be able to enqueue the deploy again.
+      _               <- nodes(0).casperEff.deploy(deploy)
+      pendingDeploys1 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys1 should contain(deploy)
 
       // Should not put it in a block.
-      createB <- node.casperEff.createBlock
+      createB <- nodes(0).casperEff.createBlock
       _       = createB shouldBe CreateBlockStatus.noNewDeploys
 
       // Should discard the deploy.
-      pendingDeploys2 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys2 shouldBe empty
+      pendingDeploys2 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys2 should not contain (deploy)
 
-      _ <- node.tearDown()
+      _ <- nodes.toList.traverse(_.tearDown())
     } yield ()
   }
 

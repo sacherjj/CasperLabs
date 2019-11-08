@@ -6,12 +6,12 @@ pub mod storage;
 pub mod system;
 mod turef;
 
-use alloc::alloc::{Alloc, Global};
-use alloc::vec::Vec;
+use alloc::{
+    alloc::{Alloc, Global},
+    vec::Vec,
+};
 
-use crate::bytesrepr::ToBytes;
-
-use crate::unwrap_or_revert::UnwrapOrRevert;
+use crate::{bytesrepr::ToBytes, unwrap_or_revert::UnwrapOrRevert};
 pub use contract_ref::ContractRef;
 pub use error::{i32_from, result_from, Error};
 pub use turef::TURef;
@@ -22,7 +22,11 @@ fn alloc_bytes(n: usize) -> *mut u8 {
         // cannot allocate with size 0
         0 as *mut u8
     } else {
-        Global.alloc_array(n).unwrap().as_ptr()
+        Global
+            .alloc_array(n)
+            .map_err(|_| Error::OutOfMemoryError)
+            .unwrap_or_revert()
+            .as_ptr()
     }
 }
 

@@ -2,15 +2,15 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::string::String;
 
-use contract_ffi::contract_api::{account, runtime, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    Weight,
+use contract_ffi::{
+    contract_api::{account, runtime, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::{
+        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure, Weight,
+    },
 };
 
 #[no_mangle]

@@ -2,10 +2,11 @@
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{account, runtime, system, Error as ApiError};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, Error as ApiError},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 enum Arg {
     TargetPurse = 0,

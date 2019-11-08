@@ -48,30 +48,33 @@ object DagStorage {
     abstract override def contains(blockHash: BlockHash): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
 
-    abstract override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+    abstract override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
       incAndMeasure("latestMessageHash", super.latestMessageHash(validator))
 
-    abstract override def latestMessage(validator: Validator): F[Option[Message]] =
+    abstract override def latestMessage(validator: Validator): F[Set[Message]] =
       incAndMeasure("latestMessage", super.latestMessage(validator))
 
-    abstract override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+    abstract override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
       incAndMeasure("latestMessageHashes", super.latestMessageHashes)
 
-    abstract override def latestMessages: F[Map[Validator, Message]] =
+    abstract override def latestMessages: F[Map[Validator, Set[Message]]] =
       incAndMeasure("latestMessages", super.latestMessages)
 
     abstract override def topoSort(
         startBlockNumber: Long,
         endBlockNumber: Long
     ): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super
-        .topoSort(startBlockNumber, endBlockNumber)
+      super.incAndMeasure(
+        "topoSort",
+        super
+          .topoSort(startBlockNumber, endBlockNumber)
+      )
 
     abstract override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSort")) >> super.topoSort(startBlockNumber)
+      super.incAndMeasure("topoSort", super.topoSort(startBlockNumber))
 
     abstract override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-      fs2.Stream.eval(m.incrementCounter("topoSortTail")) >> super.topoSortTail(tailLength)
+      super.incAndMeasure("topoSortTail", super.topoSortTail(tailLength))
   }
 
   def apply[F[_]](implicit B: DagStorage[F]): DagStorage[F] = B
@@ -96,10 +99,10 @@ trait DagRepresentation[F[_]] {
 
   def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]]
 
-  def latestMessageHash(validator: Validator): F[Option[BlockHash]]
-  def latestMessage(validator: Validator): F[Option[Message]]
-  def latestMessageHashes: F[Map[Validator, BlockHash]]
-  def latestMessages: F[Map[Validator, Message]]
+  def latestMessageHash(validator: Validator): F[Set[BlockHash]]
+  def latestMessage(validator: Validator): F[Set[Message]]
+  def latestMessageHashes: F[Map[Validator, Set[BlockHash]]]
+  def latestMessages: F[Map[Validator, Set[Message]]]
 }
 
 object DagRepresentation {
@@ -124,6 +127,23 @@ object DagRepresentation {
                 }
             )
         )
+
+    // Returns a set of validators that this node has seen equivocating.
+    def getEquivocators(implicit M: Monad[F]): F[Set[Validator]] =
+      getEquivocations.map(_.keySet)
+
+    // Returns a mapping between equivocators and their messages.
+    def getEquivocations(implicit M: Monad[F]): F[Map[Validator, Set[Message]]] =
+      dagRepresentation.latestMessages.map(_.filter(_._2.size > 1))
+
+    // Returns latest messages from honest validators
+    def latestMessagesHonestValidators(implicit M: Monad[F]): F[Map[Validator, Message]] =
+      dagRepresentation.latestMessages.map { latestMessages =>
+        latestMessages.collect {
+          case (v, messages) if messages.size == 1 =>
+            (v, messages.head)
+        }
+      }
   }
 
   def apply[F[_]](implicit ev: DagRepresentation[F]): DagRepresentation[F] = ev

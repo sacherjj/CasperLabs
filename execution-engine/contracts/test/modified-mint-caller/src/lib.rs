@@ -1,13 +1,13 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::String;
+use alloc::{string::String, vec};
 
-use contract_ffi::contract_api::{runtime, storage, system};
-use contract_ffi::key::Key;
+use contract_ffi::{
+    contract_api::{runtime, storage, system},
+    key::Key,
+};
 
 const NEW_ENDPOINT_NAME: &str = "version";
 const RESULT_TUREF_NAME: &str = "output_version";

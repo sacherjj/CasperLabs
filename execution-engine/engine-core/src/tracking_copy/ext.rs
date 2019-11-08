@@ -1,39 +1,16 @@
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::{Account, Contract, Value};
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::TypeMismatch;
+use contract_ffi::{
+    bytesrepr::ToBytes,
+    key::Key,
+    uref::URef,
+    value::{Account, Contract, Value},
+};
+use engine_shared::{motes::Motes, newtypes::CorrelationId, transform::TypeMismatch};
 use engine_storage::global_state::StateReader;
 
-use crate::execution;
-use crate::tracking_copy::{QueryResult, TrackingCopy};
-
-pub struct SystemContractInfo {
-    key: Key,
-    contract: Contract,
-}
-
-impl SystemContractInfo {
-    pub fn key(&self) -> Key {
-        self.key
-    }
-
-    pub fn contract(&self) -> &Contract {
-        &self.contract
-    }
-
-    pub fn module_bytes(&self) -> Vec<u8> {
-        self.contract.bytes().to_vec()
-    }
-}
-
-impl SystemContractInfo {
-    fn new(key: Key, contract: Contract) -> SystemContractInfo {
-        SystemContractInfo { key, contract }
-    }
-}
+use crate::{
+    execution,
+    tracking_copy::{QueryResult, TrackingCopy},
+};
 
 pub trait TrackingCopyExt<R> {
     type Error;
@@ -59,14 +36,6 @@ pub trait TrackingCopyExt<R> {
         correlation_id: CorrelationId,
         balance_key: Key,
     ) -> Result<Motes, Self::Error>;
-
-    /// Gets the system contract, packaged with its outer uref key and inner
-    /// uref key
-    fn get_system_contract_info(
-        &mut self,
-        correlation_id: CorrelationId,
-        outer_key: Key,
-    ) -> Result<SystemContractInfo, Self::Error>;
 
     /// Gets a contract by Key
     fn get_contract(
@@ -141,30 +110,21 @@ where
         }
     }
 
-    fn get_system_contract_info(
-        &mut self,
-        correlation_id: CorrelationId,
-        key: Key,
-    ) -> Result<SystemContractInfo, Self::Error> {
-        let contract = self.get_contract(correlation_id, key)?;
-        Ok(SystemContractInfo::new(key, contract))
-    }
-
     fn get_contract(
         &mut self,
         correlation_id: CorrelationId,
         key: Key,
     ) -> Result<Contract, Self::Error> {
-        let contract = match self.get(correlation_id, &key).map_err(Into::into)? {
-            Some(Value::Contract(contract)) => contract,
-            Some(other) => {
-                return Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                    "Value::Contract".to_string(),
-                    other.type_string(),
-                )))
-            }
-            None => return Err(execution::Error::KeyNotFound(key)),
-        };
-        Ok(contract)
+        match self
+            .get(correlation_id, &key.normalize())
+            .map_err(Into::into)?
+        {
+            Some(Value::Contract(contract)) => Ok(contract),
+            Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
+                "Value::Contract".to_string(),
+                other.type_string(),
+            ))),
+            None => Err(execution::Error::KeyNotFound(key)),
+        }
     }
 }

@@ -1,25 +1,31 @@
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::{ProtocolVersion, Value};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::Transform;
+use contract_ffi::{
+    key::Key,
+    value::{ProtocolVersion, Value},
+};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    newtypes::{Blake2bHash, CorrelationId},
+    transform::Transform,
+};
 
-use crate::error::{self, in_memory};
-use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, StateProvider};
-use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::in_memory::InMemoryProtocolDataStore;
-use crate::store::Store;
-use crate::transaction_source::in_memory::{InMemoryEnvironment, InMemoryReadTransaction};
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::operations::create_hashed_empty_trie;
-use crate::trie::Trie;
-use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::operations;
-use crate::trie_store::operations::{read, ReadResult, WriteResult};
+use crate::{
+    error::{self, in_memory},
+    global_state::{commit, CommitResult, StateProvider, StateReader},
+    protocol_data::ProtocolData,
+    protocol_data_store::in_memory::InMemoryProtocolDataStore,
+    store::Store,
+    transaction_source::{
+        in_memory::{InMemoryEnvironment, InMemoryReadTransaction},
+        Transaction, TransactionSource,
+    },
+    trie::{operations::create_hashed_empty_trie, Trie},
+    trie_store::{
+        in_memory::InMemoryTrieStore,
+        operations::{self, read, ReadResult, WriteResult},
+    },
+};
 
 pub struct InMemoryGlobalState {
     pub environment: Arc<InMemoryEnvironment>,
@@ -147,7 +153,7 @@ impl StateProvider for InMemoryGlobalState {
         &self,
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<InMemoryEnvironment, InMemoryTrieStore, _, Self::Error>(
             &self.environment,
@@ -263,7 +269,7 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = test_pairs_updated
+        let effects: AdditiveMap<Key, Transform> = test_pairs_updated
             .iter()
             .cloned()
             .map(|TestPair { key, value }| (key, Transform::Write(value)))
@@ -291,8 +297,8 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = {
-            let mut tmp = HashMap::new();
+        let effects: AdditiveMap<Key, Transform> = {
+            let mut tmp = AdditiveMap::new();
             for TestPair { key, value } in &test_pairs_updated {
                 tmp.insert(*key, Transform::Write(value.to_owned()));
             }
@@ -331,8 +337,8 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            179u8, 25, 253, 1, 184, 92, 35, 238, 75, 11, 57, 168, 253, 235, 149, 239, 17, 19, 64,
-            154, 35, 168, 212, 17, 181, 9, 219, 10, 142, 25, 73, 65,
+            43, 174, 143, 127, 30, 3, 38, 59, 12, 141, 177, 76, 137, 106, 87, 159, 85, 97, 227, 65,
+            243, 187, 142, 102, 129, 28, 214, 173, 201, 154, 221, 251,
         ];
         let init_state = test_utils::mocked_account([48u8; 32]);
         let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();

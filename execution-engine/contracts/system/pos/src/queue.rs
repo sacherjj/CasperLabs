@@ -1,12 +1,15 @@
 use alloc::vec::Vec;
-use core::convert::TryFrom;
-use core::result;
+use core::{convert::TryFrom, result};
 
-use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
-use contract_ffi::contract_api::storage;
-use contract_ffi::system_contracts::pos::{Error, Result};
-use contract_ffi::value::account::{BlockTime, PublicKey};
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    contract_api::storage,
+    system_contracts::pos::{Error, Result},
+    value::{
+        account::{BlockTime, PublicKey},
+        Value, U512,
+    },
+};
 
 const BONDING_KEY: u8 = 1;
 const UNBONDING_KEY: u8 = 2;
@@ -181,9 +184,13 @@ impl ToBytes for Queue {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::system_contracts::pos::Error;
-    use contract_ffi::value::account::{BlockTime, PublicKey};
-    use contract_ffi::value::U512;
+    use contract_ffi::{
+        system_contracts::pos::Error,
+        value::{
+            account::{BlockTime, PublicKey},
+            U512,
+        },
+    };
 
     use crate::queue::{Queue, QueueEntry};
 
@@ -197,15 +204,15 @@ mod tests {
         let val2 = PublicKey::new(KEY2);
         let val3 = PublicKey::new(KEY3);
         let mut queue: Queue = Default::default();
-        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
-        assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime(101)));
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(5), BlockTime::new(101)));
         assert_eq!(
             Err(Error::MultipleRequests),
-            queue.push(val1, U512::from(5), BlockTime(102))
+            queue.push(val1, U512::from(5), BlockTime::new(102))
         );
         assert_eq!(
             Err(Error::TimeWentBackwards),
-            queue.push(val3, U512::from(5), BlockTime(100))
+            queue.push(val3, U512::from(5), BlockTime::new(100))
         );
     }
 
@@ -215,19 +222,19 @@ mod tests {
         let val2 = PublicKey::new(KEY2);
         let val3 = PublicKey::new(KEY3);
         let mut queue: Queue = Default::default();
-        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime(100)));
-        assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime(101)));
-        assert_eq!(Ok(()), queue.push(val3, U512::from(7), BlockTime(102)));
+        assert_eq!(Ok(()), queue.push(val1, U512::from(5), BlockTime::new(100)));
+        assert_eq!(Ok(()), queue.push(val2, U512::from(6), BlockTime::new(101)));
+        assert_eq!(Ok(()), queue.push(val3, U512::from(7), BlockTime::new(102)));
         assert_eq!(
             vec![
-                QueueEntry::new(val1, U512::from(5), BlockTime(100)),
-                QueueEntry::new(val2, U512::from(6), BlockTime(101)),
+                QueueEntry::new(val1, U512::from(5), BlockTime::new(100)),
+                QueueEntry::new(val2, U512::from(6), BlockTime::new(101)),
             ],
-            queue.pop_due(BlockTime(101))
+            queue.pop_due(BlockTime::new(101))
         );
         assert_eq!(
-            vec![QueueEntry::new(val3, U512::from(7), BlockTime(102)),],
-            queue.pop_due(BlockTime(105))
+            vec![QueueEntry::new(val3, U512::from(7), BlockTime::new(102)),],
+            queue.pop_due(BlockTime::new(105))
         );
     }
 }

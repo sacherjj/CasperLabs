@@ -7,11 +7,6 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.equivocations.EquivocationsTracker
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper._
@@ -82,11 +77,12 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
             )
         dag                 <- dagStorage.getRepresentation
         latestMessageHashes <- dag.latestMessageHashes
+        equivocators        <- dag.getEquivocators
         tips <- Estimator.tips[Task](
                  dag,
                  genesis.blockHash,
                  latestMessageHashes,
-                 EquivocationsTracker.empty
+                 equivocators
                )
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -94,10 +90,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                        )
         implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
         _                                                <- casperRef.set(casperEffect)
-        implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-          Task
-        ]()
-        blocksResponse <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
+        blocksResponse                                   <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
       } yield blocksResponse.length should be(8) // TODO: Switch to 4 when we implement block height correctly
   }
 
@@ -165,12 +158,13 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                )
           dag                  <- dagStorage.getRepresentation
           latestMessagesHashes <- dag.latestMessageHashes
+          equivocators         <- dag.getEquivocators
           tips <- Estimator
                    .tips[Task](
                      dag,
                      genesis.blockHash,
                      latestMessagesHashes,
-                     EquivocationsTracker.empty
+                     equivocators
                    )
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMsgWithTransform],
@@ -178,9 +172,7 @@ class BlocksResponseAPITest extends FlatSpec with Matchers with BlockGenerator w
                          )
           implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
           _                                                <- casperRef.set(casperEffect)
-          implicit0(finalityDetectorEffect: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-            Task
-          ]()
+
           blocksWithRankBelow1 <- BlockAPI.getBlockInfos[Task](1)
           _                    = blocksWithRankBelow1.length shouldBe 1
           blocksWithRankBelow2 <- BlockAPI.getBlockInfos[Task](2)

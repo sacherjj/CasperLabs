@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-use std::sync::{self, Arc, Mutex, MutexGuard};
+use std::{
+    collections::HashMap,
+    sync::{self, Arc, Mutex, MutexGuard},
+};
 
-use crate::error::in_memory::Error;
-use crate::transaction_source::{Readable, Transaction, TransactionSource, Writable};
+use crate::{
+    error::in_memory::Error,
+    transaction_source::{Readable, Transaction, TransactionSource, Writable},
+};
 
 /// A marker for use in a mutex which represents the capability to perform a
 /// write transaction.

@@ -1,27 +1,25 @@
-use std::cell::RefCell;
-use std::collections::BTreeSet;
-use std::convert::TryInto;
-use std::rc::Rc;
+use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::{self, FromBytes};
-use contract_ffi::execution::Phase;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::BlockTime;
-use contract_ffi::value::{ProtocolVersion, U512};
-use engine_core::engine_state::executable_deploy_item::ExecutableDeployItem;
-use engine_core::engine_state::execution_effect::ExecutionEffect;
-use engine_core::engine_state::EngineState;
-use engine_core::execution;
-use engine_core::execution::AddressGenerator;
-use engine_core::runtime_context::RuntimeContext;
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::{self, FromBytes},
+    execution::Phase,
+    key::Key,
+    uref::URef,
+    value::{account::BlockTime, ProtocolVersion, U512},
+};
+use engine_core::{
+    engine_state::{
+        executable_deploy_item::ExecutableDeployItem, execution_effect::ExecutionEffect,
+        EngineState,
+    },
+    execution::{self, AddressGenerator},
+    runtime_context::RuntimeContext,
+};
 use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::CorrelationId;
-use engine_storage::global_state::StateProvider;
-use engine_storage::protocol_data::ProtocolData;
-use engine_wasm_prep::WasmiPreprocessor;
+use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
+use engine_wasm_prep::Preprocessor;
 
 use crate::support::test_support::{self, WasmTestBuilder};
 
@@ -93,7 +91,7 @@ where
         BTreeSet::new(),
         &account,
         base_key,
-        BlockTime(block_time),
+        BlockTime::new(block_time),
         deploy_hash,
         gas_limit,
         gas_counter,
@@ -113,7 +111,7 @@ where
 
     let wasm_costs = *DEFAULT_WASM_COSTS;
 
-    let preprocessor = WasmiPreprocessor::new(wasm_costs);
+    let preprocessor = Preprocessor::new(wasm_costs);
     let parity_module = builder
         .get_engine_state()
         .get_module(
@@ -129,7 +127,7 @@ where
         execution::instance_and_memory(parity_module.clone(), protocol_version)
             .expect("should be able to make wasm instance from module");
 
-    let mut runtime = execution::Runtime::new(memory, parity_module, context);
+    let mut runtime = execution::Runtime::new(Default::default(), memory, parity_module, context);
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,

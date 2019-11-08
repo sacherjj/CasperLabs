@@ -1,5 +1,8 @@
-use contract_ffi::bytesrepr;
-use contract_ffi::bytesrepr::{FromBytes, ToBytes, U32_SIZE};
+use std::collections::BTreeMap;
+
+use pwasm_utils::rules::{InstructionType, Metering, Set};
+
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes, U32_SIZE};
 
 const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
@@ -30,6 +33,22 @@ pub struct WasmCosts {
     /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul` /
     /// `opcodes_div`
     pub opcodes_div: u32,
+}
+
+impl WasmCosts {
+    pub(crate) fn to_set(&self) -> Set {
+        let meterings = {
+            let mut tmp = BTreeMap::new();
+            tmp.insert(InstructionType::Load, Metering::Fixed(self.mem));
+            tmp.insert(InstructionType::Store, Metering::Fixed(self.mem));
+            tmp.insert(InstructionType::Div, Metering::Fixed(self.div));
+            tmp.insert(InstructionType::Mul, Metering::Fixed(self.mul));
+            tmp
+        };
+        Set::new(self.regular, meterings)
+            .with_grow_cost(self.grow_mem)
+            .with_forbidden_floats()
+    }
 }
 
 impl ToBytes for WasmCosts {
@@ -78,8 +97,7 @@ impl FromBytes for WasmCosts {
 }
 
 pub mod gens {
-    use proptest::num;
-    use proptest::prop_compose;
+    use proptest::{num, prop_compose};
 
     use crate::wasm_costs::WasmCosts;
 

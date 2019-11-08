@@ -1,11 +1,10 @@
 #![no_std]
 
-extern crate alloc;
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{runtime, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::BlockTime;
+use contract_ffi::{
+    contract_api::{runtime, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::BlockTime,
+};
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -16,7 +15,7 @@ pub extern "C" fn call() {
 
     assert_eq!(
         actual_block_time,
-        BlockTime(known_block_time),
+        BlockTime::new(known_block_time),
         "actual block time not known block time"
     );
 }

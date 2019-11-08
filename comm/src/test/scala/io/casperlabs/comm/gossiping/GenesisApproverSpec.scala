@@ -496,6 +496,10 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): Task[GenesisCandidate] = ???
+
+    override def streamDagSliceBlockSummaries(
+        request: StreamDagSliceBlockSummariesRequest
+    ): Iterant[Task, BlockSummary] = ???
   }
   object MockGossipService {
     class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends MockGossipService() {

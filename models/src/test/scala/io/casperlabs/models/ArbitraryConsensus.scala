@@ -173,11 +173,12 @@ trait ArbitraryConsensus {
   implicit def arbDeploy(implicit c: ConsensusConfig): Arbitrary[Deploy] = Arbitrary {
     for {
       accountKeys     <- Gen.oneOf(randomAccounts)
-      timestamp       <- Gen.choose(0L, Long.MaxValue)
+      timeToLive      <- Gen.option(Gen.choose(1 * 60 * 60 * 1000, 24 * 60 * 60 * 1000))
+      age             <- Gen.choose(0, timeToLive getOrElse 24 * 60 * 60 * 1000)
+      timestamp       = System.currentTimeMillis - age
       gasPrice        <- arbitrary[Long]
       sessionCode     <- Gen.choose(0, c.maxSessionCodeBytes).flatMap(genBytes(_))
       paymentCode     <- Gen.choose(0, c.maxPaymentCodeBytes).flatMap(genBytes(_))
-      timeToLive      <- Gen.option(Gen.choose(1 * 60 * 60 * 1000, 24 * 60 * 60 * 1000))
       numDependencies <- Gen.chooseNum(0, 10)
       dependencies    <- Gen.listOfN(numDependencies, genHash)
       body = Deploy
@@ -229,11 +230,12 @@ trait ArbitraryConsensus {
   // It's backwards but then the DAG of summaries doesn't need to spend time generating bodies.
   private def genBlockFromSummary(summary: BlockSummary)(implicit c: ConsensusConfig): Gen[Block] =
     for {
-      deploys <- Gen.listOfN(summary.deployCount, arbitrary[Block.ProcessedDeploy])
+      deploys   <- Gen.listOfN(summary.deployCount, arbitrary[Block.ProcessedDeploy])
+      timestamp = deploys.map(_.getDeploy.getHeader.timestamp).maximumOption.getOrElse(0L)
     } yield {
       Block()
         .withBlockHash(summary.blockHash)
-        .withHeader(summary.getHeader)
+        .withHeader(summary.getHeader.withTimestamp(timestamp))
         .withBody(Block.Body(deploys))
         .withSignature(summary.getSignature)
     }
@@ -284,11 +286,10 @@ trait ArbitraryConsensus {
     }
     // Always start from the Genesis block.
     arbitrary[BlockSummary] map { summary =>
-      summary.withHeader(
-        summary.getHeader
-          .withJustifications(Seq.empty)
-          .withParentHashes(Seq.empty)
-      )
+      summary
+        .update(_.header.parentHashes := Seq.empty)
+        .update(_.header.justifications := Seq.empty)
+        .update(_.header.rank := 0)
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))
     }

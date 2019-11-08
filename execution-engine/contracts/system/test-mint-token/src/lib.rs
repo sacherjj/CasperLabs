@@ -1,14 +1,10 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::String;
+use alloc::{string::String, vec};
 
-use contract_ffi::contract_api::runtime;
-use contract_ffi::key::Key;
-use contract_ffi::value::U512;
+use contract_ffi::{contract_api::runtime, key::Key, value::U512};
 
 #[no_mangle]
 pub extern "C" fn call() {

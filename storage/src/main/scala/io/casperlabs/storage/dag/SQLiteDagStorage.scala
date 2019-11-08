@@ -6,8 +6,8 @@ import cats.effect._
 import cats.implicits._
 import doobie._
 import doobie.implicits._
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
@@ -21,7 +21,8 @@ import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDa
 import io.casperlabs.storage.util.DoobieCodecs
 
 class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
-    xa: Transactor[F]
+    readXa: Transactor[F],
+    writeXa: Transactor[F]
 ) extends DagStorage[F]
     with DagRepresentation[F]
     with DoobieCodecs {
@@ -53,17 +54,28 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
 
     val latestMessagesQuery =
       if (!block.isGenesisLike) {
-        // Insert in case if new block has a higher rank than the previous max rank of validator
-        sql"""|INSERT OR REPLACE INTO validator_latest_messages
-              |SELECT ${blockSummary.validatorPublicKey} as validator,
-              |       ${blockSummary.blockHash} as block_hash,
-              |       ${blockSummary.rank} as rank
-              |WHERE NOT exists(
-              |        SELECT 1
-              |        FROM validator_latest_messages
-              |        WHERE validator = ${blockSummary.validatorPublicKey}
-              |          AND rank > ${blockSummary.rank}
-              |    )""".stripMargin.update.run
+        // CON-557 will add a validity condition that a block cannot cite multiple latest messages
+        // from its creator, i.e. merging of swimlane is not allowed.
+        val validatorPreviousMessage =
+          Option(blockSummary.getHeader.validatorPrevBlockHash).filterNot(_.isEmpty)
+
+        val insertQuery =
+          sql""" INSERT OR IGNORE INTO validator_latest_messages (validator, block_hash)
+                 VALUES (${blockSummary.validatorPublicKey}, ${blockSummary.blockHash})""".stripMargin
+
+        validatorPreviousMessage
+          .fold {
+            // No previous message visible from the justifications.
+            // This is the first block from this validator (at least according to the creator of the message).
+            insertQuery.update.run
+          } { lastMessageHash =>
+            // Delete previous entry if the new block cites it.
+            // Insert new one.
+            sql"""|DELETE FROM validator_latest_messages
+                  |WHERE validator = ${blockSummary.validatorPublicKey}
+                  |AND block_hash = $lastMessageHash""".stripMargin.update.run >>
+              insertQuery.update.run
+          }
       } else ().pure[ConnectionIO]
 
     val topologicalSortingQuery =
@@ -85,7 +97,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
     } yield ()
 
     for {
-      _   <- transaction.transact(xa)
+      _   <- transaction.transact(writeXa)
       dag <- getRepresentation
     } yield dag
   }
@@ -98,7 +110,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
       _ <- sql"DELETE FROM block_justifications".update.run
       _ <- sql"DELETE FROM validator_latest_messages".update.run
       _ <- sql"DELETE FROM block_metadata".update.run
-    } yield ()).transact(xa)
+    } yield ()).transact(writeXa)
 
   override def close(): F[Unit] = ().pure[F]
 
@@ -108,7 +120,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |WHERE parent_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
-      .transact(xa)
+      .transact(readXa)
 
   override def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
@@ -116,7 +128,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |WHERE justification_block_hash=$blockHash""".stripMargin
       .query[BlockHash]
       .to[Set]
-      .transact(xa)
+      .transact(readXa)
 
   override def lookup(blockHash: BlockHash): F[Option[Message]] =
     sql"""|SELECT data
@@ -124,7 +136,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |WHERE block_hash=$blockHash""".stripMargin
       .query[BlockSummary]
       .option
-      .transact(xa)
+      .transact(readXa)
       .flatMap(Message.fromOptionalSummary[F](_))
 
   override def contains(blockHash: BlockHash): F[Boolean] =
@@ -133,7 +145,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |WHERE block_hash=$blockHash""".stripMargin
       .query[Long]
       .option
-      .transact(xa)
+      .transact(readXa)
       .map(_.nonEmpty)
 
   override def topoSort(
@@ -147,7 +159,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |""".stripMargin
       .query[(Long, BlockInfo)]
       .stream
-      .transact(xa)
+      .transact(readXa)
       .groupByRank
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
@@ -157,7 +169,7 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |ORDER BY rank""".stripMargin
       .query[(Long, BlockInfo)]
       .stream
-      .transact(xa)
+      .transact(readXa)
       .groupByRank
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
@@ -171,48 +183,46 @@ class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
           |""".stripMargin
       .query[(Long, BlockInfo)]
       .stream
-      .transact(xa)
+      .transact(readXa)
       .groupByRank
 
-  override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+  override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     sql"""|SELECT block_hash
           |FROM validator_latest_messages
           |WHERE validator=$validator""".stripMargin
       .query[BlockHash]
-      .option
-      .transact(xa)
+      .to[Set]
+      .transact(readXa)
 
-  override def latestMessage(validator: Validator): F[Option[Message]] =
+  override def latestMessage(validator: Validator): F[Set[Message]] =
     sql"""|SELECT m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
           |ON v.validator=$validator AND v.block_hash=m.block_hash""".stripMargin
       .query[BlockSummary]
-      .option
-      .transact(xa)
-      .flatMap {
-        case None     => none[Message].pure[F]
-        case Some(bs) => toMessageSummaryF(bs).map(Some(_))
-      }
+      .to[List]
+      .transact(readXa)
+      .flatMap(_.traverse(toMessageSummaryF))
+      .map(_.toSet)
 
-  override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+  override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
     sql"""|SELECT *
           |FROM validator_latest_messages""".stripMargin
       .query[(Validator, BlockHash)]
       .to[List]
-      .transact(xa)
-      .map(_.toMap)
+      .transact(readXa)
+      .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
 
-  override def latestMessages: F[Map[Validator, Message]] =
+  override def latestMessages: F[Map[Validator, Set[Message]]] =
     sql"""|SELECT v.validator, m.data
           |FROM validator_latest_messages v
           |INNER JOIN block_metadata m
           |ON m.block_hash=v.block_hash""".stripMargin
       .query[(Validator, BlockSummary)]
       .to[List]
-      .transact(xa)
+      .transact(readXa)
       .flatMap(_.traverse { case (v, bs) => toMessageSummaryF(bs).map(v -> _) })
-      .map(_.toMap)
+      .map(_.groupBy(_._1).mapValues(_.map(_._2).toSet))
 
   private val toMessageSummaryF: BlockSummary => F[Message] = bs =>
     MonadThrowable[F].fromTry(Message.fromBlockSummary(bs))
@@ -281,13 +291,13 @@ object SQLiteDagStorage {
       Base16.encode(info.getSummary.blockHash.toByteArray).take(10)
   }
 
-  private[storage] def create[F[_]: Sync](
-      implicit xa: Transactor[F],
+  private[storage] def create[F[_]: Sync](readXa: Transactor[F], writeXa: Transactor[F])(
+      implicit
       met: Metrics[F]
   ): F[DagStorage[F] with DagRepresentation[F]] =
     for {
       dagStorage <- Sync[F].delay(
-                     new SQLiteDagStorage[F](xa)
+                     new SQLiteDagStorage[F](readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F] {
                        override implicit val m: Metrics[F] = met

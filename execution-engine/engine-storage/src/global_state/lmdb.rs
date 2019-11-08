@@ -1,26 +1,30 @@
-use std::collections::HashMap;
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use lmdb;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::{ProtocolVersion, Value};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::Transform;
+use contract_ffi::{
+    key::Key,
+    value::{ProtocolVersion, Value},
+};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    newtypes::{Blake2bHash, CorrelationId},
+    transform::Transform,
+};
 
-use crate::error;
-use crate::global_state::StateReader;
-use crate::global_state::{commit, CommitResult, StateProvider};
-use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::lmdb::LmdbProtocolDataStore;
-use crate::store::Store;
-use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::operations::create_hashed_empty_trie;
-use crate::trie::Trie;
-use crate::trie_store::lmdb::LmdbTrieStore;
-use crate::trie_store::operations::{read, ReadResult};
+use crate::{
+    error,
+    global_state::{commit, CommitResult, StateProvider, StateReader},
+    protocol_data::ProtocolData,
+    protocol_data_store::lmdb::LmdbProtocolDataStore,
+    store::Store,
+    transaction_source::{lmdb::LmdbEnvironment, Transaction, TransactionSource},
+    trie::{operations::create_hashed_empty_trie, Trie},
+    trie_store::{
+        lmdb::LmdbTrieStore,
+        operations::{read, ReadResult},
+    },
+};
 
 pub struct LmdbGlobalState {
     pub environment: Arc<LmdbEnvironment>,
@@ -117,7 +121,7 @@ impl StateProvider for LmdbGlobalState {
         &self,
         correlation_id: CorrelationId,
         prestate_hash: Blake2bHash,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> Result<CommitResult, Self::Error> {
         let commit_result = commit::<LmdbEnvironment, LmdbTrieStore, _, Self::Error>(
             &self.environment,
@@ -160,8 +164,10 @@ mod tests {
     use lmdb::DatabaseFlags;
     use tempfile::tempdir;
 
-    use crate::trie_store::operations::{write, WriteResult};
-    use crate::TEST_MAP_SIZE;
+    use crate::{
+        trie_store::operations::{write, WriteResult},
+        TEST_MAP_SIZE,
+    };
 
     use super::*;
 
@@ -264,8 +270,8 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = {
-            let mut tmp = HashMap::new();
+        let effects: AdditiveMap<Key, Transform> = {
+            let mut tmp = AdditiveMap::new();
             for TestPair { key, value } in &test_pairs_updated {
                 tmp.insert(*key, Transform::Write(value.to_owned()));
             }
@@ -294,8 +300,8 @@ mod tests {
 
         let (state, root_hash) = create_test_state();
 
-        let effects: HashMap<Key, Transform> = {
-            let mut tmp = HashMap::new();
+        let effects: AdditiveMap<Key, Transform> = {
+            let mut tmp = AdditiveMap::new();
             for TestPair { key, value } in &test_pairs_updated {
                 tmp.insert(*key, Transform::Write(value.to_owned()));
             }

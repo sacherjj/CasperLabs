@@ -3,7 +3,6 @@ package io.casperlabs.casper.finality
 import cats.Monad
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
@@ -81,7 +80,7 @@ object FinalityDetectorUtil {
       validator: Validator,
       candidateBlockHash: BlockHash
   ): F[List[Message]] =
-    dag.latestMessage(validator).flatMap {
+    dag.latestMessage(validator).map(s => if (s.size > 1) None else s.headOption).flatMap {
       case Some(latestMsgByValidator) =>
         DagOperations
           .bfTraverseF[F, Message](List(latestMsgByValidator))(
@@ -140,31 +139,28 @@ object FinalityDetectorUtil {
   private[casper] def panoramaM[F[_]: Monad](
       dag: DagRepresentation[F],
       validatorsToIndex: Map[Validator, Int],
-      blockSummary: Message,
-      equivocationsTracker: EquivocationsTracker
+      blockSummary: Message
   ): F[MutableSeq[Level]] =
-    FinalityDetectorUtil
-      .panoramaDagLevelsOfBlock(
-        dag,
-        blockSummary,
-        validatorsToIndex.keySet
-      )
-      .map(
-        latestBlockDagLevelsAsMap =>
-          fromMapToArray(
-            validatorsToIndex,
-            validator => {
-              // When V(j) happens to be an equivocator, put 0L in the corresponding cell
-              if (equivocationsTracker.contains(validator)) {
-                0L
-              } else {
-                // When V(j)-swimlane is empty, put 0L in the corresponding cell
-                latestBlockDagLevelsAsMap.getOrElse(validator, 0L)
-              }
-            }
-          )
-      )
-
+    for {
+      equivocators <- dag.getEquivocators
+      latestBlockDagLevelAsMap <- FinalityDetectorUtil
+                                   .panoramaDagLevelsOfBlock(
+                                     dag,
+                                     blockSummary,
+                                     validatorsToIndex.keySet
+                                   )
+    } yield fromMapToArray(
+      validatorsToIndex,
+      validator => {
+        // When V(j) happens to be an equivocator, put 0L in the corresponding cell
+        if (equivocators.contains(validator)) {
+          0L
+        } else {
+          // When V(j)-swimlane is empty, put 0L in the corresponding cell
+          latestBlockDagLevelAsMap.getOrElse(validator, 0L)
+        }
+      }
+    )
   // Returns an MutableSeq, whose size equals the size of validatorsToIndex and
   // For v in validatorsToIndex.key
   //   Arr[validatorsToIndex[v]] = mapFunction[v]

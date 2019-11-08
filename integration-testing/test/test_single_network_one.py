@@ -1,5 +1,6 @@
 import logging
 import pytest
+import time
 from pytest import fixture, raises
 
 from casperlabs_local_net.contract_address import contract_address
@@ -14,7 +15,8 @@ from casperlabs_local_net.common import (
 from casperlabs_local_net.docker_node import DockerNode
 from casperlabs_local_net.errors import NonZeroExitCodeError
 from casperlabs_local_net.wait import wait_for_genesis_block
-from casperlabs_client import ABI
+from casperlabs_client import ABI, blake2b_hash
+from casperlabs_client.consensus_pb2 import Deploy
 from casperlabs_local_net.cli import CLI, DockerCLI, CLIErrorExit
 
 """
@@ -35,11 +37,6 @@ account {
   action_thresholds {
     deployment_threshold: 1
     key_management_threshold: 1
-  }
-  account_activity {
-    key_management_last_used: 0
-    deployment_last_used: 0
-    inactivity_period_limit: 100
   }
 }
 
@@ -76,6 +73,19 @@ def test_account_state(node):
     named_keys = acct_state.account[0].named_keys
     names = [uref.name for uref in named_keys]
     assert "counter" in names
+
+
+def test_logging_enabled_for_node_and_execution_engine(one_node_network):
+    """
+    Verify both Node and EE are outputting logs.
+    """
+    assert (
+        "Listening for traffic on casperlabs://"
+        in one_node_network.docker_nodes[0].logs()
+    )
+    assert (
+        '"host_name":"execution-engine-' in one_node_network.execution_engines[0].logs()
+    )
 
 
 def test_transfer_with_overdraft(node):
@@ -642,9 +652,20 @@ def test_cli_scala_help(scala_cli):
 
 
 def test_cli_scala_extended_deploy(scala_cli, temp_dir):
-    cli = scala_cli
     account = GENESIS_ACCOUNT
+    public_key = account.public_key_docker_path
+    private_key = account.private_key_docker_path
+    check_extended_deploy(scala_cli, temp_dir, account, public_key, private_key)
 
+
+def test_cli_python_extended_deploy(cli, temp_dir):
+    account = GENESIS_ACCOUNT
+    public_key = account.public_key_path
+    private_key = account.private_key_path
+    check_extended_deploy(cli, temp_dir, account, public_key, private_key)
+
+
+def check_extended_deploy(cli, temp_dir, account, public_key, private_key):
     # TODO: when paralelizing tests, make sure test don't collide
     # when trying to access the same file, perhaps map containers /tmp
     # to a unique hosts's directory.
@@ -662,18 +683,19 @@ def test_cli_scala_extended_deploy(scala_cli, temp_dir):
     cli('sign-deploy',
         '-i', unsigned_deploy_path,
         '-o', signed_deploy_path,
-        '--private-key', account.private_key_docker_path,
-        '--public-key', account.public_key_docker_path)
+        '--private-key', private_key,
+        '--public-key', public_key)
 
     deploy_hash = cli('send-deploy', '-i', signed_deploy_path)
     cli('propose')
     deploy_info = cli("show-deploy", deploy_hash)
     assert not deploy_info.processing_results[0].is_error
 
-    # Test that replay attacks fail
-    with pytest.raises(NonZeroExitCodeError) as excinfo:
-        _ = cli('send-deploy', '-i', signed_deploy_path)
-    assert "supersedes Deploy" in excinfo.value.output
+    # Test that replay attacks have no effect.
+    cli('send-deploy', '-i', signed_deploy_path)
+    with pytest.raises(Exception) as excinfo:
+        cli('propose')
+    assert "No new deploys" in str(excinfo.value) or "No new deploys" in excinfo.value.output
 
 
 def test_cli_scala_direct_call_by_hash_and_name(scala_cli):
@@ -793,3 +815,149 @@ def test_multiple_deploys_per_block(cli):
     deploys = list(cli("show-deploys", block_hash))
     assert len(deploys) == 2
     assert set(d.deploy.deploy_hash for d in deploys) == set((deploy_hash1, deploy_hash2))
+
+
+def test_dependencies_ok_scala(scala_cli):
+    check_dependencies_ok(scala_cli)
+
+
+def test_dependencies_ok_python(cli):
+    check_dependencies_ok(cli)
+
+
+def check_dependencies_ok(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+    deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
+    propose_check_no_errors(cli)
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1)
+    propose_check_no_errors(cli)
+
+
+def test_dependencies_multiple_ok_scala(scala_cli):
+    check_dependencies_multiple_ok(scala_cli)
+
+
+def test_dependencies_multiple_ok_python(cli):
+    check_dependencies_multiple_ok(cli)
+
+
+def check_dependencies_multiple_ok(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+    deploy_hash1 = cli("deploy", "--session", cli.resource(Contract.COUNTER_DEFINE))
+    propose_check_no_errors(cli)
+
+    deploy_hash2 = cli("deploy", "--session", cli.resource(Contract.COUNTER_CALL))
+    propose_check_no_errors(cli)
+
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1, deploy_hash2)
+    propose_check_no_errors(cli)
+
+
+def test_dependencies_not_met_scala(scala_cli):
+    check_dependencies_not_met(scala_cli)
+
+
+def test_dependencies_not_met_python(cli):
+    check_dependencies_not_met(cli)
+
+
+def check_dependencies_not_met(cli):
+    account = cli.node.test_account
+    cli.set_default_deploy_args('--from', account.public_key_hex,
+                                '--private-key', cli.private_key_path(account),
+                                '--public-key', cli.public_key_path(account),
+                                "--payment-amount", 10000000)
+
+    # Make a deploy with dependency on a non-existing deploy.
+    deploy_hash1 = bytes(range(32)).hex()
+    cli("deploy",
+        "--session", cli.resource(Contract.MAILING_LIST_DEFINE),
+        "--dependencies", deploy_hash1)
+
+    with raises(Exception) as excinfo:
+        propose_check_no_errors(cli)
+
+    expected = "OUT_OF_RANGE: No new deploys"
+    assert expected in str(excinfo.value) or expected in excinfo.value.output
+
+
+def test_ttl_ok_scala(scala_cli):
+    check_ttl_ok(scala_cli)
+
+
+def test_ttl_ok_python(cli):
+    check_ttl_ok(cli)
+
+
+def check_ttl_ok(cli):
+    account = cli.node.test_account
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource(Contract.COUNTER_DEFINE),
+        "--ttl", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
+    time.sleep(0.5)
+    propose_check_no_errors(cli)
+
+
+def test_ttl_late_scala(scala_cli, temp_dir):
+    check_ttl_late(scala_cli, temp_dir)
+
+
+def test_ttl_late_python(cli, temp_dir):
+    check_ttl_late(cli, temp_dir)
+
+
+def check_ttl_late(cli, temp_dir):
+    account = cli.node.test_account
+    one_hour = 3600000  # 1h in millliseconds
+
+    deploy_path = f"{temp_dir}/deploy_with_ttl"
+    modified_deploy_path = f"{temp_dir}/deploy_with_ttl.changed_timestamp"
+    signed_deploy_path = f"{temp_dir}/deploy_with_ttl.signed"
+
+    cli("make-deploy",
+        "-o", deploy_path,
+        "--from", account.public_key_hex,
+        "--session", cli.resource(Contract.COUNTER_DEFINE),
+        "--payment-amount", 100000000,
+        "--ttl", 3600000)
+
+    # Modify the deploy and change its timestamp to be more than one hour earlier.
+    deploy = Deploy()
+    with open(deploy_path, "rb") as f:
+        deploy.ParseFromString(f.read())
+
+    deploy.header.timestamp = int(1000 * time.time() - one_hour - 60 * 1000)
+    deploy.deploy_hash = blake2b_hash(deploy.header.SerializeToString())
+
+    with open(modified_deploy_path, "wb") as f:
+        f.write(deploy.SerializeToString())
+
+    cli('sign-deploy',
+        '-i', modified_deploy_path,
+        '-o', signed_deploy_path,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account))
+
+    cli('send-deploy', '-i', signed_deploy_path)
+
+    with raises(Exception) as excinfo:
+        propose_check_no_errors(cli)
+
+    expected = "OUT_OF_RANGE: No new deploys"
+    assert expected in str(excinfo.value) or expected in excinfo.value.output

@@ -79,7 +79,7 @@ export class BoundContract {
   constructor(
     private contract: Contract,
     private contractKeyPair: nacl.SignKeyPair
-  ) {}
+  ) { }
 
   public deploy(args: Deploy.Arg[], paymentAmount: bigint): Deploy {
     return this.contract.deploy(

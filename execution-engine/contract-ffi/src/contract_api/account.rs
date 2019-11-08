@@ -2,18 +2,19 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 
 use super::to_ptr;
-use crate::bytesrepr::deserialize;
-use crate::contract_api::alloc_bytes;
-use crate::ext_ffi;
-use crate::unwrap_or_revert::UnwrapOrRevert;
 pub use crate::value::account::PublicKey;
-use crate::value::account::{
-    ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    Weight, PURSE_ID_SIZE_SERIALIZED,
+use crate::{
+    bytesrepr::deserialize,
+    contract_api, ext_ffi,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::{
+        ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        UpdateKeyFailure, Weight, PURSE_ID_SIZE_SERIALIZED,
+    },
 };
 
 pub fn get_main_purse() -> PurseId {
-    let dest_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let dest_ptr = contract_api::alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
     let bytes = unsafe {
         ext_ffi::get_main_purse(dest_ptr);
         Vec::from_raw_parts(dest_ptr, PURSE_ID_SIZE_SERIALIZED, PURSE_ID_SIZE_SERIALIZED)
@@ -31,7 +32,7 @@ pub fn set_action_threshold(
     if result == 0 {
         Ok(())
     } else {
-        Err(SetThresholdFailure::try_from(result).expect("invalid result"))
+        Err(SetThresholdFailure::try_from(result).unwrap_or_revert())
     }
 }
 
@@ -43,7 +44,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
     if result == 0 {
         Ok(())
     } else {
-        Err(AddKeyFailure::try_from(result).expect("invalid result"))
+        Err(AddKeyFailure::try_from(result).unwrap_or_revert())
     }
 }
 
@@ -54,7 +55,7 @@ pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailu
     if result == 0 {
         Ok(())
     } else {
-        Err(RemoveKeyFailure::try_from(result).expect("invalid result"))
+        Err(RemoveKeyFailure::try_from(result).unwrap_or_revert())
     }
 }
 
@@ -69,6 +70,6 @@ pub fn update_associated_key(
     if result == 0 {
         Ok(())
     } else {
-        Err(UpdateKeyFailure::try_from(result).expect("invalid result"))
+        Err(UpdateKeyFailure::try_from(result).unwrap_or_revert())
     }
 }

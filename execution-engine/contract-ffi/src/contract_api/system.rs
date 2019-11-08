@@ -1,18 +1,19 @@
 use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::u8;
+use core::{fmt::Debug, u8};
 
-use super::error::Error;
-use super::runtime::revert;
-use super::{alloc_bytes, to_ptr, ContractRef, TURef};
-use crate::bytesrepr::deserialize;
-use crate::contract_api::error::result_from;
-use crate::ext_ffi;
-use crate::system_contracts::SystemContract;
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::UREF_SIZE_SERIALIZED;
-use crate::value::account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED};
-use crate::value::U512;
+use super::{alloc_bytes, error::Error, runtime::revert, to_ptr, ContractRef, TURef};
+use crate::{
+    bytesrepr::deserialize,
+    contract_api::{error::result_from, runtime},
+    ext_ffi,
+    system_contracts::SystemContract,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::UREF_SIZE_SERIALIZED,
+    value::{
+        account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED},
+        U512,
+    },
+};
 
 pub type TransferResult = Result<TransferredTo, Error>;
 
@@ -66,7 +67,7 @@ pub fn create_purse() -> PurseId {
             );
             deserialize(&bytes).unwrap_or_revert()
         } else {
-            panic!("could not create purse_id")
+            runtime::revert(Error::PurseNotCreated)
         }
     }
 }

@@ -1,9 +1,7 @@
 #![no_std]
 #![feature(cell_update)]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 mod capabilities;
 
@@ -14,16 +12,17 @@ mod capabilities;
 pub mod internal_purse_id;
 pub mod mint;
 
-use alloc::string::String;
+use alloc::{string::String, vec};
 use core::convert::TryInto;
 
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::mint::Error;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::KEY_SIZE;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError},
+    key::Key,
+    system_contracts::mint::Error,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+    value::{account::KEY_SIZE, U512},
+};
 
 use capabilities::{ARef, RAWRef};
 use internal_purse_id::{DepositId, WithdrawId};

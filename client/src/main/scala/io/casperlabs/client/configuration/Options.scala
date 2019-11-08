@@ -120,6 +120,14 @@ object Options {
       noshort = true
     )
 
+    val chainName = opt[String](
+      descr =
+        "Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.",
+      required = false,
+      noshort = true,
+      default = "".some
+    )
+
     addValidation {
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined, sessionUref.isDefined)
@@ -141,6 +149,23 @@ object Options {
     }
   }
 
+  trait FormattingOptions { self: Subcommand =>
+    val bytesStandard = opt[Boolean](
+      required = false,
+      descr =
+        "Use standard encoding for bytes instead of default Base16, for JSON standard is Base64, for Protobuf text - ASCII escaped",
+      default = false.some,
+      name = "bytes-standard"
+    )
+
+    val json = opt[Boolean](
+      required = false,
+      descr = "Output in JSON instead of default Protobuf text encoding",
+      default = false.some,
+      name = "json",
+      short = 'j'
+    )
+  }
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -161,7 +186,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     override val argType: ArgType.V = ArgType.SINGLE
   }
 
-  version(s"CasperLabs Client ${BuildInfo.version}")
+  version(
+    s"CasperLabs Client ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+  )
   printedName = "casperlabs"
 
   val port =
@@ -324,7 +351,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(propose)
 
-  val showBlock = new Subcommand("show-block") {
+  val showBlock = new Subcommand("show-block") with FormattingOptions {
     descr(
       "View properties of a block known by Casper on an existing running node."
     )
@@ -339,7 +366,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showBlock)
 
-  val showDeploys = new Subcommand("show-deploys") {
+  val showDeploys = new Subcommand("show-deploys") with FormattingOptions {
     descr(
       "View deploys included in a block."
     )
@@ -354,7 +381,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showDeploys)
 
-  val showDeploy = new Subcommand("show-deploy") {
+  val showDeploy = new Subcommand("show-deploy") with FormattingOptions {
     descr(
       "View properties of a deploy known by Casper on an existing running node."
     )
@@ -369,7 +396,21 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(showDeploy)
 
-  val showBlocks = new Subcommand("show-blocks") {
+  val printDeploy = new Subcommand("print-deploy") with FormattingOptions {
+    descr("Print information of a deploy saved by 'make-deploy' command")
+
+    val deployPath =
+      opt[File](
+        required = false,
+        descr = "Path to the deploy file.",
+        validate = fileCheck,
+        short = 'i'
+      ).map(file => Files.readAllBytes(file.toPath))
+        .orElse(Some(IOUtils.toByteArray(System.in)))
+  }
+  addSubcommand(printDeploy)
+
+  val showBlocks = new Subcommand("show-blocks") with FormattingOptions {
     descr(
       "View list of blocks in the current Casper view on an existing running node."
     )
@@ -489,7 +530,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(visualizeBlocks)
 
-  val query = new Subcommand("query-state") {
+  val query = new Subcommand("query-state") with FormattingOptions {
     descr(
       "Query a value in the global state."
     )

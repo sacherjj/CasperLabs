@@ -12,16 +12,21 @@ use tempfile::{tempdir, TempDir};
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::{Blake2bHash, CorrelationId};
 
-use crate::error::{self, in_memory};
-use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::transaction_source::{Readable, Transaction, TransactionSource};
-use crate::trie::{Pointer, Trie};
-use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::lmdb::LmdbTrieStore;
-use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
-use crate::trie_store::TrieStore;
-use crate::TEST_MAP_SIZE;
+use crate::{
+    error::{self, in_memory},
+    transaction_source::{
+        in_memory::InMemoryEnvironment, lmdb::LmdbEnvironment, Readable, Transaction,
+        TransactionSource,
+    },
+    trie::{Pointer, Trie},
+    trie_store::{
+        in_memory::InMemoryTrieStore,
+        lmdb::LmdbTrieStore,
+        operations::{read, write, ReadResult, WriteResult},
+        TrieStore,
+    },
+    TEST_MAP_SIZE,
+};
 
 const TEST_KEY_LENGTH: usize = 7;
 

@@ -4,6 +4,7 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.metrics.Metrics
@@ -192,11 +193,10 @@ object AutoProposerTest {
     override def contains(block: Block): F[Boolean]     = ???
     override def estimator(
         dag: DagRepresentation[F],
-        lm: Map[ByteString, ByteString]
-    ): F[List[ByteString]]                                                          = ???
-    override def dag: F[DagRepresentation[F]]                                       = ???
-    override def normalizedInitialFault(weights: Map[ByteString, Weight]): F[Float] = ???
-    override def lastFinalizedBlock: F[Block]                                       = ???
-    override def faultToleranceThreshold                                            = 0f
+        lm: Map[Validator, Set[ByteString]],
+        equivocators: Set[Validator]
+    ): F[List[ByteString]]                    = ???
+    override def dag: F[DagRepresentation[F]] = ???
+    override def lastFinalizedBlock: F[Block] = ???
   }
 }

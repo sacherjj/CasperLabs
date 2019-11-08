@@ -17,7 +17,7 @@ import scala.util.{Failure, Success, Try}
   * This way we can do necessary validation of protobuf fields (like existence of required fields)
   * and represent different messages in type-safe way.
   */
-trait Message {
+sealed trait Message {
   type Id = ByteString
   val messageHash: Id
   val validatorId: ByteString

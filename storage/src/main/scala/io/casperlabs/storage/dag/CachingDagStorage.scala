@@ -154,15 +154,16 @@ class CachingDagStorage[F[_]: Concurrent](
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
     underlying.topoSortTail(tailLength)
 
-  override def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
+  override def latestMessageHash(validator: Validator): F[Set[BlockHash]] =
     underlying.latestMessageHash(validator)
 
-  override def latestMessage(validator: Validator): F[Option[Message]] =
+  override def latestMessage(validator: Validator): F[Set[Message]] =
     underlying.latestMessage(validator)
 
-  override def latestMessageHashes: F[Map[Validator, BlockHash]] = underlying.latestMessageHashes
+  override def latestMessageHashes: F[Map[Validator, Set[BlockHash]]] =
+    underlying.latestMessageHashes
 
-  override def latestMessages: F[Map[Validator, Message]] = underlying.latestMessages
+  override def latestMessages: F[Map[Validator, Set[Message]]] = underlying.latestMessages
 }
 
 object CachingDagStorage {

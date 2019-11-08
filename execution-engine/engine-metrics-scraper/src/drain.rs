@@ -1,9 +1,9 @@
-use std::net::SocketAddr;
-use std::thread;
-use std::thread::JoinHandle;
+use std::{
+    net::SocketAddr,
+    thread::{self, JoinHandle},
+};
 
-use hyper::rt::Future;
-use hyper::{service, Body, Method, Request, Response, Server, StatusCode};
+use hyper::{rt::Future, service, Body, Method, Request, Response, Server, StatusCode};
 
 use crate::accumulator::Drainer;
 
@@ -52,8 +52,7 @@ pub fn open_drain<D: Drainer<String> + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::string::ToString;
-    use std::time::Duration;
+    use std::{string::ToString, time::Duration};
 
     use futures::stream::Stream;
     use hyper::Client;

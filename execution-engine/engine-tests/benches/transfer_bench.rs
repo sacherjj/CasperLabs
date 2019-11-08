@@ -1,23 +1,20 @@
-#[macro_use]
-extern crate criterion;
-extern crate contract_ffi;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-
-use criterion::{Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use tempfile::TempDir;
 
-use casperlabs_engine_tests::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
-    STANDARD_PAYMENT_CONTRACT,
+use casperlabs_engine_tests::{
+    support::test_support::{
+        DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, WasmTestResult,
+        STANDARD_PAYMENT_CONTRACT,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
 };
-use casperlabs_engine_tests::test::{
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT,
+use contract_ffi::{
+    key::Key,
+    value::{
+        account::{PublicKey, PurseId},
+        U512,
+    },
 };
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 use engine_storage::global_state::lmdb::LmdbGlobalState;
 

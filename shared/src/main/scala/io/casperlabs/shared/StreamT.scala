@@ -83,6 +83,18 @@ sealed abstract class StreamT[F[_], +A] { self =>
     case _: SNil[F] => StreamT.empty[F, B]
   }
 
+  def collect[B](f: PartialFunction[A, B])(implicit monad: Monad[F]): StreamT[F, B] = self match {
+    case SCons(curr, lazyTail) =>
+      val collectTail = lazyTail.map(_.map(_.collect(f)))
+      if (f.isDefinedAt(curr)) {
+        StreamT.cons(f(curr), collectTail)
+      } else StreamT.delay(collectTail)
+
+    case SLazy(lazyTail) => StreamT.delay(lazyTail.map(_.map(_.collect(f))))
+
+    case _: SNil[F] => StreamT.empty[F, B]
+  }
+
   def foldLeft[B](b: B)(f: (B, A) => B)(implicit monad: Monad[F]): F[B] = self match {
     case SCons(curr, lazyTail) =>
       val newB = f(b, curr)
@@ -267,6 +279,11 @@ final class SNil[F[_]]                                                     exten
 
 object StreamT {
   type STail[F[_], A] = Eval[F[StreamT[F, A]]]
+
+  def pure[F[_]: Applicative, A](a: A): StreamT[F, A] = cons(a, Eval.later(empty[F, A].pure[F]))
+
+  def lift[F[_]: Applicative, A](fa: F[A]): StreamT[F, A] =
+    StreamT.delay(Eval.now(fa.map(pure[F, A](_))))
 
   def empty[F[_], A]: StreamT[F, A]                                = new SNil[F]
   def cons[F[_], A](curr: A, lazyTail: STail[F, A]): StreamT[F, A] = SCons(curr, lazyTail)

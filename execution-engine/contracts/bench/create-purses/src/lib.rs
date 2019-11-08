@@ -5,9 +5,11 @@ extern crate alloc;
 
 extern crate contract_ffi;
 
-use contract_ffi::contract_api::{account, runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::U512,
+};
 
 enum Arg {
     TotalPurses = 0,
