@@ -1,22 +1,21 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
-extern crate pos;
-
-use alloc::collections::BTreeMap;
-use alloc::string::String;
+use alloc::{collections::BTreeMap, string::String, vec};
 use core::fmt::Write;
 
-use contract_ffi::contract_api::{runtime, storage, ContractRef, Error, TURef};
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::mint;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, storage, ContractRef, Error, TURef},
+    key::Key,
+    system_contracts::mint,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+    value::{
+        account::{PublicKey, PurseId},
+        U512,
+    },
+};
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
 const POS_BONDING_PURSE: &str = "pos_bonding_purse";

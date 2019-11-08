@@ -1,31 +1,38 @@
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Display;
-use std::rc::Rc;
-
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
-
-use contract_ffi::bytesrepr::{deserialize, ToBytes};
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{
-    Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
-    SetThresholdFailure, UpdateKeyFailure, Weight,
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    convert::{TryFrom, TryInto},
+    fmt::Display,
+    rc::Rc,
 };
-use contract_ffi::value::{Contract, ProtocolVersion, Value};
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::{CorrelationId, Validated};
-use engine_storage::global_state::StateReader;
-use engine_storage::protocol_data::ProtocolData;
 
-use crate::engine_state::execution_effect::ExecutionEffect;
-use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
-use crate::execution::{AddressGenerator, Error};
-use crate::tracking_copy::{AddResult, TrackingCopy};
-use crate::Address;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
+
+use contract_ffi::{
+    bytesrepr::{deserialize, ToBytes},
+    execution::Phase,
+    key::{Key, LOCAL_SEED_SIZE},
+    uref::{AccessRights, URef},
+    value::{
+        account::{
+            Account, ActionType, AddKeyFailure, BlockTime, PublicKey, RemoveKeyFailure,
+            SetThresholdFailure, UpdateKeyFailure, Weight,
+        },
+        Contract, ProtocolVersion, Value,
+    },
+};
+use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
+
+use crate::{
+    engine_state::{execution_effect::ExecutionEffect, SYSTEM_ACCOUNT_ADDR},
+    execution::{AddressGenerator, Error},
+    tracking_copy::{AddResult, TrackingCopy},
+    Address,
+};
 
 #[cfg(test)]
 mod tests;
@@ -143,13 +150,10 @@ where
         name: &str,
     ) -> Result<(), Error> {
         contract.named_keys_mut().remove(name);
-        // By this point in the code path, there is no further validation needed.
-        let validated_uref = Validated::new(key, Validated::valid)?;
-        let validated_value = Validated::new(Value::Contract(contract), Validated::valid)?;
 
-        self.state
-            .borrow_mut()
-            .write(validated_uref, validated_value);
+        let contract_value = Value::Contract(contract);
+
+        self.state.borrow_mut().write(key, contract_value);
 
         Ok(())
     }
@@ -161,29 +165,22 @@ where
     pub fn remove_key(&mut self, name: &str) -> Result<(), Error> {
         match self.base_key() {
             public_key @ Key::Account(_) => {
-                let mut account: Account = self.read_gs_typed(&public_key)?;
+                let account: Account = {
+                    let mut account: Account = self.read_gs_typed(&public_key)?;
+                    account.named_keys_mut().remove(name);
+                    account
+                };
                 self.named_keys.remove(name);
-                account.named_keys_mut().remove(name);
-                let validated_uref = Validated::new(public_key, Validated::valid)?;
-                let validated_value =
-                    Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
-
-                self.state
-                    .borrow_mut()
-                    .write(validated_uref, validated_value);
-
+                let account_value = self.make_validated_value(account)?;
+                self.state.borrow_mut().write(public_key, account_value);
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                // We do not need to validate the base key because a contract
-                // is always able to remove keys from its own named_keys.
-                let contract_key = Validated::new(contract_uref, Validated::valid)?;
-
                 let contract: Contract = {
                     let value: Value = self
                         .state
                         .borrow_mut()
-                        .read(self.correlation_id, &contract_key)
+                        .read(self.correlation_id, &contract_uref)
                         .map_err(Into::into)?
                         .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
 
@@ -320,16 +317,10 @@ where
         // No need to perform actual validation on the base key because an account or
         // contract (i.e. the element stored under `base_key`) is allowed to add
         // new named keys to itself.
-        let base_key = Validated::new(self.base_key(), Validated::valid)?;
+        let named_key_value = self.make_validated_value((name.clone(), key))?;
 
-        let validated_value = Validated::new(Value::NamedKey(name.clone(), key), |v| {
-            self.validate_keys(&v)
-        })?;
-        self.add_gs_validated(base_key, validated_value)?;
-
-        // key was already validated successfully as part of validated_value above
-        let validated_key = Validated::new(key, Validated::valid)?;
-        self.insert_key(name, validated_key);
+        self.add_gs_unsafe(self.base_key(), named_key_value)?;
+        self.insert_key(name, key);
         Ok(())
     }
 
@@ -345,40 +336,34 @@ where
         key_bytes: &[u8],
     ) -> Result<Option<Value>, Error> {
         let key = Key::local(seed, key_bytes);
-        let validated_key = Validated::new(key, Validated::valid)?;
         self.state
             .borrow_mut()
-            .read(self.correlation_id, &validated_key)
+            .read(self.correlation_id, &key)
             .map_err(Into::into)
     }
 
     pub fn write_ls(&mut self, key_bytes: &[u8], value: Value) -> Result<(), Error> {
         let seed = self.seed();
         let key = Key::local(seed, key_bytes);
-        let validated_key = Validated::new(key, Validated::valid)?;
-        let validated_value = Validated::new(value, Validated::valid)?;
-        self.state
-            .borrow_mut()
-            .write(validated_key, validated_value);
+        self.state.borrow_mut().write(key, value);
         Ok(())
     }
 
     pub fn read_gs(&mut self, key: &Key) -> Result<Option<Value>, Error> {
-        let validated_key = Validated::new(*key, |key| {
-            self.validate_readable(&key).and(self.validate_key(&key))
-        })?;
+        self.validate_readable(key)?;
+        self.validate_key(key)?;
+
         self.state
             .borrow_mut()
-            .read(self.correlation_id, &validated_key)
+            .read(self.correlation_id, key)
             .map_err(Into::into)
     }
 
     /// DO NOT EXPOSE THIS VIA THE FFI
     pub fn read_gs_direct(&mut self, key: &Key) -> Result<Option<Value>, Error> {
-        let validated_key = Validated::new(*key, Validated::valid)?;
         self.state
             .borrow_mut()
-            .read(self.correlation_id, &validated_key)
+            .read(self.correlation_id, key)
             .map_err(Into::into)
     }
 
@@ -404,22 +389,19 @@ where
     }
 
     pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
-        let validated_key: Validated<Key> = Validated::new(key, |key| {
-            self.validate_writeable(&key).and(self.validate_key(&key))
-        })?;
-        let validated_value = Validated::new(value, |value| self.validate_keys(&value))?;
-        self.state
-            .borrow_mut()
-            .write(validated_key, validated_value);
+        self.validate_writeable(&key)?;
+        self.validate_key(&key)?;
+        self.validate_value(&value)?;
+        self.state.borrow_mut().write(key, value);
         Ok(())
     }
 
     pub fn read_account(&mut self, key: &Key) -> Result<Option<Value>, Error> {
         if let Key::Account(_) = key {
-            let validated_key = Validated::new(*key, |key| self.validate_key(&key))?;
+            self.validate_key(key)?;
             self.state
                 .borrow_mut()
-                .read(self.correlation_id, &validated_key)
+                .read(self.correlation_id, key)
                 .map_err(Into::into)
         } else {
             panic!("Do not use this function for reading from non-account keys")
@@ -428,12 +410,9 @@ where
 
     pub fn write_account(&mut self, key: Key, account: Account) -> Result<(), Error> {
         if let Key::Account(_) = key {
-            let validated_key = Validated::new(key, |key| self.validate_key(&key))?;
-            let validated_value =
-                Validated::new(Value::Account(account), |value| self.validate_keys(&value))?;
-            self.state
-                .borrow_mut()
-                .write(validated_key, validated_value);
+            self.validate_key(&key)?;
+            let account_value = self.make_validated_value(account)?;
+            self.state.borrow_mut().write(key, account_value);
             Ok(())
         } else {
             panic!("Do not use this function for writing non-account keys")
@@ -441,8 +420,8 @@ where
     }
 
     pub fn store_function(&mut self, contract: Value) -> Result<[u8; 32], Error> {
-        let contract = Validated::new(contract, |c| self.validate_keys(&c))?;
-        if let Key::URef(contract_ref) = self.new_uref(contract.into_raw())? {
+        self.validate_value(&contract)?;
+        if let Key::URef(contract_ref) = self.new_uref(contract)? {
             Ok(contract_ref.addr())
         } else {
             // TODO: make new_uref return only a URef
@@ -452,19 +431,17 @@ where
 
     pub fn store_function_at_hash(&mut self, contract: Value) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
-        let validated_value = Validated::new(contract, |cntr| self.validate_keys(&cntr))?;
-        let validated_key = Validated::new(Key::Hash(new_hash), Validated::valid)?;
-        self.state
-            .borrow_mut()
-            .write(validated_key, validated_value);
+        self.validate_value(&contract)?;
+        let hash_key = Key::Hash(new_hash);
+        self.state.borrow_mut().write(hash_key, contract);
         Ok(new_hash)
     }
 
-    pub fn insert_key(&mut self, name: String, key: Validated<Key>) {
-        if let Key::URef(uref) = *key {
+    pub fn insert_key(&mut self, name: String, key: Key) {
+        if let Key::URef(uref) = key {
             self.insert_uref(uref);
         }
-        self.named_keys.insert(name, *key);
+        self.named_keys.insert(name, key);
     }
 
     pub fn insert_uref(&mut self, uref: URef) {
@@ -482,7 +459,7 @@ where
     }
 
     /// Validates whether keys used in the `value` are not forged.
-    pub fn validate_keys(&self, value: &Value) -> Result<(), Error> {
+    pub fn validate_value(&self, value: &Value) -> Result<(), Error> {
         match value {
             Value::Int32(_)
             | Value::UInt128(_)
@@ -634,23 +611,14 @@ where
     /// value stored under `key` has different type, then `TypeMismatch`
     /// errors is returned.
     pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
-        let validated_key = Validated::new(key, |k| {
-            self.validate_addable(&k).and(self.validate_key(&k))
-        })?;
-        let validated_value = Validated::new(value, |v| self.validate_keys(&v))?;
-        self.add_gs_validated(validated_key, validated_value)
+        self.validate_addable(&key)?;
+        self.validate_key(&key)?;
+        self.validate_value(&value)?;
+        self.add_gs_unsafe(key, value)
     }
 
-    fn add_gs_validated(
-        &mut self,
-        validated_key: Validated<Key>,
-        validated_value: Validated<Value>,
-    ) -> Result<(), Error> {
-        match self
-            .state
-            .borrow_mut()
-            .add(self.correlation_id, validated_key, validated_value)
-        {
+    fn add_gs_unsafe(&mut self, key: Key, value: Value) -> Result<(), Error> {
+        match self.state.borrow_mut().add(self.correlation_id, key, value) {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
@@ -682,20 +650,18 @@ where
         let key = Key::Account(self.account().pub_key());
 
         // Take an account out of the global state
-        let mut account: Account = self.read_gs_typed(&key)?;
+        let account = {
+            let mut account: Account = self.read_gs_typed(&key)?;
+            // Exit early in case of error without updating global state
+            account
+                .add_associated_key(public_key, weight)
+                .map_err(Error::from)?;
+            account
+        };
 
-        // Exit early in case of error without updating global state
-        account
-            .add_associated_key(public_key, weight)
-            .map_err(Error::from)?;
+        let account_value = self.make_validated_value(account)?;
 
-        let validated_uref = Validated::new(key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
-
-        self.state
-            .borrow_mut()
-            .write(validated_uref, validated_value);
+        self.state.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -727,13 +693,9 @@ where
             .remove_associated_key(public_key)
             .map_err(Error::from)?;
 
-        let validated_uref = Validated::new(key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+        let account_value = self.make_validated_value(account)?;
 
-        self.state
-            .borrow_mut()
-            .write(validated_uref, validated_value);
+        self.state.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -769,13 +731,9 @@ where
             .update_associated_key(public_key, weight)
             .map_err(Error::from)?;
 
-        let validated_uref = Validated::new(key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+        let account_value = self.make_validated_value(account)?;
 
-        self.state
-            .borrow_mut()
-            .write(validated_uref, validated_value);
+        self.state.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -811,13 +769,9 @@ where
             .set_action_threshold(action_type, threshold)
             .map_err(Error::from)?;
 
-        let validated_uref = Validated::new(key, Validated::valid)?;
-        let validated_value =
-            Validated::new(Value::Account(account), |value| self.validate_keys(value))?;
+        let account_value = self.make_validated_value(account)?;
 
-        self.state
-            .borrow_mut()
-            .write(validated_uref, validated_value);
+        self.state.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -831,13 +785,11 @@ where
         let protocol_version = self.protocol_version();
         let contract = Contract::new(bytes, named_keys, protocol_version);
         let contract = Value::Contract(contract);
-        let validated_key: Validated<Key> = Validated::new(key, |key| {
-            self.validate_writeable(&key).and(self.validate_key(&key))
-        })?;
-        let validated_value = Validated::new(contract, Validated::valid)?;
-        self.state
-            .borrow_mut()
-            .write(validated_key, validated_value);
+
+        self.validate_writeable(&key)?;
+        self.validate_key(&key)?;
+
+        self.state.borrow_mut().write(key, contract);
         Ok(())
     }
 
@@ -851,5 +803,14 @@ where
     /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
     pub(crate) fn attenuate_uref(&mut self, uref: URef) -> URef {
         attenuate_uref_for_account(&self.account(), uref)
+    }
+
+    /// Creates validated instance of [`Value`].
+    ///
+    /// Converts its argument into a [`Value`] and validates any keys it may contain.
+    fn make_validated_value(&self, input: impl Into<Value>) -> Result<Value, Error> {
+        let value = input.into();
+        self.validate_value(&value)?;
+        Ok(value)
     }
 }

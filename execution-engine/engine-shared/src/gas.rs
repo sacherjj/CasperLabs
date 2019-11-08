@@ -84,8 +84,7 @@ impl Zero for Gas {
 
 #[cfg(test)]
 mod tests {
-    use crate::gas::Gas;
-    use crate::motes::Motes;
+    use crate::{gas::Gas, motes::Motes};
     use contract_ffi::value::U512;
 
     #[test]

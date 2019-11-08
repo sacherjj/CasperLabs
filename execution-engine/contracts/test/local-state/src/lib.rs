@@ -2,12 +2,9 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
-
 use alloc::string::{String, ToString};
 
-use contract_ffi::contract_api::storage;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{contract_api::storage, unwrap_or_revert::UnwrapOrRevert};
 
 pub const LOCAL_KEY: [u8; 32] = [66u8; 32];
 pub const HELLO_PREFIX: &str = " Hello, ";

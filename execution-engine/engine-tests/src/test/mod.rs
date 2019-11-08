@@ -15,11 +15,9 @@ pub mod system_contracts;
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;
 
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{ProtocolVersion, U512};
+use contract_ffi::value::{account::PublicKey, ProtocolVersion, U512};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_shared::motes::Motes;
-use engine_shared::test_utils;
+use engine_shared::{motes::Motes, test_utils};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::support::test_support;

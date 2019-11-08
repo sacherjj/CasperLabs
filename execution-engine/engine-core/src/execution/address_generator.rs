@@ -1,5 +1,7 @@
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 

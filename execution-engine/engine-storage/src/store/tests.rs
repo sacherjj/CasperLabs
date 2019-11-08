@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
-use crate::store::{Store, StoreExt};
-use crate::transaction_source::{Transaction, TransactionSource};
+use crate::{
+    store::{Store, StoreExt},
+    transaction_source::{Transaction, TransactionSource},
+};
 
 // should be moved to the `store` module
 fn roundtrip<'a, K, V, X, S>(

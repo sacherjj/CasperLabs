@@ -1,17 +1,20 @@
-use std::sync::{Arc, Barrier};
-use std::thread;
+use std::{
+    sync::{Arc, Barrier},
+    thread,
+};
 
 use tempfile::tempdir;
 
 use super::TestData;
-use crate::store::Store;
-use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::Trie;
-use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::lmdb::LmdbTrieStore;
-use crate::TEST_MAP_SIZE;
+use crate::{
+    store::Store,
+    transaction_source::{
+        in_memory::InMemoryEnvironment, lmdb::LmdbEnvironment, Transaction, TransactionSource,
+    },
+    trie::Trie,
+    trie_store::{in_memory::InMemoryTrieStore, lmdb::LmdbTrieStore},
+    TEST_MAP_SIZE,
+};
 
 #[test]
 fn lmdb_writer_mutex_does_not_collide_with_readers() {

@@ -1,15 +1,17 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::{String, ToString};
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
-use contract_ffi::contract_api::{account, runtime, storage, system, Error as ApiError};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, storage, system, Error as ApiError},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const NEW_UREF_RESULT_UREF_NAME: &str = "new_uref_result";

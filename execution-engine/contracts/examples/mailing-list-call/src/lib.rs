@@ -1,16 +1,15 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::convert::From;
 
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError, TURef},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
 const MAIL_FEED_KEY: &str = "mail_feed";
 const MAILING_KEY: &str = "mailing";

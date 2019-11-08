@@ -1,13 +1,14 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::string::String;
 
-use contract_ffi::contract_api::{runtime, Error as ApiError};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, Error as ApiError},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::U512,
+};
 
 #[repr(u16)]
 enum Error {

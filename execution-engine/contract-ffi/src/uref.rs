@@ -1,12 +1,13 @@
-use bitflags;
+use alloc::{format, string::String, vec::Vec};
+
+use bitflags::bitflags;
 use hex_fmt::HexFmt;
 
-use crate::alloc::string::String;
-use crate::alloc::vec::Vec;
-use crate::base16;
-use crate::bytesrepr;
-use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
-use crate::contract_api::TURef;
+use crate::{
+    base16,
+    bytesrepr::{self, OPTION_SIZE, U32_SIZE},
+    contract_api::TURef,
+};
 
 pub const UREF_ADDR_SIZE: usize = 32;
 pub const ACCESS_RIGHTS_SIZE: usize = 1;

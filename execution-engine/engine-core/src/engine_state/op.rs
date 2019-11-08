@@ -1,6 +1,8 @@
-use std::default::Default;
-use std::fmt::{self, Display, Formatter};
-use std::ops::{Add, AddAssign};
+use std::{
+    default::Default,
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign},
+};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Op {

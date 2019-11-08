@@ -1,12 +1,17 @@
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use alloc::{format, vec::Vec};
+
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
 use hex_fmt::HexFmt;
 
-use crate::alloc::vec::Vec;
-use crate::base16;
-use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
-use crate::contract_api::{ContractRef, TURef};
-use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
+use crate::{
+    base16,
+    bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
+    contract_api::{ContractRef, TURef},
+    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+};
 
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
@@ -274,11 +279,21 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use crate::bytesrepr::{Error, FromBytes};
-    use crate::key::Key;
-    use crate::uref::{AccessRights, URef};
-    use alloc::string::String;
-    use alloc::vec::Vec;
+    // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+    #[rustfmt::skip]
+    use alloc::vec;
+    use alloc::{format, string::String, vec::Vec};
+
+    use proptest::{
+        prelude::*,
+        string::{string_regex, RegexGeneratorStrategy},
+    };
+
+    use crate::{
+        bytesrepr::{Error, FromBytes},
+        key::Key,
+        uref::{AccessRights, URef},
+    };
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -373,9 +388,6 @@ mod tests {
         // verifies that the arbitrary key length doesn't get truncated
         assert_ne!(local1, local2);
     }
-
-    use proptest::prelude::*;
-    use proptest::string::{string_regex, RegexGeneratorStrategy};
 
     /// Create a base16 string of [[length]] size.
     fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {

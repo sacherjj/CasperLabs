@@ -1,12 +1,14 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use contract_ffi::contract_api::{runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::uint::U512;
+use alloc::vec;
+
+use contract_ffi::{
+    contract_api::{runtime, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::uint::U512,
+};
 
 const UNBOND_METHOD_NAME: &str = "unbond";
 

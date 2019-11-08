@@ -1,6 +1,5 @@
 use super::TURef;
-use crate::key::Key;
-use crate::value::Contract;
+use crate::{key::Key, value::Contract};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractRef {

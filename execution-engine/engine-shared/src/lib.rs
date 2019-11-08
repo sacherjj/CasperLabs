@@ -1,16 +1,5 @@
 #![feature(result_map_or_else, never_type)]
 
-extern crate blake2;
-extern crate chrono;
-extern crate contract_ffi;
-#[macro_use]
-extern crate lazy_static;
-extern crate base16;
-extern crate libc;
-extern crate log;
-extern crate num;
-extern crate parity_wasm;
-
 pub mod additive_map;
 #[macro_use]
 pub mod gas;

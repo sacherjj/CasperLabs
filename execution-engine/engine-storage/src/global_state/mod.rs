@@ -1,24 +1,28 @@
 pub mod in_memory;
 pub mod lmdb;
 
-use std::collections::HashMap;
-use std::fmt;
-use std::hash::BuildHasher;
-use std::time::Instant;
+use std::{collections::HashMap, fmt, hash::BuildHasher, time::Instant};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{ProtocolVersion, Value, U512};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::logging::{log_duration, log_metric, GAUGE};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId};
-use engine_shared::transform::{self, Transform, TypeMismatch};
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, ProtocolVersion, Value, U512},
+};
+use engine_shared::{
+    additive_map::AdditiveMap,
+    logging::{log_duration, log_metric, GAUGE},
+    newtypes::{Blake2bHash, CorrelationId},
+    transform::{self, Transform, TypeMismatch},
+};
 
-use crate::protocol_data::ProtocolData;
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::Trie;
-use crate::trie_store::operations::{read, write, ReadResult, WriteResult};
-use crate::trie_store::TrieStore;
+use crate::{
+    protocol_data::ProtocolData,
+    transaction_source::{Transaction, TransactionSource},
+    trie::Trie,
+    trie_store::{
+        operations::{read, write, ReadResult, WriteResult},
+        TrieStore,
+    },
+};
 
 const GLOBAL_STATE_COMMIT_READS: &str = "global_state_commit_reads";
 const GLOBAL_STATE_COMMIT_WRITES: &str = "global_state_commit_writes";

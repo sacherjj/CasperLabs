@@ -1,5 +1,4 @@
-use contract_ffi::bytesrepr;
-use contract_ffi::bytesrepr::{FromBytes, ToBytes, U32_SIZE};
+use contract_ffi::bytesrepr::{self, FromBytes, ToBytes, U32_SIZE};
 
 const NUM_FIELDS: usize = 10;
 pub const WASM_COSTS_SIZE_SERIALIZED: usize = NUM_FIELDS * U32_SIZE;
@@ -78,8 +77,7 @@ impl FromBytes for WasmCosts {
 }
 
 pub mod gens {
-    use proptest::num;
-    use proptest::prop_compose;
+    use proptest::{num, prop_compose};
 
     use crate::wasm_costs::WasmCosts;
 

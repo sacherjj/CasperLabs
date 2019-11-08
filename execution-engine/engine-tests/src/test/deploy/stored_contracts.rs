@@ -1,21 +1,20 @@
-use std::collections::hash_map::RandomState;
-use std::collections::BTreeMap;
+use std::collections::{hash_map::RandomState, BTreeMap};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, Value, U512},
+};
 use engine_core::engine_state::CONV_RATE;
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::transform::Transform;
+use engine_shared::{additive_map::AdditiveMap, gas::Gas, motes::Motes, transform::Transform};
 use std::convert::TryInto;
 
-use crate::support::test_support::{
-    self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    GENESIS_INITIAL_BALANCE,
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        GENESIS_INITIAL_BALANCE,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";

@@ -1,16 +1,15 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::string::String;
+use alloc::{string::String, vec};
 
-use contract_ffi::contract_api::{runtime, system, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, system, Error as ApiError},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
