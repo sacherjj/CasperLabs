@@ -56,6 +56,6 @@ def test_upgrades_applied(cli):
             logging.info(f"Execution cost at iteration {i}, is {cost}. ")
             costs.append(cost)
 
-    logging.info(f"Costs of execution: {' '.join(costs)}")
+    logging.info(f"Costs of execution: {' '.join(str(c) for c in costs)}")
 
     assert len(costs) == 3, "For 2 upgrades after genesis that change opcodes' cost we should see 3 different execution costs"
