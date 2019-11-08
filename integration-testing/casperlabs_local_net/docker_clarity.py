@@ -134,7 +134,7 @@ class DockerSelenium(LoggingDockerBase):
 
     @property
     def image_name(self) -> str:
-        return "selenium/standalone-chrome-debug:3.141.59-xenon"
+        return "selenium/standalone-chrome:3.141.59-xenon"
 
     @property
     def volumes(self) -> dict:
@@ -149,6 +149,6 @@ class DockerSelenium(LoggingDockerBase):
             network=self.config.network,
             volumes=self.volumes,
             hostname=self.container_name,
-            ports={"4444/tcp": 4444, "5900": 5900},
+            ports={"4444/tcp": 4444},
         )
         return container

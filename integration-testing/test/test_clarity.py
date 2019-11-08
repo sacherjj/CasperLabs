@@ -6,9 +6,6 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from casperlabs_local_net.common import random_string
 
-github_name = "clarity-ci-test"
-github_password = "casperlabsclarity"
-
 
 def test_clarity_running(one_node_network_with_clarity):
     """
@@ -80,7 +77,7 @@ def test_create_account_key(one_node_network_with_clarity):
     remove_button.click()
     driver.switch_to.alert.accept()
 
-    # verify we have deleted the account
+    # Verify we have deleted the account
     assert (
         len(driver.find_elements(By.XPATH, f"//td[contains(., '{account_name}')]")) == 0
     )
