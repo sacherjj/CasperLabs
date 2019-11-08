@@ -8,9 +8,7 @@ import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.metrics.Metrics.{MetricsOps, Source}
-import io.casperlabs.models.Weight
-import io.casperlabs.shared.LogSource
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 

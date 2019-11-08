@@ -74,15 +74,4 @@ object Metrics {
   }
   def Source(prefix: Source, name: String): Source = Source(s"$prefix.$name")
   val BaseSource: Source                           = Source("casperlabs")
-
-  implicit class MetricsOps[F[_], A](fa: F[A])(implicit M: Metrics[F], ev: Metrics.Source) {
-    def timer(name: String): F[A] = M.timer(name)(fa)
-  }
-
-  implicit class MetricsStreamOps[F[_], A](fas: fs2.Stream[F, A])(
-      implicit M: Metrics[F],
-      ev: Metrics.Source
-  ) {
-    def timerS(name: String): fs2.Stream[F, A] = M.timerS(name)(fas)
-  }
 }

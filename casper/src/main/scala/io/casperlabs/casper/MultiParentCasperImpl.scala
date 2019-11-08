@@ -27,7 +27,7 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.metrics.Metrics.{MetricsOps, MetricsStreamOps}
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
