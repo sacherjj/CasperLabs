@@ -1,12 +1,6 @@
-import pytest
 import logging
 from casperlabs_local_net.cli import CLI
 from casperlabs_local_net.common import Contract
-
-
-@pytest.fixture()
-def cli(chainspec_upgrades_network_major):
-    return CLI(chainspec_upgrades_network_major.docker_nodes[0], "casperlabs_client")
 
 
 def propose_and_get_cost(cli):
@@ -22,7 +16,17 @@ def propose_and_get_cost(cli):
 
 # fmt: off
 
-def test_upgrades_applied(cli):
+
+def test_upgrades_applied_major_versions(chainspec_upgrades_network_major):
+    check_upgrades_applied(chainspec_upgrades_network_major)
+
+
+def test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
+    check_upgrades_applied(chainspec_upgrades_network_minor)
+
+
+def check_upgrades_applied(network):
+    cli = CLI(network.docker_nodes[0], "casperlabs_client")
     account = cli.node.test_account
 
     cli.set_default_deploy_args(
