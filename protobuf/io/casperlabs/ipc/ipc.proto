@@ -221,19 +221,6 @@ message QueryResponse {
 }
 
 
-message ValidateResponse {
-    message ValidateSuccess {};
-    oneof result {
-        ValidateSuccess success = 1;
-        string failure = 2;
-    }
-}
-
-message ValidateRequest {
-    bytes wasm_code = 1;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
-}
-
 message GenesisResult {
     bytes poststate_hash = 1;
     ExecutionEffect effect = 2;
@@ -351,7 +338,6 @@ message UpgradeResponse {
 service ExecutionEngineService {
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
-    rpc validate (ValidateRequest) returns (ValidateResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
     rpc run_genesis (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
     rpc upgrade (UpgradeRequest) returns (UpgradeResponse) {}

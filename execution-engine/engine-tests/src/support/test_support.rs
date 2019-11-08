@@ -30,7 +30,7 @@ use engine_grpc_server::engine_server::{
         CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
         DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
         ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-        StoredContractURef, UpgradeRequest, UpgradeResponse, ValidateRequest, ValidateResponse,
+        StoredContractURef, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
     mappings::{CommitTransforms, MappingError},
@@ -789,15 +789,6 @@ where
             .expect("Should have commit response")
     }
 
-    pub fn validate(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
-        let validate_request = create_validate_request(wasm_bytes);
-
-        self.engine_state
-            .validate(RequestOptions::new(), validate_request)
-            .wait_drop_metadata()
-            .expect("Should have validate response")
-    }
-
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
     pub fn commit_effects(
@@ -1034,12 +1025,6 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
     let path = get_compiled_wasm_path(contract_file);
     std::fs::read(path.clone())
         .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
-}
-
-fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
-    let mut validate_request = ValidateRequest::new();
-    validate_request.set_wasm_code(wasm_bytes);
-    validate_request
 }
 
 pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
