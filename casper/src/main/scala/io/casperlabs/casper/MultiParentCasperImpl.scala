@@ -465,7 +465,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          upgrades
                        )
-                       .timer("computeDeploysCheckpoint")
       } yield {
         if (checkpoint.deploysForBlock.isEmpty) {
           CreateBlockStatus.noNewDeploys
