@@ -373,6 +373,8 @@ class OneNodeWithClarity(OneNodeNetwork):
     def create_cl_network(self):
         account = self.get_key()
         config = self.docker_config(account)
+        # Enable auto proposing
+        config.node_env["CL_CASPER_AUTO_PROPOSE_ENABLED"] = "true"
         self.add_bootstrap(config)
         self.add_clarity(config)
 
