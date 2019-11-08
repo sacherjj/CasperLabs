@@ -15,7 +15,7 @@ use crate::{
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account.wasm";
 const DONATION_BOX_COPY_KEY: &str = "donation_box_copy";
-const EXPECTED_ERROR: &str = "Interpreter(Trap(Trap { kind: Host(InvalidContext) }))";
+const EXPECTED_ERROR: &str = "Invalid execution context.";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
 const VICTIM_ADDR: [u8; 32] = [42; 32];
 

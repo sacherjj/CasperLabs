@@ -208,6 +208,10 @@ where
                         // InterpreterError.
                         return Err(Error::Revert(*status));
                     }
+                    Error::InvalidContext => {
+                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
+                        return Err(Error::InvalidContext);
+                    }
                     _ => {}
                 }
             }
