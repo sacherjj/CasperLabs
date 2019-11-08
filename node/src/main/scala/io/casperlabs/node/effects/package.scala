@@ -108,6 +108,9 @@ package object effects {
       config
     }
 
+    def addPragma(pragma: doobie.util.fragment.Fragment)(xa: Transactor[Task]) =
+      Transactor.before.set(xa, pragma.update.run.void >> Transactor.before.get(xa))
+
     // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
@@ -118,6 +121,10 @@ package object effects {
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
     val readXaconfig = mkConfig(poolSize = 10)
 
+    // NOTE: We still saw at least one SQLITE_BUSY error in testing, sepsite the 1 sized pool.
+    // NODE-1019 will add logging, maybe we'll learn more.
+    val pragmaBusyTimeout = fr"PRAGMA busy_timeout = 5000;"
+
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
       writeXa <- HikariTransactor
@@ -126,15 +133,9 @@ package object effects {
                     connectEC,
                     Blocker.liftExecutionContext(transactEC)
                   )
-                  .map { xa =>
-                    // Foreign keys support must be enabled explicitly in SQLite
-                    // https://www.sqlite.org/foreignkeys.html#fk_enable
-                    Transactor.before
-                      .set(
-                        xa,
-                        sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa)
-                      )
-                  }
+                  // Foreign keys support must be enabled explicitly in SQLite
+                  // https://www.sqlite.org/foreignkeys.html#fk_enable
+                  .map(addPragma(fr"PRAGMA foreign_keys = ON;" ++ pragmaBusyTimeout))
       // Ignoring foreign keys pragma during reads, because it doesn't affect the logic.
       readXa <- HikariTransactor
                  .fromHikariConfig[Task](
@@ -142,6 +143,7 @@ package object effects {
                    connectEC,
                    Blocker.liftExecutionContext(transactEC)
                  )
+                 .map(addPragma(pragmaBusyTimeout))
     } yield (writeXa, readXa)
   }
 }
