@@ -125,6 +125,10 @@ package object effects {
     // NODE-1019 will add logging, maybe we'll learn more.
     val pragmaBusyTimeout = fr"PRAGMA busy_timeout = 5000;"
 
+    // Foreign keys support must be enabled explicitly in SQLite; it doesn't affect read logic though.
+    // https://www.sqlite.org/foreignkeys.html#fk_enable
+    val pragmaForeignKeys = fr"PRAGMA foreign_keys = ON;"
+
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
       writeXa <- HikariTransactor
@@ -133,10 +137,7 @@ package object effects {
                     connectEC,
                     Blocker.liftExecutionContext(transactEC)
                   )
-                  // Foreign keys support must be enabled explicitly in SQLite
-                  // https://www.sqlite.org/foreignkeys.html#fk_enable
-                  .map(addPragma(fr"PRAGMA foreign_keys = ON;" ++ pragmaBusyTimeout))
-      // Ignoring foreign keys pragma during reads, because it doesn't affect the logic.
+                  .map(addPragma(pragmaForeignKeys ++ pragmaBusyTimeout))
       readXa <- HikariTransactor
                  .fromHikariConfig[Task](
                    readXaconfig,
