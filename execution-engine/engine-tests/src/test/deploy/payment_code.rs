@@ -338,9 +338,9 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -409,9 +409,9 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -475,9 +475,9 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -749,8 +749,8 @@ fn should_charge_non_main_purse() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 

@@ -1,4 +1,3 @@
-#![feature(result_map_or_else)]
 #![feature(never_type)]
 
 use contract_ffi::key::Key;
