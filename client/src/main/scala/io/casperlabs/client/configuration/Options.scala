@@ -399,7 +399,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val deployPath =
       opt[File](
-        required = true,
+        required = false,
         descr = "Path to the deploy file.",
         validate = fileCheck,
         short = 'i'
