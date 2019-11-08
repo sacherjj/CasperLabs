@@ -5,8 +5,8 @@ from casperlabs_local_net.common import Contract
 
 
 @pytest.fixture()
-def cli(chainspec_upgrades_network):
-    return CLI(chainspec_upgrades_network.docker_nodes[0], "casperlabs_client")
+def cli(chainspec_upgrades_network_major):
+    return CLI(chainspec_upgrades_network_major.docker_nodes[0], "casperlabs_client")
 
 
 def propose_and_get_cost(cli):

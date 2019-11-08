@@ -1,6 +1,8 @@
 import logging
 import os
 import threading
+import errno
+import shutil
 from casperlabs_local_net.casperlabs_node import CasperLabsNode
 from casperlabs_local_net.common import (
     random_string,
@@ -292,9 +294,41 @@ class OneNodeNetwork(CasperLabsNetwork):
 
 
 class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
+    THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+    RESOURCES = f"{THIS_DIRECTORY}/../resources/"
+    EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
+    # We need to copy system contracts to genesis in test chainspecs
+    SYSTEM_CONTRACTS = ("pos_install.wasm", "mint_install.wasm")
+
+    def __init__(
+        self,
+        docker_client: DockerClient,
+        extra_docker_params: Dict = None,
+        chainspec_directory="test-chainspec",
+    ):
+        super().__init__(docker_client, extra_docker_params)
+        self.chainspec_directory = chainspec_directory
+        source_directory = (
+            os.environ.get("TAG_NAME")
+            and "/root/system_contracts/"
+            or self.EE_CONTRACTS_DIR
+        )
+        destination_directory = os.path.join(
+            self.RESOURCES, self.chainspec_directory, "genesis"
+        )
+        try:
+            os.makedirs(destination_directory)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        for file_name in self.SYSTEM_CONTRACTS:
+            shutil.copy(
+                os.path.join(source_directory, file_name), destination_directory
+            )
+
     def docker_config(self, account):
         config = super().docker_config(account)
-        config.chainspec_directory = "test-chainspec"
+        config.chainspec_directory = self.chainspec_directory
         return config
 
 

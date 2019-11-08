@@ -19,3 +19,5 @@ RUN mkdir -p /root/protobuf
 COPY ./protobuf/ /root/protobuf/
 RUN mkdir -p /root/bundled_contracts
 COPY ./bundled_contracts/ /root/bundled_contracts/
+RUN mkdir -p /root/system_contracts
+COPY ./system_contracts/ /root/system_contracts/
