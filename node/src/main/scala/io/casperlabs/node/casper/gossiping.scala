@@ -39,7 +39,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FilesAPI, Log, SelfEquivocationError, Time}
+import io.casperlabs.shared.{Cell, FatalError, FatalErrorShutdown, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -281,7 +281,7 @@ package object gossiping {
         case SelfEquivocatedBlock =>
           MonadThrowable[F]
             .raiseError[Unit](
-              SelfEquivocationError(block.blockHash)
+              FatalError.selfEquivocationError(block.blockHash)
             )
 
         case other =>

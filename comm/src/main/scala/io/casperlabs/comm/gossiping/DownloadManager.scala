@@ -19,7 +19,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, Log, SelfEquivocationError}
+import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -435,8 +435,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       // Make sure the manager knows we're done, even if we fail unexpectedly.
       loop(item.sources.map((_, 0)).toMap, lastError = none[Throwable]) recoverWith {
         case NonFatal(ex) => failure(ex)
-        case error @ SelfEquivocationError(_) =>
-          Log[F].error(error.getLocalizedMessage) *> Concurrent[F].raiseError(error)
+        case error @ FatalErrorShutdown(_) =>
+          Log[F].error(error.getLocalizedMessage) *> failure(error) *> Concurrent[F]
+            .raiseError(error)
       }
     }
   }
