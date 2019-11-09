@@ -27,9 +27,9 @@ class PropertyBag:
         # will never show up when the message is serialized, even to text format.
         # This is here to make it possible to use output of show-deploy in test framework
         # to make important assertions.
-        if name == "is_error" and ("block_info" in self.d) and ("cost" in self.d):
+        if name == "is_error" and "cost" in self.d:
             return False
-        if name == "error_message" and ("block_info" in self.d) and ("cost" in self.d):
+        if name == "error_message" and "cost" in self.d:
             return ""
         raise KeyError("Can't find '%s' in block; got %r" % (name, self.d.keys()))
 
