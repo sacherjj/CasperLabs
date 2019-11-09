@@ -7,6 +7,8 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.util.DagOperations
 import io.casperlabs.casper.util.ProtoUtil.weightFromValidatorByDag
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -18,7 +20,10 @@ object Estimator {
 
   import Weight._
 
-  def tips[F[_]: MonadThrowable](
+  implicit val metricsSource   = CasperMetricsSource
+  implicit val decreasingOrder = Ordering[Long].reverse
+
+  def tips[F[_]: MonadThrowable: Metrics](
       dag: DagRepresentation[F],
       genesis: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
@@ -58,9 +63,10 @@ object Estimator {
       lca <- NonEmptyList
               .fromList(latestMessagesFlattened)
               .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-      scores        <- lmdScoring(dag, lca, latestMessageHashes, equivocators)
-      newMainParent <- forkChoiceTip(dag, lca, scores)
-      parents       <- tipsOfLatestMessages(latestMessagesFlattened, lca)
+              .timer("calculateLCA")
+      scores        <- lmdScoring(dag, lca, latestMessageHashes, equivocators).timer("lmdScoring")
+      newMainParent <- forkChoiceTip(dag, lca, scores).timer("forkChoiceTip")
+      parents       <- tipsOfLatestMessages(latestMessagesFlattened, lca).timer("tipsOfLatestMessages")
       secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
         // Filter out blocks created by equivocators from the secondary parents.
         // Secondary parents are not subject to the fork choice rule, the only requirement

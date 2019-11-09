@@ -42,14 +42,12 @@ use self::{
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";
 const METRIC_DURATION_QUERY: &str = "query_duration";
-const METRIC_DURATION_VALIDATE: &str = "validate_duration";
 const METRIC_DURATION_GENESIS: &str = "genesis_duration";
 const METRIC_DURATION_UPGRADE: &str = "upgrade_duration";
 
 const TAG_RESPONSE_COMMIT: &str = "commit_response";
 const TAG_RESPONSE_EXEC: &str = "exec_response";
 const TAG_RESPONSE_QUERY: &str = "query_response";
-const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 const TAG_RESPONSE_UPGRADE: &str = "upgrade_response";
 
@@ -370,53 +368,6 @@ where
         );
 
         grpc::SingleResponse::completed(commit_response)
-    }
-
-    fn validate(
-        &self,
-        _request_options: ::grpc::RequestOptions,
-        validate_request: ipc::ValidateRequest,
-    ) -> grpc::SingleResponse<ipc::ValidateResponse> {
-        let start = Instant::now();
-        let correlation_id = CorrelationId::new();
-
-        let module = wabt::Module::read_binary(
-            validate_request.wasm_code,
-            &wabt::ReadBinaryOptions::default(),
-        )
-        .and_then(|x| x.validate());
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            "module",
-            start.elapsed(),
-        );
-
-        let validate_result = match module {
-            Ok(_) => {
-                let mut validate_result = ipc::ValidateResponse::new();
-                validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
-                validate_result
-            }
-            Err(cause) => {
-                let cause_msg = cause.to_string();
-                logging::log_error(&cause_msg);
-
-                let mut validate_result = ipc::ValidateResponse::new();
-                validate_result.set_failure(cause_msg);
-                validate_result
-            }
-        };
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            TAG_RESPONSE_VALIDATE,
-            start.elapsed(),
-        );
-
-        grpc::SingleResponse::completed(validate_result)
     }
 
     fn run_genesis(

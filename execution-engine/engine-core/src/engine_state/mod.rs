@@ -340,7 +340,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, Key::URef(mint_reference))?;
                 let (bytes, _, _) = contract.destructure();
-                preprocessor.deserialize(&bytes)?
+                engine_wasm_prep::deserialize(&bytes)?
             };
 
             // For each account...
@@ -605,7 +605,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
@@ -623,7 +623,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, *stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
@@ -671,7 +671,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
         }
@@ -794,7 +794,7 @@ where
             };
 
             if !self.system_contract_cache.has(&mint_reference) {
-                let module = match preprocessor.deserialize(mint_contract.bytes()) {
+                let module = match engine_wasm_prep::deserialize(mint_contract.bytes()) {
                     Ok(module) => module,
                     Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
                 };
@@ -1037,7 +1037,7 @@ where
                     Some(module) => module,
                     None => {
                         let module =
-                            match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                            match engine_wasm_prep::deserialize(&proof_of_stake_contract.bytes()) {
                                 Ok(module) => module,
                                 Err(error) => {
                                     return Ok(ExecutionResult::precondition_failure(error.into()))

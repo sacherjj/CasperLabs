@@ -241,7 +241,7 @@ object ExecutionEngineService {
 }
 
 object GrpcExecutionEngineService {
-  private implicit val EngineMetricsSource: Metrics.Source =
+  implicit val EngineMetricsSource: Metrics.Source =
     Metrics.Source(Metrics.BaseSource, "engine")
 
   private def initializeMetrics[F[_]: Metrics] =
