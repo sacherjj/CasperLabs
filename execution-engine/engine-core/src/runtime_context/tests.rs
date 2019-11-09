@@ -1,31 +1,39 @@
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::iter::{self, FromIterator};
-use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    iter::{self, FromIterator},
+    rc::Rc,
+};
 
 use rand::RngCore;
 
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, LOCAL_SEED_SIZE};
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{
-    ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-    SetThresholdFailure, Weight,
+use contract_ffi::{
+    execution::Phase,
+    key::{Key, LOCAL_SEED_SIZE},
+    uref::{AccessRights, URef},
+    value::{
+        self,
+        account::{
+            ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
+            RemoveKeyFailure, SetThresholdFailure, Weight,
+        },
+        Account, Contract, ProtocolVersion, Value,
+    },
 };
-use contract_ffi::value::{self, Account, Contract, ProtocolVersion, Value};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::Transform;
-use engine_storage::global_state::in_memory::{InMemoryGlobalState, InMemoryGlobalStateView};
-use engine_storage::global_state::{CommitResult, StateProvider};
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, newtypes::CorrelationId, transform::Transform,
+};
+use engine_storage::global_state::{
+    in_memory::{InMemoryGlobalState, InMemoryGlobalStateView},
+    CommitResult, StateProvider,
+};
 
-use super::attenuate_uref_for_account;
-use super::{Address, Error, RuntimeContext, Validated};
-use crate::engine_state::SYSTEM_ACCOUNT_ADDR;
-use crate::execution::extract_access_rights_from_keys;
-use crate::execution::AddressGenerator;
-use crate::tracking_copy::TrackingCopy;
+use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};
+use crate::{
+    engine_state::SYSTEM_ACCOUNT_ADDR,
+    execution::{extract_access_rights_from_keys, AddressGenerator},
+    tracking_copy::TrackingCopy,
+};
 
 const DEPLOY_HASH: [u8; 32] = [1u8; 32];
 const PHASE: Phase = Phase::Session;
@@ -412,10 +420,7 @@ fn contract_key_addable_valid() {
         Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
-    tc.borrow_mut().write(
-        Validated::new(contract_key, Validated::valid).unwrap(),
-        Validated::new(contract, Validated::valid).unwrap(),
-    );
+    tc.borrow_mut().write(contract_key, contract);
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);
@@ -475,10 +480,7 @@ fn contract_key_addable_invalid() {
         Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
-    tc.borrow_mut().write(
-        Validated::new(contract_key, Validated::valid).unwrap(),
-        Validated::new(contract, Validated::valid).unwrap(),
-    );
+    tc.borrow_mut().write(contract_key, contract);
 
     let mut uref_map = BTreeMap::new();
     let uref = create_uref(&mut address_generator, AccessRights::WRITE);

@@ -2,8 +2,7 @@ use failure::Fail;
 
 use engine_shared::newtypes::Blake2bHash;
 
-use contract_ffi::bytesrepr;
-use contract_ffi::system_contracts::mint;
+use contract_ffi::{bytesrepr, system_contracts::mint};
 
 use crate::execution;
 use contract_ffi::value::ProtocolVersion;

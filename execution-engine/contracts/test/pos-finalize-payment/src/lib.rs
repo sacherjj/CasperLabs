@@ -1,17 +1,21 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
+use alloc::vec;
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::ContractRef;
-use contract_ffi::contract_api::{account, runtime, system, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{account, runtime, system, ContractRef, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{
+        account::{PublicKey, PurseId},
+        U512,
+    },
+};
 
 fn purse_to_key(p: &PurseId) -> Key {
     Key::URef(p.value())

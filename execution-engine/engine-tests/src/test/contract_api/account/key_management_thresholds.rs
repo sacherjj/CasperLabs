@@ -1,9 +1,12 @@
 use contract_ffi::value::account::PublicKey;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, STANDARD_PAYMENT_CONTRACT,
+use crate::{
+    support::test_support::{
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        STANDARD_PAYMENT_CONTRACT,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 const CONTRACT_KEY_MANAGEMENT_THRESHOLDS: &str = "key_management_thresholds.wasm";
 

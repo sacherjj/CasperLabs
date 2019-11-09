@@ -1,47 +1,52 @@
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::ffi::OsStr;
-use std::fs;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{
+    collections::HashMap, convert::TryInto, ffi::OsStr, fs, path::PathBuf, rc::Rc, sync::Arc,
+};
 
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 use rand::Rng;
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::{Account, PublicKey, PurseId};
-use contract_ffi::value::contract::Contract;
-use contract_ffi::value::{SemVer, Value, U512};
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
-use engine_core::execution;
-use engine_grpc_server::engine_server::ipc::{
-    ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
-    CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
-    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
-    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-    StoredContractURef, UpgradeRequest, UpgradeResponse, ValidateRequest, ValidateResponse,
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::ToBytes,
+    key::Key,
+    uref::URef,
+    value::{
+        account::{Account, PublicKey, PurseId},
+        contract::Contract,
+        SemVer, Value, U512,
+    },
 };
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
-use engine_grpc_server::engine_server::state::ProtocolVersion;
-use engine_grpc_server::engine_server::{state, transforms};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::Blake2bHash;
-use engine_shared::os::get_page_size;
-use engine_shared::transform::Transform;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_storage::global_state::StateProvider;
-use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
-use engine_storage::transaction_source::lmdb::LmdbEnvironment;
-use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_core::{
+    engine_state::{
+        genesis::{GenesisAccount, GenesisConfig},
+        EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
+    },
+    execution,
+};
+use engine_grpc_server::engine_server::{
+    ipc::{
+        ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
+        CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
+        DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+        ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
+        StoredContractURef, UpgradeRequest, UpgradeResponse,
+    },
+    ipc_grpc::ExecutionEngineService,
+    mappings::{CommitTransforms, MappingError},
+    state::{self, ProtocolVersion},
+    transforms,
+};
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, newtypes::Blake2bHash, os::get_page_size,
+    transform::Transform,
+};
+use engine_storage::{
+    global_state::{in_memory::InMemoryGlobalState, lmdb::LmdbGlobalState, StateProvider},
+    protocol_data_store::lmdb::LmdbProtocolDataStore,
+    transaction_source::lmdb::LmdbEnvironment,
+    trie_store::lmdb::LmdbTrieStore,
+};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use protobuf::RepeatedField;
 use transforms::TransformEntry;
@@ -784,15 +789,6 @@ where
             .expect("Should have commit response")
     }
 
-    pub fn validate(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
-        let validate_request = create_validate_request(wasm_bytes);
-
-        self.engine_state
-            .validate(RequestOptions::new(), validate_request)
-            .wait_drop_metadata()
-            .expect("Should have validate response")
-    }
-
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
     pub fn commit_effects(
@@ -1029,12 +1025,6 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
     let path = get_compiled_wasm_path(contract_file);
     std::fs::read(path.clone())
         .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
-}
-
-fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
-    let mut validate_request = ValidateRequest::new();
-    validate_request.set_wasm_code(wasm_bytes);
-    validate_request
 }
 
 pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {

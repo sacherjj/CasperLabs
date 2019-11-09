@@ -120,3 +120,34 @@ class DockerGrpcWebProxy(LoggingDockerBase):
         )
 
         return container
+
+
+class DockerSelenium(LoggingDockerBase):
+    """
+    see https://github.com/SeleniumHQ/docker-selenium
+    """
+
+    @property
+    def container_type(self) -> str:
+        return "selenium"
+
+    @property
+    def image_name(self) -> str:
+        return "selenium/standalone-chrome:3.141.59-xenon"
+
+    @property
+    def volumes(self) -> dict:
+        return {"/dev/shm": {"bind": "/dev/shm", "mode": "rw"}}
+
+    def _get_container(self):
+        container = self.config.docker_client.containers.run(
+            self.image_name,
+            name=self.container_name,
+            user="root",
+            detach=True,
+            network=self.config.network,
+            volumes=self.volumes,
+            hostname=self.container_name,
+            ports={"4444/tcp": 4444},
+        )
+        return container

@@ -1,21 +1,24 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
-extern crate contract_ffi;
-extern crate mint_token;
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
-use alloc::string::{String, ToString};
-
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::system_contracts::mint::Error;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::U512;
-use mint_token::internal_purse_id::{DepositId, WithdrawId};
-use mint_token::mint::Mint;
-use mint_token::CLMint;
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError},
+    system_contracts::mint::Error,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+    value::U512,
+};
+use mint_token::{
+    internal_purse_id::{DepositId, WithdrawId},
+    mint::Mint,
+    CLMint,
+};
 
 const VERSION: &str = "1.1.0";
 

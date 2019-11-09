@@ -1,10 +1,10 @@
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::{bytesrepr::ToBytes, key::Key, value::Value};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+};
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 
 #[ignore]

@@ -1,18 +1,23 @@
-use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::convert::TryFrom;
-use core::fmt::{Debug, Display, Formatter};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
+use core::{
+    convert::TryFrom,
+    fmt::{Debug, Display, Formatter},
+};
 
 use failure::Fail;
 use hex_fmt::HexFmt;
 
-use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::contract_api::runtime;
-use crate::contract_api::Error as ApiError;
-use crate::key::{Key, UREF_SIZE};
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
+use crate::{
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE},
+    contract_api::{runtime, Error as ApiError},
+    key::{Key, UREF_SIZE},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+};
 
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
@@ -859,15 +864,23 @@ impl FromBytes for Account {
 
 #[cfg(test)]
 mod tests {
-    use crate::uref::{AccessRights, URef};
-    use crate::value::account::{
-        Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey, PurseId,
-        RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE, MAX_KEYS,
+    // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+    #[rustfmt::skip]
+    use alloc::vec;
+    use alloc::{
+        collections::{BTreeMap, BTreeSet},
+        vec::Vec,
     };
-    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-    use alloc::vec::Vec;
-    use core::convert::TryFrom;
-    use core::iter::FromIterator;
+    use core::{convert::TryFrom, iter::FromIterator};
+
+    use crate::{
+        uref::{AccessRights, URef},
+        value::account::{
+            Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey,
+            PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE,
+            MAX_KEYS,
+        },
+    };
 
     #[test]
     fn associated_keys_add() {

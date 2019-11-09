@@ -44,11 +44,8 @@ abstract class HashSetCasperTest
 
   private val (otherSk, _)                = Ed25519.newKeyPair
   private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  //private val (ethPivKeys, ethPubKeys) = (1 to 4).map(_ => Secp256k1.newKeyPair).unzip
-  //private val ethAddresses = ethPubKeys.map(pk => "0x" + Base16.encode(Keccak256.hash(pk.drop(1)).takeRight(20)))
-  //private val wallets = ethAddresses.map(addr => PreWallet(addr, BigInt(10001)))
-  private val wallets = validators.map(key => (key, 10001L)).toMap
-  private val bonds   = createBonds(validators)
+  private val wallets                     = validators.map(key => (key, 10001L)).toMap
+  private val bonds                       = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, 0L)
 
@@ -321,7 +318,7 @@ abstract class HashSetCasperTest
 
   it should "start numbering validators' blocks from 1" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     val validator = ByteString.copyFrom(validators.head)
 
     for {
@@ -1066,7 +1063,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block1)
+      _                     <- checkLastFinalizedBlock(nodes(0), block2)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
@@ -1076,7 +1073,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block2)
+      _                     <- checkLastFinalizedBlock(nodes(0), block3)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
@@ -1086,9 +1083,9 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block3)
+      _                     <- checkLastFinalizedBlock(nodes(0), block4)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
-      _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
+      _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
       Created(block9) <- nodes(2).casperEff
                           .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
@@ -1096,7 +1093,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block4)
+      _                     <- checkLastFinalizedBlock(nodes(0), block5)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
@@ -1106,7 +1103,7 @@ abstract class HashSetCasperTest
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      _                     <- checkLastFinalizedBlock(nodes(0), block5)
+      _                     <- checkLastFinalizedBlock(nodes(0), block6)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 7 and block 10
 
@@ -1164,7 +1161,7 @@ abstract class HashSetCasperTest
 
   it should "not execute deploys until dependencies are met" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     for {
       deploy1         <- ProtoUtil.basicDeploy[Task]()
       deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withDependencies(Seq(deploy1.deployHash)))
@@ -1181,7 +1178,7 @@ abstract class HashSetCasperTest
 
   it should "only execute deploys during the appropriate time window" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     val minTTL = 60 * 60 * 1000
     for {
       deploy1         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(3L).withTtl(minTTL))
@@ -1205,33 +1202,52 @@ abstract class HashSetCasperTest
   }
 
   it should "not execute deploys which are already in the past" in effectTest {
-    val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = -1.0f)
+    val bonds = createBonds(validators.take(2))
+    val BlockMsgWithTransform(Some(genesis), transforms) =
+      buildGenesis(Map.empty, bonds, 0L)
+
+    def deploySomething(nodes: IndexedSeq[TestNode[Task]], i: Int) =
+      for {
+        deploy         <- ProtoUtil.basicDeploy[Task]()
+        _              <- nodes(i).casperEff.deploy(deploy)
+        create         <- nodes(i).casperEff.createBlock
+        Created(block) = create
+        _              <- nodes(i).casperEff.addBlock(block) shouldBeF Valid
+        _              <- nodes(1 - i).casperEff.addBlock(block) shouldBeF Valid
+      } yield deploy
+
     for {
-      deploy          <- ProtoUtil.basicDeploy[Task]()
-      _               <- node.casperEff.deploy(deploy)
-      create1         <- node.casperEff.createBlock
-      Created(block1) = create1
-      _               <- node.casperEff.addBlock(block1) shouldBeF Valid
+      nodes <- networkEff(
+                validatorKeys.take(2),
+                genesis,
+                transforms
+              )
 
-      // Should be finalized, so not stop it appearing again as pending.
-      processedDeploys <- node.deployStorage.reader.readProcessed
-      _                = processedDeploys shouldBe empty
+      deploy <- deploySomething(nodes, 0)
+      // Deploy a few more things to both nodes so things get finalized.
+      // NOTE: A single node currently doesn't finalize anything.
+      _ <- deploySomething(nodes, 1)
+      _ <- deploySomething(nodes, 0)
+      _ <- deploySomething(nodes, 1)
 
-      // Should be able to enquee the deploy again.
-      _               <- node.casperEff.deploy(deploy)
-      pendingDeploys1 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys1 should not be empty
+      // The first deploy should be finalized, so not stop it appearing again as pending.
+      processedDeploys <- nodes(0).deployStorage.reader.readProcessed
+      _                = processedDeploys should not contain (deploy)
+
+      // Should be able to enqueue the deploy again.
+      _               <- nodes(0).casperEff.deploy(deploy)
+      pendingDeploys1 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys1 should contain(deploy)
 
       // Should not put it in a block.
-      createB <- node.casperEff.createBlock
+      createB <- nodes(0).casperEff.createBlock
       _       = createB shouldBe CreateBlockStatus.noNewDeploys
 
       // Should discard the deploy.
-      pendingDeploys2 <- node.deployStorage.reader.readPending
-      _               = pendingDeploys2 shouldBe empty
+      pendingDeploys2 <- nodes(0).deployStorage.reader.readPending
+      _               = pendingDeploys2 should not contain (deploy)
 
-      _ <- node.tearDown()
+      _ <- nodes.toList.traverse(_.tearDown())
     } yield ()
   }
 

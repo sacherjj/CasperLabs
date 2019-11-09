@@ -1,11 +1,17 @@
-use std::collections::btree_map::BTreeMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
-use crate::logging::log_level::LogLevel;
-use crate::logging::log_message::{LogMessage, MessageId};
-use crate::logging::logger::initialize_terminal_logger;
-use crate::newtypes::CorrelationId;
-use crate::utils::jsonify;
+use crate::{
+    logging::{
+        log_level::LogLevel,
+        log_message::{LogMessage, MessageId},
+        logger::initialize_terminal_logger,
+    },
+    newtypes::CorrelationId,
+    utils::jsonify,
+};
 
 pub mod log_level;
 pub mod log_message;

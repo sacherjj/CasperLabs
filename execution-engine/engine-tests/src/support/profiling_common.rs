@@ -1,11 +1,8 @@
-use std::env;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{env, path::PathBuf, str::FromStr};
 
 use clap::{Arg, ArgMatches};
 
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::U512;
+use contract_ffi::value::{account::PublicKey, U512};
 
 const DATA_DIR_ARG_NAME: &str = "data-dir";
 const DATA_DIR_ARG_SHORT: &str = "d";

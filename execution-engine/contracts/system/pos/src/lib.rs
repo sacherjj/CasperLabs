@@ -1,26 +1,32 @@
 #![cfg_attr(not(test), no_std)]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
 mod queue;
 mod stakes;
 
-use alloc::string::String;
-use alloc::vec::Vec;
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
+use alloc::vec;
+use alloc::{string::String, vec::Vec};
 
-use contract_ffi::contract_api::{runtime, system};
-use contract_ffi::execution::Phase;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::pos::{Error, PurseLookupError, Result};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, system},
+    execution::Phase,
+    key::Key,
+    system_contracts::pos::{Error, PurseLookupError, Result},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+    value::{
+        account::{BlockTime, PublicKey, PurseId},
+        U512,
+    },
+};
 
-use crate::queue::{QueueEntry, QueueLocal, QueueProvider};
-use crate::stakes::{ContractStakes, StakesProvider};
+use crate::{
+    queue::{QueueEntry, QueueLocal, QueueProvider},
+    stakes::{ContractStakes, StakesProvider},
+};
 
 /// Account used to run system functions (in particular `finalize_payment`).
 const SYSTEM_ACCOUNT: [u8; 32] = [0u8; 32];
@@ -355,18 +361,22 @@ pub extern "C" fn call() {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::iter;
+    use std::{cell::RefCell, iter};
 
-    use contract_ffi::system_contracts::pos::Result;
-    use contract_ffi::value::{
-        account::{BlockTime, PublicKey},
-        U512,
+    use contract_ffi::{
+        system_contracts::pos::Result,
+        value::{
+            account::{BlockTime, PublicKey},
+            U512,
+        },
     };
 
-    use crate::queue::{Queue, QueueProvider};
-    use crate::stakes::{Stakes, StakesProvider};
-    use crate::{bond, step, unbond, BOND_DELAY, UNBOND_DELAY};
+    use crate::{
+        bond,
+        queue::{Queue, QueueProvider},
+        stakes::{Stakes, StakesProvider},
+        step, unbond, BOND_DELAY, UNBOND_DELAY,
+    };
 
     const KEY1: [u8; 32] = [1; 32];
     const KEY2: [u8; 32] = [2; 32];

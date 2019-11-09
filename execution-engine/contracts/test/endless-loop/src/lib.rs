@@ -1,7 +1,5 @@
 #![no_std]
 
-extern crate contract_ffi;
-
 use contract_ffi::contract_api::account;
 
 #[no_mangle]

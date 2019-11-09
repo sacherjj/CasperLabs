@@ -1,13 +1,16 @@
 //! Some functions to use in tests.
-use std::collections::btree_map::BTreeMap;
+use std::collections::BTreeMap;
 
-use parity_wasm::builder::ModuleBuilder;
-use parity_wasm::elements::{MemorySection, MemoryType, Module, Section, Serialize};
+use parity_wasm::{
+    builder::ModuleBuilder,
+    elements::{MemorySection, MemoryType, Module, Section, Serialize},
+};
 
-use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::{Account, Value};
+use contract_ffi::{
+    key::Key,
+    uref::{AccessRights, URef},
+    value::{account::PurseId, Account, Value},
+};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 /// Returns the serialized form of an empty Wasm Module

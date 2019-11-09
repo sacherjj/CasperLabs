@@ -4,46 +4,50 @@ pub mod mappings;
 pub mod state;
 pub mod transforms;
 
-use std::collections::BTreeMap;
-use std::convert::{TryFrom, TryInto};
-use std::fmt::Debug;
-use std::io::ErrorKind;
-use std::marker::{Send, Sync};
-use std::time::Instant;
+use std::{
+    collections::BTreeMap,
+    convert::{TryFrom, TryInto},
+    fmt::Debug,
+    io::ErrorKind,
+    marker::{Send, Sync},
+    time::Instant,
+};
 
 use grpc::SingleResponse;
 
-use contract_ffi::value::account::BlockTime;
-use contract_ffi::value::ProtocolVersion;
-use engine_core::engine_state::deploy_item::DeployItem;
-use engine_core::engine_state::execution_result::ExecutionResult;
-use engine_core::engine_state::genesis::{GenesisConfig, GenesisResult};
-use engine_core::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
-use engine_core::engine_state::EngineState;
-use engine_core::engine_state::Error as EngineError;
-use engine_core::execution::Executor;
-use engine_core::tracking_copy::QueryResult;
-use engine_shared::logging;
-use engine_shared::logging::log_level::LogLevel;
-use engine_shared::logging::{log_duration, log_info};
-use engine_shared::newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH};
+use contract_ffi::value::{account::BlockTime, ProtocolVersion};
+use engine_core::{
+    engine_state::{
+        deploy_item::DeployItem,
+        execution_result::ExecutionResult,
+        genesis::{GenesisConfig, GenesisResult},
+        upgrade::{UpgradeConfig, UpgradeResult},
+        EngineState, Error as EngineError,
+    },
+    execution::Executor,
+    tracking_copy::QueryResult,
+};
+use engine_shared::{
+    logging::{self, log_duration, log_info, log_level::LogLevel},
+    newtypes::{Blake2bHash, CorrelationId, BLAKE2B_DIGEST_LENGTH},
+};
 use engine_storage::global_state::{CommitResult, StateProvider};
 use engine_wasm_prep::Preprocessor;
 
-use self::ipc_grpc::ExecutionEngineService;
-use self::mappings::{CommitTransforms, MappingError, ParsingError};
+use self::{
+    ipc_grpc::ExecutionEngineService,
+    mappings::{CommitTransforms, MappingError, ParsingError},
+};
 
 const METRIC_DURATION_COMMIT: &str = "commit_duration";
 const METRIC_DURATION_EXEC: &str = "exec_duration";
 const METRIC_DURATION_QUERY: &str = "query_duration";
-const METRIC_DURATION_VALIDATE: &str = "validate_duration";
 const METRIC_DURATION_GENESIS: &str = "genesis_duration";
 const METRIC_DURATION_UPGRADE: &str = "upgrade_duration";
 
 const TAG_RESPONSE_COMMIT: &str = "commit_response";
 const TAG_RESPONSE_EXEC: &str = "exec_response";
 const TAG_RESPONSE_QUERY: &str = "query_response";
-const TAG_RESPONSE_VALIDATE: &str = "validate_response";
 const TAG_RESPONSE_GENESIS: &str = "genesis_response";
 const TAG_RESPONSE_UPGRADE: &str = "upgrade_response";
 
@@ -364,53 +368,6 @@ where
         );
 
         grpc::SingleResponse::completed(commit_response)
-    }
-
-    fn validate(
-        &self,
-        _request_options: ::grpc::RequestOptions,
-        validate_request: ipc::ValidateRequest,
-    ) -> grpc::SingleResponse<ipc::ValidateResponse> {
-        let start = Instant::now();
-        let correlation_id = CorrelationId::new();
-
-        let module = wabt::Module::read_binary(
-            validate_request.wasm_code,
-            &wabt::ReadBinaryOptions::default(),
-        )
-        .and_then(|x| x.validate());
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            "module",
-            start.elapsed(),
-        );
-
-        let validate_result = match module {
-            Ok(_) => {
-                let mut validate_result = ipc::ValidateResponse::new();
-                validate_result.set_success(ipc::ValidateResponse_ValidateSuccess::new());
-                validate_result
-            }
-            Err(cause) => {
-                let cause_msg = cause.to_string();
-                logging::log_error(&cause_msg);
-
-                let mut validate_result = ipc::ValidateResponse::new();
-                validate_result.set_failure(cause_msg);
-                validate_result
-            }
-        };
-
-        log_duration(
-            correlation_id,
-            METRIC_DURATION_VALIDATE,
-            TAG_RESPONSE_VALIDATE,
-            start.elapsed(),
-        );
-
-        grpc::SingleResponse::completed(validate_result)
     }
 
     fn run_genesis(

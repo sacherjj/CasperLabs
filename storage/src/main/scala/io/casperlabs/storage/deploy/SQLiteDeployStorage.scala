@@ -22,13 +22,14 @@ import io.casperlabs.storage.util.DoobieCodecs
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
-class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](
+class SQLiteDeployStorage[F[_]: Time: Sync](
     chunkSize: Int,
     readXa: Transactor[F],
     writeXa: Transactor[F]
 )(
     implicit val
-    metricsSource: Source
+    metricsSource: Source,
+    metrics: Metrics[F]
 ) extends DeployStorage[F]
     with DoobieCodecs {
   // Deploys not yet included in a block
@@ -49,9 +50,26 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](
 
   private val readers: TrieMap[DeployInfo.View, DeployStorageReader[F]] = TrieMap.empty
 
-  override val writer = new DeployStorageWriter[F] {
+  override val writer = new SQLiteDeployStorageWriter
+    with DeployStorageWriter.MeteredDeployStorageWriter[F] {
+    override implicit val m: Metrics[F] = metrics
+    override implicit val ms: Source    = metricsSource
+    override implicit val a: Apply[F]   = Sync[F]
+  }
 
-    override def addAsExecuted(block: Block): F[Unit] = {
+  def reader(implicit dv: DeployInfo.View) =
+    readers.getOrElseUpdate(
+      dv,
+      new SQLiteDeployStorageReader(dv) with DeployStorageReader.MeteredDeployStorageReader[F] {
+        override implicit val m: Metrics[F] = metrics
+        override implicit val ms: Source    = metricsSource
+        override implicit val a: Apply[F]   = Sync[F]
+      }
+    )
+
+  class SQLiteDeployStorageWriter extends DeployStorageWriter[F] {
+
+    override private[storage] def addAsExecuted(block: Block): F[Unit] = {
       val writeToDeploysTable = Update[(ByteString, ByteString, Long, ByteString, ByteString)](
         "INSERT OR IGNORE INTO deploys (hash, account, create_time_millis, summary, body) VALUES (?, ?, ?, ?, ?)"
       ).updateMany(
@@ -241,264 +259,259 @@ class SQLiteDeployStorage[F[_]: Metrics: Time: Sync](
     override def close(): F[Unit] = ().pure[F]
   }
 
-  def reader(implicit dv: DeployInfo.View) =
-    readers.getOrElseUpdate(
-      dv,
-      new DeployStorageReader[F] {
+  class SQLiteDeployStorageReader(dv: DeployInfo.View) extends DeployStorageReader[F] {
+    private def bodyCol(alias: String = "") =
+      if (dv == DeployInfo.View.BASIC) {
+        fr"null"
+      } else if (alias.isEmpty) {
+        fr"body"
+      } else {
+        Fragment.const(s"${alias}.body")
+      }
 
-        private def bodyCol(alias: String = "") =
-          if (dv == DeployInfo.View.BASIC) {
-            fr"null"
-          } else if (alias.isEmpty) {
-            fr"body"
-          } else {
-            Fragment.const(s"${alias}.body")
-          }
+    override def readProcessed: F[List[Deploy]] =
+      readByStatus(ProcessedStatusCode)
 
-        override def readProcessed: F[List[Deploy]] =
-          readByStatus(ProcessedStatusCode)
+    override def readPendingHeaders: F[List[Deploy.Header]] =
+      readHeadersByStatus(PendingStatusCode)
 
-        override def readPendingHeaders: F[List[Deploy.Header]] =
-          readHeadersByStatus(PendingStatusCode)
+    override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
+      readHashesAndHeadersByStatus(PendingStatusCode)
 
-        override def readPendingHashesAndHeaders: fs2.Stream[F, (ByteString, Deploy.Header)] =
-          readHashesAndHeadersByStatus(PendingStatusCode)
-
-        private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
-          sql"""|SELECT summary, null
+    private def readHeadersByStatus(status: Int): F[List[Deploy.Header]] =
+      sql"""|SELECT summary, null
                 |FROM buffered_deploys
                 |WHERE  status=$status""".stripMargin
-            .query[Deploy]
-            .to[List]
-            .transact(readXa)
-            .map(_.map(_.getHeader))
+        .query[Deploy]
+        .to[List]
+        .transact(readXa)
+        .map(_.map(_.getHeader))
 
-        private def readHashesAndHeadersByStatus(
-            status: Int
-        ): fs2.Stream[F, (ByteString, Deploy.Header)] =
-          sql"""|SELECT summary, null
+    private def readHashesAndHeadersByStatus(
+        status: Int
+    ): fs2.Stream[F, (ByteString, Deploy.Header)] =
+      sql"""|SELECT summary, null
                 |FROM buffered_deploys
                 |WHERE  status=$status""".stripMargin
-            .query[Deploy]
-            .streamWithChunkSize(chunkSize)
-            .transact(readXa)
-            .map(d => d.deployHash -> d.getHeader)
+        .query[Deploy]
+        .streamWithChunkSize(chunkSize)
+        .transact(readXa)
+        .map(d => d.deployHash -> d.getHeader)
 
-        private def readByStatus(status: Int): F[List[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+    private def readByStatus(status: Int): F[List[Deploy]] =
+      (fr"SELECT summary, " ++ bodyCol() ++ fr"""
               FROM buffered_deploys
               WHERE  status=$status""")
-            .query[Deploy]
-            .to[List]
-            .transact(readXa)
+        .query[Deploy]
+        .to[List]
+        .transact(readXa)
 
-        override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
-          readByAccountAndStatus(account, ProcessedStatusCode)
+    override def readProcessedByAccount(account: ByteString): F[List[Deploy]] =
+      readByAccountAndStatus(account, ProcessedStatusCode)
 
-        private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+    private def readByAccountAndStatus(account: ByteString, status: Int): F[List[Deploy]] =
+      (fr"SELECT summary, " ++ bodyCol() ++ fr"""
               FROM buffered_deploys
               WHERE account=$account AND status=$status""")
-            .query[Deploy]
-            .to[List]
-            .transact(readXa)
+        .query[Deploy]
+        .to[List]
+        .transact(readXa)
 
-        override def readProcessedHashes: F[List[ByteString]] =
-          readHashesByStatus(ProcessedStatusCode)
+    override def readProcessedHashes: F[List[ByteString]] =
+      readHashesByStatus(ProcessedStatusCode)
 
-        override def readPending: F[List[Deploy]] =
-          readByStatus(PendingStatusCode)
+    override def readPending: F[List[Deploy]] =
+      readByStatus(PendingStatusCode)
 
-        override def readPendingHashes: F[List[ByteString]] =
-          readHashesByStatus(PendingStatusCode)
+    override def readPendingHashes: F[List[ByteString]] =
+      readHashesByStatus(PendingStatusCode)
 
-        private def readHashesByStatus(status: Int): F[List[ByteString]] =
-          sql"SELECT hash FROM buffered_deploys WHERE status=$status"
-            .query[ByteString]
-            .to[List]
-            .transact(readXa)
+    private def readHashesByStatus(status: Int): F[List[ByteString]] =
+      sql"SELECT hash FROM buffered_deploys WHERE status=$status"
+        .query[ByteString]
+        .to[List]
+        .transact(readXa)
 
-        override def sizePendingOrProcessed(): F[Long] =
-          sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
-            .query[Long]
-            .unique
-            .transact(readXa)
+    override def sizePendingOrProcessed(): F[Long] =
+      sql"SELECT COUNT(hash) FROM buffered_deploys WHERE status=$PendingStatusCode OR status=$ProcessedStatusCode"
+        .query[Long]
+        .unique
+        .transact(readXa)
 
-        override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr"""
+    override def getPendingOrProcessed(deployHash: DeployHash): F[Option[Deploy]] =
+      (fr"SELECT summary, " ++ bodyCol() ++ fr"""
               FROM buffered_deploys
               WHERE hash=$deployHash AND (status=$PendingStatusCode OR status=$ProcessedStatusCode)""")
-            .query[Deploy]
-            .option
-            .transact(readXa)
+        .query[Deploy]
+        .option
+        .transact(readXa)
 
-        override def getByHashes(
-            deployHashes: Set[DeployHash]
-        ): fs2.Stream[F, Deploy] =
-          NonEmptyList
-            .fromList[ByteString](deployHashes.toList)
-            .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
-              val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
-                .in(fr"hash", nel) // "hash IN (…)"
-              q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
-            })
+    override def getByHashes(
+        deployHashes: Set[DeployHash]
+    ): fs2.Stream[F, Deploy] =
+      NonEmptyList
+        .fromList[ByteString](deployHashes.toList)
+        .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
+          val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
+            .in(fr"hash", nel) // "hash IN (…)"
+          q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
+        })
 
-        def getByHash(deployHash: DeployHash): F[Option[Deploy]] =
-          getByHashes(Set(deployHash)).compile.last
+    def getByHash(deployHash: DeployHash): F[Option[Deploy]] =
+      getByHashes(Set(deployHash)).compile.last
 
-        override def getProcessedDeploys(blockHash: ByteString): F[List[ProcessedDeploy]] =
-          (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message
+    override def getProcessedDeploys(blockHash: ByteString): F[List[ProcessedDeploy]] =
+      (fr"SELECT d.summary, " ++ bodyCol("d") ++ fr""", cost, execution_error_message
               FROM deploy_process_results dpr
               JOIN deploys d
               ON d.hash = dpr.deploy_hash
               WHERE dpr.block_hash=$blockHash
               ORDER BY deploy_position""")
-            .query[ProcessedDeploy]
-            .to[List]
-            .transact(readXa)
+        .query[ProcessedDeploy]
+        .to[List]
+        .transact(readXa)
 
-        override def getProcessingResults(
-            deployHash: DeployHash
-        ): F[List[(ByteString, ProcessedDeploy)]] = {
-          val getDeploy =
-            (fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE hash=$deployHash")
-              .query[Deploy]
-              .unique
-              .transact(readXa)
+    override def getProcessingResults(
+        deployHash: DeployHash
+    ): F[List[(ByteString, ProcessedDeploy)]] = {
+      val getDeploy =
+        (fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE hash=$deployHash")
+          .query[Deploy]
+          .unique
+          .transact(readXa)
 
-          val readProcessingResults =
-            sql"""|SELECT block_hash, cost, execution_error_message
+      val readProcessingResults =
+        sql"""|SELECT block_hash, cost, execution_error_message
                   |FROM deploy_process_results
                   |WHERE deploy_hash=$deployHash
                   |ORDER BY execute_time_millis DESC""".stripMargin
-              .query[(ByteString, ProcessedDeploy)]
-              .to[List]
-              .transact(readXa)
+          .query[(ByteString, ProcessedDeploy)]
+          .to[List]
+          .transact(readXa)
 
-          for {
-            blockHashesAndProcessingResults <- readProcessingResults
-            res <- if (blockHashesAndProcessingResults.isEmpty)
-                    blockHashesAndProcessingResults.pure[F]
-                  else
-                    getDeploy.map(
-                      d =>
-                        blockHashesAndProcessingResults.map {
-                          case (blockHash, processingResult) =>
-                            (blockHash, processingResult.withDeploy(d))
-                        }
-                    )
-          } yield res
-        }
+      for {
+        blockHashesAndProcessingResults <- readProcessingResults
+        res <- if (blockHashesAndProcessingResults.isEmpty)
+                blockHashesAndProcessingResults.pure[F]
+              else
+                getDeploy.map(
+                  d =>
+                    blockHashesAndProcessingResults.map {
+                      case (blockHash, processingResult) =>
+                        (blockHash, processingResult.withDeploy(d))
+                    }
+                )
+      } yield res
+    }
 
-        override def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]] =
-          sql"""|SELECT status, status_message
+    override def getBufferedStatus(deployHash: DeployHash): F[Option[DeployInfo.Status]] =
+      sql"""|SELECT status, status_message
                 |FROM buffered_deploys
                 |WHERE hash=$deployHash """.stripMargin
-            .query[(Int, Option[String])]
-            .option
-            .transact(readXa)
-            .map(_.map {
-              case (status, maybeMessage) =>
-                DeployInfo.Status(
-                  state = StatusCodeToState(status),
-                  message = maybeMessage.getOrElse("")
-                )
-            })
+        .query[(Int, Option[String])]
+        .option
+        .transact(readXa)
+        .map(_.map {
+          case (status, maybeMessage) =>
+            DeployInfo.Status(
+              state = StatusCodeToState(status),
+              message = maybeMessage.getOrElse("")
+            )
+        })
 
-        override def getDeployInfo(
-            deployHash: DeployHash
-        ): F[Option[DeployInfo]] =
-          getByHash(deployHash) flatMap {
-            case None =>
-              none[DeployInfo].pure[F]
-            case Some(deploy) =>
-              getDeployInfos(List(deploy)).map(_.headOption)
-          }
+    override def getDeployInfo(
+        deployHash: DeployHash
+    ): F[Option[DeployInfo]] =
+      getByHash(deployHash) flatMap {
+        case None =>
+          none[DeployInfo].pure[F]
+        case Some(deploy) =>
+          getDeployInfos(List(deploy)).map(_.headOption)
+      }
 
-        override def getDeploysByAccount(
-            account: PublicKeyBS,
-            limit: Int,
-            lastTimeStamp: Long,
-            lastDeployHash: DeployHash
-        ): F[List[Deploy]] =
-          (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
+    override def getDeploysByAccount(
+        account: PublicKeyBS,
+        limit: Int,
+        lastTimeStamp: Long,
+        lastDeployHash: DeployHash
+    ): F[List[Deploy]] =
+      (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
               WHERE account = $account
               AND (create_time_millis < $lastTimeStamp OR
                 create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
               ORDER BY create_time_millis DESC, hash DESC
               LIMIT $limit""")
-            .query[Deploy]
-            .to[List]
-            .transact(readXa)
+        .query[Deploy]
+        .to[List]
+        .transact(readXa)
 
-        override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] = {
-          val deployHashes = deploys.map(_.deployHash)
+    override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] = {
+      val deployHashes = deploys.map(_.deployHash)
 
-          def processingResults: F[Map[DeployHash, List[ProcessingResult]]] =
-            NonEmptyList
-              .fromList[ByteString](deployHashes)
-              .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
-                val q = fr"""|SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, bm.data, bm.block_size,
+      def processingResults: F[Map[DeployHash, List[ProcessingResult]]] =
+        NonEmptyList
+          .fromList[ByteString](deployHashes)
+          .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
+            val q = fr"""|SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message, bm.data, bm.block_size,
                              | bm.deploy_error_count, bm.deploy_cost_total
                              |FROM deploy_process_results dpr
                              |JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
                              |WHERE """.stripMargin ++ Fragments.in(fr"dpr.deploy_hash", nel)
-                q.query[(DeployHash, ProcessingResult)]
-                  .to[List]
-                  .transact(readXa)
-                  .map(_.groupBy(_._1).map {
-                    case (deployHash: DeployHash, l: Seq[(DeployHash, ProcessingResult)]) =>
-                      (deployHash, l.map(_._2))
-                  })
+            q.query[(DeployHash, ProcessingResult)]
+              .to[List]
+              .transact(readXa)
+              .map(_.groupBy(_._1).map {
+                case (deployHash: DeployHash, l: Seq[(DeployHash, ProcessingResult)]) =>
+                  (deployHash, l.map(_._2))
               })
+          })
 
-          def getStatus: F[List[(DeployHash, DeployInfo.Status)]] =
-            NonEmptyList
-              .fromList(deployHashes)
-              .fold(List.empty[(DeployHash, DeployInfo.Status)].pure[F])(nel => {
-                val statusSql =
-                  fr"""|SELECT hash,status, status_message
+      def getStatus: F[List[(DeployHash, DeployInfo.Status)]] =
+        NonEmptyList
+          .fromList(deployHashes)
+          .fold(List.empty[(DeployHash, DeployInfo.Status)].pure[F])(nel => {
+            val statusSql =
+              fr"""|SELECT hash,status, status_message
                        |FROM buffered_deploys
                        |WHERE """.stripMargin ++ Fragments.in(fr"hash", nel)
 
-                statusSql
-                  .query[(Array[Byte], Int, Option[String])]
-                  .to[List]
-                  .transact(readXa)
-                  .map(_.map {
-                    case (deployHash, status, maybeMessage) =>
-                      (
-                        ByteString.copyFrom(deployHash),
-                        DeployInfo.Status(
-                          state = StatusCodeToState(status),
-                          message = maybeMessage.getOrElse("")
-                        )
-                      )
-                  })
-              })
-
-          for {
-            deployHashToProcessingResults <- processingResults
-            deployHashToBufferedStatus    <- getStatus.map(_.toMap)
-            deployInfos = deploys.map(d => {
-              val bs = deployHashToBufferedStatus.get(d.deployHash)
-              deployHashToProcessingResults.get(d.deployHash) match {
-                case Some(prs) =>
-                  DeployInfo()
-                    .withDeploy(d)
-                    .withStatus(
-                      bs getOrElse DeployInfo
-                        .Status(DeployInfo.State.FINALIZED)
+            statusSql
+              .query[(Array[Byte], Int, Option[String])]
+              .to[List]
+              .transact(readXa)
+              .map(_.map {
+                case (deployHash, status, maybeMessage) =>
+                  (
+                    ByteString.copyFrom(deployHash),
+                    DeployInfo.Status(
+                      state = StatusCodeToState(status),
+                      message = maybeMessage.getOrElse("")
                     )
-                    .withProcessingResults(prs)
-                case None =>
-                  DeployInfo(status = bs).withDeploy(d)
-              }
-            })
-          } yield deployInfos
-        }
-      }
-    )
+                  )
+              })
+          })
+
+      for {
+        deployHashToProcessingResults <- processingResults
+        deployHashToBufferedStatus    <- getStatus.map(_.toMap)
+        deployInfos = deploys.map(d => {
+          val bs = deployHashToBufferedStatus.get(d.deployHash)
+          deployHashToProcessingResults.get(d.deployHash) match {
+            case Some(prs) =>
+              DeployInfo()
+                .withDeploy(d)
+                .withStatus(
+                  bs getOrElse DeployInfo
+                    .Status(DeployInfo.State.FINALIZED)
+                )
+                .withProcessingResults(prs)
+            case None =>
+              DeployInfo(status = bs).withDeploy(d)
+          }
+        })
+      } yield deployInfos
+    }
+  }
 }
 
 object SQLiteDeployStorage {

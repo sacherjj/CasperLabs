@@ -1,19 +1,17 @@
 use std::ops::RangeInclusive;
 
 use lmdb::DatabaseFlags;
-use proptest::collection::vec;
-use proptest::prelude::proptest;
+use proptest::{collection::vec, prelude::proptest};
 use tempfile::tempdir;
 
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
+use contract_ffi::{bytesrepr::ToBytes, key::Key, value::Value};
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::store::tests as store_tests;
-use crate::trie::gens::trie_arb;
-use crate::trie::Trie;
-use crate::TEST_MAP_SIZE;
+use crate::{
+    store::tests as store_tests,
+    trie::{gens::trie_arb, Trie},
+    TEST_MAP_SIZE,
+};
 use std::collections::BTreeMap;
 
 const DEFAULT_MIN_LENGTH: usize = 1;
@@ -30,8 +28,10 @@ fn get_range() -> RangeInclusive<usize> {
 }
 
 fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-    use crate::transaction_source::in_memory::InMemoryEnvironment;
-    use crate::trie_store::in_memory::InMemoryTrieStore;
+    use crate::{
+        transaction_source::in_memory::InMemoryEnvironment,
+        trie_store::in_memory::InMemoryTrieStore,
+    };
 
     let env = InMemoryEnvironment::new();
     let store = InMemoryTrieStore::new(&env, None);
@@ -45,8 +45,7 @@ fn in_memory_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
 }
 
 fn lmdb_roundtrip_succeeds(inputs: Vec<Trie<Key, Value>>) -> bool {
-    use crate::transaction_source::lmdb::LmdbEnvironment;
-    use crate::trie_store::lmdb::LmdbTrieStore;
+    use crate::{transaction_source::lmdb::LmdbEnvironment, trie_store::lmdb::LmdbTrieStore};
 
     let tmp_dir = tempdir().unwrap();
     let env = LmdbEnvironment::new(&tmp_dir.path().to_path_buf(), *TEST_MAP_SIZE).unwrap();

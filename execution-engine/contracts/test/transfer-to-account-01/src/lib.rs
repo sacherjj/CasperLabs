@@ -1,10 +1,10 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    contract_api::{runtime, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::U512,
+};
 
 const TRANSFER_AMOUNT: u32 = 250_000_000 + 1000;
 

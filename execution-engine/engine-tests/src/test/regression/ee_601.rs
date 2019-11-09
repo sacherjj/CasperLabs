@@ -1,12 +1,13 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::Value;
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, Value},
+};
 use engine_shared::transform::Transform;
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use crate::{
+    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
 
 #[ignore]
 #[test]

@@ -19,6 +19,7 @@ import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -42,7 +43,7 @@ object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
-class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
+class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time: Metrics]
     extends Validation[F] {
   import ValidationImpl.DRIFT
   import ValidationImpl.MAX_TTL

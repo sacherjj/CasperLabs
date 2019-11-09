@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
@@ -38,14 +39,16 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
+  import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
+
+  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       rank: Long,
       upgrades: Seq[ChainSpec.UpgradePoint]
-  ): F[DeploysCheckpoint] =
+  ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
       preStateHash <- computePrestate[F](merged, rank, upgrades)
       pdr <- DeploySelection[F].select(
@@ -74,6 +77,7 @@ object ExecEngineUtil {
       deploysForBlock,
       protocolVersion
     )
+  }
 
   // Discard deploys that will never be included because they failed some precondition.
   // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included

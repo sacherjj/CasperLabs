@@ -10,47 +10,60 @@ pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
 
-use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap},
+    rc::Rc,
+};
 
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::execution::Phase;
-use contract_ffi::key::{Key, HASH_SIZE};
-use contract_ffi::system_contracts::mint;
-use contract_ffi::uref::URef;
-use contract_ffi::uref::{AccessRights, UREF_ADDR_SIZE};
-use contract_ffi::value::account::{BlockTime, PublicKey, PurseId};
-use contract_ffi::value::{Account, ProtocolVersion, Value, U512};
-use engine_shared::additive_map::AdditiveMap;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::{Blake2bHash, CorrelationId, Validated};
-use engine_shared::transform::Transform;
-use engine_storage::global_state::{CommitResult, StateProvider, StateReader};
-use engine_storage::protocol_data::ProtocolData;
-use engine_wasm_prep::wasm_costs::WasmCosts;
-use engine_wasm_prep::Preprocessor;
-
-use self::deploy_item::DeployItem;
-pub use self::engine_config::EngineConfig;
-pub use self::error::{Error, RootNotFound};
-use self::executable_deploy_item::ExecutableDeployItem;
-use self::execution_result::ExecutionResult;
-use self::genesis::{
-    GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE,
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::ToBytes,
+    execution::Phase,
+    key::{Key, HASH_SIZE},
+    system_contracts::mint,
+    uref::{AccessRights, URef, UREF_ADDR_SIZE},
+    value::{
+        account::{BlockTime, PublicKey, PurseId},
+        Account, ProtocolVersion, Value, U512,
+    },
 };
-use self::system_contract_cache::SystemContractCache;
-use crate::engine_state::error::Error::MissingSystemContractError;
-use crate::engine_state::upgrade::{UpgradeConfig, UpgradeResult};
-use crate::execution::AddressGenerator;
-use crate::execution::{self, Executor, MINT_NAME, POS_NAME};
-use crate::tracking_copy::{TrackingCopy, TrackingCopyExt};
-use crate::KnownKeys;
+use engine_shared::{
+    additive_map::AdditiveMap,
+    gas::Gas,
+    motes::Motes,
+    newtypes::{Blake2bHash, CorrelationId},
+    transform::Transform,
+};
+use engine_storage::{
+    global_state::{CommitResult, StateProvider, StateReader},
+    protocol_data::ProtocolData,
+};
+use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
+
+use self::{
+    deploy_item::DeployItem,
+    executable_deploy_item::ExecutableDeployItem,
+    execution_result::ExecutionResult,
+    genesis::{GenesisAccount, GenesisConfig, GenesisResult, POS_PAYMENT_PURSE, POS_REWARDS_PURSE},
+    system_contract_cache::SystemContractCache,
+};
+pub use self::{
+    engine_config::EngineConfig,
+    error::{Error, RootNotFound},
+};
+use crate::{
+    engine_state::{
+        error::Error::MissingSystemContractError,
+        upgrade::{UpgradeConfig, UpgradeResult},
+    },
+    execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
+    tracking_copy::{TrackingCopy, TrackingCopyExt},
+    KnownKeys,
+};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -141,14 +154,10 @@ where
 
         // Persist the "virtual system account".  It will get overwritten with the actual system
         // account below.
-        let key = {
-            let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-            Validated::new(key, Validated::valid).unwrap() // safe to unwrap
-        };
+        let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let value = {
             let virtual_system_account = virtual_system_account.clone();
-            let value = Value::Account(virtual_system_account);
-            Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+            Value::Account(virtual_system_account)
         };
 
         tracking_copy.borrow_mut().write(key, value);
@@ -331,7 +340,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, Key::URef(mint_reference))?;
                 let (bytes, _, _) = contract.destructure();
-                preprocessor.deserialize(&bytes)?
+                engine_wasm_prep::deserialize(&bytes)?
             };
 
             // For each account...
@@ -378,19 +387,15 @@ where
                 )?;
 
                 // ...and write that account to global state...
-                let key = {
-                    let key = Key::Account(account_public_key.value());
-                    Validated::new(key, Validated::valid).unwrap() // safe to unwrap
-                };
+                let key = Key::Account(account_public_key.value());
                 let value = {
                     let account_main_purse = mint_result?;
                     let purse_id = PurseId::new(account_main_purse);
-                    let value = Value::Account(Account::create(
+                    Value::Account(Account::create(
                         account_public_key.value(),
                         named_keys,
                         purse_id,
-                    ));
-                    Validated::new(value, Validated::valid).unwrap() // safe to unwrap
+                    ))
                 };
 
                 tracking_copy_write.borrow_mut().write(key, value);
@@ -485,9 +490,7 @@ where
 
             // execute as system account
             let system_account = {
-                // safe to unwrap (Validated::valid is always true)
-                let key =
-                    Validated::new(Key::Account(SYSTEM_ACCOUNT_ADDR), Validated::valid).unwrap();
+                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 match tracking_copy.borrow_mut().read(correlation_id, &key) {
                     Ok(Some(Value::Account(account))) => account,
                     Ok(_) => panic!("system account must exist"),
@@ -602,7 +605,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
@@ -620,7 +623,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, *stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
@@ -668,7 +671,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, stored_contract_key)?;
                 let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
+                let module = engine_wasm_prep::deserialize(&ret)?;
                 Ok(module)
             }
         }
@@ -791,7 +794,7 @@ where
             };
 
             if !self.system_contract_cache.has(&mint_reference) {
-                let module = match preprocessor.deserialize(mint_contract.bytes()) {
+                let module = match engine_wasm_prep::deserialize(mint_contract.bytes()) {
                     Ok(module) => module,
                     Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
                 };
@@ -1034,7 +1037,7 @@ where
                     Some(module) => module,
                     None => {
                         let module =
-                            match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                            match engine_wasm_prep::deserialize(&proof_of_stake_contract.bytes()) {
                                 Ok(module) => module,
                                 Err(error) => {
                                     return Ok(ExecutionResult::precondition_failure(error.into()))
