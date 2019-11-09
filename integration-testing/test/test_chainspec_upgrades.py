@@ -11,7 +11,7 @@ def propose_and_get_cost(cli):
     deployInfo = deployInfos[0]
     if deployInfo.is_error:
         raise Exception(f"error_message: {deployInfo.error_message}")
-    return deployInfo.cost
+    return deployInfo.cost, block_hash
 
 
 # fmt: off
@@ -43,9 +43,10 @@ def check_upgrades_applied(network):
 
     # We have spec of genesis, upgrade-1 and upgrade-2 in our custom chainspec
     # (in integration-testing/resources/test-chainspec)
-    # Upgrades change cost of excuting opcodes, so cost of execution of the same contract should change
+    # Upgrades change cost of executing opcodes, so cost of execution of the same contract should change
     # after the upgrades are applied.
     costs = []
+    versions = []
 
     # Currently test-chainspec activation points configured like below:
 
@@ -55,11 +56,14 @@ def check_upgrades_applied(network):
     # So, a number of deploys above 30 should be enough to activate both upgrades.
     for i in range(1, 35):
         cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
-        cost = propose_and_get_cost(cli)
+        cost, block_hash = propose_and_get_cost(cli)
         if cost not in costs:
             logging.info(f"Execution cost at iteration {i}, is {cost}. ")
             costs.append(cost)
+            version = cli("show-block", block_hash).summary.header.protocol_version
+            versions.append(version)
 
     logging.info(f"Costs of execution: {' '.join(str(c) for c in costs)}")
+    logging.info(f"Versions: {' '.join(str(v) for v in versions)}")
 
     assert len(costs) == 3, "For 2 upgrades after genesis that change opcodes' cost we should see 3 different execution costs"
