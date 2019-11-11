@@ -13,6 +13,7 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
@@ -417,6 +418,8 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                   Log[F].debug(message) *>
                     Timer[F].sleep(delay) *>
                     tryDownload(item.summary, source, item.relay).handleErrorWith {
+                      case fatal: FatalErrorShutdown =>
+                        MonadThrowable[F].raiseError(fatal)
                       case NonFatal(ex) =>
                         val message =
                           s"Retrying downloading of block $id from other sources, failed source: ${source.show}, prev attempt: $counter, error: $ex"
