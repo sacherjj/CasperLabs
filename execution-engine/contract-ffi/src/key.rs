@@ -97,13 +97,13 @@ fn drop_hex_prefix(s: &str) -> &str {
 /// if `input` cannot be parsed as hex, or if it does not parse to exactly 32 bytes.
 fn decode_from_hex(input: &str) -> Option<[u8; HASH_SIZE]> {
     const UNDECORATED_INPUT_LEN: usize = 2 * HASH_SIZE;
-    const DECORATED_INPUT_LEN: usize = UNDECORATED_INPUT_LEN + 2;
 
-    let undecorated_input = match input.len() {
-        UNDECORATED_INPUT_LEN => input,
-        DECORATED_INPUT_LEN if input.starts_with("0x") => &input[2..],
-        _ => return None,
-    };
+    let undecorated_input = drop_hex_prefix(input);
+
+    if undecorated_input.len() != UNDECORATED_INPUT_LEN {
+        return None;
+    }
+
     let mut output = [0u8; HASH_SIZE];
     let _bytes_written = base16::decode_slice(undecorated_input, &mut output).ok()?;
     debug_assert!(_bytes_written == HASH_SIZE);
