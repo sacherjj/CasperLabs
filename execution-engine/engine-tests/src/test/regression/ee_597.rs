@@ -1,7 +1,9 @@
 use contract_ffi::contract_api::Error;
 
-use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
+use crate::{
+    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
+};
 
 const CONTRACT_EE_597_REGRESSION: &str = "ee_597_regression.wasm";
 

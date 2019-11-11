@@ -1,12 +1,17 @@
 use std::collections::BTreeMap;
 
-use crate::support::exec_with_return;
-use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME};
-use contract_ffi::key::Key;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::Value;
-use contract_ffi::value::U512;
+use crate::support::{
+    exec_with_return,
+    test_support::{ExecuteRequestBuilder, WasmTestBuilder, DEFAULT_BLOCK_TIME},
+};
+use contract_ffi::{
+    key::Key,
+    uref::{AccessRights, URef},
+    value::{
+        account::{PublicKey, PurseId},
+        Value, U512,
+    },
+};
 use engine_shared::transform::Transform;
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};

@@ -11,7 +11,6 @@ import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
@@ -55,24 +54,11 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: FinalityDetector: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
       d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
-    def check(msg: String)(f: F[Boolean]): F[Unit] =
-      f flatMap { ok =>
-        MonadThrowable[F].raiseError(InvalidArgument(msg)).whenA(!ok)
-      }
-
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
-      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
-      _ <- Validation[F].deployHeader(d) >>= { headerErrors =>
-            MonadThrowable[F]
-              .raiseError(InvalidArgument(headerErrors.map(_.errorMessage).mkString("\n")))
-              .whenA(headerErrors.nonEmpty)
-          }
-
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
@@ -137,7 +123,7 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[Option[DeployInfo]] =
@@ -148,7 +134,7 @@ object BlockAPI {
       DeployStorage[F].reader(deployView).getDeployInfo(deployHash)
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
       deployHashBase16: String,
       deployView: DeployInfo.View
   ): F[DeployInfo] =
@@ -261,7 +247,7 @@ object BlockAPI {
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: DeployStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0
   ): F[List[BlockInfo]] =

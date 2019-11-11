@@ -1,21 +1,24 @@
 use std::convert::TryInto;
 
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
-use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::transform::Transform;
-
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use contract_ffi::{
+    bytesrepr::ToBytes,
+    key::Key,
+    value::{
+        account::{PublicKey, PurseId},
+        Value, U512,
+    },
 };
-use crate::test::{
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
-    DEFAULT_GENESIS_CONFIG,
+use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
+use engine_shared::{gas::Gas, motes::Motes, transform::Transform};
+
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    },
+    test::{
+        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
+        DEFAULT_GENESIS_CONFIG,
+    },
 };
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];

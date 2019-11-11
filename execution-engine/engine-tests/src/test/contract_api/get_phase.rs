@@ -1,10 +1,9 @@
-use contract_ffi::execution::Phase;
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{execution::Phase, value::account::PublicKey};
 
-use crate::support::test_support::{
-    DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use crate::{
+    support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
 #[ignore]
 #[test]

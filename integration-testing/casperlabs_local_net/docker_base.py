@@ -109,7 +109,7 @@ class DockerBase:
     @property
     def host_chainspec_dir(self) -> str:
         # Mirror the default chainspec packaged in the node so we can apply partial overrides.
-        return f"{self.host_mount_dir}/chainspec"
+        return f"{self.host_mount_dir}/{self.config.chainspec_directory}"
 
     @property
     def host_bootstrap_dir(self) -> str:

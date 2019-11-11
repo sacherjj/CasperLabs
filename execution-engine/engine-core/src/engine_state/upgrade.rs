@@ -1,9 +1,7 @@
 use std::fmt;
 
-use contract_ffi::key::Key;
-use contract_ffi::value::ProtocolVersion;
-use engine_shared::newtypes::Blake2bHash;
-use engine_shared::transform::TypeMismatch;
+use contract_ffi::{key::Key, value::ProtocolVersion};
+use engine_shared::{newtypes::Blake2bHash, transform::TypeMismatch};
 use engine_storage::global_state::CommitResult;
 use engine_wasm_prep::wasm_costs::WasmCosts;
 

@@ -1,11 +1,13 @@
-use bitflags;
+use alloc::{format, string::String, vec::Vec};
 
-use crate::alloc::string::String;
-use crate::alloc::vec::Vec;
-use crate::base16;
-use crate::bytesrepr;
-use crate::bytesrepr::{OPTION_SIZE, U32_SIZE};
-use crate::contract_api::TURef;
+use bitflags::bitflags;
+use hex_fmt::HexFmt;
+
+use crate::{
+    base16,
+    bytesrepr::{self, OPTION_SIZE, U32_SIZE},
+    contract_api::TURef,
+};
 
 pub const UREF_ADDR_SIZE: usize = 32;
 pub const ACCESS_RIGHTS_SIZE: usize = 1;
@@ -79,14 +81,9 @@ impl core::fmt::Display for URef {
         let addr = self.addr();
         let access_rights_o = self.access_rights();
         if let Some(access_rights) = access_rights_o {
-            write!(
-                f,
-                "URef({}, {})",
-                super::key::addr_to_hex(&addr),
-                access_rights
-            )
+            write!(f, "URef({}, {})", HexFmt(&addr), access_rights)
         } else {
-            write!(f, "URef({}, None)", super::key::addr_to_hex(&addr))
+            write!(f, "URef({}, None)", HexFmt(&addr))
         }
     }
 }
@@ -121,6 +118,11 @@ impl URef {
     /// Returns the access rights of this URef.
     pub fn access_rights(&self) -> Option<AccessRights> {
         self.1
+    }
+
+    /// Returns a new URef with updated access rights.
+    pub fn with_access_rights(self, access_rights: AccessRights) -> Self {
+        URef(self.0, Some(access_rights))
     }
 
     /// Removes the access rights from this URef.

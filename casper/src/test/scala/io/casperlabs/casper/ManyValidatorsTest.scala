@@ -5,10 +5,6 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper._
 import io.casperlabs.casper.util.BondingUtil.Bond
@@ -21,6 +17,7 @@ import scala.util.Random
 
 @silent("deprecated")
 class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
+
   "Show blocks" should "be processed quickly for a node with 300 validators" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val bonds = Seq
@@ -49,9 +46,7 @@ class ManyValidatorsTest extends FlatSpec with Matchers with BlockGenerator with
                        )
         implicit0(casperRef: MultiParentCasperRef[Task]) <- MultiParentCasperRef.of[Task]
         _                                                <- casperRef.set(casperEffect)
-        implicit0(finalityDetector: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-          Task
-        ]
+
         result <- BlockAPI.getBlockInfos[Task](Int.MaxValue)
       } yield result
   }

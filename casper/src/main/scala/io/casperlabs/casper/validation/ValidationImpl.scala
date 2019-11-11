@@ -19,6 +19,7 @@ import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -42,7 +43,7 @@ object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]) = ev
 }
 
-class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
+class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time: Metrics]
     extends Validation[F] {
   import ValidationImpl.DRIFT
   import ValidationImpl.MAX_TTL
@@ -134,8 +135,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- deployCount(block)
       _ <- deployHashes(block)
       _ <- deploySignatures(block)
+      _ <- deployHeaders(block, dag, chainName)
       _ <- deployUniqueness(block, dag)
-      _ <- deployHeaders(block, dag)
     } yield ()
   }
 
@@ -225,14 +226,29 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  def deployHeader(d: consensus.Deploy): F[List[Errors.DeployHeaderError]] =
+  private def validateChainName(
+      chainName: String,
+      deployChainName: String,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (deployChainName.nonEmpty && deployChainName != chainName)
+      Errors.DeployHeaderError
+        .invalidChainName(deployHash, deployChainName, chainName)
+        .logged[F]
+        .map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def deployHeader(d: consensus.Deploy, chainName: String): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map2(
+        Applicative[F].map3(
           validateTimeToLive(ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
-          validateDependencies(header.dependencies, d.deployHash)
+          validateDependencies(header.dependencies, d.deployHash),
+          validateChainName(chainName, header.chainName, d.deployHash)
         ) {
-          case (validTTL, validDependencies) => validTTL.toList ::: validDependencies
+          case (validTTL, validDependencies, validChainNames) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList
         }
 
       case None =>
@@ -624,7 +640,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield ()
     }
 
-  def deployHeaders(b: Block, dag: DagRepresentation[F])(
+  def deployHeaders(b: Block, dag: DagRepresentation[F], chainName: String)(
       implicit blockStorage: BlockStorage[F]
   ): F[Unit] = {
     val deploys: List[consensus.Deploy] = b.getBody.deploys.flatMap(_.deploy).toList
@@ -637,7 +653,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        staticErrors           <- deployHeader(d)
+        staticErrors           <- deployHeader(d, chainName)
         _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
         header                 = d.getHeader
         isFromFuture           = !isFromPast(header)

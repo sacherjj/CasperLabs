@@ -1,10 +1,15 @@
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
-use std::fmt;
-use std::ops::Add;
+use std::{
+    collections::BTreeMap,
+    convert::TryFrom,
+    default::Default,
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign},
+};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::{Value, U128, U256, U512};
+use contract_ffi::{
+    key::Key,
+    value::{Value, U128, U256, U512},
+};
 use num::traits::{ToPrimitive, WrappingAdd, WrappingSub};
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -12,6 +17,7 @@ pub struct TypeMismatch {
     pub expected: String,
     pub found: String,
 }
+
 impl TypeMismatch {
     pub fn new(expected: String, found: String) -> TypeMismatch {
         TypeMismatch { expected, found }
@@ -70,8 +76,6 @@ macro_rules! from_try_from_impl {
     };
 }
 
-use self::Transform::*;
-
 from_try_from_impl!(Value, Write);
 from_try_from_impl!(i32, AddInt32);
 from_try_from_impl!(u64, AddUInt64);
@@ -127,9 +131,9 @@ where
 impl Transform {
     pub fn apply(self, v: Value) -> Result<Value, Error> {
         match self {
-            Identity => Ok(v),
-            Write(w) => Ok(w),
-            AddInt32(i) => match v {
+            Transform::Identity => Ok(v),
+            Transform::Write(w) => Ok(w),
+            Transform::AddInt32(i) => match v {
                 Value::Int32(j) => Ok(Value::Int32(j.wrapping_add(i))),
                 Value::UInt64(j) => Ok(Value::UInt64(i32_wrapping_addition(j, i))),
                 Value::UInt128(j) => Ok(Value::UInt128(i32_wrapping_addition(j, i))),
@@ -144,7 +148,7 @@ impl Transform {
                     .into())
                 }
             },
-            AddUInt64(i) => match v {
+            Transform::AddUInt64(i) => match v {
                 Value::Int32(j) => Ok(Value::Int32(u64_wrapping_addition(i, j))),
                 Value::UInt64(j) => Ok(Value::UInt64(i.wrapping_add(j))),
                 Value::UInt128(_) => wrapping_addition(i, v, "UInt128"),
@@ -159,10 +163,10 @@ impl Transform {
                     .into())
                 }
             },
-            AddUInt128(i) => wrapping_addition(i, v, "UInt128"),
-            AddUInt256(i) => wrapping_addition(i, v, "UInt256"),
-            AddUInt512(i) => wrapping_addition(i, v, "UInt512"),
-            AddKeys(mut keys) => match v {
+            Transform::AddUInt128(i) => wrapping_addition(i, v, "UInt128"),
+            Transform::AddUInt256(i) => wrapping_addition(i, v, "UInt256"),
+            Transform::AddUInt512(i) => wrapping_addition(i, v, "UInt512"),
+            Transform::AddKeys(mut keys) => match v {
                 Value::Contract(mut c) => {
                     c.named_keys_append(&mut keys);
                     Ok(c.into())
@@ -180,7 +184,7 @@ impl Transform {
                     .into())
                 }
             },
-            Failure(error) => Err(error),
+            Transform::Failure(error) => Err(error),
         }
     }
 }
@@ -204,7 +208,7 @@ where
         i.wrapping_add(&j.into()).into()
     } else {
         match T::try_from(b) {
-            Err(b_type) => Failure(
+            Err(b_type) => Transform::Failure(
                 TypeMismatch {
                     expected: String::from(expected),
                     found: b_type,
@@ -222,25 +226,25 @@ impl Add for Transform {
 
     fn add(self, other: Transform) -> Transform {
         match (self, other) {
-            (a, Identity) => a,
-            (Identity, b) => b,
-            (a @ Failure(_), _) => a,
-            (_, b @ Failure(_)) => b,
-            (_, b @ Write(_)) => b,
-            (Write(v), b) => {
+            (a, Transform::Identity) => a,
+            (Transform::Identity, b) => b,
+            (a @ Transform::Failure(_), _) => a,
+            (_, b @ Transform::Failure(_)) => b,
+            (_, b @ Transform::Write(_)) => b,
+            (Transform::Write(v), b) => {
                 // second transform changes value being written
                 match b.apply(v) {
-                    Err(error) => Failure(error),
-                    Ok(new_value) => Write(new_value),
+                    Err(error) => Transform::Failure(error),
+                    Ok(new_value) => Transform::Write(new_value),
                 }
             }
-            (AddInt32(i), b) => match b {
-                AddInt32(j) => AddInt32(i.wrapping_add(j)),
-                AddUInt64(j) => AddUInt64(i32_wrapping_addition(j, i)),
-                AddUInt128(j) => AddUInt128(i32_wrapping_addition(j, i)),
-                AddUInt256(j) => AddUInt256(i32_wrapping_addition(j, i)),
-                AddUInt512(j) => AddUInt512(i32_wrapping_addition(j, i)),
-                other => Failure(
+            (Transform::AddInt32(i), b) => match b {
+                Transform::AddInt32(j) => Transform::AddInt32(i.wrapping_add(j)),
+                Transform::AddUInt64(j) => Transform::AddUInt64(i32_wrapping_addition(j, i)),
+                Transform::AddUInt128(j) => Transform::AddUInt128(i32_wrapping_addition(j, i)),
+                Transform::AddUInt256(j) => Transform::AddUInt256(i32_wrapping_addition(j, i)),
+                Transform::AddUInt512(j) => Transform::AddUInt512(i32_wrapping_addition(j, i)),
+                other => Transform::Failure(
                     TypeMismatch {
                         expected: "AddInt32".to_owned(),
                         found: format!("{:?}", other),
@@ -248,13 +252,13 @@ impl Add for Transform {
                     .into(),
                 ),
             },
-            (AddUInt64(i), b) => match b {
-                AddInt32(j) => AddInt32(u64_wrapping_addition(i, j)),
-                AddUInt64(j) => AddUInt64(i.wrapping_add(j)),
-                AddUInt128(j) => AddUInt128(j.wrapping_add(&i.into())),
-                AddUInt256(j) => AddUInt256(j.wrapping_add(&i.into())),
-                AddUInt512(j) => AddUInt512(j.wrapping_add(&i.into())),
-                other => Failure(
+            (Transform::AddUInt64(i), b) => match b {
+                Transform::AddInt32(j) => Transform::AddInt32(u64_wrapping_addition(i, j)),
+                Transform::AddUInt64(j) => Transform::AddUInt64(i.wrapping_add(j)),
+                Transform::AddUInt128(j) => Transform::AddUInt128(j.wrapping_add(&i.into())),
+                Transform::AddUInt256(j) => Transform::AddUInt256(j.wrapping_add(&i.into())),
+                Transform::AddUInt512(j) => Transform::AddUInt512(j.wrapping_add(&i.into())),
+                other => Transform::Failure(
                     TypeMismatch {
                         expected: "AddUInt64".to_owned(),
                         found: format!("{:?}", other),
@@ -262,15 +266,15 @@ impl Add for Transform {
                     .into(),
                 ),
             },
-            (AddUInt128(i), b) => wrapped_transform_addition(i, b, "U128"),
-            (AddUInt256(i), b) => wrapped_transform_addition(i, b, "U256"),
-            (AddUInt512(i), b) => wrapped_transform_addition(i, b, "U512"),
-            (AddKeys(mut ks1), b) => match b {
-                AddKeys(mut ks2) => {
+            (Transform::AddUInt128(i), b) => wrapped_transform_addition(i, b, "U128"),
+            (Transform::AddUInt256(i), b) => wrapped_transform_addition(i, b, "U256"),
+            (Transform::AddUInt512(i), b) => wrapped_transform_addition(i, b, "U512"),
+            (Transform::AddKeys(mut ks1), b) => match b {
+                Transform::AddKeys(mut ks2) => {
                     ks1.append(&mut ks2);
-                    AddKeys(ks1)
+                    Transform::AddKeys(ks1)
                 }
-                other => Failure(
+                other => Transform::Failure(
                     TypeMismatch {
                         expected: "AddKeys".to_owned(),
                         found: format!("{:?}", other),
@@ -282,17 +286,28 @@ impl Add for Transform {
     }
 }
 
-impl fmt::Display for Transform {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl AddAssign for Transform {
+    fn add_assign(&mut self, other: Self) {
+        *self = self.clone() + other;
+    }
+}
+
+impl Display for Transform {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Transform::Identity
     }
 }
 
 pub mod gens {
     use super::Transform;
     use contract_ffi::gens::value_arb;
-    use proptest::collection::vec;
-    use proptest::prelude::*;
+    use proptest::{collection::vec, prelude::*};
 
     pub fn transform_arb() -> impl Strategy<Value = Transform> {
         prop_oneof![

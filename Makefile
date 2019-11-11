@@ -65,8 +65,8 @@ docker-build/client: .make/docker-build/universal/client
 docker-build/execution-engine: .make/docker-build/execution-engine
 docker-build/integration-testing: .make/docker-build/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
-docker-build/explorer: .make/docker-build/explorer
-docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
+docker-build/explorer: .make/docker-build/explorer .make/docker-build/test/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy .make/docker-build/test/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -121,6 +121,8 @@ cargo-native-packager/%:
 	cp -r protobuf $(IT_PATH)/
 	mkdir -p $(IT_PATH)/bundled_contracts
 	cp -r client/src/main/resources/*.wasm $(IT_PATH)/bundled_contracts/
+	mkdir -p $(IT_PATH)/system_contracts
+	cp -r ./execution-engine/target/wasm32-unknown-unknown/release/*_install.wasm $(IT_PATH)/system_contracts/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
@@ -156,6 +158,12 @@ cargo-native-packager/%:
 		explorer/Dockerfile \
 		build-explorer
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test tagged version of explorer for integration-testing.
+.make/docker-build/test/explorer: \
+		.make/docker-build/explorer
+	docker tag $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/explorer:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 .make/npm/explorer: \
@@ -223,6 +231,12 @@ cargo-native-packager/%:
 .make/docker-build/grpcwebproxy: hack/docker/grpcwebproxy/Dockerfile
 	cd hack/docker && docker-compose build grpcwebproxy
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
+	mkdir -p $(dir $@) && touch $@
+
+# Make a test tagged version of grpcwebproxy for integration-testing.
+.make/docker-build/test/grpcwebproxy: \
+		.make/docker-build/grpcwebproxy
+	docker tag $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.

@@ -185,11 +185,6 @@ account {
     deployment_threshold: 1
     key_management_threshold: 1
   }
-  account_activity {
-    key_management_last_used: 0
-    deployment_last_used: 0
-    inactivity_period_limit: 100
-  }
 }
 ```
 

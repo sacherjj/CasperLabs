@@ -1,18 +1,11 @@
-use std::collections::HashMap;
-
-use crate::tracking_copy;
-
-use contract_ffi::key::Key;
-use contract_ffi::value::Value;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::newtypes::CorrelationId;
-use engine_shared::transform::Transform;
+use contract_ffi::{key::Key, value::Value};
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
+    transform::Transform,
+};
 use engine_storage::global_state::StateReader;
 
-use super::execution_effect::ExecutionEffect;
-use super::op::Op;
-use super::{error, CONV_RATE};
+use super::{error, execution_effect::ExecutionEffect, op::Op, CONV_RATE};
 
 #[derive(Debug)]
 pub enum ExecutionResult {
@@ -177,8 +170,8 @@ impl ExecutionResultBuilder {
             return None;
         }
 
-        let mut ops = HashMap::new();
-        let mut transforms = HashMap::new();
+        let mut ops = AdditiveMap::new();
+        let mut transforms = AdditiveMap::new();
 
         let new_balance = account_main_purse_balance - max_payment_cost;
 
@@ -214,8 +207,8 @@ impl ExecutionResultBuilder {
         correlation_id: CorrelationId,
     ) -> Result<ExecutionResult, ExecutionResultBuilderError> {
         let cost = self.total_cost();
-        let mut ops = HashMap::new();
-        let mut transforms = HashMap::new();
+        let mut ops = AdditiveMap::new();
+        let mut transforms = AdditiveMap::new();
 
         let mut ret: ExecutionResult = ExecutionResult::Success {
             effect: Default::default(),
@@ -267,15 +260,15 @@ impl ExecutionResultBuilder {
     }
 
     fn add_effects(
-        ops: &mut HashMap<Key, Op>,
-        transforms: &mut HashMap<Key, Transform>,
+        ops: &mut AdditiveMap<Key, Op>,
+        transforms: &mut AdditiveMap<Key, Transform>,
         effect: &ExecutionEffect,
     ) {
         for (k, op) in effect.ops.iter() {
-            tracking_copy::utils::add(ops, *k, op.clone());
+            ops.insert_add(*k, op.clone());
         }
         for (k, t) in effect.transforms.iter() {
-            tracking_copy::utils::add(transforms, *k, t.clone());
+            transforms.insert_add(*k, t.clone())
         }
     }
 
@@ -283,8 +276,8 @@ impl ExecutionResultBuilder {
     /// it is equivalent to having a `Transform::Identity` and `Op::Read`.
     /// This function makes that reduction before returning the `ExecutionEffect`.
     fn reduce_identity_writes<R: StateReader<Key, Value>>(
-        mut ops: HashMap<Key, Op>,
-        mut transforms: HashMap<Key, Transform>,
+        mut ops: AdditiveMap<Key, Op>,
+        mut transforms: AdditiveMap<Key, Transform>,
         reader: &R,
         correlation_id: CorrelationId,
     ) -> ExecutionEffect {

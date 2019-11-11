@@ -1,20 +1,20 @@
-use std::collections::hash_map::RandomState;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{hash_map::RandomState, BTreeMap};
 
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{Value, U512};
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, Value, U512},
+};
 use engine_core::engine_state::CONV_RATE;
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::transform::Transform;
+use engine_shared::{additive_map::AdditiveMap, gas::Gas, motes::Motes, transform::Transform};
 use std::convert::TryInto;
 
-use crate::support::test_support::{
-    self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
-    GENESIS_INITIAL_BALANCE,
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, Diff, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+        GENESIS_INITIAL_BALANCE,
+    },
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG},
 };
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_KEY, DEFAULT_GENESIS_CONFIG};
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
@@ -586,7 +586,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
     builder_by_uref.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let test_result = builder_by_uref.exec_commit_finish(exec_request_genesis.clone());
-    let transforms: &HashMap<Key, Transform, RandomState> =
+    let transforms: &AdditiveMap<Key, Transform, RandomState> =
         &test_result.builder().get_transforms()[0];
 
     let stored_payment_contract_uref = {
@@ -815,7 +815,6 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 assert_eq!(la.pub_key(), ra.pub_key());
                 assert_eq!(la.purse_id(), ra.purse_id());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
-                assert_eq!(la.account_activity(), ra.account_activity());
 
                 assert!(Iterator::eq(
                     la.get_associated_keys(),

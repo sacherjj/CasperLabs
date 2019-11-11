@@ -9,6 +9,8 @@ RUN sudo mv protoc3/include/* /usr/local/include/ && ln -s /protoc3/bin/protoc /
 RUN python3 -m pip install pipenv
 ENTRYPOINT ["/root/integration-testing/run_tests.sh"]
 
+ENV IN_DOCKER=true
+
 WORKDIR /root/integration-testing
 RUN mkdir -p /root/integration-testing
 COPY ./ /root/integration-testing/
@@ -17,3 +19,5 @@ RUN mkdir -p /root/protobuf
 COPY ./protobuf/ /root/protobuf/
 RUN mkdir -p /root/bundled_contracts
 COPY ./bundled_contracts/ /root/bundled_contracts/
+RUN mkdir -p /root/system_contracts
+COPY ./system_contracts/ /root/system_contracts/

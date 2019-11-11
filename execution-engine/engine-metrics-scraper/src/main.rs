@@ -2,9 +2,7 @@ mod accumulator;
 mod drain;
 mod sink;
 
-use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{io, net::SocketAddr, time::Duration};
 
 use clap::{App, Arg};
 

@@ -1,13 +1,17 @@
-use core::fmt::Write;
+use alloc::{format, vec::Vec};
 
-use blake2::digest::{Input, VariableOutput};
-use blake2::VarBlake2b;
+use blake2::{
+    digest::{Input, VariableOutput},
+    VarBlake2b,
+};
+use hex_fmt::HexFmt;
 
-use crate::alloc::vec::Vec;
-use crate::base16;
-use crate::bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE};
-use crate::contract_api::{ContractRef, TURef};
-use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
+use crate::{
+    base16,
+    bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
+    contract_api::{ContractRef, TURef},
+    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+};
 
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
@@ -60,25 +64,14 @@ impl Key {
     }
 }
 
-// There is no impl LowerHex for neither [u8; 32] nor &[u8] in std.
-// I can't impl them b/c they're not living in current crate.
-/// Creates a hex string from [u8; 32] table.
-pub fn addr_to_hex(addr: &[u8; 32]) -> String {
-    let mut str = String::with_capacity(64);
-    for b in addr {
-        write!(&mut str, "{:02x}", b).unwrap();
-    }
-    str
-}
-
 impl core::fmt::Display for Key {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Key::Account(addr) => write!(f, "Key::Account({})", addr_to_hex(addr)),
-            Key::Hash(addr) => write!(f, "Key::Hash({})", addr_to_hex(addr)),
+            Key::Account(addr) => write!(f, "Key::Account({})", HexFmt(addr)),
+            Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
             // URef(…).
-            Key::Local(hash) => write!(f, "Key::Local({})", addr_to_hex(hash)),
+            Key::Local(hash) => write!(f, "Key::Local({})", HexFmt(hash)),
         }
     }
 }
@@ -286,11 +279,21 @@ impl ToBytes for Vec<Key> {
 #[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
-    use crate::bytesrepr::{Error, FromBytes};
-    use crate::key::Key;
-    use crate::uref::{AccessRights, URef};
-    use alloc::string::String;
-    use alloc::vec::Vec;
+    // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+    #[rustfmt::skip]
+    use alloc::vec;
+    use alloc::{format, string::String, vec::Vec};
+
+    use proptest::{
+        prelude::*,
+        string::{string_regex, RegexGeneratorStrategy},
+    };
+
+    use crate::{
+        bytesrepr::{Error, FromBytes},
+        key::Key,
+        uref::{AccessRights, URef},
+    };
 
     fn test_readable(right: AccessRights, is_true: bool) {
         assert_eq!(right.is_readable(), is_true)
@@ -385,9 +388,6 @@ mod tests {
         // verifies that the arbitrary key length doesn't get truncated
         assert_ne!(local1, local2);
     }
-
-    use proptest::prelude::*;
-    use proptest::string::{string_regex, RegexGeneratorStrategy};
 
     /// Create a base16 string of [[length]] size.
     fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {

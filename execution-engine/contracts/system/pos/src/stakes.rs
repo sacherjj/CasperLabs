@@ -1,11 +1,15 @@
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::String;
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+};
 use core::fmt::Write;
 
-use contract_ffi::contract_api::runtime;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::pos::{Error, Result};
-use contract_ffi::value::{account::PublicKey, U512};
+use contract_ffi::{
+    contract_api::runtime,
+    key::Key,
+    system_contracts::pos::{Error, Result},
+    value::{account::PublicKey, U512},
+};
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
@@ -194,8 +198,10 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::system_contracts::pos::Error;
-    use contract_ffi::value::{account::PublicKey, U512};
+    use contract_ffi::{
+        system_contracts::pos::Error,
+        value::{account::PublicKey, U512},
+    };
 
     use crate::stakes::Stakes;
 

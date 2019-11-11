@@ -121,7 +121,9 @@ private[configuration] final case class Options private (
 
   val configFile = opt[Path](descr = "Path to the TOML configuration file.")
 
-  version(s"CasperLabs Node ${BuildInfo.version}")
+  version(
+    s"CasperLabs Node ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+  )
   printedName = "casperlabs"
   banner(
     """
@@ -359,6 +361,12 @@ private[configuration] final case class Options private (
     @scallop
     val serverInitSyncMaxBlockCount =
       gen[Int]("Maximum number of blocks to allow to be synced initially.")
+
+    @scallop
+    val serverInitSyncStep =
+      gen[Int](
+        "Depth of DAG slices (by rank) retrieved slice-by-slice until node fully synchronized."
+      )
 
     @scallop
     val serverInitSyncRoundPeriod =

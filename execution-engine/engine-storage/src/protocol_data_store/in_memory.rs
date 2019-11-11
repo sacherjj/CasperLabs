@@ -1,10 +1,12 @@
 use contract_ffi::value::ProtocolVersion;
 
-use crate::error::in_memory::Error;
-use crate::protocol_data::ProtocolData;
-use crate::protocol_data_store::{self, ProtocolDataStore};
-use crate::store::Store;
-use crate::transaction_source::in_memory::InMemoryEnvironment;
+use crate::{
+    error::in_memory::Error,
+    protocol_data::ProtocolData,
+    protocol_data_store::{self, ProtocolDataStore},
+    store::Store,
+    transaction_source::in_memory::InMemoryEnvironment,
+};
 
 /// An in-memory protocol data store
 pub struct InMemoryProtocolDataStore {

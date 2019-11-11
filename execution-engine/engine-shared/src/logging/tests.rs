@@ -1,10 +1,16 @@
-use std::thread;
-use std::time::{Instant, SystemTime};
-
-use crate::logging::log_settings::{
-    get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
+use std::{
+    thread,
+    time::{Instant, SystemTime},
 };
-use crate::logging::logger::{initialize_buffered_logger, LogBufferProvider};
+
+use lazy_static::lazy_static;
+
+use crate::logging::{
+    log_settings::{
+        get_log_settings_provider, set_log_settings_provider, LogLevelFilter, LogSettings,
+    },
+    logger::{initialize_buffered_logger, LogBufferProvider},
+};
 
 use super::*;
 

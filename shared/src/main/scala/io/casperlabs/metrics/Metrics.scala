@@ -30,13 +30,21 @@ trait Metrics[F[_]] {
   )(implicit ev: Metrics.Source, B: Bracket[F, Throwable]): F[A] =
     B.guarantee(incrementGauge(name, delta) *> block)(decrementGauge(name, delta))
 
+  def gaugeS[A](name: String, delta: Long = 1)(
+      stream: fs2.Stream[F, A]
+  )(implicit ev: Metrics.Source): fs2.Stream[F, A] =
+    fs2.Stream.bracket(incrementGauge(name, delta))(_ => decrementGauge(name, delta)) >> stream
+
   // Histogram
   def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit]
 
   def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A]
+  def timerS[A](name: String)(stream: fs2.Stream[F, A])(
+      implicit ev: Metrics.Source
+  ): fs2.Stream[F, A]
 }
 
-object Metrics extends MetricsInstances {
+object Metrics {
   def apply[F[_]](implicit M: Metrics[F]): Metrics[F] = M
 
   class MetricsNOP[F[_]: Applicative] extends Metrics[F] {
@@ -51,54 +59,19 @@ object Metrics extends MetricsInstances {
     def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
       ().pure[F]
     def timer[A](name: String)(block: F[A])(implicit ev: Metrics.Source): F[A] = block
+    def timerS[A](name: String)(stream: fs2.Stream[F, A])(
+        implicit ev: Metrics.Source
+    ): fs2.Stream[F, A] = stream
   }
 
   import shapeless.tag.@@
   sealed trait SourceTag
   type Source = String @@ SourceTag
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  private def Source(name: String): Source         = name.asInstanceOf[Source]
+  private def Source(name: String): Source = name.asInstanceOf[Source]
+  implicit class SourceOps(base: Source) {
+    def /(path: String): Source = Source(base, path)
+  }
   def Source(prefix: Source, name: String): Source = Source(s"$prefix.$name")
   val BaseSource: Source                           = Source("casperlabs")
-}
-
-sealed abstract class MetricsInstances {
-  implicit def eitherT[E, F[_]: Monad](implicit evF: Metrics[F]): Metrics[EitherT[F, E, ?]] =
-    new Metrics[EitherT[F, E, ?]] {
-      def incrementCounter(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementCounter(name, delta))
-
-      def incrementSampler(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementSampler(name, delta))
-
-      def sample(name: String)(implicit ev: Metrics.Source): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.sample(name))
-
-      def setGauge(name: String, value: Long)(implicit ev: Metrics.Source): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.setGauge(name, value))
-
-      def incrementGauge(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.incrementGauge(name, delta))
-
-      def decrementGauge(name: String, delta: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.decrementGauge(name, delta))
-
-      def record(name: String, value: Long, count: Long = 1)(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, Unit] =
-        EitherT.liftF(evF.record(name, count))
-
-      def timer[A](name: String)(block: EitherT[F, E, A])(
-          implicit ev: Metrics.Source
-      ): EitherT[F, E, A] =
-        EitherT(evF.timer(name)(block.value))
-    }
 }

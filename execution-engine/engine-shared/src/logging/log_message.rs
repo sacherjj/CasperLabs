@@ -1,14 +1,17 @@
-use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::{hash_map::DefaultHasher, BTreeMap},
+    fmt,
+    hash::{Hash, Hasher},
+};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use contract_ffi::value::SemVer;
 use serde::{Serialize, Serializer};
 
-use crate::logging::log_level::{LogLevel, LogPriority};
-use crate::logging::log_settings::{HostName, LogSettingsProvider, ProcessId, ProcessName};
+use crate::logging::{
+    log_level::{LogLevel, LogPriority},
+    log_settings::{HostName, LogSettingsProvider, ProcessId, ProcessName},
+};
 
 const MESSAGE_TYPE: &str = "ee-structured";
 
@@ -267,8 +270,7 @@ impl MessageProperties {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::logging::log_settings;
-    use crate::logging::log_settings::LogLevelFilter;
+    use crate::logging::log_settings::{self, LogLevelFilter};
 
     #[test]
     fn should_format_message_template_default_use_case() {

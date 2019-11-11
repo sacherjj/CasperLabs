@@ -12,14 +12,9 @@ import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
 import com.olegpy.meow.effects._
-import doobie.util.transactor.Transactor
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
@@ -40,7 +35,7 @@ import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngine
 import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
-import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
 import io.netty.handler.ssl.ClientAuth
@@ -118,11 +113,11 @@ class NodeRuntime private[node] (
                                                                           conf.server.maxMessageSize
                                                                         )
       //TODO: We may want to adjust threading model for better performance
-      implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
-                                                        connectEC = dbConnScheduler,
-                                                        transactEC = dbIOScheduler,
-                                                        conf.server.dataDir
-                                                      )
+      (writeTransactor, readTransactor) <- effects.doobieTransactors(
+                                            connectEC = dbConnScheduler,
+                                            transactEC = dbIOScheduler,
+                                            conf.server.dataDir
+                                          )
       deployStorageChunkSize = 20 //TODO: Move to config
 
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
@@ -132,6 +127,8 @@ class NodeRuntime private[node] (
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = deployStorageChunkSize,
+              readXa = readTransactor,
+              writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
                 CachingBlockStorage[Task](
                   underlyingBlockStorage,
@@ -209,10 +206,6 @@ class NodeRuntime private[node] (
                                                                       MultiParentCasperRef
                                                                         .of[Task]
                                                                     )
-
-      implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-        Task
-      ]()
 
       blockApiLock <- Resource.liftF(Semaphore[Task](1))
 
