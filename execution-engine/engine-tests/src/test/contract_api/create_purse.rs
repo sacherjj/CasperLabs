@@ -1,7 +1,7 @@
+use base16;
 use lazy_static::lazy_static;
 
 use contract_ffi::{
-    base16,
     key::Key,
     value::{account::PurseId, U512},
 };
@@ -44,7 +44,7 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
         )
     );
 
-    let decoded_purse_id = base16::decode_lower(&map_key[5..69]).expect("should decode base16");
+    let decoded_purse_id = base16::decode(&map_key[5..69]).expect("should decode base16");
     assert_eq!(decoded_purse_id.len(), 32);
 
     *map_value
