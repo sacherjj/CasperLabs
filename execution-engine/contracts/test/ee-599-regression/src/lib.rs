@@ -21,6 +21,8 @@ const DONATION_BOX_COPY: &str = "donation_box_copy";
 const DONATION_BOX: &str = "donation_box";
 const GET_MAIN_PURSE: &str = "get_main_purse";
 const MAINTAINER: &str = "maintainer";
+const METHOD_CALL: &str = "call";
+const METHOD_INSTALL: &str = "install";
 const TRANSFER_FROM_PURSE_TO_ACCOUNT: &str = "transfer_from_purse_to_account";
 const TRANSFER_FROM_PURSE_TO_PURSE: &str = "transfer_from_purse_to_purse";
 const TRANSFER_FUNDS_EXT: &str = "transfer_funds_ext";
@@ -91,15 +93,14 @@ fn transfer_funds() -> Result<(), Error> {
         TRANSFER_FROM_PURSE_TO_ACCOUNT => {
             let main_purse = account::get_main_purse();
 
-            let _transferred_to = system::transfer_from_purse_to_account(
+            system::transfer_from_purse_to_account(
                 main_purse,
                 maintainer_public_key,
                 U512::from(DONATION_AMOUNT),
             )?;
         }
         TRANSFER_TO_ACCOUNT => {
-            let _transferred_to =
-                system::transfer_to_account(maintainer_public_key, U512::from(DONATION_AMOUNT))?;
+            system::transfer_to_account(maintainer_public_key, U512::from(DONATION_AMOUNT))?;
         }
         GET_MAIN_PURSE => {
             let _main_purse = account::get_main_purse();
@@ -121,8 +122,8 @@ fn delegate() -> Result<(), Error> {
         .ok_or(Error::MissingArgument)?
         .map_err(|_| Error::InvalidArgument)?;
     match method.as_str() {
-        "install" => {
-            // Create a malicious purse that should be known to the contract regardless of the
+        METHOD_INSTALL => {
+            // Create a purse that should be known to the contract regardless of the
             // calling context still owned by the account that deploys the contract
             let donation_box = system::create_purse();
             let maintainer = runtime::get_caller();
@@ -142,7 +143,7 @@ fn delegate() -> Result<(), Error> {
             // to the account
             runtime::put_key(DONATION_BOX_COPY, &donation_box.value().into());
         }
-        "call" => {
+        METHOD_CALL => {
             // This comes from outside i.e. after deploying the contract, this key is queried, and
             // then passed into the call
             let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
