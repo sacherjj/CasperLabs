@@ -13,6 +13,7 @@ import io.casperlabs.casper.util.execengine.{
   ProcessedDeployResult
 }
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.smartcontracts.ExecutionEngineService
 
 trait Select[F[_]] {
@@ -51,6 +52,20 @@ object DeploySelection {
       else
         this
     }
+  }
+
+  def createMetered[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler: Metrics](
+      sizeLimitBytes: Int
+  ): DeploySelection[F] = {
+    import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
+    val underlying = create[F](sizeLimitBytes)
+    new DeploySelection[F] {
+      override def select(
+          in: (DeployHash, Long, ProtocolVersion, fs2.Stream[F, Deploy])
+      ): F[List[ProcessedDeployResult]] =
+        Metrics[F].timer("deploySelection")(underlying.select(in))
+    }
+
   }
 
   def create[F[_]: MonadThrowable: ExecutionEngineService: Fs2Compiler](

@@ -316,7 +316,7 @@ object HashSetCasperTestNode {
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
 
-  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
+  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time: Metrics]
       : Validation[F] =
     new ValidationImpl[F] {
       // Tests are not signing the deploys.

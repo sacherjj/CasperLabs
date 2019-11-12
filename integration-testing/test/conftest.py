@@ -20,6 +20,7 @@ from casperlabs_local_net.casperlabs_network import (
     InterceptedTwoNodeNetwork,
     TwoNodeWithDifferentAccountsCSVNetwork,
     NetworkWithTaggedDev,
+    OneNodeNetworkWithChainspecUpgrades,
 )
 from docker.client import DockerClient
 
@@ -90,7 +91,7 @@ def encrypted_one_node_network(docker_client_fixture):
         yield net
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def one_node_network_with_clarity(docker_client_fixture):
     with OneNodeWithClarity(docker_client_fixture) as net:
         net.create_cl_network()
@@ -129,6 +130,24 @@ def intercepted_two_node_network(docker_client_fixture):
     with InterceptedTwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
+
+
+@pytest.fixture()
+def chainspec_upgrades_network_major(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, chainspec_directory="test-chainspec"
+    ) as net:
+        net.create_cl_network()
+        yield net
+
+
+@pytest.fixture()
+def chainspec_upgrades_network_minor(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, chainspec_directory="test-chainspec-minor"
+    ) as net:
+        net.create_cl_network()
+        yield net
 
 
 @pytest.fixture(scope="module")

@@ -5,7 +5,7 @@ import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{Applicative, Monad}
+import cats.Applicative
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -18,16 +18,16 @@ import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.ipc.ValidateRequest
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError, Weight}
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -42,7 +42,6 @@ import scala.util.control.NonFatal
   * Encapsulates mutable state of the MultiParentCasperImpl
   **
   *
-  * @param blockBuffer
   * @param invalidBlockTracker
   */
 final case class CasperState(
@@ -149,7 +148,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                                StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                                dag,
                                block
-                             )
+                             ).timer("validateAndAddBlock")
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
@@ -326,7 +325,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           _ <- Log[F].info(
                 s"Fork-choice tip is block ${PrettyPrinter.buildString(tipHashes.head)}."
               )
-          merged  <- ExecEngineUtil.merge[F](tips, dag)
+          merged  <- ExecEngineUtil.merge[F](tips, dag).timer("mergeTipsEffects")
           parents = merged.parents
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
@@ -336,8 +335,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
           // is that the auto-proposer will not pick up the change in the pending set immediately.
-          requeued <- requeueOrphanedDeploys(dag, tipHashes)
-          _        <- Log[F].info(s"Re-queued ${requeued} orphaned deploys.").whenA(requeued > 0)
+          requeued <- requeueOrphanedDeploys(dag, merged)
+          _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
 
           timestamp       <- Time[F].currentMillis
           remainingHashes <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp)
@@ -385,7 +384,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList
       // Make sure pending deploys have never been processed in the past cone of the new parents.
-      validDeploys <- DeployFilters.filterDeploysNotInPast(dag, parents, unexpiredList).map(_.toSet)
+      validDeploys <- DeployFilters
+                       .filterDeploysNotInPast(dag, parents, unexpiredList)
+                       .map(_.toSet)
+                       .timer("remainingDeploys_filterDeploysNotInPast")
       // anything with timestamp earlier than now and not included in the valid deploys
       // can be discarded as a duplicate and/or expired deploy
       deploysToDiscard <- earlierPendingDeploys.map(_._1).compile.to[Set].map(_ diff validDeploys)
@@ -401,21 +403,16 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     */
   private def requeueOrphanedDeploys(
       dag: DagRepresentation[F],
-      tipHashes: List[BlockHash]
+      merged: MergeResult[TransformMap, Block]
   ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
     for {
-      // We actually need the tips which can be merged, the ones which we'd build on if we
-      // attempted to create a new block.
-      tips    <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
-      merged  <- ExecEngineUtil.merge[F](tips, dag)
-      parents = merged.parents
       // Consider deploys which this node has processed but hasn't finalized yet.
       processedDeploys <- DeployStorageReader[F].readProcessedHashes
       orphanedDeploys <- filterDeploysNotInPast(
                           dag,
-                          parents.map(_.blockHash).toSet,
+                          merged.parents.map(_.blockHash).toSet,
                           processedDeploys
-                        )
+                        ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
       _ <- DeployStorageWriter[F]
             .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
     } yield orphanedDeploys.size
@@ -459,14 +456,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                    .map(set => ProtoUtil.nextRank(set.toList))
                )
         protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
-        checkpoint <- ExecEngineUtil.computeDeploysCheckpoint[F](
-                       merged,
-                       deployStream,
-                       timestamp,
-                       protocolVersion,
-                       rank,
-                       upgrades
-                     )
+        checkpoint <- ExecEngineUtil
+                       .computeDeploysCheckpoint[F](
+                         merged,
+                         deployStream,
+                         timestamp,
+                         protocolVersion,
+                         rank,
+                         upgrades
+                       )
       } yield {
         if (checkpoint.deploysForBlock.isEmpty) {
           CreateBlockStatus.noNewDeploys

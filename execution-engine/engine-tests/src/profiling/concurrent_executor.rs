@@ -11,13 +11,14 @@ use std::{
     time::{Duration, Instant},
 };
 
+use base16;
 use clap::{crate_version, App, Arg};
 use crossbeam_channel::{Iter, Receiver, Sender};
 use grpc::{ClientStubExt, RequestOptions};
 use log::info;
 
 use casperlabs_engine_tests::support::{profiling_common, test_support::ExecuteRequestBuilder};
-use contract_ffi::{base16, value::U512};
+use contract_ffi::value::U512;
 use engine_grpc_server::engine_server::{
     ipc::ExecuteRequest,
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceClient},
@@ -95,7 +96,7 @@ fn request_count_arg() -> Arg<'static, 'static> {
 }
 
 fn parse_hash(encoded_hash: &str) -> Vec<u8> {
-    base16::decode_lower(encoded_hash).expect("Expected a valid, hex-encoded hash")
+    base16::decode(encoded_hash).expect("Expected a valid, hex-encoded hash")
 }
 
 fn parse_count(encoded_thread_count: &str) -> usize {

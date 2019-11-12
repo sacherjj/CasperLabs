@@ -121,6 +121,8 @@ cargo-native-packager/%:
 	cp -r protobuf $(IT_PATH)/
 	mkdir -p $(IT_PATH)/bundled_contracts
 	cp -r client/src/main/resources/*.wasm $(IT_PATH)/bundled_contracts/
+	mkdir -p $(IT_PATH)/system_contracts
+	cp -r ./execution-engine/target/wasm32-unknown-unknown/release/*_install.wasm $(IT_PATH)/system_contracts/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
