@@ -159,9 +159,7 @@ class DockerNode(LoggingDockerBase):
     def resources_folder(self) -> Path:
         """ This will return the resources folder that is copied into the correct location for testing """
         cur_path = Path(os.path.realpath(__file__)).parent
-        while cur_path.name != "integration-testing":
-            cur_path = cur_path.parent
-        return cur_path / "resources"
+        return cur_path.parent / "resources"
 
     @property
     def timeout(self):

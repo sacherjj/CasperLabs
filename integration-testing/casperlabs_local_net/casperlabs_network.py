@@ -465,6 +465,24 @@ class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
 
 
+class InterceptedOneNodeNetwork(OneNodeNetwork):
+    grpc_encryption = True
+    behind_proxy = True
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            behind_proxy=True,
+        )
+        self.add_bootstrap(config)
+
+
 class InterceptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
     behind_proxy = True

@@ -13,15 +13,22 @@ with open(os.path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
 setup(
     name=NAME,
     version="0.1.0",
-    packages=find_packages(exclude=["tests", "client", "node_modules", "util"]),
+    packages=find_packages(exclude=["test", "client", "node_modules", "util"]),
     setup_requires=[],
-    install_requires=["casperlabs-client"],
+    install_requires=["casperlabs-client", "docker"],
     cmdclass={},
     description="Python package for CasperLabs integration testing and node configuration for local development",
     long_description=long_description,
     long_description_content_type="text/markdown",
     include_package_data=True,
-    package_data={NAME: [f"{THIS_DIRECTORY}/resources/accounts/account*"]},
+    package_data={
+        NAME: [
+            f"{THIS_DIRECTORY}/resources/*",
+            f"{THIS_DIRECTORY}/resources/*/*",
+            f"{THIS_DIRECTORY}/resources/*/*/*",
+            f"{THIS_DIRECTORY}/resources/*/*/*/*",
+        ]
+    },
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
@@ -42,6 +49,8 @@ setup(
         "Readme": "https://github.com/CasperLabs/CasperLabs/blob/dev/integration-testing/casperlabs_local_net/README.md",
     },
     entry_points={
-        "console_scripts": ["node_proxy = casperlabs_local_net.node_proxy:main"]
+        "console_scripts": [
+            "casperlabs_local_node = casperlabs_local_net.casperlabs_local_node:main"
+        ]
     },
 )
