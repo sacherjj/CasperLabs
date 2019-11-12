@@ -208,6 +208,10 @@ where
                         // InterpreterError.
                         return Err(Error::Revert(*status));
                     }
+                    Error::InvalidContext => {
+                        // TODO: https://casperlabs.atlassian.net/browse/EE-771
+                        return Err(Error::InvalidContext);
+                    }
                     _ => {}
                 }
             }
@@ -388,14 +392,10 @@ where
 
     /// Writes runtime context's account main purse to [dest_ptr] in the Wasm memory.
     fn get_main_purse(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let purse_id = self
-            .context
-            .account()
-            .purse_id()
-            .to_bytes()
-            .map_err(Error::BytesRepr)?;
+        let purse_id = self.context.get_main_purse()?;
+        let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
         self.memory
-            .set(dest_ptr, &purse_id)
+            .set(dest_ptr, &purse_id_bytes)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -888,7 +888,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let source = self.context.account().purse_id();
+        let source = self.context.get_main_purse()?;
         self.transfer_from_purse_to_account(source, target, amount)
     }
 
