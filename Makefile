@@ -139,12 +139,6 @@ cargo-native-packager/%:
 	rm -rf $(RELEASE)/Dockerfile
 	mkdir -p $(dir $@) && touch $@
 
-# Make an image to run Python tests under integration-testing.
-.make/docker-build/test/integration-testing: \
-		.make/docker-build/integration-testing
-	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
 # Make an image for keys generation
 .make/docker-build/key-generator: \
 	hack/key-management/Dockerfile \
@@ -231,12 +225,6 @@ cargo-native-packager/%:
 .make/docker-build/grpcwebproxy: hack/docker/grpcwebproxy/Dockerfile
 	cd hack/docker && docker-compose build grpcwebproxy
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make a test tagged version of grpcwebproxy for integration-testing.
-.make/docker-build/test/grpcwebproxy: \
-		.make/docker-build/grpcwebproxy
-	docker tag $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Refresh Scala build artifacts if source was changed.
