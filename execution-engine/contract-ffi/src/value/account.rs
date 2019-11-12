@@ -60,6 +60,12 @@ impl PurseId {
     }
 }
 
+impl From<PurseId> for URef {
+    fn from(purse_id: PurseId) -> URef {
+        purse_id.value()
+    }
+}
+
 impl ToBytes for PurseId {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         ToBytes::to_bytes(&self.0)

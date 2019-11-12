@@ -477,6 +477,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "create-purses"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.20.0",
+]
+
+[[package]]
 name = "create-test-node-01"
 version = "0.1.0"
 dependencies = [
@@ -2714,6 +2721,13 @@ dependencies = [
 
 [[package]]
 name = "transfer-to-existing-account"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.20.0",
+]
+
+[[package]]
+name = "transfer-to-purse"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.20.0",
