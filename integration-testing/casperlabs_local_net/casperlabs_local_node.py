@@ -1,7 +1,7 @@
 import time
 import docker
 import traceback
-from casperlabs_local_net.casperlabs_network import OneNodeNetwork
+from casperlabs_local_net.casperlabs_network import InterceptedOneNodeNetwork
 
 
 def prune_docker(docker_api):
@@ -13,7 +13,7 @@ def prune_docker(docker_api):
 def main():
     docker_api = docker.from_env()
     prune_docker(docker_api)
-    network = OneNodeNetwork(docker_api)
+    network = InterceptedOneNodeNetwork(docker_api)
     try:
         network.create_cl_network()
         print("Node and proxy is running, press Ctrl-C to stop it.")
