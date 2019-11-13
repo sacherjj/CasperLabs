@@ -14,6 +14,7 @@ import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
@@ -38,14 +39,16 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
+  import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
+
+  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       rank: Long,
       upgrades: Seq[ChainSpec.UpgradePoint]
-  ): F[DeploysCheckpoint] =
+  ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
       preStateHash <- computePrestate[F](merged, rank, upgrades)
       pdr <- DeploySelection[F].select(
@@ -74,6 +77,7 @@ object ExecEngineUtil {
       deploysForBlock,
       protocolVersion
     )
+  }
 
   // Discard deploys that will never be included because they failed some precondition.
   // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
@@ -223,7 +227,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
@@ -248,15 +252,17 @@ object ExecEngineUtil {
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
         val maxRank         = merged.parents.map(_.getHeader.rank).max
+
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank
         }
         activatedUpgrades.toList.foldLeftM(postStateHash) {
           case (postStateHash, upgrade) =>
-            ExecutionEngineService[F]
-              .upgrade(postStateHash, upgrade, protocolVersion)
-              .rethrow
-              .map(_.postStateHash)
+            Log[F].info(s"Applying upgrade ${upgrade.getProtocolVersion}") *>
+              ExecutionEngineService[F]
+                .upgrade(postStateHash, upgrade, protocolVersion)
+                .rethrow
+                .map(_.postStateHash)
           // NOTE: We are dropping the effects here, so they won't be part of the block.
         }
       } else {

@@ -58,7 +58,6 @@ TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
 USER_ERROR_MIN = 65536
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
-CHAINSPEC_PATH = "/root/.casperlabs/chainspec"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
@@ -69,9 +68,7 @@ class KeyPair:
 
 def testing_root_path() -> Path:
     cur_path = Path(os.path.realpath(__file__)).parent
-    while cur_path.name != "integration-testing":
-        cur_path = cur_path.parent
-    return cur_path
+    return cur_path.parent
 
 
 def resources_path() -> Path:

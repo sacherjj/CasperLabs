@@ -186,7 +186,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     override val argType: ArgType.V = ArgType.SINGLE
   }
 
-  version(s"CasperLabs Client ${BuildInfo.version}")
+  version(
+    s"CasperLabs Client ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+  )
   printedName = "casperlabs"
 
   val port =
@@ -399,7 +401,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val deployPath =
       opt[File](
-        required = true,
+        required = false,
         descr = "Path to the deploy file.",
         validate = fileCheck,
         short = 'i'

@@ -150,10 +150,10 @@ object DownloadManagerImpl {
                           fatalError.put(error)
                       }.start
         fatalErroFiber <- fatalError.take
-              .flatMap(
-                Concurrent[F].raiseError[Unit](_)
-              )
-              .start
+                           .flatMap(
+                             Concurrent[F].raiseError[Unit](_)
+                           )
+                           .start
       } yield (isShutdown, workersRef, managerLoop, fatalErroFiber, manager)
     } {
       case (isShutdown, workersRef, managerLoop, fatalErroFiber, _) =>

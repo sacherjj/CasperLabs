@@ -159,9 +159,7 @@ class DockerNode(LoggingDockerBase):
     def resources_folder(self) -> Path:
         """ This will return the resources folder that is copied into the correct location for testing """
         cur_path = Path(os.path.realpath(__file__)).parent
-        while cur_path.name != "integration-testing":
-            cur_path = cur_path.parent
-        return cur_path / "resources"
+        return cur_path.parent / "resources"
 
     @property
     def timeout(self):
@@ -280,8 +278,12 @@ class DockerNode(LoggingDockerBase):
         N = self.NUMBER_OF_BONDS
         # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
         path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
-        os.makedirs(os.path.dirname(path))
-        with open(path, "a") as f:
+        try:
+            os.makedirs(os.path.dirname(path))
+        except OSError:
+            pass
+
+        with open(path, "w") as f:
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
             # created this way, without having to do a transfer.
@@ -322,7 +324,7 @@ class DockerNode(LoggingDockerBase):
         options = [
             f"{opt} {arg}"
             for opt, arg in self.config.node_command_options(
-                self.container_name
+                self, self.container_name
             ).items()
         ]
         return f"run {bootstrap_flag} {' '.join(options)}"

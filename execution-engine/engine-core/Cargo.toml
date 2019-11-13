@@ -5,6 +5,7 @@ authors = ["Michael Birch <birchmd@casperlabs.io>", "Mateusz Górski <gorski.mat
 edition = "2018"
 
 [dependencies]
+base16 = "0.2"
 blake2 = "0.8"
 contract-ffi = { path = "../contract-ffi",  package = "casperlabs-contract-ffi", features = ["std", "gens"] }
 engine-shared = { path = "../engine-shared", package = "casperlabs-engine-shared" }

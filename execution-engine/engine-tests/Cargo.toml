@@ -5,6 +5,7 @@ authors = ["Ed Hastings <ed@casperlabs.io>, Henry Till <henrytill@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+base16 = "0.2"
 clap = "2"
 contract-ffi = { path = "../contract-ffi", package = "casperlabs-contract-ffi" }
 crossbeam-channel = "0.3.9"

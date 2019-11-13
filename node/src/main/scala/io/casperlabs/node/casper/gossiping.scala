@@ -144,7 +144,7 @@ package object gossiping {
                         )
 
       implicit0(deploySelection: DeploySelection[F]) <- Resource.pure[F, DeploySelection[F]](
-                                                         DeploySelection.create[F](
+                                                         DeploySelection.createMetered[F](
                                                            conf.casper.maxBlockSizeBytes
                                                          )
                                                        )

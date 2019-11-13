@@ -132,8 +132,10 @@ class ClarityServerStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "server started at", times)
 
-    def is_satisfied(self) -> bool:
-        return self.node.logs().count(self.message) >= self.times
+
+class SeleniumServerStarted(LogsContainMessage):
+    def __init__(self, node: DockerNode, times: int) -> None:
+        super().__init__(node, "Selenium Server is up and running on port", times)
 
 
 class WaitForGoodBye(LogsContainMessage):
@@ -556,4 +558,9 @@ def wait_for_connected_to_node(
 
 def wait_for_clarity_started(node: DockerNode, startup_timeout: int, times: int = 1):
     predicate = ClarityServerStarted(node, times)
+    wait_on_using_wall_clock_time(predicate, startup_timeout)
+
+
+def wait_for_selenium_started(node: DockerNode, startup_timeout: int, times: int = 1):
+    predicate = SeleniumServerStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)

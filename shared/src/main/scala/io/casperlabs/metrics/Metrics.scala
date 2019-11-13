@@ -68,7 +68,10 @@ object Metrics {
   sealed trait SourceTag
   type Source = String @@ SourceTag
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  private def Source(name: String): Source         = name.asInstanceOf[Source]
+  private def Source(name: String): Source = name.asInstanceOf[Source]
+  implicit class SourceOps(base: Source) {
+    def /(path: String): Source = Source(base, path)
+  }
   def Source(prefix: Source, name: String): Source = Source(s"$prefix.$name")
   val BaseSource: Source                           = Source("casperlabs")
 }
