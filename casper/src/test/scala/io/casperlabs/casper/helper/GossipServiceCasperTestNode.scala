@@ -7,7 +7,7 @@ import cats.implicits._
 import cats.mtl.DefaultApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper
+import io.casperlabs.{casper, shared}
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
@@ -24,6 +24,7 @@ import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import monix.eval.Task
 import monix.tail.Iterant
 
 import scala.collection.immutable.Queue
@@ -283,8 +284,9 @@ object GossipServiceCasperTestNodeFactory {
   class TestGossipService[F[_]: Concurrent: Timer: Time: Parallel: Log: Validation]()
       extends GossipService[F] {
 
-    implicit val metrics  = new Metrics.MetricsNOP[F]
-    implicit val versions = HashSetCasperTestNode.protocolVersions[F]
+    implicit val metrics               = new Metrics.MetricsNOP[F]
+    implicit val noopFatalErrorHandler = new shared.FatalErrorHandler.FatalErrorHandlerNoop[F]
+    implicit val versions              = HashSetCasperTestNode.protocolVersions[F]
 
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _

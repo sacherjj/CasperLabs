@@ -76,8 +76,13 @@ class NodeRuntime private[node] (
   implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
 
   implicit val concurrentEffectForEffect = {
-    implicit val s = mainScheduler.withUncaughtExceptionReporter(uncaughtExceptionHandler)
+    implicit val s = mainScheduler
     implicitly[ConcurrentEffect[Task]]
+  }
+
+  implicit val fatalErrorHandler = new FatalErrorHandler[Task] {
+    override def handle(error: FatalErrorShutdown): Task[Unit] =
+      Task.delay(uncaughtExceptionHandler.reportFailure(error))
   }
 
   // intra-node gossiping port.

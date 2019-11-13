@@ -15,7 +15,8 @@ import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Log
+import io.casperlabs.shared
+import io.casperlabs.shared.{FatalErrorHandler, Log}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.tail.Iterant
@@ -602,7 +603,8 @@ class DownloadManagerSpec
 }
 
 object DownloadManagerSpec {
-  implicit val metrics = new Metrics.MetricsNOP[Task]
+  implicit val metrics               = new Metrics.MetricsNOP[Task]
+  implicit val noopFatalErrorHandler = new shared.FatalErrorHandler.FatalErrorHandlerNoop[Task]
 
   def summaryOf(block: Block): BlockSummary =
     BlockSummary()

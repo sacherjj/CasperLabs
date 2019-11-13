@@ -20,7 +20,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
+import io.casperlabs.shared.{Compression, FatalErrorHandler, FatalErrorShutdown, Log}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -119,7 +119,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer: Metrics](
+  def apply[F[_]: Concurrent: Log: Timer: Metrics: FatalErrorHandler](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
@@ -129,7 +129,6 @@ object DownloadManagerImpl {
     Resource.make {
       for {
         isShutdown <- Ref.of(false)
-        fatalError <- MVar.empty[F, FatalErrorShutdown]
         itemsRef   <- Ref.of(Map.empty[ByteString, Item[F]])
         workersRef <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore  <- Semaphore[F](maxParallelDownloads.toLong)
@@ -147,26 +146,20 @@ object DownloadManagerImpl {
         )
         managerLoop <- manager.run.onError {
                         case error: FatalErrorShutdown =>
-                          fatalError.put(error)
+                          FatalErrorHandler[F].handle(error)
                       }.start
-        fatalErroFiber <- fatalError.take
-                           .flatMap(
-                             Concurrent[F].raiseError[Unit](_)
-                           )
-                           .start
-      } yield (isShutdown, workersRef, managerLoop, fatalErroFiber, manager)
+      } yield (isShutdown, workersRef, managerLoop, manager)
     } {
-      case (isShutdown, workersRef, managerLoop, fatalErroFiber, _) =>
+      case (isShutdown, workersRef, managerLoop, _) =>
         for {
           _       <- Log[F].info("Shutting down the Download Manager...")
           _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
-          _       <- fatalErroFiber.cancel.attempt
           workers <- workersRef.get
           _       <- workers.values.toList.map(_.cancel.attempt).sequence.void
         } yield ()
     } map {
-      case (_, _, _, _, manager) => manager
+      case (_, _, _, manager) => manager
     }
 
   /** All dependencies that need to be downloaded before a block. */
