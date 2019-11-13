@@ -129,6 +129,7 @@ object DownloadManagerImpl {
     Resource.make {
       for {
         isShutdown <- Ref.of(false)
+        fatalError <- MVar.empty[F, FatalErrorShutdown]
         itemsRef   <- Ref.of(Map.empty[ByteString, Item[F]])
         workersRef <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore  <- Semaphore[F](maxParallelDownloads.toLong)
@@ -144,19 +145,28 @@ object DownloadManagerImpl {
           relaying,
           retriesConf
         )
-        managerLoop <- manager.run.start
-      } yield (isShutdown, workersRef, managerLoop, manager)
+        managerLoop <- manager.run.onError {
+                        case error: FatalErrorShutdown =>
+                          fatalError.put(error)
+                      }.start
+        fatalErroFiber <- fatalError.take
+              .flatMap(
+                Concurrent[F].raiseError[Unit](_)
+              )
+              .start
+      } yield (isShutdown, workersRef, managerLoop, fatalErroFiber, manager)
     } {
-      case (isShutdown, workersRef, managerLoop, _) =>
+      case (isShutdown, workersRef, managerLoop, fatalErroFiber, _) =>
         for {
           _       <- Log[F].info("Shutting down the Download Manager...")
           _       <- isShutdown.set(true)
           _       <- managerLoop.cancel.attempt
+          _       <- fatalErroFiber.cancel.attempt
           workers <- workersRef.get
           _       <- workers.values.toList.map(_.cancel.attempt).sequence.void
         } yield ()
     } map {
-      case (_, _, _, manager) => manager
+      case (_, _, _, _, manager) => manager
     }
 
   /** All dependencies that need to be downloaded before a block. */
@@ -276,7 +286,21 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attempt flatMap {
+          case Right(()) => onFatalErrorShutdown(ex) >> run
+          case Left(finishError) =>
+            Log[F]
+              .error("An error occurred when handling DownloadFailure.", finishError) >> onFatalErrorShutdown(
+              ex
+            ) >> run
+        }
+    }
+
+  private def onFatalErrorShutdown(ex: Throwable): F[Unit] =
+    ex match {
+      case error: FatalErrorShutdown =>
+        Log[F].error(error.getLocalizedMessage) >> Concurrent[F].raiseError(error)
+      case _ => Monad[F].unit
     }
 
   // Indicate how many items we have in the queue.
@@ -438,9 +462,6 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
       // Make sure the manager knows we're done, even if we fail unexpectedly.
       loop(item.sources.map((_, 0)).toMap, lastError = none[Throwable]) recoverWith {
         case NonFatal(ex) => failure(ex)
-        case error @ FatalErrorShutdown(_) =>
-          Log[F].error(error.getLocalizedMessage) *> failure(error) *> Concurrent[F]
-            .raiseError(error)
       }
     }
   }
