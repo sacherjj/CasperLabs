@@ -3,7 +3,7 @@ package io.casperlabs.grpcmonix
 import scala.concurrent.Future
 import scala.util.control.NonFatal
 
-import io.casperlabs.shared.{Log, LogSource}
+import io.casperlabs.shared.Log
 
 import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
@@ -19,8 +19,7 @@ import scalapb.grpc.Grpc
 
 object GrpcMonix {
 
-  private val logger                        = Log.logId
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  private val logger = Log.logId
 
   type GrpcOperator[I, O] = StreamObserver[O] => StreamObserver[I]
   type Transformer[I, O]  = Observable[I] => Observable[O]

@@ -7,11 +7,10 @@ import scala.concurrent.duration.FiniteDuration
 class UncaughtExceptionHandler(shutdownTimeout: FiniteDuration)
     extends UncaughtExceptionReporter
     with RuntimeOps {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-  private val log: Log[Id]                  = Log.logId
+  private val log: Log[Id] = Log.logId
 
   override def reportFailure(ex: scala.Throwable): Unit = {
-    log.error(s"Uncaught Exception : ${ex.getMessage}", ex)
+    log.error(s"Uncaught Exception : $ex")
     ex match {
       case _: VirtualMachineError | _: LinkageError =>
         // To flush logs

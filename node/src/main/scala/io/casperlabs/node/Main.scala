@@ -86,7 +86,7 @@ object Main {
       }
       .doOnFinish {
         case Some(ex) =>
-          log.error(ex.getMessage, ex) *>
+          log.error(s"Unexpected error: $ex") *>
             Task
               .delay(System.exit(1))
               .delayExecution(500.millis) // A bit of time for logs to flush.
@@ -101,7 +101,7 @@ object Main {
   ): Task[Unit] = {
     val node =
       for {
-        _       <- log.info(api.VersionInfo.get)
+        _       <- log.info(s"${api.VersionInfo.get -> "version" -> null}")
         runtime <- NodeRuntime(conf, chainSpec)
         _       <- runtime.main
       } yield ()

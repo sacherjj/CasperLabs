@@ -1346,7 +1346,7 @@ object HashSetCasperTest {
       timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val metricsEff              = new Metrics.MetricsNOP[Task]
-    implicit val logEff                  = new LogStub[Task]()
+    implicit val logEff                  = LogStub[Task]()
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
     val spec = ipc.ChainSpec

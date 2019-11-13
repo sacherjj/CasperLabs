@@ -22,13 +22,4 @@ package object validation {
       override def raise[A](e: InvalidBlock): F[A] =
         ValidateErrorWrapper(e).raiseError[F, A]
     }
-
-  def ignore(block: Block, reason: String): String =
-    ignore(block.blockHash, reason)
-
-  def ignore(block: BlockSummary, reason: String): String =
-    ignore(block.blockHash, reason)
-
-  def ignore(blockHash: ByteString, reason: String): String =
-    s"Ignoring block ${PrettyPrinter.buildString(blockHash)} because $reason"
 }

@@ -13,7 +13,7 @@ import org.scalatest._
 
 class ConnectionsSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
-  implicit val logEff    = new Log.NOPLog[Id]
+  implicit val logEff    = Log.NOPLog[Id]
   implicit val timeEff   = new LogicalTime[Id]
   implicit val metricEff = new Metrics.MetricsNOP[Id]
 

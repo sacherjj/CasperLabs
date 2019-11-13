@@ -24,7 +24,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
+import logstage.LogIO
 import scala.collection.immutable.HashMap
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 
@@ -151,12 +151,12 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   private def effectsForSimpleCasperSetup(
       blockStorage: BlockStorage[Task],
       dagStorage: DagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task])] =
+  ): Task[(LogStub with LogIO[Task], MultiParentCasperRef[Task])] =
     for {
       _            <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
       _            <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
       casperEffect <- NoOpsCasperEffect[Task]()(Sync[Task], blockStorage, dagStorage)
-      logEff       = new LogStub[Task]()
+      logEff       = LogStub[Task]()
       casperRef    <- MultiParentCasperRef.of[Task]
       _            <- casperRef.set(casperEffect)
     } yield (logEff, casperRef)
@@ -164,7 +164,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   private def emptyEffects(
       blockStorage: BlockStorage[Task],
       dagStorage: DagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task])] =
+  ): Task[(LogStub with LogIO[Task], MultiParentCasperRef[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
                        HashMap[BlockHash, BlockMsgWithTransform](
@@ -178,7 +178,7 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                          )
                        )
                      )(Sync[Task], blockStorage, dagStorage)
-      logEff    = new LogStub[Task]()
+      logEff    = LogStub[Task]()
       casperRef <- MultiParentCasperRef.of[Task]
       _         <- casperRef.set(casperEffect)
     } yield (logEff, casperRef)

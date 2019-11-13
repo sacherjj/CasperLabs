@@ -93,7 +93,7 @@ object ExecEngineUtil {
                          case (acc, d: PreconditionFailure) =>
                            // Log precondition failures as we will be getting rid of them.
                            Log[F].warn(
-                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                             s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
                            ) as {
                              acc.copy(preconditionFailures = d :: acc.preconditionFailures)
                            }

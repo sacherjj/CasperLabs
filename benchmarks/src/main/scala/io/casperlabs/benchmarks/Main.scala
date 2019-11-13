@@ -8,9 +8,10 @@ import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.{ExecutionModel, Scheduler}
 import scala.concurrent.duration._
+import logstage.IzLogger
 
 object Main {
-  implicit val log: Log[Task] = Log.log
+  implicit val log: Log[Task] = Log.log[Task](IzLogger())
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.io(

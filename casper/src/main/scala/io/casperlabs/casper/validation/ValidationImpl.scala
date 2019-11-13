@@ -54,7 +54,22 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   type Data        = Array[Byte]
   type BlockHeight = Long
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
+  def ignore(blockHash: ByteString, reason: String): F[Unit] =
+    Log[F].warn(
+      s"Ignoring ${PrettyPrinter.buildString(blockHash) -> "block"} because ${reason -> "reason" -> null}"
+    )
+
+  def raise(status: InvalidBlock) =
+    FunctorRaise[F, InvalidBlock].raise[Unit](status)
+
+  def reject(blockHash: ByteString, status: InvalidBlock, reason: String): F[Unit] =
+    ignore(blockHash, reason) *> raise(status)
+
+  def reject(block: Block, status: InvalidBlock, reason: String): F[Unit] =
+    reject(block.blockHash, status, reason)
+
+  def reject(summary: BlockSummary, status: InvalidBlock, reason: String): F[Unit] =
+    reject(summary.blockHash, status, reason)
 
   private def checkDroppable(checks: F[Boolean]*): F[Unit] =
     checks.toList.sequence
@@ -115,7 +130,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     for {
       _ <- checkDroppable(
             if (block.body.isEmpty)
-              Log[F].warn(ignore(block, s"block body is missing.")) *> false.pure[F]
+              ignore(block.blockHash, s"block body is missing.").as(false)
             else true.pure[F],
             // Validate that the sender is a bonded validator.
             maybeGenesis.fold(summary.isGenesisLike.pure[F]) { _ =>
@@ -150,20 +165,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         )
       ) match {
         case Success(true) => true.pure[F]
-        case _             => Log[F].warn(ignore(b, "signature is invalid.")).map(_ => false)
+        case _             => ignore(b.blockHash, "signature is invalid.").as(false)
       }
     } getOrElse {
-      for {
-        _ <- Log[F].warn(
-              ignore(b, s"signature algorithm '${b.getSignature.sigAlgorithm}' is unsupported.")
-            )
-      } yield false
+      ignore(b.blockHash, s"signature algorithm '${b.getSignature.sigAlgorithm}' is unsupported.")
+        .as(false)
     }
 
   def deploySignature(d: consensus.Deploy): F[Boolean] =
     if (d.approvals.isEmpty) {
       Log[F].warn(
-        s"Deploy ${PrettyPrinter.buildString(d.deployHash)} has no signatures."
+        s"Deploy ${PrettyPrinter.buildString(d.deployHash) -> "deployHash"} has no signatures."
       ) *> false.pure[F]
     } else {
       d.approvals.toList
@@ -180,15 +192,19 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                 case Success(true) =>
                   true.pure[F]
                 case _ =>
-                  Log[F].warn(
-                    s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash)} is invalid."
-                  ) *> false.pure[F]
+                  Log[F]
+                    .warn(
+                      s"Signature of deploy ${PrettyPrinter.buildString(d.deployHash) -> "deployHash"} is invalid."
+                    )
+                    .as(false)
               }
             } getOrElse {
-            Log[F].warn(
-              s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
-                .buildString(d.deployHash)} is unsupported."
-            ) *> false.pure[F]
+            Log[F]
+              .warn(
+                s"Signature algorithm ${a.getSignature.sigAlgorithm} of deploy ${PrettyPrinter
+                  .buildString(d.deployHash) -> "deployHash"} is unsupported."
+              )
+              .as(false)
           }
         }
         .map(_.forall(identity))
@@ -260,41 +276,41 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       weight <- ProtoUtil.weightFromSender[F](block.getHeader)
       result <- if (weight > 0) true.pure[F]
                else
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(
-                           block,
-                           s"block creator ${PrettyPrinter.buildString(block.validatorPublicKey)} has 0 weight."
-                         )
-                       )
-                 } yield false
+                 ignore(
+                   block.blockHash,
+                   s"block creator ${PrettyPrinter.buildString(block.validatorPublicKey)} has 0 weight."
+                 ).as(false)
     } yield result
 
   def formatOfFields(
       b: BlockSummary,
       treatAsGenesis: Boolean = false
-  ): F[Boolean] =
+  ): F[Boolean] = {
+    def invalid(msg: String) =
+      ignore(b.blockHash, msg).as(false)
+
     if (b.blockHash.isEmpty) {
-      Log[F].warn(ignore(b, s"block hash is empty.")).as(false)
+      invalid(s"block hash is empty.")
     } else if (b.header.isEmpty) {
-      Log[F].warn(ignore(b, s"block header is missing.")).as(false)
+      invalid(s"block header is missing.")
     } else if (b.getSignature.sig.isEmpty && !treatAsGenesis) {
-      Log[F].warn(ignore(b, s"block signature is empty.")).as(false)
+      invalid(s"block signature is empty.")
     } else if (!b.getSignature.sig.isEmpty && treatAsGenesis) {
-      Log[F].warn(ignore(b, s"block signature is not empty on Genesis.")).as(false)
+      invalid(s"block signature is not empty on Genesis.")
     } else if (b.getSignature.sigAlgorithm.isEmpty && !treatAsGenesis) {
-      Log[F].warn(ignore(b, s"block signature algorithm is not empty on Genesis.")).as(false)
+      invalid(s"block signature algorithm is not empty on Genesis.")
     } else if (!b.getSignature.sigAlgorithm.isEmpty && treatAsGenesis) {
-      Log[F].warn(ignore(b, s"block signature algorithm is empty.")).as(false)
+      invalid(s"block signature algorithm is empty.")
     } else if (b.chainName.isEmpty) {
-      Log[F].warn(ignore(b, s"block chain identifier is empty.")).as(false)
+      invalid(s"block chain identifier is empty.")
     } else if (b.state.postStateHash.isEmpty) {
-      Log[F].warn(ignore(b, s"block post state hash is empty.")).as(false)
+      invalid(s"block post state hash is empty.")
     } else if (b.bodyHash.isEmpty) {
-      Log[F].warn(ignore(b, s"block new code hash is empty.")).as(false)
+      invalid(s"block new code hash is empty.")
     } else {
       true.pure[F]
     }
+  }
 
   // Validates whether block was built using correct protocol version.
   def version(
@@ -308,12 +324,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       if (blockVersion == version) {
         true.pure[F]
       } else {
-        Log[F].warn(
-          ignore(
-            b,
-            s"Received block version $blockVersion, expected version $version."
-          )
-        ) *> false.pure[F]
+        ignore(
+          b.blockHash,
+          s"Received block version $blockVersion, expected version $version."
+        ).as(false)
       }
     }
   }
@@ -329,8 +343,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                          .forallM(p => BlockStorage[F].contains(p))
       justificationsPresent <- block.justifications.toList
                                 .forallM(j => BlockStorage[F].contains(j.latestBlockHash))
-      _ <- FunctorRaise[F, InvalidBlock]
-            .raise[Unit](MissingBlocks)
+      _ <- reject(block, MissingBlocks, "parents or justifications are missing from storage")
             .whenA(!parentsPresent || !justificationsPresent)
     } yield ()
 
@@ -357,15 +370,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       _ <- if (beforeFuture && afterLatestDependency) {
             Applicative[F].unit
           } else {
-            for {
-              _ <- Log[F].warn(
-                    ignore(
-                      b,
-                      s"block timestamp $timestamp is not between latest justification block time and current time."
-                    )
-                  )
-              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidUnslashableBlock)
-            } yield ()
+            reject(
+              b,
+              InvalidUnslashableBlock,
+              s"block timestamp $timestamp is not between latest justification block time and current time."
+            )
           }
     } yield ()
 
@@ -392,31 +401,19 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   ): F[Unit] =
     for {
       justificationMsgs <- (b.parents ++ b.justifications.map(_.latestBlockHash)).toSet.toList
-                            .traverse { messageHash =>
-                              dag.lookup(messageHash).flatMap {
-                                MonadThrowable[F].fromOption(
-                                  _,
-                                  new Exception(
-                                    s"Block dag store was missing ${PrettyPrinter.buildString(messageHash)}."
-                                  )
-                                )
-                              }
-                            }
+                            .traverse(dag.lookupUnsafe(_))
       calculatedRank = ProtoUtil.nextRank(justificationMsgs)
       actuallyRank   = b.rank
       result         = calculatedRank == actuallyRank
       _ <- if (result) {
             Applicative[F].unit
           } else {
-            val logMessage =
+            val msg =
               if (justificationMsgs.isEmpty)
                 s"block number $actuallyRank is not zero, but block has no justifications."
               else
                 s"block number $actuallyRank is not the maximum block number of justifications plus 1, i.e. $calculatedRank."
-            for {
-              _ <- Log[F].warn(ignore(b, logMessage))
-              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockNumber)
-            } yield ()
+            reject(b, InvalidBlockNumber, msg)
           }
     } yield ()
 
@@ -459,8 +456,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                       s"${message.messageHash} cites multiple latest message by its creator ${message.validatorId}: ${seenEquivocations
                         .map(PrettyPrinter.buildString)
                         .mkString("[", ",", "]")}"
-                    Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
-                      .raise[Unit](SwimlaneMerged)
+                    reject(b, SwimlaneMerged, msg)
                   }
             } yield ()
           }
@@ -491,15 +487,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- if (ok) {
               Applicative[F].unit
             } else {
-              for {
-                _ <- Log[F].warn(
-                      ignore(
-                        b,
-                        s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
-                      )
-                    )
-                _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidSequenceNumber)
-              } yield ()
+              reject(
+                b,
+                InvalidSequenceNumber,
+                s"seq number $number is not one more than creator justification number $creatorJustificationSeqNumber."
+              )
             }
       } yield ()
 
@@ -515,17 +507,16 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     if (prevBlockHash.isEmpty) {
       ().pure[F]
     } else {
-      def raise(msg: String) =
-        Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
-          .raise[Unit](InvalidPrevBlockHash)
+      def rejectWith(msg: String) =
+        reject(b, InvalidPrevBlockHash, msg)
 
       dag.lookup(prevBlockHash).flatMap {
         case None =>
-          raise(
+          rejectWith(
             s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(prevBlockHash)}"
           )
         case Some(meta) if meta.validatorId != validatorId =>
-          raise(
+          rejectWith(
             s"Previous block hash ${PrettyPrinter.buildString(prevBlockHash)} was not created by validator ${PrettyPrinter
               .buildString(validatorId)}"
           )
@@ -540,12 +531,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                 case Some(msg) if msg.messageHash == prevBlockHash =>
                   ().pure[F]
                 case Some(msg) if msg.validatorId == validatorId =>
-                  raise(
+                  rejectWith(
                     s"The previous block hash from this validator in the j-past-cone is ${PrettyPrinter
                       .buildString(msg.messageHash)}, not the expected ${PrettyPrinter.buildString(prevBlockHash)}"
                   )
                 case _ =>
-                  raise(
+                  rejectWith(
                     s"Could not find any previous block hash from the validator in the j-past-cone."
                   )
               }
@@ -562,12 +553,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     if (b.chainName == chainName) {
       Applicative[F].unit
     } else {
-      for {
-        _ <- Log[F].warn(
-              ignore(b, s"got chain identifier ${b.chainName} while $chainName was expected.")
-            )
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidChainName)
-      } yield ()
+      reject(
+        b,
+        InvalidChainName,
+        s"got chain identifier ${b.chainName} while $chainName was expected."
+      )
     }
 
   def deployHash(d: consensus.Deploy): F[Boolean] = {
@@ -581,10 +571,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       for {
         _ <- Log[F]
               .warn(
-                s"Invalid deploy body hash; got ${b16(d.getHeader.bodyHash)}, expected ${b16(bodyHash)}"
+                s"Invalid deploy body hash; got ${b16(d.getHeader.bodyHash) -> "bodyHash"}, expected ${b16(bodyHash) -> "expectedBodyHash"}"
               )
         _ <- Log[F]
-              .warn(s"Invalid deploy hash; got ${b16(d.deployHash)}, expected ${b16(deployHash)}")
+              .warn(
+                s"Invalid deploy hash; got ${b16(d.deployHash) -> "deployHash"}, expected ${b16(deployHash) -> "expectedDeployHash"}"
+              )
       } yield ()
     }
 
@@ -603,18 +595,17 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     } else {
       def show(hash: ByteString) = PrettyPrinter.buildString(hash)
       for {
-        _ <- Log[F].warn(ignore(b, s"block hash does not match to computed value."))
         _ <- Log[F]
               .warn(
-                s"Expected block hash ${show(blockHashComputed)}; got ${show(b.blockHash)}"
+                s"Expected block hash ${show(blockHashComputed) -> "expectedBlockHash"}; got ${show(b.blockHash) -> "blockHash"}"
               )
               .whenA(b.blockHash != blockHashComputed)
         _ <- Log[F]
               .warn(
-                s"Expected body hash ${show(bodyHashComputed)}; got ${show(b.bodyHash)}"
+                s"Expected body hash ${show(bodyHashComputed) -> "expectedBodyHash"}; got ${show(b.bodyHash) -> "bodyHash"}"
               )
               .whenA(b.bodyHash != bodyHashComputed)
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockHash)
+        _ <- reject(b.blockHash, InvalidBlockHash, "block hash does not match to computed value.")
       } yield ()
     }
   }
@@ -624,8 +615,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   ): F[Unit] = {
     val blockHashComputed = ProtoUtil.protoHash(b.getHeader)
     val ok                = b.blockHash == blockHashComputed
-    (Log[F].warn(s"Invalid block hash ${PrettyPrinter.buildString(b.blockHash)}") *>
-      FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBlockHash)).whenA(!ok)
+    reject(b, InvalidBlockHash, s"invalid block hash").whenA(!ok)
   }
 
   def deployCount(
@@ -634,10 +624,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
     if (b.deployCount == b.getBody.deploys.length) {
       Applicative[F].unit
     } else {
-      for {
-        _ <- Log[F].warn(ignore(b, s"block deploy count does not match to the amount of deploys."))
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployCount)
-      } yield ()
+      reject(b, InvalidDeployCount, s"block deploy count does not match to the amount of deploys.")
     }
 
   def deployHeaders(b: Block, dag: DagRepresentation[F], chainName: String)(
@@ -665,40 +652,34 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       } yield ()
 
     def raiseHeaderErrors(errors: List[Errors.DeployHeaderError]): F[Unit] =
-      for {
-        _ <- Log[F].warn(ignore(b, errors.map(_.errorMessage).mkString(". ")))
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHeader)
-      } yield ()
+      reject(b, InvalidDeployHeader, errors.map(_.errorMessage).mkString(". "))
 
     def raiseFutureDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
       val hash = PrettyPrinter.buildString(deployHash)
-      val message = ignore(
+      reject(
         b,
+        DeployFromFuture,
         s"block timestamp $timestamp is earlier than timestamp of deploy $hash, ${header.timestamp}"
       )
-
-      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployFromFuture)
     }
 
     def raiseExpiredDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
       val hash           = PrettyPrinter.buildString(deployHash)
       val ttl            = ProtoUtil.getTimeToLive(header, MAX_TTL)
       val expirationTime = header.timestamp + ttl
-      val message = ignore(
+      reject(
         b,
+        DeployExpired,
         s"block timestamp $timestamp is later than expiration time of deploy $hash, $expirationTime"
       )
-
-      Log[F].warn(message) >> FunctorRaise[F, InvalidBlock].raise[Unit](DeployExpired)
     }
 
     def raiseDeployDependencyNotMet(deploy: consensus.Deploy): F[Unit] =
-      for {
-        _ <- Log[F].warn(
-              ignore(b, s"${PrettyPrinter.buildString(deploy)} did not have all dependencies met.")
-            )
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](DeployDependencyNotMet)
-      } yield ()
+      reject(
+        b,
+        DeployDependencyNotMet,
+        s"${PrettyPrinter.buildString(deploy)} did not have all dependencies met."
+      )
 
     deploys.traverse(singleDeployValidation).as(())
   }
@@ -710,11 +691,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       case None =>
         Applicative[F].unit
       case Some(d) =>
-        for {
-          _ <- Log[F]
-                .warn(ignore(b, s"${PrettyPrinter.buildString(d.getDeploy)} has invalid hash."))
-          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeployHash)
-        } yield ()
+        reject(b, InvalidDeployHash, s"${PrettyPrinter.buildString(d.getDeploy)} has invalid hash.")
     }
 
   def deploySignatures(
@@ -726,13 +703,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         case None =>
           Applicative[F].unit
         case Some(d) =>
-          for {
-            _ <- Log[F]
-                  .warn(
-                    ignore(b, s"${PrettyPrinter.buildString(d.getDeploy)} has invalid signature.")
-                  )
-            _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidDeploySignature)
-          } yield ()
+          reject(
+            b,
+            InvalidDeploySignature,
+            s"${PrettyPrinter.buildString(d.getDeploy)} has invalid signature."
+          )
       }
       .whenA(!b.isGenesisLike)
 
@@ -765,13 +740,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                        latestMessagesHashes
                      )
       tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
-      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes)}")
+      _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
       parentHashes         = ProtoUtil.parentHashes(b)
       _ <- if (parentHashes.isEmpty)
-            FunctorRaise[F, InvalidBlock].raise[Unit](InvalidParents)
+            raise(InvalidParents)
           else if (parentHashes == computedParentHashes)
             Applicative[F].unit
           else {
@@ -782,17 +757,11 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
             val justificationString = latestMessagesHashes.values
               .map(hashes => hashes.map(PrettyPrinter.buildString).mkString("[", ",", "]"))
               .mkString(",")
-            val message =
+            reject(
+              b,
+              InvalidParents,
               s"block parents $parentsString did not match estimate $estimateString based on justification $justificationString."
-            for {
-              _ <- Log[F].warn(
-                    ignore(
-                      b,
-                      message
-                    )
-                  )
-              _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidParents)
-            } yield ()
+            )
           }
     } yield merged
   }
@@ -820,21 +789,19 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         _ <- possibleCommitResult match {
               case Left(ex) =>
                 Log[F].error(
-                  s"Could not commit effects of block ${PrettyPrinter.buildString(block)}: $ex",
-                  ex
+                  s"Could not commit effects of ${PrettyPrinter.buildString(block.blockHash) -> "block"}: $ex"
                 ) *>
-                  FunctorRaise[F, InvalidBlock].raise[Unit](InvalidTransaction)
+                  raise(InvalidTransaction)
               case Right(commitResult) =>
                 for {
-                  _ <- FunctorRaise[F, InvalidBlock]
-                        .raise[Unit](InvalidPostStateHash)
+                  _ <- reject(block, InvalidPostStateHash, "invalid post state hash")
                         .whenA(commitResult.postStateHash != blockPostState)
                   _ <- bondsCache(block, commitResult.bondedValidators)
                 } yield ()
             }
       } yield ()
     } else {
-      FunctorRaise[F, InvalidBlock].raise[Unit](InvalidPreStateHash)
+      raise(InvalidPreStateHash)
     }
   }
 
@@ -858,10 +825,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
       }
     }
     if (neglectedInvalidJustification) {
-      for {
-        _ <- Log[F].warn("Neglected invalid justification.")
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](NeglectedInvalidBlock)
-      } yield ()
+      reject(block, NeglectedInvalidBlock, "Neglected invalid justification.")
     } else {
       Applicative[F].unit
     }
@@ -877,18 +841,18 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
         if (bonds.toSet == computedBonds.toSet) {
           Applicative[F].unit
         } else {
-          for {
-            _ <- Log[F].warn(
-                  "Bonds in proof of stake contract do not match block's bond cache."
-                )
-            _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBondsCache)
-          } yield ()
+          reject(
+            b,
+            InvalidBondsCache,
+            "Bonds in proof of stake contract do not match block's bond cache."
+          )
         }
       case _ =>
-        for {
-          _ <- Log[F].warn(s"Block ${PrettyPrinter.buildString(b)} is missing a post state hash.")
-          _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidBondsCache)
-        } yield ()
+        reject(
+          b,
+          InvalidBondsCache,
+          s"Block ${PrettyPrinter.buildString(b)} is missing a post state hash."
+        )
     }
   }
 
@@ -901,14 +865,13 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
   )(implicit bs: BlockStorage[F]): F[Unit] = {
     val deploys        = block.getBody.deploys.map(_.getDeploy).toList
     val maybeDuplicate = deploys.groupBy(_.deployHash).find(_._2.size > 1).map(_._2.head)
-    def raise(msg: String) =
-      for {
-        _ <- Log[F].warn(ignore(block, msg))
-        _ <- FunctorRaise[F, InvalidBlock].raise[Unit](InvalidRepeatDeploy)
-      } yield ()
     maybeDuplicate match {
       case Some(duplicate) =>
-        raise(s"block contains duplicate ${PrettyPrinter.buildString(duplicate)}")
+        reject(
+          block,
+          InvalidRepeatDeploy,
+          s"block contains duplicate ${PrettyPrinter.buildString(duplicate)}"
+        )
 
       case None =>
         for {
@@ -936,7 +899,9 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                   case (deploy, blockHashes) if blockHashes.contains(exampleBlockHash) =>
                     deploy
                 }.get
-                raise(
+                reject(
+                  block,
+                  InvalidRepeatDeploy,
                   s"block contains a duplicate ${PrettyPrinter.buildString(exampleDeploy)} already present in ${PrettyPrinter
                     .buildString(exampleBlockHash)}"
                 )

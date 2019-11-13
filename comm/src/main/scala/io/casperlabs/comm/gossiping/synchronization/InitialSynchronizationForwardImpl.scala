@@ -76,17 +76,17 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                        for {
                                          _ <- F.whenA(r < rank || r > rank + step) {
                                                val hexHash = hex(h)
-                                               val m =
-                                                 s"Failed to sync with ${peer.show}, rank of summary $hexHash $r not in range of [$rank, ${rank + step}]"
-                                               Log[F].error(m) >> F.raiseError(
+                                               Log[F].error(
+                                                 s"Failed to sync with ${peer.show -> "show"}, rank of summary $hexHash $r not in range of [${rank -> "from"}, ${rank + step -> "to"}]"
+                                               ) >> F.raiseError(
                                                  SynchronizationError()
                                                )
                                              }
                                          _ <- F.whenA(prevHashes(h)) {
                                                val hexHash = hex(h)
-                                               val m =
-                                                 s"Failed to sync with ${peer.show}, $hexHash has seen previously in range of [$rank, ${rank + step}]"
-                                               Log[F].error(m) >>
+                                               Log[F].error(
+                                                 s"Failed to sync with ${peer.show -> "show"}, $hexHash has seen previously in range of [${rank -> "from"}, ${rank + step -> "to"}]"
+                                               ) >>
                                                  F.raiseError(
                                                    SynchronizationError()
                                                  )
@@ -104,9 +104,9 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
         //      https://developers.google.com/protocol-buffers/docs/proto3#scalar
         //      Unsafe and dirty hack is used now here.
         _ <- F.whenA(maxRank > Int.MaxValue) {
-              val m =
-                s"Failed to sync with ${peer.show}, returned rank $maxRank is higher than Int.MaxValue"
-              Log[F].error(m) >> F.raiseError(SynchronizationError())
+              Log[F].error(
+                s"Failed to sync with ${peer.show -> "peer"}, returned rank $maxRank is higher than Int.MaxValue"
+              ) >> F.raiseError(SynchronizationError())
             }
       } yield (maxRank.toInt, fullySynced)
     }
@@ -123,7 +123,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
               Log[F].error("Failed to run initial sync - no more nodes to try") >>
                 F.raiseError(SynchronizationError())
             )
-        _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show)}")
+        _ <- Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show) -> "peers"}")
         // Sync in parallel
         results <- nodes.parTraverse(n => syncDagSlice(n, rank).attempt.map(result => n -> result))
         (fullSyncs, successful, newFailed, prevRoundRank) = results.foldLeft(emptyS) {
@@ -152,8 +152,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                    }
                                  }
                 _ <- Log[F].debug(
-                      s"Haven't reached required $minSuccessful amount of fully synced nodes, " +
-                        "continuing initial synchronization"
+                      s"Haven't reached required $minSuccessful amount of fully synced nodes, continuing initial synchronization"
                     )
                 _ <- Timer[F].sleep(roundPeriod)
                 _ <- loop(

@@ -390,40 +390,40 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
             case None =>
               failure(new IllegalStateException("No source to download from."))
 
-            case Some((_, counter)) if counter > retriesConf.maxRetries.toInt =>
+            case Some((_, attempt)) if attempt > retriesConf.maxRetries.toInt =>
               // Least tried source is tried more than allowed => don't have sources to try anymore.
               // Let's just return the last error, unwrapped, so callers don't have to anticipate
               // whether this component is going to do retries or not.
               // Alternatively we could use `Throwable.addSupressed` to collect all of them.
               val countersSum = counterPerSource.values.sum
               val sourcesNum  = counterPerSource.size
-              val message =
-                s"Could not download block $id from any of the sources; tried $countersSum requests for $sourcesNum sources."
-              val ex = lastError.getOrElse(new IllegalStateException(message))
+              val ex          = lastError.getOrElse(new IllegalStateException("No errors captured."))
               Log[F]
-                .error(message, ex) *> failure(ex)
+                .error(
+                  s"Could not download block $id from any of the sources; tried $countersSum requests for $sourcesNum sources: $ex"
+                ) *> failure(ex)
 
-            case Some((source, counter)) =>
-              val duration = if (counter > 0) {
+            case Some((source, attempt)) =>
+              val duration = if (attempt > 0) {
                 retriesConf.initialBackoffPeriod *
-                  math.pow(retriesConf.backoffFactor, (counter - 1).toDouble)
+                  math.pow(retriesConf.backoffFactor, (attempt - 1).toDouble)
               } else {
                 Duration.Zero
               }
               duration match {
                 case delay: FiniteDuration =>
-                  val message =
-                    s"Scheduling downloading of block $id from ${source.show}, attempt: $counter, delay: $delay"
-                  Log[F].debug(message) *>
+                  Log[F].debug(
+                    s"Scheduling download of block $id from ${source.show -> "peer"} later, $attempt, $delay"
+                  ) *>
                     Timer[F].sleep(delay) *>
                     tryDownload(item.summary, source, item.relay).handleErrorWith {
                       case NonFatal(ex) =>
-                        val message =
-                          s"Retrying downloading of block $id from other sources, failed source: ${source.show}, prev attempt: $counter, error: $ex"
-                        val nextCounter = counter + 1
+                        val nextAttempt = attempt + 1
                         Metrics[F].incrementCounter("downloads_failed") *>
-                          Log[F].warn(message) *>
-                          loop(counterPerSource.updated(source, nextCounter), ex.some)
+                          Log[F].warn(
+                            s"Retrying download of block $id from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
+                          ) *>
+                          loop(counterPerSource.updated(source, nextAttempt), ex.some)
                     }
                 case _: Duration.Infinite => sys.error("Unreachable")
               }

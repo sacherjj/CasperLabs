@@ -14,12 +14,13 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
 import monix.execution.Scheduler
-
+import logstage.IzLogger
 import scala.concurrent.duration._
 
 object Main {
 
-  implicit val log: Log[Task] = Log.log
+  // TODO: NODE-495: Configure SLF4J to Logstage adapter.
+  implicit val log: Log[Task] = Log.log[Task](IzLogger())
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(

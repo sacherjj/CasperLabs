@@ -12,6 +12,7 @@ object Dependencies {
   val doobieVersion  = "0.8.4"
   val fs2Version     = "2.0.1"
   val meowMtlVersion = "0.4.0"
+  val izumiVersion   = "0.9.11"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
@@ -103,9 +104,9 @@ object Dependencies {
     .exclude("co.fs2", s"fs2-core_2.12")
   val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
     .exclude("co.fs2", s"fs2-core_2.12")
-  val flyway = "org.flywaydb" % "flyway-core" % "5.2.4"
-  val fs2Io    = "co.fs2"       %% "fs2-io"     % fs2Version
-  val fs2ReactiveStreams    = "co.fs2"       %% "fs2-reactive-streams"     % fs2Version
+  val flyway             = "org.flywaydb" % "flyway-core"           % "5.2.4"
+  val fs2Io              = "co.fs2"       %% "fs2-io"               % fs2Version
+  val fs2ReactiveStreams = "co.fs2"       %% "fs2-reactive-streams" % fs2Version
   val upperbound = ("org.systemfw" %% "upperbound" % "0.3.0")
     .exclude("co.fs2", "fs2-core_2.12")
 
@@ -145,7 +146,14 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
-  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j)
+  // https://izumi.7mind.io/latest/release/doc/logstage/index.html
+  private val izumiDependencies = Seq(
+    "io.7mind.izumi" %% "logstage-core"            % izumiVersion,
+    "io.7mind.izumi" %% "logstage-rendering-circe" % izumiVersion, // JSON rendering
+    "io.7mind.izumi" %% "logstage-adapter-slf4j"   % izumiVersion // Router from Slf4j to LogStage
+  )
+
+  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j) ++ izumiDependencies
 
   val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)

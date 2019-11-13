@@ -34,7 +34,7 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
-
+import logstage.LogIO
 import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 
@@ -53,7 +53,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
-  implicit val logEff: LogStub[F]
+  implicit val logEff: LogStub with LogIO[F]
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]

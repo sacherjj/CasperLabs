@@ -17,14 +17,15 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-
+import logstage.IzLogger
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
 
-  def log: Log[Task] = Log.log
+  // TODO: NODE-419: Configure JSON logs to file, text to console, route SLF4J to logstash.
+  def log: Log[Task] = Log.log[Task](IzLogger())
 
   def nodeDiscovery(
       id: NodeIdentifier,

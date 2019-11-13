@@ -36,7 +36,7 @@ class DownloadManagerSpec
   import Scheduler.Implicits.global
 
   // Collect log messages. Reset before each test.
-  implicit val log = new LogStub[Task]()
+  implicit val log = LogStub[Task]()
 
   override def beforeEach() =
     log.reset()
@@ -413,10 +413,10 @@ class DownloadManagerSpec
         final case class Retrying(attempt: Int, node: Node)
 
         def attempt(logLine: String): Int =
-          ".*attempt: (\\d+).*".r.unapplySeq(logLine).get.head.toInt
+          ".*attempt=(\\d+).*".r.unapplySeq(logLine).get.head.toInt
 
         def delay(logLine: String): FiniteDuration =
-          Duration(".*delay: (.+)".r.unapplySeq(logLine).get.head).asInstanceOf[FiniteDuration]
+          Duration(".*delay=(.+)".r.unapplySeq(logLine).get.head).asInstanceOf[FiniteDuration]
 
         def node(logLine: String): Node = {
           val id = ".*casperlabs:\\/\\/([a-f0-9]{64}).*".r.unapplySeq(logLine).get.head
@@ -716,7 +716,7 @@ object DownloadManagerSpec {
 
     // Used only as a default argument for when we aren't touching the remote service in a test.
     val default = {
-      implicit val log = new Log.NOPLog[Task]
+      implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
           def hasBlock(blockHash: ByteString)             = ???

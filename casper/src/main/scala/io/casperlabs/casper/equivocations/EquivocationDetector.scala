@@ -16,8 +16,6 @@ import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   /** !!!CAUTION!!!: Must be called before storing block in the DAG
     *
     * Check whether a block creates equivocations when adding a new block to the block dag,
@@ -55,7 +53,7 @@ object EquivocationDetector {
       creator      = block.getHeader.validatorPublicKey
       equivocated <- if (equivocators.contains(creator)) {
                       Log[F].debug(
-                        s"The creator of Block ${PrettyPrinter.buildString(block)} has equivocated before}"
+                        s"The creator of ${PrettyPrinter.buildString(block.blockHash) -> "block"} has equivocated before"
                       ) *> true.pure[F]
                     } else {
                       checkEquivocations(dag, block)
@@ -103,17 +101,17 @@ object EquivocationDetector {
                         if (block.getHeader.validatorPrevBlockHash != head.messageHash) {
                           Log[F]
                             .warn(
-                              s"Found equivocation: justifications of block ${PrettyPrinter
-                                .buildString(block)} don't cite the latest message by validator ${PrettyPrinter
-                                .buildString(block.getHeader.validatorPublicKey)}: ${PrettyPrinter
-                                .buildString(head.messageHash)}"
+                              s"Found equivocation: justifications of ${PrettyPrinter
+                                .buildString(block.blockHash)                    -> "block"} don't cite the latest message by ${PrettyPrinter
+                                .buildString(block.getHeader.validatorPublicKey) -> "validator"}: ${PrettyPrinter
+                                .buildString(head.messageHash)                   -> "latestMessage"}"
                             )
                             .as(true)
                         } else false.pure[F]
                       case _ =>
                         Log[F]
                           .warn(
-                            s"Validator ${PrettyPrinter.buildString(block.getHeader.validatorPublicKey)} has already equivocated in the past."
+                            s"${PrettyPrinter.buildString(block.getHeader.validatorPublicKey) -> "validator"} has already equivocated in the past."
                           )
                           .as(true)
                     }

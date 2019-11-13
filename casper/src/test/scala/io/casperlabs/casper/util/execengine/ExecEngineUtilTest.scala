@@ -25,7 +25,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff: LogStub[Task] = new LogStub[Task]()
+  implicit val logEff = LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)

@@ -294,7 +294,9 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       trySync
         .handleErrorWith {
           case NonFatal(ex) =>
-            Log[F].warn(s"Failed to sync genesis candidate with bootstrap ${bootstrap.show}: $ex") *>
+            Log[F].warn(
+              s"Failed to sync genesis candidate with bootstrap ${bootstrap.show -> "peer"}: $ex"
+            ) *>
               (prevApprovals, false).pure[F]
         }
         .flatMap {
@@ -370,12 +372,12 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       val tryRelay = for {
         service <- connectToGossip(peer)
         _       <- service.addApproval(AddApprovalRequest(blockHash).withApproval(approval))
-        _       <- Log[F].debug(s"Relayed an approval for $id to ${peer.show}")
+        _       <- Log[F].debug(s"Relayed an approval for $id to ${peer.show -> "peer"}")
       } yield true
 
       tryRelay.handleErrorWith {
         case NonFatal(ex) =>
-          Log[F].warn(s"Could not relay the approval for $id to ${peer.show}: $ex") *> false
+          Log[F].warn(s"Could not relay the approval for $id to ${peer.show -> "peer"}: $ex") *> false
             .pure[F]
       }
     }

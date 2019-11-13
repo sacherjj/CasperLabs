@@ -290,7 +290,7 @@ class NodeRuntime private[node] (
         Log[Task].info(s"Starting stand-alone node.")
       else
         Log[Task].info(
-          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ") -> "bootstraps"}"
         )
 
     val cleanupDiscardedDeploysLoop: Task[Unit] = for {
@@ -317,7 +317,7 @@ class NodeRuntime private[node] (
             .start
 
       localNode <- localAsk.ask
-      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show}.")
+      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show -> "peer"}.")
       // This loop will keep the program from exiting until shutdown is initiated.
       _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler)
     } yield ()
@@ -395,10 +395,10 @@ class NodeRuntime private[node] (
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
-        _       <- Log[F].info("Constructing Genesis block...")
+        _       <- Log[F].info(s"Constructing Genesis block...")
         genesis <- Genesis.fromChainSpec[F](chainSpec.getGenesis)
         _ <- Log[F].info(
-              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash)}"
+              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash) -> "genesis" -> null}"
             )
       } yield genesis.getBlockMessage
     }

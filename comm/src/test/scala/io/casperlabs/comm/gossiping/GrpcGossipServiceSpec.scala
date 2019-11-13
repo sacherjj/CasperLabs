@@ -7,6 +7,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary, GenesisCandidate}
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated, Unavailable}
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
@@ -1398,8 +1399,8 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
       val port             = getFreePort
       val serverCert       = TestCert.generate
       implicit val metrics = new Metrics.MetricsNOP[Task]
-      implicit val logTask = new Log.NOPLog[Task]
-      implicit val logId   = new Log.NOPLog[Id]
+      implicit val logTask = Log.NOPLog[Task]
+      implicit val logId   = Log.NOPLog[Id]
 
       val serverR = GrpcServer[Task](
         port,

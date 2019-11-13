@@ -24,7 +24,7 @@ import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.tail.Iterant
-
+import logstage.LogIO
 import scala.collection.immutable.Queue
 
 class GossipServiceCasperTestNode[F[_]](
@@ -47,7 +47,7 @@ class GossipServiceCasperTestNode[F[_]](
     val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
-    val logEff: LogStub[F]
+    val logEff: LogStub with LogIO[F]
 ) extends HashSetCasperTestNode[F](
       local,
       sk,
@@ -109,7 +109,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
     val name               = "standalone"
     val identity           = peerNode(name, 40400)
     implicit val timeEff   = new LogicalTime[F]
-    implicit val log       = new LogStub[F](printEnabled = false)
+    implicit val log       = LogStub[F](printEnabled = false)
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val nodeAsk   = makeNodeAsk(identity)(concurrentF)
     implicit val functorRaiseInvalidBlock =
@@ -185,7 +185,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       .toList
       .traverse {
         case (peer, sk) =>
-          implicit val log       = new LogStub[F](peer.host, printEnabled = false)
+          implicit val log       = LogStub[F](peer.host, printEnabled = false)
           implicit val metricEff = new Metrics.MetricsNOP[F]
           implicit val nodeAsk   = makeNodeAsk(peer)(concurrentF)
           implicit val functorRaiseInvalidBlock =
@@ -309,23 +309,25 @@ object GossipServiceCasperTestNodeFactory {
                                  // will assume the DownloadManager will do that.
                                  // Doing this log here as it's evidently happened if we are here, and the tests expect it.
                                  Log[F].info(
-                                   s"Requested missing block ${PrettyPrinter.buildString(block.blockHash)} Now validating."
+                                   s"Requested missing ${PrettyPrinter.buildString(block.blockHash) -> "block"} Now validating."
                                  ) *>
                                    casper
                                      .addBlock(block) flatMap {
                                    case Valid =>
                                      Log[F].debug(s"Validated and stored block ${PrettyPrinter
-                                       .buildString(block.blockHash)}")
+                                       .buildString(block.blockHash) -> "block" -> null}")
 
                                    case EquivocatedBlock =>
                                      Log[F].debug(
                                        s"Detected Equivocation on block ${PrettyPrinter
-                                         .buildString(block.blockHash)}"
+                                         .buildString(block.blockHash) -> "block" -> null}"
                                      )
 
                                    case other =>
-                                     Log[F].debug(s"Received invalid block ${PrettyPrinter
-                                       .buildString(block.blockHash)}: $other") *>
+                                     Log[F].debug(
+                                       s"Received invalid block ${PrettyPrinter
+                                         .buildString(block.blockHash) -> "block" -> null}: $other"
+                                     ) *>
                                        Sync[F].raiseError(
                                          new RuntimeException(s"Non-valid status: $other")
                                        )
@@ -345,7 +347,8 @@ object GossipServiceCasperTestNodeFactory {
                                  // The EquivocationDetector treats equivocations with children differently,
                                  // so let Casper know about the DAG dependencies up front.
                                  Log[F].debug(
-                                   s"Feeding pending block to Casper: ${PrettyPrinter.buildString(summary.blockHash)}"
+                                   s"Feeding pending block to Casper: ${PrettyPrinter
+                                     .buildString(summary.blockHash) -> "block" -> null}"
                                  ) *> {
                                    val partialBlock = consensus
                                      .Block()
@@ -358,7 +361,7 @@ object GossipServiceCasperTestNodeFactory {
                                override def onDownloaded(blockHash: ByteString) =
                                  // Calling `addBlock` during validation has already stored the block.
                                  Log[F].debug(
-                                   s"Download ready for ${PrettyPrinter.buildString(blockHash)}"
+                                   s"Download ready for ${PrettyPrinter.buildString(blockHash) -> "block" -> null}"
                                  )
 
                              },
@@ -381,7 +384,8 @@ object GossipServiceCasperTestNodeFactory {
                            override def validate(blockSummary: consensus.BlockSummary): F[Unit] =
                              for {
                                _ <- Log[F].debug(
-                                     s"Trying to validate block summary ${PrettyPrinter.buildString(blockSummary.blockHash)}"
+                                     s"Trying to validate block summary ${PrettyPrinter
+                                       .buildString(blockSummary.blockHash) -> "block" -> null}"
                                    )
                                _ <- Validation[F].blockSummary(
                                      blockSummary,
@@ -407,12 +411,12 @@ object GossipServiceCasperTestNodeFactory {
                          blockHash: ByteString
                      ): F[Option[consensus.BlockSummary]] =
                        Log[F].debug(
-                         s"Retrieving block summary ${PrettyPrinter.buildString(blockHash)} from storage."
+                         s"Retrieving block summary ${PrettyPrinter.buildString(blockHash) -> "block" -> null} from storage."
                        ) *> blockStorage.getBlockSummary(blockHash)
 
                      override def getBlock(blockHash: ByteString): F[Option[consensus.Block]] =
                        Log[F].debug(
-                         s"Retrieving block ${PrettyPrinter.buildString(blockHash)} from storage."
+                         s"Retrieving block ${PrettyPrinter.buildString(blockHash) -> "block" -> null} from storage."
                        ) *>
                          blockStorage
                            .get(blockHash)
@@ -497,7 +501,7 @@ object GossipServiceCasperTestNodeFactory {
 
     override def newBlocks(request: NewBlocksRequest): F[NewBlocksResponse] =
       Log[F].info(
-        s"Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head)}"
+        s"Received notification about block ${PrettyPrinter.buildString(request.blockHashes.head) -> "block" -> null}"
       ) *>
         notificationQueue
           .update { q =>
@@ -512,7 +516,7 @@ object GossipServiceCasperTestNodeFactory {
       Iterant
         .liftF(
           Log[F].info(
-            s"Received request for block ${PrettyPrinter.buildString(request.blockHash)} Response sent."
+            s"Received request for block ${PrettyPrinter.buildString(request.blockHash) -> "block" -> null} Response sent."
           )
         )
         .flatMap { _ =>
@@ -524,7 +528,7 @@ object GossipServiceCasperTestNodeFactory {
     ): Iterant[F, consensus.BlockSummary] =
       Iterant
         .liftF(Log[F].info(s"Received request for ancestors of ${request.targetBlockHashes
-          .map(PrettyPrinter.buildString)}"))
+          .map(PrettyPrinter.buildString) -> "blocks" -> null}"))
         .flatMap { _ =>
           underlying.streamAncestorBlockSummaries(request)
         }
