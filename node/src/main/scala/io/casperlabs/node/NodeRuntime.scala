@@ -11,8 +11,8 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
+import cats.effect.implicits._
 import com.olegpy.meow.effects._
-import doobie.util.transactor.Transactor
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
@@ -76,7 +76,7 @@ class NodeRuntime private[node] (
   implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
 
   implicit val concurrentEffectForEffect = {
-    implicit val s = mainScheduler
+    implicit val s = mainScheduler.withUncaughtExceptionReporter(uncaughtExceptionHandler)
     implicitly[ConcurrentEffect[Task]]
   }
 
