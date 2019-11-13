@@ -38,8 +38,9 @@ def docker_client_fixture() -> Generator[DockerClient, None, None]:
     try:
         yield docker_client
     finally:
-        docker_client.volumes.prune()
         docker_client.networks.prune()
+        docker_client.volumes.prune()
+        docker_client.containers.prune()
 
 
 @pytest.fixture(scope="module")
