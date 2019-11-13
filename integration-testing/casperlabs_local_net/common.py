@@ -68,9 +68,7 @@ class KeyPair:
 
 def testing_root_path() -> Path:
     cur_path = Path(os.path.realpath(__file__)).parent
-    while cur_path.name != "integration-testing":
-        cur_path = cur_path.parent
-    return cur_path
+    return cur_path.parent
 
 
 def resources_path() -> Path:

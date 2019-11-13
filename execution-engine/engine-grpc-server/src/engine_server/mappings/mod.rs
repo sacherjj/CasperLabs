@@ -856,6 +856,15 @@ impl From<ExecutionResult> for ipc::DeployResult {
                                             let errors_msg = format!("Key {:?} not found.", key);
                                             execution_error(errors_msg, cost.value(), effect)
                                         }
+                                        ExecutionError::InvalidContext => {
+                                            // TODO: https://casperlabs.atlassian.net/browse/EE-771
+                                            let errors_msg = "Invalid execution context.";
+                                            execution_error(
+                                                errors_msg.to_string(),
+                                                cost.value(),
+                                                effect,
+                                            )
+                                        }
                                         other => execution_error(
                                             format!("{:?}", other),
                                             cost.value(),

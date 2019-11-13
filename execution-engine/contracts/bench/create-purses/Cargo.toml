@@ -1,19 +1,18 @@
 [package]
-name = "pos"
+name = "create-purses"
 version = "0.1.0"
-authors = ["Andreas Fackler <andreas@casperlabs.io>"]
+authors = ["Michał Papierski <michal@papierski.net>"]
 edition = "2018"
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib"]
 bench = false
 doctest = false
+test = false
 
 [features]
 default = []
 std = ["contract-ffi/std"]
-lib = []
 
 [dependencies]
-base16 = { version = "0.2", default-features = false }
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
