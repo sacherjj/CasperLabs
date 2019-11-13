@@ -33,4 +33,4 @@ def cleanup(tag_name: str):
 
 
 if __name__ == "__main__":
-    cleanup(os.environ.get("TAG_NAME") or "test")
+    cleanup(os.environ.get("TAG_NAME") or "latest")
