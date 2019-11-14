@@ -9,7 +9,7 @@ use engine_storage::global_state::StateReader;
 
 use crate::{
     execution,
-    tracking_copy::{QueryResult, TrackingCopy},
+    tracking_copy::{TrackingCopy, TrackingCopyQueryResult},
 };
 
 pub trait TrackingCopyExt<R> {
@@ -82,12 +82,11 @@ where
             .query(correlation_id, balance_mapping_key, &[])
             .map_err(Into::into)?
         {
-            QueryResult::Success(Value::Key(key)) => Ok(key),
-            QueryResult::Success(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                "Value::Key".to_string(),
-                other.type_string(),
-            ))),
-            QueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
+            TrackingCopyQueryResult::Success(Value::Key(key)) => Ok(key),
+            TrackingCopyQueryResult::Success(other) => Err(execution::Error::TypeMismatch(
+                TypeMismatch::new("Value::Key".to_string(), other.type_string()),
+            )),
+            TrackingCopyQueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
         }
     }
 
@@ -101,12 +100,11 @@ where
             Err(_) => return Err(execution::Error::KeyNotFound(key)),
         };
         match query_result {
-            QueryResult::Success(Value::UInt512(balance)) => Ok(Motes::new(balance)),
-            QueryResult::Success(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                "Value::UInt512".to_string(),
-                other.type_string(),
-            ))),
-            QueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),
+            TrackingCopyQueryResult::Success(Value::UInt512(balance)) => Ok(Motes::new(balance)),
+            TrackingCopyQueryResult::Success(other) => Err(execution::Error::TypeMismatch(
+                TypeMismatch::new("Value::UInt512".to_string(), other.type_string()),
+            )),
+            TrackingCopyQueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),
         }
     }
 
