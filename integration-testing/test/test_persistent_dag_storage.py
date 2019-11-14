@@ -2,17 +2,13 @@ from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import (
     wait_for_connected_to_node,
     wait_for_finalised_hash,
-    wait_for_metrics_and_assert_blocks_avaialable,
-    wait_for_received_approved_block_request,
-    wait_for_sending_approved_block_request,
-    wait_for_streamed_packet,
+    wait_for_metrics_and_assert_block_count,
     wait_for_block_hashes_propagated_to_all_nodes,
 )
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
 
 
-# TODO: Fix finalized hash portion
-def ignore_test_persistent_dag_storage(two_node_network):
+def test_persistent_dag_storage(two_node_network):
     """
     Feature file: storage.feature
     Scenario: Stop a node in network, and restart it. Assert that it downloads only latest block not the whole DAG.
@@ -32,15 +28,11 @@ def ignore_test_persistent_dag_storage(two_node_network):
         session_contract=Contract.HELLO_NAME_DEFINE
     )
 
-    wait_for_sending_approved_block_request(node0, node1.name, timeout)
-    wait_for_received_approved_block_request(node0, node1.name, timeout)
-    wait_for_streamed_packet(node0, node1.name, timeout)
-
     wait_for_finalised_hash(node0, hash_string, timeout * 2)
     wait_for_finalised_hash(node1, hash_string, timeout * 2)
 
-    number_of_blocks = 1
-    wait_for_metrics_and_assert_blocks_avaialable(node1, timeout, number_of_blocks)
+    number_of_blocks = 5
+    wait_for_metrics_and_assert_block_count(node1, timeout, number_of_blocks)
 
 
 def test_storage_after_multiple_node_deploy_propose_and_shutdown(two_node_network):
