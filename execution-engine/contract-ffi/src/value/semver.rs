@@ -28,3 +28,19 @@ impl fmt::Display for SemVer {
         write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn should_compare_semver_versions() {
+        assert!(SemVer::new(0, 0, 0) < SemVer::new(1, 2, 3));
+        assert!(SemVer::new(1, 1, 0) < SemVer::new(1, 2, 0));
+        assert!(SemVer::new(1, 0, 0) < SemVer::new(1, 2, 0));
+        assert!(SemVer::new(1, 0, 0) < SemVer::new(1, 2, 3));
+        assert!(SemVer::new(1, 2, 0) < SemVer::new(1, 2, 3));
+        assert!(SemVer::new(1, 2, 3) == SemVer::new(1, 2, 3));
+        assert!(SemVer::new(1, 2, 3) >= SemVer::new(1, 2, 3));
+        assert!(SemVer::new(1, 2, 3) <= SemVer::new(1, 2, 3));
+    }
+}

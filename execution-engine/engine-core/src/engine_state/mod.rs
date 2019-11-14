@@ -449,12 +449,13 @@ where
         };
 
         // 3.1.1.1.1.3 activation point is not currently used by EE; skipping
-        // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
+        // 3.1.1.1.1.4 upgrade point protocol version validation
         let new_protocol_version = upgrade_config.new_protocol_version();
-        // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
-        if new_protocol_version.value().major != current_protocol_version.value().major + 1 {
+
+        if !current_protocol_version.check_follows(&new_protocol_version) {
             return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
+
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
         let new_wasm_costs = match upgrade_config.wasm_costs() {
             Some(new_wasm_costs) => new_wasm_costs,
