@@ -69,6 +69,36 @@ from google.protobuf import json_format
 Arg = consensus.Deploy.Arg
 Value = consensus.Deploy.Arg.Value
 
+HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
+
+
+def h2b64(name, x):
+    if type(x) == str and name in HEX_FIELDS:
+        return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
+    return hex2base64(x)
+
+
+def hex2base64(d):
+    if type(d) == list:
+        return [hex2base64(x) for x in d]
+    if type(d) == dict:
+        return {k: h2b64(k, d[k]) for k in d}
+    return d
+
+
+def b64_2h(name, x):
+    if type(x) == str and name in HEX_FIELDS:
+        return base64.b64decode(x).hex()
+    return base64_2hex(x)
+
+
+def base64_2hex(d):
+    if type(d) == list:
+        return [base64_2hex(x) for x in d]
+    if type(d) == dict:
+        return {k: b64_2h(k, d[k]) for k in d}
+    return d
+
 
 class ABI:
     """
@@ -94,22 +124,47 @@ class ABI:
         raise Exception("account must be 32 bytes or 64 characters long string")
 
     @staticmethod
-    def int_value(name, a: int):
-        return Arg(name=name, value=Value(int_value=a))
+    def int_value(name, i: int):
+        return Arg(name=name, value=Value(int_value=i))
 
     @staticmethod
-    def long_value(name, a: int):
-        return Arg(name=name, value=Value(long_value=a))
+    def long_value(name, n: int):
+        return Arg(name=name, value=Value(long_value=n))
 
     @staticmethod
-    def big_int(name, a):
+    def big_int(name, n):
         return Arg(
-            name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
+            name=name, value=Value(big_int=state.BigInt(value=str(n), bit_width=512))
         )
 
     @staticmethod
-    def string_value(name, a):
-        return Arg(name=name, value=Value(string_value=a))
+    def string_value(name, s):
+        return Arg(name=name, value=Value(string_value=s))
+
+    @staticmethod
+    def key_hash(name, h):
+        return Arg(name=name, value=Value(key=state.Key(hash=state.Key.Hash(hash=h))))
+
+    @staticmethod
+    def key_address(name, a):
+        return Arg(
+            name=name, value=Value(key=state.Key(address=state.Key.Address(account=a)))
+        )
+
+    @staticmethod
+    def key_uref(name, uref, access_rights):
+        return Arg(
+            name=name,
+            value=Value(
+                key=state.Key(
+                    uref=state.Key.URef(uref=uref, access_rights=access_rights)
+                )
+            ),
+        )
+
+    @staticmethod
+    def key_local(name, h):
+        return Arg(name=name, value=Value(key=state.Key(local=state.Key.Local(hash=h))))
 
     @staticmethod
     def args(l: list):
@@ -118,42 +173,18 @@ class ABI:
 
     @staticmethod
     def args_from_json(s):
-        base64_b64decode = base64.b64decode
-        try:
-            # Change JSON protobuf format of binary data from base64 to base16
-            base64.b64decode = lambda s: bytes.fromhex(s)
-            parsed_json = json.loads(s)
-            args = [
-                json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json
-            ]
-            c = consensus.Deploy.Code(args=args)
-            return c.args
-        finally:
-            base64.b64decode = base64_b64decode
+        parsed_json = hex2base64(json.loads(s))
+        args = [json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json]
+        c = consensus.Deploy.Code(args=args)
+        return c.args
 
     @staticmethod
-    def args_to_json(args):
-        base64_b64encode = base64.b64encode
-        try:
-            # We can't just call MessageToDict or MessageToJson on the args object,
-            # which is a 'repeated Arg', because we get:
-            # AttributeError: 'google.protobuf.pyext._message.RepeatedCompositeCo' object has no attribute 'DESCRIPTOR'
-            class Mock:
-                def __init__(self, v):
-                    self.value = v
-
-                def decode(self, s):
-                    return self.value
-
-            base64.b64encode = lambda b: Mock(b.hex())
-            return json.dumps(
-                [
-                    json_format.MessageToDict(arg, preserving_proto_field_name=True)
-                    for arg in args
-                ]
-            )
-        finally:
-            base64.b64encode = base64_b64encode
+    def args_to_json(args, **kwargs):
+        lst = [
+            json_format.MessageToDict(arg, preserving_proto_field_name=True)
+            for arg in args
+        ]
+        return json.dumps(base64_2hex(lst), **kwargs)
 
     # Below methods for backwards compatibility
 
