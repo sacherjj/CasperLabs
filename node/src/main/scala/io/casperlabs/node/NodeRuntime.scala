@@ -91,7 +91,8 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    implicit val logId: Log[Id]         = Log.logId
+    // NOTE: Setup has to happen before `logId` is requested by anything.
+    implicit def logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
     implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 

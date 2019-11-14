@@ -9,10 +9,20 @@ import io.casperlabs.catscontrib.effect.implicits._
 import Catscontrib._
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
-import logstage.{IzLogger, LogIO}
+import logstage.{ConsoleSink, IzLogger, LogIO}
+import java.nio.file.Path
 import izumi.logstage.api.Log._
+import izumi.logstage.api.{Log => IzLog}
 import izumi.logstage.api.AbstractLogger
 import izumi.fundamentals.platform.language.CodePositionMaterializer
+import izumi.logstage.api.routing.StaticLogRouter
+import izumi.logstage.sink.file.FileSink
+import izumi.logstage.sink.file.FileServiceImpl.RealFile
+import izumi.logstage.sink.file.FileServiceImpl
+import izumi.logstage.sink.file.models.FileRotation
+import izumi.logstage.sink.file.models.FileSinkConfig
+import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
+import izumi.logstage.api.logger.LogSink
 
 // Keeping this for now so that maybe we can utilise it with IzLogger as well.
 trait LogSource {
@@ -46,14 +56,11 @@ trait LogPackage {
   type Log[F[_]] = LogIO[F]
 }
 
-object Log extends LogInstances {
+object Log {
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
   def NOPLog[F[_]: Sync] =
     log[F](IzLogger.NullLogger)
-}
-
-sealed abstract class LogInstances {
 
   def log[F[_]: Sync](logger: AbstractLogger): Log[F] =
     LogIO.fromLogger(logger)
@@ -62,5 +69,48 @@ sealed abstract class LogInstances {
   // gets injected with sinks from the classpath. Some parts of the
   // program get this value as a singleton. We can set it once during
   // startup.
-  var logId: Log[Id] = log(IzLogger())
+  var logId: Log[Id] = log(mkLogger())
+
+  // Set every global routing to this logger.
+  def useLogger[F[_]: Sync](logger: IzLogger): Log[F] = {
+    // https://izumi.7mind.io/latest/release/doc/logstage/index.html#slf4j-router
+    // configure SLF4j to use the same router that `myLogger` uses
+    StaticLogRouter.instance.setup(logger.router)
+    // Use by anything that accesses the singleton logId
+    logId = log[Id](logger)
+    // Create the wrapper that we can pass around.
+    log[F](logger)
+  }
+
+  /** Configure a logger that writes text to the console and optionally JSON to a file. */
+  def mkLogger(
+      level: IzLog.Level = defaultLevel,
+      levels: Map[String, IzLog.Level] = defaultLevels,
+      jsonPath: Option[Path] = None // Empty so we don't start multiple loggers to the same file accidentally.
+  ): IzLogger = {
+    var sinks: Vector[LogSink] = Vector(defaultSink)
+    jsonPath.foreach { path =>
+      sinks = sinks :+ new FileSink[RealFile](
+        renderingPolicy = new LogstageCirceRenderingPolicy(),
+        fileService = new FileServiceImpl(path.toString),
+        rotation = FileRotation.FileLimiterRotation(10),
+        config = FileSinkConfig.soft(10 * 1024 * 1024)
+      ) {
+        override def recoverOnFail(e: String): Unit = println
+      }
+    }
+    IzLogger(level, sinks, levels)
+  }
+
+  private def defaultLevel: IzLog.Level =
+    IzLog.Level.parse(sys.env.getOrElse("CL_LOG_LEVEL", "INFO"))
+
+  private def defaultSink = ConsoleSink.text(colored = false)
+
+  private def defaultLevels: Map[String, IzLog.Level] = Map(
+    "org.http4s"                                          -> IzLog.Level.Warn,
+    "io.netty"                                            -> IzLog.Level.Warn,
+    "io.grpc"                                             -> IzLog.Level.Error,
+    "org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" -> IzLog.Level.Crit
+  )
 }

@@ -11,7 +11,7 @@ import scala.concurrent.duration._
 import logstage.IzLogger
 
 object Main {
-  implicit val log: Log[Task] = Log.log[Task](IzLogger())
+  implicit val log: Log[Task] = Log.useLogger[Task](Log.mkLogger())
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.io(

@@ -18,7 +18,7 @@ import scala.util.control.NoStackTrace
 
 object Main {
 
-  implicit val log: Log[Task] = effects.log
+  //implicit val log: Log[Task] = effects.log
 
   implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
 
@@ -99,6 +99,9 @@ object Main {
   private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
       implicit scheduler: Scheduler
   ): Task[Unit] = {
+    implicit val log = Log.useLogger[Task] {
+      Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
+    }
     val node =
       for {
         _       <- log.info(s"${api.VersionInfo.get -> "version" -> null}")

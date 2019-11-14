@@ -19,8 +19,7 @@ import scala.concurrent.duration._
 
 object Main {
 
-  // TODO: NODE-495: Configure SLF4J to Logstage adapter.
-  implicit val log: Log[Task] = Log.log[Task](IzLogger())
+  implicit val log: Log[Task] = Log.useLogger[Task](Log.mkLogger())
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(

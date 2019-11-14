@@ -19,8 +19,6 @@ import scalapb.grpc.Grpc
 
 object GrpcMonix {
 
-  private val logger = Log.logId
-
   type GrpcOperator[I, O] = StreamObserver[O] => StreamObserver[I]
   type Transformer[I, O]  = Observable[I] => Observable[O]
 
@@ -77,7 +75,7 @@ object GrpcMonix {
           observer.onNext(value)
           observer.onCompleted()
         } catch {
-          case NonFatal(e) => logger.warn(s"Failed to send a response: ${e.getMessage}")
+          case NonFatal(e) => Log.logId.warn(s"Failed to send a response: ${e.getMessage}")
         }
     }
 
