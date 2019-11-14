@@ -474,12 +474,14 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
 
     implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
     val allBlocks                           = Vector(j, i, h, g, f, e, d, c, b, a)
-    val result1                             = OpDagNode.merge(allBlocks)
-    val result2                             = OpDagNode.merge(Vector(j, i))
+    val result1                             = OpDagNode.merge(allBlocks) // includes many redundant parents in input
+    val result2                             = OpDagNode.merge(Vector(j, i)) // includes only DAG tips
 
     val nonFirstEffect = Vector('a', 'c', 'd', 'f', 'g', 'i').map(ops.apply).reduce(_ + _)
 
+    // output does not include any redundant parents
     result1 shouldBe ((nonFirstEffect, Vector(j, i)))
+    // output is the same as if the input had only included the DAG tips
     result2 shouldBe result1
   }
 }
