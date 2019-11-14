@@ -474,6 +474,7 @@ class CasperLabsClient:
         public_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
         payment_uref: bytes = None,
@@ -492,6 +493,12 @@ class CasperLabsClient:
 
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
+
+        if payment_amount:
+            payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
+            # Unless one of payment* options supplied use bundled standard-payment
+            if not any((payment, payment_name, payment_hash, payment_uref)):
+                payment = bundled_contract("standard_payment.wasm")
 
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)
@@ -557,6 +564,7 @@ class CasperLabsClient:
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
         payment_uref: bytes = None,
@@ -607,6 +615,7 @@ class CasperLabsClient:
             public_key=public_key,
             session_args=session_args,
             payment_args=payment_args,
+            payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
             payment_uref=payment_uref,
@@ -626,7 +635,7 @@ class CasperLabsClient:
 
     @api
     def send_deploy(self, deploy):
-        # TODO: Deploy returns Empty, error handing via exceptions, apparently,
+        # TODO: Deploy returns Empty, error handling via exceptions, apparently,
         # so no point in returning it.
         return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
