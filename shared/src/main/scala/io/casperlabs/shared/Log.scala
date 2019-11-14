@@ -23,6 +23,7 @@ import izumi.logstage.sink.file.models.FileRotation
 import izumi.logstage.sink.file.models.FileSinkConfig
 import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
 import izumi.logstage.api.logger.LogSink
+import izumi.logstage.api.logger.LogRouter
 
 // Keeping this for now so that maybe we can utilise it with IzLogger as well.
 trait LogSource {
@@ -59,8 +60,14 @@ trait LogPackage {
 object Log {
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
+  // This should only be used in testing, it disables all logging even SLF4j
+  // Otherwise we see output from http4s during tests, something that used
+  // to be disabled by having a test version of logback.xml
+  // Alternatively we could use TypeSafeConfig to set up logstage, which is
+  // probably the right thing to do:
+  // https://github.com/7mind/izumi/blob/baea35e54dd482e54cd2d075e774cfd26806897a/doc/microsite/src/main/tut/logstage/config.md
   def NOPLog[F[_]: Sync] =
-    log[F](IzLogger.NullLogger)
+    useLogger[F](IzLogger.NullLogger)
 
   def log[F[_]: Sync](logger: AbstractLogger): Log[F] =
     LogIO.fromLogger(logger)

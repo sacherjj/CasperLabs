@@ -144,14 +144,17 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
-  // https://izumi.7mind.io/latest/release/doc/logstage/index.html
-  private val izumiDependencies = Seq(
+  private val logging = Seq(janino, julToSlf4j) ++ Seq(
+    // https://izumi.7mind.io/latest/release/doc/logstage/index.html
     "io.7mind.izumi" %% "logstage-core"            % izumiVersion,
-    "io.7mind.izumi" %% "logstage-rendering-circe" % izumiVersion, // JSON rendering
-    "io.7mind.izumi" %% "logstage-adapter-slf4j"   % izumiVersion // Router from Slf4j to LogStage
+    "io.7mind.izumi" %% "logstage-rendering-circe" % izumiVersion //, // JSON rendering
   )
 
-  private val logging = Seq(janino, julToSlf4j) ++ izumiDependencies
+  // Mix these only into the projects which have a `Main`, so that we don't see
+  // output for anything that uses SLF4j during tests.
+  val slf4jAdapters = Seq(
+    "io.7mind.izumi" %% "logstage-adapter-slf4j" % izumiVersion // Router from Slf4j to LogStage
+  )
 
   val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
