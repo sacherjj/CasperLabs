@@ -59,11 +59,9 @@ object Dependencies {
   val kamonZipkin        = "io.kamon"          %% "kamon-zipkin"         % "1.0.0"
   val lightningj = ("org.lightningj" % "lightningj" % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
   val janino                 = "org.codehaus.janino"        % "janino"                          % "3.0.12"
   val lz4                    = "org.lz4"                    % "lz4-java"                        % "1.5.0"
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0"
-  val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
   val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
@@ -153,7 +151,7 @@ object Dependencies {
     "io.7mind.izumi" %% "logstage-adapter-slf4j"   % izumiVersion // Router from Slf4j to LogStage
   )
 
-  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j) ++ izumiDependencies
+  private val logging = Seq(janino, julToSlf4j) ++ izumiDependencies
 
   val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)
