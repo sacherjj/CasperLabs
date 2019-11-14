@@ -208,7 +208,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.5.1",
+    version="0.5.2",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
