@@ -10,13 +10,15 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
 class DeployInfoPaginationSpec extends PropSpec with Matchers with GeneratorDrivenPropertyChecks {
   property("decode after encode returns the original input") {
-    forAll(Gen.chooseNum(0, Long.MaxValue), Gen.listOfN(32, arbitrary[Byte])) { (l, d) =>
-      val bs        = ByteString.copyFrom(d.toArray)
-      val pageToken = DeployInfoPagination.createNextPageToken(Option((l, bs)))
-      val (_, (parsedTimestamp: Long, parsedByteString: DeployHash)) =
-        DeployInfoPagination.parsePageToken(ListDeployInfosRequest().withPageToken(pageToken)).get
-      parsedTimestamp shouldBe l
-      parsedByteString shouldBe bs
+    forAll(Gen.chooseNum(0, Long.MaxValue), Gen.listOfN(32, arbitrary[Byte]), arbitrary[Boolean]) {
+      (l, d, t) =>
+        val bs        = ByteString.copyFrom(d.toArray)
+        val pageToken = DeployInfoPagination.createPageToken(Option((l, bs, t)))
+        val (_, (parsedTimestamp: Long, parsedByteString: DeployHash, next: Boolean)) =
+          DeployInfoPagination.parsePageToken(ListDeployInfosRequest().withPageToken(pageToken)).get
+        parsedTimestamp shouldBe l
+        parsedByteString shouldBe bs
+        next shouldBe t
     }
   }
 }

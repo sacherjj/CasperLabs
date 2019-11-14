@@ -255,24 +255,10 @@ class MockDeployStorage[F[_]: Sync: Log](
         account: PublicKeyBS,
         limit: Int,
         lastTimeStamp: Long,
-        lastDeployHash: DeployHash
+        lastDeployHash: DeployHash,
+        next: Boolean
     ): F[List[Deploy]] =
-      deploysWithMetadataRef.get.map(
-        _.keys
-          .filter { d =>
-            if (PublicKey(d.getHeader.accountPublicKey) != account) {
-              false
-            } else {
-              val strictEarlier = d.getHeader.timestamp < lastTimeStamp
-              strictEarlier || d.getHeader.timestamp == lastTimeStamp && byteStringOrdering
-                .lt(d.deployHash, lastDeployHash)
-            }
-          }
-          .toList
-          .sortBy(d => (d.getHeader.timestamp, d.deployHash))
-          .reverse
-          .take(limit)
-      )
+      List.empty[Deploy].pure[F]
   }
 
   private def logOperation[A](opMsg: String, op: F[A]): F[A] =

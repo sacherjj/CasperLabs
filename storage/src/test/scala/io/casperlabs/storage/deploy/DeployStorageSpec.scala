@@ -450,7 +450,8 @@ trait DeployStorageSpec
                       PublicKey(accountKey.publicKey),
                       limit,
                       lastTimeStamp,
-                      lastDeployHash
+                      lastDeployHash,
+                      true
                     )
               _ = assert(expectResult == all)
             } yield ()

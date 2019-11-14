@@ -113,16 +113,16 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   accountPublicKeyBase16 <- validateAccountPublicKey[F](
                                              accountPublicKeyBase16
                                            )
-                  (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F]
-                                                                  .fromTry(
-                                                                    DeployInfoPagination
-                                                                      .parsePageToken(
-                                                                        ListDeployInfosRequest(
-                                                                          pageSize = first,
-                                                                          pageToken = after
-                                                                        )
-                                                                      )
-                                                                  )
+                  (pageSize, (lastTimeStamp, lastDeployHash, _)) <- MonadThrowable[F]
+                                                                     .fromTry(
+                                                                       DeployInfoPagination
+                                                                         .parsePageToken(
+                                                                           ListDeployInfosRequest(
+                                                                             pageSize = first,
+                                                                             pageToken = after
+                                                                           )
+                                                                         )
+                                                                     )
                   accountPublicKeyBs = PublicKey(
                     ByteString.copyFrom(
                       Base16.decode(accountPublicKeyBase16)
@@ -134,7 +134,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                                accountPublicKeyBs,
                                                pageSize + 1,
                                                lastTimeStamp,
-                                               lastDeployHash
+                                               lastDeployHash,
+                                               true
                                              )
                   (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
                     (deploysWithOneMoreElem.take(pageSize), true)
@@ -144,8 +145,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   deployInfos <- DeployStorage[F]
                                   .reader(deployView)
                                   .getDeployInfos(deploys)
-                  endCursor = DeployInfoPagination.createNextPageToken(
-                    deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+                  endCursor = DeployInfoPagination.createPageToken(
+                    deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash, true))
                   )
                   pageInfo = PageInfo(endCursor, hasNextPage)
                   result   = DeployInfosWithPageInfo(deployInfos, pageInfo)

@@ -61,7 +61,8 @@ class SQLiteDeployStorageSpec
                       PublicKey(accountKey.publicKey),
                       limit = Int.MaxValue,
                       lastTimeStamp = Long.MaxValue,
-                      lastDeployHash = ByteString.EMPTY
+                      lastDeployHash = ByteString.EMPTY,
+                      next = true
                     )
               _ = all should contain theSameElementsInOrderAs accountDeploysWithoutBody
             } yield ()

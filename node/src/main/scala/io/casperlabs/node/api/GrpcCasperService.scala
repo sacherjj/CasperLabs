@@ -137,11 +137,12 @@ object GrpcCasperService {
                                          request.accountPublicKeyBase16,
                                          adaptToInvalidArgument
                                        )
-              (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F].fromTry(
-                                                              DeployInfoPagination.parsePageToken(
-                                                                request
-                                                              )
-                                                            )
+              (pageSize, (lastTimeStamp, lastDeployHash, next)) <- MonadThrowable[F].fromTry(
+                                                                    DeployInfoPagination
+                                                                      .parsePageToken(
+                                                                        request
+                                                                      )
+                                                                  )
               accountPublicKeyBs = PublicKey(
                 ByteString.copyFrom(
                   Base16.decode(accountPublicKeyBase16)
@@ -153,17 +154,47 @@ object GrpcCasperService {
                             accountPublicKeyBs,
                             pageSize,
                             lastTimeStamp,
-                            lastDeployHash
+                            lastDeployHash,
+                            next
                           )
               deployInfos <- DeployStorage[F]
                               .reader(request.view)
                               .getDeployInfos(deploys)
-              nextPageToken = DeployInfoPagination.createNextPageToken(
-                deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
-              )
+              (nextPageToken, prevPageToken) = if (deploys.isEmpty) {
+                if (next) {
+                  (
+                    "",
+                    DeployInfoPagination.createPageToken(
+                      (Long.MinValue, ByteString.EMPTY, false).some
+                    )
+                  )
+                } else {
+                  (
+                    DeployInfoPagination.createPageToken(
+                      (Long.MaxValue, ByteString.EMPTY, true).some
+                    ),
+                    ""
+                  )
+                }
+              } else {
+                val n = DeployInfoPagination.createPageToken(
+                  deploys.lastOption
+                    .map(
+                      d => (d.getHeader.timestamp, d.deployHash, true)
+                    )
+                )
+                val p = DeployInfoPagination.createPageToken(
+                  deploys.headOption
+                    .map(
+                      d => (d.getHeader.timestamp, d.deployHash, false)
+                    )
+                )
+                (n, p)
+              }
               result = ListDeployInfosResponse()
                 .withDeployInfos(deployInfos)
                 .withNextPageToken(nextPageToken)
+                .withPrevPageToken(prevPageToken)
             } yield result
           }
       }
