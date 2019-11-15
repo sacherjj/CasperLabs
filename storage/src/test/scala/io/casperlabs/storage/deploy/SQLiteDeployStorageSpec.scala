@@ -1,11 +1,13 @@
 package io.casperlabs.storage.deploy
 
+import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.shared.Sorting.byteStringOrdering
 import io.casperlabs.storage.{SQLiteFixture, SQLiteStorage}
 import monix.eval.Task
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 import scala.concurrent.duration._
@@ -68,6 +70,58 @@ class SQLiteDeployStorageSpec
             } yield ()
           }
         )
+    }
+
+    "getDeploysByAccount" should {
+      "return the correct paginated list of deploys for the specified account" in forAll(
+        deploysGen(),
+        Gen.oneOf(randomAccounts),
+        Gen.choose(0, 100),
+        arbitrary[Boolean]
+      ) {
+        case (deploys, accountKey, limit, next) =>
+          testFixture { (reader, writer) =>
+            val deploysByAccount = deploys
+              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
+              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+              .reverse
+            val offset = if (deploysByAccount.isEmpty) {
+              0
+            } else {
+              scala.util.Random.nextInt(deploysByAccount.size)
+            }
+
+            val (lastTimeStamp, lastDeployHash) =
+              deploysByAccount
+                .get(offset.toLong)
+                .map(d => (d.getHeader.timestamp, d.deployHash))
+                .getOrElse((Long.MaxValue, ByteString.EMPTY))
+            val (startInclusive, len) = if (next) {
+              (offset + 1, limit)
+            } else {
+              val s = math.max(0, offset - limit);
+              val l = offset - s
+              (s, l)
+            }
+            println(
+              s"start: ${startInclusive}, len: ${len}, ${next} , ${deploysByAccount.size}"
+            )
+
+            val expectResult = deploysByAccount.drop(startInclusive).take(len)
+
+            for {
+              _ <- writer.addAsPending(deploys)
+              all <- reader.getDeploysByAccount(
+                      PublicKey(accountKey.publicKey),
+                      limit,
+                      lastTimeStamp,
+                      lastDeployHash,
+                      next
+                    )
+              _ = assert(expectResult == all)
+            } yield ()
+          }
+      }
     }
   }
 }
