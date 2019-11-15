@@ -227,7 +227,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
@@ -252,15 +252,17 @@ object ExecEngineUtil {
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
         val maxRank         = merged.parents.map(_.getHeader.rank).max
+
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank
         }
         activatedUpgrades.toList.foldLeftM(postStateHash) {
           case (postStateHash, upgrade) =>
-            ExecutionEngineService[F]
-              .upgrade(postStateHash, upgrade, protocolVersion)
-              .rethrow
-              .map(_.postStateHash)
+            Log[F].info(s"Applying upgrade ${upgrade.getProtocolVersion}") *>
+              ExecutionEngineService[F]
+                .upgrade(postStateHash, upgrade, protocolVersion)
+                .rethrow
+                .map(_.postStateHash)
           // NOTE: We are dropping the effects here, so they won't be part of the block.
         }
       } else {
@@ -403,7 +405,10 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
-        blocks                             = chosenParents.map(i => candidates(i))
+        blocks = chosenParents
+          .map(i => candidates(i))
+          // we only keep blocks which are not related in any way to other candidates
+          .filter(block => uncommonAncestors(block).size == 1)
       } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
   }
 

@@ -1,3 +1,4 @@
+import os
 import logging
 import pytest
 import time
@@ -485,6 +486,26 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
+
+
+def test_python_api_payment_amount(one_node_network):
+    """
+    Test Python Client API deploy handles payment_amount parameter.
+    """
+    node = one_node_network.docker_nodes[0]
+    client = node.p_client.client
+    account = node.test_account
+    client.deploy(
+        from_addr=account.public_key_hex,
+        public_key=account.public_key_path,
+        private_key=account.private_key_path,
+        session=os.path.join("resources", Contract.HELLO_NAME_DEFINE),
+        payment_amount=10000000,
+    )
+    block_hash = client.propose().block_hash.hex()
+    for deployInfo in client.showDeploys(block_hash):
+        if deployInfo.is_error:
+            raise Exception(f"Deploy failed: {deployInfo.error_message}")
 
 
 # Python CLI #

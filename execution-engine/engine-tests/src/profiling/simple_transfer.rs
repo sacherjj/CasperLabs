@@ -9,6 +9,7 @@
 
 use std::{env, io, path::PathBuf};
 
+use base16;
 use clap::{crate_version, App, Arg};
 
 use casperlabs_engine_tests::{
@@ -18,7 +19,7 @@ use casperlabs_engine_tests::{
     },
     test::DEFAULT_PAYMENT,
 };
-use contract_ffi::{base16, value::U512};
+use contract_ffi::value::U512;
 use engine_core::engine_state::EngineConfig;
 
 const ABOUT: &str =
@@ -55,7 +56,7 @@ fn verbose_arg() -> Arg<'static, 'static> {
 }
 
 fn parse_hash(encoded_hash: &str) -> Vec<u8> {
-    base16::decode_lower(encoded_hash).expect("Expected a valid, hex-encoded hash")
+    base16::decode(encoded_hash).expect("Expected a valid, hex-encoded hash")
 }
 
 #[derive(Debug)]

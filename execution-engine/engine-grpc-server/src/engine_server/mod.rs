@@ -21,11 +21,11 @@ use engine_core::{
         deploy_item::DeployItem,
         execution_result::ExecutionResult,
         genesis::{GenesisConfig, GenesisResult},
+        query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
         EngineState, Error as EngineError,
     },
     execution::Executor,
-    tracking_copy::QueryResult,
 };
 use engine_shared::{
     logging::{self, log_duration, log_info, log_level::LogLevel},
@@ -71,75 +71,53 @@ where
     ) -> grpc::SingleResponse<ipc::QueryResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
-        // TODO: don't unwrap
-        let state_hash: Blake2bHash = query_request.get_state_hash().try_into().unwrap();
 
-        let mut tracking_copy = match self.tracking_copy(state_hash) {
-            Err(storage_error) => {
-                let mut result = ipc::QueryResponse::new();
-                let error = format!("Error during checkout out Trie: {:?}", storage_error);
-                logging::log_error(&error);
-                result.set_failure(error);
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_QUERY,
-                    "tracking_copy_error",
-                    start.elapsed(),
-                );
-                return grpc::SingleResponse::completed(result);
-            }
-            Ok(None) => {
-                let mut result = ipc::QueryResponse::new();
-                let error = format!("Root not found: {:?}", state_hash);
-                logging::log_warning(&error);
-                result.set_failure(error);
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_QUERY,
-                    "tracking_copy_root_not_found",
-                    start.elapsed(),
-                );
-                return grpc::SingleResponse::completed(result);
-            }
-            Ok(Some(tracking_copy)) => tracking_copy,
-        };
-
-        let key = match query_request.get_base_key().try_into() {
-            Err(ParsingError(err_msg)) => {
-                logging::log_error(&err_msg);
-                let mut result = ipc::QueryResponse::new();
-                result.set_failure(err_msg);
-                log_duration(
-                    correlation_id,
-                    METRIC_DURATION_QUERY,
-                    "key_parsing_error",
-                    start.elapsed(),
-                );
-                return grpc::SingleResponse::completed(result);
-            }
-            Ok(key) => key,
-        };
-
-        let path = query_request.get_path();
-
-        let response = match tracking_copy.query(correlation_id, key, path) {
+        let request: QueryRequest = match query_request.try_into() {
+            Ok(ret) => ret,
             Err(err) => {
+                let log_message = format!("{:?}", err);
+                logging::log_error(&log_message);
                 let mut result = ipc::QueryResponse::new();
-                let error = format!("{:?}", err);
-                logging::log_error(&error);
-                result.set_failure(error);
+                result.set_failure(log_message);
+                log_duration(
+                    correlation_id,
+                    METRIC_DURATION_QUERY,
+                    TAG_RESPONSE_QUERY,
+                    start.elapsed(),
+                );
+                return grpc::SingleResponse::completed(result);
+            }
+        };
+
+        let result = self.run_query(correlation_id, request);
+
+        let response = match result {
+            Ok(QueryResult::Success(value)) => {
+                let log_message = format!("query successful; correlation_id: {}", correlation_id);
+                log_info(&log_message);
+                let mut result = ipc::QueryResponse::new();
+                result.set_success(value.into());
                 result
             }
             Ok(QueryResult::ValueNotFound(full_path)) => {
+                let log_message = format!("Value not found: {:?}", full_path);
+                logging::log_warning(&log_message);
                 let mut result = ipc::QueryResponse::new();
-                let error = format!("Value not found: {:?}", full_path);
-                logging::log_warning(&error);
-                result.set_failure(error);
+                result.set_failure(log_message);
                 result
             }
-            Ok(QueryResult::Success(value)) => {
+            Ok(QueryResult::RootNotFound) => {
+                let log_message = "Root not found";
+                logging::log_error(log_message);
                 let mut result = ipc::QueryResponse::new();
-                result.set_success(value.into());
+                result.set_failure(log_message.to_string());
+                result
+            }
+            Err(err) => {
+                let log_message = format!("{:?}", err);
+                logging::log_error(&log_message);
+                let mut result = ipc::QueryResponse::new();
+                result.set_failure(log_message);
                 result
             }
         };
