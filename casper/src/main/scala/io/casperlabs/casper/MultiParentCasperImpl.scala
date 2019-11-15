@@ -563,7 +563,7 @@ object MultiParentCasperImpl {
       // that we can use to mark every final block in the database and just look up the latest upon restart.
       lca <- NonEmptyList.fromList(lmh.values.flatten.toList).fold(genesis.blockHash.pure[F]) {
               hashes =>
-                DagOperations.latestCommonAncestorsMainParent[F](dag, hashes)
+                DagOperations.latestCommonAncestorsMainParent[F](dag, hashes).map(_.messageHash)
             }
       implicit0(finalizer: FinalityDetectorVotingMatrix[F]) <- FinalityDetectorVotingMatrix
                                                                 .of[F](
