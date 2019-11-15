@@ -8,7 +8,7 @@ else
     export TAG_NAME="test"
 fi
 
-export TEST_RUN_ARGS=$@
+export TEST_RUN_ARGS="-k test_graph_ql"
 
 # We need networks for the Python Client to talk directly to the DockerNode.
 # We cannot share a network as we might have DockerNodes partitioned.
