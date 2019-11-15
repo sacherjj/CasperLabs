@@ -2,7 +2,7 @@ use contract_ffi::{
     key::Key,
     value::{ProtocolVersion, Value, U512},
 };
-use engine_core::engine_state::upgrade::ActivationPoint;
+use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::transform::Transform;
 use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -45,10 +45,15 @@ fn should_upgrade_only_protocol_version() {
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
     let mut upgrade_request = {
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let mut installer_code = DeployCode::new();
+        installer_code.set_code(bytes);
+
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
             .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
+            .with_installer_code(installer_code)
             .build()
     };
 
@@ -159,11 +164,15 @@ fn should_upgrade_wasm_costs() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let mut installer_code = DeployCode::new();
+        installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
             .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
             .with_new_costs(new_costs)
+            .with_installer_code(installer_code)
             .build()
     };
 
@@ -283,10 +292,14 @@ fn should_not_downgrade() {
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
     let mut upgrade_request = {
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let mut installer_code = DeployCode::new();
+        installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
             .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
+            .with_installer_code(installer_code)
             .build()
     };
 
