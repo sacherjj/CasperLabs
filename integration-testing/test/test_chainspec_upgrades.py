@@ -21,7 +21,7 @@ def test_upgrades_applied_major_versions(chainspec_upgrades_network_major):
     check_upgrades_applied(chainspec_upgrades_network_major)
 
 
-def disabled_test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
+def test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
     check_upgrades_applied(chainspec_upgrades_network_minor)
 
 
