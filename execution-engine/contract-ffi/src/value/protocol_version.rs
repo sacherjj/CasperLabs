@@ -189,7 +189,7 @@ mod tests {
 
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 1));
         let next = ProtocolVersion::new(SemVer::new(1, 0, 0));
-        assert!(!prev.check_follows(&next)); // wrong - should increaes monotonically
+        assert!(!prev.check_follows(&next)); // wrong - should increase monotonically
 
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 0, 1));
