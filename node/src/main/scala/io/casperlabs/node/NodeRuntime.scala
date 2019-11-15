@@ -80,11 +80,6 @@ class NodeRuntime private[node] (
     implicitly[ConcurrentEffect[Task]]
   }
 
-  implicit val fatalErrorHandler = new FatalErrorHandler[Task] {
-    override def handle(error: FatalErrorShutdown): Task[Unit] =
-      Task.delay(uncaughtExceptionHandler.reportFailure(error))
-  }
-
   // intra-node gossiping port.
   private val port         = conf.server.port
   private val kademliaPort = conf.server.kademliaPort

@@ -39,7 +39,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.shared.{Cell, FatalError, FatalErrorHandler, FilesAPI, Log, Time}
+import io.casperlabs.shared.{Cell, FatalError, FilesAPI, Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
@@ -61,7 +61,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: FatalErrorHandler](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
@@ -279,10 +279,7 @@ package object gossiping {
           )
 
         case SelfEquivocatedBlock =>
-          MonadThrowable[F]
-            .raiseError[Unit](
-              FatalError.selfEquivocationError(block.blockHash)
-            )
+          Sync[F].delay(throw FatalError.selfEquivocationError(block.blockHash))
 
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>
@@ -373,7 +370,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster: FatalErrorHandler](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],

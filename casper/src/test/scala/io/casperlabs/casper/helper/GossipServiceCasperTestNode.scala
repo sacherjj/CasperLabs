@@ -284,9 +284,8 @@ object GossipServiceCasperTestNodeFactory {
   class TestGossipService[F[_]: Concurrent: Timer: Time: Parallel: Log: Validation]()
       extends GossipService[F] {
 
-    implicit val metrics               = new Metrics.MetricsNOP[F]
-    implicit val noopFatalErrorHandler = new shared.FatalErrorHandler.FatalErrorHandlerNoop[F]
-    implicit val versions              = HashSetCasperTestNode.protocolVersions[F]
+    implicit val metrics  = new Metrics.MetricsNOP[F]
+    implicit val versions = HashSetCasperTestNode.protocolVersions[F]
 
     /** Exercise the full underlying stack. It's what we are testing here, via the MultiParentCasper tests. */
     var underlying: GossipServiceServer[F] = _

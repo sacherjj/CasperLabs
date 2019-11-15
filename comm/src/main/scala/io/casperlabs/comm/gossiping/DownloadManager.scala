@@ -20,7 +20,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, FatalErrorHandler, FatalErrorShutdown, Log}
+import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
 import io.casperlabs.shared.Log.LogOps
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -120,7 +120,7 @@ object DownloadManagerImpl {
   }
 
   /** Start the download manager. */
-  def apply[F[_]: Concurrent: Log: Timer: Metrics: FatalErrorHandler](
+  def apply[F[_]: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
@@ -145,10 +145,7 @@ object DownloadManagerImpl {
           relaying,
           retriesConf
         )
-        managerLoop <- manager.run.onError {
-                        case error: FatalErrorShutdown =>
-                          FatalErrorHandler[F].handle(error)
-                      }.start
+        managerLoop <- manager.run.start
       } yield (isShutdown, workersRef, managerLoop, manager)
     } {
       case (isShutdown, workersRef, managerLoop, _) =>
@@ -280,16 +277,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attemptAndLog("An error occurred when handling DownloadFailure.") >> onFatalErrorShutdown(
-          ex
-        ) >> run
-    }
-
-  private def onFatalErrorShutdown(ex: Throwable): F[Unit] =
-    ex match {
-      case error: FatalErrorShutdown =>
-        Log[F].error(error.getLocalizedMessage) >> Concurrent[F].raiseError(error)
-      case _ => Monad[F].unit
+        finish.attemptAndLog("An error occurred when handling DownloadFailure.") >> run
     }
 
   // Indicate how many items we have in the queue.
