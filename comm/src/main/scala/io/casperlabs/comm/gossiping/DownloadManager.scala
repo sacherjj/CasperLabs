@@ -21,6 +21,7 @@ import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Compression, FatalErrorHandler, FatalErrorShutdown, Log}
+import io.casperlabs.shared.Log.LogOps
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -279,14 +280,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attempt flatMap {
-          case Right(()) => onFatalErrorShutdown(ex) >> run
-          case Left(finishError) =>
-            Log[F]
-              .error("An error occurred when handling DownloadFailure.", finishError) >> onFatalErrorShutdown(
-              ex
-            ) >> run
-        }
+        finish.attemptAndLog("An error occurred when handling DownloadFailure.") >> onFatalErrorShutdown(
+          ex
+        ) >> run
     }
 
   private def onFatalErrorShutdown(ex: Throwable): F[Unit] =
