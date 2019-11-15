@@ -16,7 +16,7 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
+class AutoProposer[F[_]: Sync: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
     checkInterval: FiniteDuration,
     accInterval: FiniteDuration,
     accCount: Int,
