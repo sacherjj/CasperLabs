@@ -279,7 +279,7 @@ package object gossiping {
           )
 
         case SelfEquivocatedBlock =>
-          Sync[F].delay(throw FatalError.selfEquivocationError(block.blockHash))
+          FatalError.selfEquivocationError(block.blockHash)
 
         case other =>
           Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>

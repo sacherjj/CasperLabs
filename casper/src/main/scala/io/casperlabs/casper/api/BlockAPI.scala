@@ -18,7 +18,7 @@ import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{FatalErrorShutdown, Log}
+import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
@@ -93,11 +93,7 @@ object BlockAPI {
                                      block.blockHash.pure[F]
                                    case SelfEquivocatedBlock =>
                                      Concurrent[F].start(
-                                       Sync[F]
-                                         .delay(
-                                           throw io.casperlabs.shared.FatalError
-                                             .selfEquivocationError(block.blockHash)
-                                         )
+                                       FatalError.selfEquivocationError(block.blockHash)
                                      ) >> raise(
                                        Internal(s"Node has equivocated with block ${PrettyPrinter
                                          .buildString(block.blockHash)}")
