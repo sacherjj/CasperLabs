@@ -15,7 +15,6 @@ import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler

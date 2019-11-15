@@ -419,8 +419,6 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
                   Log[F].debug(message) *>
                     Timer[F].sleep(delay) *>
                     tryDownload(item.summary, source, item.relay).handleErrorWith {
-                      case fatal: FatalErrorShutdown =>
-                        MonadThrowable[F].raiseError(fatal)
                       case NonFatal(ex) =>
                         val message =
                           s"Retrying downloading of block $id from other sources, failed source: ${source.show}, prev attempt: $counter, error: $ex"
