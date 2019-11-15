@@ -82,10 +82,6 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
 
         self.reads_cached.get_refresh(key).map(|v| &*v)
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.reads_cached.is_empty() && self.muts_cached.is_empty()
-    }
 }
 
 pub struct TrackingCopy<R> {
