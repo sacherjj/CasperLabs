@@ -769,6 +769,9 @@ impl From<ExecutionResult> for ipc::DeployResult {
                     error @ EngineError::InvalidProtocolVersion { .. } => {
                         precondition_failure(error.to_string())
                     }
+                    error @ EngineError::InvalidUpgradeConfig => {
+                        precondition_failure(error.to_string())
+                    }
                     error @ EngineError::WasmPreprocessingError(_) => {
                         precondition_failure(error.to_string())
                     }

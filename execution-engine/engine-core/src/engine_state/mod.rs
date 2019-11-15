@@ -473,81 +473,97 @@ where
             .put_protocol_data(new_protocol_version, &new_protocol_data)
             .map_err(Into::into)?;
 
-        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
         // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
-        // 3.1.2.3 execute upgrade installer if one is provided
-        if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
-            // preprocess installer module
-            let upgrade_installer_module = {
-                let preprocessor = Preprocessor::new(new_wasm_costs);
-                preprocessor.preprocess(bytes)?
-            };
-
-            // currently there are no expected args for an upgrade installer but args are supported
-            let args = match upgrade_config.upgrade_installer_args() {
-                Some(args) => args,
-                None => &[],
-            };
-
-            // execute as system account
-            let system_account = {
-                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                match tracking_copy.borrow_mut().read(correlation_id, &key) {
-                    Ok(Some(Value::Account(account))) => account,
-                    Ok(_) => panic!("system account must exist"),
-                    Err(error) => return Err(Error::ExecError(error.into())),
+        if let Some(is_required) =
+            current_protocol_version.check_upgrade_point(&new_protocol_version)
+        {
+            match upgrade_config.upgrade_installer_bytes() {
+                None if is_required => {
+                    // 3.1.1.1.1.5 continued - make sure upgrade installer is present for major
+                    // bumps
+                    return Err(Error::InvalidUpgradeConfig);
                 }
-            };
+                None => {
+                    // optional for patch/minor bumps
+                }
+                Some(bytes) => {
+                    // 3.1.2.3 execute upgrade installer if one is provided
 
-            let mut keys = BTreeMap::new();
+                    // preprocess installer module
+                    let upgrade_installer_module = {
+                        let preprocessor = Preprocessor::new(new_wasm_costs);
+                        preprocessor.preprocess(bytes)?
+                    };
 
-            let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-            let authorization_keys = {
-                let mut ret = BTreeSet::new();
-                ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
-                ret
-            };
+                    // currently there are no expected args for an upgrade installer but args are
+                    // supported
+                    let args = match upgrade_config.upgrade_installer_args() {
+                        Some(args) => args,
+                        None => &[],
+                    };
 
-            let blocktime = BlockTime::default();
+                    // execute as system account
+                    let system_account = {
+                        let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                        match tracking_copy.borrow_mut().read(correlation_id, &key) {
+                            Ok(Some(Value::Account(account))) => account,
+                            Ok(_) => panic!("system account must exist"),
+                            Err(error) => return Err(Error::ExecError(error.into())),
+                        }
+                    };
 
-            let deploy_hash = {
-                // seeds address generator w/ protocol version
-                let bytes: Vec<u8> = upgrade_config
-                    .new_protocol_version()
-                    .value()
-                    .to_bytes()?
-                    .to_vec();
-                Blake2bHash::new(&bytes).into()
-            };
+                    let mut keys = BTreeMap::new();
 
-            // upgrade has no gas limit; approximating with MAX
-            let gas_limit = Gas::new(std::u64::MAX.into());
-            let phase = Phase::System;
-            let address_generator = {
-                let generator = AddressGenerator::new(pre_state_hash.into(), phase);
-                Rc::new(RefCell::new(generator))
-            };
-            let state = Rc::clone(&tracking_copy);
-            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+                    let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                    let authorization_keys = {
+                        let mut ret = BTreeSet::new();
+                        ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                        ret
+                    };
 
-            Executor.better_exec(
-                upgrade_installer_module,
-                &args,
-                &mut keys,
-                initial_base_key,
-                &system_account,
-                authorization_keys,
-                blocktime,
-                deploy_hash,
-                gas_limit,
-                address_generator,
-                new_protocol_version,
-                correlation_id,
-                state,
-                phase,
-                new_protocol_data,
-                system_contract_cache,
-            )?
+                    let blocktime = BlockTime::default();
+
+                    let deploy_hash = {
+                        // seeds address generator w/ protocol version
+                        let bytes: Vec<u8> = upgrade_config
+                            .new_protocol_version()
+                            .value()
+                            .to_bytes()?
+                            .to_vec();
+                        Blake2bHash::new(&bytes).into()
+                    };
+
+                    // upgrade has no gas limit; approximating with MAX
+                    let gas_limit = Gas::new(std::u64::MAX.into());
+                    let phase = Phase::System;
+                    let address_generator = {
+                        let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                        Rc::new(RefCell::new(generator))
+                    };
+                    let state = Rc::clone(&tracking_copy);
+                    let system_contract_cache =
+                        SystemContractCache::clone(&self.system_contract_cache);
+
+                    Executor.better_exec(
+                        upgrade_installer_module,
+                        &args,
+                        &mut keys,
+                        initial_base_key,
+                        &system_account,
+                        authorization_keys,
+                        blocktime,
+                        deploy_hash,
+                        gas_limit,
+                        address_generator,
+                        new_protocol_version,
+                        correlation_id,
+                        state,
+                        phase,
+                        new_protocol_data,
+                        system_contract_cache,
+                    )?
+                }
+            }
         };
 
         let effects = tracking_copy.borrow().effect();
