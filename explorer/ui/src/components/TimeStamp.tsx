@@ -1,5 +1,5 @@
-import TimeAgo from "javascript-time-ago";
-import en from "javascript-time-ago/locale/en";
+import TimeAgo from 'javascript-time-ago';
+import en from 'javascript-time-ago/locale/en';
 import React from 'react';
 
 TimeAgo.addLocale(en);
