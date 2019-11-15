@@ -392,7 +392,7 @@ class ForkchoiceTest
       }.toMap
       val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
       val scores = Estimator
-        .lmdScoring(dag, lca, latestMessageHashes, equivocators)
+        .lmdScoring(dag, lca.messageHash, latestMessageHashes, equivocators)
         .runSyncUnsafe(5.seconds)
 
       scores shouldBe expectScores

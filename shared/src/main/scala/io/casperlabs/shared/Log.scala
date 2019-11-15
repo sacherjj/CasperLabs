@@ -50,6 +50,26 @@ trait Log[F[_]] {
 object Log extends LogInstances {
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
+  implicit class LogOps[F[_]: Log, A](fa: F[A]) {
+
+    /** Materializes an error from `F` context (if any), logs it and returns as Left.
+      * Otherwise returns Right(result)
+      *
+      * @param msg Error message. Defaults to empty.
+      * @param logSource
+      * @param M
+      * @tparam E
+      * @return Result. Either an error (wrapped in Left) or result (wrapper in Right).
+      */
+    def attemptAndLog[E <: Throwable](
+        msg: String = ""
+    )(implicit logSource: LogSource, M: MonadError[F, E]): F[Either[E, A]] =
+      M.attempt(fa).flatMap {
+        case Left(err)        => Log[F].error(msg, err).as(Left(err))
+        case right @ Right(_) => M.pure(right)
+      }
+  }
+
   def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit L: Log[F]): Log[T[F, ?]] =
     new Log[T[F, ?]] {
       def isTraceEnabled(implicit ev: LogSource): T[F, Boolean]  = L.isTraceEnabled.liftM[T]

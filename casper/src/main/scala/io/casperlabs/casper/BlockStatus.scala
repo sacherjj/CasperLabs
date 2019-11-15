@@ -28,6 +28,9 @@ final case object Valid extends ValidBlock
 final case object EquivocatedBlock extends InvalidBlock {
   override val inDag: Boolean = true
 }
+final case object SelfEquivocatedBlock extends InvalidBlock {
+  override val inDag: Boolean = true
+}
 final case object InvalidUnslashableBlock extends InvalidBlock
 final case object MissingBlocks           extends InvalidBlock
 
