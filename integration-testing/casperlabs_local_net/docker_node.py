@@ -509,7 +509,7 @@ class DockerNode(LoggingDockerBase):
             return addr
 
         m = re.search(
-            f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
+            f"Listening for traffic on peer=(casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
             self.logs(),
             re.MULTILINE | re.DOTALL,
         )
