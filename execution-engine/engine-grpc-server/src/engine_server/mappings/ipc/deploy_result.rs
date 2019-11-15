@@ -201,7 +201,7 @@ mod tests {
         // Extract transform map from the IPC message and parse it back to the domain
         let ipc_transforms: AdditiveMap<Key, Transform> = {
             let mut ipc_effects = success.take_effects();
-            let ipc_effects_tnfs = ipc_effects.take_transform_map().to_vec();
+            let ipc_effects_tnfs = ipc_effects.take_transform_map().into_vec();
             ipc_effects_tnfs
                 .into_iter()
                 .map(TryInto::try_into)

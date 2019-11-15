@@ -718,7 +718,7 @@ where
             .engine_state
             .query(RequestOptions::new(), query_request)
             .wait_drop_metadata()
-            .expect("should query");
+            .expect("should get query response");
 
         if query_response.has_success() {
             query_response.take_success().try_into().ok()

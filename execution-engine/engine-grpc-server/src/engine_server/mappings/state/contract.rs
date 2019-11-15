@@ -24,7 +24,7 @@ impl TryFrom<ProtobufContract> for Contract {
     type Error = ParsingError;
 
     fn try_from(mut pb_contract: ProtobufContract) -> Result<Self, Self::Error> {
-        let named_keys: NamedKeyMap = pb_contract.take_named_keys().to_vec().try_into()?;
+        let named_keys: NamedKeyMap = pb_contract.take_named_keys().into_vec().try_into()?;
         let protocol_version = pb_contract.take_protocol_version().into();
         let contract = Contract::new(pb_contract.body, named_keys.0, protocol_version);
         Ok(contract)

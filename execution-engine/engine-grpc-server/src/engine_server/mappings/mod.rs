@@ -25,12 +25,13 @@ pub(crate) fn vec_to_array(input: Vec<u8>, input_name: &str) -> Result<[u8; 32],
 
 #[derive(Debug)]
 pub enum MappingError {
-    InvalidHashLength { expected: usize, actual: usize },
+    InvalidStateHashLength { expected: usize, actual: usize },
     InvalidPublicKeyLength { expected: usize, actual: usize },
     InvalidDeployHashLength { expected: usize, actual: usize },
     ParsingError(ParsingError),
     InvalidStateHash(String),
     MissingPayload,
+    TryFromSliceError,
 }
 
 impl MappingError {
@@ -55,7 +56,7 @@ impl From<ParsingError> for MappingError {
 impl From<MappingError> for engine_state::Error {
     fn from(error: MappingError) -> Self {
         match error {
-            MappingError::InvalidHashLength { expected, actual } => {
+            MappingError::InvalidStateHashLength { expected, actual } => {
                 engine_state::Error::InvalidHashLength { expected, actual }
             }
             _ => engine_state::Error::DeployError,
@@ -66,7 +67,7 @@ impl From<MappingError> for engine_state::Error {
 impl Display for MappingError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
-            MappingError::InvalidHashLength { expected, actual } => write!(
+            MappingError::InvalidStateHashLength { expected, actual } => write!(
                 f,
                 "Invalid hash length: expected {}, actual {}",
                 expected, actual
@@ -86,6 +87,7 @@ impl Display for MappingError {
             }
             MappingError::InvalidStateHash(message) => write!(f, "Invalid hash: {}", message),
             MappingError::MissingPayload => write!(f, "Missing payload"),
+            MappingError::TryFromSliceError => write!(f, "Unable to convert from slice"),
         }
     }
 }

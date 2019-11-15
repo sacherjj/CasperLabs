@@ -52,7 +52,7 @@ impl TryFrom<ProtobufAccount> for Account {
         let public_key =
             mappings::vec_to_array(pb_account.public_key, "Protobuf Account::PublicKey")?;
 
-        let named_keys: NamedKeyMap = pb_account.named_keys.to_vec().try_into()?;
+        let named_keys: NamedKeyMap = pb_account.named_keys.into_vec().try_into()?;
 
         let purse_id = {
             let pb_uref = pb_account
