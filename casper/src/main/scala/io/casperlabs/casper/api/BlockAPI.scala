@@ -1,7 +1,7 @@
 package io.casperlabs.casper.api
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.Monad
 import com.google.protobuf.ByteString
@@ -71,7 +71,7 @@ object BlockAPI {
     } yield ()
   }
 
-  def propose[F[_]: Sync: MultiParentCasperRef: Log: Metrics: Broadcaster](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
       blockApiLock: Semaphore[F]
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
@@ -92,9 +92,12 @@ object BlockAPI {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]
                                    case SelfEquivocatedBlock =>
-                                     Sync[F].delay(
-                                       throw io.casperlabs.shared.FatalError
-                                         .selfEquivocationError(block.blockHash)
+                                     Concurrent[F].start(
+                                       Sync[F]
+                                         .delay(
+                                           throw io.casperlabs.shared.FatalError
+                                             .selfEquivocationError(block.blockHash)
+                                         )
                                      ) >> raise(
                                        Internal(s"Node has equivocated with block ${PrettyPrinter
                                          .buildString(block.blockHash)}")
