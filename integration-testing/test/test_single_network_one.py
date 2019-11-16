@@ -79,10 +79,7 @@ def test_logging_enabled_for_node_and_execution_engine(one_node_network):
     """
     Verify both Node and EE are outputting logs.
     """
-    assert (
-        "Listening for traffic on casperlabs://"
-        in one_node_network.docker_nodes[0].logs()
-    )
+    assert "Listening for traffic on " in one_node_network.docker_nodes[0].logs()
     assert (
         '"host_name":"execution-engine-' in one_node_network.execution_engines[0].logs()
     )
