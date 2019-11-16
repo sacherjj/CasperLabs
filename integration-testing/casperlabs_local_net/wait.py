@@ -107,7 +107,9 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 
 
 class ConnectedToOtherNode(RegexBlockRequest):
-    regex = r"(Connected to casperlabs:)|(Listening for traffic on casperlabs:)"
+    regex = (
+        r"(Connected to peer=casperlabs:)|(Listening for traffic on peer=casperlabs:)"
+    )
 
     def __init__(self, node: DockerNode, node_name: str, times: int) -> None:
         self.times = times
