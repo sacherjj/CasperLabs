@@ -1,10 +1,9 @@
 package io.casperlabs.casper.api
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Concurrent, Resource}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-import cats.{Functor, Monad}
-import com.github.ghik.silencer.silent
+import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
@@ -13,19 +12,18 @@ import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
-import io.casperlabs.casper.util.execengine.ProcessedDeployResult
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 
 object BlockAPI {
 
@@ -73,7 +71,7 @@ object BlockAPI {
     } yield ()
   }
 
-  def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
       blockApiLock: Semaphore[F]
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
@@ -89,9 +87,17 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
+                           _      <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]
+                                   case SelfEquivocatedBlock =>
+                                     Concurrent[F].start(
+                                       FatalError.selfEquivocationError(block.blockHash)
+                                     ) >> raise(
+                                       Internal(s"Node has equivocated with block ${PrettyPrinter
+                                         .buildString(block.blockHash)}")
+                                     )
                                    case _: InvalidBlock =>
                                      raise(InvalidArgument(s"Invalid block: $status"))
                                    case UnexpectedBlockException(ex) =>

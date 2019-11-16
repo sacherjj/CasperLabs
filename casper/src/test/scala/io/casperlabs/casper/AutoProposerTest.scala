@@ -5,6 +5,7 @@ import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.metrics.Metrics
@@ -120,8 +121,9 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 object AutoProposerTest {
   import Scheduler.Implicits.global
   import io.casperlabs.storage.dag.DagRepresentation
-  implicit val log     = Log.NOPLog[Task]
-  implicit val metrics = new Metrics.MetricsNOP[Task]()
+  implicit val log         = Log.NOPLog[Task]
+  implicit val metrics     = new Metrics.MetricsNOP[Task]()
+  implicit val broadcaster = Broadcaster.noop[Task]
 
   implicit val time = new Time[Task] {
     val timer                                       = implicitly[Timer[Task]]

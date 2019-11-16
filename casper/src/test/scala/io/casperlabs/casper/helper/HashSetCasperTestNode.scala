@@ -6,6 +6,7 @@ import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
@@ -32,7 +33,6 @@ import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
-import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
 import logstage.LogIO
 import scala.collection.mutable.{Map => MutMap}
@@ -59,6 +59,7 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
+  implicit val broadcaster: Broadcaster[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 

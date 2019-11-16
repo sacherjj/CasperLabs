@@ -15,4 +15,5 @@ std = ["contract-ffi/std"]
 lib = []
 
 [dependencies]
+base16 = { version = "0.2", default-features = false }
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

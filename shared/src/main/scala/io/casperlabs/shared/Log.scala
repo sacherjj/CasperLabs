@@ -120,4 +120,24 @@ object Log {
     "io.grpc"                                             -> IzLog.Level.Error,
     "org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" -> IzLog.Level.Crit
   )
+
+  implicit class LogOps[F[_]: Log, A](fa: F[A]) {
+
+    /** Materializes an error from `F` context (if any), logs it and returns as Left.
+      * Otherwise returns Right(result)
+      *
+      * @param msg Error message. Defaults to empty.
+      * @param logSource
+      * @param M
+      * @tparam E
+      * @return Result. Either an error (wrapped in Left) or result (wrapper in Right).
+      */
+    def attemptAndLog[E <: Throwable](
+        msg: String = ""
+    )(implicit M: MonadError[F, E]): F[Either[E, A]] =
+      M.attempt(fa).flatMap {
+        case Left(ex)         => Log[F].error(s"${msg -> "msg" -> null}: $ex").as(Left(ex))
+        case right @ Right(_) => M.pure(right)
+      }
+  }
 }

@@ -4,6 +4,8 @@ use alloc::{
 };
 use core::fmt::Write;
 
+use base16;
+
 use contract_ffi::{
     contract_api::runtime,
     key::Key,
@@ -34,11 +36,13 @@ impl StakesProvider for ContractStakes {
             let hex_key = split_name
                 .next()
                 .ok_or(Error::StakesKeyDeserializationFailed)?;
-            let mut key_bytes = [0u8; 32];
-            for i in 0..32 {
-                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16)
-                    .map_err(|_| Error::StakesKeyDeserializationFailed)?;
+            if hex_key.len() != 64 {
+                return Err(Error::StakesKeyDeserializationFailed);
             }
+            let mut key_bytes = [0u8; 32];
+            let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
+                .map_err(|_| Error::StakesKeyDeserializationFailed)?;
+            debug_assert!(_bytes_written == key_bytes.len());
             let pub_key = PublicKey::new(key_bytes);
             let balance = split_name
                 .next()

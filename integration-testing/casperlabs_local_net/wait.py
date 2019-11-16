@@ -143,18 +143,18 @@ class WaitForGoodBye(LogsContainMessage):
         super().__init__(node, "Goodbye.")
 
 
-class MetricsAvailable:
+class SQLiteBlockTotalFromMetrics:
     def __init__(self, node: DockerNode, number_of_blocks: int) -> None:
         self.node = node
         self.number_of_blocks = number_of_blocks
+        self.received_blocks_pattern = re.compile(
+            r"^casperlabs_block_storage_sqlite_get_total ([1-9][0-9]*).0\s*$",
+            re.MULTILINE | re.DOTALL,
+        )
 
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
-        received_blocks_pattern = re.compile(
-            r"^casperlabs_casper_packet_handler_blocks_received_total ([1-9][0-9]*).0\s*$",
-            re.MULTILINE | re.DOTALL,
-        )
-        blocks = received_blocks_pattern.search(data)
+        blocks = self.received_blocks_pattern.search(data)
         if blocks is None:
             return False
         return int(blocks.group(1)) == self.number_of_blocks
@@ -297,7 +297,10 @@ class BlockContainsString:
 
 class LastFinalisedHash(LogsContainMessage):
     def __init__(self, node: DockerNode, hash_string: str) -> None:
-        super().__init__(node, f"New last finalized block hash is {hash_string}")
+        super().__init__(
+            node,
+            f"i.c.c.MultiParentCasperImpl$StatelessExecutor - Added {hash_string[:10]}...",
+        )
 
 
 class BlocksCountAtLeast:
@@ -489,10 +492,10 @@ def wait_for_peers_count_exactly(
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
-def wait_for_metrics_and_assert_blocks_avaialable(
+def wait_for_metrics_and_assert_block_count(
     node: DockerNode, timeout_seconds: int, number_of_blocks: int
 ) -> None:
-    predicate = MetricsAvailable(node, number_of_blocks)
+    predicate = SQLiteBlockTotalFromMetrics(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 

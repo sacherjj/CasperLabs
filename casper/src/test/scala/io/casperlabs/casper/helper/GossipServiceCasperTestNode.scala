@@ -7,8 +7,9 @@ import cats.implicits._
 import cats.mtl.DefaultApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
-import io.casperlabs.casper
+import io.casperlabs.{casper, shared}
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{consensus, _}
@@ -23,6 +24,7 @@ import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
+import monix.eval.Task
 import monix.tail.Iterant
 import logstage.LogIO
 import scala.collection.immutable.Queue
@@ -58,6 +60,8 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
   implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
+  implicit val broadcaster: Broadcaster[F] =
+    Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
 
   // `addBlock` called in many ways:
@@ -67,8 +71,12 @@ class GossipServiceCasperTestNode[F[_]](
   implicit val casperEff: MultiParentCasperImpl[F] =
     new MultiParentCasperImpl[F](
       semaphoresMap,
-      new MultiParentCasperImpl.StatelessExecutor[F](chainName, upgrades = Nil, semaphore),
-      MultiParentCasperImpl.Broadcaster.fromGossipServices(Some(validatorId), relaying),
+      new MultiParentCasperImpl.StatelessExecutor[F](
+        Some(validatorId.publicKey),
+        chainName,
+        upgrades = Nil,
+        semaphore
+      ),
       Some(validatorId),
       genesis,
       chainName,

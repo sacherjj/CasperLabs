@@ -4,6 +4,7 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.validation.Validation
@@ -58,7 +59,8 @@ object Servers {
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      multiParentCasperRef: MultiParentCasperRef[Task]
+      multiParentCasperRef: MultiParentCasperRef[Task],
+      broadcaster: Broadcaster[Task]
   ): Resource[Task, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer[Task](
