@@ -69,17 +69,17 @@ class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
 
 class NewForkChoiceTipBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Fork-choice tip is block {block[:10]}....")
+        super().__init__(node, f"Fork-choice is block={block[:10]}....")
 
 
 class FinishedAddingBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Finished adding {block[:10]}...")
+        super().__init__(node, f"Finished adding block={block[:10]}...")
 
 
 class AddedBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Added {block[:10]}...")
+        super().__init__(node, f"Added block={block[:10]}...")
 
 
 class RegexBlockRequest:
@@ -299,10 +299,7 @@ class BlockContainsString:
 
 class LastFinalisedHash(LogsContainMessage):
     def __init__(self, node: DockerNode, hash_string: str) -> None:
-        super().__init__(
-            node,
-            f"i.c.c.MultiParentCasperImpl$StatelessExecutor - Added {hash_string[:10]}...",
-        )
+        super().__init__(node, f"Added block={hash_string[:10]}...")
 
 
 class BlocksCountAtLeast:
