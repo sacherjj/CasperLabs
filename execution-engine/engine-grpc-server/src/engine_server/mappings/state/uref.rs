@@ -17,7 +17,7 @@ impl From<AccessRights> for ProtobufAccessRights {
             AccessRights::READ_WRITE => ProtobufAccessRights::READ_WRITE,
             AccessRights::ADD_WRITE => ProtobufAccessRights::ADD_WRITE,
             AccessRights::READ_ADD_WRITE => ProtobufAccessRights::READ_ADD_WRITE,
-            _ => panic!("Invalid mapping from AccessRights to Protobuf AccessRights"),
+            _ => ProtobufAccessRights::UNKNOWN,
         }
     }
 }
