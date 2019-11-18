@@ -74,7 +74,7 @@ def test_equivocating_node_shutdown(three_node_network):
     expected_counter_result = count(1)
     for i in range(2):
         for node in nodes:
-            block_hash = nodes[0].p_client.deploy_and_propose(
+            block_hash = node.p_client.deploy_and_propose(
                 from_address=account.public_key_hex,
                 public_key=account.public_key_path,
                 private_key=account.private_key_path,
