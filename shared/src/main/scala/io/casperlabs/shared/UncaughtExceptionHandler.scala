@@ -13,7 +13,7 @@ class UncaughtExceptionHandler(shutdownTimeout: FiniteDuration)
   override def reportFailure(ex: scala.Throwable): Unit = {
     log.error(s"Uncaught Exception : ${ex.getMessage}", ex)
     ex match {
-      case _: VirtualMachineError | _: LinkageError =>
+      case _: VirtualMachineError | _: LinkageError | _: FatalErrorShutdown =>
         // To flush logs
         Thread.sleep(1000)
         exitOrHalt(1, shutdownTimeout)

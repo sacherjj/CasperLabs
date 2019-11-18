@@ -64,7 +64,6 @@ fn tracking_copy_new() {
     let db = CountingDb::new(counter);
     let tc = TrackingCopy::new(db);
 
-    assert_eq!(tc.cache.is_empty(), true);
     assert_eq!(tc.ops.is_empty(), true);
     assert_eq!(tc.fns.is_empty(), true);
 }

@@ -69,36 +69,6 @@ from google.protobuf import json_format
 Arg = consensus.Deploy.Arg
 Value = consensus.Deploy.Arg.Value
 
-HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
-
-
-def h2b64(name, x):
-    if type(x) == str and name in HEX_FIELDS:
-        return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
-    return hex2base64(x)
-
-
-def hex2base64(d):
-    if type(d) == list:
-        return [hex2base64(x) for x in d]
-    if type(d) == dict:
-        return {k: h2b64(k, d[k]) for k in d}
-    return d
-
-
-def b64_2h(name, x):
-    if type(x) == str and name in HEX_FIELDS:
-        return base64.b64decode(x).hex()
-    return base64_2hex(x)
-
-
-def base64_2hex(d):
-    if type(d) == list:
-        return [base64_2hex(x) for x in d]
-    if type(d) == dict:
-        return {k: b64_2h(k, d[k]) for k in d}
-    return d
-
 
 class ABI:
     """
@@ -173,7 +143,7 @@ class ABI:
 
     @staticmethod
     def args_from_json(s):
-        parsed_json = hex2base64(json.loads(s))
+        parsed_json = ABI.hex2base64(json.loads(s))
         args = [json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json]
         c = consensus.Deploy.Code(args=args)
         return c.args
@@ -184,7 +154,7 @@ class ABI:
             json_format.MessageToDict(arg, preserving_proto_field_name=True)
             for arg in args
         ]
-        return json.dumps(base64_2hex(lst), **kwargs)
+        return json.dumps(ABI.base64_2hex(lst), **kwargs)
 
     # Below methods for backwards compatibility
 
@@ -203,6 +173,58 @@ class ABI:
     @staticmethod
     def byte_array(name, a):
         return Arg(name=name, value=Value(bytes_value=a))
+
+    # These are kinds of Arg that are of type bytes.
+    # We want to represent them in JSON in hex format, rather than base64.
+    HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
+
+    # Standard protobuf JSON representation encodes fields of type bytes
+    # in base64. We like base16 (hex) more. Below helper functions
+    # help in converting output of protobuf JSON args serialization (base64 -> base16)
+    # and in preparing user suplied JSON for parsing with protobuf (base16 -> base64).
+
+    @staticmethod
+    def h2b64(name, x):
+        """
+        Convert value of a field of a given name from hex to base64,
+        if the field is known to be of the bytes type.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
+        return ABI.hex2base64(x)
+
+    @staticmethod
+    def hex2base64(d):
+        """
+        Convert decoded JSON list of args so fields of type bytes
+        are in base64, in order to make it compatible with the format
+        required by protobuf JSON parser.
+        """
+        if type(d) == list:
+            return [ABI.hex2base64(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.h2b64(k, d[k]) for k in d}
+        return d
+
+    @staticmethod
+    def b64_2h(name, x):
+        """
+        Helper function of base64_2hex.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64decode(x).hex()
+        return ABI.base64_2hex(x)
+
+    @staticmethod
+    def base64_2hex(d):
+        """
+        Convert JSON serialized args so fields of type bytes are shown in base16 (hex).
+        """
+        if type(d) == list:
+            return [ABI.base64_2hex(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.b64_2h(k, d[k]) for k in d}
+        return d
 
 
 def read_pem_key(file_name: str):
@@ -496,9 +518,10 @@ class CasperLabsClient:
 
         if payment_amount:
             payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
-            # Unless one of payment* options supplied use bundled standard-payment
-            if not any((payment, payment_name, payment_hash, payment_uref)):
-                payment = bundled_contract("standard_payment.wasm")
+
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not any((payment, payment_name, payment_hash, payment_uref)):
+            payment = bundled_contract("standard_payment.wasm")
 
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)

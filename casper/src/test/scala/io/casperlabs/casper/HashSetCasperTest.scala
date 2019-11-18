@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.consensus.Block.{Justification, ProcessedDeploy}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.genesis.Genesis
@@ -39,6 +40,18 @@ abstract class HashSetCasperTest
     with HashSetCasperTestNodeFactory {
 
   import HashSetCasperTest._
+
+  implicit class TestNodeOps(node: TestNode[Task]) {
+    def addAndBroadcast(b: Block): Task[BlockStatus] =
+      node.casperEff.addBlock(b).flatTap(node.broadcaster.networkEffects(b, _))
+
+    def propose(): Task[Block] =
+      node.casperEff.createBlock.flatMap {
+        case Created(block) => addAndBroadcast(block).as(block)
+        case noBlock: NoBlock =>
+          Task.raiseError(new IllegalStateException(s"No block created ${noBlock.toString}"))
+      }
+  }
 
   implicit val timeEff = new LogicalTime[Task]
 
@@ -364,14 +377,13 @@ abstract class HashSetCasperTest
 
   it should "propose blocks it adds to peers" in effectTest {
     for {
-      nodes                <- networkEff(validatorKeys.take(2), genesis, transforms)
-      deploy               <- ProtoUtil.basicDeploy[Task]()
-      createBlockResult    <- nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
-      Created(signedBlock) = createBlockResult
-      _                    <- nodes(0).casperEff.addBlock(signedBlock)
-      _                    <- nodes(1).receive()
-      result               <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
-      _                    <- nodes.map(_.tearDownNode()).toList.sequence
+      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
+      deploy      <- ProtoUtil.basicDeploy[Task]()
+      _           <- nodes(0).casperEff.deploy(deploy)
+      signedBlock <- nodes(0).propose()
+      _           <- nodes(1).receive()
+      result      <- nodes(1).casperEff.contains(signedBlock) shouldBeF true
+      _           <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage {
               _.getBlockMessage(signedBlock.blockHash)
@@ -385,15 +397,14 @@ abstract class HashSetCasperTest
 
   it should "add a valid block from peer" in effectTest {
     for {
-      nodes                      <- networkEff(validatorKeys.take(2), genesis, transforms)
-      deploy                     <- ProtoUtil.basicDeploy[Task]()
-      createBlockResult          <- nodes(0).casperEff.deploy(deploy) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1Prime) = createBlockResult
-      _                          <- nodes(0).casperEff.addBlock(signedBlock1Prime)
-      _                          <- nodes(1).receive()
-      _                          = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
-      result                     = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
-      _                          <- nodes.map(_.tearDownNode()).toList.sequence
+      nodes             <- networkEff(validatorKeys.take(2), genesis, transforms)
+      deploy            <- ProtoUtil.basicDeploy[Task]()
+      _                 <- nodes(0).casperEff.deploy(deploy)
+      signedBlock1Prime <- nodes(0).propose()
+      _                 <- nodes(1).receive()
+      _                 = nodes(1).logEff.infos.count(_ startsWith "Added") should be(1)
+      result            = nodes(1).logEff.warns.count(_ startsWith "Recording invalid block") should be(0)
+      _                 <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage(
               _.getBlockMessage(signedBlock1Prime.blockHash) shouldBeF Some(
@@ -404,18 +415,19 @@ abstract class HashSetCasperTest
     } yield result
   }
 
+  def createTestBlock(node: HashSetCasperTestNode[Task]) =
+    for {
+      deploy         <- ProtoUtil.basicDeploy[Task]()
+      result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
+      Created(block) = result
+    } yield block
+
   it should "process blocks in parallel" in effectTest {
-    def createBlock(node: HashSetCasperTestNode[Task]) =
-      for {
-        deploy         <- ProtoUtil.basicDeploy[Task]()
-        result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
-        Created(block) = result
-      } yield block
     for {
       nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
       // Create blocks on different nodes that can add in parallel.
       // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
-      blocks <- Task.sequence(nodes.map(createBlock))
+      blocks <- Task.sequence(nodes.map(createTestBlock))
       // Add them all concurrently to the one of the nodes; it shouldn't run into validation problems.
       results <- Task.gatherUnordered {
                   blocks.map(nodes.head.casperEff.addBlock(_))
@@ -438,29 +450,25 @@ abstract class HashSetCasperTest
         deployData1,
         deployData2
       )
-      createBlockResult0 <- nodes(0).casperEff.deploy(deploys(0)) *> nodes(0).casperEff.createBlock
-      createBlockResult1 <- nodes(1).casperEff.deploy(deploys(1)) *> nodes(1).casperEff.createBlock
-      Created(block0)    = createBlockResult0
-      Created(block1)    = createBlockResult1
-      _                  <- nodes(0).casperEff.addBlock(block0)
-      _                  <- nodes(1).casperEff.addBlock(block1)
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
-      _                  <- nodes(0).receive()
-      _                  <- nodes(1).receive()
+      _ <- nodes(0).casperEff.deploy(deploys(0))
+      _ <- nodes(0).propose()
+      _ <- nodes(1).casperEff.deploy(deploys(1))
+      _ <- nodes(1).propose()
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
+      _ <- nodes(0).receive()
+      _ <- nodes(1).receive()
 
       //multiparent block joining block0 and block1 since they do not conflict
-      multiparentCreateBlockResult <- nodes(0).casperEff
-                                       .deploy(deploys(2)) *> nodes(0).casperEff.createBlock
-      Created(multiparentBlock) = multiparentCreateBlockResult
-      _                         <- nodes(0).casperEff.addBlock(multiparentBlock)
-      _                         <- nodes(1).receive()
+      _                <- nodes(0).casperEff.deploy(deploys(2))
+      multiParentBlock <- nodes(0).propose()
+      _                <- nodes(1).receive()
 
       _ = nodes(0).logEff.warns shouldBe empty
       _ = nodes(1).logEff.warns shouldBe empty
-      _ = multiparentBlock.header.get.parentHashes.size shouldBe 2
-      _ = nodes(0).casperEff.contains(multiparentBlock) shouldBeF true
-      _ = nodes(1).casperEff.contains(multiparentBlock) shouldBeF true
+      _ = multiParentBlock.header.get.parentHashes.size shouldBe 2
+      _ = nodes(0).casperEff.contains(multiParentBlock) shouldBeF true
+      _ = nodes(1).casperEff.contains(multiParentBlock) shouldBeF true
 
       _ = nodes.foreach(_.tearDown())
     } yield ()
@@ -494,57 +502,33 @@ abstract class HashSetCasperTest
         forwardDeploy.getHeader.timestamp + 1
       )
 
-      _                    <- nodes.head.casperEff.deploy(forwardDeploy)
-      _                    <- nodes.head.casperEff.deploy(bondingDeploy)
-      createBlockResult1   <- nodes.head.casperEff.createBlock
-      Created(bondedBlock) = createBlockResult1
+      _ <- nodes.head.casperEff.deploy(forwardDeploy)
+      _ <- nodes.head.casperEff.deploy(bondingDeploy)
+      _ <- nodes.head.propose()
 
-      bondedBlockStatus <- nodes.head.casperEff
-                            .addBlock(bondedBlock)
       _ <- nodes(1).receive()
       _ <- nodes.head.receive()
       _ <- nodes(2).clearMessages() //nodes(2) misses bonding
 
-      createBlockResult2 <- {
-        val n = nodes(1)
-        import n.casperEff._
-        (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
-      }
-      Created(block2) = createBlockResult2
-      status2         <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes.head.receive()
-      _               <- nodes(1).receive()
-      _               <- nodes(2).clearMessages() //nodes(2) misses block built on bonding
+      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes(1).casperEff.deploy) *> nodes(1).propose()
+      _ <- nodes.head.receive()
+      _ <- nodes(1).receive()
+      _ <- nodes(2).clearMessages() //nodes(2) misses block built on bonding
 
-      createBlockResult3 <- { //nodes(2) proposes a block
-        val n = nodes(2)
-        import n.casperEff._
-        (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
-      }
-      Created(block3) = createBlockResult3
-      status3         <- nodes(2).casperEff.addBlock(block3)
-      _               <- nodes.toList.traverse_(_.receive())
+      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes(2).casperEff.deploy) *> nodes(2).propose()
+      _ <- nodes.toList.traverse_(_.receive())
       //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
       //their fork-choice changes, thus the new validator
       //is no longer bonded
 
-      createBlockResult4 <- { //nodes(0) proposes a new block
-        val n = nodes.head
-        import n.casperEff._
-        (ProtoUtil.basicDeploy[Task]() >>= deploy) *> createBlock
-      }
-      Created(block4) = createBlockResult4
-      status4         <- nodes.head.casperEff.addBlock(block4)
-      _               <- nodes.toList.traverse_(_.receive())
+      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes.head.casperEff.deploy) *> nodes.head
+            .propose()
+      _ <- nodes.toList.traverse_(_.receive())
 
-      _      = bondedBlockStatus shouldBe Valid
-      _      = status2 shouldBe Valid
-      _      = status3 shouldBe Valid
-      result = status4 shouldBe Valid
-      _      = nodes.foreach(_.logEff.warns shouldBe Nil)
+      _ = nodes.foreach(_.logEff.warns shouldBe Nil)
 
       _ <- nodes.map(_.tearDown()).toList.sequence
-    } yield result
+    } yield ()
   }
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
@@ -558,35 +542,26 @@ abstract class HashSetCasperTest
             .withTimestamp(deployDatas(0).getHeader.timestamp)
             .withAccountPublicKey(deployDatas(0).getHeader.accountPublicKey)
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
-      createdBlockResult1 <- nodes(0).casperEff
-                              .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1) = createdBlockResult1
-      _                     <- nodes(0).casperEff.addBlock(signedBlock1)
-      _                     <- nodes(1).receive() // receive block1
+      _            <- nodes(0).casperEff.deploy(deployDatas(0))
+      signedBlock1 <- nodes(0).propose()
+      _            <- nodes(1).receive() // receive block1
 
-      createBlockResult2 <- nodes(0).casperEff
-                             .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock2) = createBlockResult2
-      _                     <- nodes(0).casperEff.addBlock(signedBlock2)
-      _                     <- nodes(1).receive() // receive block2
+      _            <- nodes(0).casperEff.deploy(deployDatas(1))
+      signedBlock2 <- nodes(0).propose()
+      _            <- nodes(1).receive() // receive block2
 
-      createBlockResult3 <- nodes(0).casperEff
-                             .deploy(deployDatas(2)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock3) = createBlockResult3
-      _                     <- nodes(0).casperEff.addBlock(signedBlock3)
-      _                     <- nodes(1).receive() // receive block3
+      _            <- nodes(0).casperEff.deploy(deployDatas(2))
+      signedBlock3 <- nodes(0).propose()
+      _            <- nodes(1).receive() // receive block3
 
       _ <- nodes(1).casperEff.contains(signedBlock3) shouldBeF true
 
-      createBlockResult4 <- nodes(1).casperEff
-                             .deploy(deployPrim0) *> nodes(1).casperEff.createBlock
-      Created(signedBlock4) = createBlockResult4
-      _ <- nodes(1).casperEff
-            .addBlock(signedBlock4) // should succeed
-      _ <- nodes(0).receive() // still receive signedBlock4
+      _            <- nodes(1).casperEff.deploy(deployPrim0)
+      signedBlock4 <- nodes(1).propose()
+      _            <- nodes(0).receive() // still receive signedBlock4
 
-      result <- nodes(1).casperEff
-                 .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
+      _ <- nodes(1).casperEff
+            .contains(signedBlock4) shouldBeF true // Invalid blocks are still added
       _ <- nodes(0).casperEff.contains(signedBlock4) shouldBeF (false)
       _ = nodes(0).logEff.warns
         .count(_ contains "found deploy by the same (user, millisecond timestamp) produced") shouldBe (1)
@@ -603,7 +578,7 @@ abstract class HashSetCasperTest
           } yield result
         }
       }
-    } yield result
+    } yield ()
   }
 
   it should "ask peers for blocks it is missing" in effectTest {
@@ -614,19 +589,14 @@ abstract class HashSetCasperTest
         List("for(_ <- @1){ Nil } | @1!(1)", "@2!(2)")
       )
 
-      createBlockResult1 <- nodes(0).casperEff
-                             .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock1) = createBlockResult1
+      _            <- nodes(0).casperEff.deploy(deployDatas(0))
+      signedBlock1 <- nodes(0).propose()
+      _            <- nodes(1).receive()
+      _            <- nodes(2).clearMessages() //nodes(2) misses this block
 
-      _ <- nodes(0).casperEff.addBlock(signedBlock1)
-      _ <- nodes(1).receive()
-      _ <- nodes(2).clearMessages() //nodes(2) misses this block
+      _            <- nodes(0).casperEff.deploy(deployDatas(1))
+      signedBlock2 <- nodes(0).propose()
 
-      createBlockResult2 <- nodes(0).casperEff
-                             .deploy(deployDatas(1)) *> nodes(0).casperEff.createBlock
-      Created(signedBlock2) = createBlockResult2
-
-      _ <- nodes(0).casperEff.addBlock(signedBlock2)
       _ <- nodes(1).receive() //receives block2
       _ <- nodes(2).receive() //receives block2; asks for block1
       _ <- nodes(1).receive() //receives request for block1; sends block1
@@ -709,15 +679,14 @@ abstract class HashSetCasperTest
     }
 
     /** Create a block from a deploy and add it on that node. */
-    def deploy(node: HashSetCasperTestNode[Task], dd: Deploy): Task[Block] =
+    def deploy(node: TestNode[Task], dd: Deploy): Task[Block] =
       for {
-        _                     <- node.casperEff.deploy(dd)
-        Created(signedBlock1) <- node.casperEff.createBlock
-        _                     <- node.casperEff.addBlock(signedBlock1)
-      } yield signedBlock1
+        _     <- node.casperEff.deploy(dd)
+        block <- node.propose()
+      } yield block
 
     /** nodes 0 and 1 create blocks in parallel; node 2 misses both, e.g. a1 and a2. */
-    def stepSplit(nodes: Seq[HashSetCasperTestNode[Task]]) =
+    def stepSplit(nodes: Seq[TestNode[Task]]) =
       for {
         _ <- deploy(nodes(0), makeDeployA())
         _ <- deploy(nodes(1), makeDeployB())
@@ -728,7 +697,7 @@ abstract class HashSetCasperTest
       } yield ()
 
     /** node 0 creates a block; node 1 gets it but node 2 doesn't. */
-    def stepSingle(nodes: Seq[HashSetCasperTestNode[Task]]) =
+    def stepSingle(nodes: Seq[TestNode[Task]]) =
       for {
         _ <- deploy(nodes(0), makeDeployA())
 
@@ -737,7 +706,7 @@ abstract class HashSetCasperTest
         _ <- nodes(2).clearMessages() //nodes(2) misses this block
       } yield ()
 
-    def propagate(nodes: Seq[HashSetCasperTestNode[Task]]) =
+    def propagate(nodes: Seq[TestNode[Task]]) =
       for {
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
@@ -790,9 +759,16 @@ abstract class HashSetCasperTest
                                   .deploy(basicDeployData1) *> nodes(0).casperEff.createBlock
       Created(signedBlock1Prime) = createBlockResult1Prime
 
-      _ <- nodes(0).casperEff.addBlock(signedBlock1)
+      _ <- nodes(0).casperEff
+            .addBlock(signedBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(signedBlock1, _)) shouldBeF Valid
       _ <- nodes(1).receive()
-      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime)
+      _ <- nodes(0).casperEff.addBlock(signedBlock1Prime) shouldBeF SelfEquivocatedBlock
+      // NOTE: Actual implementation would NOT DO THIS.
+      // signedBlock1Prime and signedBlock1 create a self-equivocation (node-0) sees itself equivocating
+      // with this pair of blocks. We don't gossip self-equivocating blocks but we want to test
+      // that a node adds to its DAG blocks that create an equivocation.
+      _ <- nodes(0).broadcaster.networkEffects(signedBlock1Prime, EquivocatedBlock)
       _ <- nodes(1).receive()
 
       _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
@@ -846,7 +822,7 @@ abstract class HashSetCasperTest
       block1Prime <- makeDeploy(0)
 
       _ <- nodes(0).casperEff.addBlock(block1) shouldBeF Valid
-      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF EquivocatedBlock
+      _ <- nodes(0).casperEff.addBlock(block1Prime) shouldBeF SelfEquivocatedBlock
       _ <- nodes(1).clearMessages()
       _ <- nodes(1).casperEff.addBlock(block1Prime) shouldBeF Valid
       _ <- nodes(0).receive()
@@ -855,7 +831,7 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
 
       block2Prime <- makeDeploy(1)
-      _           <- nodes(1).casperEff.addBlock(block2Prime) shouldBeF Valid
+      _           <- nodes(1).addAndBroadcast(block2Prime)
       _           <- nodes(0).receive()
       // Process dependencies
       _ <- nodes(1).receive()
@@ -865,6 +841,42 @@ abstract class HashSetCasperTest
       _ <- nodes(0).casperEff.contains(block1Prime) shouldBeF true
 
       _ <- nodes.toList.traverse(_.tearDown())
+    } yield ()
+  }
+
+  it should "detect self equivocation when validating an incoming block" in effectTest {
+    for {
+      // Starting 2 nodes with the same validator key.
+      nodes <- networkEff(IndexedSeq(validatorKeys.head, validatorKeys.head), genesis, transforms)
+      // Creates a pair that constitutes equivocation blocks
+      signedBlock1 <- createTestBlock(nodes(0))
+      signedBlock2 <- createTestBlock(nodes(1))
+
+      _ <- nodes(0).addAndBroadcast(signedBlock1)
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
+
+      _ <- nodes(1).casperEff
+            .addBlock(signedBlock2) shouldBeF SelfEquivocatedBlock
+    } yield ()
+  }
+
+  it should "not relay blocks that create a self equivocation" in effectTest {
+    for {
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      // Creates a pair that constitutes equivocation blocks
+      signedBlock1      <- createTestBlock(nodes(0))
+      signedBlock1Prime <- createTestBlock(nodes(0))
+
+      _ <- nodes(0).addAndBroadcast(signedBlock1)
+      _ <- nodes(1).receive()
+      _ <- nodes(1).casperEff.contains(signedBlock1) shouldBeF true
+
+      _ <- nodes(0).addAndBroadcast(signedBlock1Prime)
+      _ <- nodes(1).receive()
+
+      _ <- nodes(1).casperEff
+            .contains(signedBlock1Prime) shouldBeF false
     } yield ()
   }
 
@@ -924,21 +936,14 @@ abstract class HashSetCasperTest
       _ <- (1L to 10L).toList.traverse_[Task, Unit] { _ =>
             for {
               deploy <- ProtoUtil.basicDeploy[Task]()
-              createBlockResult <- nodes(0).casperEff
-                                    .deploy(deploy) *> nodes(0).casperEff.createBlock
-              Created(block) = createBlockResult
-
-              _ <- nodes(0).casperEff.addBlock(block)
-              _ <- nodes(1).clearMessages() //nodes(1) misses this block
+              _      <- nodes(0).casperEff.deploy(deploy)
+              _      <- nodes(0).propose()
+              _      <- nodes(1).clearMessages() //nodes(1) misses this block
             } yield ()
           }
       deployData10 <- ProtoUtil.basicDeploy[Task]()
-      createBlock11Result <- nodes(0).casperEff.deploy(deployData10) *> nodes(
-                              0
-                            ).casperEff.createBlock
-      Created(block11) = createBlock11Result
-      _                <- nodes(0).casperEff.addBlock(block11)
-
+      _            <- nodes(0).casperEff.deploy(deployData10)
+      _            <- nodes(0).propose()
       // Cycle of requesting and passing blocks until block #9 from nodes(0) to nodes(1)
       _ <- (0 to 8).toList.traverse_[Task, Unit] { _ =>
             nodes(1).receive().void *> nodes(0).receive().void
@@ -975,23 +980,24 @@ abstract class HashSetCasperTest
         block1.withHeader(block1.getHeader.withTimestamp(Long.MaxValue)),
         nodes(0).validatorId.privateKey
       )
-      _ <- nodes(0).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(0).casperEff
+            .addBlock(invalidBlock1)
+            .flatTap(nodes(0).broadcaster.networkEffects(invalidBlock1, _))
       _ = nodes(0).logEff.warns.count(_ startsWith "Recording invalid block") should be(1)
       // nodes(0) won't send invalid blocks
       _ <- nodes(1).receive()
       _ <- nodes(1).casperEff
             .contains(invalidBlock1) shouldBeF false
       // we manually add this invalid block to node1
-      _ <- nodes(1).casperEff.addBlock(invalidBlock1)
+      _ <- nodes(1).addAndBroadcast(invalidBlock1)
       _ <- nodes(1).casperEff
             .contains(invalidBlock1) shouldBeF false
       deployData2 <- ProtoUtil.basicDeploy[Task]()
-      createBlock2Result <- nodes(1).casperEff
-                             .deploy(deployData2) *> nodes(1).casperEff.createBlock
-      Created(block2) = createBlock2Result
-      _               <- nodes(1).casperEff.addBlock(block2)
-      _               <- nodes(0).receive()
-      _               <- nodes.map(_.tearDownNode()).toList.sequence
+      _ <- nodes(1).casperEff
+            .deploy(deployData2)
+      block2 <- nodes(1).propose()
+      _      <- nodes(0).receive()
+      _      <- nodes.map(_.tearDownNode()).toList.sequence
       _ <- nodes.toList.traverse_[Task, Assertion] { node =>
             node.validateBlockStorage { blockStorage =>
               for {
@@ -1027,49 +1033,35 @@ abstract class HashSetCasperTest
               )
       deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
 
-      Created(block1) <- nodes(0).casperEff
-                          .deploy(deployDatas(0)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block1)
+      _ <- nodes(0).casperEff.deploy(deployDatas(0)) *> nodes(0).propose()
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
-      Created(block2) <- nodes(1).casperEff
-                          .deploy(deployDatas(1)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block2)
-      _ <- nodes(0).receive()
-      _ <- nodes(2).receive()
+      block2 <- nodes(1).casperEff.deploy(deployDatas(1)) *> nodes(1).propose()
+      _      <- nodes(0).receive()
+      _      <- nodes(2).receive()
 
-      Created(block3) <- nodes(2).casperEff
-                          .deploy(deployDatas(2)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block3)
-      _ <- nodes(0).receive()
-      _ <- nodes(1).receive()
+      block3 <- nodes(2).casperEff.deploy(deployDatas(2)) *> nodes(2).propose()
+      _      <- nodes(0).receive()
+      _      <- nodes(1).receive()
 
-      Created(block4) <- nodes(0).casperEff
-                          .deploy(deployDatas(3)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block4)
-      _ <- nodes(1).receive()
-      _ <- nodes(2).receive()
+      block4 <- nodes(0).casperEff.deploy(deployDatas(3)) *> nodes(0).propose()
+      _      <- nodes(1).receive()
+      _      <- nodes(2).receive()
 
-      Created(block5) <- nodes(1).casperEff
-                          .deploy(deployDatas(4)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block5)
-      _ <- nodes(0).receive()
-      _ <- nodes(2).receive()
+      block5 <- nodes(1).casperEff.deploy(deployDatas(4)) *> nodes(1).propose()
+      _      <- nodes(0).receive()
+      _      <- nodes(2).receive()
 
-      Created(block6) <- nodes(2).casperEff
-                          .deploy(deployDatas(5)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block6)
-      _ <- nodes(0).receive()
-      _ <- nodes(1).receive()
+      block6 <- nodes(2).casperEff.deploy(deployDatas(5)) *> nodes(2).propose()
+      _      <- nodes(0).receive()
+      _      <- nodes(1).receive()
 
       _                     <- checkLastFinalizedBlock(nodes(0), block2)
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1)
 
-      Created(block7) <- nodes(0).casperEff
-                          .deploy(deployDatas(6)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block7)
+      _ <- nodes(0).casperEff.deploy(deployDatas(6)) *> nodes(0).propose()
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
@@ -1077,9 +1069,7 @@ abstract class HashSetCasperTest
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(2) // deploys contained in block 4 and block 7
 
-      Created(block8) <- nodes(1).casperEff
-                          .deploy(deployDatas(7)) *> nodes(1).casperEff.createBlock
-      _ <- nodes(1).casperEff.addBlock(block8)
+      _ <- nodes(1).casperEff.deploy(deployDatas(7)) *> nodes(1).propose()
       _ <- nodes(0).receive()
       _ <- nodes(2).receive()
 
@@ -1087,9 +1077,7 @@ abstract class HashSetCasperTest
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
-      Created(block9) <- nodes(2).casperEff
-                          .deploy(deployDatas(8)) *> nodes(2).casperEff.createBlock
-      _ <- nodes(2).casperEff.addBlock(block9)
+      _ <- nodes(2).casperEff.deploy(deployDatas(8)) *> nodes(2).propose()
       _ <- nodes(0).receive()
       _ <- nodes(1).receive()
 
@@ -1097,9 +1085,7 @@ abstract class HashSetCasperTest
       pendingOrProcessedNum <- nodes(0).deployStorage.reader.sizePendingOrProcessed()
       _                     = pendingOrProcessedNum should be(1) // deploys contained in block 7
 
-      Created(block10) <- nodes(0).casperEff
-                           .deploy(deployDatas(9)) *> nodes(0).casperEff.createBlock
-      _ <- nodes(0).casperEff.addBlock(block10)
+      _ <- nodes(0).casperEff.deploy(deployDatas(9)) *> nodes(0).propose()
       _ <- nodes(1).receive()
       _ <- nodes(2).receive()
 
@@ -1109,20 +1095,6 @@ abstract class HashSetCasperTest
 
       _ <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
-  }
-
-  it should "succeed if given enough gas for deploy" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
-    import node._
-    implicit val timeEff = new LogicalTime[Task]
-
-    for {
-      deploy <- ProtoUtil.basicDeploy[Task]()
-      _      <- node.casperEff.deploy(deploy)
-
-      createBlockResult <- MultiParentCasper[Task].createBlock
-      Created(block)    = createBlockResult
-    } yield assert(!block.body.get.deploys.head.isError)
   }
 
   it should "put orphaned deploys back into the pending deploy buffer" in effectTest {
