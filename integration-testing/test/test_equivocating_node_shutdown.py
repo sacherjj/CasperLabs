@@ -45,5 +45,9 @@ def test_equivocating_node_shutdown(two_node_network):
     with pytest.raises(Exception):
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
-    assert "Goodbye" in nodes[0].logs()
+    # Check node-0 is offline. If it terminated the docker container it was running in stopped as well.
+    with pytest.raises(Exception) as excinfo:
+        nodes[0].d_client.show_blocks(1)
+    assert "Unable to resolve host node-0" in str(excinfo.value.output)
+
     assert "Node has detected it's own equivocation with block" in nodes[0].logs()
