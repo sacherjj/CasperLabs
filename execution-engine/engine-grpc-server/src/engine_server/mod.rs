@@ -37,11 +37,8 @@ use engine_wasm_prep::Preprocessor;
 
 use self::{
     ipc::{
-        ChainSpec_GenesisConfig as ProtobufGenesisConfig, CommitRequest as ProtobufCommitRequest,
-        CommitResponse as ProtobufCommitResponse, ExecuteRequest as ProtobufExecuteRequest,
-        ExecuteResponse as ProtobufExecuteResponse, GenesisResponse as ProtobufGenesisResponse,
-        QueryRequest as ProtobufQueryRequest, QueryResponse as ProtobufQueryResponse,
-        UpgradeRequest as ProtobufUpgradeRequest, UpgradeResponse as ProtobufUpgradeResponse,
+        ChainSpec_GenesisConfig, CommitRequest, CommitResponse, ExecuteRequest, ExecuteResponse,
+        GenesisResponse, QueryResponse, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::{ExecutionEngineService, ExecutionEngineServiceServer},
     mappings::{MappingError, ParsingError, TransformMap},
@@ -75,8 +72,8 @@ where
     fn query(
         &self,
         _request_options: RequestOptions,
-        query_request: ProtobufQueryRequest,
-    ) -> SingleResponse<ProtobufQueryResponse> {
+        query_request: ipc::QueryRequest,
+    ) -> SingleResponse<QueryResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -143,8 +140,8 @@ where
     fn execute(
         &self,
         _request_options: RequestOptions,
-        mut exec_request: ProtobufExecuteRequest,
-    ) -> SingleResponse<ProtobufExecuteResponse> {
+        mut exec_request: ExecuteRequest,
+    ) -> SingleResponse<ExecuteResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -169,7 +166,7 @@ where
         let executor = Executor;
         let preprocessor = Preprocessor::new(wasm_costs);
 
-        let mut exec_response = ProtobufExecuteResponse::new();
+        let mut exec_response = ExecuteResponse::new();
         let mut results: Vec<ExecutionResult> = Vec::new();
 
         for result in exec_request
@@ -227,8 +224,8 @@ where
     fn commit(
         &self,
         _request_options: RequestOptions,
-        mut commit_request: ProtobufCommitRequest,
-    ) -> SingleResponse<ProtobufCommitResponse> {
+        mut commit_request: CommitRequest,
+    ) -> SingleResponse<CommitResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -247,7 +244,7 @@ where
             Err(_) => {
                 let error_message = "Could not parse pre-state hash".to_string();
                 logging::log_error(&error_message);
-                let mut commit_response = ProtobufCommitResponse::new();
+                let mut commit_response = CommitResponse::new();
                 commit_response
                     .mut_failed_transform()
                     .set_message(error_message);
@@ -260,7 +257,7 @@ where
         let transforms = match TransformMap::try_from(commit_request.take_effects().into_vec()) {
             Err(ParsingError(error_message)) => {
                 logging::log_error(&error_message);
-                let mut commit_response = ProtobufCommitResponse::new();
+                let mut commit_response = CommitResponse::new();
                 commit_response
                     .mut_failed_transform()
                     .set_message(error_message);
@@ -271,7 +268,7 @@ where
 
         // "Apply" effects to global state
         let commit_response = {
-            let mut ret = ProtobufCommitResponse::new();
+            let mut ret = CommitResponse::new();
 
             match self.apply_effect(correlation_id, protocol_version, pre_state_hash, transforms) {
                 Ok(CommitResult::Success {
@@ -335,8 +332,8 @@ where
     fn run_genesis(
         &self,
         _request_options: RequestOptions,
-        genesis_config: ProtobufGenesisConfig,
-    ) -> SingleResponse<ProtobufGenesisResponse> {
+        genesis_config: ChainSpec_GenesisConfig,
+    ) -> SingleResponse<GenesisResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -346,7 +343,7 @@ where
                 let err_msg = error.to_string();
                 logging::log_error(&err_msg);
 
-                let mut genesis_response = ProtobufGenesisResponse::new();
+                let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
                 return SingleResponse::completed(genesis_response);
             }
@@ -360,7 +357,7 @@ where
                 let success_message = format!("run_genesis successful: {}", post_state_hash);
                 log_info(&success_message);
 
-                let mut genesis_response = ProtobufGenesisResponse::new();
+                let mut genesis_response = GenesisResponse::new();
                 let genesis_result = genesis_response.mut_success();
                 genesis_result.set_poststate_hash(post_state_hash.to_vec());
                 genesis_result.set_effect(effect.into());
@@ -370,7 +367,7 @@ where
                 let err_msg = genesis_result.to_string();
                 logging::log_error(&err_msg);
 
-                let mut genesis_response = ProtobufGenesisResponse::new();
+                let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
                 genesis_response
             }
@@ -378,7 +375,7 @@ where
                 let err_msg = err.to_string();
                 logging::log_error(&err_msg);
 
-                let mut genesis_response = ProtobufGenesisResponse::new();
+                let mut genesis_response = GenesisResponse::new();
                 genesis_response.mut_failed_deploy().set_message(err_msg);
                 genesis_response
             }
@@ -397,8 +394,8 @@ where
     fn upgrade(
         &self,
         _request_options: RequestOptions,
-        upgrade_request: ProtobufUpgradeRequest,
-    ) -> SingleResponse<ProtobufUpgradeResponse> {
+        upgrade_request: UpgradeRequest,
+    ) -> SingleResponse<UpgradeResponse> {
         let start = Instant::now();
         let correlation_id = CorrelationId::new();
 
@@ -408,7 +405,7 @@ where
                 let err_msg = error.to_string();
                 logging::log_error(&err_msg);
 
-                let mut upgrade_response = ProtobufUpgradeResponse::new();
+                let mut upgrade_response = UpgradeResponse::new();
                 upgrade_response.mut_failed_deploy().set_message(err_msg);
 
                 log_duration(
@@ -430,7 +427,7 @@ where
                 let success_message = format!("upgrade successful: {}", post_state_hash);
                 log_info(&success_message);
 
-                let mut ret = ProtobufUpgradeResponse::new();
+                let mut ret = UpgradeResponse::new();
                 let upgrade_result = ret.mut_success();
                 upgrade_result.set_post_state_hash(post_state_hash.to_vec());
                 upgrade_result.set_effect(effect.into());
@@ -440,7 +437,7 @@ where
                 let err_msg = upgrade_result.to_string();
                 logging::log_error(&err_msg);
 
-                let mut ret = ProtobufUpgradeResponse::new();
+                let mut ret = UpgradeResponse::new();
                 ret.mut_failed_deploy().set_message(err_msg);
                 ret
             }
@@ -448,7 +445,7 @@ where
                 let err_msg = err.to_string();
                 logging::log_error(&err_msg);
 
-                let mut ret = ProtobufUpgradeResponse::new();
+                let mut ret = UpgradeResponse::new();
                 ret.mut_failed_deploy().set_message(err_msg);
                 ret
             }

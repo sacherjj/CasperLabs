@@ -7,12 +7,10 @@ use engine_core::{
 };
 use engine_shared::gas::Gas;
 
-use crate::engine_server::ipc::{
-    DeployError_OutOfGasError as ProtobufOutOfGasError, DeployResult as ProtobufDeployResult,
-};
+use crate::engine_server::ipc::{DeployError_OutOfGasError, DeployResult};
 
-impl From<ExecutionResult> for ProtobufDeployResult {
-    fn from(execution_result: ExecutionResult) -> ProtobufDeployResult {
+impl From<ExecutionResult> for DeployResult {
+    fn from(execution_result: ExecutionResult) -> DeployResult {
         match execution_result {
             ExecutionResult::Success { effect, cost } => detail::execution_success(effect, cost),
             ExecutionResult::Failure {
@@ -24,7 +22,7 @@ impl From<ExecutionResult> for ProtobufDeployResult {
     }
 }
 
-impl From<(EngineStateError, ExecutionEffect, Gas)> for ProtobufDeployResult {
+impl From<(EngineStateError, ExecutionEffect, Gas)> for DeployResult {
     fn from((engine_state_error, effect, cost): (EngineStateError, ExecutionEffect, Gas)) -> Self {
         match engine_state_error {
             // TODO(mateusz.gorski): Fix error model for the storage errors.
@@ -57,7 +55,7 @@ impl From<(EngineStateError, ExecutionEffect, Gas)> for ProtobufDeployResult {
     }
 }
 
-impl From<(ExecutionError, ExecutionEffect, Gas)> for ProtobufDeployResult {
+impl From<(ExecutionError, ExecutionEffect, Gas)> for DeployResult {
     fn from((exec_error, effect, cost): (ExecutionError, ExecutionEffect, Gas)) -> Self {
         match exec_error {
             ExecutionError::GasLimit => detail::out_of_gas_error(effect, cost),
@@ -96,35 +94,35 @@ impl From<(ExecutionError, ExecutionEffect, Gas)> for ProtobufDeployResult {
 }
 
 mod detail {
-    use super::{ExecutionEffect, Gas, ProtobufDeployResult, ProtobufOutOfGasError};
+    use super::{DeployError_OutOfGasError, DeployResult, ExecutionEffect, Gas};
 
-    /// Constructs an instance of `ProtobufDeployResult` with no error set, i.e. a successful
+    /// Constructs an instance of `DeployResult` with no error set, i.e. a successful
     /// result.
-    pub(super) fn execution_success(effect: ExecutionEffect, cost: Gas) -> ProtobufDeployResult {
+    pub(super) fn execution_success(effect: ExecutionEffect, cost: Gas) -> DeployResult {
         deploy_result(DeployErrorType::None, effect, cost)
     }
 
-    /// Constructs an instance of `ProtobufDeployResult` with an error set to
+    /// Constructs an instance of `DeployResult` with an error set to
     /// `ProtobufPreconditionFailure`.
-    pub(super) fn precondition_error(msg: String) -> ProtobufDeployResult {
-        let mut pb_deploy_result = ProtobufDeployResult::new();
+    pub(super) fn precondition_error(msg: String) -> DeployResult {
+        let mut pb_deploy_result = DeployResult::new();
         pb_deploy_result.mut_precondition_failure().set_message(msg);
         pb_deploy_result
     }
 
-    /// Constructs an instance of `ProtobufDeployResult` with an error set to
+    /// Constructs an instance of `DeployResult` with an error set to
     /// `ProtobufExecutionError`.
     pub(super) fn execution_error<T: ToString>(
         msg: T,
         effect: ExecutionEffect,
         cost: Gas,
-    ) -> ProtobufDeployResult {
+    ) -> DeployResult {
         deploy_result(DeployErrorType::Exec(msg.to_string()), effect, cost)
     }
 
-    /// Constructs an instance of `ProtobufDeployResult` with an error set to
-    /// `ProtobufOutOfGasError`.
-    pub(super) fn out_of_gas_error(effect: ExecutionEffect, cost: Gas) -> ProtobufDeployResult {
+    /// Constructs an instance of `DeployResult` with an error set to
+    /// `DeployError_OutOfGasError`.
+    pub(super) fn out_of_gas_error(effect: ExecutionEffect, cost: Gas) -> DeployResult {
         deploy_result(DeployErrorType::OutOfGas, effect, cost)
     }
 
@@ -134,22 +132,22 @@ mod detail {
         Exec(String),
     }
 
-    /// Constructs an instance of `ProtobufDeployResult` with an error set to
-    /// `ProtobufOutOfGasError` or `ProtobufExecutionError` or with no error set, depending on the
-    /// value of `error_type`.
+    /// Constructs an instance of `DeployResult` with an error set to
+    /// `DeployError_OutOfGasError` or `ProtobufExecutionError` or with no error set, depending on
+    /// the value of `error_type`.
     fn deploy_result(
         error_type: DeployErrorType,
         effect: ExecutionEffect,
         cost: Gas,
-    ) -> ProtobufDeployResult {
-        let mut pb_deploy_result = ProtobufDeployResult::new();
+    ) -> DeployResult {
+        let mut pb_deploy_result = DeployResult::new();
 
         let pb_execution_result = pb_deploy_result.mut_execution_result();
         match error_type {
             DeployErrorType::None => (),
             DeployErrorType::OutOfGas => pb_execution_result
                 .mut_error()
-                .set_gas_error(ProtobufOutOfGasError::new()),
+                .set_gas_error(DeployError_OutOfGasError::new()),
             DeployErrorType::Exec(msg) => pb_execution_result
                 .mut_error()
                 .mut_exec_error()
@@ -192,7 +190,7 @@ mod tests {
             effect: execution_effect,
             cost,
         };
-        let mut ipc_deploy_result: ProtobufDeployResult = execution_result.into();
+        let mut ipc_deploy_result: DeployResult = execution_result.into();
         assert!(ipc_deploy_result.has_execution_result());
         let mut success = ipc_deploy_result.take_execution_result();
         let execution_cost: U512 = success.take_cost().try_into().expect("should map to U512");
@@ -217,7 +215,7 @@ mod tests {
             effect: Default::default(),
             cost: expected_cost,
         };
-        let mut ipc_deploy_result: ProtobufDeployResult = execution_failure.into();
+        let mut ipc_deploy_result: DeployResult = execution_failure.into();
         assert!(ipc_deploy_result.has_execution_result());
         let execution_result = ipc_deploy_result.mut_execution_result();
         let execution_cost: U512 = execution_result
@@ -260,7 +258,7 @@ mod tests {
             effect: Default::default(),
             cost: Gas::new(amount),
         };
-        let mut ipc_result: ProtobufDeployResult = exec_result.into();
+        let mut ipc_result: DeployResult = exec_result.into();
         assert!(
             ipc_result.has_execution_result(),
             "should have execution result"

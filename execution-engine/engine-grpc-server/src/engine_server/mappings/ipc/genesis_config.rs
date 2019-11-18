@@ -3,16 +3,13 @@ use std::convert::{TryFrom, TryInto};
 use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
 
 use crate::engine_server::{
-    ipc::{
-        ChainSpec_GenesisAccount as ProtobufGenesisAccount,
-        ChainSpec_GenesisConfig as ProtobufGenesisConfig,
-    },
+    ipc::{ChainSpec_GenesisAccount, ChainSpec_GenesisConfig},
     mappings::MappingError,
 };
 
-impl From<GenesisConfig> for ProtobufGenesisConfig {
+impl From<GenesisConfig> for ChainSpec_GenesisConfig {
     fn from(genesis_config: GenesisConfig) -> Self {
-        let mut pb_genesis_config = ProtobufGenesisConfig::new();
+        let mut pb_genesis_config = ChainSpec_GenesisConfig::new();
 
         pb_genesis_config.set_name(genesis_config.name().to_string());
         pb_genesis_config.set_timestamp(genesis_config.timestamp());
@@ -26,7 +23,7 @@ impl From<GenesisConfig> for ProtobufGenesisConfig {
                 .iter()
                 .cloned()
                 .map(Into::into)
-                .collect::<Vec<ProtobufGenesisAccount>>();
+                .collect::<Vec<ChainSpec_GenesisAccount>>();
             pb_genesis_config.set_accounts(accounts.into());
         }
         pb_genesis_config
@@ -36,10 +33,10 @@ impl From<GenesisConfig> for ProtobufGenesisConfig {
     }
 }
 
-impl TryFrom<ProtobufGenesisConfig> for GenesisConfig {
+impl TryFrom<ChainSpec_GenesisConfig> for GenesisConfig {
     type Error = MappingError;
 
-    fn try_from(mut pb_genesis_config: ProtobufGenesisConfig) -> Result<Self, Self::Error> {
+    fn try_from(mut pb_genesis_config: ChainSpec_GenesisConfig) -> Result<Self, Self::Error> {
         let name = pb_genesis_config.take_name();
         let timestamp = pb_genesis_config.get_timestamp();
         let protocol_version = pb_genesis_config.take_protocol_version().into();
@@ -73,6 +70,6 @@ mod tests {
     #[test]
     fn round_trip() {
         let genesis_config = rand::random();
-        test_utils::protobuf_round_trip::<GenesisConfig, ProtobufGenesisConfig>(genesis_config);
+        test_utils::protobuf_round_trip::<GenesisConfig, ChainSpec_GenesisConfig>(genesis_config);
     }
 }

@@ -4,15 +4,12 @@ use contract_ffi::value::Value;
 
 use crate::engine_server::{
     mappings::ParsingError,
-    state::{
-        IntList as ProtobufIntList, StringList as ProtobufStringList, Unit as ProtobufUnit,
-        Value as ProtobufValue, Value_oneof_value as ProtobufValueEnum,
-    },
+    state::{self, IntList, StringList, Unit, Value_oneof_value},
 };
 
-impl From<Value> for ProtobufValue {
+impl From<Value> for state::Value {
     fn from(value: Value) -> Self {
-        let mut pb_value = ProtobufValue::new();
+        let mut pb_value = state::Value::new();
         match value {
             Value::Int32(x) => pb_value.set_int_value(x),
             Value::UInt64(x) => pb_value.set_long_value(x),
@@ -21,13 +18,13 @@ impl From<Value> for ProtobufValue {
             Value::UInt512(x) => pb_value.set_big_int(x.into()),
             Value::ByteArray(bytes) => pb_value.set_bytes_value(bytes),
             Value::ListInt32(int_list) => {
-                let mut pb_int_list = ProtobufIntList::new();
+                let mut pb_int_list = IntList::new();
                 pb_int_list.set_values(int_list);
                 pb_value.set_int_list(pb_int_list);
             }
             Value::String(string) => pb_value.set_string_value(string),
             Value::ListString(list_string) => {
-                let mut pb_string_list = ProtobufStringList::new();
+                let mut pb_string_list = StringList::new();
                 pb_string_list.set_values(list_string.into());
                 pb_value.set_string_list(pb_string_list);
             }
@@ -37,37 +34,37 @@ impl From<Value> for ProtobufValue {
             Value::Key(key) => pb_value.set_key(key.into()),
             Value::Account(account) => pb_value.set_account(account.into()),
             Value::Contract(contract) => pb_value.set_contract(contract.into()),
-            Value::Unit => pb_value.set_unit(ProtobufUnit::new()),
+            Value::Unit => pb_value.set_unit(Unit::new()),
         };
         pb_value
     }
 }
 
-impl TryFrom<ProtobufValue> for Value {
+impl TryFrom<state::Value> for Value {
     type Error = ParsingError;
 
-    fn try_from(pb_value: ProtobufValue) -> Result<Self, Self::Error> {
+    fn try_from(pb_value: state::Value) -> Result<Self, Self::Error> {
         let pb_value = pb_value
             .value
             .ok_or_else(|| ParsingError("Unable to parse Protobuf Value".to_string()))?;
         let value = match pb_value {
-            ProtobufValueEnum::int_value(x) => Value::Int32(x),
-            ProtobufValueEnum::long_value(x) => Value::UInt64(x),
-            ProtobufValueEnum::big_int(pb_big_int) => pb_big_int.try_into()?,
-            ProtobufValueEnum::bytes_value(bytes) => Value::ByteArray(bytes),
-            ProtobufValueEnum::int_list(pb_int_list) => Value::ListInt32(pb_int_list.values),
-            ProtobufValueEnum::string_value(string) => Value::String(string),
-            ProtobufValueEnum::string_list(pb_string_list) => {
+            Value_oneof_value::int_value(x) => Value::Int32(x),
+            Value_oneof_value::long_value(x) => Value::UInt64(x),
+            Value_oneof_value::big_int(pb_big_int) => pb_big_int.try_into()?,
+            Value_oneof_value::bytes_value(bytes) => Value::ByteArray(bytes),
+            Value_oneof_value::int_list(pb_int_list) => Value::ListInt32(pb_int_list.values),
+            Value_oneof_value::string_value(string) => Value::String(string),
+            Value_oneof_value::string_list(pb_string_list) => {
                 Value::ListString(pb_string_list.values.into_vec())
             }
-            ProtobufValueEnum::named_key(pb_named_key) => {
+            Value_oneof_value::named_key(pb_named_key) => {
                 let (name, key) = pb_named_key.try_into()?;
                 Value::NamedKey(name, key)
             }
-            ProtobufValueEnum::key(pb_key) => Value::Key(pb_key.try_into()?),
-            ProtobufValueEnum::account(pb_account) => Value::Account(pb_account.try_into()?),
-            ProtobufValueEnum::contract(pb_contract) => Value::Contract(pb_contract.try_into()?),
-            ProtobufValueEnum::unit(_) => Value::Unit,
+            Value_oneof_value::key(pb_key) => Value::Key(pb_key.try_into()?),
+            Value_oneof_value::account(pb_account) => Value::Account(pb_account.try_into()?),
+            Value_oneof_value::contract(pb_contract) => Value::Contract(pb_contract.try_into()?),
+            Value_oneof_value::unit(_) => Value::Unit,
         };
         Ok(value)
     }
@@ -85,7 +82,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(value in gens::value_arb()) {
-            test_utils::protobuf_round_trip::<Value, ProtobufValue>(value);
+            test_utils::protobuf_round_trip::<Value, state::Value>(value);
         }
     }
 }

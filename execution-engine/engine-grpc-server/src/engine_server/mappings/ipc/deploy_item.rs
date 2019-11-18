@@ -6,12 +6,12 @@ use std::{
 use contract_ffi::value::account::PublicKey;
 use engine_core::engine_state::deploy_item::DeployItem;
 
-use crate::engine_server::{ipc::DeployItem as ProtobufDeployItem, mappings::MappingError};
+use crate::engine_server::{ipc, mappings::MappingError};
 
-impl TryFrom<ProtobufDeployItem> for DeployItem {
+impl TryFrom<ipc::DeployItem> for DeployItem {
     type Error = MappingError;
 
-    fn try_from(mut pb_deploy_item: ProtobufDeployItem) -> Result<Self, Self::Error> {
+    fn try_from(mut pb_deploy_item: ipc::DeployItem) -> Result<Self, Self::Error> {
         let address = pb_deploy_item
             .get_address()
             .try_into()

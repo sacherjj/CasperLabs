@@ -1,30 +1,26 @@
 use std::convert::TryFrom;
 
-use engine_shared::transform::{Error as TransformError, TypeMismatch};
+use engine_shared::transform::{self, TypeMismatch};
 
 use crate::engine_server::{
     mappings::ParsingError,
-    transforms::{
-        TransformFailure as ProtobufTransformFailure,
-        TransformFailure_oneof_failure_instance as ProtobufTransformFailureEnum,
-        TypeMismatch as ProtobufTypeMismatch,
-    },
+    transforms::{self, TransformFailure, TransformFailure_oneof_failure_instance},
 };
 
-impl From<TypeMismatch> for ProtobufTypeMismatch {
-    fn from(type_mismatch: TypeMismatch) -> ProtobufTypeMismatch {
-        let mut pb_type_mismatch = ProtobufTypeMismatch::new();
+impl From<TypeMismatch> for transforms::TypeMismatch {
+    fn from(type_mismatch: TypeMismatch) -> transforms::TypeMismatch {
+        let mut pb_type_mismatch = transforms::TypeMismatch::new();
         pb_type_mismatch.set_expected(type_mismatch.expected);
         pb_type_mismatch.set_found(type_mismatch.found);
         pb_type_mismatch
     }
 }
 
-impl From<TransformError> for ProtobufTransformFailure {
-    fn from(error: TransformError) -> Self {
-        let mut pb_transform_failure = ProtobufTransformFailure::new();
+impl From<transform::Error> for TransformFailure {
+    fn from(error: transform::Error) -> Self {
+        let mut pb_transform_failure = TransformFailure::new();
         match error {
-            TransformError::TypeMismatch(type_mismatch) => {
+            transform::Error::TypeMismatch(type_mismatch) => {
                 pb_transform_failure.set_type_mismatch(type_mismatch.into())
             }
         }
@@ -32,23 +28,21 @@ impl From<TransformError> for ProtobufTransformFailure {
     }
 }
 
-impl TryFrom<ProtobufTransformFailure> for TransformError {
+impl TryFrom<TransformFailure> for transform::Error {
     type Error = ParsingError;
 
-    fn try_from(
-        pb_transform_failure: ProtobufTransformFailure,
-    ) -> Result<TransformError, ParsingError> {
+    fn try_from(pb_transform_failure: TransformFailure) -> Result<transform::Error, ParsingError> {
         let pb_transform_failure = pb_transform_failure
             .failure_instance
             .ok_or_else(|| ParsingError::from("Unable to parse Protobuf TransformFailure"))?;
         match pb_transform_failure {
-            ProtobufTransformFailureEnum::type_mismatch(ProtobufTypeMismatch {
+            TransformFailure_oneof_failure_instance::type_mismatch(transforms::TypeMismatch {
                 expected,
                 found,
                 ..
             }) => {
                 let type_mismatch = TypeMismatch { expected, found };
-                Ok(TransformError::TypeMismatch(type_mismatch))
+                Ok(transform::Error::TypeMismatch(type_mismatch))
             }
         }
     }
@@ -61,10 +55,10 @@ mod tests {
 
     #[test]
     fn round_trip() {
-        let error = TransformError::TypeMismatch(TypeMismatch::new(
+        let error = transform::Error::TypeMismatch(TypeMismatch::new(
             "expected".to_string(),
             "found".to_string(),
         ));
-        test_utils::protobuf_round_trip::<TransformError, ProtobufTransformFailure>(error);
+        test_utils::protobuf_round_trip::<transform::Error, TransformFailure>(error);
     }
 }

@@ -1,10 +1,10 @@
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
-use crate::engine_server::ipc::ChainSpec_CostTable_WasmCosts as ProtobufWasmCosts;
+use crate::engine_server::ipc::ChainSpec_CostTable_WasmCosts;
 
-impl From<WasmCosts> for ProtobufWasmCosts {
+impl From<WasmCosts> for ChainSpec_CostTable_WasmCosts {
     fn from(wasm_costs: WasmCosts) -> Self {
-        ProtobufWasmCosts {
+        ChainSpec_CostTable_WasmCosts {
             regular: wasm_costs.regular,
             div: wasm_costs.div,
             mul: wasm_costs.mul,
@@ -20,8 +20,8 @@ impl From<WasmCosts> for ProtobufWasmCosts {
     }
 }
 
-impl From<ProtobufWasmCosts> for WasmCosts {
-    fn from(pb_wasm_costs: ProtobufWasmCosts) -> Self {
+impl From<ChainSpec_CostTable_WasmCosts> for WasmCosts {
+    fn from(pb_wasm_costs: ChainSpec_CostTable_WasmCosts) -> Self {
         WasmCosts {
             regular: pb_wasm_costs.regular,
             div: pb_wasm_costs.div,
@@ -49,7 +49,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(wasm_costs in gens::wasm_costs_arb()) {
-            test_utils::protobuf_round_trip::<WasmCosts, ProtobufWasmCosts>(wasm_costs);
+            test_utils::protobuf_round_trip::<WasmCosts, ChainSpec_CostTable_WasmCosts>(wasm_costs);
         }
     }
 }

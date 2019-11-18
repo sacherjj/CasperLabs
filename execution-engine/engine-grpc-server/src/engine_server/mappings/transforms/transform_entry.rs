@@ -3,23 +3,21 @@ use std::convert::{TryFrom, TryInto};
 use contract_ffi::key::Key;
 use engine_shared::transform::Transform;
 
-use crate::engine_server::{
-    mappings::ParsingError, transforms::TransformEntry as ProtobufTransformEntry,
-};
+use crate::engine_server::{mappings::ParsingError, transforms::TransformEntry};
 
-impl From<(Key, Transform)> for ProtobufTransformEntry {
+impl From<(Key, Transform)> for TransformEntry {
     fn from((key, transform): (Key, Transform)) -> Self {
-        let mut pb_transform_entry = ProtobufTransformEntry::new();
+        let mut pb_transform_entry = TransformEntry::new();
         pb_transform_entry.set_key(key.into());
         pb_transform_entry.set_transform(transform.into());
         pb_transform_entry
     }
 }
 
-impl TryFrom<ProtobufTransformEntry> for (Key, Transform) {
+impl TryFrom<TransformEntry> for (Key, Transform) {
     type Error = ParsingError;
 
-    fn try_from(pb_transform_entry: ProtobufTransformEntry) -> Result<Self, Self::Error> {
+    fn try_from(pb_transform_entry: TransformEntry) -> Result<Self, Self::Error> {
         let pb_key = pb_transform_entry
             .key
             .into_option()
@@ -51,7 +49,7 @@ mod tests {
             key in contract_ffi::gens::key_arb(),
             transform in transform::gens::transform_arb()
         ) {
-            test_utils::protobuf_round_trip::<(Key, Transform), ProtobufTransformEntry>((key, transform));
+            test_utils::protobuf_round_trip::<(Key, Transform), TransformEntry>((key, transform));
         }
     }
 }

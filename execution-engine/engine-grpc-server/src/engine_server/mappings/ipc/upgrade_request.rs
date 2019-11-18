@@ -3,12 +3,12 @@ use std::convert::{TryFrom, TryInto};
 use contract_ffi::value::ProtocolVersion;
 use engine_core::engine_state::upgrade::UpgradeConfig;
 
-use crate::engine_server::{ipc::UpgradeRequest as ProtobufUpgradeRequest, mappings::MappingError};
+use crate::engine_server::{ipc::UpgradeRequest, mappings::MappingError};
 
-impl TryFrom<ProtobufUpgradeRequest> for UpgradeConfig {
+impl TryFrom<UpgradeRequest> for UpgradeConfig {
     type Error = MappingError;
 
-    fn try_from(mut pb_upgrade_request: ProtobufUpgradeRequest) -> Result<Self, Self::Error> {
+    fn try_from(mut pb_upgrade_request: UpgradeRequest) -> Result<Self, Self::Error> {
         let pre_state_hash = pb_upgrade_request
             .get_parent_state_hash()
             .try_into()

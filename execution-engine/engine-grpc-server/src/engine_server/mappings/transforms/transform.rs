@@ -5,15 +5,13 @@ use engine_shared::transform::{Error as TransformError, Transform};
 
 use crate::engine_server::{
     mappings::{state::NamedKeyMap, ParsingError},
-    state::NamedKey as ProtobufNamedKey,
-    transforms::{
-        Transform as ProtobufTransform, Transform_oneof_transform_instance as ProtobufTransformEnum,
-    },
+    state::NamedKey,
+    transforms::{self, Transform_oneof_transform_instance},
 };
 
-impl From<Transform> for ProtobufTransform {
+impl From<Transform> for transforms::Transform {
     fn from(transform: Transform) -> Self {
-        let mut pb_transform = ProtobufTransform::new();
+        let mut pb_transform = transforms::Transform::new();
         match transform {
             Transform::Identity => {
                 pb_transform.set_identity(Default::default());
@@ -28,7 +26,7 @@ impl From<Transform> for ProtobufTransform {
                 pb_transform.mut_write().set_value(value.into());
             }
             Transform::AddKeys(keys_map) => {
-                let pb_named_keys: Vec<ProtobufNamedKey> = NamedKeyMap::new(keys_map).into();
+                let pb_named_keys: Vec<NamedKey> = NamedKeyMap::new(keys_map).into();
                 pb_transform.mut_add_keys().set_value(pb_named_keys.into());
             }
             Transform::Failure(transform_error) => pb_transform.set_failure(transform_error.into()),
@@ -46,22 +44,22 @@ impl From<Transform> for ProtobufTransform {
     }
 }
 
-impl TryFrom<ProtobufTransform> for Transform {
+impl TryFrom<transforms::Transform> for Transform {
     type Error = ParsingError;
 
-    fn try_from(pb_transform: ProtobufTransform) -> Result<Self, Self::Error> {
+    fn try_from(pb_transform: transforms::Transform) -> Result<Self, Self::Error> {
         let pb_transform = pb_transform
             .transform_instance
             .ok_or_else(|| ParsingError::from("Unable to parse Protobuf Transform"))?;
         let transform = match pb_transform {
-            ProtobufTransformEnum::identity(_) => Transform::Identity,
-            ProtobufTransformEnum::add_keys(pb_add_keys) => {
+            Transform_oneof_transform_instance::identity(_) => Transform::Identity,
+            Transform_oneof_transform_instance::add_keys(pb_add_keys) => {
                 let named_keys_map: NamedKeyMap = pb_add_keys.value.into_vec().try_into()?;
                 named_keys_map.into_inner().into()
             }
-            ProtobufTransformEnum::add_i32(pb_add_int32) => pb_add_int32.value.into(),
-            ProtobufTransformEnum::add_u64(pb_add_u64) => pb_add_u64.value.into(),
-            ProtobufTransformEnum::add_big_int(mut pb_big_int) => {
+            Transform_oneof_transform_instance::add_i32(pb_add_int32) => pb_add_int32.value.into(),
+            Transform_oneof_transform_instance::add_u64(pb_add_u64) => pb_add_u64.value.into(),
+            Transform_oneof_transform_instance::add_big_int(mut pb_big_int) => {
                 let value = pb_big_int.take_value().try_into()?;
                 match value {
                     Value::UInt128(uint128) => uint128.into(),
@@ -75,11 +73,11 @@ impl TryFrom<ProtobufTransform> for Transform {
                     }
                 }
             }
-            ProtobufTransformEnum::write(mut pb_write) => {
+            Transform_oneof_transform_instance::write(mut pb_write) => {
                 let value = Value::try_from(pb_write.take_value())?;
                 Transform::Write(value)
             }
-            ProtobufTransformEnum::failure(pb_failure) => {
+            Transform_oneof_transform_instance::failure(pb_failure) => {
                 let error = TransformError::try_from(pb_failure)?;
                 Transform::Failure(error)
             }
@@ -100,7 +98,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(transform in gens::transform_arb()) {
-            test_utils::protobuf_round_trip::<Transform, ProtobufTransform>(transform);
+            test_utils::protobuf_round_trip::<Transform, transforms::Transform>(transform);
         }
     }
 }

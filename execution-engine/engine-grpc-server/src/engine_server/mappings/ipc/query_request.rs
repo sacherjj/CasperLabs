@@ -3,12 +3,12 @@ use std::convert::{TryFrom, TryInto};
 use engine_core::engine_state::query::QueryRequest;
 use engine_shared::newtypes::BLAKE2B_DIGEST_LENGTH;
 
-use crate::engine_server::{ipc::QueryRequest as ProtobufQueryRequest, mappings::MappingError};
+use crate::engine_server::{ipc, mappings::MappingError};
 
-impl TryFrom<ProtobufQueryRequest> for QueryRequest {
+impl TryFrom<ipc::QueryRequest> for QueryRequest {
     type Error = MappingError;
 
-    fn try_from(mut query_request: ProtobufQueryRequest) -> Result<Self, Self::Error> {
+    fn try_from(mut query_request: ipc::QueryRequest) -> Result<Self, Self::Error> {
         let state_hash = {
             let state_hash = query_request.get_state_hash();
             let length = state_hash.len();
