@@ -24,7 +24,7 @@ impl From<Account> for ProtobufAccount {
         pb_account.set_public_key(account.pub_key().to_vec());
 
         let named_keys = mem::replace(account.named_keys_mut(), BTreeMap::new());
-        let pb_named_keys: Vec<ProtobufNamedKey> = NamedKeyMap(named_keys).into();
+        let pb_named_keys: Vec<ProtobufNamedKey> = NamedKeyMap::new(named_keys).into();
         pb_account.set_named_keys(pb_named_keys.into());
 
         pb_account.set_purse_id(account.purse_id().value().into());
@@ -97,7 +97,7 @@ impl TryFrom<ProtobufAccount> for Account {
 
         let account = Account::new(
             public_key,
-            named_keys.0,
+            named_keys.into_inner(),
             purse_id,
             associated_keys,
             action_thresholds,

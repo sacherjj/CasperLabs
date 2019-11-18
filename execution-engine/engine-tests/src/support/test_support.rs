@@ -756,7 +756,7 @@ where
             .to_vec()
             .try_into()
             .expect("should convert");
-        let transforms = commit_transforms.0;
+        let transforms = commit_transforms.into_inner();
         // Cache transformations
         self.transforms.push(transforms);
         self
@@ -1081,7 +1081,7 @@ pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap
         .to_vec()
         .try_into()
         .expect("should convert");
-    commit_transforms.0
+    commit_transforms.into_inner()
 }
 
 pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {

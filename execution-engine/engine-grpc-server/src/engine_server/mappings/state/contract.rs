@@ -12,7 +12,7 @@ impl From<Contract> for ProtobufContract {
     fn from(contract: Contract) -> Self {
         let (bytes, named_keys, protocol_version) = contract.destructure();
         let mut pb_contract = ProtobufContract::new();
-        let named_keys: Vec<ProtobufNamedKey> = NamedKeyMap(named_keys).into();
+        let named_keys: Vec<ProtobufNamedKey> = NamedKeyMap::new(named_keys).into();
         pb_contract.set_body(bytes);
         pb_contract.set_named_keys(named_keys.into());
         pb_contract.set_protocol_version(protocol_version.into());
@@ -26,7 +26,7 @@ impl TryFrom<ProtobufContract> for Contract {
     fn try_from(mut pb_contract: ProtobufContract) -> Result<Self, Self::Error> {
         let named_keys: NamedKeyMap = pb_contract.take_named_keys().into_vec().try_into()?;
         let protocol_version = pb_contract.take_protocol_version().into();
-        let contract = Contract::new(pb_contract.body, named_keys.0, protocol_version);
+        let contract = Contract::new(pb_contract.body, named_keys.into_inner(), protocol_version);
         Ok(contract)
     }
 }

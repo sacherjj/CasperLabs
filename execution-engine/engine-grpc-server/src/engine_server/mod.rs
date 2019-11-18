@@ -266,7 +266,7 @@ where
                     .set_message(error_message);
                 return SingleResponse::completed(commit_response);
             }
-            Ok(transforms) => transforms.0,
+            Ok(transforms) => transforms.into_inner(),
         };
 
         // "Apply" effects to global state

@@ -7,7 +7,13 @@ use crate::engine_server::{
     mappings::ParsingError, transforms::TransformEntry as ProtobufTransformEntry,
 };
 
-pub struct TransformMap(pub AdditiveMap<Key, Transform>);
+pub struct TransformMap(AdditiveMap<Key, Transform>);
+
+impl TransformMap {
+    pub fn into_inner(self) -> AdditiveMap<Key, Transform> {
+        self.0
+    }
+}
 
 impl TryFrom<Vec<ProtobufTransformEntry>> for TransformMap {
     type Error = ParsingError;

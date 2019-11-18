@@ -29,7 +29,17 @@ impl TryFrom<ProtobufNamedKey> for (String, Key) {
 /// Thin wrapper to allow us to implement `From` and `TryFrom` helpers to convert to and from
 /// `BTreeMap<String, Key>` and `Vec<ProtobufNamedKey>`.
 #[derive(Clone, PartialEq, Debug)]
-pub(crate) struct NamedKeyMap(pub BTreeMap<String, Key>);
+pub(crate) struct NamedKeyMap(BTreeMap<String, Key>);
+
+impl NamedKeyMap {
+    pub fn new(inner: BTreeMap<String, Key>) -> Self {
+        Self(inner)
+    }
+
+    pub fn into_inner(self) -> BTreeMap<String, Key> {
+        self.0
+    }
+}
 
 impl From<NamedKeyMap> for Vec<ProtobufNamedKey> {
     fn from(named_key_map: NamedKeyMap) -> Self {

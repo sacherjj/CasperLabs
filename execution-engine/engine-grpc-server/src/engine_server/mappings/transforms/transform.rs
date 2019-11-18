@@ -28,7 +28,7 @@ impl From<Transform> for ProtobufTransform {
                 pb_transform.mut_write().set_value(value.into());
             }
             Transform::AddKeys(keys_map) => {
-                let pb_named_keys: Vec<ProtobufNamedKey> = NamedKeyMap(keys_map).into();
+                let pb_named_keys: Vec<ProtobufNamedKey> = NamedKeyMap::new(keys_map).into();
                 pb_transform.mut_add_keys().set_value(pb_named_keys.into());
             }
             Transform::Failure(transform_error) => pb_transform.set_failure(transform_error.into()),
@@ -57,7 +57,7 @@ impl TryFrom<ProtobufTransform> for Transform {
             ProtobufTransformEnum::identity(_) => Transform::Identity,
             ProtobufTransformEnum::add_keys(pb_add_keys) => {
                 let named_keys_map: NamedKeyMap = pb_add_keys.value.into_vec().try_into()?;
-                named_keys_map.0.into()
+                named_keys_map.into_inner().into()
             }
             ProtobufTransformEnum::add_i32(pb_add_int32) => pb_add_int32.value.into(),
             ProtobufTransformEnum::add_u64(pb_add_u64) => pb_add_u64.value.into(),
