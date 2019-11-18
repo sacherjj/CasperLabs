@@ -343,7 +343,11 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     RESOURCES = f"{THIS_DIRECTORY}/../resources/"
     EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
     # We need to copy system contracts to genesis in test chainspecs
-    SYSTEM_CONTRACTS = ("pos_install.wasm", "mint_install.wasm")
+    SYSTEM_CONTRACTS = (
+        "mint_install.wasm",
+        "modified_mint_upgrader.wasm",
+        "pos_install.wasm",
+    )
 
     def __init__(
         self,
@@ -358,18 +362,19 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
             and "/root/system_contracts/"
             or self.EE_CONTRACTS_DIR
         )
-        destination_directory = os.path.join(
-            self.RESOURCES, self.chainspec_directory, "genesis"
-        )
-        try:
-            os.makedirs(destination_directory)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-        for file_name in self.SYSTEM_CONTRACTS:
-            shutil.copy(
-                os.path.join(source_directory, file_name), destination_directory
-            )
+        destination_base = os.path.join(self.RESOURCES, self.chainspec_directory)
+        for (_, subdirectories, _) in os.walk(destination_base):
+            for subdirectory in subdirectories:
+                destination_directory = os.path.join(destination_base, subdirectory)
+                try:
+                    os.makedirs(destination_directory)
+                except OSError as e:
+                    if e.errno != errno.EEXIST:
+                        raise
+                for file_name in self.SYSTEM_CONTRACTS:
+                    shutil.copy(
+                        os.path.join(source_directory, file_name), destination_directory
+                    )
 
     def docker_config(self, account):
         config = super().docker_config(account)
