@@ -65,9 +65,7 @@ def test_create_account_key(one_node_network_with_clarity):
 
     # Verify the balance of created account to be exactly 10,000,000
     driver.find_element(By.LINK_TEXT, "Account Keys").click()
-    xpath_correct_balance = (
-        f"//td[contains(., '{account_name}')]/ancestor::tr/td[contains(.,'10,000,000')]"
-    )
+    xpath_correct_balance = f"//td[contains(., '{account_name}')]/ancestor::tr/td[contains(.,'1,000,000,000')]"
     assert len(driver.find_elements(By.XPATH, xpath_correct_balance)) == 1
 
     # Remove the created account
