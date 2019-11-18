@@ -66,7 +66,7 @@ class FinalityDetectorVotingMatrix[F[_]: Concurrent: Log] private (rFTT: Double)
                            case None =>
                              Log[F]
                                .info(
-                                 s"The ${PrettyPrinter.buildString(block.blockHash) -> "block"} don't vote any main child of ${PrettyPrinter
+                                 s"The ${PrettyPrinter.buildString(block.blockHash) -> "block"} doesn't vote any main child of ${PrettyPrinter
                                    .buildString(latestFinalizedBlock)               -> "latestFinalizedBlock"}"
                                )
                                .as(none[CommitteeWithConsensusValue])
