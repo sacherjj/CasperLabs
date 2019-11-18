@@ -51,7 +51,8 @@ docker-build-all: \
 	docker-build/execution-engine \
 	docker-build/integration-testing \
 	docker-build/key-generator \
-	docker-build/explorer
+	docker-build/explorer \
+	docker-build/grpcwebproxy
 
 docker-push-all: \
 	docker-push/node \
