@@ -474,10 +474,6 @@ impl TryFrom<i32> for UpdateKeyFailure {
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
 impl AssociatedKeys {
-    pub fn empty() -> AssociatedKeys {
-        AssociatedKeys(BTreeMap::new())
-    }
-
     pub fn new(key: PublicKey, weight: Weight) -> AssociatedKeys {
         let mut bt: BTreeMap<PublicKey, Weight> = BTreeMap::new();
         bt.insert(key, weight);
@@ -775,7 +771,7 @@ impl ToBytes for AssociatedKeys {
 impl FromBytes for AssociatedKeys {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
         keys_map.into_iter().for_each(|(k, v)| {
             // NOTE: we're ignoring potential errors (duplicate key, maximum number of
             // elements). This is safe, for now, as we were the ones that
@@ -902,7 +898,7 @@ mod tests {
         let map = (0..MAX_KEYS).map(|k| (PublicKey([k as u8; KEY_SIZE]), Weight::new(k as u8)));
         assert_eq!(map.len(), 10);
         let mut keys = {
-            let mut tmp = AssociatedKeys::empty();
+            let mut tmp = AssociatedKeys::default();
             map.for_each(|(key, weight)| assert!(tmp.add_key(key, weight).is_ok()));
             tmp
         };
@@ -938,7 +934,7 @@ mod tests {
         let key_1 = PublicKey::new([0; 32]);
         let key_2 = PublicKey::new([1; 32]);
         let key_3 = PublicKey::new([2; 32]);
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
             .expect("should add key_1");
@@ -986,7 +982,7 @@ mod tests {
         let key_1 = PublicKey::new([0; 32]);
         let key_2 = PublicKey::new([1; 32]);
         let key_3 = PublicKey::new([2; 32]);
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
             .expect("should add key_1");

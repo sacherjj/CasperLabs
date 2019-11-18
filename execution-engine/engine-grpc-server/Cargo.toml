@@ -29,6 +29,7 @@ protoc-rust-grpc = "0.6.1"
 
 [dev-dependencies]
 parity-wasm = "0.31"
+rand = "0.6.1"
 
 [[bin]]
 name = "casperlabs-engine-grpc-server"
