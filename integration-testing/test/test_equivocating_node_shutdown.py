@@ -45,4 +45,5 @@ def test_equivocating_node_shutdown(two_node_network):
     with pytest.raises(Exception):
         wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
 
+    assert "Goodbye" in nodes[0].logs()
     assert "Node has detected it's own equivocation with block" in nodes[0].logs()
