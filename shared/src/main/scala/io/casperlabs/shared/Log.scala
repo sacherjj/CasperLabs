@@ -63,9 +63,11 @@ object Log {
   // This should only be used in testing, it disables all logging even SLF4j
   // Otherwise we see output from http4s during tests, something that used
   // to be disabled by having a test version of logback.xml
-  // Alternatively we could use TypeSafeConfig to set up logstage, which is
-  // probably the right thing to do:
+  // In the future, we could use TypeSafeConfig to set up logstage,
+  // but the `logstage-config` module that feature requires doesn't seem
+  // to be implemented yet.
   // https://github.com/7mind/izumi/blob/baea35e54dd482e54cd2d075e774cfd26806897a/doc/microsite/src/main/tut/logstage/config.md
+
   def NOPLog[F[_]: Sync] =
     useLogger[F](IzLogger.NullLogger)
 

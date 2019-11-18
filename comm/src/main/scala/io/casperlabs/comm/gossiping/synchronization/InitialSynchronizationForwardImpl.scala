@@ -152,7 +152,7 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
                                    }
                                  }
                 _ <- Log[F].debug(
-                      s"Haven't reached required $minSuccessful amount of fully synced nodes, continuing initial synchronization"
+                      s"Haven't reached required $minSuccessful amount of fully synced nodes, currently at $fullSyncs, continuing initial synchronization."
                     )
                 _ <- Timer[F].sleep(roundPeriod)
                 _ <- loop(

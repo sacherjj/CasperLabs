@@ -18,8 +18,6 @@ import scala.util.control.NoStackTrace
 
 object Main {
 
-  //implicit val log: Log[Task] = effects.log
-
   implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
 
   def main(args: Array[String]): Unit =
@@ -45,18 +43,17 @@ object Main {
               reporter = uncaughtExceptionHandler
             )
 
-            val exec = updateLoggingProps(conf) >> mainProgram(command, conf, chainSpec)
+            val exec = updateLoggingProps() >> mainProgram(command, conf, chainSpec)
 
             // This uses Scala `blocking` under the hood, so make sure the thread pool we use supports it.
             exec.runSyncUnsafe()
         }
       )
 
-  private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
+  private def updateLoggingProps(): Task[Unit] = Task {
     //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
-    sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
   private def mainProgram(
@@ -74,6 +71,10 @@ object Main {
       )
 
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
+
+    implicit val log = Log.useLogger[Task] {
+      Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
+    }
 
     val program = command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
@@ -97,11 +98,9 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
-      implicit scheduler: Scheduler
+      implicit scheduler: Scheduler,
+      log: Log[Task]
   ): Task[Unit] = {
-    implicit val log = Log.useLogger[Task] {
-      Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
-    }
     val node =
       for {
         _       <- log.info(s"${api.VersionInfo.get -> "version" -> null}")
