@@ -105,7 +105,7 @@ object Log {
         rotation = FileRotation.FileLimiterRotation(10),
         config = FileSinkConfig.soft(10 * 1024 * 1024)
       ) {
-        override def recoverOnFail(e: String): Unit = println
+        override def recoverOnFail(e: String): Unit = println(e)
       }
     }
     IzLogger(level, sinks, levels)
