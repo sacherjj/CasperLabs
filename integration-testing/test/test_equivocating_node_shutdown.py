@@ -6,7 +6,7 @@ from casperlabs_local_net.common import Contract
 from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_nodes
 
 
-def test_equivocating_node_shutdown(three_node_network):
+def test_equivocating_node_shutdown_and_other_nodes_are_working_ok(three_node_network):
     network = three_node_network
     nodes = network.docker_nodes
     account = GENESIS_ACCOUNT
