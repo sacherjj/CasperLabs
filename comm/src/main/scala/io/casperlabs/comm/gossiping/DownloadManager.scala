@@ -234,7 +234,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleFeedback.complete) >> run
+        start
+          .attemptAndLog("An error occurred when handling Download signal.")
+          .flatMap(scheduleFeedback.complete) >> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -258,7 +260,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _                      <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attemptAndLog("An error occurred when handling DownloadSuccess signal.") >> run
 
       case Signal.DownloadFailure(blockHash, ex) =>
         val finish = for {
@@ -277,7 +279,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attemptAndLog("An error occurred when handling DownloadFailure.") >> run
+        finish.attemptAndLog("An error occurred when handling DownloadFailure signal.") >> run
     }
 
   // Indicate how many items we have in the queue.
