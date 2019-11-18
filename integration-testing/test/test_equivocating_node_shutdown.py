@@ -59,28 +59,28 @@ def test_equivocating_node_shutdown(three_node_network):
     # Regardless, the remaining nodes should carry on working correctly.
     # They all should be able to deploy contracts and propose new blocks with them.
 
-    nodes = nodes[1:]
+    working_nodes = nodes[1:]
 
-    block_hash = nodes[0].p_client.deploy_and_propose(
+    block_hash = working_nodes[0].p_client.deploy_and_propose(
         from_address=account.public_key_hex,
         public_key=account.public_key_path,
         private_key=account.private_key_path,
         session_contract=Contract.COUNTER_DEFINE,
     )
-    wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+    wait_for_block_hash_propagated_to_all_nodes(working_nodes, block_hash)
 
     # Deploy counter_call.wasm on each node a couple of times,
     # check the value of the counter is correct.
     expected_counter_result = count(1)
     for i in range(2):
-        for node in nodes:
+        for node in working_nodes:
             block_hash = node.p_client.deploy_and_propose(
                 from_address=account.public_key_hex,
                 public_key=account.public_key_path,
                 private_key=account.private_key_path,
                 session_contract=Contract.COUNTER_CALL,
             )
-            wait_for_block_hash_propagated_to_all_nodes(nodes, block_hash)
+            wait_for_block_hash_propagated_to_all_nodes(working_nodes, block_hash)
 
             state = node.p_client.query_state(
                 block_hash=block_hash,
