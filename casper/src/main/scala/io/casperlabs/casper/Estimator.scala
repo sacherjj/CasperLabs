@@ -59,27 +59,30 @@ object Estimator {
 
     val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
 
-    for {
-      lca <- NonEmptyList
-              .fromList(latestMessagesFlattened)
-              .fold(genesis.pure[F])(DagOperations.latestCommonAncestorsMainParent(dag, _))
-              .timer("calculateLCA")
-      scores        <- lmdScoring(dag, lca, latestMessageHashes, equivocators).timer("lmdScoring")
-      newMainParent <- forkChoiceTip(dag, lca, scores).timer("forkChoiceTip")
-      parents       <- tipsOfLatestMessages(latestMessagesFlattened, lca).timer("tipsOfLatestMessages")
-      secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
-        // Filter out blocks created by equivocators from the secondary parents.
-        // Secondary parents are not subject to the fork choice rule, the only requirement
-        // is that they don't conflict with the main chain. This opens up possibility for various
-        // kinds of attacks. An example could be a block created in the past, that includes a deploy
-        // that should have expired by now, if that block did not conflict with the main parent
-        // fork-choice would include it in the p-dag.
-        equivocators.contains(message.validatorId)
-      }
-      sortedSecParents = secondaryParents
-        .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
-        .reverse
-    } yield newMainParent +: sortedSecParents.map(_.messageHash)
+    NonEmptyList.fromList(latestMessagesFlattened).fold(List(genesis).pure[F]) { lmh =>
+      for {
+        latestMessages <- lmh.toList.traverse(dag.lookup(_)).map(_.flatten)
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, lmh).timer("calculateLCA")
+        _              <- Metrics[F].record("lcaDistance", latestMessages.maxBy(_.rank).rank - lca.rank)
+        scores <- lmdScoring(dag, lca.messageHash, latestMessageHashes, equivocators)
+                   .timer("lmdScoring")
+        newMainParent <- forkChoiceTip(dag, lca.messageHash, scores).timer("forkChoiceTip")
+        parents <- tipsOfLatestMessages(latestMessagesFlattened, lca.messageHash)
+                    .timer("tipsOfLatestMessages")
+        secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
+          // Filter out blocks created by equivocators from the secondary parents.
+          // Secondary parents are not subject to the fork choice rule, the only requirement
+          // is that they don't conflict with the main chain. This opens up possibility for various
+          // kinds of attacks. An example could be a block created in the past, that includes a deploy
+          // that should have expired by now, if that block did not conflict with the main parent
+          // fork-choice would include it in the p-dag.
+          equivocators.contains(message.validatorId)
+        }
+        sortedSecParents = secondaryParents
+          .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
+          .reverse
+      } yield newMainParent +: sortedSecParents.map(_.messageHash)
+    }
   }
 
   /** Computes scores for LMD GHOST.

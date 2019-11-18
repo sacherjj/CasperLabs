@@ -405,7 +405,10 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
-        blocks                             = chosenParents.map(i => candidates(i))
+        blocks = chosenParents
+          .map(i => candidates(i))
+          // we only keep blocks which are not related in any way to other candidates
+          .filter(block => uncommonAncestors(block).size == 1)
       } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
   }
 

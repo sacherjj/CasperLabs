@@ -6,6 +6,7 @@ pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod query;
 pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
@@ -58,6 +59,7 @@ pub use self::{
 use crate::{
     engine_state::{
         error::Error::MissingSystemContractError,
+        query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
     },
     execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
@@ -573,6 +575,24 @@ where
             Some(tc) => Ok(Some(TrackingCopy::new(tc))),
             None => Ok(None),
         }
+    }
+
+    pub fn run_query(
+        &self,
+        correlation_id: CorrelationId,
+        query_request: QueryRequest,
+    ) -> Result<QueryResult, Error> {
+        let tracking_copy = match self.tracking_copy(query_request.state_hash())? {
+            Some(tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
+            None => return Ok(QueryResult::RootNotFound),
+        };
+
+        let mut mut_tracking_copy = tracking_copy.borrow_mut();
+
+        Ok(mut_tracking_copy
+            .query(correlation_id, query_request.key(), query_request.path())
+            .map_err(|err| Error::ExecError(err.into()))?
+            .into())
     }
 
     pub fn get_module(

@@ -22,7 +22,7 @@ pub use self::ext::TrackingCopyExt;
 use self::meter::{heap_meter::HeapSize, Meter};
 
 #[derive(Debug)]
-pub enum QueryResult {
+pub enum TrackingCopyQueryResult {
     Success(Value),
     ValueNotFound(String),
 }
@@ -81,10 +81,6 @@ impl<M: Meter<Key, Value>> TrackingCopyCache<M> {
         };
 
         self.reads_cached.get_refresh(key).map(|v| &*v)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.reads_cached.is_empty() && self.muts_cached.is_empty()
     }
 }
 
@@ -227,9 +223,9 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
         correlation_id: CorrelationId,
         base_key: Key,
         path: &[String],
-    ) -> Result<QueryResult, R::Error> {
+    ) -> Result<TrackingCopyQueryResult, R::Error> {
         match self.read(correlation_id, &base_key)? {
-            None => Ok(QueryResult::ValueNotFound(self.error_path_msg(
+            None => Ok(TrackingCopyQueryResult::ValueNotFound(self.error_path_msg(
                 base_key,
                 path,
                 "".to_owned(),
@@ -269,8 +265,8 @@ impl<R: StateReader<Key, Value>> TrackingCopy<R> {
                 );
 
                 match result {
-                    Ok(value) => Ok(QueryResult::Success(value)),
-                    Err(Ok((i, s))) => Ok(QueryResult::ValueNotFound(
+                    Ok(value) => Ok(TrackingCopyQueryResult::Success(value)),
+                    Err(Ok((i, s))) => Ok(TrackingCopyQueryResult::ValueNotFound(
                         self.error_path_msg(base_key, path, s, i),
                     )),
                     Err(Err(err)) => Err(err),
