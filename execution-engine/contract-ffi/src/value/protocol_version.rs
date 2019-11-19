@@ -264,7 +264,7 @@ mod tests {
 
     #[test]
     fn should_accept_minor_bump_with_optional_code() {
-        // installer is optional for major bump
+        // installer is optional for minor bump
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 1, 0));
         assert_eq!(
