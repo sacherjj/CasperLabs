@@ -3,7 +3,7 @@ package io.casperlabs.client
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
-import cats.Parallel
+import cats.{Id, Parallel}
 import cats.effect.{Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -12,6 +12,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.IzLogger
@@ -19,7 +20,9 @@ import scala.concurrent.duration._
 
 object Main {
 
-  implicit val log: Log[Task] = Log.useLogger[Task](Log.mkLogger())
+  val logger                  = Log.mkLogger()
+  implicit val log: Log[Task] = Log.useLogger[Task](logger)
+  implicit val logId: Log[Id] = Log.log[Id](logger)
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.computation(
@@ -48,19 +51,19 @@ object Main {
   ): F[Unit] =
     configuration match {
       case ShowBlock(hash, bytesStandard, json) =>
-        DeployRuntime.showBlock(hash, bytesStandard, json)
+        DeployRuntime.showBlock[F](hash, bytesStandard, json)
       case ShowDeploy(hash, bytesStandard, json) =>
-        DeployRuntime.showDeploy(hash, bytesStandard, json)
+        DeployRuntime.showDeploy[F](hash, bytesStandard, json)
       case ShowDeploys(hash, bytesStandard, json) =>
-        DeployRuntime.showDeploys(hash, bytesStandard, json)
+        DeployRuntime.showDeploys[F](hash, bytesStandard, json)
       case ShowBlocks(depth, bytesStandard, json) =>
-        DeployRuntime.showBlocks(depth, bytesStandard, json)
+        DeployRuntime.showBlocks[F](depth, bytesStandard, json)
       case Unbond(
           amount,
           contracts,
           privateKey
           ) =>
-        DeployRuntime.unbond(
+        DeployRuntime.unbond[F](
           amount,
           contracts,
           privateKey
@@ -70,7 +73,7 @@ object Main {
           contracts,
           privateKey
           ) =>
-        DeployRuntime.bond(
+        DeployRuntime.bond[F](
           amount,
           contracts,
           privateKey
@@ -81,7 +84,7 @@ object Main {
           contracts,
           privateKey
           ) =>
-        DeployRuntime.transferCLI(
+        DeployRuntime.transferCLI[F](
           contracts,
           privateKey,
           recipientPublicKeyBase64,
@@ -93,7 +96,7 @@ object Main {
           maybePublicKey,
           maybePrivateKey
           ) =>
-        DeployRuntime.deployFileProgram(
+        DeployRuntime.deployFileProgram[F](
           from,
           contracts,
           maybePublicKey.map(
@@ -127,33 +130,33 @@ object Main {
                                           )
                             } yield ByteString.copyFrom(publicKey)
                         }
-          deploy = DeployRuntime.makeDeploy(
+          deploy = DeployRuntime.makeDeploy[F](
             baseAccount,
             contracts,
             sessionArgs = Nil
           )
-          _ <- DeployRuntime.writeDeploy(deploy, deployPath)
+          _ <- DeployRuntime.writeDeploy[F](deploy, deployPath)
         } yield ()
 
       case SendDeploy(deploy) =>
-        DeployRuntime.sendDeploy(deploy)
+        DeployRuntime.sendDeploy[F](deploy)
 
       case PrintDeploy(deploy, bytesStandard, json) =>
-        DeployRuntime.printDeploy(deploy, bytesStandard, json)
+        DeployRuntime.printDeploy[F](deploy, bytesStandard, json)
 
       case Sign(deploy, signedDeployOut, publicKey, privateKey) =>
-        DeployRuntime.sign(deploy, signedDeployOut, publicKey, privateKey)
+        DeployRuntime.sign[F](deploy, signedDeployOut, publicKey, privateKey)
 
       case Propose =>
-        DeployRuntime.propose()
+        DeployRuntime.propose[F]()
 
       case VisualizeDag(depth, showJustificationLines, out, streaming) =>
-        DeployRuntime.visualizeDag(depth, showJustificationLines, out, streaming)
+        DeployRuntime.visualizeDag[F](depth, showJustificationLines, out, streaming)
 
       case Query(hash, keyType, keyValue, path, bytesStandard, json) =>
-        DeployRuntime.queryState(hash, keyType, keyValue, path, bytesStandard, json)
+        DeployRuntime.queryState[F](hash, keyType, keyValue, path, bytesStandard, json)
 
       case Balance(address, blockHash) =>
-        DeployRuntime.balance(address, blockHash)
+        DeployRuntime.balance[F](address, blockHash)
     }
 }

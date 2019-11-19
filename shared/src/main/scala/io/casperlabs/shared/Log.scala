@@ -78,7 +78,13 @@ object Log {
   // gets injected with sinks from the classpath. Some parts of the
   // program get this value as a singleton. We can set it once during
   // startup.
-  var logId: Log[Id] = log(mkLogger())
+  private var _logId: Log[Id] = log(mkLogger())
+
+  // Mix this into what needs access to the singleton.
+  // Normally it should be passed as a constructor argument instead.
+  trait LogId {
+    implicit def logId: Log[Id] = _logId
+  }
 
   // Set every global routing to this logger.
   def useLogger[F[_]: Sync](logger: IzLogger): Log[F] = {
@@ -86,7 +92,7 @@ object Log {
     // configure SLF4j to use the same router that `myLogger` uses
     StaticLogRouter.instance.setup(logger.router)
     // Use by anything that accesses the singleton logId
-    logId = log[Id](logger)
+    _logId = log[Id](logger)
     // Create the wrapper that we can pass around.
     log[F](logger)
   }

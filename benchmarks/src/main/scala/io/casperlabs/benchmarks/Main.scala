@@ -1,8 +1,10 @@
 package io.casperlabs.benchmarks
 
+import cats.Id
 import cats.effect.{Sync, Timer}
 import io.casperlabs.benchmarks.Options.Configuration
 import io.casperlabs.benchmarks.Options.Configuration._
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.client.{DeployService, GrpcDeployService}
 import io.casperlabs.shared.{FilesAPI, Log, UncaughtExceptionHandler}
 import monix.eval.Task
@@ -11,7 +13,9 @@ import scala.concurrent.duration._
 import logstage.IzLogger
 
 object Main {
-  implicit val log: Log[Task] = Log.useLogger[Task](Log.mkLogger())
+  val logger                  = Log.mkLogger()
+  implicit val logId: Log[Id] = Log.log[Id](logger)
+  implicit val log: Log[Task] = Log.useLogger[Task](logger)
 
   def main(args: Array[String]): Unit = {
     implicit val scheduler: Scheduler = Scheduler.io(

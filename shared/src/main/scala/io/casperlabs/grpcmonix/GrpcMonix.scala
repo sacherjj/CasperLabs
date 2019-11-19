@@ -1,11 +1,10 @@
 package io.casperlabs.grpcmonix
 
+import cats.Id
+import com.google.common.util.concurrent.ListenableFuture
 import scala.concurrent.Future
 import scala.util.control.NonFatal
-
 import io.casperlabs.shared.Log
-
-import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.stub.StreamObserver
 import monix.eval.Task
 import monix.execution._
@@ -17,7 +16,7 @@ import monix.reactive.subjects.PublishSubject
 import org.reactivestreams.{Subscriber => SubscriberR}
 import scalapb.grpc.Grpc
 
-object GrpcMonix {
+object GrpcMonix extends Log.LogId {
 
   type GrpcOperator[I, O] = StreamObserver[O] => StreamObserver[I]
   type Transformer[I, O]  = Observable[I] => Observable[O]
@@ -75,7 +74,7 @@ object GrpcMonix {
           observer.onNext(value)
           observer.onCompleted()
         } catch {
-          case NonFatal(e) => Log.logId.warn(s"Failed to send a response: ${e.getMessage}")
+          case NonFatal(e) => Log[Id].warn(s"Failed to send a response: ${e.getMessage}")
         }
     }
 

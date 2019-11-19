@@ -55,6 +55,7 @@ class NodeRuntime private[node] (
     mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
+    logId: Log[Id],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
@@ -93,8 +94,6 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    // NOTE: Setup has to happen before `logId` is requested by anything.
-    implicit def logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
     implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
@@ -415,6 +414,7 @@ object NodeRuntime {
       implicit
       scheduler: Scheduler,
       log: Log[Task],
+      logId: Log[Id],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Task[NodeRuntime] =
     for {

@@ -1,5 +1,6 @@
 package io.casperlabs.node
 
+import cats.Id
 import cats.implicits._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
@@ -9,6 +10,7 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.bridge.SLF4JBridgeHandler
@@ -17,8 +19,6 @@ import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 object Main {
-
-  implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
 
   def main(args: Array[String]): Unit =
     Configuration
@@ -32,6 +32,13 @@ object Main {
       .fold(
         errors => println(errors.mkString_("", "\n", "")), {
           case (command, conf, chainSpec) =>
+            val logger         = Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
+            implicit val logId = Log.log[Id](logger)
+            implicit val log   = Log.useLogger[Task](logger)
+
+            implicit val uncaughtExceptionHandler =
+              new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
+
             // Create a scheduler to execute the program and block waiting on it to finish.
             implicit val scheduler: Scheduler = Scheduler.forkJoin(
               parallelism = Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 4),
@@ -61,7 +68,10 @@ object Main {
       conf: Configuration,
       chainSpec: ChainSpec
   )(
-      implicit scheduler: Scheduler
+      implicit scheduler: Scheduler,
+      log: Log[Task],
+      logId: Log[Id],
+      ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
@@ -71,10 +81,6 @@ object Main {
       )
 
     implicit val consoleIO: ConsoleIO[Task] = (str: String) => Task(println(str))
-
-    implicit val log = Log.useLogger[Task] {
-      Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
-    }
 
     val program = command match {
       case Diagnostics => diagnostics.client.Runtime.diagnosticsProgram[Task]
@@ -99,7 +105,9 @@ object Main {
 
   private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
       implicit scheduler: Scheduler,
-      log: Log[Task]
+      log: Log[Task],
+      logId: Log[Id],
+      ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
     val node =
       for {
