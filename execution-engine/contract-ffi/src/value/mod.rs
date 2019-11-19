@@ -1,4 +1,5 @@
 pub mod account;
+pub mod cltype;
 pub mod contract;
 pub mod protocol_version;
 mod semver;
@@ -166,6 +167,7 @@ impl ToBytes for Value {
         }
     }
 }
+
 impl FromBytes for Value {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
