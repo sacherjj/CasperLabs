@@ -12,6 +12,7 @@ object Dependencies {
   val doobieVersion  = "0.8.4"
   val fs2Version     = "2.0.1"
   val meowMtlVersion = "0.4.0"
+  val izumiVersion   = "0.9.11"
 
   val julToSlf4j          = "org.slf4j"           % "jul-to-slf4j"          % "1.7.25"
   val bitcoinjCore        = "org.bitcoinj"        % "bitcoinj-core"         % "0.14.6"
@@ -58,11 +59,9 @@ object Dependencies {
   val kamonZipkin        = "io.kamon"          %% "kamon-zipkin"         % "1.0.0"
   val lightningj = ("org.lightningj" % "lightningj" % "0.5.0-Beta-rc2")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val logbackClassic         = "ch.qos.logback"             % "logback-classic"                 % "1.2.3"
   val janino                 = "org.codehaus.janino"        % "janino"                          % "3.0.12"
   val lz4                    = "org.lz4"                    % "lz4-java"                        % "1.5.0"
   val monix                  = "io.monix"                   %% "monix"                          % "3.0.0"
-  val scalaLogging           = "com.typesafe.scala-logging" %% "scala-logging"                  % "3.9.0"
   val scalaUri               = "io.lemonlabs"               %% "scala-uri"                      % "1.1.5"
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
   val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
@@ -103,9 +102,9 @@ object Dependencies {
     .exclude("co.fs2", s"fs2-core_2.12")
   val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
     .exclude("co.fs2", s"fs2-core_2.12")
-  val flyway = "org.flywaydb" % "flyway-core" % "5.2.4"
-  val fs2Io    = "co.fs2"       %% "fs2-io"     % fs2Version
-  val fs2ReactiveStreams    = "co.fs2"       %% "fs2-reactive-streams"     % fs2Version
+  val flyway             = "org.flywaydb" % "flyway-core"           % "5.2.4"
+  val fs2Io              = "co.fs2"       %% "fs2-io"               % fs2Version
+  val fs2ReactiveStreams = "co.fs2"       %% "fs2-reactive-streams" % fs2Version
   val upperbound = ("org.systemfw" %% "upperbound" % "0.3.0")
     .exclude("co.fs2", "fs2-core_2.12")
 
@@ -145,7 +144,17 @@ object Dependencies {
 
   private val testing = Seq(scalactic, scalatest, scalacheck, scalacheckShapeless)
 
-  private val logging = Seq(scalaLogging, logbackClassic, janino, julToSlf4j)
+  private val logging = Seq(janino, julToSlf4j) ++ Seq(
+    // https://izumi.7mind.io/latest/release/doc/logstage/index.html
+    "io.7mind.izumi" %% "logstage-core"            % izumiVersion,
+    "io.7mind.izumi" %% "logstage-rendering-circe" % izumiVersion //, // JSON rendering
+  )
+
+  // Mix these only into the projects which have a `Main`, so that we don't see
+  // output for anything that uses SLF4j during tests.
+  val slf4jAdapters = Seq(
+    "io.7mind.izumi" %% "logstage-adapter-slf4j" % izumiVersion // Router from Slf4j to LogStage
+  )
 
   val circeDependencies: Seq[ModuleID] =
     Seq(circeCore, circeGeneric, circeGenericExtras, circeParser, circeLiteral)

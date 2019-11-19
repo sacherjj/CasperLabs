@@ -13,6 +13,7 @@ import eu.timepit.refined.numeric._
 import eu.timepit.refined.api.Refined
 import scala.concurrent.duration.Duration.Infinite
 import scala.concurrent.duration._
+import izumi.logstage.api.{Log => IzLog}
 
 private[configuration] trait Parser[A] {
   def parse(s: String): Either[String, A]
@@ -91,6 +92,11 @@ private[configuration] trait ParserImplicits {
   implicit def listParser[T: Parser] = new Parser[List[T]] {
     override def parse(s: String) =
       s.split(' ').filterNot(_.isEmpty).map(Parser[T].parse).toList.sequence
+  }
+
+  implicit val logLevelParser = new Parser[IzLog.Level] {
+    override def parse(s: String) =
+      Try(IzLog.Level.parse(s)).toEither.leftMap(_.getMessage)
   }
 }
 

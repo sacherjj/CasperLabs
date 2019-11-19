@@ -17,14 +17,11 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
-
-  def log: Log[Task] = Log.log
 
   def nodeDiscovery(
       id: NodeIdentifier,

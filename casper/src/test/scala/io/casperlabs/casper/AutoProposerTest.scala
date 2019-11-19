@@ -121,7 +121,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 object AutoProposerTest {
   import Scheduler.Implicits.global
   import io.casperlabs.storage.dag.DagRepresentation
-  implicit val log         = new Log.NOPLog[Task]()
+  implicit val log         = Log.NOPLog[Task]
   implicit val metrics     = new Metrics.MetricsNOP[Task]()
   implicit val broadcaster = Broadcaster.noop[Task]
 

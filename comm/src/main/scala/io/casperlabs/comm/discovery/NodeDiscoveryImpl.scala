@@ -62,11 +62,7 @@ object NodeDiscoveryImpl {
             .attempt(kRpc.shutdown())
             .flatMap(
               _.fold(
-                ex =>
-                  Log[F].error(
-                    "Failed to properly shutdown KademliaRPC",
-                    ex
-                  ),
+                ex => Log[F].error(s"Failed to properly shutdown KademliaRPC: $ex"),
                 _.pure[F]
               )
             )

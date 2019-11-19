@@ -10,7 +10,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import org.scalacheck.{Arbitrary, Gen}
-
+import izumi.logstage.api.{Log => IzLog}
 import scala.concurrent.duration._
 
 trait ArbitraryImplicits {
@@ -79,5 +79,9 @@ trait ArbitraryImplicits {
     for {
       d <- Gen.choose(0.0, 10.0)
     } yield refineV[GreaterEqual[W.`0.0`.T]](d).right.get
+  }
+
+  implicit val levelGen: Arbitrary[IzLog.Level] = Arbitrary {
+    Gen.oneOf(List(IzLog.Level.Debug, IzLog.Level.Info, IzLog.Level.Error, IzLog.Level.Warn))
   }
 }

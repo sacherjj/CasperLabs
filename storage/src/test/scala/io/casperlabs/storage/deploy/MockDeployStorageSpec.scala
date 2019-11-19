@@ -13,7 +13,7 @@ class MockDeployStorageSpec extends DeployStorageSpec {
       timeout: FiniteDuration = 5.seconds
   ): Unit =
     (for {
-      implicit0(logNOP: Log[Task]) <- Task(new NOPLog[Task])
+      implicit0(logNOP: Log[Task]) <- Task(Log.NOPLog[Task])
       mock                         <- MockDeployStorage.create[Task]()
       _                            <- test(mock.reader, mock.writer)
     } yield ()).runSyncUnsafe(timeout)

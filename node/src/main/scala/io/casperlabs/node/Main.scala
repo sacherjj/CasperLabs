@@ -1,5 +1,6 @@
 package io.casperlabs.node
 
+import cats.Id
 import cats.implicits._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm._
@@ -9,6 +10,7 @@ import io.casperlabs.node.configuration._
 import io.casperlabs.node.diagnostics.client.GrpcDiagnosticsService
 import io.casperlabs.node.effects._
 import io.casperlabs.shared._
+import io.casperlabs.catscontrib.effect.implicits.syncId
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.bridge.SLF4JBridgeHandler
@@ -17,10 +19,6 @@ import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
 
 object Main {
-
-  implicit val log: Log[Task] = effects.log
-
-  implicit val uncaughtExceptionHandler = new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
 
   def main(args: Array[String]): Unit =
     Configuration
@@ -34,6 +32,13 @@ object Main {
       .fold(
         errors => println(errors.mkString_("", "\n", "")), {
           case (command, conf, chainSpec) =>
+            val logger         = Log.mkLogger(level = conf.log.level, jsonPath = conf.log.jsonPath)
+            implicit val logId = Log.log[Id](logger)
+            implicit val log   = Log.useLogger[Task](logger)
+
+            implicit val uncaughtExceptionHandler =
+              new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
+
             // Create a scheduler to execute the program and block waiting on it to finish.
             implicit val scheduler: Scheduler = Scheduler.forkJoin(
               parallelism = Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 4),
@@ -45,18 +50,17 @@ object Main {
               reporter = uncaughtExceptionHandler
             )
 
-            val exec = updateLoggingProps(conf) >> mainProgram(command, conf, chainSpec)
+            val exec = updateLoggingProps() >> mainProgram(command, conf, chainSpec)
 
             // This uses Scala `blocking` under the hood, so make sure the thread pool we use supports it.
             exec.runSyncUnsafe()
         }
       )
 
-  private def updateLoggingProps(conf: Configuration): Task[Unit] = Task {
+  private def updateLoggingProps(): Task[Unit] = Task {
     //https://github.com/grpc/grpc-java/issues/1577#issuecomment-228342706
     SLF4JBridgeHandler.removeHandlersForRootLogger()
     SLF4JBridgeHandler.install()
-    sys.props.update("node.data.dir", conf.server.dataDir.toAbsolutePath.toString)
   }
 
   private def mainProgram(
@@ -64,7 +68,10 @@ object Main {
       conf: Configuration,
       chainSpec: ChainSpec
   )(
-      implicit scheduler: Scheduler
+      implicit scheduler: Scheduler,
+      log: Log[Task],
+      logId: Log[Id],
+      ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
     implicit val diagnosticsService: GrpcDiagnosticsService =
       new diagnostics.client.GrpcDiagnosticsService(
@@ -86,7 +93,7 @@ object Main {
       }
       .doOnFinish {
         case Some(ex) =>
-          log.error(ex.getMessage, ex) *>
+          log.error(s"Unexpected error: $ex") *>
             Task
               .delay(System.exit(1))
               .delayExecution(500.millis) // A bit of time for logs to flush.
@@ -97,11 +104,14 @@ object Main {
   }
 
   private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
-      implicit scheduler: Scheduler
+      implicit scheduler: Scheduler,
+      log: Log[Task],
+      logId: Log[Id],
+      ueh: UncaughtExceptionHandler
   ): Task[Unit] = {
     val node =
       for {
-        _       <- log.info(api.VersionInfo.get)
+        _       <- log.info(s"${api.VersionInfo.get -> "version" -> null}")
         runtime <- NodeRuntime(conf, chainSpec)
         _       <- runtime.main
       } yield ()

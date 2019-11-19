@@ -30,7 +30,6 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
     connectionsCache: ConnectionsCache[F, KademliaConnTag]
 ) extends KademliaService[F] {
 
-  private implicit val logSource: LogSource = LogSource(this.getClass)
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia.grpc")
 
@@ -66,7 +65,7 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
     cell.modify { s =>
       s.connections.get(peer).fold(s.pure[F]) { connection =>
         for {
-          _ <- Log[F].debug(s"Disconnecting from peer ${peer.show}")
+          _ <- Log[F].debug(s"Disconnecting from ${peer.show -> "peer"}")
           _ <- Sync[F].delay(connection.shutdownNow()).attempt
         } yield s.copy(connections = s.connections - peer)
       }
@@ -125,7 +124,7 @@ class GrpcKademliaService[F[_]: Concurrent: TaskLift: Timer: TaskLike: Log: Node
 
   private def clientChannel(peer: Node): F[ManagedChannel] =
     for {
-      _ <- Log[F].debug(s"Creating new channel to peer ${peer.show}")
+      _ <- Log[F].debug(s"Creating new channel to ${peer.show -> "peer"}")
       c <- Sync[F].delay {
             NettyChannelBuilder
               .forAddress(peer.host, peer.discoveryPort)
