@@ -302,26 +302,32 @@ impl ToBytes for Vec<String> {
     }
 }
 
-impl ToBytes for [u8; N32] {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + N32);
-        result.extend((N32 as u32).to_bytes()?);
-        result.extend(self);
-        Ok(result)
-    }
+macro_rules! impl_byte_array {
+    ($len:expr) => {
+        impl ToBytes for [u8; $len] {
+            fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + $len);
+                result.extend_from_slice(&($len as u32).to_bytes()?);
+                result.extend_from_slice(self);
+                Ok(result)
+            }
+        }
+
+        impl FromBytes for [u8; $len] {
+            fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                let (bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
+                if bytes.len() != $len {
+                    return Err(Error::FormattingError);
+                };
+                let mut result = [0u8; $len];
+                result.copy_from_slice(&bytes);
+                Ok((result, rem))
+            }
+        }
+    };
 }
 
-impl FromBytes for [u8; N32] {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        if bytes.len() != N32 {
-            return Err(Error::FormattingError);
-        };
-        let mut result = [0u8; N32];
-        result.copy_from_slice(&bytes);
-        Ok((result, rem))
-    }
-}
+impl_byte_array!(32);
 
 impl<T: ToBytes> ToBytes for [T; N256] {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
