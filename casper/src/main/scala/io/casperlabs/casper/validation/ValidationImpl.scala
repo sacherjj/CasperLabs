@@ -456,7 +456,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log
                                     }
               _ <- Monad[F].whenA(seenEquivocations.size > 1) {
                     val msg =
-                      s"${message.messageHash} cites multiple latest message by its creator ${message.validatorId}: ${seenEquivocations
+                      s"${PrettyPrinter.buildString(message.messageHash)} cites multiple latest message by its creator ${PrettyPrinter
+                        .buildString(message.validatorId)}: ${seenEquivocations
                         .map(PrettyPrinter.buildString)
                         .mkString("[", ",", "]")}"
                     Log[F].warn(ignore(b, msg)) *> FunctorRaise[F, InvalidBlock]
