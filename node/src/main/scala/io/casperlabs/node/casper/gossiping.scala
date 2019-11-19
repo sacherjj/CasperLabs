@@ -157,7 +157,7 @@ package object gossiping {
                             genesisStore <- MonadThrowable[F].fromOption(
                                              maybeGenesis,
                                              NotFound(
-                                               s"Cannot retrieve Genesis ${show(genesisBlockHash)}"
+                                               s"Cannot retrieve ${show(genesisBlockHash) -> "genesis"}"
                                              )
                                            )
                             genesis    = genesisStore.getBlockMessage
@@ -172,7 +172,7 @@ package object gossiping {
                                        chainSpec.upgrades
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
-                            _ <- Log[F].info("Making the transition to block processing.")
+                            _ <- Log[F].info(s"Making the transition to block processing.")
                           } yield ()
                         }
                       }
@@ -254,7 +254,7 @@ package object gossiping {
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
-            _     <- Log[F].info(s"Validating genesis-like block ${show(block.blockHash)}...")
+            _     <- Log[F].info(s"Validating genesis-like ${show(block.blockHash) -> "block"}")
             state <- Cell.mvarCell[F, CasperState](CasperState())
             executor <- MultiParentCasperImpl.StatelessExecutor
                          .create[F](validatorId, chainName = spec.getGenesis.name, spec.upgrades)
@@ -266,23 +266,23 @@ package object gossiping {
       }
       .flatMap {
         case Valid =>
-          Log[F].debug(s"Validated and stored block ${show(block.blockHash)}")
+          Log[F].debug(s"Validated and stored ${show(block.blockHash) -> "block"}")
 
         case EquivocatedBlock =>
           Log[F].debug(
-            s"Detected block ${show(block.blockHash)} equivocated"
+            s"Detected ${show(block.blockHash) -> "block"} equivocated"
           )
 
         case Processed =>
           Log[F].warn(
-            s"Block ${show(block.blockHash)} seems to have been processed before."
+            s"${show(block.blockHash) -> "block"} seems to have been processed before."
           )
 
         case SelfEquivocatedBlock =>
           FatalError.selfEquivocationError(block.blockHash)
 
         case other =>
-          Log[F].debug(s"Received invalid block ${show(block.blockHash)}: $other") *>
+          Log[F].debug(s"Received invalid ${show(block.blockHash) -> "block"}: $other") *>
             MonadThrowable[F].raiseError[Unit](
               // Raise an exception to stop the DownloadManager from progressing with this block.
               new RuntimeException(s"Non-valid status: $other") with NoStackTrace
@@ -308,7 +308,7 @@ package object gossiping {
       shutdown = cache.read.flatMap { s =>
         s.connections.toList.traverse {
           case (peer, chan) =>
-            Log[F].debug(s"Closing connection to ${peer.show}") *>
+            Log[F].debug(s"Closing connection to ${peer.show -> "peer"}") *>
               Sync[F].delay(chan.shutdown()).attempt.void
         }.void
       }
@@ -323,7 +323,7 @@ package object gossiping {
       egressScheduler: Scheduler
   ): F[ManagedChannel] =
     for {
-      _ <- Log[F].debug(s"Creating new channel to peer ${peer.show}")
+      _ <- Log[F].debug(s"Creating new channel to peer ${peer.show -> "peer"}")
       chan <- Sync[F].delay {
                NettyChannelBuilder
                  .forAddress(peer.host, peer.protocolPort)
@@ -344,7 +344,7 @@ package object gossiping {
     cache.modify { s =>
       for {
         _ <- s.connections.get(peer).fold(().pure[F]) { c =>
-              Log[F].debug(s"Disconnecting from peer ${peer.show}") *>
+              Log[F].debug(s"Disconnecting from peer ${peer.show -> "peer"}") *>
                 Sync[F].delay(c.shutdown()).attempt.void
             }
       } yield s.copy(connections = s.connections - peer)
@@ -390,7 +390,7 @@ package object gossiping {
                                 .fold(().pure[F]) { _ =>
                                   Log[F]
                                     .warn(
-                                      s"Block ${PrettyPrinter.buildString(block)} seems to be created by a doppelganger using the same validator key!"
+                                      s"${PrettyPrinter.buildString(block) -> "block" -> null} seems to be created by a doppelganger using the same validator key!"
                                     )
                                 } *>
                                 validateAndAddBlock(validatorId.map(_.publicKey), spec, block)
@@ -416,7 +416,7 @@ package object gossiping {
                                     .withHeader(summary.getHeader)
 
                                   Log[F].debug(
-                                    s"Feeding a pending blocks to Casper: ${show(summary.blockHash)}"
+                                    s"Feeding a pending block to Casper: ${show(summary.blockHash) -> "block"}"
                                   ) *>
                                     casper.addMissingDependencies(partialBlock)
 
@@ -454,7 +454,7 @@ package object gossiping {
                         _ <- id match {
                               case Some(ValidatorIdentity(publicKey, _, _)) =>
                                 Log[F].info(
-                                  s"Starting with validator identity ${Base16.encode(publicKey)}"
+                                  s"Starting with validator identity ${Base16.encode(publicKey) -> "validator"}"
                                 )
                               case None =>
                                 Log[F].info("Starting without a validator identity.")
@@ -466,7 +466,7 @@ package object gossiping {
             for {
               // Validate it to make sure that code path is exercised.
               _ <- Log[F].info(
-                    s"Trying to validate and run the Genesis candidate ${show(genesis.blockHash)}"
+                    s"Trying to validate and run the Genesis ${show(genesis.blockHash) -> "candidate"}"
                   )
               _ <- validateAndAddBlock(
                     validatorId.map(_.publicKey),
@@ -506,7 +506,7 @@ package object gossiping {
             maybeApproveBlock(block).asRight.pure[F]
           } else {
             InvalidArgument(
-              s"Block hash ${show(block.blockHash)} did not equal the expected Genesis hash ${show(genesis.blockHash)}"
+              s"${show(block.blockHash) -> "candidate"} did not equal the expected Genesis ${show(genesis.blockHash) -> "genesis"}"
             ).asLeft.pure[F].widen
           }
 
@@ -681,7 +681,7 @@ package object gossiping {
                   _         <- awaitApproved
                   awaitSync <- initialSync.sync()
                   _         <- awaitSync
-                  _         <- Log[F].info("Initial synchronization complete.")
+                  _         <- Log[F].info(s"Initial synchronization complete.")
                 } yield ()
               }
     } yield fiber
@@ -732,10 +732,10 @@ package object gossiping {
         peers <- NodeDiscovery[F].recentlyAlivePeersAscendingDistance.map(_.toSet)
         _     <- Log[F].info(s"Peers: ${peers.size}").whenA(peers.size != prevPeers.size)
         _ <- (prevPeers diff peers).toList.traverse { peer =>
-              Log[F].info(s"Disconnected from ${peer.show}")
+              Log[F].info(s"Disconnected from ${peer.show -> "peer"}")
             }
         _ <- (peers diff prevPeers).toList.traverse { peer =>
-              Log[F].info(s"Connected to ${peer.show}")
+              Log[F].info(s"Connected to ${peer.show -> "peer"}")
             }
         _ <- Time[F].sleep(15.seconds)
       } yield peers
@@ -753,7 +753,7 @@ package object gossiping {
         .start {
           f.onError {
             case NonFatal(ex) =>
-              Log[F].error("Fiber resource dead.", ex)
+              Log[F].error(s"Fiber resource dead: $ex")
           }
         }
         .map { fiber =>

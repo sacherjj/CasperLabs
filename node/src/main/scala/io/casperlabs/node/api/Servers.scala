@@ -38,7 +38,7 @@ import scala.concurrent.ExecutionContext
 object Servers {
 
   private def logStarted[F[_]: Log](name: String, port: Int, isSsl: Boolean) =
-    Log[F].info(s"$name gRPC services started on port ${port}${if (isSsl) " using SSL" else ""}.")
+    Log[F].info(s"$name gRPC services started on $port with $isSsl")
 
   /** Start a gRPC server with services meant for the operators.
     * This port shouldn't be exposed to the internet, or some endpoints

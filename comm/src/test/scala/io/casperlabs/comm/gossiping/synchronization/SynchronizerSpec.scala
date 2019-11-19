@@ -362,8 +362,8 @@ class SynchronizerSpec
 }
 
 object SynchronizerSpec {
-  implicit var log: LogStub[Task] = new LogStub[Task]
-  implicit val metrics            = new Metrics.MetricsNOP[Task]
+  implicit var log     = LogStub[Task]()
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   object MockBackend {
     def apply(

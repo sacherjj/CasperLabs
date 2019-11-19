@@ -95,14 +95,16 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
-      val prefix  = s"Failed to sync DAG, source: ${source.show}."
+      val prefix  = s"Failed to sync DAG, source: ${source.show -> "peer"}."
       val message = syncError.getMessage
       Log[F].warn(s"$prefix $message").as(syncError.asLeft)
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].info(
-            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show}: ${newBlockHashes.map(Utils.hex).mkString(", ")}"
+            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
+              .map(Utils.hex)
+              .mkString(", ") -> "blocks"}"
           )
       errorOrDag <- synchronizer.syncDag(
                      source = source,
@@ -110,7 +112,9 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                    )
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
-                           Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
+                           Log[F].info(
+                             s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
+                           ) *>
                              dag.traverse { summary =>
                                downloadManager.scheduleDownload(
                                  summary,
@@ -126,7 +130,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
     trySync.onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not synchronize with ${source.show}: $ex")
+        Log[F].error(s"Could not synchronize with ${source.show -> "peer"}: $ex")
     }
   }
 

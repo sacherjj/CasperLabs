@@ -42,7 +42,7 @@ class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
     def sync(node: Node): F[Unit] =
       for {
         service <- connector(node)
-        _       <- Log[F].debug(s"Syncing with a node: ${node.show}")
+        _       <- Log[F].debug(s"Syncing with a node: ${node.show -> "peer"}")
         lms     <- service.streamLatestMessages(StreamLatestMessagesRequest()).toListL
         _ <- MonadThrowable[F].rethrow {
               selfGossipService
@@ -62,7 +62,7 @@ class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
         Log[F].error("Failed to run initial sync - no more nodes to try") >>
           Sync[F].raiseError(SynchronizationError())
       } else {
-        Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show)}") >>
+        Log[F].debug(s"Next round of syncing with nodes: ${nodes.map(_.show) -> "peers"}") >>
           nodes
             .traverse(node => sync(node).attempt.map(result => node -> result))
             .flatMap { results =>

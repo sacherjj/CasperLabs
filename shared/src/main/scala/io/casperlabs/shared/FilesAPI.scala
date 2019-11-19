@@ -31,8 +31,6 @@ import scala.util.Try
 }
 
 object FilesAPI {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   def create[F[_]: Sync: Log]: FilesAPI[F] =
     new FilesAPI[F] {
       override def readBytes(path: Path): F[Array[Byte]] =
@@ -62,8 +60,8 @@ object FilesAPI {
                   Files.write(path, data, options: _*)
                 }
         } yield ()).onError {
-          case e =>
-            Log[F].error(s"Failed to write data to file: $path", e)
+          case ex =>
+            Log[F].error(s"Failed to write data to file at $path: $ex")
         }
 
       override def writeString(

@@ -49,7 +49,7 @@ import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
-
+import logstage.LogIO
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -60,8 +60,8 @@ class ValidationTest
     with BlockGenerator
     with StorageFixture
     with ArbitraryConsensus {
-  override implicit val log: LogStub[Task] = new LogStub[Task]
-  implicit val raiseValidateErr            = validation.raiseValidateErrorThroughApplicativeError[Task]
+  override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
+  implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions = {
     CasperLabsProtocolVersions.unsafe[Task](
       0L -> state.ProtocolVersion(1)
@@ -836,7 +836,7 @@ class ValidationTest
       val BlockMsgWithTransform(Some(genesis), _) = HashSetCasperTest.createGenesis(bonds)
       val genesisBonds                            = ProtoUtil.bonds(genesis)
       implicit val casperSmartContractsApi        = ExecutionEngineServiceStub.noOpApi[Task]()
-      implicit val log                            = new LogStub[Task]
+      implicit val log                            = LogStub[Task]()
       for {
         dag <- dagStorage.getRepresentation
         _ <- ExecutionEngineServiceStub
@@ -859,7 +859,7 @@ class ValidationTest
 
   "Field format validation" should "succeed on a valid block and fail on empty fields" in withStorage {
     _ => _ => _ =>
-      implicit val log                          = new LogStub[Task]()
+      implicit val log                          = LogStub[Task]()
       val (sk, pk)                              = Ed25519.newKeyPair
       val BlockMsgWithTransform(Some(block), _) = HashSetCasperTest.createGenesis(Map(pk -> 1))
       val genesis                               = ProtoUtil.signBlock(block, sk, Ed25519)

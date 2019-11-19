@@ -149,8 +149,13 @@ class ConfigurationSpec
       "user".some,
       "password".some
     )
+    val log = Configuration.Log(
+      level = izumi.logstage.api.Log.Level.Info,
+      jsonPath = Paths.get("/tmp/json.log").some
+    )
 
     Configuration(
+      log,
       server,
       grpcServer,
       tls,

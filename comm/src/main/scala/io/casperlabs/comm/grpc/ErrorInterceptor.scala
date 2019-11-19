@@ -38,12 +38,11 @@ class ErrorInterceptor(f: PartialFunction[Throwable, Status.Code])(implicit log:
       // Log internal errors with stack trace. Otherwise just warn, treat them as domain errors.
       if (status.getCode == Status.Code.INTERNAL) {
         Log[Id].error(
-          s"Closing gRPC call from $source to $method with ${status.getCode}: $desc",
-          status.getCause
+          s"Closing gRPC call from $source to $method with ${status.getCode}: $desc: ${status.getCause}"
         )
       } else if (!status.isOk)
         Log[Id].warn(
-          s"Closing gRPC call from $source to $method with ${status.getCode}: $desc $cause"
+          s"Closing gRPC call from $source to $method with ${status.getCode}: $desc: $cause"
         )
 
       super.close(status, trailers)

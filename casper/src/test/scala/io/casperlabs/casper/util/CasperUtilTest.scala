@@ -19,7 +19,7 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff                  = new LogStub[Task]()
+  implicit val logEff                  = LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   /**

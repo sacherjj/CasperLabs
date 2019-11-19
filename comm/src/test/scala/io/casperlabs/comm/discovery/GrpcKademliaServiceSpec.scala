@@ -14,7 +14,7 @@ import scala.util.Random
 
 class GrpcKademliaServiceSpec extends KademliaServiceSpec[Task, GrpcEnvironment] {
 
-  implicit val log: Log[Task]         = new Log.NOPLog[Task]
+  implicit val log: Log[Task]         = Log.NOPLog[Task]
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
 

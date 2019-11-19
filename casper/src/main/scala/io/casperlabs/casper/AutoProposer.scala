@@ -59,16 +59,16 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: D
 
     loop(Set.empty, 0) onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Auto-proposal stopped unexpectedly.", ex)
+        Log[F].error(s"Auto-proposal stopped unexpectedly: $ex")
     }
   }
 
   private def tryPropose(): F[Unit] =
     BlockAPI.propose(blockApiLock).flatMap { blockHash =>
-      Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}")
+      Log[F].info(s"Proposed ${PrettyPrinter.buildString(blockHash) -> "block"}")
     } handleErrorWith {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not propose block.", ex)
+        Log[F].error(s"Could not propose block: $ex")
     }
 }
 

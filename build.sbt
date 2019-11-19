@@ -224,7 +224,7 @@ lazy val node = (project in file("node"))
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
-      apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      apiServerDependencies ++ commonDependencies ++ slf4jAdapters ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
         fs2ReactiveStreams,

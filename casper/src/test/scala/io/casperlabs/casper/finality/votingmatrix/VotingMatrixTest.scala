@@ -29,7 +29,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
 
   behavior of "Voting Matrix"
 
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff = LogStub[Task]()
 
   def checkWeightMap(
       expect: Map[Validator, Long]

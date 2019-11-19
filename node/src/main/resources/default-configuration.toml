@@ -2,6 +2,13 @@
 #   * Nested tables
 #   * Arrays
 
+[log]
+# Log level, e.g. DEBUG, INFO, WARN, ERROR.
+level = "INFO"
+
+# Optionally print logs to a file in JSON format.
+# json-path =
+
 # io.casperlabs.node.configuration.Configuration.Server
 [server]
 

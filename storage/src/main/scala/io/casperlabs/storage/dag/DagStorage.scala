@@ -9,6 +9,8 @@ import io.casperlabs.metrics.Metered
 import io.casperlabs.models.Message
 import io.casperlabs.storage.block.BlockStorage.BlockHash
 import io.casperlabs.storage.dag.DagRepresentation.Validator
+import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.codec.Base16
 
 trait DagStorage[F[_]] {
   //TODO: Get rid of DagRepresentation if SQLite works out
@@ -87,6 +89,16 @@ trait DagRepresentation[F[_]] {
   def justificationToBlocks(blockHash: BlockHash): F[Set[BlockHash]]
   def lookup(blockHash: BlockHash): F[Option[Message]]
   def contains(blockHash: BlockHash): F[Boolean]
+
+  def lookupUnsafe(blockHash: BlockHash)(implicit MT: MonadThrowable[F]): F[Message] =
+    lookup(blockHash) flatMap {
+      MonadThrowable[F].fromOption(
+        _,
+        new NoSuchElementException(
+          s"DAG store was missing ${Base16.encode(blockHash.toByteArray)}."
+        )
+      )
+    }
 
   /** Return block summaries with ranks in the DAG between start and end, inclusive. */
   def topoSort(
