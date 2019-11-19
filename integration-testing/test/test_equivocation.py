@@ -20,7 +20,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
 
     GetBlockChunked is first intercepted to make a copy of a genuine block
     and modify it so it has a different identity but the same justifications.
-    Next, StreamDagTipBlockSummaries is intercepted to advertise the equivocating block.
+    Next, StreamLatestMessages is intercepted to advertise the equivocating block.
     Node follows with StreamAncestorBlockSummaries, interceptor responds with
     summary of the equivocating block.
     Eventually, node asks for the equivocating block with GetBlockChunked and gets it
@@ -66,7 +66,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
     def post_request_stream(self, name, request, response):
         logging.debug(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
 
-        if name == "StreamDagTipBlockSummaries":
+        if name == "StreamLatestMessages":
             if self.equivocating_block:
                 b = self.equivocating_block
                 logging.info(
