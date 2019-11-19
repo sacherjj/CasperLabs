@@ -322,6 +322,9 @@ macro_rules! impl_byte_array {
     };
 }
 
+impl_byte_array!(4);
+impl_byte_array!(5);
+impl_byte_array!(8);
 impl_byte_array!(32);
 
 impl<T: ToBytes> ToBytes for [T; N256] {
