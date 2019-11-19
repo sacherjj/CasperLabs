@@ -11,10 +11,6 @@ trait GossipService[F[_]] {
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary]
 
-  def streamDagTipBlockSummaries(
-      request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary]
-
   def streamLatestMessages(
       request: StreamLatestMessagesRequest
   ): Iterant[F, Block.Justification]

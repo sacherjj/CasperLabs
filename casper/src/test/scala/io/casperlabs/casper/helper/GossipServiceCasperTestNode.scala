@@ -545,9 +545,6 @@ object GossipServiceCasperTestNodeFactory {
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): F[consensus.GenesisCandidate] = ???
-    override def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[F, consensus.BlockSummary] = ???
     override def streamLatestMessages(
         request: StreamLatestMessagesRequest
     ): Iterant[F, Block.Justification] = ???

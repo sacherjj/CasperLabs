@@ -260,7 +260,6 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
       extends GossipService[Task] {
     def newBlocks(request: NewBlocksRequest)                                       = ???
     def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
     def streamLatestMessages(
         request: StreamLatestMessagesRequest
     ): Iterant[Task, Block.Justification] =

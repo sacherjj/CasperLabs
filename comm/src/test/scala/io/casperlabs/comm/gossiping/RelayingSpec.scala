@@ -179,8 +179,6 @@ object RelayingSpec {
           override def streamAncestorBlockSummaries(
               request: StreamAncestorBlockSummariesRequest
           ) = ???
-          override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
-            ???
           override def streamLatestMessages(
               request: StreamLatestMessagesRequest
           ): Iterant[Task, Block.Justification]                                   = ???

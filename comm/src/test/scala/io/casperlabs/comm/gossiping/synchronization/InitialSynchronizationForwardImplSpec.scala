@@ -263,7 +263,6 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
       extends GossipService[Task] {
     def newBlocks(request: NewBlocksRequest)                                       = ???
     def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
     def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
     def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
     def getBlockChunked(request: GetBlockChunkedRequest)                           = ???

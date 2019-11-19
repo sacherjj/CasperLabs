@@ -69,11 +69,6 @@ object GrpcGossipService {
       ): Observable[BlockSummary] =
         service.streamAncestorBlockSummaries(request).toObservable
 
-      def streamDagTipBlockSummaries(
-          request: StreamDagTipBlockSummariesRequest
-      ): Observable[BlockSummary] =
-        service.streamDagTipBlockSummaries(request).toObservable
-
       override def streamLatestMessages(
           request: StreamLatestMessagesRequest
       ): Observable[Block.Justification] =
@@ -142,11 +137,6 @@ object GrpcGossipService {
           request: StreamAncestorBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
         withErrorCallback(stub.streamAncestorBlockSummaries(request))
-
-      def streamDagTipBlockSummaries(
-          request: StreamDagTipBlockSummariesRequest
-      ): Iterant[F, BlockSummary] =
-        withErrorCallback(stub.streamDagTipBlockSummaries(request))
 
       override def streamLatestMessages(
           request: StreamLatestMessagesRequest

@@ -185,11 +185,6 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     }
   }
 
-  override def streamDagTipBlockSummaries(
-      request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary] =
-    Iterant.liftF(backend.listTips).flatMap(Iterant.fromSeq(_))
-
   override def streamLatestMessages(
       request: StreamLatestMessagesRequest
   ): Iterant[F, Block.Justification] =

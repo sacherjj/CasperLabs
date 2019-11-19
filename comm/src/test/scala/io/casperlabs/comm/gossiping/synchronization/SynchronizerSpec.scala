@@ -408,7 +408,6 @@ object SynchronizerSpec {
                 }
               }
           }
-          def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
           def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
           def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
           def getBlockChunked(request: GetBlockChunkedRequest)                           = ???

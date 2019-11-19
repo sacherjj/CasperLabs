@@ -18,6 +18,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.ClientAuth
@@ -76,7 +77,7 @@ class GrpcGossipServiceSpec
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
-    StreamDagTipBlockSummariesSpec,
+    StreamLatestMessagesSpec,
     NewBlocksSpec,
     GenesisApprovalSpec,
     StreamDagSliceBlockSummariesSpec
@@ -989,12 +990,12 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object StreamDagTipBlockSummariesSpec extends WordSpecLike {
+  object StreamLatestMessagesSpec extends WordSpecLike {
     implicit val config          = PropertyCheckConfiguration(minSuccessful = 5)
     implicit val consensusConfig = ConsensusConfig()
 
-    "streamDagTipBlockSummaries" should {
-      "return the tips from the consensus" in {
+    "streamLatestMessages" should {
+      "return latest messages in the DAG" in {
         forAll(genSummaryDagFromGenesis) { dag =>
           // Tips are the ones without children.
           val tips = dag.filterNot { parent =>
@@ -1002,11 +1003,16 @@ class GrpcGossipServiceSpec
               child.parentHashes.contains(parent.blockHash)
             }
           }
+          val expected = dag
+            .groupBy(_.getHeader.validatorPublicKey)
+            .values
+            .flatten
+            .map(s => Block.Justification(s.getHeader.validatorPublicKey, s.blockHash))
+            .toList
           runTestUnsafe(TestData(summaries = dag, tips = tips)) {
             TestEnvironment(testDataRef).use { stub =>
-              stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
-                res =>
-                  res should contain theSameElementsInOrderAs tips
+              stub.streamLatestMessages(StreamLatestMessagesRequest()).toListL map { res =>
+                res should contain theSameElementsAs expected
               }
             }
           }
