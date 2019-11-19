@@ -345,10 +345,10 @@ object ProtoUtil {
             .map(_ -> Set(m))
             .toMap |+| acc
       }
-    val keySet  = dependenciesOf.keySet
-    val tipsSet = dependenciesOf.values.flatten.toSet
+    val ancestors   = dependenciesOf.keySet
+    val descendants = dependenciesOf.values.flatten.toSet
     // Filter out messages that are in justifications of another one.
-    tipsSet.filterNot(m => keySet.contains(m.messageHash))
+    descendants.filterNot(m => ancestors.contains(m.messageHash))
   }
 
   def toJustification(
