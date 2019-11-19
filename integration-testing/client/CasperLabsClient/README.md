@@ -6,17 +6,48 @@ interact with a CasperLabs node via its gRPC API.
 ## Installation
 
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
+
+### Linux
 You can install it with
+
+```
+pip3 install casperlabs-client
+```
+
+or, if you have only Python 3 installed (Python 3 installed as `python`, rather than `python3`):
 
 ```
 pip install casperlabs-client
 ```
 
-or, if you have both Python 2 and Python 3 installed:
+
+### Mac OS X
+
+Install Python 3 with brew.
 
 ```
-pip3 install casperlabs-client
+brew update
+brew upgrade
+pip install casperlabs-client
 ```
+
+### Windows 10
+
+To install `casperlabs-client` on Windows 10 you need to install latest Python 3.7,
+it is curently not possible to install it on Python 3.8 due to
+https://github.com/grpc/grpc/issues/20831
+
+You also need to install free Microsoft Visual Studio C++ 14.0.
+Get it with "Microsoft Visual C++ Build Tools": https://visualstudio.microsoft.com/downloads/
+This is required by 'pyblake2' extension.
+
+After installing the above you install the casperlabs-client by
+typing the following on the command prompt:
+
+```
+C:\Users\alice>pip install casperlabs-client
+```
+
 
 ## Getting started
 
@@ -29,7 +60,7 @@ import casperlabs_client
 client = casperlabs_client.CasperLabsClient('deploy.casperlabs.io', 40401)
 blockInfo = next(client.showBlocks(1, full_view=False))
 for bond in blockInfo.summary.header.state.bonds:
-    print(f'{bond.validator_public_key.hex()}: {bond.stake}')
+    print(f'{bond.validator_public_key.hex()}: {bond.stake.value}')
 ```
 
 When executed the script should print a list of bonded validators' public keys
