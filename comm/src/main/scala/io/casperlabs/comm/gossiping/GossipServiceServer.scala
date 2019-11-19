@@ -279,9 +279,6 @@ object GossipServiceServer {
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString): F[Option[Block]]
 
-    /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
-    def listTips: F[Seq[BlockSummary]]
-
     /** Returns latest messages as seen currently by the node.
       * NOTE: In the future we will remove redundant messages. */
     def latestMessages: F[Set[Block.Justification]]

@@ -426,8 +426,6 @@ object GossipServiceCasperTestNodeFactory {
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
 
-                     override def listTips = ???
-
                      override def latestMessages: F[Set[Block.Justification]] = ???
 
                      override def dagTopoSort(startRank: Long, endRank: Long) = ???

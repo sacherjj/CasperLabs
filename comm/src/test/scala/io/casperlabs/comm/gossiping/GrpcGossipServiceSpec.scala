@@ -591,7 +591,6 @@ class GrpcGossipServiceSpec
                   }
                   def hasBlock(blockHash: ByteString)                = ???
                   def getBlockSummary(blockHash: ByteString)         = ???
-                  def listTips                                       = ???
                   def latestMessages: Task[Set[Block.Justification]] = ???
                   def dagTopoSort(startRank: Long, endRank: Long)    = ???
                 }
@@ -997,19 +996,14 @@ class GrpcGossipServiceSpec
     "streamLatestMessages" should {
       "return latest messages in the DAG" in {
         forAll(genSummaryDagFromGenesis) { dag =>
-          // Tips are the ones without children.
-          val tips = dag.filterNot { parent =>
-            dag.exists { child =>
-              child.parentHashes.contains(parent.blockHash)
-            }
-          }
+          // ProtoUtil.removeRedundantJustifications is not available here.
           val expected = dag
             .groupBy(_.getHeader.validatorPublicKey)
             .values
             .flatten
             .map(s => Block.Justification(s.getHeader.validatorPublicKey, s.blockHash))
             .toList
-          runTestUnsafe(TestData(summaries = dag, tips = tips)) {
+          runTestUnsafe(TestData(summaries = dag)) {
             TestEnvironment(testDataRef).use { stub =>
               stub.streamLatestMessages(StreamLatestMessagesRequest()).toListL map { res =>
                 res should contain theSameElementsAs expected
@@ -1320,7 +1314,6 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
     def blocks: Map[ByteString, Block]
-    def tips: Seq[BlockSummary]
   }
 
   object TestData {
@@ -1330,16 +1323,13 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
     def apply(
         summaries: Seq[BlockSummary] = Seq.empty,
-        blocks: Seq[Block] = Seq.empty,
-        tips: Seq[BlockSummary] = Seq.empty
+        blocks: Seq[Block] = Seq.empty
     ): TestData = {
       val ss = summaries
       val bs = blocks
-      val ts = tips
       new TestData {
         val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
         val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
-        val tips      = ts
       }
     }
   }
@@ -1366,8 +1356,6 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
-        def listTips =
-          Task.delay(testDataRef.get.tips)
         def latestMessages: Task[Set[Block.Justification]] =
           Task.delay(
             testDataRef.get.summaries.values

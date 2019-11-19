@@ -213,7 +213,6 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
     override def hasBlock(blockHash: ByteString)                = ???
     override def getBlockSummary(blockHash: ByteString)         = ???
     override def getBlock(blockHash: ByteString)                = ???
-    override def listTips                                       = ???
     override def latestMessages: Task[Set[Block.Justification]] = ???
     override def dagTopoSort(startRank: Long, endRank: Long)    = ???
   }
