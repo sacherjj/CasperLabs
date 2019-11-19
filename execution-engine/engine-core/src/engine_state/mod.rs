@@ -455,12 +455,11 @@ where
         let new_protocol_version = upgrade_config.new_protocol_version();
 
         let upgrade_check_result =
-            current_protocol_version.check_upgrade_point(&new_protocol_version);
+            current_protocol_version.check_next_version(&new_protocol_version);
 
-        if !upgrade_check_result.can_be_followed() {
+        if upgrade_check_result.is_invalid() {
             return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
-        debug_assert!(!upgrade_check_result.is_invalid());
 
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
         let new_wasm_costs = match upgrade_config.wasm_costs() {
@@ -482,8 +481,7 @@ where
         // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
         match upgrade_config.upgrade_installer_bytes() {
             None if upgrade_check_result.is_code_required() => {
-                // 3.1.1.1.1.5 continued - make sure upgrade installer is present for major
-                // bumps
+                // 3.1.1.1.1.5 code is required for major version bump
                 return Err(Error::InvalidUpgradeConfig);
             }
             None => {

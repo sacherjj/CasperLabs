@@ -6,7 +6,7 @@ use super::SemVer;
 pub struct ProtocolVersion(SemVer);
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum UpgradeCheckResult {
+pub enum VersionCheckResult {
     /// Upgrade possible, installer code is required
     CodeIsRequired,
     /// Upgrade possible, installer code is optional
@@ -15,32 +15,24 @@ pub enum UpgradeCheckResult {
     Invalid,
 }
 
-impl UpgradeCheckResult {
-    /// Checks if given version can be followed
-    pub fn can_be_followed(&self) -> bool {
-        match self {
-            UpgradeCheckResult::CodeIsRequired | UpgradeCheckResult::CodeIsOptional => true,
-            UpgradeCheckResult::Invalid => false,
-        }
-    }
-
-    /// Checks if given upgrade is invalid
+impl VersionCheckResult {
+    /// Checks if given version result is invalid.
+    ///
+    /// Invalid means that a given version can not be followed.
     pub fn is_invalid(&self) -> bool {
         match self {
-            UpgradeCheckResult::Invalid => true,
-            _ => false,
+            VersionCheckResult::Invalid => true,
+            VersionCheckResult::CodeIsRequired | VersionCheckResult::CodeIsOptional => false,
         }
     }
 
-    /// Checks if code is required as a boolean.
+    /// Checks if code is required.
     ///
-    /// # Panics
-    /// Panics only if [`UpgradeCheckResult::Invalid`] variant is held
+    /// Any other variant than [`VersionCheckResult::CodeIsRequired`] returns false.
     pub fn is_code_required(&self) -> bool {
         match self {
-            UpgradeCheckResult::CodeIsRequired => true,
-            UpgradeCheckResult::CodeIsOptional => false,
-            UpgradeCheckResult::Invalid => panic!("Invalid invariant"),
+            VersionCheckResult::CodeIsRequired => true,
+            _ => false,
         }
     }
 }
@@ -66,47 +58,48 @@ impl ProtocolVersion {
         self.0
     }
 
-    /// Checks installer upgrade activation point
-    pub fn check_upgrade_point(&self, next: &ProtocolVersion) -> UpgradeCheckResult {
-        // Follows rules as explained in 3.1.1.1.1.3
-
-        if next.0.major > self.0.major + 1 {
-            UpgradeCheckResult::Invalid // Protocol major versions should increase monotonically by
-                                        // 1.
-        } else if next.0.major == self.0.major + 1 {
-            // A major version increase resets both the minor and patch versions to ( 0.0 ).
-            if next.0.minor == 0 && next.0.patch == 0 {
-                UpgradeCheckResult::CodeIsRequired
-            } else {
-                UpgradeCheckResult::Invalid
-            }
-        } else if next.0.major == self.0.major {
-            if next.0.minor > self.0.minor + 1 {
-                UpgradeCheckResult::Invalid // Protocol minor versions should increase monotonically
-                                            // by 1 within the same
-                                            // major version.
-            } else if next.0.minor == self.0.minor + 1 {
-                // A minor version increase resets the patch version to ( 0 ).
-                if next.0.patch == 0 {
-                    UpgradeCheckResult::CodeIsOptional
-                } else {
-                    UpgradeCheckResult::Invalid
-                }
-            } else if next.0.minor == self.0.minor {
-                // Protocol patch versions should increase monotonically.
-                if next.0.patch > self.0.patch {
-                    UpgradeCheckResult::CodeIsOptional
-                } else {
-                    UpgradeCheckResult::Invalid
-                }
-            } else {
-                UpgradeCheckResult::Invalid // Protocol minor versions should not go backwards
-                                            // within the same major
-                                            // version.
-            }
-        } else {
-            UpgradeCheckResult::Invalid // Protocol major versions should not go backwards.
+    /// Checks if next version can be followed.
+    pub fn check_next_version(&self, next: &ProtocolVersion) -> VersionCheckResult {
+        if next.0.major < self.0.major || next.0.major > self.0.major + 1 {
+            // Protocol major versions should not go backwards and should increase monotonically by
+            // 1.
+            return VersionCheckResult::Invalid;
         }
+
+        if next.0.major == self.0.major.saturating_add(1) {
+            // A major version increase resets both the minor and patch versions to ( 0.0 ).
+            if next.0.minor != 0 || next.0.patch != 0 {
+                return VersionCheckResult::Invalid;
+            }
+            return VersionCheckResult::CodeIsRequired;
+        }
+
+        // Covers the equal major versions
+        debug_assert_eq!(next.0.major, self.0.major);
+
+        if next.0.minor < self.0.minor || next.0.minor > self.0.minor + 1 {
+            // Protocol minor versions should increase monotonically by 1 within the same major
+            // version and should not go backwards.
+            return VersionCheckResult::Invalid;
+        }
+
+        if next.0.minor == self.0.minor + 1 {
+            // A minor version increase resets the patch version to ( 0 ).
+            if next.0.patch != 0 {
+                return VersionCheckResult::Invalid;
+            }
+            return VersionCheckResult::CodeIsOptional;
+        }
+
+        // Code belows covers equal minor versions
+        debug_assert_eq!(next.0.minor, self.0.minor);
+
+        // Protocol patch versions should increase monotonically but can be skipped.
+        if next.0.patch <= self.0.patch {
+            return VersionCheckResult::Invalid;
+        }
+
+        VersionCheckResult::CodeIsOptional
     }
 }
 
@@ -120,6 +113,27 @@ impl fmt::Display for ProtocolVersion {
 mod tests {
     use super::*;
     use crate::value::semver::SemVer;
+
+    #[test]
+    fn should_follow_version_with_optional_code() {
+        let value = VersionCheckResult::CodeIsOptional;
+        assert!(!value.is_invalid());
+        assert!(!value.is_code_required());
+    }
+
+    #[test]
+    fn should_follow_version_with_required_code() {
+        let value = VersionCheckResult::CodeIsRequired;
+        assert!(!value.is_invalid());
+        assert!(value.is_code_required());
+    }
+
+    #[test]
+    fn should_not_follow_version_with_invalid_code() {
+        let value = VersionCheckResult::Invalid;
+        assert!(value.is_invalid());
+        assert!(!value.is_code_required());
+    }
 
     #[test]
     fn should_be_able_to_get_instance() {
@@ -157,21 +171,24 @@ mod tests {
     }
 
     #[test]
-    fn should_check_follows_major_version_upgrade() {
+    fn should_follow_major_version_upgrade() {
         // If the upgrade protocol version is lower than or the same as EE's current in-use protocol
         // version the upgrade is rejected and an error is returned; this includes the special case
         // of a defaulted protocol version ( 0.0.0 ).
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(2, 0, 0));
-        assert!(prev.check_upgrade_point(&next).can_be_followed());
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsRequired
+        );
+    }
 
+    #[test]
+    fn should_reject_if_major_version_decreases() {
+        let prev = ProtocolVersion::new(SemVer::new(10, 0, 0));
+        let next = ProtocolVersion::new(SemVer::new(9, 0, 0));
         // Major version must not decrease ...
-        assert!(!next.check_upgrade_point(&prev).can_be_followed());
-
-        // ... and may only increase by exactly 1 from the current major version.
-        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
-        let next = ProtocolVersion::new(SemVer::new(3, 0, 0));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed());
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
     }
 
     #[test]
@@ -181,100 +198,153 @@ mod tests {
         // Minor version must not decrease within the same major version
         let prev = ProtocolVersion::new(SemVer::new(1, 1, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 2, 0));
-        assert!(!next.check_upgrade_point(&prev).can_be_followed());
-
-        // and may only increase by exactly 1 from the current minor version. It may remain the same
-        // in the case of a patch only increase.
-        assert!(prev.check_upgrade_point(&next).can_be_followed());
-
-        let prev = ProtocolVersion::new(SemVer::new(1, 1, 0));
-        let next = ProtocolVersion::new(SemVer::new(1, 3, 0));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - increases minor by 2 for same major
-
-        // A minor version increase resets the patch version to ( 0 ).
-        let prev = ProtocolVersion::new(SemVer::new(1, 1, 0));
-        let next = ProtocolVersion::new(SemVer::new(1, 2, 1));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - patch version should
-                                                                     // be reset for minor
-                                                                     // version increase
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsOptional
+        );
     }
 
     #[test]
-    fn should_check_follows_major_resets_minor_and_patch() {
+    fn should_check_if_minor_bump_resets_patch() {
+        // A minor version increase resets the patch version to ( 0 ).
+        let prev = ProtocolVersion::new(SemVer::new(1, 2, 0));
+        let next = ProtocolVersion::new(SemVer::new(1, 3, 1));
+        // wrong - patch version should be reset for minor version increase
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+
+        let prev = ProtocolVersion::new(SemVer::new(1, 20, 42));
+        let next = ProtocolVersion::new(SemVer::new(1, 30, 43));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
+
+    #[test]
+    fn should_check_if_major_resets_minor_and_patch() {
         // A major version increase resets both the minor and patch versions to ( 0.0 ).
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(2, 1, 0));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - major increase should reset minor
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid); // wrong - major increase should reset minor
 
-        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(2, 0, 1));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - major increase should reset patch
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid); // wrong - major increase should reset patch
 
-        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(2, 1, 1));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - major increase
-                                                                     // should reset minor and patch
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid); // wrong - major
+                                                                                 // increase
+                                                                                 // should reset
+                                                                                 // minor and patch
     }
 
     #[test]
-    fn should_check_follows_patch_version_increase() {
+    fn should_reject_patch_version_rollback() {
         // Patch version must not decrease or remain the same within the same major and minor
         // version pair, but may skip.
+        let prev = ProtocolVersion::new(SemVer::new(1, 0, 42));
+        let next = ProtocolVersion::new(SemVer::new(1, 0, 41));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+        let next = ProtocolVersion::new(SemVer::new(1, 0, 13));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
 
-        let prev = ProtocolVersion::new(SemVer::new(1, 0, 1));
-        let next = ProtocolVersion::new(SemVer::new(1, 0, 0));
-        assert!(!prev.check_upgrade_point(&next).can_be_followed()); // wrong - should increase monotonically
-
+    #[test]
+    fn should_accept_patch_version_update_with_optional_code() {
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 0, 1));
-        assert!(prev.check_upgrade_point(&next).can_be_followed());
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsOptional
+        );
 
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 8));
         let next = ProtocolVersion::new(SemVer::new(1, 0, 42));
-        assert!(prev.check_upgrade_point(&next).can_be_followed());
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsOptional
+        );
     }
 
     #[test]
-    fn should_allow_for_installer_upgrade() {
-        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
-
-        // installer is optional for patch bump
-        let next = ProtocolVersion::new(SemVer::new(1, 0, 1));
-        assert_eq!(
-            prev.check_upgrade_point(&next),
-            UpgradeCheckResult::CodeIsOptional
-        );
-
-        let next = ProtocolVersion::new(SemVer::new(1, 0, 123));
-        assert_eq!(
-            prev.check_upgrade_point(&next),
-            UpgradeCheckResult::CodeIsOptional
-        );
-
+    fn should_accept_minor_bump_with_optional_code() {
         // installer is optional for major bump
+        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 1, 0));
         assert_eq!(
-            prev.check_upgrade_point(&next),
-            UpgradeCheckResult::CodeIsOptional
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsOptional
         );
 
+        let prev = ProtocolVersion::new(SemVer::new(3, 98, 0));
+        let next = ProtocolVersion::new(SemVer::new(3, 99, 0));
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsOptional
+        );
+    }
+
+    #[test]
+    fn should_reject_wrong_minor_bump() {
         // minor can be updated only by 1
-        let next = ProtocolVersion::new(SemVer::new(1, 2, 0));
-        assert_eq!(prev.check_upgrade_point(&next), UpgradeCheckResult::Invalid);
+        let prev = ProtocolVersion::new(SemVer::new(1, 1, 0));
 
+        let next = ProtocolVersion::new(SemVer::new(1, 3, 0));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+
+        let next = ProtocolVersion::new(SemVer::new(1, 7, 0));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
+
+    #[test]
+    fn should_reset_minor_and_patch_on_major_bump() {
         // no upgrade - minor resets patch
-        let next = ProtocolVersion::new(SemVer::new(1, 1, 1));
-        assert_eq!(prev.check_upgrade_point(&next), UpgradeCheckResult::Invalid);
+        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
+        let next = ProtocolVersion::new(SemVer::new(2, 1, 1));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
 
+        let prev = ProtocolVersion::new(SemVer::new(1, 1, 1));
+        let next = ProtocolVersion::new(SemVer::new(2, 2, 3));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
+
+    #[test]
+    fn should_allow_code_on_major_update() {
         // major upgrade requires installer to be present
+        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(2, 0, 0));
         assert_eq!(
-            prev.check_upgrade_point(&next),
-            UpgradeCheckResult::CodeIsRequired
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsRequired
         );
 
-        // can bump only by 1
+        let prev = ProtocolVersion::new(SemVer::new(2, 99, 99));
         let next = ProtocolVersion::new(SemVer::new(3, 0, 0));
-        assert_eq!(prev.check_upgrade_point(&next), UpgradeCheckResult::Invalid);
+        assert_eq!(
+            prev.check_next_version(&next),
+            VersionCheckResult::CodeIsRequired
+        );
+    }
+
+    #[test]
+    fn should_reject_wrong_advance_of_major() {
+        // can bump only by 1
+        let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
+        let next = ProtocolVersion::new(SemVer::new(3, 0, 0));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
+    #[test]
+    fn should_reject_rollback_of_major_version() {
+        // can bump forward
+        let prev = ProtocolVersion::new(SemVer::new(2, 0, 0));
+        let next = ProtocolVersion::new(SemVer::new(0, 0, 0));
+        assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
+    }
+
+    #[test]
+    fn should_reject_equal_versions() {
+        for ver in &[
+            ProtocolVersion::from_parts(1, 0, 0),
+            ProtocolVersion::from_parts(1, 2, 0),
+            ProtocolVersion::from_parts(1, 2, 3),
+        ] {
+            assert_eq!(ver.check_next_version(&ver), VersionCheckResult::Invalid);
+        }
     }
 }

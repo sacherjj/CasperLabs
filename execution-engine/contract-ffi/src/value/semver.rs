@@ -42,5 +42,7 @@ mod tests {
         assert!(SemVer::new(1, 2, 3) == SemVer::new(1, 2, 3));
         assert!(SemVer::new(1, 2, 3) >= SemVer::new(1, 2, 3));
         assert!(SemVer::new(1, 2, 3) <= SemVer::new(1, 2, 3));
+        assert!(SemVer::new(2, 0, 0) >= SemVer::new(1, 99, 99));
+        assert!(SemVer::new(2, 0, 0) > SemVer::new(1, 99, 99));
     }
 }

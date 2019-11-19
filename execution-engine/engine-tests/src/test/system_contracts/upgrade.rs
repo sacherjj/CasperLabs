@@ -42,18 +42,15 @@ fn should_upgrade_only_protocol_version() {
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
+    let sem_ver = PROTOCOL_VERSION.value();
+    let new_protocol_version =
+        ProtocolVersion::from_parts(sem_ver.major, sem_ver.minor, sem_ver.patch + 1);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
         UpgradeRequestBuilder::new()
             .with_current_protocol_version(PROTOCOL_VERSION)
             .with_new_protocol_version(new_protocol_version)
             .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
             .build()
     };
 
@@ -310,7 +307,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
 
 #[ignore]
 #[test]
-fn should_upgrade_wasm_costs_only_on_patch_bump() {
+fn should_allow_only_wasm_costs_patch_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -352,7 +349,7 @@ fn should_upgrade_wasm_costs_only_on_patch_bump() {
 
 #[ignore]
 #[test]
-fn should_upgrade_wasm_costs_only_on_minor_bump() {
+fn should_allow_only_wasm_costs_minor_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -398,7 +395,7 @@ fn should_upgrade_wasm_costs_only_on_minor_bump() {
 
 #[ignore]
 #[test]
-fn should_upgrade_system_contract_and_wasm_costs() {
+fn should_upgrade_system_contract_and_wasm_costs_major() {
     let mut builder = InMemoryWasmTestBuilder::default();
 
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
