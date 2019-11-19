@@ -369,17 +369,25 @@ object ChainSpecReader {
     }
   }
 
-  /** If there's no explicit ChainSpec location defined we can use the default one
+  /** If the user installed the software under Unix then they'll have standard
+    * libraries created and the chainspec copied to /etc/casperlabs; if present,
+    * use it, unless an explicit setting is pointing the node somewhere else.
+    * If there's no explicit ChainSpec location defined we can use the default one
     * packaged with the node. Every file can be overridden by placing one with the
     * same path under the ~/.casperlabs data directory.
     */
   def fromConf(
       conf: Configuration
-  ): ValidatedNel[String, ipc.ChainSpec] =
-    conf.casper.chainSpecPath match {
-      case None =>
-        implicit val resolver = new ResourceResolver(conf.server.dataDir)
-        ChainSpecReader[ipc.ChainSpec].fromDirectory(Paths.get("chainspec"))
+  ): ValidatedNel[String, ipc.ChainSpec] = {
+    val maybeEtcPath =
+      Option(Paths.get("/", "etc", "casperlabs", "chainspec")).filter(_.toFile.exists)
+
+    // The node comes default settings for devnet packaged in the JAR. If it's installed,
+    // these get unpacked by the installer to /etc/casperlabs/chainspec.
+    // If the user sets the `--casper-chain-spec-path` to a directory, that means they
+    // are providing a full ChainSpec, for example to connect to testnet or mainnet,
+    // instead of devnet; in this case ignore everything else, this takes priority.
+    conf.casper.chainSpecPath orElse maybeEtcPath match {
       case Some(path) =>
         val dir = path.toFile
         if (!dir.exists)
@@ -390,6 +398,12 @@ object ChainSpecReader {
           implicit val resolver = FileResolver
           ChainSpecReader[ipc.ChainSpec].fromDirectory(path)
         }
-    }
 
+      case None =>
+        // No dedicated ChainSpec directory given, so use the `chainspec` directory
+        // as it exists under `resources`, packaged in the JAR.
+        implicit val resolver = new ResourceResolver(conf.server.dataDir)
+        ChainSpecReader[ipc.ChainSpec].fromDirectory(Paths.get("chainspec"))
+    }
+  }
 }

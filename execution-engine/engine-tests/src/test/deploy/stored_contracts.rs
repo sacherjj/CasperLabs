@@ -71,9 +71,9 @@ fn should_exec_non_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -142,8 +142,8 @@ fn should_exec_stored_code_by_hash() {
         "stored_payment_contract_hash should exist"
     );
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -188,8 +188,8 @@ fn should_exec_stored_code_by_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -249,8 +249,8 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -296,8 +296,8 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -357,8 +357,8 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -401,8 +401,8 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -462,8 +462,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_alpha = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -494,8 +494,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
@@ -530,8 +530,8 @@ fn should_exec_payment_and_session_stored_code() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes_charlie = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 

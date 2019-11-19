@@ -77,7 +77,7 @@ pub fn weight_arb() -> impl Strategy<Value = Weight> {
 
 pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys> {
     proptest::collection::btree_map(public_key_arb(), weight_arb(), size).prop_map(|keys| {
-        let mut associated_keys = AssociatedKeys::empty();
+        let mut associated_keys = AssociatedKeys::default();
         keys.into_iter().for_each(|(k, v)| {
             associated_keys.add_key(k, v).unwrap();
         });

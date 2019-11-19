@@ -131,9 +131,9 @@ fn finalize_payment_should_refund_to_specified_purse() {
             .get_exec_response(0)
             .expect("there should be a response");
 
-        let success_result = test_support::get_success_result(response);
+        let mut success_result = test_support::get_success_result(response);
         let cost = success_result
-            .get_cost()
+            .take_cost()
             .try_into()
             .expect("should map to U512");
         Motes::from_gas(Gas::new(cost), CONV_RATE)

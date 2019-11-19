@@ -1,10 +1,15 @@
-use std::fmt;
+use std::{fmt, iter};
 
 use num_traits::Zero;
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 
-use contract_ffi::key::Key;
-
-use contract_ffi::value::{account::PublicKey, ProtocolVersion};
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, ProtocolVersion, U512},
+};
 use engine_shared::{motes::Motes, newtypes::Blake2bHash, transform::TypeMismatch};
 use engine_storage::global_state::CommitResult;
 use engine_wasm_prep::wasm_costs::WasmCosts;
@@ -84,6 +89,25 @@ impl GenesisAccount {
     }
 }
 
+impl Distribution<GenesisAccount> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GenesisAccount {
+        let public_key = PublicKey::new(rng.gen());
+
+        let mut u512_array = [0u8; 64];
+        rng.fill_bytes(u512_array.as_mut());
+        let balance = Motes::new(U512::from(u512_array.as_ref()));
+
+        rng.fill_bytes(u512_array.as_mut());
+        let bonded_amount = Motes::new(U512::from(u512_array.as_ref()));
+
+        GenesisAccount {
+            public_key,
+            balance,
+            bonded_amount,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenesisConfig {
     name: String,
@@ -156,5 +180,52 @@ impl GenesisConfig {
 
     pub fn accounts(&self) -> &[GenesisAccount] {
         self.accounts.as_slice()
+    }
+}
+
+impl Distribution<GenesisConfig> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> GenesisConfig {
+        let mut count = rng.gen_range(1, 1000);
+        let name = iter::repeat(())
+            .map(|_| rng.gen::<char>())
+            .take(count)
+            .collect();
+
+        let timestamp = rng.gen();
+
+        let protocol_version = ProtocolVersion::from_parts(rng.gen(), rng.gen(), rng.gen());
+
+        count = rng.gen_range(1000, 10_000);
+        let mint_installer_bytes = iter::repeat(()).map(|_| rng.gen()).take(count).collect();
+
+        count = rng.gen_range(1000, 10_000);
+        let proof_of_stake_installer_bytes =
+            iter::repeat(()).map(|_| rng.gen()).take(count).collect();
+
+        count = rng.gen_range(1, 10);
+        let accounts = iter::repeat(()).map(|_| rng.gen()).take(count).collect();
+
+        let wasm_costs = WasmCosts {
+            regular: rng.gen(),
+            div: rng.gen(),
+            mul: rng.gen(),
+            mem: rng.gen(),
+            initial_mem: rng.gen(),
+            grow_mem: rng.gen(),
+            memcpy: rng.gen(),
+            max_stack_height: rng.gen(),
+            opcodes_mul: rng.gen(),
+            opcodes_div: rng.gen(),
+        };
+
+        GenesisConfig {
+            name,
+            timestamp,
+            protocol_version,
+            mint_installer_bytes,
+            proof_of_stake_installer_bytes,
+            accounts,
+            wasm_costs,
+        }
     }
 }
