@@ -588,10 +588,11 @@ class GrpcGossipServiceSpec
                         Task.now(None)
                     }
                   }
-                  def hasBlock(blockHash: ByteString)             = ???
-                  def getBlockSummary(blockHash: ByteString)      = ???
-                  def listTips                                    = ???
-                  def dagTopoSort(startRank: Long, endRank: Long) = ???
+                  def hasBlock(blockHash: ByteString)                = ???
+                  def getBlockSummary(blockHash: ByteString)         = ???
+                  def listTips                                       = ???
+                  def latestMessages: Task[Set[Block.Justification]] = ???
+                  def dagTopoSort(startRank: Long, endRank: Long)    = ???
                 }
               }
 
@@ -1361,6 +1362,13 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.summaries.get(blockHash))
         def listTips =
           Task.delay(testDataRef.get.tips)
+        def latestMessages: Task[Set[Block.Justification]] =
+          Task.delay(
+            testDataRef.get.summaries.values
+              .map(bs => Block.Justification(bs.getHeader.validatorPublicKey, bs.blockHash))
+              .toSet
+          )
+
         def dagTopoSort(startRank: Long, endRank: Long) =
           Iterant
             .liftF(
