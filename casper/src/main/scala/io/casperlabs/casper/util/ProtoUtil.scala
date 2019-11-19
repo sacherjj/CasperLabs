@@ -330,6 +330,27 @@ object ProtoUtil {
   def blockNumber(b: Block): Long =
     b.getHeader.rank
 
+  /** Removes redundant messages that are available in the immediate justifications of another message in the set */
+  def removeRedundantMessages(
+      messages: Iterable[Message]
+  ): Set[Message] = {
+    // Builds a dependencies map.
+    // ancestor -> {descendant}
+    // Allows for quick test whether a block is in justifications of another one.
+    val dependenciesOf = messages
+      .foldLeft(Map.empty[ByteString, Set[Message]]) {
+        case (acc, m) =>
+          m.justifications
+            .map(_.latestBlockHash)
+            .map(_ -> Set(m))
+            .toMap |+| acc
+      }
+    val keySet  = dependenciesOf.keySet
+    val tipsSet = dependenciesOf.values.flatten.toSet
+    // Filter out messages that are in justifications of another one.
+    tipsSet.filterNot(m => keySet.contains(m.messageHash))
+  }
+
   def toJustification(
       latestMessages: Seq[Message]
   ): Seq[Justification] =
