@@ -46,7 +46,7 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
-  new MenuItem(Pages.LatestDeploys, 'Latest Deploys', 'align-left'),
+  new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search')
 ];
 
@@ -284,7 +284,7 @@ const Content = (props: AppProps) => {
             />
 
             <Route
-              path={Pages.LatestDeploysOfAccount}
+              path={Pages.DeploysOfAccount}
               render={_ => (
                 <DeployInfoListDetails
                   pageToken={query.get('pageToken')}
@@ -293,7 +293,7 @@ const Content = (props: AppProps) => {
               )}
             ></Route>
             <Route
-              path={Pages.LatestDeploys}
+              path={Pages.Deploys}
               render={_ => <LatestDeploys {...props} />}
             />
             <Route path={Pages.Search} render={_ => <Search {...props} />} />

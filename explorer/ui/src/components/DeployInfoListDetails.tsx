@@ -96,7 +96,7 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
               onClick={() => {
                 if (this.props.deployInfoList.prevPageToken !== '') {
                   let url =
-                    Pages.LatestDeploys +
+                    Pages.Deploys +
                     '/' +
                     this.accountPublicKeyBase16 +
                     '?pageToken=' +
@@ -111,7 +111,7 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
               onClick={() => {
                 if (this.props.deployInfoList.nextPageToken !== '') {
                   let url =
-                    Pages.LatestDeploys +
+                    Pages.Deploys +
                     '/' +
                     this.accountPublicKeyBase16 +
                     '?pageToken=' +
