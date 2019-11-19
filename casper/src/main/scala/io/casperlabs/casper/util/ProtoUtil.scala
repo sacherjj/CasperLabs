@@ -337,7 +337,7 @@ object ProtoUtil {
     // Builds a dependencies map.
     // ancestor -> {descendant}
     // Allows for quick test whether a block is in justifications of another one.
-    val dependenciesOf = messages
+    val dependantsOf = messages
       .foldLeft(Map.empty[ByteString, Set[Message]]) {
         case (acc, m) =>
           m.justifications
@@ -345,8 +345,8 @@ object ProtoUtil {
             .map(_ -> Set(m))
             .toMap |+| acc
       }
-    val ancestors   = dependenciesOf.keySet
-    val descendants = dependenciesOf.values.flatten.toSet
+    val ancestors   = dependantsOf.keySet
+    val descendants = dependantsOf.values.flatten.toSet
     // Filter out messages that are in justifications of another one.
     descendants.filterNot(m => ancestors.contains(m.messageHash))
   }
