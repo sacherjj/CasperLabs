@@ -108,8 +108,9 @@ object Log {
       sinks = sinks :+ new FileSink[RealFile](
         renderingPolicy = new LogstageCirceRenderingPolicy(),
         fileService = new FileServiceImpl(path.toString),
-        rotation = FileRotation.FileLimiterRotation(10),
-        config = FileSinkConfig.soft(10 * 1024 * 1024)
+        // NOTE: What SRE wants is to have log rotation happen at the end of the day with timestamped files. For now they'll deal with this in the OS.
+        rotation = FileRotation.DisabledRotation,
+        config = FileSinkConfig.soft(Int.MaxValue)
       ) {
         override def recoverOnFail(e: String): Unit = println(e)
       }
