@@ -38,10 +38,11 @@ class DockerClarity(LoggingDockerBase):
         return {
             "FAUCET_ACCOUNT_PUBLIC_KEY_PATH": "/app/keys/public.key",
             "FAUCET_ACCOUNT_PRIVATE_KEY_PATH": "/app/keys/private.key",
-            "CASPER_SERVICE_URL": f"http://{self.grpc_proxy_name}:8080",
+            "CASPER_SERVICE_URL": f"http://{self.grpc_proxy_name}:8401",
             "SERVER_PORT": "8080",
             "SERVER_USE_TLS": "false",
-            "UI_GRPC_URL": "http://localhost:8401",
+            "UI_GRPC_URL": f"http://{self.grpc_proxy_name}:8401",
+            "AUTH_MOCK_ENABLED": "true",  # Enable Auth0 mock service
         }
 
     def _get_container(self):
