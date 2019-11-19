@@ -1,4 +1,3 @@
 /Dockerfile.tmp
-resources/**/*.wasm
 resources/*.rlib
 client/CasperLabsClient/.eggs

@@ -12,7 +12,6 @@ import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
-import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
@@ -100,7 +99,7 @@ class RelayingSpec
         }
       "not stop gossiping if received an error" in
         forAll(genListNode, genHash) { (peers: List[Node], hash: ByteString) =>
-          val log = new LogStub[Task]()
+          val log = LogStub[Task]()
 
           TestFixture(peers.size, 100, peers, acceptOrFailure = _ => none[Boolean], log) {
             (relaying, asked, _) =>
@@ -137,7 +136,7 @@ object RelayingSpec {
     def ask: Task[Node]                = Task.pure(local)
   }
 
-  private val noOpLog: Log[Task] = new NOPLog[Task]
+  private val noOpLog: Log[Task] = Log.NOPLog[Task]
   implicit val metrics           = new Metrics.MetricsNOP[Task]
 
   object TestFixture {

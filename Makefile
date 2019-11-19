@@ -323,6 +323,7 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
 client/src/main/resources/%.wasm: .make/contracts/%
+	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 # Compile a contract and put it in the node resources so they get packaged with the JAR.
@@ -331,7 +332,7 @@ node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
 
 # Copy a client or explorer contract to the explorer.
 explorer/contracts/%.wasm: .make/contracts/%
-	mkdir -p explorer/contracts
+	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 build-client: \

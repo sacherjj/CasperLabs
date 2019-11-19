@@ -18,7 +18,7 @@ object Errors {
     def errorMessage: String
 
     def logged[F[_]: Log: Functor]: F[DeployHeaderError] =
-      Log[F].warn(self.errorMessage).as(self)
+      Log[F].warn(s"${self.errorMessage -> "error" -> null}").as(self)
   }
   object DeployHeaderError {
     def missingHeader(deployHash: ByteString): DeployHeaderError = MissingHeader(deployHash)

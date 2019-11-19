@@ -53,7 +53,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
         }.toMap
 
       implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](validatorsMap)
-      implicit val logEff                  = new LogStub[Task]
+      implicit val logEff                  = LogStub[Task]()
 
       for {
         genesisWithTransform <- Genesis.fromChainSpec[Task](spec)

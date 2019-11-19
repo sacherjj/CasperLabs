@@ -7,7 +7,6 @@ import cats.implicits._
 import io.casperlabs.shared.{Log, LogSource, MaybeCell}
 
 object MultiParentCasperRef {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
 
   type MultiParentCasperRef[F[_]] = MaybeCell[F, MultiParentCasper[F]]
 

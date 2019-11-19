@@ -2,6 +2,10 @@
 #   * Nested tables
 #   * Arrays
 
+[log]
+level = "info"
+json-path = "/tmp/json.log"
+
 [server]
 host = "test"
 port = 1

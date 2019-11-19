@@ -47,7 +47,7 @@ class CreateBlockAPITest
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff      = new LogStub[Task]
+  implicit val logEff      = LogStub[Task]()
   implicit val broadcaster = Broadcaster.noop[Task]
 
   implicit val validation: Validation[Task] = HashSetCasperTestNode.makeValidation[Task]
@@ -78,7 +78,7 @@ class CreateBlockAPITest
         )
     }
 
-    implicit val logEff       = new LogStub[Task]
+    implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
 
     def testProgram(blockApiLock: Semaphore[Task])(
@@ -180,7 +180,7 @@ class CreateBlockAPITest
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)
 
-    implicit val logEff       = new LogStub[Task]
+    implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
 
     def testProgram(blockApiLock: Semaphore[Task])(
@@ -214,7 +214,7 @@ class CreateBlockAPITest
       standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
@@ -286,7 +286,7 @@ class CreateBlockAPITest
       standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
@@ -327,7 +327,7 @@ class CreateBlockAPITest
       standaloneEff(genesis, transforms, validatorKeys.head)
     val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 

@@ -11,7 +11,7 @@ import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationForwar
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.shared.Log.NOPLog
+import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.{Atomic, AtomicInt}
@@ -234,7 +234,7 @@ class InitialSynchronizationForwardImplSpec
 }
 
 object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
-  implicit val logNoOp = new NOPLog[Task]
+  implicit val logNoOp = Log.NOPLog[Task]
   implicit val metris  = new Metrics.MetricsNOP[Task]
 
   class MockNodeDiscovery(nodes: List[Node]) extends NodeDiscovery[Task] {

@@ -1,12 +1,11 @@
 package io.casperlabs.models
 
-import com.typesafe.scalalogging.Logger
+import cats.Id
 import monix.eval.Coeval
 import monix.eval.Coeval.Eager
+import io.casperlabs.shared.Log
 
-class Memo[A](f: => Coeval[A]) {
-
-  private[this] val logger = Logger("Memo")
+class Memo[A](f: => Coeval[A])(implicit logId: Log[Id]) {
 
   private[this] var thunk             = f
   private[this] var result: Coeval[A] = _
@@ -28,7 +27,7 @@ class Memo[A](f: => Coeval[A]) {
                   }
                 }
               case _ =>
-                logger.warn(s"Non-Eager result when the thunk is null: $result")
+                Log[Id].warn(s"Non-Eager result when the thunk is null: $result")
                 result
             }
           }
