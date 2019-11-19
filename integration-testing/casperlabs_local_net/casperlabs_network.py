@@ -26,6 +26,7 @@ from casperlabs_local_net.docker_clarity import (
     DockerGrpcWebProxy,
     DockerSelenium,
 )
+from casperlabs_local_net.docker_config import DEFAULT_NODE_ENV
 from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
 from casperlabs_local_net.docker_node import FIRST_VALIDATOR_ACCOUNT, DockerNode
 from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
@@ -419,6 +420,10 @@ class OneNodeWithClarity(OneNodeNetwork):
     def create_cl_network(self):
         account = self.get_key()
         config = self.docker_config(account)
+        # Enable auto proposing
+        new_env = DEFAULT_NODE_ENV.copy()
+        new_env["CL_CASPER_AUTO_PROPOSE_ENABLED"] = "true"
+        config.node_env = new_env
         self.add_bootstrap(config)
         self.add_clarity(config)
 

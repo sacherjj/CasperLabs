@@ -13,13 +13,15 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
+import io.casperlabs.shared.Log.LogOps
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -232,7 +234,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleFeedback.complete) >> run
+        start
+          .attemptAndLog("An error occurred when handling Download signal.")
+          .flatMap(scheduleFeedback.complete) >> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -256,7 +260,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _                      <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attemptAndLog("An error occurred when handling DownloadSuccess signal.") >> run
 
       case Signal.DownloadFailure(blockHash, ex) =>
         val finish = for {
@@ -275,7 +279,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attemptAndLog("An error occurred when handling DownloadFailure signal.") >> run
     }
 
   // Indicate how many items we have in the queue.

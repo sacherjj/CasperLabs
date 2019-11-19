@@ -94,22 +94,47 @@ class ABI:
         raise Exception("account must be 32 bytes or 64 characters long string")
 
     @staticmethod
-    def int_value(name, a: int):
-        return Arg(name=name, value=Value(int_value=a))
+    def int_value(name, i: int):
+        return Arg(name=name, value=Value(int_value=i))
 
     @staticmethod
-    def long_value(name, a: int):
-        return Arg(name=name, value=Value(long_value=a))
+    def long_value(name, n: int):
+        return Arg(name=name, value=Value(long_value=n))
 
     @staticmethod
-    def big_int(name, a):
+    def big_int(name, n):
         return Arg(
-            name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
+            name=name, value=Value(big_int=state.BigInt(value=str(n), bit_width=512))
         )
 
     @staticmethod
-    def string_value(name, a):
-        return Arg(name=name, value=Value(string_value=a))
+    def string_value(name, s):
+        return Arg(name=name, value=Value(string_value=s))
+
+    @staticmethod
+    def key_hash(name, h):
+        return Arg(name=name, value=Value(key=state.Key(hash=state.Key.Hash(hash=h))))
+
+    @staticmethod
+    def key_address(name, a):
+        return Arg(
+            name=name, value=Value(key=state.Key(address=state.Key.Address(account=a)))
+        )
+
+    @staticmethod
+    def key_uref(name, uref, access_rights):
+        return Arg(
+            name=name,
+            value=Value(
+                key=state.Key(
+                    uref=state.Key.URef(uref=uref, access_rights=access_rights)
+                )
+            ),
+        )
+
+    @staticmethod
+    def key_local(name, h):
+        return Arg(name=name, value=Value(key=state.Key(local=state.Key.Local(hash=h))))
 
     @staticmethod
     def args(l: list):
@@ -118,42 +143,18 @@ class ABI:
 
     @staticmethod
     def args_from_json(s):
-        base64_b64decode = base64.b64decode
-        try:
-            # Change JSON protobuf format of binary data from base64 to base16
-            base64.b64decode = lambda s: bytes.fromhex(s)
-            parsed_json = json.loads(s)
-            args = [
-                json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json
-            ]
-            c = consensus.Deploy.Code(args=args)
-            return c.args
-        finally:
-            base64.b64decode = base64_b64decode
+        parsed_json = ABI.hex2base64(json.loads(s))
+        args = [json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json]
+        c = consensus.Deploy.Code(args=args)
+        return c.args
 
     @staticmethod
-    def args_to_json(args):
-        base64_b64encode = base64.b64encode
-        try:
-            # We can't just call MessageToDict or MessageToJson on the args object,
-            # which is a 'repeated Arg', because we get:
-            # AttributeError: 'google.protobuf.pyext._message.RepeatedCompositeCo' object has no attribute 'DESCRIPTOR'
-            class Mock:
-                def __init__(self, v):
-                    self.value = v
-
-                def decode(self, s):
-                    return self.value
-
-            base64.b64encode = lambda b: Mock(b.hex())
-            return json.dumps(
-                [
-                    json_format.MessageToDict(arg, preserving_proto_field_name=True)
-                    for arg in args
-                ]
-            )
-        finally:
-            base64.b64encode = base64_b64encode
+    def args_to_json(args, **kwargs):
+        lst = [
+            json_format.MessageToDict(arg, preserving_proto_field_name=True)
+            for arg in args
+        ]
+        return json.dumps(ABI.base64_2hex(lst), **kwargs)
 
     # Below methods for backwards compatibility
 
@@ -172,6 +173,58 @@ class ABI:
     @staticmethod
     def byte_array(name, a):
         return Arg(name=name, value=Value(bytes_value=a))
+
+    # These are kinds of Arg that are of type bytes.
+    # We want to represent them in JSON in hex format, rather than base64.
+    HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
+
+    # Standard protobuf JSON representation encodes fields of type bytes
+    # in base64. We like base16 (hex) more. Below helper functions
+    # help in converting output of protobuf JSON args serialization (base64 -> base16)
+    # and in preparing user suplied JSON for parsing with protobuf (base16 -> base64).
+
+    @staticmethod
+    def h2b64(name, x):
+        """
+        Convert value of a field of a given name from hex to base64,
+        if the field is known to be of the bytes type.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
+        return ABI.hex2base64(x)
+
+    @staticmethod
+    def hex2base64(d):
+        """
+        Convert decoded JSON list of args so fields of type bytes
+        are in base64, in order to make it compatible with the format
+        required by protobuf JSON parser.
+        """
+        if type(d) == list:
+            return [ABI.hex2base64(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.h2b64(k, d[k]) for k in d}
+        return d
+
+    @staticmethod
+    def b64_2h(name, x):
+        """
+        Helper function of base64_2hex.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64decode(x).hex()
+        return ABI.base64_2hex(x)
+
+    @staticmethod
+    def base64_2hex(d):
+        """
+        Convert JSON serialized args so fields of type bytes are shown in base16 (hex).
+        """
+        if type(d) == list:
+            return [ABI.base64_2hex(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.b64_2h(k, d[k]) for k in d}
+        return d
 
 
 def read_pem_key(file_name: str):
@@ -465,9 +518,10 @@ class CasperLabsClient:
 
         if payment_amount:
             payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
-            # Unless one of payment* options supplied use bundled standard-payment
-            if not any((payment, payment_name, payment_hash, payment_uref)):
-                payment = bundled_contract("standard_payment.wasm")
+
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not any((payment, payment_name, payment_hash, payment_uref)):
+            payment = bundled_contract("standard_payment.wasm")
 
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)

@@ -33,7 +33,7 @@ use engine_grpc_server::engine_server::{
         StoredContractURef, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
-    mappings::{CommitTransforms, MappingError},
+    mappings::{MappingError, TransformMap},
     state::{self, ProtocolVersion},
     transforms,
 };
@@ -714,14 +714,14 @@ where
 
         let query_request = create_query_request(post_state, base_key, path_vec);
 
-        let query_response = self
+        let mut query_response = self
             .engine_state
             .query(RequestOptions::new(), query_request)
             .wait_drop_metadata()
-            .expect("should query");
+            .expect("should get query response");
 
         if query_response.has_success() {
-            query_response.get_success().try_into().ok()
+            query_response.take_success().try_into().ok()
         } else {
             None
         }
@@ -749,13 +749,14 @@ where
             .get_deploy_results()
             .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
-        let commit_transforms: CommitTransforms = deploy_result
+        let commit_transforms: TransformMap = deploy_result
             .get_execution_result()
             .get_effects()
             .get_transform_map()
+            .to_vec()
             .try_into()
             .expect("should convert");
-        let transforms = commit_transforms.value();
+        let transforms = commit_transforms.into_inner();
         // Cache transformations
         self.transforms.push(transforms);
         self
@@ -796,18 +797,18 @@ where
         prestate_hash: Vec<u8>,
         effects: AdditiveMap<Key, Transform>,
     ) -> &mut Self {
-        let commit_response = self.commit_transforms(prestate_hash, effects);
+        let mut commit_response = self.commit_transforms(prestate_hash, effects);
         if !commit_response.has_success() {
             panic!(
                 "Expected commit success but received a failure instead: {:?}",
                 commit_response
             );
         }
-        let commit_success = commit_response.get_success();
-        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let mut commit_success = commit_response.take_success();
+        self.post_state_hash = Some(commit_success.take_poststate_hash().to_vec());
         let bonded_validators = commit_success
-            .get_bonded_validators()
-            .iter()
+            .take_bonded_validators()
+            .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<HashMap<PublicKey, U512>, MappingError>>()
             .unwrap();
@@ -1073,13 +1074,14 @@ pub fn create_commit_request(
 
 #[allow(clippy::implicit_hasher)]
 pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
-    let commit_transforms: CommitTransforms = genesis_response
+    let commit_transforms: TransformMap = genesis_response
         .get_success()
         .get_effect()
         .get_transform_map()
+        .to_vec()
         .try_into()
         .expect("should convert");
-    commit_transforms.value()
+    commit_transforms.into_inner()
 }
 
 pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
@@ -1091,6 +1093,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
             let execution_result = deploy_result.get_execution_result();
             let cost = execution_result
                 .get_cost()
+                .clone()
                 .try_into()
                 .expect("cost should map to U512");
             Gas::new(cost)

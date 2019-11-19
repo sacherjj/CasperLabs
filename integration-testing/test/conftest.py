@@ -92,7 +92,7 @@ def encrypted_one_node_network(docker_client_fixture):
         yield net
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="module")
 def one_node_network_with_clarity(docker_client_fixture):
     with OneNodeWithClarity(docker_client_fixture) as net:
         net.create_cl_network()

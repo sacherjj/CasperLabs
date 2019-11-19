@@ -65,8 +65,7 @@ sealed abstract class MultiParentCasperInstances {
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       chainName: String,
-      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      relaying: gossiping.Relaying[F]
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ): F[MultiParentCasper[F]] =
     for {
       implicit0(casperState: Cell[F, CasperState]) <- init(
@@ -74,12 +73,12 @@ sealed abstract class MultiParentCasperInstances {
                                                        genesisPreState,
                                                        genesisEffects
                                                      )
-      semaphoreMap      <- SemaphoreMap[F, ByteString](1)
-      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor.create[F](chainName, upgrades)
+      semaphoreMap <- SemaphoreMap[F, ByteString](1)
+      statelessExecutor <- MultiParentCasperImpl.StatelessExecutor
+                            .create[F](validatorId.map(_.publicKey), chainName, upgrades)
       casper <- MultiParentCasperImpl.create[F](
                  semaphoreMap,
                  statelessExecutor,
-                 MultiParentCasperImpl.Broadcaster.fromGossipServices(validatorId, relaying),
                  validatorId,
                  genesis,
                  chainName,
