@@ -5,7 +5,7 @@ import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
@@ -181,6 +181,9 @@ object RelayingSpec {
           ) = ???
           override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
             ???
+          override def streamLatestMessages(
+              request: StreamLatestMessagesRequest
+          ): Iterant[Task, Block.Justification]                                   = ???
           override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
           override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
           override def addApproval(request: AddApprovalRequest)                   = ???

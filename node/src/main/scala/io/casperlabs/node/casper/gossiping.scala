@@ -572,8 +572,7 @@ package object gossiping {
 
                          override def justifications: F[List[ByteString]] =
                            for {
-                             casper <- unsafeGetCasper[F]
-                             dag    <- casper.dag
+                             dag    <- DagStorage[F].getRepresentation
                              latest <- dag.latestMessageHashes
                            } yield latest.values.flatten.toList
 
@@ -622,6 +621,16 @@ package object gossiping {
                         tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
                         tips           <- tipHashes.traverse(BlockStorage[F].getBlockSummary(_))
                       } yield tips.flatten
+
+                    /** Returns latest messages as seen currently by the node.
+                      * NOTE: In the future we will remove redundant messages. */
+                    override def latestMessages: F[Set[Block.Justification]] =
+                      for {
+                        dag <- DagStorage[F].getRepresentation
+                        lm  <- dag.latestMessages
+                      } yield lm.values
+                        .flatMap(_.map(m => Block.Justification(m.validatorId, m.messageHash)))
+                        .toSet
 
                     override def dagTopoSort(
                         startRank: Long,

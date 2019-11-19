@@ -190,6 +190,11 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   ): Iterant[F, BlockSummary] =
     Iterant.liftF(backend.listTips).flatMap(Iterant.fromSeq(_))
 
+  override def streamLatestMessages(
+      request: StreamLatestMessagesRequest
+  ): Iterant[F, Block.Justification] =
+    Iterant.liftF(backend.latestMessages).flatMap(set => Iterant.fromSeq(set.toSeq))
+
   override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
   ): Iterant[F, BlockSummary] =
@@ -281,6 +286,10 @@ object GossipServiceServer {
 
     /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
     def listTips: F[Seq[BlockSummary]]
+
+    /** Returns latest messages as seen currently by the node.
+      * NOTE: In the future we will remove redundant messages. */
+    def latestMessages: F[Set[Block.Justification]]
 
     /* Retrieve the DAG slice in topological order, inclusive */
     def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]

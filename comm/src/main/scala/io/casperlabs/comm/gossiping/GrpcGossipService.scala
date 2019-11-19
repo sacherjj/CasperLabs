@@ -4,7 +4,7 @@ import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.protobuf.empty.Empty
-import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import io.casperlabs.comm.ServiceError.{DeadlineExceeded, Unauthenticated}
 import io.casperlabs.comm.auth.Principal
 import io.casperlabs.comm.discovery.{Node, NodeIdentifier}
@@ -74,6 +74,11 @@ object GrpcGossipService {
       ): Observable[BlockSummary] =
         service.streamDagTipBlockSummaries(request).toObservable
 
+      override def streamLatestMessages(
+          request: StreamLatestMessagesRequest
+      ): Observable[Block.Justification] =
+        service.streamLatestMessages(request).toObservable
+
       def streamBlockSummaries(
           request: StreamBlockSummariesRequest
       ): Observable[BlockSummary] =
@@ -142,6 +147,11 @@ object GrpcGossipService {
           request: StreamDagTipBlockSummariesRequest
       ): Iterant[F, BlockSummary] =
         withErrorCallback(stub.streamDagTipBlockSummaries(request))
+
+      override def streamLatestMessages(
+          request: StreamLatestMessagesRequest
+      ): Iterant[F, Block.Justification] =
+        withErrorCallback(stub.streamLatestMessages(request))
 
       def streamBlockSummaries(
           request: StreamBlockSummariesRequest

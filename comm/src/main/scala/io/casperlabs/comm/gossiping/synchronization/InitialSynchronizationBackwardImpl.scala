@@ -43,13 +43,13 @@ class InitialSynchronizationBackwardImpl[F[_]: Concurrent: Log: Timer](
       for {
         service <- connector(node)
         _       <- Log[F].debug(s"Syncing with a node: ${node.show}")
-        tips    <- service.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL
+        lms     <- service.streamLatestMessages(StreamLatestMessagesRequest()).toListL
         _ <- MonadThrowable[F].rethrow {
               selfGossipService
                 .newBlocksSynchronous(
                   NewBlocksRequest(
                     sender = node.some,
-                    blockHashes = tips.map(_.blockHash)
+                    blockHashes = lms.map(_.latestBlockHash)
                   ),
                   skipRelaying = true
                 )

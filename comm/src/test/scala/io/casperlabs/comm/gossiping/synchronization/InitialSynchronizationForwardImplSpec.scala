@@ -3,7 +3,7 @@ package io.casperlabs.comm.gossiping.synchronization
 import java.util.concurrent.TimeoutException
 
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
@@ -264,6 +264,7 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     def newBlocks(request: NewBlocksRequest)                                       = ???
     def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
     def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+    def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
     def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
     def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
     def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
