@@ -19,12 +19,12 @@ def propose_and_get_cost(cli):
 
 def test_upgrades_applied_major_versions(chainspec_upgrades_network_major):
     costs = check_upgrades_applied(chainspec_upgrades_network_major)
-    assert len(costs) == 3, f"For 2 upgrades after genesis that change opcodes' cost we should see 3 different execution costs"
+    assert len(costs) == 3, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
 
 
 def test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
     costs = check_upgrades_applied(chainspec_upgrades_network_minor)
-    assert len(costs) == 2, f"For 1 upgrade after genesis that change opcodes' cost we should see 2 different execution costs"
+    assert len(costs) == 2, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
 
 
 def check_upgrades_applied(network):
