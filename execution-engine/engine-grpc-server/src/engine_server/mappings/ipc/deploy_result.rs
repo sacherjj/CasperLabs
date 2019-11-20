@@ -31,6 +31,7 @@ impl From<(EngineStateError, ExecutionEffect, Gas)> for DeployResult {
             error @ EngineStateError::InvalidHashLength { .. }
             | error @ EngineStateError::InvalidPublicKeyLength { .. }
             | error @ EngineStateError::InvalidProtocolVersion { .. }
+            | error @ EngineStateError::InvalidUpgradeConfig
             | error @ EngineStateError::WasmPreprocessingError(_)
             | error @ EngineStateError::WasmSerializationError(_)
             | error @ EngineStateError::ExecError(ExecutionError::DeploymentAuthorizationFailure)
