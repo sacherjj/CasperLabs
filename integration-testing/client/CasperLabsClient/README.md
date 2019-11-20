@@ -1,14 +1,22 @@
 # CasperLabs Python Client API library and command line tool
 
-[CasperLabs](https://casperlabs.io/) Python client is a library that can be used to
-interact with a CasperLabs node via its gRPC API.
+`casperlabs-client` is a Python package consisting of
+- a client library `casperlabs_client` that can be used to interact with
+  a [CasperLabs](https://casperlabs.io/) node
+  via its gRPC API and
+- a command line interface (CLI) script with the same name: `casperlabs_client`.
+
+Note, the name of the package available on PyPi is `casperlabs-client` (with hyphen),
+but the name of the library as well as the CLI is written with underscore: `casperlabs_client`.
+The name of the CLI is written with underscore to make it different from the Scala client,
+which is written with hyphen.
 
 ## Installation
 
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
 
 ### Linux
-You can install it with
+You can install the `casperlabs_client` package with
 
 ```
 pip3 install casperlabs-client
@@ -23,7 +31,9 @@ pip install casperlabs-client
 
 ### Mac OS X
 
-Install Python 3 with brew.
+Install Python 3 with brew: https://docs.python-guide.org/starting/install3/osx/
+
+Next, type the following commands in the Terminal:
 
 ```
 brew update
@@ -38,11 +48,13 @@ it is curently not possible to install it on Python 3.8 due to
 https://github.com/grpc/grpc/issues/20831
 
 You also need to install free Microsoft Visual Studio C++ 14.0.
-Get it with "Microsoft Visual C++ Build Tools": https://visualstudio.microsoft.com/downloads/
-This is required by 'pyblake2' extension.
+Get it with "Build Tools for Visual Studio 2019":
+https://visualstudio.microsoft.com/downloads/
+(All downloads -> Tools for Visual Studio 2019 -> Build tools for Visual Studio 2019).
+This is required by the `pyblake2` extension module.
 
-After installing the above you install the casperlabs-client by
-typing the following on the command prompt:
+After installing the above prerequisites you can install the `casperlabs-client` package by
+typing the following on the command line:
 
 ```
 C:\Users\alice>pip install casperlabs-client
