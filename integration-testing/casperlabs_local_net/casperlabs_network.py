@@ -343,8 +343,8 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
     RESOURCES = f"{THIS_DIRECTORY}/../resources/"
     EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
-    # We need to copy system contracts to genesis in test chainspecs
-    SYSTEM_CONTRACTS = (
+    # We need to copy all required contracts in test chainspecs
+    REQUIRED_CONTRACTS = (
         "mint_install.wasm",
         "modified_mint_upgrader.wasm",
         "pos_install.wasm",
@@ -372,7 +372,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
                 except OSError as e:
                     if e.errno != errno.EEXIST:
                         raise
-                for file_name in self.SYSTEM_CONTRACTS:
+                for file_name in self.REQUIRED_CONTRACTS:
                     shutil.copy(
                         os.path.join(source_directory, file_name), destination_directory
                     )
