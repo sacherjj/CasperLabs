@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn should_accept_minor_bump_with_optional_code() {
+    fn should_accept_minor_version_update_with_optional_code() {
         // installer is optional for minor bump
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(1, 1, 0));
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_wrong_minor_bump() {
+    fn should_not_skip_minor_version_within_major_version() {
         // minor can be updated only by 1
         let prev = ProtocolVersion::new(SemVer::new(1, 1, 0));
 
@@ -323,14 +323,15 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_wrong_advance_of_major() {
+    fn should_not_skip_major_version() {
         // can bump only by 1
         let prev = ProtocolVersion::new(SemVer::new(1, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(3, 0, 0));
         assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
     }
+    
     #[test]
-    fn should_reject_rollback_of_major_version() {
+    fn should_reject_major_version_rollback() {
         // can bump forward
         let prev = ProtocolVersion::new(SemVer::new(2, 0, 0));
         let next = ProtocolVersion::new(SemVer::new(0, 0, 0));
@@ -338,7 +339,7 @@ mod tests {
     }
 
     #[test]
-    fn should_reject_equal_versions() {
+    fn should_check_same_version_is_invalid() {
         for ver in &[
             ProtocolVersion::from_parts(1, 0, 0),
             ProtocolVersion::from_parts(1, 2, 0),
