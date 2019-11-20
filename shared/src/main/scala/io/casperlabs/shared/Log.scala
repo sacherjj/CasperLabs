@@ -52,7 +52,7 @@ class LogSourceMacros(val c: blackbox.Context) {
   }
 }
 
-// Mixed into the `shared` package so the existing `Log` alieases keep working.
+// Mixed into the `shared` package so the existing `Log` aliases keep working.
 trait LogPackage {
   type Log[F[_]] = LogIO[F]
 }

@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.casper.{consensus, _}
+import io.casperlabs.casper.{DeriveValidation, consensus, _}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
@@ -58,11 +58,11 @@ class GossipServiceCasperTestNode[F[_]](
     ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-  implicit val validation        = HashSetCasperTestNode.makeValidation[F]
 
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
-  implicit val deploySelection = DeploySelection.create[F](5 * 1024 * 1024)
+  implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
+  implicit val derivedValidation = DeriveValidation.deriveValidationImpl[F]
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -298,6 +298,7 @@ object GossipServiceCasperTestNodeFactory {
         relaying: Relaying[F],
         connectToGossip: GossipService.Connector[F]
     ): F[Unit] = {
+
       def isInDag(blockHash: ByteString): F[Boolean] =
         for {
           dag  <- casper.dag

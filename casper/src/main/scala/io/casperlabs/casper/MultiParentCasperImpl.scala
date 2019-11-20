@@ -109,7 +109,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 
     // If the block timestamp is in the future, wait some time before adding it,
     // so we won't include it as a justification from the future.
-    Validation[F].preTimestamp(block).attempt.flatMap {
+    Validation.preTimestamp[F](block).attempt.flatMap {
       case Right(None) =>
         addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
@@ -259,9 +259,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
               illegal(s"Deploy was missing session and/or payment code.")
             case _ => ().pure[F]
           }
-      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(deploy))
-      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(deploy))
-      _ <- Validation[F].deployHeader(deploy, chainName) >>= { headerErrors =>
+      _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
+      _ <- check("Invalid deploy signature.")(Validation.deploySignature[F](deploy))
+      _ <- Validation.deployHeader[F](deploy, chainName) >>= { headerErrors =>
             illegal(headerErrors.map(_.errorMessage).mkString("\n"))
               .whenA(headerErrors.nonEmpty)
           }

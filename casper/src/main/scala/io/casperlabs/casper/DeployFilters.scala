@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.validation.ValidationImpl.MAX_TTL
+import io.casperlabs.casper.validation.Validation.MAX_TTL
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation

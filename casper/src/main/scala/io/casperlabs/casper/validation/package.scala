@@ -3,8 +3,6 @@ package io.casperlabs.casper
 import cats.{ApplicativeError, Functor}
 import cats.mtl.FunctorRaise
 import cats.syntax.applicativeError._
-import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
 
 package object validation {

@@ -528,7 +528,7 @@ package object gossiping {
             publicKey: ByteString,
             signature: Signature
         ): Boolean =
-          Validation[F].signature(
+          Validation.signature(
             blockHash.toByteArray,
             signature,
             PublicKey(publicKey.toByteArray)

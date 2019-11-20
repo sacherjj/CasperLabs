@@ -1,10 +1,9 @@
 package io.casperlabs.casper.helper
 
-import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
@@ -15,8 +14,6 @@ import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -35,7 +32,6 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.LogIO
-import scala.collection.mutable.{Map => MutMap}
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -316,13 +312,6 @@ object HashSetCasperTestNode {
   private def pad(x: Array[Byte], length: Int): Array[Byte] =
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
-
-  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time: Metrics]
-      : Validation[F] =
-    new ValidationImpl[F] {
-      // Tests are not signing the deploys.
-      override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
-    }
 
   implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
     0L -> consensus.state.ProtocolVersion(1)

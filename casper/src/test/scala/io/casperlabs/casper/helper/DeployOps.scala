@@ -4,13 +4,25 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.validation.ValidationImpl.{MAX_DEPENDENCIES, MAX_TTL, MIN_TTL}
-import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.casper.validation.Validation.{MAX_DEPENDENCIES, MAX_TTL, MIN_TTL}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.models.{ArbitraryConsensus, DeployImplicits}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 object DeployOps extends ArbitraryConsensus {
   implicit class ChangeDeployOps(deploy: Deploy) {
+    // Clears previous signatures and adds a new one.
+    def signSingle: Deploy = {
+      val (sk, pk) = Ed25519.newKeyPair
+      DeployImplicits.DeployOps(deploy.withApprovals(Seq.empty)).sign(sk, pk)
+    }
+
+    // Adds a new signature to already existing ones.
+    def addSignature: Deploy = {
+      val (sk, pk) = Ed25519.newKeyPair
+      DeployImplicits.DeployOps(deploy).sign(sk, pk)
+    }
     def withSessionCode(bytes: ByteString): Deploy =
       rehash(
         deploy.withBody(deploy.getBody.withSession(Deploy.Code().withWasm(bytes)))

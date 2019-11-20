@@ -11,11 +11,13 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, Weight}
@@ -182,6 +184,7 @@ object ProtoUtil {
       1.pure[F]
     } else {
 
+      // TODO: Replace with lookupUnsafe
       dag.lookup(validatorPrevBlockHash).flatMap {
         case Some(meta) =>
           (1 + meta.validatorMsgSeqNum).pure[F]
@@ -364,14 +367,8 @@ object ProtoUtil {
         }
     }
 
-  def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
-    protoSeqHash(protoSeq)
-
-  def protoSeqHash[A <: scalapb.GeneratedMessage](protoSeq: Seq[A]): ByteString =
-    hashByteArrays(protoSeq.map(_.toByteArray): _*)
-
-  def hashByteArrays(items: Array[Byte]*): ByteString =
-    ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
+  def protoHash[A <: scalapb.GeneratedMessage](data: A): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
   /* Creates a Genesis block. Genesis is not signed */
   def genesis(
@@ -522,22 +519,24 @@ object ProtoUtil {
   // This is only used for tests.
   def basicDeploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY,
-      accountPublicKey: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY
   ): Deploy = {
+    val (sk, pk) = Ed25519.newKeyPair
     val b = Deploy
       .Body()
       .withSession(Deploy.Code().withWasm(sessionCode))
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountPublicKey(accountPublicKey)
+      .withAccountPublicKey(ByteString.copyFrom(pk))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
     Deploy()
-      .withDeployHash(protoHash(h))
       .withHeader(h)
       .withBody(b)
+      .withHashes
+      .sign(sk, pk)
+
   }
 
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
