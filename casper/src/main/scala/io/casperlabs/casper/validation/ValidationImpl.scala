@@ -26,10 +26,10 @@ import io.casperlabs.ipc.TransformEntry
 object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]): Validation[F] = ev
 
+  implicit val metricsSource = CasperMetricsSource / "validation"
+
   def metered[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
       : Validation[F] = {
-
-    implicit val metricsSource = CasperMetricsSource / "validation"
 
     val underlying = new ValidationImpl[F]
 

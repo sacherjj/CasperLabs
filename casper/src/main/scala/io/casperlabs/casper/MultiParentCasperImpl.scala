@@ -588,7 +588,6 @@ object MultiParentCasperImpl {
   ) {
     //TODO pull out
     implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
-    implicit val metricsSource            = CasperMetricsSource
 
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
@@ -597,7 +596,8 @@ object MultiParentCasperImpl {
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         block: Block
-    )(implicit state: Cell[F, CasperState]): F[BlockStatus] =
+    )(implicit state: Cell[F, CasperState]): F[BlockStatus] = {
+      import io.casperlabs.casper.validation.ValidationImpl.metricsSource
       Metrics[F].timer("validateAndAddBlock") {
         val hashPrefix = PrettyPrinter.buildString(block.blockHash)
         val validationStatus = (for {
@@ -651,6 +651,7 @@ object MultiParentCasperImpl {
           _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
           _ <- EquivocationDetector
                 .checkEquivocationWithUpdate[F](dag, block)
+                .timer("checkEquivocationsWithUpdate")
           _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
         } yield blockEffects).attempt
 
@@ -680,6 +681,7 @@ object MultiParentCasperImpl {
             } yield UnexpectedBlockException(ex)
         }
       }
+    }
 
     // TODO: Handle slashing
     /** Either store the block with its transformation,
