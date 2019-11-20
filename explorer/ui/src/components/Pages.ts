@@ -18,6 +18,11 @@ export default class Pages {
   static readonly deploy = (deployHashBase16: string) =>
     `/deploys/${deployHashBase16}`;
 
-  static readonly deploysOfAccount = (accountHashBase16: string) =>
-    `/deploys/account/${accountHashBase16}`;
+  static readonly deploysOfAccount = (
+    accountHashBase16: string,
+    pageToken?: string
+  ) => {
+    const url = `/accounts/${accountHashBase16}/deploys`;
+    return pageToken ? `${url}?pageToken=${pageToken}` : url;
+  };
 }

@@ -94,13 +94,11 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
             <IconButton
               title="Previous"
               onClick={() => {
-                if (this.props.deployInfoList.prevPageToken !== '') {
-                  let url =
-                    Pages.Deploys +
-                    '/' +
-                    this.accountPublicKeyBase16 +
-                    '?pageToken=' +
-                    this.props.deployInfoList.prevPageToken;
+                if (this.props.deployInfoList.prevPageToken) {
+                  let url = Pages.deploysOfAccount(
+                    this.accountPublicKeyBase16,
+                    this.props.deployInfoList.prevPageToken
+                  );
                   this.props.history.push(url);
                 }
               }}
@@ -109,13 +107,11 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
             <IconButton
               title="Next"
               onClick={() => {
-                if (this.props.deployInfoList.nextPageToken !== '') {
-                  let url =
-                    Pages.Deploys +
-                    '/' +
-                    this.accountPublicKeyBase16 +
-                    '?pageToken=' +
-                    this.props.deployInfoList.nextPageToken;
+                if (this.props.deployInfoList.nextPageToken) {
+                  let url = Pages.deploysOfAccount(
+                    this.accountPublicKeyBase16,
+                    this.props.deployInfoList.nextPageToken
+                  );
                   this.props.history.push(url);
                 }
               }}
