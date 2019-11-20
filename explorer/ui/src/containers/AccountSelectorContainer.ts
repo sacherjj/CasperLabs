@@ -10,7 +10,7 @@ interface AccountKeyWithAlias {
   alias: string;
 }
 
-export default class LatestDeploysContainer {
+export default class AccountSelectorContainer {
   @observable inputValue?: string | null = null;
   @observable checkError?: string | null = null;
   @observable accountNameToKeys: Map<string, string> = new Map();

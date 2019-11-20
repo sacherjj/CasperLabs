@@ -25,7 +25,7 @@ import BlockContainer from './containers/BlockContainer';
 import DeployContainer from './containers/DeployContainer';
 import SearchContainer from './containers/SearchContainer';
 import { DeployInfoListContainer } from './containers/DeployInfoListContainer';
-import LatestDeploysContainer from './containers/LatestDeploysContainer';
+import AccountSelectorContainer from './containers/AccountSelectorContainer';
 
 let w = window as any;
 w.$ = w.jQuery = jQuery;
@@ -60,7 +60,7 @@ const block = new BlockContainer(errors, casperService, balanceService);
 const deploy = new DeployContainer(errors, casperService, balanceService);
 const deployInfoList = new DeployInfoListContainer(errors, casperService);
 const search = new SearchContainer(errors, casperService);
-const latestDeploysContainer = new LatestDeploysContainer();
+const accountSelectorContainer = new AccountSelectorContainer();
 
 ReactDOM.render(
   <HashRouter>
@@ -72,7 +72,7 @@ ReactDOM.render(
       block={block}
       deploy={deploy}
       deployInfoList={deployInfoList}
-      latestDeploysContainer={latestDeploysContainer}
+      accountSelectorContainer={accountSelectorContainer}
       search={search}
     />
   </HashRouter>,

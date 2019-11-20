@@ -27,7 +27,6 @@ class _DeployInfoListDetails extends RefreshableComponent<Props, {}> {
       decodeBase16(this.accountPublicKeyBase16),
       this.props.pageToken
     );
-    console.log('construct');
   }
 
   get accountPublicKeyBase16() {

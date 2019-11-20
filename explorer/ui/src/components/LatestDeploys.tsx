@@ -5,32 +5,32 @@ import { RouteComponentProps, withRouter } from 'react-router';
 import Downshift from 'downshift';
 import AuthContainer from '../containers/AuthContainer';
 import { FaucetContainer } from '../containers/FaucetContainer';
-import LatestDeploysContainer from '../containers/LatestDeploysContainer';
+import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 
 interface Props extends RouteComponentProps {
   auth: AuthContainer;
   faucet: FaucetContainer;
-  latestDeploysContainer: LatestDeploysContainer;
+  accountSelectorContainer: AccountSelectorContainer;
 }
 
 @observer
 class _LatestDeploys extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
-    this.props.latestDeploysContainer.init(
+    this.props.accountSelectorContainer.init(
       this.props.auth.accounts || [],
       this.props.history
     );
   }
 
   render() {
-    let latestDeploysContainer = this.props.latestDeploysContainer;
+    let latestDeploysContainer = this.props.accountSelectorContainer;
     return (
       <div>
         <Card title="Search">
           <Downshift
-            selectedItem={this.props.latestDeploysContainer.inputValue}
-            onStateChange={this.props.latestDeploysContainer.handleStateChange}
+            selectedItem={this.props.accountSelectorContainer.inputValue}
+            onStateChange={this.props.accountSelectorContainer.handleStateChange}
           >
             {({
               getInputProps,

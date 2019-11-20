@@ -26,7 +26,7 @@ import SearchContainer from '../containers/SearchContainer';
 import DeployInfoListDetails from './DeployInfoListDetails';
 import { DeployInfoListContainer } from '../containers/DeployInfoListContainer';
 import LatestDeploys from './LatestDeploys';
-import LatestDeploysContainer from '../containers/LatestDeploysContainer';
+import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -58,7 +58,7 @@ export interface AppProps {
   block: BlockContainer;
   deploy: DeployContainer;
   deployInfoList: DeployInfoListContainer;
-  latestDeploysContainer: LatestDeploysContainer;
+  accountSelectorContainer: AccountSelectorContainer;
   search: SearchContainer;
 }
 
