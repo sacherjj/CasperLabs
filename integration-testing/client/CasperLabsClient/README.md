@@ -54,7 +54,7 @@ https://www.python.org/downloads/windows/
 If you install Python from the Windows Store
 you will need to manually add the `Scripts` folder of your Python installation to your `Path`
 in order to have the `casperlabs_client` command line tool
-available on the commmand line without providing full path to it.
+available on the command line without providing full path to it.
 This will be located in a path similar to this:
 
 ```
