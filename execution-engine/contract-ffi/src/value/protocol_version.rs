@@ -329,7 +329,7 @@ mod tests {
         let next = ProtocolVersion::new(SemVer::new(3, 0, 0));
         assert_eq!(prev.check_next_version(&next), VersionCheckResult::Invalid);
     }
-    
+
     #[test]
     fn should_reject_major_version_rollback() {
         // can bump forward
