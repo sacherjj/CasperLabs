@@ -107,16 +107,18 @@ import cats.mtl.ApplicativeAsk
 
   /**
     * List of deploys created by specified account
-    * If next is true, return limit of deploys whose (timeStamp, deployHash) < (lastTimeStamp, lastDeployHash),
-    * else if next is false, means getting the previous page, return limit of deploys whose
-    * (timeStamp, deployHash) > (lastTimeStamp, deployHash)
+    *
+    *   If isNext is true, getting the next page, returns limit of deploys whose
+    *      timestamp < lastTimestamp or timestamp == lastTimestamp && deployHash < lastDeployHash
+    *   Else, getting the previous page, returns limit of deploys whose
+    *      timestamp > firstTimestamp or timestamp == firstTimestamp && deployHash > firstDeployHash
     */
   def getDeploysByAccount(
       account: PublicKeyBS,
       limit: Int,
       lastTimeStamp: Long,
       lastDeployHash: DeployHash,
-      next: Boolean
+      isNext: Boolean
   ): F[List[Deploy]]
 }
 

@@ -434,9 +434,9 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         limit: Int,
         lastTimeStamp: Long,
         lastDeployHash: DeployHash,
-        next: Boolean
+        isNext: Boolean
     ): F[List[Deploy]] = {
-      val sql = if (next) {
+      val sql = if (isNext) {
         (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
              WHERE account = $account AND
              (create_time_millis < $lastTimeStamp OR create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
@@ -453,7 +453,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         .query[Deploy]
         .to[List]
         .map(l => {
-          if (next) {
+          if (isNext) {
             l
           } else {
             l.reverse

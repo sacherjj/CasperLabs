@@ -64,7 +64,7 @@ class SQLiteDeployStorageSpec
                       limit = Int.MaxValue,
                       lastTimeStamp = Long.MaxValue,
                       lastDeployHash = ByteString.EMPTY,
-                      next = true
+                      isNext = true
                     )
               _ = all should contain theSameElementsInOrderAs accountDeploysWithoutBody
             } yield ()
