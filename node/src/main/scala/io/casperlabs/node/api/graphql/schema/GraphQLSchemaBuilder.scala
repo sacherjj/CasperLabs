@@ -20,6 +20,7 @@ import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql.schema.blocks.{DeployInfosWithPageInfo, PageInfo}
+import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -113,16 +114,16 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   accountPublicKeyBase16 <- validateAccountPublicKey[F](
                                              accountPublicKeyBase16
                                            )
-                  (pageSize, (lastTimeStamp, lastDeployHash, _)) <- MonadThrowable[F]
-                                                                     .fromTry(
-                                                                       DeployInfoPagination
-                                                                         .parsePageToken(
-                                                                           ListDeployInfosRequest(
-                                                                             pageSize = first,
-                                                                             pageToken = after
-                                                                           )
-                                                                         )
-                                                                     )
+                  (pageSize, pageTokenParams) <- MonadThrowable[F]
+                                                  .fromTry(
+                                                    DeployInfoPagination
+                                                      .parsePageToken(
+                                                        ListDeployInfosRequest(
+                                                          pageSize = first,
+                                                          pageToken = after
+                                                        )
+                                                      )
+                                                  )
                   accountPublicKeyBs = PublicKey(
                     ByteString.copyFrom(
                       Base16.decode(accountPublicKeyBase16)
@@ -133,8 +134,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                              .getDeploysByAccount(
                                                accountPublicKeyBs,
                                                pageSize + 1,
-                                               lastTimeStamp,
-                                               lastDeployHash,
+                                               pageTokenParams.lastTimeStamp,
+                                               pageTokenParams.lastDeployHash,
                                                true
                                              )
                   (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
@@ -146,7 +147,14 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                   .reader(deployView)
                                   .getDeployInfos(deploys)
                   endCursor = DeployInfoPagination.createPageToken(
-                    deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash, true))
+                    deploys.lastOption.map(
+                      d =>
+                        DeployInfoPageTokenParams(
+                          d.getHeader.timestamp,
+                          d.deployHash,
+                          isNext = true
+                        )
+                    )
                   )
                   pageInfo = PageInfo(endCursor, hasNextPage)
                   result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
