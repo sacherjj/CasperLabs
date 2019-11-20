@@ -7,7 +7,7 @@ set -e
 DEFAULT_USERNAME="casperlabs"
 DEFAULT_SYSTEMD_SERVICE_FILE="/lib/systemd/system/${DEFAULT_USERNAME}-node.service"
 DEFAULT_CONFIG_DIRECTORY="/etc/${DEFAULT_USERNAME}"
-DEFAULT_TOML="${DEFAULT_CONFIG_DIRECTORY}/default-configuration.toml"
+DEFAULT_TOML="${DEFAULT_CONFIG_DIRECTORY}/example-configuration.toml"
 DEFAULT_DATA_DIRECTORY="/var/lib/${DEFAULT_USERNAME}"
 
 # User Creation
