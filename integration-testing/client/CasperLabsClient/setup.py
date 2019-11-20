@@ -196,7 +196,6 @@ with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
 
 class CInstall(InstallCommand):
     def run(self):
-        run_codegen()
         super().run()
 
 
