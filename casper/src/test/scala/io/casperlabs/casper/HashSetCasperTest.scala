@@ -1124,16 +1124,15 @@ abstract class HashSetCasperTest
 
     for {
       deploy1 <- ProtoUtil.basicDeploy[Task]()
-      deploy2 = ProtoUtil
-        .basicDeploy(System.currentTimeMillis())
-        .withDependencies(Seq(deploy1.deployHash))
-        .signSingle
+      deploy2 <- ProtoUtil
+                  .basicDeploy[Task]()
+                  .map(_.withDependencies(Seq(deploy1.deployHash)).signSingle)
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block1) <- node.casperEff.createBlock
       _               <- node.casperEff.addBlock(block1) shouldBeF Valid
-      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
       Created(block2) <- node.casperEff.createBlock
+      _               = block1.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy1)
       _               = block2.getBody.deploys.map(_.getDeploy) shouldBe Seq(deploy2)
       _               <- node.tearDown()
     } yield ()
