@@ -409,7 +409,9 @@ object DagOperations {
   )(neighbours: A => F[List[A]])(
       implicit k: Key[A]
   ): F[Boolean] =
-    bfTraverseF[F, A](start.toList)(neighbours).find(targets).map(_.nonEmpty)
+    if (targets.isEmpty || start.isEmpty) false.pure[F]
+    else
+      bfTraverseF[F, A](start.toList)(neighbours).find(targets).map(_.nonEmpty)
 
   /** Check if a path in the p-DAG exists from ancestors to descendants (or self). */
   def anyDescendantPathExists[F[_]: MonadThrowable](
@@ -426,23 +428,25 @@ object DagOperations {
       dag: DagRepresentation[F],
       ancestors: Set[BlockHash],
       descendants: Set[BlockHash]
-  ): F[Set[BlockHash]] = {
-    // Traverse backwards rank by rank until we either visit all ancestors or go beyond the oldest.
-    implicit val ord = blockTopoOrderingDesc
-    for {
-      ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
-      descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
-      minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
-      reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
-                    blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
-                  }.foldWhileLeft(Set.empty[BlockHash]) {
-                    case (reachable, msgSummary) if ancestors(msgSummary.messageHash) =>
-                      Left(reachable + msgSummary.messageHash)
-                    case (reachable, blockMeta) if blockMeta.rank >= minRank =>
-                      Left(reachable)
-                    case (reachable, _) =>
-                      Right(reachable)
-                  }
-    } yield reachable
-  }
+  ): F[Set[BlockHash]] =
+    if (ancestors.isEmpty || descendants.isEmpty) Set.empty[BlockHash].pure[F]
+    else {
+      // Traverse backwards rank by rank until we either visit all ancestors or go beyond the oldest.
+      implicit val ord = blockTopoOrderingDesc
+      for {
+        ancestorMeta   <- ancestors.toList.traverse(dag.lookup).map(_.flatten)
+        descendantMeta <- descendants.toList.traverse(dag.lookup).map(_.flatten)
+        minRank        = if (ancestorMeta.isEmpty) 0 else ancestorMeta.map(_.rank).min
+        reachable <- bfToposortTraverseF[F](descendantMeta) { blockMeta =>
+                      blockMeta.parents.toList.traverse(dag.lookup).map(_.flatten)
+                    }.foldWhileLeft(Set.empty[BlockHash]) {
+                      case (reachable, msgSummary) if ancestors(msgSummary.messageHash) =>
+                        Left(reachable + msgSummary.messageHash)
+                      case (reachable, blockMeta) if blockMeta.rank >= minRank =>
+                        Left(reachable)
+                      case (reachable, _) =>
+                        Right(reachable)
+                    }
+      } yield reachable
+    }
 }
