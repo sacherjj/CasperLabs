@@ -259,6 +259,15 @@ const Content = (props: AppProps) => {
           <Alerts {...props} />
           <Switch>
             <Route exact path={Pages.Home} render={_ => <Home {...props} />} />
+            <Route
+              path={Pages.DeploysOfAccount}
+              render={_ => (
+                <DeployInfoListDetails
+                  pageToken={query.get('pageToken')}
+                  {...props}
+                />
+              )}
+            ></Route>
             <PrivateRoute
               path={Pages.Accounts}
               auth={props.auth}
@@ -283,15 +292,6 @@ const Content = (props: AppProps) => {
               render={_ => <DeployDetails {...props} />}
             />
 
-            <Route
-              path={Pages.DeploysOfAccount}
-              render={_ => (
-                <DeployInfoListDetails
-                  pageToken={query.get('pageToken')}
-                  {...props}
-                />
-              )}
-            ></Route>
             <Route
               path={Pages.Deploys}
               render={_ => <LatestDeploys {...props} />}
