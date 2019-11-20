@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
+import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.ipc
@@ -21,9 +21,57 @@ import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import Validation._
+import io.casperlabs.ipc.TransformEntry
 
 object ValidationImpl {
   def apply[F[_]](implicit ev: ValidationImpl[F]): Validation[F] = ev
+
+  def metered[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
+      : Validation[F] = {
+
+    implicit val metricsSource = CasperMetricsSource / "validation"
+
+    val underlying = new ValidationImpl[F]
+
+    new Validation[F] {
+      override def neglectedInvalidBlock(
+          block: Block,
+          invalidBlockTracker: Set[BlockHash]
+      ): F[Unit] =
+        Metrics[F].timer("neglectedInvalidBlock")(
+          underlying.neglectedInvalidBlock(block, invalidBlockTracker)
+        )
+
+      override def parents(b: Block, lastFinalizedBlockHash: BlockHash, dag: DagRepresentation[F])(
+          implicit bs: BlockStorage[F]
+      ): F[ExecEngineUtil.MergeResult[TransformMap, Block]] =
+        Metrics[F].timer("parents")(underlying.parents(b, lastFinalizedBlockHash, dag))
+
+      override def transactions(
+          block: Block,
+          preStateHash: StateHash,
+          effects: Seq[TransformEntry]
+      )(implicit ee: ExecutionEngineService[F]): F[Unit] =
+        Metrics[F].timer("transactions")(underlying.transactions(block, preStateHash, effects))
+
+      override def blockFull(
+          block: Block,
+          dag: DagRepresentation[F],
+          chainName: String,
+          maybeGenesis: Option[Block]
+      )(
+          implicit bs: BlockStorage[F],
+          versions: CasperLabsProtocolVersions[F],
+          compiler: Fs2Compiler[F]
+      ): F[Unit] =
+        Metrics[F].timer("blockFull")(underlying.blockFull(block, dag, chainName, maybeGenesis))
+
+      override def blockSummary(summary: BlockSummary, chainName: String)(
+          implicit versions: CasperLabsProtocolVersions[F]
+      ): F[Unit] =
+        Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
+    }
+  }
 }
 
 class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log: Time: Metrics]
