@@ -9,7 +9,7 @@ use contract_ffi::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::U512,
+    value::{cl_type::CLValue, U512},
 };
 
 #[no_mangle]
@@ -24,7 +24,7 @@ pub extern "C" fn do_something() {
     let test_string = String::from("Hello, world!");
 
     let test_uref = storage::new_turef(test_string).into();
-    runtime::ret(test_uref, vec![test_uref])
+    runtime::r#return(CLValue::from_t(&test_uref).unwrap(), vec![test_uref])
 }
 
 #[no_mangle]
@@ -53,7 +53,8 @@ pub extern "C" fn call() {
         let uref1: URef = storage::new_turef(U512::from(0)).into();
         runtime::put_key("uref1", &Key::URef(uref1));
         // do_something returns a new uref, and it should forward the internal RNG.
-        let uref2: URef = runtime::call_contract(do_something.clone(), &(), &vec![]);
+        let cl_value: CLValue = runtime::call_contract(do_something.clone(), &(), &vec![]);
+        let uref2: URef = cl_value.to_t().unwrap();
         runtime::put_key("uref2", &Key::URef(uref2));
     }
 }

@@ -467,6 +467,37 @@ where
         }
     }
 
+    /// Return a some bytes from the memory and terminate the current
+    /// `sub_call`. Note that the return type is `Trap`, indicating that
+    /// this function will always kill the current Wasm instance.
+    pub fn r#return(
+        &mut self,
+        value_ptr: u32,
+        value_size: usize,
+        extra_urefs_ptr: u32,
+        extra_urefs_size: usize,
+    ) -> Trap {
+        let mem_get = self
+            .memory
+            .get(value_ptr, value_size)
+            .map_err(Error::Interpreter)
+            .and_then(|x| {
+                let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
+                let urefs = self.context.deserialize_urefs(&urefs_bytes)?;
+                Ok((x, urefs))
+            });
+        match mem_get {
+            Ok((buf, urefs)) => {
+                // Set the result field in the runtime and return
+                // the proper element of the `Error` enum indicating
+                // that the reason for exiting the module was a call to ret.
+                self.result = buf;
+                Error::Ret(urefs).into()
+            }
+            Err(e) => e.into(),
+        }
+    }
+
     /// Calls contract living under a `key`, with supplied `args` and extra
     /// `urefs`.
     pub fn call_contract(

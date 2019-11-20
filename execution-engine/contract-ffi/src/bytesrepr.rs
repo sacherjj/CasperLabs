@@ -519,6 +519,23 @@ impl FromBytes for ProtocolVersion {
     }
 }
 
+impl<T1: ToBytes, T2: ToBytes> ToBytes for (T1, T2) {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes, T2: FromBytes> FromBytes for (T1, T2) {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        Ok(((t1, t2), remainder))
+    }
+}
+
 #[doc(hidden)]
 /// Returns `true` if a we can serialize and then deserialize a value
 pub fn test_serialization_roundtrip<T>(t: &T)

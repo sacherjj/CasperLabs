@@ -88,6 +88,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::RetFuncIndex.into(),
             ),
+            "r#return" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 4][..], None),
+                FunctionIndex::ReturnFuncIndex.into(),
+            ),
             "call_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 FunctionIndex::CallContractFuncIndex.into(),
