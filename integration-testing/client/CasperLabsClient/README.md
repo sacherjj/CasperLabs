@@ -16,6 +16,7 @@ which is written with hyphen.
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
 
 ### Linux
+
 You can install the `casperlabs_client` package with
 
 ```
@@ -46,6 +47,20 @@ pip install casperlabs-client
 To install `casperlabs-client` on Windows 10 you need to install latest Python 3.7,
 it is curently not possible to install it on Python 3.8 due to
 https://github.com/grpc/grpc/issues/20831
+
+It is recommended to install Python from the python.org website:
+https://www.python.org/downloads/windows/
+
+If you install Python from the Windows Store
+you will need to manually add the `Scripts` folder of your Python installation to your `Path`
+in order to have the `casperlabs_client` command line tool
+available on the commmand line without providing full path to it.
+This will be located in a path similar to this:
+
+```
+C:\Users\[USERNAME]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.x_qbz5n2kfra8p0\LocalCache\local-packages\Python37\Scripts>
+```
+
 
 You also need to install free Microsoft Visual Studio C++ 14.0.
 Get it with "Build Tools for Visual Studio 2019":
@@ -84,6 +99,19 @@ and their stake:
 569b41d574c46390212d698660b5326269ddb0a761d1294258897ac717b4958b: 4000000000
 d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
 ```
+
+Note, you will also see a warning:
+
+```
+WARNING:root:Creating insecure connection to deploy.casperlabs.io:40401 (<class 'casperlabs_client.casper_pb2_grpc.CasperServiceStub'>)
+```
+
+Currently it is possible to connect from client to node without SSL encryption,
+which is what the above example code does.
+In the future encryption will become obligatory
+and you will have to pass a `certificate_path` to the `CasperLabsClient` constructor.
+The warning about insecure connection is meant to remind about this.
+
 
 ## Deploying smart contracts
 
