@@ -74,49 +74,46 @@ class SQLiteDeployStorageSpec
 
     "getDeploysByAccount" should {
       "return the correct paginated list of deploys for the specified account" in forAll(
-        deploysGen(),
-        Gen.oneOf(randomAccounts),
-        Gen.choose(0, 100),
-        arbitrary[Boolean]
+        for {
+          deploys          <- deploysGen()
+          accountKey       <- Gen.oneOf(randomAccounts)
+          accountPublicKey = accountKey.publicKey
+          deploysByAccount = deploys
+            .filter(_.getHeader.accountPublicKey == accountPublicKey)
+            .sortBy(d => (d.getHeader.timestamp, d.deployHash))
+            .reverse
+          offset = if (deploysByAccount.isEmpty) {
+            0
+          } else {
+            scala.util.Random.nextInt(deploysByAccount.size)
+          }
+          limit  <- Gen.choose(0, 100)
+          isNext <- arbitrary[Boolean]
+        } yield (deploys, accountPublicKey, deploysByAccount, offset, limit, isNext)
       ) {
-        case (deploys, accountKey, limit, next) =>
+        case (deploys, accountPubKey, deploysByAccount, offset, limit, isNext) =>
           testFixture { (reader, writer) =>
-            val deploysByAccount = deploys
-              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
-              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
-              .reverse
-            val offset = if (deploysByAccount.isEmpty) {
-              0
-            } else {
-              scala.util.Random.nextInt(deploysByAccount.size)
-            }
-
             val (lastTimeStamp, lastDeployHash) =
               deploysByAccount
                 .get(offset.toLong)
                 .map(d => (d.getHeader.timestamp, d.deployHash))
                 .getOrElse((Long.MaxValue, ByteString.EMPTY))
-            val (startInclusive, len) = if (next) {
-              (offset + 1, limit)
-            } else {
-              val s = math.max(0, offset - limit);
-              val l = offset - s
-              (s, l)
-            }
-            println(
-              s"start: ${startInclusive}, len: ${len}, ${next} , ${deploysByAccount.size}"
-            )
 
-            val expectResult = deploysByAccount.drop(startInclusive).take(len)
+            val expectResult = if (isNext) {
+              deploysByAccount.slice(offset + 1, offset + 1 + limit)
+            } else {
+              val reverseOffset = deploysByAccount.size - 1 - offset
+              deploysByAccount.reverse.slice(reverseOffset + 1, reverseOffset + 1 + limit).reverse
+            }
 
             for {
               _ <- writer.addAsPending(deploys)
               all <- reader.getDeploysByAccount(
-                      PublicKey(accountKey.publicKey),
+                      PublicKey(accountPubKey),
                       limit,
                       lastTimeStamp,
                       lastDeployHash,
-                      next
+                      isNext
                     )
               _ = assert(expectResult == all)
             } yield ()
