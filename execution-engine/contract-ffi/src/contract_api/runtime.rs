@@ -14,7 +14,7 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
     value::{
-        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE},
+        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE, PUBLIC_KEY_SIZE},
         Contract, Value,
     },
 };
@@ -112,10 +112,9 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 /// When in the sub call - returns public key of the account that made the
 /// deploy.
 pub fn get_caller() -> PublicKey {
-    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
-    let dest_ptr = alloc_bytes(36);
+    let dest_ptr = alloc_bytes(PUBLIC_KEY_SIZE);
     unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PUBLIC_KEY_SIZE, PUBLIC_KEY_SIZE) };
     deserialize(&bytes).unwrap_or_revert()
 }
 

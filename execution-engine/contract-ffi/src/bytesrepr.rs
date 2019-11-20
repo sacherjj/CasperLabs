@@ -20,7 +20,6 @@ pub const U512_SIZE: usize = U256_SIZE * 2;
 pub const OPTION_SIZE: usize = 1;
 pub const SEM_VER_SIZE: usize = 12;
 
-pub const N32: usize = 32;
 const N256: usize = 256;
 
 pub trait ToBytes {
@@ -306,8 +305,7 @@ macro_rules! impl_byte_array {
     ($len:expr) => {
         impl ToBytes for [u8; $len] {
             fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-                let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + $len);
-                result.extend_from_slice(&($len as u32).to_bytes()?);
+                let mut result: Vec<u8> = Vec::with_capacity($len);
                 result.extend_from_slice(self);
                 Ok(result)
             }
@@ -315,12 +313,9 @@ macro_rules! impl_byte_array {
 
         impl FromBytes for [u8; $len] {
             fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-                let (bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-                if bytes.len() != $len {
-                    return Err(Error::FormattingError);
-                };
+                let (bytes, rem) = safe_split_at(bytes, $len)?;
                 let mut result = [0u8; $len];
-                result.copy_from_slice(&bytes);
+                result.copy_from_slice(bytes);
                 Ok((result, rem))
             }
         }

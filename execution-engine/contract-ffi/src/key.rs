@@ -8,7 +8,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
-    bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
+    bytesrepr::{Error, FromBytes, ToBytes},
     contract_api::{ContractRef, TURef},
     uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
 };
@@ -18,15 +18,16 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+pub const ACCOUNT_SIZE: usize = 32;
 pub const HASH_SIZE: usize = 32;
 pub const LOCAL_KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
 
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
-const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
-const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
+const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + ACCOUNT_SIZE;
+const HASH_KEY_SIZE: usize = KEY_ID_SIZE + HASH_SIZE;
 pub const UREF_SIZE: usize = KEY_ID_SIZE + UREF_SIZE_SERIALIZED;
-const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_KEY_SIZE;
+const LOCAL_SIZE: usize = KEY_ID_SIZE + LOCAL_KEY_SIZE;
 
 /// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
 fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
@@ -41,7 +42,7 @@ fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
-    Account([u8; 32]),
+    Account([u8; ACCOUNT_SIZE]),
     Hash([u8; HASH_SIZE]),
     URef(URef),
     Local([u8; LOCAL_KEY_SIZE]),

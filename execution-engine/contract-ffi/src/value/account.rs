@@ -295,13 +295,7 @@ impl Debug for PublicKey {
     }
 }
 
-// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE
-// * U8_SIZE. I am not changing that as I don't want to deal with ripple effect.
-
-// Public key is encoded as its underlying [u8; 32] array, which in turn
-// is serialized as u8 + [u8; 32], u8 represents the length and then 32 element
-// array.
-pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
+pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE;
 
 impl PublicKey {
     pub fn new(key: [u8; KEY_SIZE]) -> PublicKey {
