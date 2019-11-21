@@ -1,9 +1,10 @@
 package io.casperlabs.node.api
 
+import java.util
+
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.comm.ServiceError.InvalidArgument
-import io.casperlabs.crypto.codec.Base64
 import pbdirect._
 import io.casperlabs.node.{ByteStringReader, ByteStringWriter}
 
@@ -47,17 +48,17 @@ object DeployInfoPagination extends Pagination {
       Try { (pageSize, DeployInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY, isNext = true)) }
     } else
       Try {
-        Base64
-          .tryDecode(request.pageToken)
-          .map(pageTokenBytes => pageTokenBytes.pbTo[DeployInfoPageTokenParams])
+        util.Base64.getUrlDecoder
+          .decode(request.pageToken.trim)
+          .pbTo[DeployInfoPageTokenParams]
       } match {
-        case Failure(_) | Success(None) =>
+        case Failure(_) =>
           Failure(
             InvalidArgument(
               "Failed parsing pageToken"
             )
           )
-        case Success(Some(pageTokenParams)) =>
+        case Success(pageTokenParams) =>
           Success {
             (pageSize, pageTokenParams)
           }
@@ -70,7 +71,7 @@ object DeployInfoPagination extends Pagination {
     pageTokenParamsOpt match {
       case None => ""
       case Some(pageTokenParams) =>
-        Base64.encode(pageTokenParams.toPB)
+        util.Base64.getUrlEncoder.encodeToString(pageTokenParams.toPB)
     }
 
   /**
