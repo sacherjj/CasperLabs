@@ -722,11 +722,11 @@ object DownloadManagerSpec {
       implicit val log = Log.NOPLog[Task]
       GossipServiceServer[Task](
         backend = new GossipServiceServer.Backend[Task] {
-          def hasBlock(blockHash: ByteString)             = ???
-          def getBlock(blockHash: ByteString)             = Task.now(None)
-          def getBlockSummary(blockHash: ByteString)      = ???
-          def listTips: Task[Seq[BlockSummary]]           = ???
-          def dagTopoSort(startRank: Long, endRank: Long) = ???
+          def hasBlock(blockHash: ByteString)                = ???
+          def getBlock(blockHash: ByteString)                = Task.now(None)
+          def getBlockSummary(blockHash: ByteString)         = ???
+          def latestMessages: Task[Set[Block.Justification]] = ???
+          def dagTopoSort(startRank: Long, endRank: Long)    = ???
         },
         synchronizer = emptySynchronizer,
         downloadManager = emptyDownloadManager,
@@ -750,12 +750,12 @@ object DownloadManagerSpec {
         // Using `new` because I want to override `getBlockChunked`.
         new GossipServiceServer[Task](
           backend = new GossipServiceServer.Backend[Task] {
-            def hasBlock(blockHash: ByteString) = ???
-            def getBlock(blockHash: ByteString) =
+            override def hasBlock(blockHash: ByteString) = ???
+            override def getBlock(blockHash: ByteString) =
               regetter(Task.delay(blockMap.get(blockHash)))
-            def getBlockSummary(blockHash: ByteString)      = ???
-            def listTips                                    = ???
-            def dagTopoSort(startRank: Long, endRank: Long) = ???
+            override def getBlockSummary(blockHash: ByteString)         = ???
+            override def latestMessages: Task[Set[Block.Justification]] = ???
+            override def dagTopoSort(startRank: Long, endRank: Long)    = ???
 
           },
           synchronizer = emptySynchronizer,

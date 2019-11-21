@@ -8,7 +8,7 @@ import cats.mtl.DefaultApplicativeAsk
 import com.google.protobuf.ByteString
 import eu.timepit.refined.auto._
 import io.casperlabs.{casper, shared}
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
@@ -431,7 +431,7 @@ object GossipServiceCasperTestNodeFactory {
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
 
-                     override def listTips = ???
+                     override def latestMessages: F[Set[Block.Justification]] = ???
 
                      override def dagTopoSort(startRank: Long, endRank: Long) = ???
                    },
@@ -548,9 +548,9 @@ object GossipServiceCasperTestNodeFactory {
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): F[consensus.GenesisCandidate] = ???
-    override def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[F, consensus.BlockSummary] = ???
+    override def streamLatestMessages(
+        request: StreamLatestMessagesRequest
+    ): Iterant[F, Block.Justification] = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] = ???

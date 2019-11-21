@@ -289,12 +289,6 @@ package object gossiping {
             )
       }
 
-  /** Only meant to be called once the genesis has been approved and the Casper instance created. */
-  private def unsafeGetCasper[F[_]: MonadThrowable: MultiParentCasperRef]: F[MultiParentCasper[F]] =
-    MultiParentCasperRef[F].get.flatMap {
-      MonadThrowable[F].fromOption(_, Unavailable("Casper is not yet available."))
-    }
-
   /** Cached connection resources, closed at the end. */
   private def makeConnectionsCache[F[_]: Concurrent: Log: Metrics](
       conf: Configuration,
@@ -572,8 +566,7 @@ package object gossiping {
 
                          override def justifications: F[List[ByteString]] =
                            for {
-                             casper <- unsafeGetCasper[F]
-                             dag    <- casper.dag
+                             dag    <- DagStorage[F].getRepresentation
                              latest <- dag.latestMessageHashes
                            } yield latest.values.flatten.toList
 
@@ -613,15 +606,15 @@ package object gossiping {
                         .get(blockHash)
                         .map(_.map(_.getBlockMessage))
 
-                    override def listTips: F[Seq[BlockSummary]] =
+                    /** Returns latest messages as seen currently by the node.
+                      * NOTE: In the future we will remove redundant messages. */
+                    override def latestMessages: F[Set[Block.Justification]] =
                       for {
-                        casper         <- unsafeGetCasper[F]
-                        dag            <- casper.dag
-                        latestMessages <- dag.latestMessageHashes
-                        equivocators   <- dag.getEquivocators
-                        tipHashes      <- casper.estimator(dag, latestMessages, equivocators)
-                        tips           <- tipHashes.traverse(BlockStorage[F].getBlockSummary(_))
-                      } yield tips.flatten
+                        dag <- DagStorage[F].getRepresentation
+                        lm  <- dag.latestMessages
+                      } yield lm.values.flatten
+                        .map(m => Block.Justification(m.validatorId, m.messageHash))
+                        .toSet
 
                     override def dagTopoSort(
                         startRank: Long,

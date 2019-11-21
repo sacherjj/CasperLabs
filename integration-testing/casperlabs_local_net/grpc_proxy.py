@@ -501,6 +501,13 @@ def block_summary(block):
         block_hash=block.block_hash, header=block.header, signature=block.signature
     )
 
+def block_justification(block):
+    return consensus.Block.Justification(
+        validator_public_key = block.header.validator_public_key,
+        latest_block_hash = block.block_hash,
+    )
+
+
 
 def update_hashes_and_signature(block, private_key):
     """Updates in-place block.header.body_hash, block.block_hash and block.signature."""

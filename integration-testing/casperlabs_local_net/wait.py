@@ -56,15 +56,9 @@ class NodeStarted(LogsContainMessage):
         super().__init__(node, "Listening for traffic on peer=casperlabs://", times)
 
 
-class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
+class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
     def __init__(self, node: DockerNode) -> None:
-        super().__init__(
-            node,
-            [
-                "Making a transition to ApprovedBlockRecievedHandler state.",
-                "Making the transition to block processing.",
-            ],
-        )
+        super().__init__(node, "Making the transition to block processing.")
 
 
 class NewForkChoiceTipBlock(LogsContainMessage):
