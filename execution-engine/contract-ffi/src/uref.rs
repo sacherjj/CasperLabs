@@ -102,7 +102,7 @@ impl URef {
 
     /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`]
     /// is the preferred constructor for most common use-cases.
-    #[cfg(feature = "gens")]
+    #[cfg(any(test, feature = "gens"))]
     pub(crate) fn unsafe_new(
         id: [u8; UREF_ADDR_SIZE],
         maybe_access_rights: Option<AccessRights>,

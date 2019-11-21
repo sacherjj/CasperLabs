@@ -451,6 +451,12 @@ impl CLTyped for String {
     }
 }
 
+impl CLTyped for &str {
+    fn cl_type() -> CLType {
+        CLType::String
+    }
+}
+
 //// system primitives
 //Key,
 impl CLTyped for Key {
@@ -484,14 +490,25 @@ impl<T: CLTyped> CLTyped for Vec<T> {
 
 //// fixed-length list type (equivalent to rust's array type)
 //FixedList(Box<CLType>, u64),
-// TODO: 32 should be N for any value up to 32
-// https://doc.rust-lang.org/std/array/trait.LengthAtMost32.html
-// https://doc.rust-lang.org/std/primitive.array.html#implementations
-//impl<T: CLTyped> CLTyped for [T; 32] {
-//    fn cl_type() -> CLType {
-//        CLType::FixedListList(Box::new(T::cl_type()), 32)
-//    }
-//}
+macro_rules! impl_cl_typed_for_array {
+    ($($N:literal)+) => {
+        $(
+            impl<T: CLTyped> CLTyped for [T; $N] {
+                fn cl_type() -> CLType {
+                    CLType::FixedList(Box::new(T::cl_type()), $N as u64)
+                }
+            }
+        )+
+    }
+}
+
+impl_cl_typed_for_array! {
+      0  1  2  3  4  5  6  7  8  9
+     10 11 12 13 14 15 16 17 18 19
+     20 21 22 23 24 25 26 27 28 29
+     30 31 32
+     64 128 256 512
+}
 
 //// result type
 //Result {
@@ -695,8 +712,7 @@ mod tests {
         let cl_value = CLValue::from_t(value).unwrap();
 
         let serialized_cl_value = cl_value.to_bytes().unwrap();
-        let (parsed_cl_value, remainder) = CLValue::from_bytes(&serialized_cl_value).unwrap();
-        assert!(remainder.is_empty());
+        let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
         assert_eq!(cl_value, parsed_cl_value);
 
         let parsed_value = CLValue::to_t(&cl_value).unwrap();
@@ -784,6 +800,59 @@ mod tests {
     fn vec_of_cl_type_should_work() {
         let vec = vec![String::from("a"), String::from("b")];
         round_trip(&vec);
+    }
+
+    #[test]
+    #[allow(clippy::cognitive_complexity)]
+    fn small_array_of_cl_type_should_work() {
+        macro_rules! test_small_array {
+            ($($N:literal)+) => {
+                $(
+                    let mut array = [0u64; $N];
+                    for i in 0..$N {
+                        array[i] = i as u64;
+                    }
+                    round_trip(&array);
+                )+
+            }
+        }
+
+        test_small_array! {
+              0  1  2  3  4  5  6  7  8  9
+             10 11 12 13 14 15 16 17 18 19
+             20 21 22 23 24 25 26 27 28 29
+             30 31 32
+        }
+    }
+
+    #[test]
+    fn large_array_of_cl_type_should_work() {
+        macro_rules! test_large_array {
+            ($($N:literal)+) => {
+                $(
+                    let array = {
+                        let mut tmp = [0u64; $N];
+                        for i in 0..$N {
+                            tmp[i] = i as u64;
+                        }
+                        tmp
+                    };
+
+                    let cl_value = CLValue::from_t(&array).unwrap();
+
+                    let serialized_cl_value = cl_value.to_bytes().unwrap();
+                    let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
+                    assert_eq!(cl_value, parsed_cl_value);
+
+                    let parsed_value: [u64; $N] = CLValue::to_t(&cl_value).unwrap();
+                    for i in 0..$N {
+                        assert_eq!(array[i], parsed_value[i]);
+                    }
+                )+
+            }
+        }
+
+        test_large_array! { 64 128 256 512 }
     }
 
     #[test]

@@ -1,5 +1,3 @@
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
 use alloc::vec::Vec;
 
 use crate::{

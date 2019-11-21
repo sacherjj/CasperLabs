@@ -1,10 +1,10 @@
-use super::alloc::{
+use alloc::{
     collections::{BTreeMap, TryReserveError},
     string::String,
     vec::Vec,
 };
-
 use core::mem::{size_of, MaybeUninit};
+
 use failure::Fail;
 
 use crate::value::{ProtocolVersion, SemVer};
@@ -21,7 +21,6 @@ pub const OPTION_SIZE: usize = 1;
 pub const SEM_VER_SIZE: usize = 12;
 
 pub const N32: usize = 32;
-const N256: usize = 256;
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Result<Vec<u8>, Error>;
@@ -76,10 +75,7 @@ pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
 
 impl ToBytes for bool {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if *self {
-            return Ok(1u8.to_le_bytes().to_vec());
-        }
-        Ok(0u8.to_le_bytes().to_vec())
+        u8::from(*self).to_bytes()
     }
 }
 
@@ -89,7 +85,8 @@ impl FromBytes for bool {
             None => Err(Error::EarlyEndOfStream),
             Some((byte, rem)) => match byte {
                 1 => Ok((true, rem)),
-                _ => Ok((false, rem)),
+                0 => Ok((false, rem)),
+                _ => Err(Error::FormattingError),
             },
         }
     }
@@ -336,62 +333,59 @@ impl ToBytes for Vec<String> {
     }
 }
 
-impl ToBytes for [u8; N32] {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + N32);
-        result.extend((N32 as u32).to_bytes()?);
-        result.extend(self);
-        Ok(result)
-    }
-}
+macro_rules! impl_to_from_bytes_for_array {
+    ($($N:literal)+) => {
+        $(
+            impl<T: ToBytes> ToBytes for [T; $N] {
+                fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                    // Approximation, as `size_of::<T>()` is only roughly equal to the serialized
+                    // size of `T`.
+                    let approx_size = self.len() * size_of::<T>();
+                    if approx_size >= u32::max_value() as usize {
+                        return Err(Error::OutOfMemoryError);
+                    }
 
-impl FromBytes for [u8; N32] {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (bytes, rem): (Vec<u8>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        if bytes.len() != N32 {
-            return Err(Error::FormattingError);
-        };
-        let mut result = [0u8; N32];
-        result.copy_from_slice(&bytes);
-        Ok((result, rem))
-    }
-}
+                    let mut result = Vec::with_capacity(approx_size);
+                    result.extend(($N as u32).to_bytes()?);
 
-impl<T: ToBytes> ToBytes for [T; N256] {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.len() * size_of::<T>() >= u32::max_value() as usize - U32_SIZE {
-            return Err(Error::OutOfMemoryError);
-        }
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
-        result.extend((N256 as u32).to_bytes()?);
-        result.extend(
-            self.iter()
-                .map(ToBytes::to_bytes)
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .flatten(),
-        );
-        Ok(result)
-    }
-}
+                    for item in self.iter() {
+                        result.extend(item.to_bytes()?);
+                    }
 
-impl<T: FromBytes> FromBytes for [T; N256] {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        if size != N256 as u32 {
-            return Err(Error::FormattingError);
-        }
-        let mut result: MaybeUninit<[T; N256]> = MaybeUninit::uninit();
-        let result_ptr = result.as_mut_ptr() as *mut T;
-        unsafe {
-            for i in 0..N256 {
-                let (t, rem): (T, &[u8]) = FromBytes::from_bytes(stream)?;
-                result_ptr.add(i).write(t);
-                stream = rem;
+                    Ok(result)
+                }
             }
-            Ok((result.assume_init(), stream))
-        }
+
+            impl<T: FromBytes> FromBytes for [T; $N] {
+                fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                    let (size, remainder) = u32::from_bytes(bytes)?;
+                    bytes = remainder;
+                    if size != $N as u32 {
+                        return Err(Error::FormattingError);
+                    }
+
+                    let mut result: MaybeUninit<[T; $N]> = MaybeUninit::uninit();
+                    let result_ptr = result.as_mut_ptr() as *mut T;
+                    unsafe {
+                        for i in 0..$N {
+                            let (t, remainder) = T::from_bytes(bytes)?;
+                            result_ptr.add(i).write(t);
+                            bytes = remainder;
+                        }
+                        Ok((result.assume_init(), bytes))
+                    }
+                }
+            }
+        )+
     }
+}
+
+impl_to_from_bytes_for_array! {
+     0  1  2  3  4  5  6  7  8  9
+    10 11 12 13 14 15 16 17 18 19
+    20 21 22 23 24 25 26 27 28 29
+    30 31 32
+    64 128 256 512
 }
 
 impl ToBytes for String {
