@@ -168,8 +168,11 @@ def run_codegen():
 
 
 def prepare_sdist():
+    contracts_dir = (
+        os.environ.get("TAG_NAME") and "/root/bundled_contracts" or CONTRACTS_DIR
+    )
     bundled_contracts = [
-        f"{CONTRACTS_DIR}/{f}"
+        f"{contracts_dir}/{f}"
         for f in [
             "bonding.wasm",
             "standard_payment.wasm",
