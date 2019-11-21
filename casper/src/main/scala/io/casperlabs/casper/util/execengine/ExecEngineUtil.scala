@@ -23,6 +23,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.metrics.implicits._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -50,7 +51,7 @@ object ExecEngineUtil {
       upgrades: Seq[ChainSpec.UpgradePoint]
   ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
-      preStateHash <- computePrestate[F](merged, rank, upgrades)
+      preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )
@@ -85,9 +86,9 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log: Metrics](
       invalidDeploys: List[NoEffectsFailure]
-  ): F[Unit] =
+  ): F[Unit] = Metrics[F].timer("handleInvalidDeploys") {
     for {
       invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
                          case (acc, d: PreconditionFailure) =>
@@ -107,6 +108,7 @@ object ExecEngineUtil {
               invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
             ) whenA invalidDeploys.preconditionFailures.nonEmpty
     } yield ()
+  }
 
   def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
       prestate: StateHash,
@@ -227,7 +229,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService: Log](
+  def computePrestate[F[_]: MonadError[*[_], Throwable]: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
