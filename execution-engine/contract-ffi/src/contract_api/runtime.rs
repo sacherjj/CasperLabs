@@ -15,7 +15,7 @@ use crate::{
     uref::URef,
     value::{
         account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE},
-        cl_type::CLValue,
+        cl_value::CLValue,
         Contract, Value,
     },
 };

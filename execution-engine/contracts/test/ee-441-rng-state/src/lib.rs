@@ -9,7 +9,7 @@ use contract_ffi::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::{cl_type::CLValue, U512},
+    value::{cl_value::CLValue, U512},
 };
 
 #[no_mangle]

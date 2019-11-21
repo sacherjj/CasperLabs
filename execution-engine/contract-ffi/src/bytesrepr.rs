@@ -74,11 +74,30 @@ pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
     }
 }
 
+impl ToBytes for bool {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        if *self {
+            return Ok(1u8.to_le_bytes().to_vec());
+        }
+        Ok(0u8.to_le_bytes().to_vec())
+    }
+}
+
+impl FromBytes for bool {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        match bytes.split_first() {
+            None => Err(Error::EarlyEndOfStream),
+            Some((byte, rem)) => match byte {
+                1 => Ok((true, rem)),
+                _ => Ok((false, rem)),
+            },
+        }
+    }
+}
+
 impl ToBytes for u8 {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(1);
-        result.push(*self);
-        Ok(result)
+        Ok(self.to_le_bytes().to_vec())
     }
 }
 
@@ -133,6 +152,21 @@ impl FromBytes for u64 {
         let (bytes, rem) = safe_split_at(bytes, 8)?;
         result.copy_from_slice(bytes);
         Ok((u64::from_le_bytes(result), rem))
+    }
+}
+
+impl ToBytes for i64 {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        Ok(self.to_le_bytes().to_vec())
+    }
+}
+
+impl FromBytes for i64 {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let mut result: [u8; 8] = [0u8; 8];
+        let (bytes, rem) = safe_split_at(bytes, 8)?;
+        result.copy_from_slice(bytes);
+        Ok((i64::from_le_bytes(result), rem))
     }
 }
 
@@ -519,6 +553,21 @@ impl FromBytes for ProtocolVersion {
     }
 }
 
+impl<T1: ToBytes> ToBytes for (T1,) {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes> FromBytes for (T1,) {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        Ok(((t1,), remainder))
+    }
+}
+
 impl<T1: ToBytes, T2: ToBytes> ToBytes for (T1, T2) {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = Vec::new();
@@ -533,6 +582,299 @@ impl<T1: FromBytes, T2: FromBytes> FromBytes for (T1, T2) {
         let (t1, remainder) = T1::from_bytes(bytes)?;
         let (t2, remainder) = T2::from_bytes(remainder)?;
         Ok(((t1, t2), remainder))
+    }
+}
+
+impl<T1: ToBytes, T2: ToBytes, T3: ToBytes> ToBytes for (T1, T2, T3) {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes, T2: FromBytes, T3: FromBytes> FromBytes for (T1, T2, T3) {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        Ok(((t1, t2, t3), remainder))
+    }
+}
+
+impl<T1: ToBytes, T2: ToBytes, T3: ToBytes, T4: ToBytes> ToBytes for (T1, T2, T3, T4) {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes, T2: FromBytes, T3: FromBytes, T4: FromBytes> FromBytes for (T1, T2, T3, T4) {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4), remainder))
+    }
+}
+
+impl<T1: ToBytes, T2: ToBytes, T3: ToBytes, T4: ToBytes, T5: ToBytes> ToBytes
+    for (T1, T2, T3, T4, T5)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes, T2: FromBytes, T3: FromBytes, T4: FromBytes, T5: FromBytes> FromBytes
+    for (T1, T2, T3, T4, T5)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5), remainder))
+    }
+}
+
+impl<T1: ToBytes, T2: ToBytes, T3: ToBytes, T4: ToBytes, T5: ToBytes, T6: ToBytes> ToBytes
+    for (T1, T2, T3, T4, T5, T6)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        result.append(&mut self.5.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<T1: FromBytes, T2: FromBytes, T3: FromBytes, T4: FromBytes, T5: FromBytes, T6: FromBytes>
+    FromBytes for (T1, T2, T3, T4, T5, T6)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        let (t6, remainder) = T6::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5, t6), remainder))
+    }
+}
+
+impl<T1: ToBytes, T2: ToBytes, T3: ToBytes, T4: ToBytes, T5: ToBytes, T6: ToBytes, T7: ToBytes>
+    ToBytes for (T1, T2, T3, T4, T5, T6, T7)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        result.append(&mut self.5.to_bytes()?);
+        result.append(&mut self.6.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<
+        T1: FromBytes,
+        T2: FromBytes,
+        T3: FromBytes,
+        T4: FromBytes,
+        T5: FromBytes,
+        T6: FromBytes,
+        T7: FromBytes,
+    > FromBytes for (T1, T2, T3, T4, T5, T6, T7)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        let (t6, remainder) = T6::from_bytes(remainder)?;
+        let (t7, remainder) = T7::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5, t6, t7), remainder))
+    }
+}
+
+impl<
+        T1: ToBytes,
+        T2: ToBytes,
+        T3: ToBytes,
+        T4: ToBytes,
+        T5: ToBytes,
+        T6: ToBytes,
+        T7: ToBytes,
+        T8: ToBytes,
+    > ToBytes for (T1, T2, T3, T4, T5, T6, T7, T8)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        result.append(&mut self.5.to_bytes()?);
+        result.append(&mut self.6.to_bytes()?);
+        result.append(&mut self.7.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<
+        T1: FromBytes,
+        T2: FromBytes,
+        T3: FromBytes,
+        T4: FromBytes,
+        T5: FromBytes,
+        T6: FromBytes,
+        T7: FromBytes,
+        T8: FromBytes,
+    > FromBytes for (T1, T2, T3, T4, T5, T6, T7, T8)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        let (t6, remainder) = T6::from_bytes(remainder)?;
+        let (t7, remainder) = T7::from_bytes(remainder)?;
+        let (t8, remainder) = T8::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5, t6, t7, t8), remainder))
+    }
+}
+
+impl<
+        T1: ToBytes,
+        T2: ToBytes,
+        T3: ToBytes,
+        T4: ToBytes,
+        T5: ToBytes,
+        T6: ToBytes,
+        T7: ToBytes,
+        T8: ToBytes,
+        T9: ToBytes,
+    > ToBytes for (T1, T2, T3, T4, T5, T6, T7, T8, T9)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        result.append(&mut self.5.to_bytes()?);
+        result.append(&mut self.6.to_bytes()?);
+        result.append(&mut self.7.to_bytes()?);
+        result.append(&mut self.8.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<
+        T1: FromBytes,
+        T2: FromBytes,
+        T3: FromBytes,
+        T4: FromBytes,
+        T5: FromBytes,
+        T6: FromBytes,
+        T7: FromBytes,
+        T8: FromBytes,
+        T9: FromBytes,
+    > FromBytes for (T1, T2, T3, T4, T5, T6, T7, T8, T9)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        let (t6, remainder) = T6::from_bytes(remainder)?;
+        let (t7, remainder) = T7::from_bytes(remainder)?;
+        let (t8, remainder) = T8::from_bytes(remainder)?;
+        let (t9, remainder) = T9::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5, t6, t7, t8, t9), remainder))
+    }
+}
+
+impl<
+        T1: ToBytes,
+        T2: ToBytes,
+        T3: ToBytes,
+        T4: ToBytes,
+        T5: ToBytes,
+        T6: ToBytes,
+        T7: ToBytes,
+        T8: ToBytes,
+        T9: ToBytes,
+        T10: ToBytes,
+    > ToBytes for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
+{
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = Vec::new();
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        result.append(&mut self.2.to_bytes()?);
+        result.append(&mut self.3.to_bytes()?);
+        result.append(&mut self.4.to_bytes()?);
+        result.append(&mut self.5.to_bytes()?);
+        result.append(&mut self.6.to_bytes()?);
+        result.append(&mut self.7.to_bytes()?);
+        result.append(&mut self.8.to_bytes()?);
+        result.append(&mut self.9.to_bytes()?);
+        Ok(result)
+    }
+}
+
+impl<
+        T1: FromBytes,
+        T2: FromBytes,
+        T3: FromBytes,
+        T4: FromBytes,
+        T5: FromBytes,
+        T6: FromBytes,
+        T7: FromBytes,
+        T8: FromBytes,
+        T9: FromBytes,
+        T10: FromBytes,
+    > FromBytes for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
+{
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (t1, remainder) = T1::from_bytes(bytes)?;
+        let (t2, remainder) = T2::from_bytes(remainder)?;
+        let (t3, remainder) = T3::from_bytes(remainder)?;
+        let (t4, remainder) = T4::from_bytes(remainder)?;
+        let (t5, remainder) = T5::from_bytes(remainder)?;
+        let (t6, remainder) = T6::from_bytes(remainder)?;
+        let (t7, remainder) = T7::from_bytes(remainder)?;
+        let (t8, remainder) = T8::from_bytes(remainder)?;
+        let (t9, remainder) = T9::from_bytes(remainder)?;
+        let (t10, remainder) = T10::from_bytes(remainder)?;
+        Ok(((t1, t2, t3, t4, t5, t6, t7, t8, t9, t10), remainder))
     }
 }
 
@@ -556,6 +898,11 @@ mod proptests {
 
     proptest! {
         #[test]
+        fn test_bool(u in any::<bool>()) {
+            bytesrepr::test_serialization_roundtrip(&u)
+        }
+
+        #[test]
         fn test_u8(u in any::<u8>()) {
             bytesrepr::test_serialization_roundtrip(&u)
         }
@@ -572,6 +919,11 @@ mod proptests {
 
         #[test]
         fn test_u64(u in any::<u64>()) {
+            bytesrepr::test_serialization_roundtrip(&u)
+        }
+
+        #[test]
+        fn test_i64(u in any::<i64>()) {
             bytesrepr::test_serialization_roundtrip(&u)
         }
 
@@ -683,6 +1035,56 @@ mod proptests {
         #[test]
         fn test_sem_ver(sem_ver in sem_ver_arb()) {
             bytesrepr::test_serialization_roundtrip(&sem_ver)
+        }
+
+        #[test]
+        fn test_tuple1(t in (any::<u8>(),)) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple2(t in (any::<u8>(),any::<u32>())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple3(t in (any::<u8>(),any::<u32>(),any::<i32>())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple4(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple5(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple6(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple7(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()))) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple8(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a")) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple9(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb())) {
+            bytesrepr::test_serialization_roundtrip(&t)
+        }
+
+        #[test]
+        fn test_tuple10(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb(), public_key_arb())) {
+            bytesrepr::test_serialization_roundtrip(&t)
         }
     }
 }

@@ -2,13 +2,39 @@ use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
+use alloc::collections::BTreeMap;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     key::Key,
     uref::URef,
-    value::{Account, Contract},
+    value::{U128, U256, U512},
 };
+
+fn serialize_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
+    tag: u8,
+    cl_type_array: T,
+) -> Result<Vec<u8>, bytesrepr::Error> {
+    let mut result = vec![tag];
+    for cl_type in cl_type_array {
+        result.append(&mut cl_type.to_bytes()?);
+    }
+    Ok(result)
+}
+
+fn parse_cl_tuple_types(
+    count: usize,
+    mut bytes: &[u8],
+) -> Result<(VecDeque<Box<CLType>>, &[u8]), bytesrepr::Error> {
+    let mut cl_types = VecDeque::with_capacity(count);
+    for _ in 0..count {
+        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
+        cl_types.push_back(Box::new(cl_type));
+        bytes = remainder;
+    }
+
+    Ok((cl_types, bytes))
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLType {
@@ -17,9 +43,6 @@ pub enum CLType {
     // signed numeric primitives
     I32,
     I64,
-    I128,
-    I256,
-    I512,
     // unsigned numeric primitives
     U8,
     U32,
@@ -32,8 +55,6 @@ pub enum CLType {
     // string primitive
     String,
     // system primitives
-    Account,
-    Contract,
     Key,
     URef,
     // optional type
@@ -53,6 +74,7 @@ pub enum CLType {
         value: Box<CLType>,
     },
     // tuple types
+    Tuple1([Box<CLType>; 1]),
     Tuple2([Box<CLType>; 2]),
     Tuple3([Box<CLType>; 3]),
     Tuple4([Box<CLType>; 4]),
@@ -62,12 +84,6 @@ pub enum CLType {
     Tuple8([Box<CLType>; 8]),
     Tuple9([Box<CLType>; 9]),
     Tuple10([Box<CLType>; 10]),
-    Tuple11([Box<CLType>; 11]),
-    Tuple12([Box<CLType>; 12]),
-    Tuple13([Box<CLType>; 13]),
-    Tuple14([Box<CLType>; 14]),
-    Tuple15([Box<CLType>; 15]),
-    Tuple16([Box<CLType>; 16]),
 }
 
 #[repr(u8)]
@@ -75,41 +91,31 @@ enum CLTypeTag {
     Bool = 0,
     I32 = 1,
     I64 = 2,
-    I128 = 3,
-    I256 = 4,
-    I512 = 5,
-    U8 = 6,
-    U32 = 7,
-    U64 = 8,
-    U128 = 9,
-    U256 = 10,
-    U512 = 11,
-    Unit = 12,
-    String = 13,
-    Account = 14,
-    Contract = 15,
-    Key = 16,
-    URef = 17,
-    Option = 18,
-    List = 19,
-    FixedList = 20,
-    Result = 21,
-    Map = 22,
-    Tuple2 = 23,
-    Tuple3 = 24,
-    Tuple4 = 25,
-    Tuple5 = 26,
-    Tuple6 = 27,
-    Tuple7 = 28,
-    Tuple8 = 29,
-    Tuple9 = 30,
-    Tuple10 = 31,
-    Tuple11 = 32,
-    Tuple12 = 33,
-    Tuple13 = 34,
-    Tuple14 = 35,
-    Tuple15 = 36,
-    Tuple16 = 37,
+    U8 = 3,
+    U32 = 4,
+    U64 = 5,
+    U128 = 6,
+    U256 = 7,
+    U512 = 8,
+    Unit = 9,
+    String = 10,
+    Key = 11,
+    URef = 12,
+    Option = 13,
+    List = 14,
+    FixedList = 15,
+    Result = 16,
+    Map = 17,
+    Tuple1 = 18,
+    Tuple2 = 19,
+    Tuple3 = 20,
+    Tuple4 = 21,
+    Tuple5 = 22,
+    Tuple6 = 23,
+    Tuple7 = 24,
+    Tuple8 = 25,
+    Tuple9 = 26,
+    Tuple10 = 27,
 }
 
 impl ToBytes for CLType {
@@ -118,9 +124,6 @@ impl ToBytes for CLType {
             CLType::Bool => Ok(vec![CLTypeTag::Bool as u8]),
             CLType::I32 => Ok(vec![CLTypeTag::I32 as u8]),
             CLType::I64 => Ok(vec![CLTypeTag::I64 as u8]),
-            CLType::I128 => Ok(vec![CLTypeTag::I128 as u8]),
-            CLType::I256 => Ok(vec![CLTypeTag::I256 as u8]),
-            CLType::I512 => Ok(vec![CLTypeTag::I512 as u8]),
             CLType::U8 => Ok(vec![CLTypeTag::U8 as u8]),
             CLType::U32 => Ok(vec![CLTypeTag::U32 as u8]),
             CLType::U64 => Ok(vec![CLTypeTag::U64 as u8]),
@@ -129,8 +132,6 @@ impl ToBytes for CLType {
             CLType::U512 => Ok(vec![CLTypeTag::U512 as u8]),
             CLType::Unit => Ok(vec![CLTypeTag::Unit as u8]),
             CLType::String => Ok(vec![CLTypeTag::String as u8]),
-            CLType::Account => Ok(vec![CLTypeTag::Account as u8]),
-            CLType::Contract => Ok(vec![CLTypeTag::Contract as u8]),
             CLType::Key => Ok(vec![CLTypeTag::Key as u8]),
             CLType::URef => Ok(vec![CLTypeTag::URef as u8]),
             CLType::Option(cl_type) => {
@@ -161,6 +162,9 @@ impl ToBytes for CLType {
                 result.append(&mut value.to_bytes()?);
                 Ok(result)
             }
+            CLType::Tuple1(cl_type_array) => {
+                serialize_cl_tuple_type(CLTypeTag::Tuple1 as u8, cl_type_array)
+            }
             CLType::Tuple2(cl_type_array) => {
                 serialize_cl_tuple_type(CLTypeTag::Tuple2 as u8, cl_type_array)
             }
@@ -188,55 +192,21 @@ impl ToBytes for CLType {
             CLType::Tuple10(cl_type_array) => {
                 serialize_cl_tuple_type(CLTypeTag::Tuple10 as u8, cl_type_array)
             }
-            CLType::Tuple11(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple11 as u8, cl_type_array)
-            }
-            CLType::Tuple12(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple12 as u8, cl_type_array)
-            }
-            CLType::Tuple13(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple13 as u8, cl_type_array)
-            }
-            CLType::Tuple14(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple14 as u8, cl_type_array)
-            }
-            CLType::Tuple15(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple15 as u8, cl_type_array)
-            }
-            CLType::Tuple16(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple16 as u8, cl_type_array)
-            }
         }
     }
-}
-
-fn serialize_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
-    tag: u8,
-    cl_type_array: T,
-) -> Result<Vec<u8>, bytesrepr::Error> {
-    let mut result = vec![tag];
-    for cl_type in cl_type_array {
-        result.append(&mut cl_type.to_bytes()?);
-    }
-    Ok(result)
 }
 
 #[allow(clippy::cognitive_complexity)]
 impl FromBytes for CLType {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (tag, remainder) = u8::from_bytes(bytes)?;
+
         if tag == CLTypeTag::Bool as u8 {
             Ok((CLType::Bool, remainder))
         } else if tag == CLTypeTag::I32 as u8 {
             Ok((CLType::I32, remainder))
         } else if tag == CLTypeTag::I64 as u8 {
             Ok((CLType::I64, remainder))
-        } else if tag == CLTypeTag::I128 as u8 {
-            Ok((CLType::I128, remainder))
-        } else if tag == CLTypeTag::I256 as u8 {
-            Ok((CLType::I256, remainder))
-        } else if tag == CLTypeTag::I512 as u8 {
-            Ok((CLType::I512, remainder))
         } else if tag == CLTypeTag::U8 as u8 {
             Ok((CLType::U8, remainder))
         } else if tag == CLTypeTag::U32 as u8 {
@@ -253,10 +223,6 @@ impl FromBytes for CLType {
             Ok((CLType::Unit, remainder))
         } else if tag == CLTypeTag::String as u8 {
             Ok((CLType::String, remainder))
-        } else if tag == CLTypeTag::Account as u8 {
-            Ok((CLType::Account, remainder))
-        } else if tag == CLTypeTag::Contract as u8 {
-            Ok((CLType::Contract, remainder))
         } else if tag == CLTypeTag::Key as u8 {
             Ok((CLType::Key, remainder))
         } else if tag == CLTypeTag::URef as u8 {
@@ -289,6 +255,10 @@ impl FromBytes for CLType {
                 key: Box::new(key_type),
                 value: Box::new(value_type),
             };
+            Ok((cl_type, remainder))
+        } else if tag == CLTypeTag::Tuple1 as u8 {
+            let (mut inner_types, remainder) = parse_cl_tuple_types(1, remainder)?;
+            let cl_type = CLType::Tuple1([inner_types.pop_front().unwrap()]);
             Ok((cl_type, remainder))
         } else if tag == CLTypeTag::Tuple2 as u8 {
             let (mut inner_types, remainder) = parse_cl_tuple_types(2, remainder)?;
@@ -389,261 +359,170 @@ impl FromBytes for CLType {
                 inner_types.pop_front().unwrap(),
             ]);
             Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple11 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(11, remainder)?;
-            let cl_type = CLType::Tuple11([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple12 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(12, remainder)?;
-            let cl_type = CLType::Tuple12([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple13 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(13, remainder)?;
-            let cl_type = CLType::Tuple13([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple14 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(14, remainder)?;
-            let cl_type = CLType::Tuple14([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple15 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(15, remainder)?;
-            let cl_type = CLType::Tuple15([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple16 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(16, remainder)?;
-            let cl_type = CLType::Tuple16([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
         } else {
             Err(bytesrepr::Error::FormattingError)
         }
     }
 }
 
-fn parse_cl_tuple_types(
-    count: usize,
-    mut bytes: &[u8],
-) -> Result<(VecDeque<Box<CLType>>, &[u8]), bytesrepr::Error> {
-    let mut cl_types = VecDeque::with_capacity(count);
-    for _ in 0..count {
-        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
-        cl_types.push_back(Box::new(cl_type));
-        bytes = remainder;
-    }
-
-    Ok((cl_types, bytes))
-}
-
 pub trait CLTyped {
     fn cl_type() -> CLType;
 }
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct CLTypeMismatch {
-    expected: CLType,
-    found: CLType,
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum Error {
-    Serialization(bytesrepr::Error),
-    Type(CLTypeMismatch),
-}
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct CLValue {
-    cl_type: CLType,
-    bytes: Vec<u8>,
-}
-
-impl CLValue {
-    pub fn to_t<T: CLTyped + FromBytes>(&self) -> Result<T, Error> {
-        let expected = T::cl_type();
-
-        if self.cl_type == expected {
-            bytesrepr::deserialize(&self.bytes).map_err(Error::Serialization)
-        } else {
-            Err(Error::Type(CLTypeMismatch {
-                expected,
-                found: self.cl_type.clone(),
-            }))
-        }
-    }
-
-    pub fn from_t<T: CLTyped + ToBytes>(t: &T) -> Result<CLValue, Error> {
-        let bytes = t.to_bytes().map_err(Error::Serialization)?;
-
-        Ok(CLValue {
-            cl_type: T::cl_type(),
-            bytes,
-        })
+//
+//// boolean primitive
+//Bool,
+impl CLTyped for bool {
+    fn cl_type() -> CLType {
+        CLType::Bool
     }
 }
 
-impl ToBytes for CLValue {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = self.cl_type.to_bytes()?;
-        result.extend(self.bytes.to_bytes()?);
-        Ok(result)
-    }
-}
-
-impl FromBytes for CLValue {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
-        let (bytes, remainder) = Vec::<u8>::from_bytes(remainder)?;
-        let cl_value = CLValue { cl_type, bytes };
-        Ok((cl_value, remainder))
-    }
-}
-
+//// signed numeric primitives
+//I32,
 impl CLTyped for i32 {
     fn cl_type() -> CLType {
         CLType::I32
     }
 }
 
-impl CLTyped for String {
+//I64,
+impl CLTyped for i64 {
     fn cl_type() -> CLType {
-        CLType::String
+        CLType::I64
     }
 }
 
+//// unsigned numeric primitives
+//U8,
+impl CLTyped for u8 {
+    fn cl_type() -> CLType {
+        CLType::U8
+    }
+}
+
+//U32,
+impl CLTyped for u32 {
+    fn cl_type() -> CLType {
+        CLType::U32
+    }
+}
+
+//U64,
+impl CLTyped for u64 {
+    fn cl_type() -> CLType {
+        CLType::U64
+    }
+}
+
+//U128,
+impl CLTyped for U128 {
+    fn cl_type() -> CLType {
+        CLType::U128
+    }
+}
+
+//U256,
+impl CLTyped for U256 {
+    fn cl_type() -> CLType {
+        CLType::U256
+    }
+}
+
+//U512,
+impl CLTyped for U512 {
+    fn cl_type() -> CLType {
+        CLType::U512
+    }
+}
+
+//// unit primitive
+//Unit,
 impl CLTyped for () {
     fn cl_type() -> CLType {
         CLType::Unit
     }
 }
 
-// system primitives
-impl CLTyped for Account {
+//// string primitive
+//String,
+impl CLTyped for String {
     fn cl_type() -> CLType {
-        CLType::Account
+        CLType::String
     }
 }
 
-impl CLTyped for Contract {
-    fn cl_type() -> CLType {
-        CLType::Contract
-    }
-}
-
+//// system primitives
+//Key,
 impl CLTyped for Key {
     fn cl_type() -> CLType {
         CLType::Key
     }
 }
 
+//URef,
 impl CLTyped for URef {
     fn cl_type() -> CLType {
         CLType::URef
     }
 }
 
+//// optional type
+//Option(Box<CLType>),
 impl<T: CLTyped> CLTyped for Option<T> {
     fn cl_type() -> CLType {
         CLType::Option(Box::new(T::cl_type()))
     }
 }
 
+//// list type
+//List(Box<CLType>),
 impl<T: CLTyped> CLTyped for Vec<T> {
     fn cl_type() -> CLType {
         CLType::List(Box::new(T::cl_type()))
     }
 }
 
+//// fixed-length list type (equivalent to rust's array type)
+//FixedList(Box<CLType>, u64),
+// TODO: 32 should be N for any value up to 32
+// https://doc.rust-lang.org/std/array/trait.LengthAtMost32.html
+// https://doc.rust-lang.org/std/primitive.array.html#implementations
+//impl<T: CLTyped> CLTyped for [T; 32] {
+//    fn cl_type() -> CLType {
+//        CLType::FixedListList(Box::new(T::cl_type()), 32)
+//    }
+//}
+
+//// result type
+//Result {
+//ok: Box<CLType>,
+//err: Box<CLType>,
+//},
 impl<T: CLTyped, E: CLTyped> CLTyped for Result<T, E> {
     fn cl_type() -> CLType {
         let ok = Box::new(T::cl_type());
         let err = Box::new(E::cl_type());
         CLType::Result { ok, err }
+    }
+}
+
+//// map type
+//Map {
+//key: Box<CLType>,
+//value: Box<CLType>,
+//},
+impl<K: CLTyped, V: CLTyped> CLTyped for BTreeMap<K, V> {
+    fn cl_type() -> CLType {
+        let key = Box::new(K::cl_type());
+        let value = Box::new(V::cl_type());
+        CLType::Map { key, value }
+    }
+}
+
+//// tuple types
+impl<T1: CLTyped> CLTyped for (T1,) {
+    fn cl_type() -> CLType {
+        CLType::Tuple1([Box::new(T1::cl_type())])
     }
 }
 
@@ -653,16 +532,163 @@ impl<T1: CLTyped, T2: CLTyped> CLTyped for (T1, T2) {
     }
 }
 
+impl<T1: CLTyped, T2: CLTyped, T3: CLTyped> CLTyped for (T1, T2, T3) {
+    fn cl_type() -> CLType {
+        CLType::Tuple3([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+        ])
+    }
+}
+
+impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped> CLTyped for (T1, T2, T3, T4) {
+    fn cl_type() -> CLType {
+        CLType::Tuple4([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+        ])
+    }
+}
+
+impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped> CLTyped
+    for (T1, T2, T3, T4, T5)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple5([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+        ])
+    }
+}
+
+impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped, T6: CLTyped> CLTyped
+    for (T1, T2, T3, T4, T5, T6)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple6([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+            Box::new(T6::cl_type()),
+        ])
+    }
+}
+
+impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped, T6: CLTyped, T7: CLTyped>
+    CLTyped for (T1, T2, T3, T4, T5, T6, T7)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple7([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+            Box::new(T6::cl_type()),
+            Box::new(T7::cl_type()),
+        ])
+    }
+}
+
+impl<
+        T1: CLTyped,
+        T2: CLTyped,
+        T3: CLTyped,
+        T4: CLTyped,
+        T5: CLTyped,
+        T6: CLTyped,
+        T7: CLTyped,
+        T8: CLTyped,
+    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple8([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+            Box::new(T6::cl_type()),
+            Box::new(T7::cl_type()),
+            Box::new(T8::cl_type()),
+        ])
+    }
+}
+
+impl<
+        T1: CLTyped,
+        T2: CLTyped,
+        T3: CLTyped,
+        T4: CLTyped,
+        T5: CLTyped,
+        T6: CLTyped,
+        T7: CLTyped,
+        T8: CLTyped,
+        T9: CLTyped,
+    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8, T9)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple9([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+            Box::new(T6::cl_type()),
+            Box::new(T7::cl_type()),
+            Box::new(T8::cl_type()),
+            Box::new(T9::cl_type()),
+        ])
+    }
+}
+
+impl<
+        T1: CLTyped,
+        T2: CLTyped,
+        T3: CLTyped,
+        T4: CLTyped,
+        T5: CLTyped,
+        T6: CLTyped,
+        T7: CLTyped,
+        T8: CLTyped,
+        T9: CLTyped,
+        T10: CLTyped,
+    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
+{
+    fn cl_type() -> CLType {
+        CLType::Tuple10([
+            Box::new(T1::cl_type()),
+            Box::new(T2::cl_type()),
+            Box::new(T3::cl_type()),
+            Box::new(T4::cl_type()),
+            Box::new(T5::cl_type()),
+            Box::new(T6::cl_type()),
+            Box::new(T7::cl_type()),
+            Box::new(T8::cl_type()),
+            Box::new(T9::cl_type()),
+            Box::new(T10::cl_type()),
+        ])
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use alloc::{collections::BTreeMap, string::String};
+    use alloc::string::String;
     use core::fmt::Debug;
 
     use super::*;
     use crate::{
         bytesrepr::{FromBytes, ToBytes},
         uref::AccessRights,
-        value::account::{AssociatedKeys, PublicKey, PurseId, Weight},
+        value::cl_value::CLValue,
     };
 
     fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug>(value: &T) {
@@ -678,8 +704,76 @@ mod tests {
     }
 
     #[test]
-    fn option_i32_should_work() {
-        let x: Option<i32> = Some(7);
+    fn bool_should_work() {
+        round_trip(&true);
+        round_trip(&false);
+    }
+
+    #[test]
+    fn u8_should_work() {
+        round_trip(&1u8);
+    }
+
+    #[test]
+    fn u32_should_work() {
+        round_trip(&1u32);
+    }
+
+    #[test]
+    fn i32_should_work() {
+        round_trip(&-1i32);
+    }
+
+    #[test]
+    fn u64_should_work() {
+        round_trip(&1u64);
+    }
+
+    #[test]
+    fn i64_should_work() {
+        round_trip(&-1i64);
+    }
+
+    #[test]
+    fn u128_should_work() {
+        round_trip(&U128::one());
+    }
+
+    #[test]
+    fn u256_should_work() {
+        round_trip(&U256::one());
+    }
+
+    #[test]
+    fn u512_should_work() {
+        round_trip(&U512::one());
+    }
+
+    #[test]
+    fn unit_should_work() {
+        round_trip(&());
+    }
+
+    #[test]
+    fn string_should_work() {
+        round_trip(&String::from("abc"));
+    }
+
+    #[test]
+    fn key_should_work() {
+        let key = Key::URef(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
+        round_trip(&key);
+    }
+
+    #[test]
+    fn uref_should_work() {
+        let uref = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+        round_trip(&uref);
+    }
+
+    #[test]
+    fn option_of_cl_type_should_work() {
+        let x: Option<i32> = Some(-1);
         let y: Option<i32> = None;
 
         round_trip(&x);
@@ -687,7 +781,13 @@ mod tests {
     }
 
     #[test]
-    fn result_unit_string_should_work() {
+    fn vec_of_cl_type_should_work() {
+        let vec = vec![String::from("a"), String::from("b")];
+        round_trip(&vec);
+    }
+
+    #[test]
+    fn result_of_cl_type_should_work() {
         let x: Result<(), String> = Ok(());
         let y: Result<(), String> = Err(String::from("Hello, world!"));
 
@@ -696,18 +796,17 @@ mod tests {
     }
 
     #[test]
-    fn result_account_should_work() {
-        let named_keys = BTreeMap::new();
-        let purse_id = PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE));
-        let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
-        let action_thresholds = Default::default();
-        let x = Account::new(
-            [0u8; 32],
-            named_keys,
-            purse_id,
-            associated_keys,
-            action_thresholds,
-        );
+    fn map_of_cl_type_should_work() {
+        let mut map: BTreeMap<String, u64> = BTreeMap::new();
+        map.insert(String::from("abc"), 1);
+        map.insert(String::from("xyz"), 2);
+
+        round_trip(&map);
+    }
+
+    #[test]
+    fn tuple_1_should_work() {
+        let x = (-1i32,);
 
         round_trip(&x);
     }
@@ -715,6 +814,106 @@ mod tests {
     #[test]
     fn tuple_2_should_work() {
         let x = (-1i32, String::from("a"));
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_3_should_work() {
+        let x = (-1i32, 1u32, String::from("a"));
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_4_should_work() {
+        let x = (-1i32, 1u32, -1i64, String::from("a"));
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_5_should_work() {
+        let x = (-1i32, 1u32, -1i64, 1u64, String::from("a"));
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_6_should_work() {
+        let x = (-1i32, 1u32, -1i64, 1u64, vec![1, 2], String::from("a"));
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_7_should_work() {
+        let x = (
+            -1i32,
+            1u32,
+            -1i64,
+            1u64,
+            (1,),
+            vec![1, 2],
+            String::from("a"),
+        );
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_8_should_work() {
+        let x = (
+            -1i32,
+            1u32,
+            -1i64,
+            1u64,
+            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
+            (1,),
+            vec![1, 2],
+            String::from("a"),
+        );
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_9_should_work() {
+        let uref = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+        let uref_key = Key::URef(uref);
+
+        let x = (
+            -1i32,
+            1u32,
+            -1i64,
+            1u64,
+            uref,
+            uref_key,
+            (1,),
+            vec![1, 2],
+            String::from("a"),
+        );
+
+        round_trip(&x);
+    }
+
+    #[test]
+    fn tuple_10_should_work() {
+        let uref = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
+        let uref_key = Key::URef(uref);
+
+        let x = (
+            -1i32,
+            1u32,
+            -1i64,
+            1u64,
+            uref,
+            uref_key,
+            (1,),
+            vec![1, 2],
+            String::from("a"),
+            U512::zero(),
+        );
 
         round_trip(&x);
     }

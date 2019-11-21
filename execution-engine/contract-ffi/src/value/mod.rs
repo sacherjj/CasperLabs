@@ -1,5 +1,6 @@
 pub mod account;
 pub mod cl_type;
+pub mod cl_value;
 pub mod contract;
 pub mod protocol_version;
 mod semver;
