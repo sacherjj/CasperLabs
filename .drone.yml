@@ -985,6 +985,36 @@ steps:
   depends_on:
     - mac-ee-tarball-tag
 
+- name: generate-metapackages
+  commands:
+  - "mkdir -p artifacts/${DRONE_BRANCH}"
+  - "WORKING_DIR=$(pwd)/artifacts/${DRONE_BRANCH}/"
+  - "cd $WORKING_DIR"
+  - "THIS_VERSION=$(ls casperlabs-engine-grpc-server_*_amd64.deb | sed 's/casperlabs-engine-grpc-server_//' | sed 's/_amd64.deb//')"
+  - "THIS_VERSION_MAJOR=$(echo $THIS_VERSION | cut -d '.' -f 1)"
+  - "THIS_VERSION_MINOR=$(echo $THIS_VERSION | cut -d '.' -f 2,3)"
+  - "cd /opt/bintray/artifacts"
+  - "echo $THIS_VERSION"
+  - "echo $THIS_VERSION_MINOR"
+  - "echo $THIS_VERSION_MAJOR"
+  - "sed -i 's/THIS_VERSION_MAJOR/'$THIS_VERSION_MAJOR'/g' rpmbuild/SPECS/casperlabs-all.spec"
+  - "sed -i 's/THIS_VERSION_MINOR/'$THIS_VERSION_MINOR'/g' rpmbuild/SPECS/casperlabs-all.spec"
+  - "sed -i 's/THIS_VERSION/'$THIS_VERSION'/g' rpmbuild/SPECS/casperlabs-all.spec"
+  - "rpmbuild -bb rpmbuild/SPECS/casperlabs-all.spec -D '_topdir '$(pwd)'/rpmbuild' -D 'SRC '$(pwd)"
+  - "sed -i 's/THIS_VERSION/'$THIS_VERSION'/g' /opt/bintray/artifacts/deb_build/casperlabs-all.cfg"
+  - "equivs-build  deb_build/casperlabs-all.cfg"
+  - "cp /opt/bintray/artifacts/casperlabs_*_all.deb $WORKING_DIR/"
+  - "cp /opt/bintray/artifacts/rpmbuild/RPMS/x86_64/casperlabs-*.rpm $WORKING_DIR/"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+  - package-ee-tag
+
 - name: github_publish_release_artifacts
   settings:
     api_key:
@@ -1001,10 +1031,9 @@ steps:
     ref:
     - refs/tags/v*
   depends_on:
-  - package-sbt-artifacts-tag
-  - package-ee-tag
   - rsync-mac-tarball-tag
   - package-python-client-tag
+  - generate-metapackages
 
 - name: pypi-publish
   image: tvasile1012/pypi:latest
@@ -1017,6 +1046,42 @@ steps:
     setupfile: "client-py/setup.py"
     dist_dir: "client-py/dist/"
     skip_build: true
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+  - github_publish_release_artifacts
+
+- name: bintray-publish
+  image: "casperlabs/buildenv:latest"
+  commands:
+    - "UPLOAD_DIR=$(pwd)/artifacts/${DRONE_BRANCH}"
+    - "cd $UPLOAD_DIR"
+    - "echo Uploading file to bintray:${DRONE_TAG} ..."
+    - "echo -e \"\nDEBIAN\" && find . -maxdepth 1 -type f -iregex \".*\\.deb\" -printf \"%f\n\" | xargs -I {} sh -c \"echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/{} && echo\""
+    - "echo -e \"\nRPMS\" && find . -maxdepth 1 -type f -iregex \".*\\.rpm\" -printf \"%f\n\" | xargs -I {} sh -c \"echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/{} && echo\""
+    - "sleep 10 && echo Publishing CL Packages on bintray..."
+    - "curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/publish"
+    - "curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/publish"
+    - "sleep 10 && echo GPG Signing CL Packages on bintray..."
+    - "curl -X POST -u$BINTRAY_USER:$API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/gpg/casperlabs/debian/CasperLabs/versions/${DRONE_TAG}"
+    - "curl -X POST -u$BINTRAY_USER:$API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/gpg/casperlabs/rpm/CasperLabs/versions/${DRONE_TAG}"
+    - "sleep 10 && echo Publishing GPG Signatures on bintray..."
+    - "curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/publish"
+    - "curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/publish"
+    - "sleep 10 && echo Calculating repo metadata on bintray..."
+    - "curl -u $SUBJECT:$API_KEY -X POST -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/calc_metadata/casperlabs/debian/CasperLabs/${DRONE_TAG}"
+    - "curl -u $SUBJECT:$API_KEY -X POST -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/calc_metadata/casperlabs/rpm/CasperLabs/${DRONE_TAG}"
+  environment:
+    API_URL: https://api.bintray.com
+    BINTRAY_USER:
+      from_secret: bintray_username
+    BINTRAY_API_KEY:
+      from_secret: bintray_api_key
+    BINTRAY_GPG_PASSPHRASE:
+      from_secret: bintray_gpg_passphrase
+    BINTRAY_PK:
+      from_secret: bintray_private_key
   when:
     ref:
     - refs/tags/v*
