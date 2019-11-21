@@ -60,3 +60,4 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root,-)
 %{_bindir}/*
+/lib/systemd/system/casperlabs-engine-grpc-server.service
