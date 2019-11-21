@@ -3,9 +3,11 @@ package io.casperlabs.node.api
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.comm.ServiceError.InvalidArgument
-import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.codec.Base64
+import pbdirect._
+import io.casperlabs.node.{ByteStringReader, ByteStringWriter}
 
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
 trait Pagination {
   type PageTokenParams
@@ -43,35 +45,23 @@ object DeployInfoPagination extends Pagination {
     val pageSize = math.max(0, math.min(request.pageSize, MAXSIZE))
     if (request.pageToken.isEmpty) {
       Try { (pageSize, DeployInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY, isNext = true)) }
-    } else {
+    } else
       Try {
-        request.pageToken
-          .split(':')
-          .map(Base16.decode)
-      }.filter(_.length == 3) map (
-          arr => {
-            val isNext =
-              if (new String(arr(2)) == PREV_PAGE) false
-              else true
-            (
-              pageSize,
-              DeployInfoPageTokenParams(
-                BigInt(arr(0)).longValue(),
-                ByteString.copyFrom(arr(1)),
-                isNext
-              )
-            )
-          }
-      ) match {
-        case Failure(_) =>
+        Base64
+          .tryDecode(request.pageToken)
+          .map(pageTokenBytes => pageTokenBytes.pbTo[DeployInfoPageTokenParams])
+      } match {
+        case Failure(_) | Success(None) =>
           Failure(
             InvalidArgument(
-              "Expected pageToken encoded as {lastTimeStamp}:{lastDeployHash}. Where both are hex encoded."
+              "Failed parsing pageToken"
             )
           )
-        case x => x
+        case Success(Some(pageTokenParams)) =>
+          Success {
+            (pageSize, pageTokenParams)
+          }
       }
-    }
   }
 
   override def createPageToken(
@@ -80,17 +70,7 @@ object DeployInfoPagination extends Pagination {
     pageTokenParamsOpt match {
       case None => ""
       case Some(pageTokenParams) =>
-        val lastTimestampBase16 =
-          Base16.encode(
-            BigInt(pageTokenParams.lastTimeStamp).toByteArray
-          )
-        val lastDeployHashBase16 = Base16.encode(pageTokenParams.lastDeployHash.toByteArray)
-        val nextEncoded = if (pageTokenParams.isNext) {
-          Base16.encode(NEXT_PAGE.getBytes())
-        } else {
-          Base16.encode(PREV_PAGE.getBytes())
-        }
-        s"$lastTimestampBase16:$lastDeployHashBase16:$nextEncoded"
+        Base64.encode(pageTokenParams.toPB)
     }
 
   /**

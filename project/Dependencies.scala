@@ -74,6 +74,7 @@ object Dependencies {
   val scalapbRuntimeLib      = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc    = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"           % scalapb.compiler.Version.scalapbVersion
   val scalapbCirce           = "io.github.scalapb-json"     %% "scalapb-circe"                  % "0.2.2"
+  val pbdirect               = "beyondthelines"             %% "pbdirect"                       % "0.1.0"
   val grpcNetty              = "io.grpc"                    % "grpc-netty"                      % scalapb.compiler.Version.grpcJavaVersion
   val nettyAll               = "io.netty"                   % "netty-all"                       % "4.1.22.Final"
   val nettyTransNativeEpoll  = "io.netty"                   % "netty-transport-native-epoll"    % "4.1.22.Final" classifier "linux-x86_64"
@@ -103,9 +104,9 @@ object Dependencies {
     .exclude("co.fs2", s"fs2-core_2.12")
   val doobieHikari = ("org.tpolecat" %% "doobie-hikari" % doobieVersion)
     .exclude("co.fs2", s"fs2-core_2.12")
-  val flyway = "org.flywaydb" % "flyway-core" % "5.2.4"
-  val fs2Io    = "co.fs2"       %% "fs2-io"     % fs2Version
-  val fs2ReactiveStreams    = "co.fs2"       %% "fs2-reactive-streams"     % fs2Version
+  val flyway             = "org.flywaydb" % "flyway-core"           % "5.2.4"
+  val fs2Io              = "co.fs2"       %% "fs2-io"               % fs2Version
+  val fs2ReactiveStreams = "co.fs2"       %% "fs2-reactive-streams" % fs2Version
   val upperbound = ("org.systemfw" %% "upperbound" % "0.3.0")
     .exclude("co.fs2", "fs2-core_2.12")
 
