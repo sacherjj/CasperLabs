@@ -109,7 +109,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 
     // If the block timestamp is in the future, wait some time before adding it,
     // so we won't include it as a justification from the future.
-    Validation[F].preTimestamp(block).attempt.flatMap {
+    Validation.preTimestamp[F](block).attempt.flatMap {
       case Right(None) =>
         addBlock(statelessExecutor.validateAndAddBlock)
       case Right(Some(delay)) =>
@@ -259,9 +259,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
               illegal(s"Deploy was missing session and/or payment code.")
             case _ => ().pure[F]
           }
-      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(deploy))
-      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(deploy))
-      _ <- Validation[F].deployHeader(deploy, chainName) >>= { headerErrors =>
+      _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
+      _ <- check("Invalid deploy signature.")(Validation.deploySignature[F](deploy))
+      _ <- Validation.deployHeader[F](deploy, chainName) >>= { headerErrors =>
             illegal(headerErrors.map(_.errorMessage).mkString("\n"))
               .whenA(headerErrors.nonEmpty)
           }
@@ -588,7 +588,6 @@ object MultiParentCasperImpl {
   ) {
     //TODO pull out
     implicit val functorRaiseInvalidBlock = validation.raiseValidateErrorThroughApplicativeError[F]
-    implicit val metricsSource            = CasperMetricsSource
 
     /* Execute the block to get the effects then do some more validation.
      * Save the block if everything checks out.
@@ -597,7 +596,8 @@ object MultiParentCasperImpl {
     def validateAndAddBlock(
         maybeContext: Option[StatelessExecutor.Context],
         block: Block
-    )(implicit state: Cell[F, CasperState]): F[BlockStatus] =
+    )(implicit state: Cell[F, CasperState]): F[BlockStatus] = {
+      import io.casperlabs.casper.validation.ValidationImpl.metricsSource
       Metrics[F].timer("validateAndAddBlock") {
         val hashPrefix = PrettyPrinter.buildString(block.blockHash)
         val validationStatus = (for {
@@ -651,6 +651,7 @@ object MultiParentCasperImpl {
           _ <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "block"}")
           _ <- EquivocationDetector
                 .checkEquivocationWithUpdate[F](dag, block)
+                .timer("checkEquivocationsWithUpdate")
           _ <- Log[F].debug(s"Block effects calculated for ${hashPrefix -> "block"}")
         } yield blockEffects).attempt
 
@@ -680,6 +681,7 @@ object MultiParentCasperImpl {
             } yield UnexpectedBlockException(ex)
         }
       }
+    }
 
     // TODO: Handle slashing
     /** Either store the block with its transformation,

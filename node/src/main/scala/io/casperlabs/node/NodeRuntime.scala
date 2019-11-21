@@ -195,7 +195,7 @@ class NodeRuntime private[node] (
 
       implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
         .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = new ValidationImpl[Task]
+      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
 
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics

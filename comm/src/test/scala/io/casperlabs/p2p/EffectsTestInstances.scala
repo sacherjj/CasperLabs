@@ -105,7 +105,7 @@ object EffectsTestInstances {
           "ERROR"
         case IzLog.Level.Crit => ???
       }
-      if (printEnabled) println(s"${lvl.padTo(5, " ")} $prefix $msg")
+      if (printEnabled) println(s"${lvl.padTo(5, " ").mkString("")} $prefix $msg")
     }
   }
 
