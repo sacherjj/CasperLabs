@@ -19,6 +19,7 @@ use contract_ffi::{
     uref::{AccessRights, URef},
     value::{
         account::{BlockTime, PublicKey, PurseId},
+        cl_value::CLValue,
         U512,
     },
 };
@@ -318,10 +319,8 @@ pub fn delegate() {
             // Limit the access rights so only balance query and deposit are allowed.
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
-            runtime::ret(
-                rights_controlled_purse,
-                vec![rights_controlled_purse.value()],
-            );
+            let return_value = CLValue::from_t(&rights_controlled_purse).unwrap_or_revert();
+            runtime::ret(return_value, vec![rights_controlled_purse.value()]);
         }
         "set_refund_purse" => {
             let purse_id: PurseId = runtime::get_arg(1)
@@ -333,11 +332,13 @@ pub fn delegate() {
             // We purposely choose to remove the access rights so that we do not
             // accidentally give rights for a purse to some contract that is not
             // supposed to have it.
-            let result = get_refund_purse().map(|p| p.value().remove_access_rights());
-            if let Some(uref) = result {
-                runtime::ret(Some(PurseId::new(uref)), vec![uref]);
+            let maybe_purse_uref = get_refund_purse().map(|p| p.value().remove_access_rights());
+            if let Some(uref) = maybe_purse_uref {
+                let return_value = CLValue::from_t(&Some(PurseId::new(uref))).unwrap_or_revert();
+                runtime::ret(return_value, vec![uref]);
             } else {
-                runtime::ret(result, Vec::new());
+                let return_value = CLValue::from_t(&maybe_purse_uref).unwrap_or_revert();
+                runtime::ret(return_value, Vec::new());
             }
         }
         "finalize_payment" => {

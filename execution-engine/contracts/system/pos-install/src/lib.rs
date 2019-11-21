@@ -13,6 +13,7 @@ use contract_ffi::{
     uref::{AccessRights, URef},
     value::{
         account::{PublicKey, PurseId},
+        cl_value::CLValue,
         U512,
     },
 };
@@ -83,12 +84,13 @@ pub extern "C" fn call() {
         named_keys.insert(String::from(*name), Key::URef(*uref));
     });
 
-    let uref = storage::store_function(POS_FUNCTION_NAME, named_keys)
+    let uref: URef = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_turef()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
+    let return_value = CLValue::from_t(&uref).unwrap_or_revert();
 
-    runtime::ret(uref, vec![uref]);
+    runtime::ret(return_value, vec![uref]);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {

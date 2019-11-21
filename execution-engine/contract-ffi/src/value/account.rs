@@ -1,4 +1,5 @@
 use alloc::{
+    boxed::Box,
     collections::{BTreeMap, BTreeSet},
     string::String,
     vec::Vec,
@@ -17,6 +18,7 @@ use crate::{
     key::{Key, UREF_SIZE},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+    value::cl_type::{CLType, CLTyped},
 };
 
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
@@ -75,6 +77,12 @@ impl ToBytes for PurseId {
 impl FromBytes for PurseId {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         <URef>::from_bytes(bytes).map(|(uref, rem)| (PurseId::new(uref), rem))
+    }
+}
+
+impl CLTyped for PurseId {
+    fn cl_type() -> CLType {
+        CLType::URef
     }
 }
 
@@ -292,6 +300,12 @@ impl Display for PublicKey {
 impl Debug for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl CLTyped for PublicKey {
+    fn cl_type() -> CLType {
+        CLType::FixedList(Box::new(CLType::U8), KEY_SIZE as u64)
     }
 }
 

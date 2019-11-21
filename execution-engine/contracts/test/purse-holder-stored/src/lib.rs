@@ -12,6 +12,7 @@ use alloc::{
 use contract_ffi::{
     contract_api::{runtime, storage, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
+    value::cl_value::CLValue,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -52,7 +53,7 @@ pub extern "C" fn apply_method() {
             let purse_id = system::create_purse();
             runtime::put_key(&purse_name, &purse_id.value().into());
         }
-        METHOD_VERSION => runtime::ret(VERSION.to_string(), vec![]),
+        METHOD_VERSION => runtime::ret(CLValue::from_t(&VERSION).unwrap_or_revert(), vec![]),
         _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }

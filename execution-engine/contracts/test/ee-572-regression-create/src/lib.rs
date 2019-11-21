@@ -11,7 +11,9 @@ use core::{clone::Clone, convert::Into};
 use contract_ffi::{
     contract_api::{runtime, storage, TURef},
     key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
+    value::cl_value::CLValue,
 };
 
 const DATA: &str = "data";
@@ -26,10 +28,11 @@ pub extern "C" fn create() {
         ret.set_access_rights(AccessRights::READ);
         ret.into()
     };
+    let return_value = CLValue::from_t(&read_only_reference).unwrap_or_revert();
 
     let extra_urefs = vec![read_only_reference];
 
-    runtime::ret(read_only_reference, extra_urefs)
+    runtime::ret(return_value, extra_urefs)
 }
 
 #[no_mangle]

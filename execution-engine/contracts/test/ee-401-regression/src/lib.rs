@@ -4,14 +4,20 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
 
-use contract_ffi::contract_api::{runtime, storage, ContractRef};
+use contract_ffi::{
+    contract_api::{runtime, storage, ContractRef},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+    value::cl_value::CLValue,
+};
 
 #[no_mangle]
 pub extern "C" fn hello_ext() {
     let test_string = String::from("Hello, world!");
-    let test_uref = storage::new_turef(test_string).into();
+    let test_uref: URef = storage::new_turef(test_string).into();
+    let return_value = CLValue::from_t(&test_uref).unwrap_or_revert();
     let extra_urefs = [test_uref].to_vec();
-    runtime::ret(test_uref, extra_urefs)
+    runtime::ret(return_value, extra_urefs)
 }
 
 #[no_mangle]

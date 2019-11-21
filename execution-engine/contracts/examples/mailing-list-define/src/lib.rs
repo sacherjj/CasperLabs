@@ -12,6 +12,7 @@ use contract_ffi::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
+    value::cl_value::CLValue,
 };
 
 const LIST_KEY: &str = "list";
@@ -89,9 +90,13 @@ pub extern "C" fn mailing_list_ext() {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
-                runtime::ret(Some(Key::from(turef)), extra_urefs);
+                let return_value = CLValue::from_t(&Some(Key::from(turef))).unwrap_or_revert();
+                runtime::ret(return_value, extra_urefs);
             }
-            _ => runtime::ret(Option::<Key>::None, Vec::new()),
+            _ => {
+                let return_value = CLValue::from_t(&Option::<Key>::None).unwrap_or_revert();
+                runtime::ret(return_value, Vec::new())
+            }
         },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an

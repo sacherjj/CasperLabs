@@ -7,13 +7,14 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::PublicKey,
+    value::{account::PublicKey, cl_value::CLValue},
 };
 
 #[no_mangle]
 pub extern "C" fn check_caller_ext() {
     let caller_public_key: PublicKey = runtime::get_caller();
-    runtime::ret(caller_public_key, Vec::new())
+    let return_value = CLValue::from_t(&caller_public_key).unwrap_or_revert();
+    runtime::ret(return_value, Vec::new())
 }
 
 #[no_mangle]

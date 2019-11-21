@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     args_parser::ArgsParser,
-    bytesrepr::{self, deserialize, FromBytes, ToBytes},
+    bytesrepr::{self, deserialize, FromBytes},
     execution::{Phase, PHASE_SIZE},
     ext_ffi,
     key::Key,
@@ -20,19 +20,11 @@ use crate::{
     },
 };
 
-/// Return `t` to the host, terminating the currently running module.
-/// Note this function is only relevant to contracts stored on chain which
-/// return a value to their caller. The return value of a directly deployed
-/// contract is never looked at.
-pub fn ret<T: ToBytes>(t: T, extra_urefs: Vec<URef>) -> ! {
-    let (ptr, size, _bytes) = to_ptr(&t);
-    let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&extra_urefs);
-    unsafe {
-        ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
-    }
-}
-
-pub fn r#return(value: CLValue, extra_urefs: Vec<URef>) -> ! {
+/// Returns `value` to the host, terminating the currently running module.
+///
+/// Note this function is only relevant to contracts stored on chain which return a value to their
+/// caller. The return value of a directly deployed contract is never looked at.
+pub fn ret(value: CLValue, extra_urefs: Vec<URef>) -> ! {
     let (ptr, size, _bytes) = to_ptr(&value);
     let (urefs_ptr, urefs_size, _bytes2) = to_ptr(&extra_urefs);
     unsafe {

@@ -8,6 +8,7 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
+    value::cl_value::CLValue,
 };
 
 const COUNT_KEY: &str = "count";
@@ -43,7 +44,8 @@ pub extern "C" fn counter_ext() {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(ApiError::Read)
                 .unwrap_or_revert_with(ApiError::ValueNotFound);
-            runtime::ret(result, Vec::new());
+            let return_value = CLValue::from_t(&result).unwrap_or_revert();
+            runtime::ret(return_value, Vec::new());
         }
         _ => runtime::revert(Error::UnknownMethodName),
     }
