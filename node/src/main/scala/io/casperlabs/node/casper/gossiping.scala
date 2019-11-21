@@ -612,9 +612,9 @@ package object gossiping {
                       for {
                         dag <- DagStorage[F].getRepresentation
                         lm  <- dag.latestMessages
-                      } yield ProtoUtil
-                        .removeRedundantMessages(lm.values.flatten)
+                      } yield lm.values.flatten
                         .map(m => Block.Justification(m.validatorId, m.messageHash))
+                        .toSet
 
                     override def dagTopoSort(
                         startRank: Long,
