@@ -502,7 +502,7 @@ def block_summary(block):
     )
 
 def block_justification(block):
-    return consensus.Justification(
+    return consensus.Block.Justification(
         validator_public_key = block.header.validator_public_key,
         latest_block_hash = block.block_hash,
     )
