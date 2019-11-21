@@ -496,7 +496,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
-    ?[_],
+    *[_],
     InvalidBlock
   ]](
       parentsHashList: Seq[BlockHash],

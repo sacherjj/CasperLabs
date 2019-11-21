@@ -44,7 +44,7 @@ object EquivocationDetector {
     * creates equivocations. And the base block of b5 is b1, whose rank is smaller than that of b2, so
     * we will update the `equivocationsTracker`, setting the value of key v1 to be rank of b1.
     */
-  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[?[_], InvalidBlock]](
+  def checkEquivocationWithUpdate[F[_]: MonadThrowable: Log: FunctorRaise[*[_], InvalidBlock]](
       dag: DagRepresentation[F],
       block: Block
   ): F[Unit] =
