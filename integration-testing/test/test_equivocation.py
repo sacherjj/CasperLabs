@@ -9,6 +9,7 @@ from casperlabs_local_net.grpc_proxy import (
     block_from_chunks,
     block_to_chunks,
     block_summary,
+    block_justification,
     update_hashes_and_signature,
 )
 from casperlabs_client import hexify, extract_common_name
@@ -32,16 +33,17 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
         self.last_block = None
         self.equivocating_block = None
         self.equivocating_block_summary = None
+        self.equivocating_block_justification = None
 
     def pre_request(self, name, request):
-        logging.debug(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
+        logging.info(f"GOSSIP PRE REQUEST: <= {name}({hexify(request)})")
 
         if name == "GetBlockChunked":
             if (
                 self.equivocating_block
                 and request.block_hash == self.equivocating_block.block_hash
             ):
-                logging.debug(
+                logging.info(
                     f"SENDING EQUIVOCATING BLOCK {self.equivocating_block.block_hash.hex()}"
                     f" to {self.node.config.number}"
                 )
@@ -55,7 +57,7 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
                 self.equivocating_block
                 and self.equivocating_block.block_hash == request.target_block_hashes[0]
             ):
-                logging.debug(
+                logging.info(
                     f"StreamAncestorBlockSummaries: {self.equivocating_block_summary}"
                 )
                 return ((s for s in (self.equivocating_block_summary,)), None)
@@ -64,15 +66,16 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
         return (response, request)
 
     def post_request_stream(self, name, request, response):
-        logging.debug(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
+        logging.info(f"GOSSIP POST REQUEST STREAM: {name}({hexify(request)})")
 
         if name == "StreamLatestMessages":
             if self.equivocating_block:
                 b = self.equivocating_block
                 logging.info(
-                    f"GOSSIP POST REQUEST STREAM: SENDING FAKE block summary ({b.block_hash.hex()})"
+                    f"GOSSIP POST REQUEST STREAM: SENDING FAKE Justification with latest_block_hash ({b.block_hash.hex()}):"
+                    f" {self.equivocating_block_justification}"
                 )
-                yield self.equivocating_block_summary
+                yield self.equivocating_block_justification
                 return
 
         if name == "GetBlockChunked":
@@ -89,18 +92,16 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
                 )
                 response = [r for r in response]
                 self.last_block = block_from_chunks(response)
-                self.equivocating_block = block_from_chunks(response)
-                self.equivocating_block = self.modify_to_equivocate(
-                    self.equivocating_block
-                )
+                self.equivocating_block = self.modify_to_equivocate(block_from_chunks(response))
                 self.equivocating_block_summary = block_summary(self.equivocating_block)
+                self.equivocating_block_justification = block_justification(self.equivocating_block)
                 logging.info(
                     f"GOSSIP POST REQUEST STREAM: Equivocating block hash: {self.equivocating_block.block_hash.hex()}"
                 )
 
         for r in response:
-            logging.debug(
-                f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:1000]}..."
+            logging.info(
+                f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:100]}..."
             )
             yield r
 
