@@ -1,6 +1,6 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import { ArrowIcon, Button, Card, XIcon } from './Utils';
+import { Button, Card } from './Utils';
 import { RouteComponentProps, withRouter } from 'react-router';
 import Downshift from 'downshift';
 import AuthContainer from '../containers/AuthContainer';
@@ -13,8 +13,16 @@ interface Props extends RouteComponentProps {
   accountSelectorContainer: AccountSelectorContainer;
 }
 
+function ArrowIcon(props:{isOpen: boolean}){
+  if(props.isOpen) {
+    return <i className="fas fa-angle-up"/>
+  }else{
+    return <i className="fas fa-angle-down"/>
+  }
+}
+
 @observer
-class _LatestDeploys extends React.Component<Props, {}> {
+class _AccountSelector extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
     this.props.accountSelectorContainer.init(
@@ -24,23 +32,23 @@ class _LatestDeploys extends React.Component<Props, {}> {
   }
 
   render() {
-    let latestDeploysContainer = this.props.accountSelectorContainer;
+    let accountSelectorContainer = this.props.accountSelectorContainer;
     return (
       <div>
         <Card title="Search">
           <Downshift
-            selectedItem={this.props.accountSelectorContainer.inputValue}
-            onStateChange={this.props.accountSelectorContainer.handleStateChange}
+            selectedItem={accountSelectorContainer.inputValue}
+            onStateChange={accountSelectorContainer.handleStateChange}
           >
             {({
-              getInputProps,
-              getToggleButtonProps,
-              getItemProps,
-              isOpen,
-              selectedItem,
-              inputValue,
-              highlightedIndex
-            }) => (
+                getInputProps,
+                getToggleButtonProps,
+                getItemProps,
+                isOpen,
+                selectedItem,
+                inputValue,
+                highlightedIndex
+              }) => (
               <div>
                 <div style={{ position: 'relative' }}>
                   <input
@@ -51,18 +59,18 @@ class _LatestDeploys extends React.Component<Props, {}> {
                   />
                   {selectedItem ? (
                     <button
-                      onClick={latestDeploysContainer.clearSelection}
+                      onClick={accountSelectorContainer.clearSelection}
                       className="controller-button"
                       aria-label="clear selection"
                     >
-                      <XIcon />
+                      <i className="fas fa-times"></i>
                     </button>
                   ) : (
                     <button
                       className="controller-button"
                       {...getToggleButtonProps()}
                     >
-                      <ArrowIcon isOpen={isOpen} />
+                      <ArrowIcon isOpen={isOpen}/>
                     </button>
                   )}
                 </div>
@@ -70,37 +78,37 @@ class _LatestDeploys extends React.Component<Props, {}> {
                 <div style={{ position: 'relative' }}>
                   <ul className={`pop-list ${isOpen ? 'is-open' : ''}`}>
                     {isOpen
-                      ? latestDeploysContainer
-                          .getStringItems(inputValue)
-                          .map((item, index) => (
-                            <li
-                              key={index}
-                              className={`option ${
-                                highlightedIndex === index ? 'is-active' : ''
-                              }`}
-                              {...getItemProps({
-                                item,
-                                index
-                              })}
-                            >
-                              {item}
-                            </li>
-                          ))
+                      ? accountSelectorContainer
+                        .getStringItems(inputValue)
+                        .map((item, index) => (
+                          <li
+                            key={index}
+                            className={`option ${
+                              highlightedIndex === index ? 'is-active' : ''
+                            }`}
+                            {...getItemProps({
+                              item,
+                              index
+                            })}
+                          >
+                            {item}
+                          </li>
+                        ))
                       : null}
                   </ul>
                 </div>
               </div>
             )}
           </Downshift>
-          {latestDeploysContainer.checkError && (
+          {accountSelectorContainer.checkError && (
             <div className="invalid-feedback">
-              {latestDeploysContainer.checkError}
+              {accountSelectorContainer.checkError}
             </div>
           )}
           <div style={{ marginTop: '2em' }}>
             <Button
               title="Submit"
-              onClick={() => latestDeploysContainer.submit()}
+              onClick={() => accountSelectorContainer.submit()}
             />
           </div>
         </Card>
@@ -109,5 +117,5 @@ class _LatestDeploys extends React.Component<Props, {}> {
   }
 }
 
-export const LatestDeploys = withRouter(_LatestDeploys);
-export default LatestDeploys;
+export const AccountSelector = withRouter(_AccountSelector);
+export default AccountSelector;

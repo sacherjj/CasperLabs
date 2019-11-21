@@ -25,7 +25,7 @@ import Search from './Search';
 import SearchContainer from '../containers/SearchContainer';
 import DeployInfoListDetails from './DeployInfoListDetails';
 import { DeployInfoListContainer } from '../containers/DeployInfoListContainer';
-import LatestDeploys from './LatestDeploys';
+import AccountSelector from './AccountSelector';
 import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
@@ -294,7 +294,7 @@ const Content = (props: AppProps) => {
 
             <Route
               path={Pages.Deploys}
-              render={_ => <LatestDeploys {...props} />}
+              render={_ => <AccountSelector {...props} />}
             />
             <Route path={Pages.Search} render={_ => <Search {...props} />} />
           </Switch>
