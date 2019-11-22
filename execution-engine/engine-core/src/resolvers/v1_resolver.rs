@@ -120,9 +120,9 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], None),
                 FunctionIndex::StoreFnAtHashIndex.into(),
             ),
-            "is_valid" => FuncInstance::alloc_host(
+            "is_valid_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
-                FunctionIndex::IsValidFnIndex.into(),
+                FunctionIndex::IsValidURefFnIndex.into(),
             ),
             "revert" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),

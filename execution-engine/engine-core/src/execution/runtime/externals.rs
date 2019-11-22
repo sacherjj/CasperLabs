@@ -267,12 +267,12 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::IsValidFnIndex => {
+            FunctionIndex::IsValidURefFnIndex => {
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
-                let (value_ptr, value_size) = Args::parse(args)?;
+                let (uref_ptr, uref_size) = Args::parse(args)?;
 
-                if self.value_is_valid(value_ptr, value_size)? {
+                if self.is_valid_uref(uref_ptr, uref_size)? {
                     Ok(Some(RuntimeValue::I32(1)))
                 } else {
                     Ok(Some(RuntimeValue::I32(0)))

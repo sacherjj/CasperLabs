@@ -25,7 +25,7 @@ pub enum FunctionIndex {
     PutKeyFuncIndex = 16,
     StoreFnIndex = 17,
     StoreFnAtHashIndex = 18,
-    IsValidFnIndex = 19,
+    IsValidURefFnIndex = 19,
     RevertFuncIndex = 20,
     AddAssociatedKeyFuncIndex = 21,
     RemoveAssociatedKeyFuncIndex = 22,
@@ -70,11 +70,11 @@ mod tests {
     #[test]
     fn primitive_to_enum() {
         let element = FunctionIndex::try_from(19).expect("Unable to create enum from number");
-        assert_eq!(element, FunctionIndex::IsValidFnIndex);
+        assert_eq!(element, FunctionIndex::IsValidURefFnIndex);
     }
     #[test]
     fn enum_to_primitive() {
-        let element = FunctionIndex::IsValidFnIndex;
+        let element = FunctionIndex::IsValidURefFnIndex;
         let primitive: usize = element.into();
         assert_eq!(primitive, 19usize);
     }

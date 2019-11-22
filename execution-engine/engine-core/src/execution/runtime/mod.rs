@@ -321,10 +321,11 @@ where
         }
     }
 
-    pub fn value_is_valid(&mut self, value_ptr: u32, value_size: u32) -> Result<bool, Trap> {
-        let value = self.value_from_mem(value_ptr, value_size)?;
-
-        Ok(self.context.validate_value(&value).is_ok())
+    pub fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
+        let bytes = self.bytes_from_mem(uref_ptr, uref_size as usize)?;
+        let uref: URef = deserialize(&bytes).map_err(Error::BytesRepr)?;
+        let key = Key::URef(uref);
+        Ok(self.context.validate_key(&key).is_ok())
     }
 
     /// Load the i-th argument invoked as part of a `sub_call` into

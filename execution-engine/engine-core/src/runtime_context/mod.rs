@@ -459,7 +459,7 @@ where
     }
 
     /// Validates whether keys used in the `value` are not forged.
-    pub fn validate_value(&self, value: &Value) -> Result<(), Error> {
+    fn validate_value(&self, value: &Value) -> Result<(), Error> {
         match value {
             Value::Int32(_)
             | Value::UInt128(_)
