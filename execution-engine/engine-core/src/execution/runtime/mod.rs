@@ -475,40 +475,34 @@ where
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
     ) -> Result<usize, Error> {
-        let (args, module, mut refs, protocol_version) = {
-            match self.context.read_gs(&key)? {
-                None => Err(Error::KeyNotFound(key)),
-                Some(value) => {
-                    if let Value::Contract(contract) = value {
-                        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
+        let contract = match self.context.read_gs(&key)? {
+            Some(Value::Contract(contract)) => contract,
+            Some(_) => {
+                return Err(Error::FunctionNotFound(format!(
+                    "Value at {:?} is not a contract",
+                    key
+                )))
+            },
+            None => return Err(Error::KeyNotFound(key)),
+        };
 
-                        let maybe_module = match key {
-                            Key::URef(uref) => self.system_contract_cache.get(&uref),
-                            _ => None,
-                        };
+        let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
 
-                        let module = match maybe_module {
-                            Some(module) => module,
-                            None => parity_wasm::deserialize_buffer(contract.bytes())?,
-                        };
+        let maybe_module = match key {
+            Key::URef(uref) => self.system_contract_cache.get(&uref),
+            _ => None,
+        };
 
-                        Ok((
-                            args,
-                            module,
-                            contract.named_keys().clone(),
-                            contract.protocol_version(),
-                        ))
-                    } else {
-                        Err(Error::FunctionNotFound(format!(
-                            "Value at {:?} is not a contract",
-                            key
-                        )))
-                    }
-                }
-            }
-        }?;
+        let module = match maybe_module {
+            Some(module) => module,
+            None => parity_wasm::deserialize_buffer(contract.bytes())?,
+        };
 
         let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
+
+        let protocol_version = contract.protocol_version();
+        let mut refs = contract.take_named_keys();
+
         let result = sub_call(
             module,
             args,
