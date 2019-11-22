@@ -548,7 +548,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 object MultiParentCasperImpl {
 
   def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocolVersions: Cell[
-    ?[_],
+    *[_],
     CasperState
   ]: DeploySelection](
       semaphoreMap: SemaphoreMap[F, ByteString],

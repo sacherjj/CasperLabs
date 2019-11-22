@@ -10,7 +10,7 @@ trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
 }
 
-class StringSerializer[F[_]: Applicative: MonadState[?[_], StringBuffer]]
+class StringSerializer[F[_]: Applicative: MonadState[*[_], StringBuffer]]
     extends GraphSerializer[F] {
   def push(str: String, suffix: String): F[Unit] =
     MonadState[F, StringBuffer].modify(sb => sb.append(str + suffix))

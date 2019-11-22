@@ -16,7 +16,7 @@ object ConsoleIO extends ConsoleIO0 {
 trait ConsoleIO0 {
   import eitherT._
   implicit def eitherTConsoleIO[F[_]: Monad: ConsoleIO, E]: ConsoleIO[EitherT[F, E, ?]] =
-    ForTrans.forTrans[F, EitherT[?[_], E, ?]]
+    ForTrans.forTrans[F, EitherT[*[_], E, ?]]
 }
 
 class NOPConsoleIO[F[_]: Applicative] extends ConsoleIO[F] {

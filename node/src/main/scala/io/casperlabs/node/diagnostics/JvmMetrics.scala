@@ -106,6 +106,6 @@ object JvmMetrics extends JmxMetricsInstances {
 }
 
 sealed abstract class JmxMetricsInstances {
-  implicit def eitherTJmxMetrics[E, F[_]: Monad: JvmMetrics[?[_]]]: JvmMetrics[EitherT[F, E, ?]] =
-    JvmMetrics.forTrans[F, EitherT[?[_], E, ?]]
+  implicit def eitherTJmxMetrics[E, F[_]: Monad: JvmMetrics[*[_]]]: JvmMetrics[EitherT[F, E, ?]] =
+    JvmMetrics.forTrans[F, EitherT[*[_], E, ?]]
 }

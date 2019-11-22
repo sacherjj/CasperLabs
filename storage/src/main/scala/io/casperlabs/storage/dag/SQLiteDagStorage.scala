@@ -20,7 +20,7 @@ import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 
-class SQLiteDagStorage[F[_]: Bracket[?[_], Throwable]](
+class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
     readXa: Transactor[F],
     writeXa: Transactor[F]
 ) extends DagStorage[F]
