@@ -472,7 +472,7 @@ where
         key: Key,
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
-    ) -> Result<(CLValue, usize), Error> {
+    ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(Value::Contract(contract)) => contract,
             Some(_) => {
@@ -520,7 +520,7 @@ where
             contract_version,
         )?;
         self.host_buf = result.to_bytes()?;
-        Ok((result, self.host_buf.len()))
+        Ok(result)
     }
 
     fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
@@ -765,7 +765,7 @@ where
 
         let urefs_bytes = Vec::<Key>::new().to_bytes()?;
 
-        let (result, _) = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         let purse_uref = result.to_t()?;
 
         Ok(PurseId::new(purse_uref))
@@ -795,7 +795,7 @@ where
 
         let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
 
-        let (result, _) = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         let result: Result<(), mint::Error> = result.to_t()?;
 
         Ok(result.map_err(system_contracts::Error::from)?)

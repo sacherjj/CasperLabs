@@ -154,8 +154,8 @@ where
                 let urefs_bytes =
                     self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                let (_, size) = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                self.call_contract(key_contract, args_bytes, urefs_bytes)?;
+                Ok(Some(RuntimeValue::I32(self.host_buf.len() as i32)))
             }
 
             FunctionIndex::GetCallResultFuncIndex => {
