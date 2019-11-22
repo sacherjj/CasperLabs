@@ -2,7 +2,9 @@ package io.casperlabs
 
 import cats.Monad
 import cats.data.EitherT
+import com.google.protobuf.{ByteString, CodedInputStream, CodedOutputStream}
 import monix.eval.{Task, TaskLike}
+import pbdirect.{PBReader, PBWriter}
 
 package object node {
 
@@ -19,4 +21,14 @@ package object node {
           }
 
     }
+
+  implicit object ByteStringReader extends PBReader[ByteString] {
+    override def read(input: CodedInputStream): ByteString =
+      ByteString.copyFrom(input.readByteArray())
+  }
+
+  implicit object ByteStringWriter extends PBWriter[ByteString] {
+    override def writeTo(index: Int, value: ByteString, out: CodedOutputStream): Unit =
+      out.writeByteArray(index, value.toByteArray)
+  }
 }

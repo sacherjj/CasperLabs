@@ -54,7 +54,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
-                  block.getSummary()!.getBlockHash_asB64()
+                    block.getSummary()!.getBlockHash_asB64()
                 ) {
                   dag.selectedBlock = undefined;
                 } else {
@@ -167,7 +167,11 @@ class BlockDetails extends React.Component<{
               );
             // Genesis doesn't have a validator.
             return (
-              (validatorBond && validatorBond.getStake() && Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
+              (validatorBond &&
+                validatorBond.getStake() &&
+                Number(
+                  validatorBond.getStake()!.getValue()
+                ).toLocaleString()) ||
               null
             );
           })()

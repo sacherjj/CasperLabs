@@ -159,8 +159,8 @@ const DeploysTable = observer(
                 {deploy.getIsError() ? (
                   <Icon name="times-circle" color="red" />
                 ) : (
-                    <Icon name="check-circle" color="green" />
-                  )}
+                  <Icon name="check-circle" color="green" />
+                )}
               </td>
               <td>{deploy.getErrorMessage()}</td>
             </tr>
@@ -204,7 +204,9 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
           );
         // Genesis doesn't have a validator.
         return (
-          (validatorBond && validatorBond.getStake() && Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
+          (validatorBond &&
+            validatorBond.getStake() &&
+            Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
           null
         );
       })()

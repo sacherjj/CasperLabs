@@ -73,6 +73,7 @@ object Dependencies {
   val scalapbRuntimeLib      = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc    = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"           % scalapb.compiler.Version.scalapbVersion
   val scalapbCirce           = "io.github.scalapb-json"     %% "scalapb-circe"                  % "0.2.2"
+  val pbdirect               = "beyondthelines"             %% "pbdirect"                       % "0.1.0"
   val grpcNetty              = "io.grpc"                    % "grpc-netty"                      % scalapb.compiler.Version.grpcJavaVersion
   val nettyAll               = "io.netty"                   % "netty-all"                       % "4.1.22.Final"
   val nettyTransNativeEpoll  = "io.netty"                   % "netty-transport-native-epoll"    % "4.1.22.Final" classifier "linux-x86_64"

@@ -433,17 +433,34 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         account: PublicKeyBS,
         limit: Int,
         lastTimeStamp: Long,
-        lastDeployHash: DeployHash
-    ): F[List[Deploy]] =
-      (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
-              WHERE account = $account
-              AND (create_time_millis < $lastTimeStamp OR
-                create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
-              ORDER BY create_time_millis DESC, hash DESC
-              LIMIT $limit""")
+        lastDeployHash: DeployHash,
+        isNext: Boolean
+    ): F[List[Deploy]] = {
+      val sql = if (isNext) {
+        (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
+             WHERE account = $account AND
+             (create_time_millis < $lastTimeStamp OR create_time_millis = $lastTimeStamp AND hash < $lastDeployHash)
+             ORDER BY create_time_millis DESC, hash DESC
+             LIMIT $limit""")
+      } else {
+        (fr"SELECT summary, " ++ bodyCol() ++ fr""" FROM deploys
+             WHERE account = $account AND
+             (create_time_millis > $lastTimeStamp OR create_time_millis = $lastTimeStamp AND hash > $lastDeployHash)
+             ORDER BY create_time_millis ASC, hash ASC
+             LIMIT $limit""")
+      }
+      sql
         .query[Deploy]
         .to[List]
+        .map(l => {
+          if (isNext) {
+            l
+          } else {
+            l.reverse
+          }
+        })
         .transact(readXa)
+    }
 
     override def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]] = {
       val deployHashes = deploys.map(_.deployHash)

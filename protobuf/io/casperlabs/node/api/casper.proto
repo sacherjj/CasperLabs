@@ -146,4 +146,5 @@ message ListDeployInfosRequest {
 message ListDeployInfosResponse {
     repeated io.casperlabs.casper.consensus.info.DeployInfo deploy_infos = 1;
     string next_page_token = 2;
+    string prev_page_token = 3;
 }

@@ -32,6 +32,7 @@ lazy val projectSettings = Seq(
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
     Resolver.sonatypeRepo("snapshots"),
+    Resolver.bintrayRepo("beyondthelines", "maven"),
     "jitpack" at "https://jitpack.io"
   ),
   scalafmtOnCompile := true,
@@ -232,6 +233,7 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
+        pbdirect,
         tomlScala,
         sangria,
         javaWebsocket,
