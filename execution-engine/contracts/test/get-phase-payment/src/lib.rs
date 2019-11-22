@@ -21,7 +21,7 @@ fn standard_payment(amount: U512) {
     let payment_purse: PurseId =
         runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![])
             .to_t()
-            .unwrap_or_revert();;
+            .unwrap_or_revert();
 
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }

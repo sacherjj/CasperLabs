@@ -2,11 +2,11 @@ use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{self, FromBytes},
+    bytesrepr::FromBytes,
     execution::Phase,
     key::Key,
     uref::URef,
-    value::{account::BlockTime, ProtocolVersion, U512},
+    value::{account::BlockTime, cl_type::CLTyped, ProtocolVersion, U512},
 };
 use engine_core::{
     engine_state::{
@@ -44,7 +44,7 @@ where
     S: StateProvider,
     S::Error: Into<execution::Error>,
     EngineState<S>: ExecutionEngineService,
-    T: FromBytes,
+    T: FromBytes + CLTyped,
 {
     let prestate = builder
         .get_post_state_hash()
@@ -141,7 +141,10 @@ where
                         let effect = runtime.context().effect();
                         let urefs = ret_urefs.clone();
 
-                        let value: T = bytesrepr::deserialize(runtime.result())
+                        let value: T = runtime
+                            .take_result()
+                            .expect("should have return value")
+                            .to_t()
                             .expect("should deserialize return value");
 
                         Some((value, urefs, effect))

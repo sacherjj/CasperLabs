@@ -23,6 +23,7 @@ use contract_ffi::{
     uref::{AccessRights, URef},
     value::{
         account::{ActionType, PublicKey, PurseId, Weight, PUBLIC_KEY_SIZE},
+        cl_value::CLValue,
         Account, ProtocolVersion, Value, U512,
     },
 };
@@ -41,7 +42,7 @@ pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
     memory: MemoryRef,
     module: Module,
-    result: Vec<u8>,
+    result: Option<CLValue>,
     host_buf: Vec<u8>,
     context: RuntimeContext<'a, R>,
 }
@@ -142,7 +143,7 @@ fn sub_call<R: StateReader<Key, Value>>(
     //(necessary if the contract takes a uref argument).
     extra_urefs: Vec<Key>,
     protocol_version: ProtocolVersion,
-) -> Result<Vec<u8>, Error>
+) -> Result<CLValue, Error>
 where
     R::Error: Into<Error>,
 {
@@ -162,7 +163,7 @@ where
         system_contract_cache,
         memory,
         module: parity_module,
-        result: Vec::new(),
+        result: None,
         host_buf: Vec::new(),
         context: RuntimeContext::new(
             current_runtime.context.state(),
@@ -188,7 +189,7 @@ where
     let result = instance.invoke_export("call", &[], &mut runtime);
 
     match result {
-        Ok(_) => Ok(runtime.result),
+        Ok(_) => Ok(runtime.take_result().unwrap_or(CLValue::from_t(&())?)),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
                 // If the "error" was in fact a trap caused by calling `ret` then
@@ -201,7 +202,7 @@ where
                         let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.access_rights_extend(ret_urefs_map);
-                        return Ok(runtime.result);
+                        return runtime.take_result().ok_or(Error::ExpectedReturnValue);
                     }
                     Error::Revert(status) => {
                         // Propagate revert as revert, instead of passing it as
@@ -235,14 +236,14 @@ where
             system_contract_cache,
             memory,
             module,
-            result: Vec::new(),
+            result: None,
             host_buf: Vec::new(),
             context,
         }
     }
 
-    pub fn result(&self) -> &[u8] {
-        self.result.as_slice()
+    pub fn take_result(&mut self) -> Option<CLValue> {
+        self.result.take()
     }
 
     pub fn context(&self) -> &RuntimeContext<'a, R> {
@@ -436,9 +437,8 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    /// Return a some bytes from the memory and terminate the current
-    /// `sub_call`. Note that the return type is `Trap`, indicating that
-    /// this function will always kill the current Wasm instance.
+    /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
+    /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
     pub fn ret(
         &mut self,
         value_ptr: u32,
@@ -457,24 +457,22 @@ where
             });
         match mem_get {
             Ok((buf, urefs)) => {
-                // Set the result field in the runtime and return
-                // the proper element of the `Error` enum indicating
-                // that the reason for exiting the module was a call to ret.
-                self.result = buf;
+                // Set the result field in the runtime and return the proper element of the `Error`
+                // enum indicating that the reason for exiting the module was a call to ret.
+                self.result = deserialize(&buf).ok();
                 Error::Ret(urefs).into()
             }
             Err(e) => e.into(),
         }
     }
 
-    /// Calls contract living under a `key`, with supplied `args` and extra
-    /// `urefs`.
+    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
     pub fn call_contract(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
-    ) -> Result<usize, Error> {
+    ) -> Result<(CLValue, usize), Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(Value::Contract(contract)) => contract,
             Some(_) => {
@@ -521,8 +519,8 @@ where
             extra_urefs,
             contract_version,
         )?;
-        self.host_buf = result;
-        Ok(self.host_buf.len())
+        self.host_buf = result.to_bytes()?;
+        Ok((result, self.host_buf.len()))
     }
 
     fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
@@ -767,11 +765,10 @@ where
 
         let urefs_bytes = Vec::<Key>::new().to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let (result, _) = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let purse_uref = result.to_t()?;
 
-        let result: URef = deserialize(&self.host_buf)?;
-
-        Ok(PurseId::new(result))
+        Ok(PurseId::new(purse_uref))
     }
 
     fn create_purse(&mut self) -> Result<PurseId, Error> {
@@ -798,13 +795,9 @@ where
 
         let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let (result, _) = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result: Result<(), mint::Error> = result.to_t()?;
 
-        // This will deserialize `host_buf` into the Result type which carries
-        // mint contract error.
-        let result: Result<(), mint::Error> = deserialize(&self.host_buf)?;
-        // Wraps mint error into a more general error type through an aggregate
-        // system contracts Error.
         Ok(result.map_err(system_contracts::Error::from)?)
     }
 

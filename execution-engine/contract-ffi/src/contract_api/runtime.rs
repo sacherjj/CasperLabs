@@ -186,7 +186,6 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
 /// (rather, thing that can be turned into a `Value`) are
 /// valid, in the sense that all of the urefs (and their access rights)
 /// are known in the current context.
-#[allow(clippy::ptr_arg)]
 pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let value = t.into();
     let (value_ptr, value_size, _bytes) = to_ptr(&value);

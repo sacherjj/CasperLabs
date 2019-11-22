@@ -63,7 +63,7 @@ impl fmt::Display for Error {
 impl wasmi::HostError for Error {}
 
 impl From<!> for Error {
-    fn from(error: !) -> Error {
+    fn from(error: !) -> Self {
         match error {}
     }
 }
@@ -93,37 +93,43 @@ impl From<elements::Error> for Error {
 }
 
 impl From<ResolverError> for Error {
-    fn from(err: ResolverError) -> Error {
+    fn from(err: ResolverError) -> Self {
         Error::ResolverError(err)
     }
 }
 
 impl From<AddKeyFailure> for Error {
-    fn from(err: AddKeyFailure) -> Error {
+    fn from(err: AddKeyFailure) -> Self {
         Error::AddKeyFailure(err)
     }
 }
 
 impl From<RemoveKeyFailure> for Error {
-    fn from(err: RemoveKeyFailure) -> Error {
+    fn from(err: RemoveKeyFailure) -> Self {
         Error::RemoveKeyFailure(err)
     }
 }
 
 impl From<UpdateKeyFailure> for Error {
-    fn from(err: UpdateKeyFailure) -> Error {
+    fn from(err: UpdateKeyFailure) -> Self {
         Error::UpdateKeyFailure(err)
     }
 }
 
 impl From<SetThresholdFailure> for Error {
-    fn from(err: SetThresholdFailure) -> Error {
+    fn from(err: SetThresholdFailure) -> Self {
         Error::SetThresholdFailure(err)
     }
 }
 
 impl From<system_contracts::Error> for Error {
-    fn from(error: system_contracts::Error) -> Error {
+    fn from(error: system_contracts::Error) -> Self {
         Error::SystemContractError(error)
+    }
+}
+
+impl From<cl_value::Error> for Error {
+    fn from(e: cl_value::Error) -> Self {
+        Error::CLValue(e)
     }
 }

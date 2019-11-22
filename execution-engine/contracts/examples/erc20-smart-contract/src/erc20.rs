@@ -4,7 +4,7 @@ use contract_ffi::{
     contract_api::{account::PublicKey, runtime, storage},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
+    value::{cl_value::CLValue, U512},
 };
 
 use erc20_logic::{ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -82,9 +82,18 @@ fn entry_point() {
             };
         }
         Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
-        Api::BalanceOf(address) => runtime::ret(token.balance_of(&address), vec![]),
-        Api::TotalSupply => runtime::ret(token.total_supply(), vec![]),
-        Api::Allowance(owner, spender) => runtime::ret(token.allowance(&owner, &spender), vec![]),
+        Api::BalanceOf(address) => runtime::ret(
+            CLValue::from_t(&token.balance_of(&address)).unwrap_or_revert(),
+            vec![],
+        ),
+        Api::TotalSupply => runtime::ret(
+            CLValue::from_t(&token.total_supply()).unwrap_or_revert(),
+            vec![],
+        ),
+        Api::Allowance(owner, spender) => runtime::ret(
+            CLValue::from_t(&token.allowance(&owner, &spender)).unwrap_or_revert(),
+            vec![],
+        ),
         _ => runtime::revert(Error::UnknownErc20CallCommand),
     }
 }

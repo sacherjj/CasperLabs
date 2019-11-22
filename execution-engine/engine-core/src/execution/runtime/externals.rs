@@ -154,7 +154,7 @@ where
                 let urefs_bytes =
                     self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                let size = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
+                let (_, size) = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 

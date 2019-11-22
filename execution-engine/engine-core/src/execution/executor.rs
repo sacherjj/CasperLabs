@@ -344,22 +344,22 @@ impl Executor {
             Err(error) => error,
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
-                let ret = bytesrepr::deserialize(runtime.result())?;
+                let result = runtime.take_result().unwrap_or(CLValue::from_t(&())?);
+                let ret = result.to_t()?;
                 return Ok(ret);
             }
         };
 
-        let return_value_bytes: &[u8] = match return_error
+        let return_value: CLValue = match return_error
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
-            Some(Error::Ret(_)) => runtime.result(),
+            Some(Error::Ret(_)) => runtime.take_result().ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
             _ => return Err(Error::Interpreter(return_error)),
         };
 
-        let val: CLValue = bytesrepr::deserialize(return_value_bytes)?;
-        let ret = val.to_t().map_err(|err| Error::CLValue(err))?;
+        let ret = return_value.to_t()?;
         Ok(ret)
     }
 }

@@ -52,7 +52,7 @@ pub extern "C" fn call() {
                 &vec![],
             )
             .to_t()
-            .unwrap_or_revert();;
+            .unwrap_or_revert();
             let version_key = storage::new_turef(version).into();
             runtime::put_key(METHOD_VERSION, &version_key);
         }

@@ -22,7 +22,6 @@ enum Error {
     GetMessagesURef,
     FindMessagesURef,
     NoMessages,
-    //NoSubKey,
 }
 
 impl From<Error> for ApiError {
