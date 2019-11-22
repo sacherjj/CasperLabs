@@ -101,6 +101,13 @@ impl ProtocolVersion {
 
         VersionCheckResult::CodeIsOptional
     }
+
+    /// Checks if given protocol version is compatible to current one.
+    ///
+    /// Two protocol versions with different major version are considered to be invalid.
+    pub fn is_compatible_to(&self, version: &ProtocolVersion) -> bool {
+        self.0.major == version.0.major
+    }
 }
 
 impl fmt::Display for ProtocolVersion {
@@ -347,5 +354,30 @@ mod tests {
         ] {
             assert_eq!(ver.check_next_version(&ver), VersionCheckResult::Invalid);
         }
+    }
+
+    #[test]
+    fn should_not_be_compatible_with_different_major_version() {
+        let current = ProtocolVersion::from_parts(1, 2, 3);
+        let other = ProtocolVersion::from_parts(2, 5, 6);
+        assert!(!current.is_compatible_to(&other));
+
+        let current = ProtocolVersion::from_parts(1, 0, 0);
+        let other = ProtocolVersion::from_parts(2, 0, 0);
+        assert!(!current.is_compatible_to(&other));
+    }
+
+    #[test]
+    fn should_be_compatible_with_equal_major_version_backwards() {
+        let current = ProtocolVersion::from_parts(1, 99, 99);
+        let other = ProtocolVersion::from_parts(1, 0, 0);
+        assert!(current.is_compatible_to(&other));
+    }
+
+    #[test]
+    fn should_be_compatible_with_equal_major_version_forwads() {
+        let current = ProtocolVersion::from_parts(1, 0, 0);
+        let other = ProtocolVersion::from_parts(1, 99, 99);
+        assert!(current.is_compatible_to(&other));
     }
 }

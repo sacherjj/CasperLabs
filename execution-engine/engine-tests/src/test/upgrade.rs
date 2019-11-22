@@ -6,20 +6,21 @@ use crate::{
     test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
 };
 
-const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
+const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
-const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
-const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
-const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
-const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
-const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
-const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
 const HELLO: &str = "Hello";
+const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
+const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
+const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
 const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
 const METHOD_VERSION: &str = "version";
 const PURSE_1: &str = "purse_1";
+const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
+const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
+const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
+const STORE_AT_UREF: &str = "uref";
 const TOTAL_PURSES: usize = 3;
 
 #[ignore]
@@ -32,7 +33,12 @@ fn should_upgrade_do_nothing_to_do_something() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (STORE_AT_UREF.to_string(),),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
