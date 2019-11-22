@@ -46,7 +46,9 @@ pub extern "C" fn call() {
         let uref1: URef = storage::new_turef(U512::from(0)).into();
         runtime::put_key("uref1", &Key::URef(uref1));
         // do_nothing doesn't do anything. It SHOULD not forward the internal RNG.
-        let result: String = runtime::call_contract(do_nothing.clone(), &(), &vec![]);
+        let result: String = runtime::call_contract(do_nothing.clone(), &(), &vec![])
+            .to_t()
+            .unwrap_or_revert();
         assert_eq!(result, "Hello, world!");
         let uref2: URef = storage::new_turef(U512::from(1)).into();
         runtime::put_key("uref2", &Key::URef(uref2));

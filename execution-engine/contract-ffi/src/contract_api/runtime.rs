@@ -44,11 +44,11 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser, T: FromBytes>(
+pub fn call_contract<A: ArgsParser>(
     c_ptr: ContractRef,
     args: &A,
     extra_urefs: &Vec<Key>,
-) -> T {
+) -> CLValue {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)

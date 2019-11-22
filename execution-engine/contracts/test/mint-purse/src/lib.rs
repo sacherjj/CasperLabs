@@ -23,7 +23,9 @@ fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
     let mint = system::get_mint();
 
     let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint, &("mint", amount), &vec![]);
+        runtime::call_contract(mint, &("mint", amount), &vec![])
+            .to_t()
+            .unwrap_or_revert();
 
     result.map(PurseId::new)
 }
@@ -39,7 +41,9 @@ pub extern "C" fn call() {
         mint,
         &("balance", new_purse),
         &vec![Key::URef(new_purse.value())],
-    );
+    )
+    .to_t()
+    .unwrap_or_revert();
 
     match balance {
         None => runtime::revert(ApiError::User(Error::BalanceNotFound as u16)),

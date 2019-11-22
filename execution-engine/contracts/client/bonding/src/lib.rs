@@ -33,5 +33,5 @@ pub extern "C" fn call() {
         pos_pointer,
         &(BOND_METHOD_NAME, bond_amount, bonding_purse),
         &vec![Key::URef(bonding_purse.value())],
-    )
+    );
 }

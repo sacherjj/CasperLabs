@@ -33,5 +33,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::InvalidArgument);
     let do_nothing = ContractRef::TURef(TURef::new(arg.addr(), AccessRights::READ));
 
-    runtime::call_contract::<_, ()>(do_nothing.clone(), &(new_purse_name.clone(),), &vec![]);
+    runtime::call_contract(do_nothing.clone(), &(new_purse_name.clone(),), &vec![]);
 }

@@ -27,7 +27,7 @@ fn purse_to_key(p: &PurseId) -> Key {
 }
 
 fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
-    runtime::call_contract::<_, ()>(
+    runtime::call_contract(
         pos.clone(),
         &("set_refund_purse", *p),
         &vec![purse_to_key(p)],
@@ -36,10 +36,14 @@ fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
 
 fn get_refund_purse(pos: &ContractRef) -> Option<PurseId> {
     runtime::call_contract(pos.clone(), &("get_refund_purse",), &Vec::new())
+        .to_t()
+        .unwrap_or_revert()
 }
 
 fn get_payment_purse(pos: &ContractRef) -> PurseId {
     runtime::call_contract(pos.clone(), &("get_payment_purse",), &Vec::new())
+        .to_t()
+        .unwrap_or_revert()
 }
 
 fn submit_payment(pos: &ContractRef, amount: U512) {

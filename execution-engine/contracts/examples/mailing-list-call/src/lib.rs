@@ -7,7 +7,6 @@ use core::convert::From;
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
-    key::Key,
     unwrap_or_revert::UnwrapOrRevert,
 };
 
@@ -23,7 +22,7 @@ enum Error {
     GetMessagesURef,
     FindMessagesURef,
     NoMessages,
-    NoSubKey,
+    //NoSubKey,
 }
 
 impl From<Error> for ApiError {
@@ -41,9 +40,9 @@ pub extern "C" fn call() {
 
     let name = "CasperLabs";
     let args = (SUB_METHOD, name);
-    let sub_key =
-        runtime::call_contract::<_, Option<Key>>(contract_ref.clone(), &args, &Vec::new())
-            .unwrap_or_revert_with(Error::NoSubKey);
+    let sub_key = runtime::call_contract(contract_ref.clone(), &args, &Vec::new())
+        .to_t()
+        .unwrap_or_revert();
 
     runtime::put_key(MAIL_FEED_KEY, &sub_key);
 
@@ -55,7 +54,7 @@ pub extern "C" fn call() {
 
     let message = "Hello, World!";
     let args = (PUB_METHOD, message);
-    runtime::call_contract::<_, ()>(contract_ref, &args, &Vec::new());
+    runtime::call_contract(contract_ref, &args, &Vec::new());
 
     let list_key: TURef<Vec<String>> = sub_key
         .to_turef()

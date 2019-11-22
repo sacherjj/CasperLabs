@@ -21,7 +21,9 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedKeyVariant);
 
     let args = ("World",);
-    let result: String = runtime::call_contract(contract_ref, &args, &Vec::new());
+    let result: String = runtime::call_contract(contract_ref, &args, &Vec::new())
+        .to_t()
+        .unwrap_or_revert();
     assert_eq!("Hello, World", result);
 
     // Store the result at a uref so it can be seen as an effect on the global state

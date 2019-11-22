@@ -8,7 +8,10 @@ use contract_ffi::{
     key::Key,
     system_contracts,
     uref::{AccessRights, URef},
-    value::account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+    value::{
+        account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+        cl_value,
+    },
 };
 use engine_shared::transform::TypeMismatch;
 
@@ -48,6 +51,7 @@ pub enum Error {
         expected: u32,
         actual: u32,
     },
+    CLValue(cl_value::Error),
 }
 
 impl fmt::Display for Error {

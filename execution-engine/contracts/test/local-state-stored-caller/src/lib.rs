@@ -32,5 +32,5 @@ pub extern "C" fn call() {
     ));
 
     // call do_nothing_stored
-    runtime::call_contract::<_, ()>(local_state_contract_pointer.clone(), &(), &vec![]);
+    runtime::call_contract(local_state_contract_pointer.clone(), &(), &vec![]);
 }

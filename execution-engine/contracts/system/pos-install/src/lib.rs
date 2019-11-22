@@ -46,7 +46,6 @@ pub extern "C" fn call() {
         runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(Error::MissingArgument)
             .unwrap_or_revert_with(Error::InvalidArgument);
-
     // Add genesis validators to PoS contract object.
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
@@ -95,7 +94,9 @@ pub extern "C" fn call() {
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
     let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint.clone(), &("mint", amount), &vec![]);
+        runtime::call_contract(mint.clone(), &("mint", amount), &vec![])
+            .to_t()
+            .unwrap_or_revert();
 
     result.map(PurseId::new).unwrap_or_revert()
 }

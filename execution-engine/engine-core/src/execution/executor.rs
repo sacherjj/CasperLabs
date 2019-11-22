@@ -12,6 +12,8 @@ use contract_ffi::{
     key::Key,
     value::{
         account::{BlockTime, PublicKey},
+        cl_type::CLTyped,
+        cl_value::CLValue,
         Account, ProtocolVersion, Value,
     },
 };
@@ -295,7 +297,7 @@ impl Executor {
     ) -> Result<T, Error>
     where
         R::Error: Into<Error>,
-        T: FromBytes,
+        T: FromBytes + CLTyped,
     {
         let access_rights =
             {
@@ -356,7 +358,8 @@ impl Executor {
             _ => return Err(Error::Interpreter(return_error)),
         };
 
-        let ret = bytesrepr::deserialize(return_value_bytes)?;
+        let val: CLValue = bytesrepr::deserialize(return_value_bytes)?;
+        let ret = val.to_t().map_err(|err| Error::CLValue(err))?;
         Ok(ret)
     }
 }
