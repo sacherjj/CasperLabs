@@ -171,7 +171,7 @@ def generate_dot(block_infos):
 
     lanes_alignment = [
         edge(genesis_block_id, alignment_node_id, style=INVISIBLE)
-        for (validator, block_infos) in validator_blocks.items()
+        for (validator, block_infos) in sorted(validator_blocks.items())
         for alignment_node_id in lane_alignment(
             block_infos, short_hash(validator), min_rank, max_rank
         )[0][min_rank]
