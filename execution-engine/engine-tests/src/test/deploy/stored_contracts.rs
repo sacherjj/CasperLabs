@@ -22,6 +22,7 @@ const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
+const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const STORE_AT_HASH: &str = "hash";
@@ -1100,7 +1101,7 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
-                &format!("{}_stored_at_uref.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (STORE_AT_UREF.to_string(),),
             )
             .with_payment_code(
@@ -1522,7 +1523,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
 

@@ -482,9 +482,19 @@ where
                     "Value at {:?} is not a contract",
                     key
                 )))
-            },
+            }
             None => return Err(Error::KeyNotFound(key)),
         };
+
+        // Check for major version compatibility before calling
+        let contract_version = contract.protocol_version();
+        let current_version = self.context.protocol_version();
+        if !contract_version.is_compatible_to(&current_version) {
+            return Err(Error::IncompatibleProtocolMajorVersion {
+                actual: current_version.value().major,
+                expected: contract_version.value().major,
+            });
+        }
 
         let args: Vec<Vec<u8>> = deserialize(&args_bytes)?;
 
@@ -500,7 +510,6 @@ where
 
         let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
 
-        let protocol_version = contract.protocol_version();
         let mut refs = contract.take_named_keys();
 
         let result = sub_call(
@@ -510,7 +519,7 @@ where
             key,
             self,
             extra_urefs,
-            protocol_version,
+            contract_version,
         )?;
         self.host_buf = result;
         Ok(self.host_buf.len())
