@@ -8,7 +8,7 @@ import casperlabs_client
 
 # Helpers for DOT language generation
 
-INVISIBLE = "invis"
+INVISIBLE = "invis"  # "dashed" #"invis"
 
 
 def attributes(**kwargs):
@@ -17,17 +17,20 @@ def attributes(**kwargs):
     return "[" + " ".join(f"{name}={value}" for (name, value) in kwargs.items()) + "]"
 
 
-def node(label, **kwargs):
-    return f'    "{label}" {attributes(**kwargs)}'
+def node(node_id, **kwargs):
+    return f'    "{node_id}" {attributes(**kwargs)}'
 
 
 def edge(l1, l2, **kwargs):
     return f'    "{l1}" -> "{l2}" {attributes(**kwargs)}'
 
 
-def subgraph(*args, name=None, label=None):
-    return f"""  subgraph "{name}" {{
-    label = "{label}"
+def subgraph(*args, **kwargs):
+    style = kwargs.get("style", "") and f"""style="{kwargs['style']}" """
+    label = kwargs.get("label", "") and f"""label="{kwargs['label']}" """
+    return f"""  subgraph "{kwargs['name']}" {{
+    {label}
+    {style}
 {cat(*args)}
   }}
 """
@@ -81,7 +84,7 @@ def block_id(block_info) -> str:
 # DAG diagram construction.
 
 
-def alignment(block_infos, validator_id, min_rank, max_rank):
+def lane_alignment(block_infos, validator_id, min_rank, max_rank):
     """
     Create invisible edges between nodes in a lane to keep them rendered in order of their ranks.
     Create invisible nodes for missing ranks.
@@ -94,44 +97,46 @@ def alignment(block_infos, validator_id, min_rank, max_rank):
     for b in block_infos:
         block_ids_by_rank[rank(b)].append(block_id(b))
 
+    def dummy_id(i):
+        return f"{i}_{validator_id}"
+
     for i in range(min_rank, max_rank):
-        if i in ranks:
-            n1s = block_ids_by_rank[i]
-        else:
-            n1s = [f"{i}_{validator_id}"]
-            nodes.append(node(n1s[0], style=INVISIBLE))
+        if i not in ranks and not block_ids_by_rank[i]:
+            block_ids_by_rank[i] = [dummy_id(i)]
+            nodes.append(node(block_ids_by_rank[i][0], style=INVISIBLE))
 
-        if i + 1 in ranks:
-            n2s = block_ids_by_rank[i + 1]
-        else:
-            n2s = [f"{i+1}_{validator_id}"]
-            nodes.append(node(n2s[0], style=INVISIBLE))
-        for n1 in n1s:
-            for n2 in n2s:
-                edges.append(edge(n1, n2, style=INVISIBLE))
+        if i + 1 not in ranks:
+            block_ids_by_rank[i + 1] = [dummy_id(i + 1)]
+            nodes.append(node(block_ids_by_rank[i + 1][0], style=INVISIBLE))
 
-    # import pdb; pdb.set_trace()
-    return [nodes, edges]
+        edges.extend(
+            [
+                edge(n1, n2, style=INVISIBLE)
+                for n1 in block_ids_by_rank[i]
+                for n2 in block_ids_by_rank[i + 1]
+            ]
+        )
+
+    return block_ids_by_rank, [nodes, edges]
 
 
-def lane(validator, block_infos, min_rank, max_rank):
+def lane(validator, block_infos, min_rank, max_rank, genesis_block_id):
     validator_id = short_hash(validator)
     nodes = [node(block_id(b)) for b in block_infos]
-    edges = [
-        edge(block_id(b), short_hash(parents(b)[0]), style="bold", constraint="false")
-        for b in block_infos
-    ]
+    block_ids_by_rank, alignment_in_lane = lane_alignment(
+        block_infos, validator_id, min_rank, max_rank
+    )
     return subgraph(
         nodes,
-        edges,
-        alignment(block_infos, validator_id, min_rank, max_rank),
+        # lanes_alignment,
+        alignment_in_lane,
         name=f"cluster_{validator_id}",
         label=f"{validator_id}",
     )
 
 
-def plot(block_infos):
-    genesis_block_id = None
+def generate_dot(block_infos):
+    genesis_block_id = "genesis_block"
     validator_blocks = defaultdict(list)
     for b in block_infos:
         pk = b.summary.header.validator_public_key
@@ -150,27 +155,43 @@ def plot(block_infos):
     min_rank = min(ranks)
     max_rank = max(ranks)
     lanes = [
-        lane(validator, block_infos, min_rank, max_rank)
+        lane(validator, block_infos, min_rank, max_rank, genesis_block_id)
         for (validator, block_infos) in validator_blocks.items()
     ]
 
-    maybe_genesis_block_subgraph = (
-        genesis_block_id
-        and subgraph(node(genesis_block_id), name="cluster_genesis", label="genesis")
-        or ""
+    parent_edges = [
+        [
+            edge(
+                block_id(b), short_hash(parents(b)[0]), style="bold", constraint="false"
+            )
+            for b in block_infos
+        ]
+        for (validator, block_infos) in validator_blocks.items()
+    ]
+
+    lanes_alignment = [
+        edge(genesis_block_id, alignment_node_id, style=INVISIBLE)
+        for (validator, block_infos) in validator_blocks.items()
+        for alignment_node_id in lane_alignment(
+            block_infos, short_hash(validator), min_rank, max_rank
+        )[0][min_rank]
+    ]
+
+    genesis_block = (
+        genesis_block_id != "genesis_block"
+        and node(genesis_block_id)
+        or node(genesis_block_id, style=INVISIBLE)
     )
 
-    return graph(maybe_genesis_block_subgraph, lanes)
+    return graph(genesis_block, lanes_alignment, lanes, parent_edges)
 
 
 def main():
-    # client = casperlabs_client.CasperLabsClient("deploy.casperlabs.io")
-    client = casperlabs_client.CasperLabsClient(
-        "localhost", port=40411, port_internal=40412
-    )
+    client = casperlabs_client.CasperLabsClient("deploy.casperlabs.io")
+    # client = casperlabs_client.CasperLabsClient("localhost", port=40411, port_internal=40412)
     block_infos = sorted(client.showBlocks(depth=10), key=rank)
 
-    print(plot(block_infos))
+    print(generate_dot(block_infos))
 
 
 main()
