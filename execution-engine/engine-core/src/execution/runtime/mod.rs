@@ -489,7 +489,7 @@ where
         // Check for major version compatibility before calling
         let contract_version = contract.protocol_version();
         let current_version = self.context.protocol_version();
-        if !contract_version.is_compatible_to(&current_version) {
+        if !contract_version.is_compatible_with(&current_version) {
             return Err(Error::IncompatibleProtocolMajorVersion {
                 actual: current_version.value().major,
                 expected: contract_version.value().major,

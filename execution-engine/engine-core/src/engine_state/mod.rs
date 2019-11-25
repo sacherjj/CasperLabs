@@ -696,7 +696,7 @@ where
         // A contract may only call a stored contract that has the same protocol major version
         // number.
         let contract_version = contract.protocol_version();
-        if !contract_version.is_compatible_to(&protocol_version) {
+        if !contract_version.is_compatible_with(&protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
                 actual: contract_version.value().major,
