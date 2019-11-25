@@ -5,6 +5,7 @@ cargo-features = ["profile-overrides"]
 members = [
     "contract-ffi",
     "contracts/[!.]*/*",
+    "erc20/erc20-*",
     "engine-core",
     "engine-grpc-server",
     "engine-metrics-scraper",

@@ -851,6 +851,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "erc20-logic"
+version = "0.1.0"
+
+[[package]]
+name = "erc20-smart-contract"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.20.0",
+ "erc20-logic 0.1.0",
+]
+
+[[package]]
+name = "erc20-smart-contract-test"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.20.0",
+ "casperlabs-engine-tests 0.1.0",
+]
+
+[[package]]
 name = "failure"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
