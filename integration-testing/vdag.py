@@ -6,12 +6,14 @@ import casperlabs_client
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 
 
-# DOT generation
+# Helpers for DOT language generation
 
-INVISIBLE = "dotted"
+INVISIBLE = "invis"
 
 
 def attributes(**kwargs):
+    if not kwargs:
+        return ""
     return "[" + " ".join(f"{name}={value}" for (name, value) in kwargs.items()) + "]"
 
 
@@ -35,7 +37,7 @@ def graph(*args):
     return f"""
 digraph "dag" {{
   rankdir=BT
-  node [width=0 height=0 margin=0.03 fontsize=8]
+  node [width=0 height=0 margin=0.03 fontsize=8 shape=box]
   splines=false
 {cat(*args)}
 }}
@@ -54,7 +56,7 @@ def justifications(block_info):
 
 
 def rank(block_info):
-    return block_info.summary.rank
+    return block_info.summary.header.rank
 
 
 def parents(block_info):
@@ -79,39 +81,64 @@ def block_id(block_info) -> str:
 # DAG diagram construction.
 
 
-def lane(validator, block_infos):
+def alignment(block_infos, validator_id, min_rank, max_rank):
+    """
+    Create invisible edges between nodes in a lane to keep them rendered in order of their ranks.
+    Create invisible nodes for missing ranks.
+    """
+    ranks = set(rank(b) for b in block_infos)
+    edges = []
+    nodes = []
+
+    block_ids_by_rank = defaultdict(list)
+    for b in block_infos:
+        block_ids_by_rank[rank(b)].append(block_id(b))
+
+    for i in range(min_rank, max_rank):
+        if i in ranks:
+            n1s = block_ids_by_rank[i]
+        else:
+            n1s = [f"{i}_{validator_id}"]
+            nodes.append(node(n1s[0], style=INVISIBLE))
+
+        if i + 1 in ranks:
+            n2s = block_ids_by_rank[i + 1]
+        else:
+            n2s = [f"{i+1}_{validator_id}"]
+            nodes.append(node(n2s[0], style=INVISIBLE))
+        for n1 in n1s:
+            for n2 in n2s:
+                edges.append(edge(n1, n2, style=INVISIBLE))
+
+    # import pdb; pdb.set_trace()
+    return [nodes, edges]
+
+
+def lane(validator, block_infos, min_rank, max_rank):
     validator_id = short_hash(validator)
     nodes = [node(block_id(b)) for b in block_infos]
-
     edges = [
         edge(block_id(b), short_hash(parents(b)[0]), style="bold", constraint="false")
         for b in block_infos
     ]
-
-    alignment_edges = [
-        edge(block_id(block_infos[i]), block_id(block_infos[i + 1]), style=INVISIBLE)
-        for i in range(len(block_infos) - 1)
-    ]
     return subgraph(
         nodes,
         edges,
-        alignment_edges,
+        alignment(block_infos, validator_id, min_rank, max_rank),
         name=f"cluster_{validator_id}",
         label=f"{validator_id}",
     )
 
 
 def plot(block_infos):
-    genesis_block = ""
+    genesis_block_id = None
     validator_blocks = defaultdict(list)
     for b in block_infos:
         pk = b.summary.header.validator_public_key
         if len(pk):
             validator_blocks[pk.hex()].append(b)
         else:
-            genesis_block = node(short_hash(block_hash(b)))
-
-    genesis_block = genesis_block
+            genesis_block_id = block_id(b)
 
     last_finalized_block_hash = next(
         (block_hash(b) for b in block_infos if b.status.fault_tolerance > 0), ""
@@ -119,15 +146,21 @@ def plot(block_infos):
 
     last_finalized_block_hash = last_finalized_block_hash
 
+    ranks = set(rank(b) for b in block_infos)
+    min_rank = min(ranks)
+    max_rank = max(ranks)
     lanes = [
-        lane(validator, block_infos)
+        lane(validator, block_infos, min_rank, max_rank)
         for (validator, block_infos) in validator_blocks.items()
     ]
 
-    for b in block_infos:
-        if len(parents(b)) != 1:
-            raise Exception(f"{b} => {parents(b)}")
-    return graph(lanes)
+    maybe_genesis_block_subgraph = (
+        genesis_block_id
+        and subgraph(node(genesis_block_id), name="cluster_genesis", label="genesis")
+        or ""
+    )
+
+    return graph(maybe_genesis_block_subgraph, lanes)
 
 
 def main():
@@ -135,7 +168,7 @@ def main():
     client = casperlabs_client.CasperLabsClient(
         "localhost", port=40411, port_internal=40412
     )
-    block_infos = list(client.showBlocks(depth=10))
+    block_infos = sorted(client.showBlocks(depth=10), key=rank)
 
     print(plot(block_infos))
 
