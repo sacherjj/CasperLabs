@@ -55,7 +55,7 @@ def cat(*args):
 
 
 def justifications(block_info):
-    return [j.hex() for j in block_info.summary.header.justifications]
+    return [j.latest_block_hash.hex() for j in block_info.summary.header.justifications]
 
 
 def rank(block_info):
@@ -135,7 +135,7 @@ def lane(validator, block_infos, min_rank, max_rank, genesis_block_id):
     )
 
 
-def generate_dot(block_infos):
+def generate_dot(block_infos, show_justification_lanes=False):
     genesis_block_id = "genesis_block"
     validator_blocks = defaultdict(list)
     for b in block_infos:
@@ -177,13 +177,33 @@ def generate_dot(block_infos):
         )[0][min_rank]
     ]
 
+    justification_lanes = (
+        not show_justification_lanes
+        and []
+        or [
+            [
+                edge(
+                    block_id(b),
+                    short_hash(j),
+                    constraint="false",
+                    style="dotted",
+                    arrowhead="none",
+                )
+                for j in justifications(b)
+            ]
+            for b in block_infos
+        ]
+    )
+
     genesis_block = (
         genesis_block_id != "genesis_block"
         and node(genesis_block_id)
         or node(genesis_block_id, style=INVISIBLE)
     )
 
-    return graph(genesis_block, lanes_alignment, lanes, parent_edges)
+    return graph(
+        genesis_block, lanes_alignment, lanes, parent_edges, justification_lanes
+    )
 
 
 def main():
@@ -191,7 +211,7 @@ def main():
     # client = casperlabs_client.CasperLabsClient("localhost", port=40411, port_internal=40412)
     block_infos = sorted(client.showBlocks(depth=10), key=rank)
 
-    print(generate_dot(block_infos))
+    print(generate_dot(block_infos, show_justification_lanes=True))
 
 
 main()
