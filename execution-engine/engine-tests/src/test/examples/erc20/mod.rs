@@ -21,6 +21,7 @@ const ACCOUNT_1: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
 const ACCOUNT_2: [u8; 32] = [2u8; 32];
 const ACCOUNT_3: [u8; 32] = [3u8; 32];
 
+#[ignore]
 #[test]
 fn test_erc20_transfer() {
     // Init virtual machine.
@@ -56,6 +57,7 @@ fn test_erc20_transfer() {
     assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_2, send_amount - pay_back);
 }
 
+#[ignore]
 #[test]
 fn test_erc20_approval_and_transfer_from() {
     // Init virtual machine.
