@@ -6,7 +6,7 @@ activation-point-rank = 30
 protocol-version = "3.0.0"
 
 # A file containing wasm bytecode installing new system contracts.
-installer-code-path = "modified_mint_upgrader.wasm"
+installer-code-path = "modified_system_upgrader.wasm"
 
 [wasm-costs]
 # Default opcode cost

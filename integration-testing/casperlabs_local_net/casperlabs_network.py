@@ -346,7 +346,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     # We need to copy all required contracts in test chainspecs
     REQUIRED_CONTRACTS = (
         "mint_install.wasm",
-        "modified_mint_upgrader.wasm",
+        "modified_system_upgrader.wasm",
         "pos_install.wasm",
     )
 

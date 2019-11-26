@@ -36,7 +36,7 @@ INTEGRATION_CONTRACTS += \
 	hello-name-define \
 	mailing-list-call \
 	mailing-list-define \
-	modified-mint-upgrader \
+	modified-system-upgrader \
 	pos-bonding \
 	remove-associated-key \
 	standard-payment \
