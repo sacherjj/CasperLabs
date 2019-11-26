@@ -66,6 +66,7 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
+DOT_FORMATS = "png,svg,svg_standalone,xdot,plain,plain_ext,ps,ps2,json,json0"
 
 from google.protobuf import json_format
 
@@ -732,9 +733,21 @@ class CasperLabsClient:
         :param show_justification_lines:  if justification lines should be shown
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
-        :return:                          VisualizeBlocksResponse object
+        :return:                          generated DOT file or None, if out provided
         """
-        raise Exception("Not implemented yet")
+        block_infos = list(self.showBlocks(depth))
+        dot = vdag.generate_dot(block_infos, show_justification_lines)
+        if not out:
+            return dot
+        else:
+            file_format = out.split(".")[-1]
+            with tempfile.NamedTemporaryFile(mode="w") as f:
+                f.write(dot)
+                f.flush()
+                cmd = f"dot -T{file_format} -o {out} {f.name}"
+                rc = os.system(cmd)
+                if rc:
+                    raise Exception(f"Call to dot failed with error code {rc}")
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -1046,28 +1059,11 @@ def show_blocks_command(casperlabs_client, args):
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    block_infos = list(casperlabs_client.showBlocks(args.depth))
-    dot = vdag.generate_dot(block_infos, args.show_justification_lines)
-    output_file = args.out
-    if not output_file:
+    dot = casperlabs_client.visualizeDag(
+        args.depth, args.out, args.show_justification_lines, args.stream
+    )
+    if dot:
         print(dot)
-    else:
-        parts = output_file.split(".")
-        if len(parts) == 1:
-            raise Exception("File name has no extension indicating file format")
-        else:
-            file_format = parts[-1]
-            formats = "png,svg,svg_standalone,xdot,plain,plain_ext,ps,ps2,json,json0"
-            if file_format not in formats.split(","):
-                raise Exception(
-                    f"File extension {file_format} not_recognized, must be one of {formats}"
-                )
-            with tempfile.NamedTemporaryFile(mode="w") as f:
-                f.write(dot)
-                f.flush()
-                cmd = f"dot -T{file_format} -o {output_file} {f.name}"
-                print(cmd)
-                return os.system(cmd)
 
 
 @guarded_command
@@ -1094,6 +1090,32 @@ def show_deploy_command(casperlabs_client, args):
 def show_deploys_command(casperlabs_client, args):
     response = casperlabs_client.showDeploys(args.hash, full_view=False)
     _show_blocks(response, element_name="deploy")
+
+
+def dot_output(file_name):
+    """
+    Check file name has an extension of one of file formats supported by Graphviz.
+    """
+    parts = file_name.split(".")
+    if len(parts) == 1:
+        raise argparse.ArgumentTypeError(
+            f"'{file_name}' has no extension indicating file format"
+        )
+    else:
+        file_format = parts[-1]
+        if file_format not in DOT_FORMATS.split(","):
+            raise argparse.ArgumentTypeError(
+                f"File extension {file_format} not_recognized, must be one of {DOT_FORMATS}"
+            )
+    return file_name
+
+
+def natural(number):
+    """Check number is an integer greater than 0"""
+    n = int(number)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{number} is not a positive int value")
+    return n
 
 
 # fmt: off
@@ -1237,8 +1259,8 @@ def main():
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
     parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+                      [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=dot_output, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
                        [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 

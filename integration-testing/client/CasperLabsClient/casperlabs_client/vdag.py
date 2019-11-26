@@ -137,7 +137,7 @@ def lane(validator, block_infos, min_rank, max_rank, genesis_block_id):
     )
 
 
-def generate_dot(block_infos, show_justification_lanes=False):
+def generate_dot(block_infos, show_justification_lines=False):
     genesis_block_id = "genesis_block"
     validator_blocks = defaultdict(list)
     for b in block_infos:
@@ -173,10 +173,9 @@ def generate_dot(block_infos, show_justification_lanes=False):
         )[0][min_rank]
     ]
 
-    justification_lanes = (
-        not show_justification_lanes
-        and ""
-        or [
+    justification_lines = ""
+    if show_justification_lines:
+        justification_lines = [
             [
                 edge(
                     block_id(b),
@@ -189,7 +188,6 @@ def generate_dot(block_infos, show_justification_lanes=False):
             ]
             for b in block_infos
         ]
-    )
 
     genesis_block = (
         genesis_block_id != "genesis_block"
@@ -198,5 +196,5 @@ def generate_dot(block_infos, show_justification_lanes=False):
     )
 
     return graph(
-        genesis_block, lanes_alignment, lanes, parent_edges, justification_lanes
+        genesis_block, lanes_alignment, lanes, parent_edges, justification_lines
     )
