@@ -18,17 +18,17 @@ export const BondedValidatorsTable = observer(
         finalizedBonds.map(bond => bond.getValidatorPublicKey_asB64())
       );
     }
+    let bondsList = props.block
+      .getSummary()!
+      .getHeader()!
+      .getState()!
+      .getBondsList();
     return (
       <DataTable
-        title="Bonded Validators List"
+        title={`Bonded Validators List (${bondsList.length})`}
         headers={['Validator', 'Stake', 'Finalized']}
         rows={
-          props.block &&
-          props.block
-            .getSummary()!
-            .getHeader()!
-            .getState()!
-            .getBondsList()
+          bondsList
         }
         renderRow={(bond, i) => {
           return (
@@ -43,15 +43,16 @@ export const BondedValidatorsTable = observer(
                 {finalizedBondedValidators.has(
                   bond.getValidatorPublicKey_asB64()
                 ) ? (
-                  <Icon name="check-circle" color="green" />
+                  <Icon name="check-circle" color="green"/>
                 ) : (
-                  <Icon name="clock" />
+                  <Icon name="clock"/>
                 )}
               </td>
             </tr>
           );
         }}
       />
-    );
+    )
+      ;
   }
 );
