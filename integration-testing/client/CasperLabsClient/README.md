@@ -112,6 +112,26 @@ In the future encryption will become obligatory
 and you will have to pass a `certificate_path` to the `CasperLabsClient` constructor.
 The warning about insecure connection is meant to remind about this.
 
+## Graph visualization
+
+`casperlabs_client` has `vdag` command that can be used to visualize DAG.
+If you want to use it you need to first install [Graphviz](https://www.graphviz.org/),
+the free graph visuallization software.
+
+For example:
+
+```
+casperlabs_client --host deploy.casperlabs.io vdag --depth 5 --out dag.png
+```
+
+will produce an image file simillar to the one below:
+
+![DAG visualization example](https://i.imgur.com/LljJCmZ.png)
+
+Small boxes represent blocks, labeled with short prefixes of their block hashes.
+Blocks are aligned in "lanes" representing validators that created them.
+Bold arrows point to main parents of blocks.
+
 
 ## Deploying smart contracts
 

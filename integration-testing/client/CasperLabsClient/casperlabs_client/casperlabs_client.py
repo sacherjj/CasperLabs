@@ -723,7 +723,7 @@ class CasperLabsClient:
         stream: str = None,
     ):
         """
-        Retrieve DAG in DOT format.
+        Generate DAG in DOT format.
 
         :param depth:                     depth in terms of block height
         :param out:                       output image filename, outputs to stdout if
@@ -1258,7 +1258,7 @@ def main():
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it.',
                       [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
                        [('-o', '--out'), dict(required=False, type=dot_output, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
