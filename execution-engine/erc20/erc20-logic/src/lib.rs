@@ -87,8 +87,7 @@ pub trait ERC20Trait<Amount: From<u32> + Add<Output=Amount> + Sub<Output=Amount>
     }
 }
 
-
-// Tests start with example implementation of ERC20Trait.
+// Tests start with an example implementation of ERC20Trait.
 #[cfg(test)]
 mod tests {
     use super::ERC20Trait;

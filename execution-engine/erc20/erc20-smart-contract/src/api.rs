@@ -100,5 +100,3 @@ impl Api {
         ContractRef::Hash(get_arg(0))
     }
 }
-
-

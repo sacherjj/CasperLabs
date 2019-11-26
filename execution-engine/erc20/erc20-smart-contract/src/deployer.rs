@@ -9,8 +9,6 @@ use contract_ffi::value::U512;
 use contract_ffi::key::Key;
 
 use crate::error::Error;
-
-// Arguments parser.
 use crate::api::Api;
 
 // ERC20 smart contract.

@@ -1,8 +1,6 @@
 extern crate engine_tests;
 extern crate alloc;
 
-use std::panic;
-
 use contract_ffi::value::U512;
 
 use engine_tests::test::DEFAULT_ACCOUNT_ADDR;
@@ -34,7 +32,7 @@ fn test_erc20_transfer() {
     // ACCOUNT_2 should have 0 balance.
     let init_balance = U512::from(1000);
     let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, "token", init_balance);
-    // assert_total_supply(&mut builder, proxy_hash, token_hash, ACCOUNT_1, init_balance);
+    assert_total_supply(&mut builder, proxy_hash, token_hash, ACCOUNT_1, init_balance);
     assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_1, init_balance);
     assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_2, U512::from(0));
 

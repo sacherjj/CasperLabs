@@ -9,3 +9,5 @@ test-smart-contract: build-smart-contract link-target
 
 test-logic:
 	cargo test --lib -p erc20-logic
+
+test: test-logic test-smart-contract
