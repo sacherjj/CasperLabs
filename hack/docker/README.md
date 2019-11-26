@@ -33,6 +33,8 @@ The setup process will establish validator keys in `.casperlabs/node-*` and bond
 
 Up to 10 nodes can be created due to the way ports are being exposed on the host: you can deploy to `node-0` on 40401, `node-1` on 40411, `node-2` on 40421, and so on.
 
+If you plan to do lots of deploys it can help to enable auto-proposing, so you don't have to issue `propose` commands after each deploy. To do so just run `export CL_CASPER_AUTO_PROPOSE_ENABLED=true` prior to running the `make` commands.
+
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
 Run the following command to establish its data directory and see the values docker-compose will use:
