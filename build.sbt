@@ -412,7 +412,7 @@ lazy val client = (project in file("client"))
     javacOptions ++= Seq("-Dnashorn.args=\"--no-deprecation-warning\""),
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
-    libraryDependencies ++= commonDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ slf4jAdapters ++ Seq(
       scallop,
       grpcNetty,
       graphvizJava,
