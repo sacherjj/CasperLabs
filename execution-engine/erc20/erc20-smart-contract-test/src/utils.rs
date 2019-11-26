@@ -44,6 +44,14 @@ pub fn assert_total_supply(builder: &mut TestBuilder, proxy_hash: [u8; 32], toke
     builder.exec(request).expect_success().commit();
 }
 
+pub fn assert_allowance(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8; 32], 
+    sender: [u8; 32], owner: [u8; 32], spender: [u8; 32], expected: U512) {
+    let request = ExecuteRequestBuilder::contract_call_by_hash(
+        sender, proxy_hash, (token_hash, "assert_allowance", owner, spender, expected)
+    ).build();
+    builder.exec(request).expect_success().commit();
+}
+
 pub fn transfer(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8; 32], 
     sender: [u8; 32], recipient: [u8; 32], amount: U512) {
     let request = ExecuteRequestBuilder::contract_call_by_hash(
@@ -52,12 +60,20 @@ pub fn transfer(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8
     builder.exec(request).expect_success().commit();
 }
 
-pub fn expect_transfer_error(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8; 32], 
-    sender: [u8; 32], recipient: [u8; 32], amount: U512) {
+pub fn transfer_from(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8; 32], 
+    sender: [u8; 32], owner: [u8; 32], recipient: [u8; 32], amount: U512) {
     let request = ExecuteRequestBuilder::contract_call_by_hash(
-        sender, proxy_hash, (token_hash, "transfer", recipient, amount)
+        sender, proxy_hash, (token_hash, "transfer_from", owner, recipient, amount)
     ).build();
-    builder.exec(request).is_error();
+    builder.exec(request).expect_success().commit();
+}
+
+pub fn approve(builder: &mut TestBuilder, proxy_hash: [u8; 32], token_hash: [u8; 32], 
+    sender: [u8; 32], spender: [u8; 32], amount: U512) {
+    let request = ExecuteRequestBuilder::contract_call_by_hash(
+        sender, proxy_hash, (token_hash, "approve", spender, amount)
+    ).build();
+    builder.exec(request).expect_success().commit();
 }
 
 pub fn transfer_motes(builder: &mut TestBuilder, sender: [u8; 32], recipient: [u8; 32], amount: u64) {

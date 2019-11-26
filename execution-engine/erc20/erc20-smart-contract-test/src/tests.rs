@@ -1,21 +1,26 @@
 extern crate engine_tests;
 extern crate alloc;
 
+use std::panic;
+
 use contract_ffi::value::U512;
 
 use engine_tests::test::DEFAULT_ACCOUNT_ADDR;
 use engine_tests::test::DEFAULT_GENESIS_CONFIG;
 use engine_tests::support::test_support::InMemoryWasmTestBuilder as TestBuilder;
 
+use crate::utils::approve;
 use crate::utils::assert_balance;
 use crate::utils::assert_total_supply;
+use crate::utils::assert_allowance;
 use crate::utils::deploy_erc20;
 use crate::utils::transfer;
+use crate::utils::transfer_from;
 use crate::utils::transfer_motes;
-use crate::utils::expect_transfer_error;
 
 const ACCOUNT_1: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
-const ACCOUNT_2: [u8; 32] = [3u8; 32];
+const ACCOUNT_2: [u8; 32] = [2u8; 32];
+const ACCOUNT_3: [u8; 32] = [3u8; 32];
 
 #[test]
 fn test_erc20_transfer() {
@@ -53,15 +58,33 @@ fn test_erc20_transfer() {
 }
 
 #[test]
-fn test_erc20_transfer_too_much() {
+fn test_erc20_approval_and_transfer_from() {
     // Init virtual machine.
     let mut builder = TestBuilder::default();
     builder.run_genesis(&DEFAULT_GENESIS_CONFIG).commit();
     transfer_motes(&mut builder, ACCOUNT_1, ACCOUNT_2, 100_000_000);
 
     // Deploy token.
-    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, "token", U512::from(1000));
+    let init_balance = U512::from(1000);
+    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, "token", init_balance);
+    
+    // At start allowance should be 0 tokens.
+    assert_allowance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_1, ACCOUNT_2, U512::from(0));
 
-    // Transfer too much.
-    expect_transfer_error(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_2, U512::from(3000));
+    // ACCOUNT_1 allows ACCOUNT_2 to spend 10 tokens.
+    let allowance = U512::from(10);
+    approve(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_2, allowance);
+    assert_allowance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_1, ACCOUNT_2, allowance);
+
+    // ACCOUNT_2 sends 3 tokens to ACCOUNT_3 from ACCOUNT_1.
+    // Balance of ACCOUNT_1 should be 9997.
+    // Balance of ACCOUNT_2 should be 0.
+    // Balance of ACCOUNT_3 should be 3.
+    // Allowance of ACCOUNT_2 for ACCOUNT_1 should be 7.
+    let send_amount = U512::from(3);
+    transfer_from(&mut builder, proxy_hash, token_hash, ACCOUNT_2, ACCOUNT_1, ACCOUNT_3, send_amount);
+    assert_allowance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_1, ACCOUNT_2, allowance - send_amount);
+    assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_1, init_balance - send_amount);
+    assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_2, U512::from(0));
+    assert_balance(&mut builder, proxy_hash, token_hash, ACCOUNT_1, ACCOUNT_3, send_amount);
 }
