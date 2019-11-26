@@ -10,8 +10,9 @@ import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.comm.ServiceError.InvalidArgument
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
@@ -170,6 +171,22 @@ object GrpcCasperService {
                 .withNextPageToken(nextPageToken)
                 .withPrevPageToken(prevPageToken)
             } yield result
+          }
+
+        override def getLastFinalizedBlockInfo(
+            request: GetLastFinalizedBlockInfoRequest
+        ): Task[BlockInfo] =
+          TaskLike[F].apply {
+            MultiParentCasperRef
+              .withCasper[F, BlockInfo](
+                casper =>
+                  for {
+                    lastFinalizedBlock <- casper.lastFinalizedBlock
+                    blockInfo          = lastFinalizedBlock.getBlockInfo
+                  } yield blockInfo,
+                "Could not get last finalized block.",
+                MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
+              )
           }
       }
     }
