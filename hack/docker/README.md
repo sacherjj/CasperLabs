@@ -109,6 +109,7 @@ Response: Success! Block f876efed8d... created and added.
 
 If you check the log output, each node should get the block and provide some feedback about the execution as well.
 
+
 ## Monitoring
 
 ### Prometheus
@@ -122,6 +123,10 @@ To see some of the metrics in [Grafana](https://grafana.com/) go to http://local
 The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+## Clarity
+
+Running `make up` will also start a local instance of Clarity at https://localhost:8443 where you can use the Faucet, visualize the DAG with the Explorer. The UI will connect to `node-0`, so that container needs to be running already.
 
 ## Visualizing the DAG
 
