@@ -1472,20 +1472,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "modified-pos"
-version = "0.1.0"
-dependencies = [
- "casperlabs-contract-ffi 0.20.0",
- "pos 0.1.0",
-]
-
-[[package]]
 name = "modified-system-upgrader"
 version = "0.1.0"
 dependencies = [
  "casperlabs-contract-ffi 0.20.0",
  "modified-mint 0.1.0",
- "modified-pos 0.1.0",
+ "pos 0.1.0",
 ]
 
 [[package]]

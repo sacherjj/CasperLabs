@@ -16,5 +16,5 @@ std = ["contract-ffi/std"]
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
-modified-pos = { path = "../modified-pos", default-features = false, features = ["lib"] }
+pos = { path = "../../system/pos", default-features = false, features = ["lib"] }
 modified-mint = { path = "../modified-mint", default-features = false, features = ["lib"] }

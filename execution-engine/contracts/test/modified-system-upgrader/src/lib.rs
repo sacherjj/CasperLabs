@@ -10,8 +10,8 @@ enum CustomError {
     ContractPointerHash = 1,
 }
 
-pub const MODIFIED_POS_EXT_FUNCTION_NAME: &str = "modified_pos_ext";
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
+pub const POS_EXT_FUNCTION_NAME: &str = "pos_ext";
 
 #[no_mangle]
 pub extern "C" fn modified_mint_ext() {
@@ -19,8 +19,8 @@ pub extern "C" fn modified_mint_ext() {
 }
 
 #[no_mangle]
-pub extern "C" fn modified_pos_ext() {
-    modified_pos::delegate();
+pub extern "C" fn pos_ext() {
+    pos::delegate();
 }
 
 fn upgrade_turef(name: &str, contract_ref: ContractRef) {
@@ -38,7 +38,7 @@ fn upgrade_mint() {
 
 fn upgrade_proof_of_stake() {
     let pos_ref = system::get_proof_of_stake();
-    upgrade_turef(MODIFIED_POS_EXT_FUNCTION_NAME, pos_ref);
+    upgrade_turef(POS_EXT_FUNCTION_NAME, pos_ref);
 }
 
 #[no_mangle]
