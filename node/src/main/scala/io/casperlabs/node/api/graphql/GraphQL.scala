@@ -40,7 +40,6 @@ object GraphQL {
 
   private[graphql] val requiredHeaders =
     Headers.of(Header("Upgrade", "websocket"), Header("Sec-WebSocket-Protocol", "graphql-ws"))
-  private implicit val logSource: LogSource = LogSource(getClass)
 
   /* Entry point */
   def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
@@ -143,12 +142,12 @@ object GraphQL {
             .flatMap(_.as[GraphQLWebSocketMessage])
             .fold(
               e => {
-                val errorMessage =
+                val error =
                   s"Failed to parse GraphQL WebSocket message: $raw, reason: ${e.getMessage}"
                 Stream
                   .eval(
-                    Log[F].warn(errorMessage) >> queue
-                      .enqueue1(GraphQLWebSocketMessage.ConnectionError(errorMessage))
+                    Log[F].warn(s"${error -> "error" -> null}") >> queue
+                      .enqueue1(GraphQLWebSocketMessage.ConnectionError(error))
                   )
                   .flatMap(_ => Stream.empty.covary[F])
               },
@@ -230,7 +229,7 @@ object GraphQL {
         case (protocolState, message) =>
           val error = s"Unexpected message: $message in state: '${protocolState.name}', ignoring"
           for {
-            _ <- Log[F].warn(error)
+            _ <- Log[F].warn(s"${error -> "error" -> null}")
             _ <- queue.enqueue1(GraphQLWebSocketMessage.ConnectionError(error))
           } yield (protocolState, ())
       }

@@ -19,7 +19,7 @@ import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
-class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
+class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     readXa: Transactor[F],
     writeXa: Transactor[F]
 ) extends BlockStorage[F]

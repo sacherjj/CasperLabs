@@ -53,33 +53,27 @@ class LogsContainOneOf:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
-        super().__init__(node, "Listening for traffic on casperlabs://", times)
+        super().__init__(node, "Listening for traffic on peer=casperlabs://", times)
 
 
-class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
+class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
     def __init__(self, node: DockerNode) -> None:
-        super().__init__(
-            node,
-            [
-                "Making a transition to ApprovedBlockRecievedHandler state.",
-                "Making the transition to block processing.",
-            ],
-        )
+        super().__init__(node, "Making the transition to block processing.")
 
 
 class NewForkChoiceTipBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Fork-choice tip is block {block[:10]}....")
+        super().__init__(node, f"Fork-choice is block={block[:10]}....")
 
 
 class FinishedAddingBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Finished adding {block[:10]}...")
+        super().__init__(node, f"Finished adding block={block[:10]}...")
 
 
 class AddedBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Added {block[:10]}...")
+        super().__init__(node, f"Added block={block[:10]}...")
 
 
 class RegexBlockRequest:
@@ -107,7 +101,9 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 
 
 class ConnectedToOtherNode(RegexBlockRequest):
-    regex = r"(Connected to casperlabs:)|(Listening for traffic on casperlabs:)"
+    regex = (
+        r"(Connected to peer=casperlabs:)|(Listening for traffic on peer=casperlabs:)"
+    )
 
     def __init__(self, node: DockerNode, node_name: str, times: int) -> None:
         self.times = times
@@ -297,10 +293,7 @@ class BlockContainsString:
 
 class LastFinalisedHash(LogsContainMessage):
     def __init__(self, node: DockerNode, hash_string: str) -> None:
-        super().__init__(
-            node,
-            f"i.c.c.MultiParentCasperImpl$StatelessExecutor - Added {hash_string[:10]}...",
-        )
+        super().__init__(node, f"Added block={hash_string[:10]}...")
 
 
 class BlocksCountAtLeast:

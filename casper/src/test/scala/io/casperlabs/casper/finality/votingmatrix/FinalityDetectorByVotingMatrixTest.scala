@@ -32,7 +32,7 @@ class FinalityDetectorByVotingMatrixTest
 
   behavior of "Finality Detector of Voting Matrix"
 
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff = LogStub[Task]()
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
@@ -496,7 +496,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
-    ?[_],
+    *[_],
     InvalidBlock
   ]](
       parentsHashList: Seq[BlockHash],

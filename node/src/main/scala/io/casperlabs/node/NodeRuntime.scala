@@ -55,6 +55,7 @@ class NodeRuntime private[node] (
     mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
+    logId: Log[Id],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
@@ -93,7 +94,6 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
     implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
@@ -195,7 +195,7 @@ class NodeRuntime private[node] (
 
       implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
         .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = new ValidationImpl[Task]
+      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
 
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics
@@ -292,7 +292,7 @@ class NodeRuntime private[node] (
         Log[Task].info(s"Starting stand-alone node.")
       else
         Log[Task].info(
-          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ") -> "bootstraps"}"
         )
 
     val cleanupDiscardedDeploysLoop: Task[Unit] = for {
@@ -319,7 +319,7 @@ class NodeRuntime private[node] (
             .start
 
       localNode <- localAsk.ask
-      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show}.")
+      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show -> "peer"}.")
       // This loop will keep the program from exiting until shutdown is initiated.
       _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler)
     } yield ()
@@ -397,10 +397,10 @@ class NodeRuntime private[node] (
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
-        _       <- Log[F].info("Constructing Genesis block...")
+        _       <- Log[F].info(s"Constructing Genesis block...")
         genesis <- Genesis.fromChainSpec[F](chainSpec.getGenesis)
         _ <- Log[F].info(
-              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash)}"
+              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash) -> "genesis" -> null}"
             )
       } yield genesis.getBlockMessage
     }
@@ -414,6 +414,7 @@ object NodeRuntime {
       implicit
       scheduler: Scheduler,
       log: Log[Task],
+      logId: Log[Id],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Task[NodeRuntime] =
     for {

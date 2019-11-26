@@ -93,15 +93,18 @@ class RelayingImpl[F[_]: Concurrent: Parallel: Log: Metrics: NodeAsk](
       service  <- connectToGossip(peer)
       local    <- NodeAsk[F].ask
       response <- service.newBlocks(NewBlocksRequest(sender = local.some, blockHashes = List(hash)))
-      (msg, counter) = if (response.isNew)
-        s"${peer.show} accepted block ${hex(hash)}" -> "relay_accepted"
-      else
-        s"${peer.show} rejected block ${hex(hash)}" -> "relay_rejected"
-      _ <- Log[F].debug(msg)
+      counter <- if (response.isNew)
+                  Log[F]
+                    .debug(s"${peer.show -> "peer"} accepted ${hex(hash) -> "block"}")
+                    .as("relay_accepted")
+                else
+                  Log[F]
+                    .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "block"}")
+                    .as("relay_rejected")
       _ <- Metrics[F].incrementCounter(counter)
-    } yield response.isNew).handleErrorWith { e =>
+    } yield response.isNew).handleErrorWith { ex =>
       for {
-        _ <- Log[F].debug(s"NewBlocks request failed ${peer.show}, $e")
+        _ <- Log[F].debug(s"NewBlocks request failed ${peer.show -> "peer"}, $ex")
         _ <- Metrics[F].incrementCounter("relay_failed")
       } yield false
     }

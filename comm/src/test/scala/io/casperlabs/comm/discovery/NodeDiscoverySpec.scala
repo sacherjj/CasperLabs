@@ -605,7 +605,7 @@ object NodeDiscoverySpec {
     override def shutdown(): Task[Unit] = ???
   }
 
-  implicit val logNoOp: Log[Task] = new NOPLog[Task]
+  implicit val logNoOp: Log[Task] = Log.NOPLog[Task]
   implicit val time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long]                   = Timer[Task].clock.realTime(MILLISECONDS)
     def nanoTime: Task[Long]                        = Timer[Task].clock.monotonic(NANOSECONDS)

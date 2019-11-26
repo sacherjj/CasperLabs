@@ -362,8 +362,8 @@ class SynchronizerSpec
 }
 
 object SynchronizerSpec {
-  implicit var log: LogStub[Task] = new LogStub[Task]
-  implicit val metrics            = new Metrics.MetricsNOP[Task]
+  implicit var log     = LogStub[Task]()
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   object MockBackend {
     def apply(
@@ -408,7 +408,7 @@ object SynchronizerSpec {
                 }
               }
           }
-          def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+          def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
           def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
           def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
           def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???

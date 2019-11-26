@@ -3,7 +3,7 @@
 PYTEST_ARGS="-vv -ra "
 
 # $TAG_NAME should have value of "DRONE-####" from docker_run_tests.sh in CI
-if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
+if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "latest" ]]; then
     # We only want to limit maxfail in CI
     PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3 --tb=short"
 else

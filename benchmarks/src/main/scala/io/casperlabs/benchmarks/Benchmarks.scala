@@ -163,7 +163,7 @@ object Benchmarks {
         StandardCharsets.UTF_8,
         StandardOpenOption.WRITE ::
           StandardOpenOption.APPEND :: Nil
-      ) >> Log[F].info(s"Round: ${round - 1}: $message")
+      ) >> Log[F].info(s"${round - 1 -> "round"}: $message")
     }
 
     def round(round: Long): F[Unit] =

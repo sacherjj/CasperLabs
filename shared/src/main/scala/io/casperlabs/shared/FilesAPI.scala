@@ -31,8 +31,6 @@ import scala.util.Try
 }
 
 object FilesAPI {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   def create[F[_]: Sync: Log]: FilesAPI[F] =
     new FilesAPI[F] {
       override def readBytes(path: Path): F[Array[Byte]] =
@@ -62,8 +60,8 @@ object FilesAPI {
                   Files.write(path, data, options: _*)
                 }
         } yield ()).onError {
-          case e =>
-            Log[F].error(s"Failed to write data to file: $path", e)
+          case ex =>
+            Log[F].error(s"Failed to write data to file at $path: $ex")
         }
 
       override def writeString(
@@ -77,7 +75,7 @@ object FilesAPI {
   implicit def eitherTFilesApi[E, F[_]: Monad: FilesAPI]: FilesAPI[EitherT[F, E, ?]] =
     new FilesAPI[EitherT[F, E, ?]] {
       override def readBytes(path: Path): EitherT[F, E, Array[Byte]] =
-        FilesAPI[F].readBytes(path).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].readBytes(path).liftM[EitherT[*[_], E, ?]]
 
       override def readString(
           path: Path,
@@ -88,14 +86,14 @@ object FilesAPI {
             path,
             charset
           )
-          .liftM[EitherT[?[_], E, ?]]
+          .liftM[EitherT[*[_], E, ?]]
 
       override def writeBytes(
           path: Path,
           data: Array[Byte],
           options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
-        FilesAPI[F].writeBytes(path, data, options).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].writeBytes(path, data, options).liftM[EitherT[*[_], E, ?]]
 
       override def writeString(
           path: Path,
@@ -103,6 +101,6 @@ object FilesAPI {
           charset: Charset = Charset.defaultCharset(),
           options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
-        FilesAPI[F].writeString(path, data, charset, options).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].writeString(path, data, charset, options).liftM[EitherT[*[_], E, ?]]
     }
 }

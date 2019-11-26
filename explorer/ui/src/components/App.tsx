@@ -2,8 +2,8 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import $ from 'jquery';
 import * as React from 'react';
 import { observer } from 'mobx-react';
-import { Switch, Route, Link, withRouter } from 'react-router-dom';
-import { RouteComponentProps } from 'react-router';
+import { Link, Route, Switch, useLocation } from 'react-router-dom';
+import { RouteComponentProps, withRouter } from 'react-router';
 
 import logo from '../img/logo-full.png';
 import Pages from './Pages';
@@ -23,6 +23,10 @@ import DeployDetails from './DeployDetails';
 import DeployContainer from '../containers/DeployContainer';
 import Search from './Search';
 import SearchContainer from '../containers/SearchContainer';
+import DeployInfoListDetails from './DeployInfoListDetails';
+import { DeployInfoListContainer } from '../containers/DeployInfoListContainer';
+import AccountSelector from './AccountSelector';
+import AccountSelectorContainer from '../containers/AccountSelectorContainer';
 
 // https://medium.com/@pshrmn/a-simple-react-router-v4-tutorial-7f23ff27adf
 
@@ -42,6 +46,7 @@ const SideMenuItems: MenuItem[] = [
   new MenuItem(Pages.Faucet, 'Faucet', 'coins'),
   new MenuItem(Pages.Explorer, 'Explorer', 'project-diagram'),
   new MenuItem(Pages.Blocks, 'Blocks', 'th-large'),
+  new MenuItem(Pages.Deploys, 'Deploys', 'tasks'),
   new MenuItem(Pages.Search, 'Search', 'search')
 ];
 
@@ -52,6 +57,8 @@ export interface AppProps {
   dag: DagContainer;
   block: BlockContainer;
   deploy: DeployContainer;
+  deployInfoList: DeployInfoListContainer;
+  accountSelectorContainer: AccountSelectorContainer;
   search: SearchContainer;
 }
 
@@ -236,37 +243,66 @@ class _Navigation extends React.Component<
 // so the calling component doesn't have to pass them.
 const Navigation = withRouter(_Navigation);
 
+// A custom hook that builds on useLocation to parse
+// the query string for you.
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
+
 // Render the appropriate page.
-const Content = (props: AppProps) => (
-  <main>
-    <div className="content-wrapper">
-      <div className="container-fluid">
-        <Alerts {...props} />
-        <Switch>
-          <Route exact path={Pages.Home} render={_ => <Home {...props} />} />
-          <PrivateRoute
-            path={Pages.Accounts}
-            auth={props.auth}
-            render={_ => <Accounts {...props} />}
-          />
-          <PrivateRoute
-            path={Pages.Faucet}
-            auth={props.auth}
-            render={_ => <Faucet {...props} />}
-          />
-          <Route path={Pages.Explorer} render={_ => <Explorer {...props} />} />
-          <Route path={Pages.Block} render={_ => <BlockDetails {...props} />} />
-          <Route path={Pages.Blocks} render={_ => <BlockList {...props} />} />
-          <Route
-            path={Pages.Deploy}
-            render={_ => <DeployDetails {...props} />}
-          />
-          <Route path={Pages.Search} render={_ => <Search {...props} />} />
-        </Switch>
+const Content = (props: AppProps) => {
+  let query = useQuery();
+  return (
+    <main>
+      <div className="content-wrapper">
+        <div className="container-fluid">
+          <Alerts {...props} />
+          <Switch>
+            <Route exact path={Pages.Home} render={_ => <Home {...props} />} />
+            <Route
+              path={Pages.DeploysOfAccount}
+              render={_ => (
+                <DeployInfoListDetails
+                  pageToken={query.get('pageToken')}
+                  {...props}
+                />
+              )}
+            ></Route>
+            <PrivateRoute
+              path={Pages.Accounts}
+              auth={props.auth}
+              render={_ => <Accounts {...props} />}
+            />
+            <PrivateRoute
+              path={Pages.Faucet}
+              auth={props.auth}
+              render={_ => <Faucet {...props} />}
+            />
+            <Route
+              path={Pages.Explorer}
+              render={_ => <Explorer {...props} />}
+            />
+            <Route
+              path={Pages.Block}
+              render={_ => <BlockDetails {...props} />}
+            />
+            <Route path={Pages.Blocks} render={_ => <BlockList {...props} />} />
+            <Route
+              path={Pages.Deploy}
+              render={_ => <DeployDetails {...props} />}
+            />
+
+            <Route
+              path={Pages.Deploys}
+              render={_ => <AccountSelector {...props} />}
+            />
+            <Route path={Pages.Search} render={_ => <Search {...props} />} />
+          </Switch>
+        </div>
       </div>
-    </div>
-  </main>
-);
+    </main>
+  );
+};
 
 // Alerts displays the outcome of the last async error on the top of the page.
 // Dismissing the error clears the state and removes the element.

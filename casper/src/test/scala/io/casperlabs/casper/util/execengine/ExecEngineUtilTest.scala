@@ -25,7 +25,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff: LogStub[Task] = new LogStub[Task]()
+  implicit val logEff = LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
@@ -437,7 +437,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     result4 shouldBe result3
   }
 
-  it should "filter redundant parents from the output list" in {
+  it should "filter redundant secondary parents from the output list" in {
     /*
      * The DAG looks like:
      *       i     j
@@ -483,6 +483,24 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     result1 shouldBe ((nonFirstEffect, Vector(j, i)))
     // output is the same as if the input had only included the DAG tips
     result2 shouldBe result1
+  }
+
+  it should "filter redundant secondary parents, but not main parent" in {
+    // Dag looks like:
+    // genesis <- a <- b
+    val ops     = Map(1 -> Op.Read)
+    val genesis = OpDagNode.genesis(ops)
+    val a       = OpDagNode.withParents(ops, List(genesis))
+    val b       = OpDagNode.withParents(ops, List(a))
+
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val redundantMainParentResult           = OpDagNode.merge(Vector(a, b))
+    val redundantSecondaryParentResult      = OpDagNode.merge(Vector(b, a))
+
+    // main parent is not filtered out even though it is redundant with b
+    redundantMainParentResult shouldBe (ops -> Vector(a, b))
+    // secondary parent is filtered out because it is redundant with the main
+    redundantSecondaryParentResult shouldBe (Map.empty -> Vector(b))
   }
 }
 

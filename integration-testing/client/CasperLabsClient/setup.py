@@ -168,8 +168,11 @@ def run_codegen():
 
 
 def prepare_sdist():
+    contracts_dir = (
+        os.environ.get("TAG_NAME") and "/root/bundled_contracts" or CONTRACTS_DIR
+    )
     bundled_contracts = [
-        f"{CONTRACTS_DIR}/{f}"
+        f"{contracts_dir}/{f}"
         for f in [
             "bonding.wasm",
             "standard_payment.wasm",
@@ -196,7 +199,6 @@ with open(path.join(THIS_DIRECTORY, "README.md"), encoding="utf-8") as fh:
 
 class CInstall(InstallCommand):
     def run(self):
-        run_codegen()
         super().run()
 
 
@@ -208,7 +210,7 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.5.2",
+    version="0.5.5",
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",

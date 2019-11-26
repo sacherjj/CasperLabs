@@ -10,8 +10,8 @@ import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
 import io.casperlabs.node.configuration.Utils._
+import izumi.logstage.api.{Log => IzLog}
 import org.rogach.scallop._
-
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
@@ -52,6 +52,9 @@ private[configuration] object Converter extends ParserImplicits {
 
       override val argType: ArgType.V = ArgType.SINGLE
     }
+
+  implicit val logLevelConverter: ValueConverter[IzLog.Level] =
+    singleArgConverter(lvl => IzLog.Level.parse(lvl))
 }
 
 private[configuration] object Options {
@@ -170,6 +173,14 @@ private[configuration] final case class Options private (
   val run = new Subcommand("run") {
 
     helpWidth(120)
+
+    @scallop
+    val logLevel =
+      gen[IzLog.Level]("Log level, e.g. DEBUG, INFO, WARN, ERROR.")
+
+    @scallop
+    val logJsonPath =
+      gen[Path]("Optionally print logs to a file in JSON format.")
 
     @scallop
     val grpcPortExternal =

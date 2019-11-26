@@ -51,7 +51,8 @@ docker-build-all: \
 	docker-build/execution-engine \
 	docker-build/integration-testing \
 	docker-build/key-generator \
-	docker-build/explorer
+	docker-build/explorer \
+	docker-build/grpcwebproxy
 
 docker-push-all: \
 	docker-push/node \
@@ -60,13 +61,13 @@ docker-push-all: \
 	docker-push/key-generator \
 	docker-push/explorer
 
-docker-build/node: .make/docker-build/universal/node .make/docker-build/test/node
-docker-build/client: .make/docker-build/universal/client .make/docker-build/test/client
-docker-build/execution-engine: .make/docker-build/execution-engine .make/docker-build/test/execution-engine
-docker-build/integration-testing: .make/docker-build/integration-testing .make/docker-build/test/integration-testing
+docker-build/node: .make/docker-build/universal/node
+docker-build/client: .make/docker-build/universal/client
+docker-build/execution-engine: .make/docker-build/execution-engine
+docker-build/integration-testing: .make/docker-build/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
-docker-build/explorer: .make/docker-build/explorer .make/docker-build/test/explorer
-docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy .make/docker-build/test/grpcwebproxy
+docker-build/explorer: .make/docker-build/explorer
+docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
 
 # Tag the `latest` build with the version from git and push it.
 # Call it like `DOCKER_PUSH_LATEST=true make docker-push/node`
@@ -122,7 +123,7 @@ cargo-native-packager/%:
 	mkdir -p $(IT_PATH)/bundled_contracts
 	cp -r client/src/main/resources/*.wasm $(IT_PATH)/bundled_contracts/
 	mkdir -p $(IT_PATH)/system_contracts
-	cp -r ./execution-engine/target/wasm32-unknown-unknown/release/*_install.wasm $(IT_PATH)/system_contracts/
+	cp -r ./execution-engine/target/wasm32-unknown-unknown/release/*.wasm $(IT_PATH)/system_contracts/
 	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
 	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
@@ -137,30 +138,6 @@ cargo-native-packager/%:
 	cp execution-engine/Dockerfile $(RELEASE)/Dockerfile
 	docker build -f $(RELEASE)/Dockerfile -t $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(RELEASE)
 	rm -rf $(RELEASE)/Dockerfile
-	mkdir -p $(dir $@) && touch $@
-
-# Make a node that has some extras installed for testing.
-.make/docker-build/test/node: \
-		.make/docker-build/universal/node
-	docker tag $(DOCKER_USERNAME)/node:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/node:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make a test version for the execution engine as well just so we can swith version easily.
-.make/docker-build/test/execution-engine: \
-		.make/docker-build/execution-engine
-	docker tag $(DOCKER_USERNAME)/execution-engine:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/execution-engine:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make a test tagged version of client so all tags exist for integration-testing.
-.make/docker-build/test/client: \
-		.make/docker-build/universal/client
-	docker tag $(DOCKER_USERNAME)/client:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/client:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
-# Make an image to run Python tests under integration-testing.
-.make/docker-build/test/integration-testing: \
-		.make/docker-build/integration-testing
-	docker tag $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/integration-testing:$(DOCKER_TEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
 # Make an image for keys generation
@@ -178,11 +155,6 @@ cargo-native-packager/%:
 	docker build -f explorer/Dockerfile -t $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) explorer
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of explorer for integration-testing.
-.make/docker-build/test/explorer: \
-		.make/docker-build/explorer
-	docker tag $(DOCKER_USERNAME)/explorer:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/explorer:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
 
 .make/npm/explorer: \
 	$(TS_SRC) \
@@ -251,12 +223,6 @@ cargo-native-packager/%:
 	docker tag casperlabs/grpcwebproxy:latest $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG)
 	mkdir -p $(dir $@) && touch $@
 
-# Make a test tagged version of grpcwebproxy for integration-testing.
-.make/docker-build/test/grpcwebproxy: \
-		.make/docker-build/grpcwebproxy
-	docker tag $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_LATEST_TAG) $(DOCKER_USERNAME)/grpcwebproxy:$(DOCKER_TEST_TAG)
-	mkdir -p $(dir $@) && touch $@
-
 # Refresh Scala build artifacts if source was changed.
 .make/sbt-stage/%: $(SCALA_SRC) build-%-contracts
 	$(eval PROJECT = $*)
@@ -323,6 +289,7 @@ execution-engine/target/system-contracts.tar.gz: $(RUST_SRC) .make/rustup-update
 
 # Compile a contract and put it in the CLI client resources so they get packaged with the JAR.
 client/src/main/resources/%.wasm: .make/contracts/%
+	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 # Compile a contract and put it in the node resources so they get packaged with the JAR.
@@ -331,7 +298,7 @@ node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
 
 # Copy a client or explorer contract to the explorer.
 explorer/contracts/%.wasm: .make/contracts/%
-	mkdir -p explorer/contracts
+	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
 build-client: \

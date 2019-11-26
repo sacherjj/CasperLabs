@@ -67,8 +67,8 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
     Metrics[F].gauge("syncs_ongoing") {
       sourceSemaphoreMap.withPermit(source) {
         effect.onError {
-          case NonFatal(e) =>
-            Log[F].error(s"Failed to sync a DAG, source: ${source.show}, reason: $e", e) *>
+          case NonFatal(ex) =>
+            Log[F].error(s"Failed to sync a DAG, source: ${source.show -> "peer"}: $ex") *>
               Metrics[F].incrementCounter("syncs_failed")
         }
       }

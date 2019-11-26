@@ -51,6 +51,12 @@ abstract class HashSetCasperTest
         case noBlock: NoBlock =>
           Task.raiseError(new IllegalStateException(s"No block created ${noBlock.toString}"))
       }
+
+    def deployAndPropose(d: Deploy): Task[Block] =
+      node.casperEff.deploy(d) >>= {
+        case Left(ex) => Task.raiseError[Block](ex)
+        case Right(_) => propose()
+      }
   }
 
   implicit val timeEff = new LogicalTime[Task]
@@ -171,8 +177,7 @@ abstract class HashSetCasperTest
       s =>
         ProtoUtil.basicDeploy(
           0,
-          ByteString.copyFromUtf8((start + s._2).toString),
-          ByteString.copyFromUtf8(s._1)
+          ByteString.copyFromUtf8((start + s._2).toString)
         )
     )
 
@@ -655,41 +660,16 @@ abstract class HashSetCasperTest
    *
    */
   it should "ask peers for blocks it is missing and add them" in effectTest {
-    //TODO: figure out a way to get wasm into deploys for tests
-    object makeDeployA {
-      private val accountPk = ProtoUtil.randomAccountAddress()
-      def apply(): Deploy = synchronized {
-        ProtoUtil.basicDeploy(
-          0,
-          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
-          accountPk
-        )
-      }
-    }
-
-    object makeDeployB {
-      private val accountPk = ProtoUtil.randomAccountAddress()
-      def apply(): Deploy = synchronized {
-        ProtoUtil.basicDeploy(
-          0,
-          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
-          accountPk
-        )
-      }
-    }
-
-    /** Create a block from a deploy and add it on that node. */
-    def deploy(node: TestNode[Task], dd: Deploy): Task[Block] =
-      for {
-        _     <- node.casperEff.deploy(dd)
-        block <- node.propose()
-      } yield block
 
     /** nodes 0 and 1 create blocks in parallel; node 2 misses both, e.g. a1 and a2. */
     def stepSplit(nodes: Seq[TestNode[Task]]) =
       for {
-        _ <- deploy(nodes(0), makeDeployA())
-        _ <- deploy(nodes(1), makeDeployB())
+        _ <- ProtoUtil.basicDeploy[Task]() >>= { deploy =>
+              nodes(0).deployAndPropose(deploy)
+            }
+        _ <- ProtoUtil.basicDeploy[Task]() >>= { deploy =>
+              nodes(1).deployAndPropose(deploy)
+            }
 
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
@@ -699,7 +679,9 @@ abstract class HashSetCasperTest
     /** node 0 creates a block; node 1 gets it but node 2 doesn't. */
     def stepSingle(nodes: Seq[TestNode[Task]]) =
       for {
-        _ <- deploy(nodes(0), makeDeployA())
+        _ <- ProtoUtil.basicDeploy[Task]() >>= { deploy =>
+              nodes(0).deployAndPropose(deploy)
+            }
 
         _ <- nodes(0).receive()
         _ <- nodes(1).receive()
@@ -727,7 +709,9 @@ abstract class HashSetCasperTest
       _ <- stepSplit(nodes) // blocks g1 g2
 
       // this block will be propagated to all nodes and force nodes(2) to ask for missing blocks.
-      br <- deploy(nodes(0), makeDeployA()) // block h1
+      br <- ProtoUtil.basicDeploy[Task]() >>= { deploy =>
+             nodes(0).deployAndPropose(deploy)
+           }
 
       // node(0) just created this block, so it should have it.
       _ <- nodes(0).casperEff.contains(br) shouldBeF true
@@ -736,7 +720,9 @@ abstract class HashSetCasperTest
       // By now node(2) should have received all dependencies and added block h1
       _ <- nodes(2).casperEff.contains(br) shouldBeF true
       // And if we create one more block on top of h1 it should be the only parent.
-      nr <- deploy(nodes(2), makeDeployA())
+      nr <- ProtoUtil.basicDeploy[Task]() >>= { deploy =>
+             nodes(2).deployAndPropose(deploy)
+           }
       _ = nr.header.get.parentHashes.map(PrettyPrinter.buildString) shouldBe Seq(
         PrettyPrinter.buildString(br.blockHash)
       )
@@ -1108,8 +1094,8 @@ abstract class HashSetCasperTest
               )
 
       sessionCode = ByteString.copyFromUtf8("Do the thing")
-      deployA     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("A"))
-      deployB     = ProtoUtil.basicDeploy(0, sessionCode, ByteString.copyFromUtf8("B"))
+      deployA     = ProtoUtil.basicDeploy(0, sessionCode)
+      deployB     = ProtoUtil.basicDeploy(0, sessionCode)
 
       _                <- nodes(0).casperEff.deploy(deployA)
       createA          <- nodes(0).casperEff.createBlock
@@ -1132,11 +1118,15 @@ abstract class HashSetCasperTest
   }
 
   it should "not execute deploys until dependencies are met" in effectTest {
+    import io.casperlabs.models.DeployImplicits._
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
+
     for {
-      deploy1         <- ProtoUtil.basicDeploy[Task]()
-      deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withDependencies(Seq(deploy1.deployHash)))
+      deploy1 <- ProtoUtil.basicDeploy[Task]()
+      deploy2 <- ProtoUtil
+                  .basicDeploy[Task]()
+                  .map(_.withDependencies(Seq(deploy1.deployHash)).signSingle)
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block1) <- node.casperEff.createBlock
@@ -1149,12 +1139,17 @@ abstract class HashSetCasperTest
   }
 
   it should "only execute deploys during the appropriate time window" in effectTest {
+    import io.casperlabs.models.DeployImplicits._
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
     val minTTL = 60 * 60 * 1000
     for {
-      deploy1         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(3L).withTtl(minTTL))
-      deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withTimestamp(5L).withTtl(minTTL))
+      deploy1 <- ProtoUtil
+                  .basicDeploy[Task]()
+                  .map(_.withTimestamp(3L).withTtl(minTTL).signSingle)
+      deploy2 <- ProtoUtil
+                  .basicDeploy[Task]()
+                  .map(_.withTimestamp(5L).withTtl(minTTL).signSingle)
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(()) // gets deploy1
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(()) // gets deploy2
       _               <- Task.delay { node.timeEff.clock = 0 }
@@ -1318,7 +1313,7 @@ object HashSetCasperTest {
       timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val metricsEff              = new Metrics.MetricsNOP[Task]
-    implicit val logEff                  = new LogStub[Task]()
+    implicit val logEff                  = LogStub[Task]()
     implicit val casperSmartContractsApi = HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
     val spec = ipc.ChainSpec

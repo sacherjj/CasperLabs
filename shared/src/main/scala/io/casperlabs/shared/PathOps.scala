@@ -45,7 +45,7 @@ object PathOps {
     }
 
   implicit class PathDelete(path: Path) {
-    def deleteDirectory[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
+    def deleteDirectory[F[_]: Sync: Log](): F[Unit] = {
       import java.io.File
       import java.util.Comparator
 
@@ -82,22 +82,22 @@ object PathOps {
         _ <- result match {
               case Left(_: NoSuchFileException) =>
                 Log[F].warn(s"Can't delete file or directory $path: No such file")
-              case Left(t) =>
-                Log[F].error(s"Can't delete file or directory $path: ${t.getMessage}", t)
+              case Left(ex) =>
+                Log[F].error(s"Can't delete file or directory $path: $ex")
               case _ => ().pure[F]
             }
       } yield ()
     }
 
-    def deleteSingleFile[F[_]: Sync: Log]()(implicit logSource: LogSource): F[Unit] = {
+    def deleteSingleFile[F[_]: Sync: Log](): F[Unit] = {
       import io.casperlabs.catscontrib.Catscontrib.ToBooleanOpsFromBoolean
 
       def delete(): F[Unit] =
         for {
           result <- Sync[F].delay(path.toFile.delete).attempt
           _ <- result match {
-                case Left(t) =>
-                  Log[F].error(s"Can't delete file $path: ${t.getMessage}", t)
+                case Left(ex) =>
+                  Log[F].error(s"Can't delete file $path: $ex")
                 case Right(false) =>
                   Log[F].warn(s"Can't delete file $path.")
                 case Right(true) =>

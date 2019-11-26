@@ -16,7 +16,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
+import logstage.LogIO
 import scala.collection.immutable.HashMap
 
 class EquivocationDetectorTest
@@ -39,7 +39,7 @@ class EquivocationDetectorTest
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
-      log: LogStub[Task]
+      log: LogStub with LogIO[Task]
   ): Task[Block] =
     for {
       dag <- dagStorage.getRepresentation
@@ -76,7 +76,7 @@ class EquivocationDetectorTest
   )(
       implicit dagStorage: IndexedDagStorage[Task],
       blockStorage: BlockStorage[Task],
-      log: LogStub[Task]
+      log: LogStub with LogIO[Task]
   ): Task[Block] =
     for {
       block <- createBlockAndTestEquivocateDetector(
@@ -109,8 +109,8 @@ class EquivocationDetectorTest
          *               genesis
          *
          */
-        implicit val logEff: LogStub[Task] = new LogStub[Task]()
-        val v0                             = generateValidator("V0")
+        implicit val logEff = LogStub[Task]()
+        val v0              = generateValidator("V0")
 
         for {
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
@@ -154,7 +154,7 @@ class EquivocationDetectorTest
          *       genesis
          *
          */
-        implicit val logEff = new LogStub[Task]()
+        implicit val logEff = LogStub[Task]()
         val v0              = generateValidator("V0")
         val v1              = generateValidator("V1")
         for {
@@ -204,7 +204,7 @@ class EquivocationDetectorTest
          *                    genesis
          *
          */
-        implicit val logEff = new LogStub[Task]()
+        implicit val logEff = LogStub[Task]()
         val v0              = generateValidator("V0")
         val v1              = generateValidator("V1")
         for {
@@ -260,8 +260,8 @@ class EquivocationDetectorTest
          *
          */
 
-        implicit val logEff: LogStub[Task] = new LogStub[Task]()
-        val v0                             = generateValidator("V0")
+        implicit val logEff = LogStub[Task]()
+        val v0              = generateValidator("V0")
 
         for {
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
@@ -316,8 +316,8 @@ class EquivocationDetectorTest
          *
          */
 
-        implicit val logEff: LogStub[Task] = new LogStub[Task]()
-        val v0                             = generateValidator("V0")
+        implicit val logEff = LogStub[Task]()
+        val v0              = generateValidator("V0")
 
         for {
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
@@ -363,9 +363,9 @@ class EquivocationDetectorTest
   // See [[casper/src/test/resources/casper/tipsHavingEquivocations.png]]
   "detectVisibleFromJustificationMsgHashes" should "find validators who has equivocated from the j-past-cone of block's justifications" in withStorage {
     implicit blockStorage => implicit dagStorage => _ =>
-      implicit val logEff: LogStub[Task] = new LogStub[Task]()
-      val v1                             = generateValidator("V1")
-      val v2                             = generateValidator("V2")
+      implicit val logEff = LogStub[Task]()
+      val v1              = generateValidator("V1")
+      val v2              = generateValidator("V2")
 
       for {
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
