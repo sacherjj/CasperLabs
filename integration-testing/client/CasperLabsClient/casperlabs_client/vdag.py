@@ -1,10 +1,8 @@
 from collections import defaultdict
-import casperlabs_client
 
-# ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
-# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
-# ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
-
+"""
+Module for generating DAG diagrams in Graphviz DOT language.
+"""
 
 # Helpers for DOT language generation
 
@@ -48,6 +46,9 @@ digraph "dag" {{
 
 
 def cat(*args):
+    """
+    Flatten lists and concatenate strings in them.
+    """
     return "\n".join(type(arg) == list and cat(*arg) or str(arg) for arg in args)
 
 
@@ -65,6 +66,7 @@ def rank(block_info):
 def parents(block_info):
     ps = [h.hex() for h in block_info.summary.header.parent_hashes]
     if len(ps) == 0:
+        # Genesis block doesn't have parents.
         return [""]
     return ps
 
@@ -145,12 +147,6 @@ def generate_dot(block_infos, show_justification_lanes=False):
         else:
             genesis_block_id = block_id(b)
 
-    last_finalized_block_hash = next(
-        (block_hash(b) for b in block_infos if b.status.fault_tolerance > 0), ""
-    )
-
-    last_finalized_block_hash = last_finalized_block_hash
-
     ranks = set(rank(b) for b in block_infos)
     min_rank = min(ranks)
     max_rank = max(ranks)
@@ -179,7 +175,7 @@ def generate_dot(block_infos, show_justification_lanes=False):
 
     justification_lanes = (
         not show_justification_lanes
-        and []
+        and ""
         or [
             [
                 edge(
@@ -204,14 +200,3 @@ def generate_dot(block_infos, show_justification_lanes=False):
     return graph(
         genesis_block, lanes_alignment, lanes, parent_edges, justification_lanes
     )
-
-
-def main():
-    client = casperlabs_client.CasperLabsClient("deploy.casperlabs.io")
-    # client = casperlabs_client.CasperLabsClient("localhost", port=40411, port_internal=40412)
-    block_infos = sorted(client.showBlocks(depth=10), key=rank)
-
-    print(generate_dot(block_infos, show_justification_lanes=True))
-
-
-main()

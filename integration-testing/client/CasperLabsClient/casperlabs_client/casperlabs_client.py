@@ -26,6 +26,7 @@ import json
 import struct
 import logging
 import pkg_resources
+import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -58,6 +59,8 @@ from . import consensus_pb2 as consensus, state_pb2 as state
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
+
+from . import vdag
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
@@ -1043,9 +1046,28 @@ def show_blocks_command(casperlabs_client, args):
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    response = casperlabs_client.visualizeDag(args.depth)
-    # TODO: call Graphviz
-    print(hexify(response))
+    block_infos = list(casperlabs_client.showBlocks(args.depth))
+    dot = vdag.generate_dot(block_infos, args.show_justification_lines)
+    output_file = args.out
+    if not output_file:
+        print(dot)
+    else:
+        parts = output_file.split(".")
+        if len(parts) == 1:
+            raise Exception("File name has no extension indicating file format")
+        else:
+            file_format = parts[-1]
+            formats = "png,svg,svg_standalone,xdot,plain,plain_ext,ps,ps2,json,json0"
+            if file_format not in formats.split(","):
+                raise Exception(
+                    f"File extension {file_format} not_recognized, must be one of {formats}"
+                )
+            with tempfile.NamedTemporaryFile(mode="w") as f:
+                f.write(dot)
+                f.flush()
+                cmd = f"dot -T{file_format} -o {output_file} {f.name}"
+                print(cmd)
+                return os.system(cmd)
 
 
 @guarded_command
@@ -1224,12 +1246,12 @@ def main():
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
                        [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
-                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+
     # fmt:on
     sys.exit(parser.run())
 
