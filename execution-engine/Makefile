@@ -41,8 +41,7 @@ INTEGRATION_CONTRACTS += \
 	remove-associated-key \
 	standard-payment \
 	transfer-to-account \
-	unbonding-call \
-	mint-install
+	unbonding-call 
 
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 
