@@ -32,6 +32,25 @@ const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account
 // message
 const EXPECTED_ERROR_MESSAGE: &str = "IncompatibleProtocolMajorVersion { expected: 2, actual: 1 }";
 
+/// Prepares a upgrade request with pre-loaded deploy code, and new protocol version.
+fn make_upgrade_request(
+    new_protocol_version: ProtocolVersion,
+    code: &str,
+) -> UpgradeRequestBuilder {
+    let installer_code = {
+        let bytes = test_support::read_wasm_file_bytes(code);
+        let mut deploy_code = DeployCode::new();
+        deploy_code.set_code(bytes);
+        deploy_code
+    };
+
+    UpgradeRequestBuilder::new()
+        .with_current_protocol_version(PROTOCOL_VERSION)
+        .with_new_protocol_version(new_protocol_version)
+        .with_activation_point(DEFAULT_ACTIVATION_POINT)
+        .with_installer_code(installer_code)
+}
+
 #[ignore]
 #[test]
 fn should_exec_non_stored_code() {
@@ -104,23 +123,12 @@ fn should_exec_stored_code_by_hash() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -232,23 +240,12 @@ fn should_exec_stored_code_by_named_hash() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -445,23 +442,12 @@ fn should_exec_payment_and_session_stored_code() {
     let payment_purse_amount = 100_000_000; // <- seems like a lot, but it gets spent fast!
 
     // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -872,23 +858,12 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -906,18 +881,8 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -926,14 +891,13 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
         .expect("should have response");
 
     assert!(upgrade_response.has_success(), "expected success");
-    //////
 
     // next make another deploy that USES stored payment logic
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
-                &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
+                &format!("{}.wasm", DO_NOTHING_NAME),
                 (account_1_public_key, U512::from(transferred_amount)),
             )
             .with_stored_payment_named_key(
@@ -968,24 +932,12 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract
-    // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -1019,11 +971,6 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
         "stored_payment_contract_hash should exist"
     );
 
-    ////
-
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let transferred_amount = 1;
-
     //
     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm costs
     // table that's queried early
@@ -1032,18 +979,8 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1052,16 +989,12 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
         .expect("should have response");
 
     assert!(upgrade_response.has_success(), "expected success");
-    //////
 
     // next make another deploy that USES stored payment logic
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
-            )
+            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_hash(
                 stored_payment_contract_hash
                     .expect("hash should exist")
@@ -1096,24 +1029,12 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract
-    // first, store standard payment contract
-    let exec_request = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_UREF.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_UREF.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -1143,9 +1064,6 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
         .cloned()
         .expect("should have uref in tranforms");
 
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let transferred_amount = 1;
-
     //
     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm costs
     // table that's queried early
@@ -1154,18 +1072,8 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1174,16 +1082,12 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
         .expect("should have response");
 
     assert!(upgrade_response.has_success(), "expected success");
-    //////
 
     // next make another deploy that USES stored payment logic
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
-            )
+            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_uref(
                 stored_payment_contract_uref,
                 (U512::from(payment_purse_amount),),
@@ -1216,23 +1120,12 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract for v1.0.0
-    let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", DO_NOTHING_NAME),
-                (STORE_AT_UREF.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", DO_NOTHING_NAME),
+        (STORE_AT_UREF.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -1246,18 +1139,8 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1305,23 +1188,12 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract for v1.0.0
-    let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", DO_NOTHING_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", DO_NOTHING_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -1350,18 +1222,8 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1409,23 +1271,12 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store standard payment contract for v1.0.0
-    let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", DO_NOTHING_NAME),
-                (STORE_AT_UREF.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
-
-        ExecuteRequestBuilder::new().push_deploy(deploy).build()
-    };
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", DO_NOTHING_NAME),
+        (STORE_AT_UREF.to_string(),),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
@@ -1454,18 +1305,8 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_MINT_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1522,18 +1363,8 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     let new_protocol_version =
         ProtocolVersion::from_parts(sem_ver.major + 1, sem_ver.minor, sem_ver.patch);
 
-    let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
-        let mut installer_code = DeployCode::new();
-        installer_code.set_code(bytes);
-
-        UpgradeRequestBuilder::new()
-            .with_current_protocol_version(PROTOCOL_VERSION)
-            .with_new_protocol_version(new_protocol_version)
-            .with_activation_point(DEFAULT_ACTIVATION_POINT)
-            .with_installer_code(installer_code)
-            .build()
-    };
+    let mut upgrade_request =
+        make_upgrade_request(new_protocol_version, MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME).build();
 
     builder.upgrade_with_upgrade_request(&mut upgrade_request);
 
@@ -1545,47 +1376,21 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
 
     // first, store standard payment contract for v2.0.0
 
-    let exec_request_1 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (STORE_AT_HASH.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([1; 32])
-            .build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
+        (STORE_AT_HASH.to_string(),),
+    )
+    .with_protocol_version(new_protocol_version)
+    .build();
 
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(new_protocol_version)
-            .build()
-    };
-
-    let exec_request_2 = {
-        let deploy = DeployItemBuilder::new()
-            .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}_stored.wasm", DO_NOTHING_NAME),
-                (STORE_AT_UREF.to_string(),),
-            )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(payment_purse_amount),),
-            )
-            .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
-            .with_deploy_hash([2; 32])
-            .build();
-
-        ExecuteRequestBuilder::new()
-            .push_deploy(deploy)
-            .with_protocol_version(new_protocol_version)
-            .build()
-    };
+    let exec_request_2 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        &format!("{}_stored.wasm", DO_NOTHING_NAME),
+        (STORE_AT_UREF.to_string(),),
+    )
+    .with_protocol_version(new_protocol_version)
+    .build();
 
     //
     // Obtain standard payment using hash

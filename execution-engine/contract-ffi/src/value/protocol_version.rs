@@ -375,7 +375,7 @@ mod tests {
     }
 
     #[test]
-    fn should_be_compatible_with_equal_major_version_forwads() {
+    fn should_be_compatible_with_equal_major_version_forwards() {
         let current = ProtocolVersion::from_parts(1, 0, 0);
         let other = ProtocolVersion::from_parts(1, 99, 99);
         assert!(current.is_compatible_with(&other));
