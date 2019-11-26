@@ -556,7 +556,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         name = "key",
         descr = "Base16 encoding of the base key.",
         required = true,
-        validate = hexCheck
+        validate = (key: String) => {
+          keyType() match {
+            case "local" =>
+              key.split(":") match {
+                case arr @ Array(_, _) => arr.forall(hexCheck)
+                case _                 => false
+              }
+            case _ => hexCheck(key)
+          }
+        }
       )
 
     val path =
