@@ -30,7 +30,7 @@ purpose. `Address`-type keys have accounts as the associated value
 (more details on accounts will follow), `Hash`-type keys store "smart
 contracts", and `URef`-type keys store any data which can be
 represented in the [CasperLabs
-ABI](https://techspec.casperlabs.io/technical-details/block-storage/global-state#abi)
+ABI](https://slack-redir.net/link?url=https%3A%2F%2Ftechspec.casperlabs.io%2Fen%2Flatest%2Fimplementation%2Fappendix.html%23b-serialization-format)
 (except accounts). An account is a cryptographically-secured
 entry-point into the system. All changes to the global state must be
 tied to an account.
