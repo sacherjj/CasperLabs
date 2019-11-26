@@ -2,8 +2,8 @@ use contract_ffi::key::Key;
 use contract_ffi::value::Value;
 use contract_ffi::value::U512;
 
-use engine_tests::support::test_support::InMemoryWasmTestBuilder as TestBuilder;
-use engine_tests::support::test_support::ExecuteRequestBuilder;
+use crate::support::test_support::InMemoryWasmTestBuilder as TestBuilder;
+use crate::support::test_support::ExecuteRequestBuilder;
 
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";

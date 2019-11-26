@@ -11,6 +11,9 @@ pub mod deploy;
 pub mod regression;
 #[cfg(test)]
 pub mod system_contracts;
+#[cfg(test)]
+pub mod examples;
+
 
 use lazy_static::lazy_static;
 use num_traits::identities::Zero;

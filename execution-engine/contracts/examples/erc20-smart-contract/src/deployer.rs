@@ -4,7 +4,6 @@ use contract_ffi::contract_api::runtime;
 use contract_ffi::contract_api::storage;
 use contract_ffi::contract_api::TURef;
 use contract_ffi::contract_api::ContractRef;
-use contract_ffi::value::Value;
 use contract_ffi::value::U512;
 use contract_ffi::key::Key;
 
@@ -12,9 +11,11 @@ use crate::error::Error;
 use crate::api::Api;
 
 // ERC20 smart contract.
+#[allow(unused_imports)]
 use crate::erc20::erc20;
 
 // Proxy smart contract.
+#[allow(unused_imports)]
 use crate::proxy::erc20_proxy;
 
 pub fn deploy() {

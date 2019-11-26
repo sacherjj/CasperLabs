@@ -10,5 +10,5 @@ doctest = false
 test = false
 
 [dependencies]
-contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../execution-engine/contract-ffi" }
+contract-ffi = { package = "casperlabs-contract-ffi", path = "../../../contract-ffi" }
 erc20_logic  = { package = "erc20-logic", path = "../erc20-logic", default-features = false }

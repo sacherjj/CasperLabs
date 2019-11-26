@@ -1,5 +1,3 @@
-use alloc::string::String;
-use alloc::string::ToString;
 use alloc::vec;
 
 use contract_ffi::contract_api::account::PublicKey;
@@ -63,7 +61,7 @@ fn constructor() {
     }
 }
 
-fn call() {
+fn entry_point() {
     match Api::from_args() {
         Api::Transfer(recipient, amount) => {
             match ERC20Token::transfer(&runtime::get_caller(), &recipient, amount) {
@@ -101,12 +99,12 @@ fn call() {
 }
 
 fn is_not_initialized() -> bool {
-    let flag: Option<String> = storage::read_local(INIT_FLAG_KEY).unwrap_or_revert();
+    let flag: Option<i32> = storage::read_local(INIT_FLAG_KEY).unwrap_or_revert();
     flag.is_none()
 }
 
 fn mark_as_initialized() { 
-    storage::write_local(INIT_FLAG_KEY, String::from("initialized")); 
+    storage::write_local(INIT_FLAG_KEY, 1); 
 }
 
 #[no_mangle]
@@ -115,6 +113,6 @@ pub extern "C" fn erc20() {
         constructor();
         mark_as_initialized();
     } else {
-        call();
+        entry_point();
     }
 }

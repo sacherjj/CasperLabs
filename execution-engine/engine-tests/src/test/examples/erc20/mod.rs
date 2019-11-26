@@ -1,20 +1,21 @@
-extern crate engine_tests;
 extern crate alloc;
 
 use contract_ffi::value::U512;
 
-use engine_tests::test::DEFAULT_ACCOUNT_ADDR;
-use engine_tests::test::DEFAULT_GENESIS_CONFIG;
-use engine_tests::support::test_support::InMemoryWasmTestBuilder as TestBuilder;
+use crate::test::DEFAULT_ACCOUNT_ADDR;
+use crate::test::DEFAULT_GENESIS_CONFIG;
+use crate::support::test_support::InMemoryWasmTestBuilder as TestBuilder;
 
-use crate::utils::approve;
-use crate::utils::assert_balance;
-use crate::utils::assert_total_supply;
-use crate::utils::assert_allowance;
-use crate::utils::deploy_erc20;
-use crate::utils::transfer;
-use crate::utils::transfer_from;
-use crate::utils::transfer_motes;
+mod utils;
+
+use utils::approve;
+use utils::assert_balance;
+use utils::assert_total_supply;
+use utils::assert_allowance;
+use utils::deploy_erc20;
+use utils::transfer;
+use utils::transfer_from;
+use utils::transfer_motes;
 
 const ACCOUNT_1: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
 const ACCOUNT_2: [u8; 32] = [2u8; 32];
