@@ -7,7 +7,7 @@ protocol-version = "1.0.2"
 # Optional path to the file containing wasm bytecode installing new system contracts.
 installer-code-path = "installer.wasm"
 
-[deploy-config]
+[deploys]
 # 1 hour
 min-ttl-millis = 3600000
 # 10 days

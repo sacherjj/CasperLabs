@@ -50,7 +50,7 @@ object ChainSpec extends ParserImplicits {
       patch: Int
   )
 
-  final case class DeployConfig(
+  final case class Deploy(
       minTtlMillis: Int Refined NonNegative,
       maxTtlMillis: Int Refined NonNegative,
       maxDependencies: Int Refined NonNegative
@@ -60,7 +60,7 @@ object ChainSpec extends ParserImplicits {
   final case class GenesisConf(
       genesis: Genesis,
       wasmCosts: WasmCosts,
-      deployConfig: DeployConfig
+      deploys: Deploy
   )
   object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
 
@@ -68,7 +68,7 @@ object ChainSpec extends ParserImplicits {
   final case class UpgradeConf(
       upgrade: Upgrade,
       wasmCosts: Option[WasmCosts],
-      deployConfig: Option[DeployConfig]
+      deploys: Option[Deploy]
   )
   object UpgradeConf extends ConfCompanion[UpgradeConf](ConfParser.gen[UpgradeConf])
 
@@ -366,7 +366,7 @@ object ChainSpecReader {
           .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
       )
 
-  private def toDeployConfig(deployConfig: DeployConfig): ipc.ChainSpec.DeployConfig =
+  private def toDeployConfig(deployConfig: Deploy): ipc.ChainSpec.DeployConfig =
     ipc.ChainSpec.DeployConfig(
       deployConfig.minTtlMillis.value,
       deployConfig.maxTtlMillis.value,

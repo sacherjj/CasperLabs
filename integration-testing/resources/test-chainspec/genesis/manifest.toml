@@ -22,7 +22,7 @@ pos-code-path = "pos_install.wasm"
 # To override the default values, create a file at ~/.casperlabs/chainspec/genesis/accounts.csv
 initial-accounts-path = "accounts.csv"
 
-[deploy-config]
+[deploys]
 # 1 hour
 min-ttl-millis = 3600000
 # 1 day

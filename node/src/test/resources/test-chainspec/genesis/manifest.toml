@@ -20,7 +20,7 @@ pos-code-path = "pos.wasm"
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 initial-accounts-path = "accounts.csv"
 
-[deploy-config]
+[deploys]
 # 1 hour
 min-ttl-millis = 3600000
 # 1 day
