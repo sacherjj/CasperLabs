@@ -133,7 +133,6 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
     */
   override def parents(
       b: Block,
-      genesisHash: BlockHash,
       dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]

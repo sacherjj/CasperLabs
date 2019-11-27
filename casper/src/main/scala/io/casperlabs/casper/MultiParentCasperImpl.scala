@@ -465,6 +465,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          upgrades
                        )
+        lfb <- LastFinalizedBlockHashContainer[F].get
         result <- Sync[F]
                    .delay {
                      if (checkpoint.deploysForBlock.isEmpty) {
@@ -492,7 +493,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          validatorId,
                          privateKey,
-                         sigAlgorithm
+                         sigAlgorithm,
+                         lfb
                        )
                        CreateBlockStatus.created(block)
                      }
