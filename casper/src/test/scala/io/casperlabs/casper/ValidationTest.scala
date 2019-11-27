@@ -18,7 +18,7 @@ import io.casperlabs.casper.helper.{
 import io.casperlabs.casper.helper.DeployOps.ChangeDeployOps
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.BondingUtil.Bond
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtilTest.prepareDeploys
 import io.casperlabs.casper.util.execengine.{
   DeploysCheckpoint,
@@ -63,7 +63,7 @@ class ValidationTest
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions = {
-    CasperLabsProtocolVersions.unsafe[Task](
+    CasperLabsProtocol.unsafe[Task](
       0L -> state.ProtocolVersion(1)
     )
   }

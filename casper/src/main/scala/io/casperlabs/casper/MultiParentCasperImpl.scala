@@ -52,7 +52,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocolVersions](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -455,7 +455,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                    .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                    .map(set => ProtoUtil.nextRank(set.toList))
                )
-        protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
         checkpoint <- ExecEngineUtil
                        .computeDeploysCheckpoint[F](
                          merged,
@@ -547,7 +547,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocolVersions: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection](
@@ -586,7 +586,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -810,7 +810,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

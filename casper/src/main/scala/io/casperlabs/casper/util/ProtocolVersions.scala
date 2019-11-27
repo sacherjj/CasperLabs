@@ -92,12 +92,12 @@ object ProtocolVersions {
 }
 
 @typeclass
-trait CasperLabsProtocolVersions[F[_]] {
+trait CasperLabsProtocol[F[_]] {
   def versionAt(blockHeight: Long): F[state.ProtocolVersion]
   def fromBlock(b: Block): F[state.ProtocolVersion]
 }
 
-object CasperLabsProtocolVersions {
+object CasperLabsProtocol {
   import ProtocolVersions.BlockThreshold
 
   // Specifies what protocol version to choose at the `blockThreshold` height.
@@ -107,7 +107,7 @@ object CasperLabsProtocolVersions {
 
   def unsafe[F[_]: Applicative](
       versions: (Long, state.ProtocolVersion)*
-  ): CasperLabsProtocolVersions[F] = {
+  ): CasperLabsProtocol[F] = {
     val thresholds = versions.map {
       case (rank, version) =>
         BlockThreshold(rank, version)
@@ -115,18 +115,18 @@ object CasperLabsProtocolVersions {
 
     val underlying = ProtocolVersions(thresholds.toList)
 
-    new CasperLabsProtocolVersions[F] {
+    new CasperLabsProtocol[F] {
       def versionAt(blockHeight: Long) = underlying.versionAt(blockHeight).pure[F]
-      def fromBlock(b: Block)          = underlying.fromBlock(b).pure[F]
+      def protocolFromBlock(b: Block)  = underlying.fromBlock(b).pure[F]
     }
   }
 
   def apply[F[_]: MonadThrowable](
       versions: (Long, state.ProtocolVersion)*
-  ): F[CasperLabsProtocolVersions[F]] =
+  ): F[CasperLabsProtocol[F]] =
     MonadThrowable[F].fromTry(Try(unsafe(versions: _*)))
 
-  def fromChainSpec[F[_]: MonadThrowable](spec: ipc.ChainSpec): F[CasperLabsProtocolVersions[F]] = {
+  def fromChainSpec[F[_]: MonadThrowable](spec: ipc.ChainSpec): F[CasperLabsProtocol[F]] = {
     val versions = (0L, spec.getGenesis.getProtocolVersion) +:
       spec.upgrades.map(up => (up.getActivationPoint.rank, up.getProtocolVersion))
     apply(versions: _*)

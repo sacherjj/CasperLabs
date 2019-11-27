@@ -8,7 +8,7 @@ import io.casperlabs.casper
 import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
@@ -29,7 +29,7 @@ object ExecutionEngineServiceStub {
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
     casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService: CasperLabsProtocolVersions](
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService: CasperLabsProtocol](
       b: Block,
       dag: DagRepresentation[F]
   ): F[Either[Throwable, StateHash]] = {

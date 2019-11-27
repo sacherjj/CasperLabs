@@ -10,7 +10,7 @@ import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
 import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.catscontrib.Fs2Compiler
@@ -71,14 +71,14 @@ trait Validation[F[_]] {
       maybeGenesis: Option[Block]
   )(
       implicit bs: BlockStorage[F],
-      versions: CasperLabsProtocolVersions[F],
+      versions: CasperLabsProtocol[F],
       compiler: Fs2Compiler[F]
   ): F[Unit]
 
   def blockSummary(
       summary: BlockSummary,
       chainName: String
-  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit]
+  )(implicit versions: CasperLabsProtocol[F]): F[Unit]
 }
 
 object Validation {

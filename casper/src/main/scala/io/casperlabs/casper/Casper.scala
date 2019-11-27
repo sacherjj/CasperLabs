@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -59,7 +59,7 @@ sealed abstract class MultiParentCasperInstances {
     } yield casperState
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocolVersions](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocol](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,

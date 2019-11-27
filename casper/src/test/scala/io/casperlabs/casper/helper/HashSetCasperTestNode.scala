@@ -11,7 +11,7 @@ import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
 import io.casperlabs.comm.discovery.Node
@@ -313,7 +313,7 @@ object HashSetCasperTestNode {
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
 
-  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocol.unsafe[F](
     0L -> consensus.state.ProtocolVersion(1)
   )
 }

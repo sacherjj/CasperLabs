@@ -8,7 +8,7 @@ import cats.implicits._
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{HashSetCasperTestNode, StorageFixture}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
@@ -57,7 +57,7 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
       for {
         genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
-        implicit0(versions: CasperLabsProtocolVersions[Task]) <- CasperLabsProtocolVersions
+        implicit0(versions: CasperLabsProtocol[Task]) <- CasperLabsProtocol
                                                                   .fromChainSpec[Task](
                                                                     ipc
                                                                       .ChainSpec()
