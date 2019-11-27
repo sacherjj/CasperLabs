@@ -58,12 +58,6 @@ pub enum Value {
     Unit,
 }
 
-mod value {
-    struct Int32(i32);
-}
-
-
-
 impl ToBytes for Value {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {

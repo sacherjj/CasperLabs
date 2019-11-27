@@ -8,11 +8,21 @@ use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilde
 const ERC_20_CONTRACT_WASM: &str = "erc20_smart_contract.wasm";
 const TRANFER_TO_ACCOUNT_WASM: &str = "transfer_to_account.wasm";
 
+const METHOD_DEPLOY: &str = "deploy";
+const METHOD_ASSERT_BALLANCE: &str = "assert_balance";
+const METHOD_ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
+const METHOD_ASSERT_ALLOWANCE: &str = "assert_allowance";
+const METHOD_TRANSFER: &str = "transfer";
+const METHOD_TRANSFER_FROM: &str = "transfer_from";
+const METHOD_APPROVE: &str = "approve";
+
+const UREF_NAME_ERC20_PROXY: &str = "erc20_proxy";
+
 pub fn contract_hash(builder: &mut TestBuilder, account: [u8; 32], name: &str) -> [u8; 32] {
     let account_key = Key::Account(account);
     let value: Value = builder.query(None, account_key, &[name]).unwrap();
     if let Value::Key(Key::Hash(contract_hash)) = value {
-        contract_hash.clone()
+        contract_hash
     } else {
         panic!("Can't extract contract hash.");
     }
@@ -27,12 +37,12 @@ pub fn deploy_erc20(
     let request = ExecuteRequestBuilder::standard(
         sender,
         ERC_20_CONTRACT_WASM,
-        ("deploy", token_name, init_balance),
+        (METHOD_DEPLOY, token_name, init_balance),
     )
     .build();
     builder.exec(request).expect_success().commit();
     let token_hash = contract_hash(builder, sender, token_name);
-    let proxy_hash = contract_hash(builder, sender, "erc20_proxy");
+    let proxy_hash = contract_hash(builder, sender, UREF_NAME_ERC20_PROXY);
     (token_hash, proxy_hash)
 }
 
@@ -47,7 +57,7 @@ pub fn assert_balance(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "assert_balance", address, expected),
+        (token_hash, METHOD_ASSERT_BALLANCE, address, expected),
     )
     .build();
     builder.exec(request).expect_success().commit();
@@ -63,7 +73,7 @@ pub fn assert_total_supply(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "assert_total_supply", expected),
+        (token_hash, METHOD_ASSERT_TOTAL_SUPPLY, expected),
     )
     .build();
     builder.exec(request).expect_success().commit();
@@ -81,7 +91,13 @@ pub fn assert_allowance(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "assert_allowance", owner, spender, expected),
+        (
+            token_hash,
+            METHOD_ASSERT_ALLOWANCE,
+            owner,
+            spender,
+            expected,
+        ),
     )
     .build();
     builder.exec(request).expect_success().commit();
@@ -98,7 +114,7 @@ pub fn transfer(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "transfer", recipient, amount),
+        (token_hash, METHOD_TRANSFER, recipient, amount),
     )
     .build();
     builder.exec(request).expect_success().commit();
@@ -116,7 +132,7 @@ pub fn transfer_from(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "transfer_from", owner, recipient, amount),
+        (token_hash, METHOD_TRANSFER_FROM, owner, recipient, amount),
     )
     .build();
     builder.exec(request).expect_success().commit();
@@ -133,7 +149,7 @@ pub fn approve(
     let request = ExecuteRequestBuilder::contract_call_by_hash(
         sender,
         proxy_hash,
-        (token_hash, "approve", spender, amount),
+        (token_hash, METHOD_APPROVE, spender, amount),
     )
     .build();
     builder.exec(request).expect_success().commit();

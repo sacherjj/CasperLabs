@@ -18,6 +18,8 @@ const ACCOUNT_1: [u8; 32] = DEFAULT_ACCOUNT_ADDR;
 const ACCOUNT_2: [u8; 32] = [2u8; 32];
 const ACCOUNT_3: [u8; 32] = [3u8; 32];
 
+const TOKEN_NAME: &str = "token_name";
+
 #[ignore]
 #[test]
 fn test_erc20_transfer() {
@@ -30,7 +32,7 @@ fn test_erc20_transfer() {
     // ACCOUNT_1 should have 1000 at start.
     // ACCOUNT_2 should have 0 balance.
     let init_balance = U512::from(1000);
-    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, "token", init_balance);
+    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, TOKEN_NAME, init_balance);
     assert_total_supply(
         &mut builder,
         proxy_hash,
@@ -138,7 +140,7 @@ fn test_erc20_approval_and_transfer_from() {
 
     // Deploy token.
     let init_balance = U512::from(1000);
-    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, "token", init_balance);
+    let (token_hash, proxy_hash) = deploy_erc20(&mut builder, ACCOUNT_1, TOKEN_NAME, init_balance);
 
     // At start allowance should be 0 tokens.
     assert_allowance(

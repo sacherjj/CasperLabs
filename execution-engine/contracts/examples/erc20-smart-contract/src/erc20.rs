@@ -13,55 +13,57 @@ use crate::{api::Api, error::Error};
 
 pub const INIT_FLAG_KEY: [u8; 32] = [1u8; 32];
 pub const TOTAL_SUPPLY_KEY: [u8; 32] = [255u8; 32];
-pub const BALANCE_SEED: [u8; 32] = [1u8; 32];
+pub const SEED: [u8; 32] = [1u8; 32];
 
 struct ERC20Token;
 
 impl ERC20Trait<U512, PublicKey> for ERC20Token {
-    fn read_balance(address: &PublicKey) -> Option<U512> {
-        let key = Key::local(BALANCE_SEED, &address.value());
+    fn read_balance(&mut self, address: &PublicKey) -> Option<U512> {
+        let key = Key::local(SEED, &address.value());
         storage::read_local(key).unwrap_or_revert()
     }
 
-    fn save_balance(address: &PublicKey, balance: U512) {
-        let key = Key::local(BALANCE_SEED, &address.value());
+    fn save_balance(&mut self, address: &PublicKey, balance: U512) {
+        let key = Key::local(SEED, &address.value());
         storage::write_local(key, balance);
     }
 
-    fn read_total_supply() -> Option<U512> {
-        let key = Key::local(TOTAL_SUPPLY_KEY, &TOTAL_SUPPLY_KEY);
+    fn read_total_supply(&mut self) -> Option<U512> {
+        let key = Key::local(SEED, &TOTAL_SUPPLY_KEY);
         storage::read_local(key).unwrap_or_revert()
     }
 
-    fn save_total_supply(total_supply: U512) {
-        let key = Key::local(TOTAL_SUPPLY_KEY, &TOTAL_SUPPLY_KEY);
+    fn save_total_supply(&mut self, total_supply: U512) {
+        let key = Key::local(SEED, &TOTAL_SUPPLY_KEY);
         storage::write_local(key, total_supply);
     }
 
-    fn read_allowance(owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
+    fn read_allowance(&mut self, owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
         let key = Key::local(owner.value(), &spender.value());
         storage::read_local(key).unwrap_or_revert()
     }
 
-    fn save_allowance(owner: &PublicKey, spender: &PublicKey, amount: U512) {
+    fn save_allowance(&mut self, owner: &PublicKey, spender: &PublicKey, amount: U512) {
         let key = Key::local(owner.value(), &spender.value());
         storage::write_local(key, amount);
     }
 }
 
 fn constructor() {
+    let mut token = ERC20Token;
     match Api::from_args() {
         Api::InitErc20(amount) => {
-            ERC20Token::mint(&runtime::get_caller(), amount);
+            token.mint(&runtime::get_caller(), amount);
         }
         _ => runtime::revert(Error::UnknownErc20ConstructorCommand),
     }
 }
 
 fn entry_point() {
+    let mut token = ERC20Token;
     match Api::from_args() {
         Api::Transfer(recipient, amount) => {
-            match ERC20Token::transfer(&runtime::get_caller(), &recipient, amount) {
+            match token.transfer(&runtime::get_caller(), &recipient, amount) {
                 Ok(()) => {}
                 Err(ERC20TransferError::NotEnoughBalance) => {
                     runtime::revert(Error::TransferFailureNotEnoughBalance)
@@ -69,28 +71,20 @@ fn entry_point() {
             };
         }
         Api::TransferFrom(owner, recipient, amount) => {
-            match ERC20Token::transfer_from(&runtime::get_caller(), &owner, &recipient, amount) {
+            match token.transfer_from(&runtime::get_caller(), &owner, &recipient, amount) {
                 Ok(()) => {}
-                Err(ERC20TransferFromError::NotEnoughBalance) => {
-                    runtime::revert(Error::TransferFromFailureNotEnoughBalance)
-                }
+                Err(ERC20TransferFromError::TransferError(
+                    ERC20TransferError::NotEnoughBalance,
+                )) => runtime::revert(Error::TransferFromFailureNotEnoughBalance),
                 Err(ERC20TransferFromError::NotEnoughAllowance) => {
                     runtime::revert(Error::TransferFromFailureNotEnoughAllowance)
                 }
             };
         }
-        Api::Approve(spender, amount) => {
-            ERC20Token::approve(&runtime::get_caller(), &spender, amount);
-        }
-        Api::BalanceOf(address) => {
-            runtime::ret(ERC20Token::balance_of(&address), vec![]);
-        }
-        Api::TotalSupply => {
-            runtime::ret(ERC20Token::total_supply(), vec![]);
-        }
-        Api::Allowance(owner, spender) => {
-            runtime::ret(ERC20Token::allowance(&owner, &spender), vec![]);
-        }
+        Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
+        Api::BalanceOf(address) => runtime::ret(token.balance_of(&address), vec![]),
+        Api::TotalSupply => runtime::ret(token.total_supply(), vec![]),
+        Api::Allowance(owner, spender) => runtime::ret(token.allowance(&owner, &spender), vec![]),
         _ => runtime::revert(Error::UnknownErc20CallCommand),
     }
 }

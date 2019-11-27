@@ -1,7 +1,6 @@
 #![no_std]
 
-#[cfg(feature = "use_std")]
-#[macro_use]
+#[cfg(feature = "std")]
 extern crate std;
 
 use core::ops::{Add, Sub};
@@ -13,8 +12,14 @@ pub enum ERC20TransferError {
 
 #[derive(PartialEq, Debug)]
 pub enum ERC20TransferFromError {
-    NotEnoughBalance,
+    TransferError(ERC20TransferError),
     NotEnoughAllowance,
+}
+
+impl From<ERC20TransferError> for ERC20TransferFromError {
+    fn from(error: ERC20TransferError) -> ERC20TransferFromError {
+        ERC20TransferFromError::TransferError(error)
+    }
 }
 
 pub trait ERC20Trait<
@@ -22,79 +27,69 @@ pub trait ERC20Trait<
     Address,
 >
 {
-    fn read_balance(address: &Address) -> Option<Amount>;
-    fn save_balance(address: &Address, balance: Amount);
-    fn read_total_supply() -> Option<Amount>;
-    fn save_total_supply(total_supply: Amount);
-    fn read_allowance(owner: &Address, spender: &Address) -> Option<Amount>;
-    fn save_allowance(owner: &Address, spender: &Address, amount: Amount);
+    fn read_balance(&mut self, address: &Address) -> Option<Amount>;
+    fn save_balance(&mut self, address: &Address, balance: Amount);
+    fn read_total_supply(&mut self) -> Option<Amount>;
+    fn save_total_supply(&mut self, total_supply: Amount);
+    fn read_allowance(&mut self, owner: &Address, spender: &Address) -> Option<Amount>;
+    fn save_allowance(&mut self, owner: &Address, spender: &Address, amount: Amount);
 
-    fn mint(address: &Address, amount: Amount) {
-        let address_balance = Self::balance_of(address);
-        let total_supply = Self::total_supply();
-        Self::save_balance(&address, address_balance + amount);
-        Self::save_total_supply(total_supply + amount);
+    fn mint(&mut self, address: &Address, amount: Amount) {
+        let address_balance = self.balance_of(address);
+        let total_supply = self.total_supply();
+        self.save_balance(&address, address_balance + amount);
+        self.save_total_supply(total_supply + amount);
     }
 
     fn transfer(
+        &mut self,
         sender: &Address,
         recipient: &Address,
         amount: Amount,
     ) -> Result<(), ERC20TransferError> {
-        let sender_balance = Self::balance_of(sender);
+        let sender_balance = self.balance_of(sender);
         if amount > sender_balance {
             Err(ERC20TransferError::NotEnoughBalance)
         } else {
-            let recipient_balance = Self::balance_of(recipient);
-            Self::save_balance(&sender, sender_balance - amount);
-            Self::save_balance(&recipient, recipient_balance + amount);
+            let recipient_balance = self.balance_of(recipient);
+            self.save_balance(&sender, sender_balance - amount);
+            self.save_balance(&recipient, recipient_balance + amount);
             Ok(())
         }
     }
 
-    fn balance_of(address: &Address) -> Amount {
-        match Self::read_balance(address) {
-            Some(amount) => amount,
-            None => Amount::from(0),
-        }
+    fn balance_of(&mut self, address: &Address) -> Amount {
+        self.read_balance(address)
+            .unwrap_or_else(|| Amount::from(0))
     }
 
-    fn total_supply() -> Amount {
-        match Self::read_total_supply() {
-            Some(amount) => amount,
-            None => Amount::from(0),
-        }
+    fn total_supply(&mut self) -> Amount {
+        self.read_total_supply().unwrap_or_else(|| Amount::from(0))
     }
 
-    fn allowance(owner: &Address, spender: &Address) -> Amount {
-        match Self::read_allowance(owner, spender) {
-            Some(amount) => amount,
-            None => Amount::from(0),
-        }
+    fn allowance(&mut self, owner: &Address, spender: &Address) -> Amount {
+        self.read_allowance(owner, spender)
+            .unwrap_or_else(|| Amount::from(0))
     }
 
-    fn approve(owner: &Address, spender: &Address, amount: Amount) {
-        Self::save_allowance(owner, spender, amount)
+    fn approve(&mut self, owner: &Address, spender: &Address, amount: Amount) {
+        self.save_allowance(owner, spender, amount)
     }
 
     fn transfer_from(
+        &mut self,
         spender: &Address,
         owner: &Address,
         recipient: &Address,
         amount: Amount,
     ) -> Result<(), ERC20TransferFromError> {
-        let allowance = Self::allowance(owner, spender);
-        let balance = Self::balance_of(owner);
+        let allowance = self.allowance(owner, spender);
         if amount > allowance {
-            Err(ERC20TransferFromError::NotEnoughAllowance)
-        } else if amount > balance {
-            Err(ERC20TransferFromError::NotEnoughBalance)
-        } else {
-            // Balance was already checked.
-            let _result = Self::transfer(owner, recipient, amount);
-            Self::approve(owner, spender, allowance - amount);
-            Ok(())
+            return Err(ERC20TransferFromError::NotEnoughAllowance);
         }
+        self.transfer(owner, recipient, amount)?;
+        self.approve(owner, spender, allowance - amount);
+        Ok(())
     }
 }
 
@@ -103,53 +98,51 @@ pub trait ERC20Trait<
 mod tests {
     use super::{ERC20Trait, ERC20TransferError, ERC20TransferFromError};
 
-    use std::{cell::RefCell, collections::HashMap};
+    use std::collections::HashMap;
 
     type Amount = u64;
     type Address = u8;
     type AddressPair = (Address, Address);
 
-    thread_local! {
-        static BALANCES: RefCell<HashMap<Address, Amount>> = RefCell::new(HashMap::new());
-        static ALLOWANCE: RefCell<HashMap<AddressPair, Amount>> = RefCell::new(HashMap::new());
-        static TOTAL_SUPPLY: RefCell<Amount> = RefCell::new(0);
+    struct Token {
+        total_supply_count: Amount,
+        balances: HashMap<Address, Amount>,
+        allowance: HashMap<AddressPair, Amount>,
     }
 
-    struct Token;
+    impl Token {
+        fn new() -> Token {
+            Token {
+                total_supply_count: 0,
+                balances: HashMap::new(),
+                allowance: HashMap::new(),
+            }
+        }
+    }
 
     impl ERC20Trait<Amount, Address> for Token {
-        fn read_balance(address: &Address) -> Option<Amount> {
-            BALANCES.with(|balances| match balances.borrow().get(address) {
-                Some(value) => Some(value.clone()),
-                None => None,
-            })
+        fn read_balance(&mut self, address: &Address) -> Option<Amount> {
+            self.balances.get(address).cloned()
         }
 
-        fn save_balance(address: &Address, balance: Amount) {
-            BALANCES.with(|balances| balances.borrow_mut().insert(*address, balance));
+        fn save_balance(&mut self, address: &Address, balance: Amount) {
+            self.balances.insert(*address, balance);
         }
 
-        fn read_total_supply() -> Option<Amount> {
-            TOTAL_SUPPLY.with(|total_supply| Some(*total_supply.borrow()))
+        fn read_total_supply(&mut self) -> Option<Amount> {
+            Some(self.total_supply_count)
         }
 
-        fn save_total_supply(new_total_supply: Amount) {
-            TOTAL_SUPPLY.with(|total_supply| {
-                *total_supply.borrow_mut() = new_total_supply;
-            });
+        fn save_total_supply(&mut self, new_total_supply: Amount) {
+            self.total_supply_count = new_total_supply;
         }
 
-        fn read_allowance(owner: &Address, spender: &Address) -> Option<Amount> {
-            ALLOWANCE.with(
-                |allowance| match allowance.borrow().get(&(*owner, *spender)) {
-                    Some(value) => Some(value.clone()),
-                    None => None,
-                },
-            )
+        fn read_allowance(&mut self, owner: &Address, spender: &Address) -> Option<Amount> {
+            self.allowance.get(&(*owner, *spender)).cloned()
         }
 
-        fn save_allowance(owner: &Address, spender: &Address, amount: Amount) {
-            ALLOWANCE.with(|allowance| allowance.borrow_mut().insert((*owner, *spender), amount));
+        fn save_allowance(&mut self, owner: &Address, spender: &Address, amount: Amount) {
+            self.allowance.insert((*owner, *spender), amount);
         }
     }
 
@@ -159,97 +152,105 @@ mod tests {
 
     #[test]
     fn test_initial_balances() {
-        assert_eq!(Token::balance_of(&ADDRESS_1), 0);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::total_supply(), 0);
+        let mut token = Token::new();
+        assert_eq!(token.balance_of(&ADDRESS_1), 0);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.total_supply(), 0);
     }
 
     #[test]
     fn test_mint() {
-        Token::mint(&ADDRESS_1, 10);
-        assert_eq!(Token::balance_of(&ADDRESS_1), 10);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::total_supply(), 10);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        assert_eq!(token.balance_of(&ADDRESS_1), 10);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.total_supply(), 10);
     }
 
     #[test]
     fn test_transfer() {
-        Token::mint(&ADDRESS_1, 10);
-        let transfer_result = Token::transfer(&ADDRESS_1, &ADDRESS_2, 3);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        let transfer_result = token.transfer(&ADDRESS_1, &ADDRESS_2, 3);
         assert!(transfer_result.is_ok());
-        assert_eq!(Token::balance_of(&ADDRESS_1), 7);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 3);
-        assert_eq!(Token::total_supply(), 10);
+        assert_eq!(token.balance_of(&ADDRESS_1), 7);
+        assert_eq!(token.balance_of(&ADDRESS_2), 3);
+        assert_eq!(token.total_supply(), 10);
     }
 
     #[test]
     fn test_transfer_too_much() {
-        Token::mint(&ADDRESS_1, 10);
-        let transfer_result = Token::transfer(&ADDRESS_1, &ADDRESS_2, 20);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        let transfer_result = token.transfer(&ADDRESS_1, &ADDRESS_2, 20);
         assert_eq!(
             transfer_result.unwrap_err(),
             ERC20TransferError::NotEnoughBalance
         );
-        assert_eq!(Token::balance_of(&ADDRESS_1), 10);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::total_supply(), 10);
+        assert_eq!(token.balance_of(&ADDRESS_1), 10);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.total_supply(), 10);
     }
 
     #[test]
     fn test_initial_allowance() {
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 0);
-        assert_eq!(Token::allowance(&ADDRESS_2, &ADDRESS_1), 0);
+        let mut token = Token::new();
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 0);
+        assert_eq!(token.allowance(&ADDRESS_2, &ADDRESS_1), 0);
     }
 
     #[test]
     fn test_approvals() {
-        Token::approve(&ADDRESS_1, &ADDRESS_2, 10);
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 10);
-        assert_eq!(Token::allowance(&ADDRESS_2, &ADDRESS_1), 0);
-        Token::approve(&ADDRESS_1, &ADDRESS_2, 2);
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 2);
-        assert_eq!(Token::allowance(&ADDRESS_2, &ADDRESS_1), 0);
+        let mut token = Token::new();
+        token.approve(&ADDRESS_1, &ADDRESS_2, 10);
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 10);
+        assert_eq!(token.allowance(&ADDRESS_2, &ADDRESS_1), 0);
+        token.approve(&ADDRESS_1, &ADDRESS_2, 2);
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 2);
+        assert_eq!(token.allowance(&ADDRESS_2, &ADDRESS_1), 0);
     }
 
     #[test]
     fn test_transfer_from() {
-        Token::mint(&ADDRESS_1, 10);
-        Token::approve(&ADDRESS_1, &ADDRESS_2, 5);
-        let transfer_result = Token::transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 3);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        token.approve(&ADDRESS_1, &ADDRESS_2, 5);
+        let transfer_result = token.transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 3);
         assert!(transfer_result.is_ok());
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 2);
-        assert_eq!(Token::balance_of(&ADDRESS_1), 7);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::balance_of(&ADDRESS_3), 3);
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 2);
+        assert_eq!(token.balance_of(&ADDRESS_1), 7);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.balance_of(&ADDRESS_3), 3);
     }
 
     #[test]
     fn test_transfer_from_too_much() {
-        Token::mint(&ADDRESS_1, 10);
-        Token::approve(&ADDRESS_1, &ADDRESS_2, 25);
-        let transfer_result = Token::transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 20);
-        assert_eq!(
-            transfer_result.unwrap_err(),
-            ERC20TransferFromError::NotEnoughBalance
-        );
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 25);
-        assert_eq!(Token::balance_of(&ADDRESS_1), 10);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::balance_of(&ADDRESS_3), 0);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        token.approve(&ADDRESS_1, &ADDRESS_2, 25);
+        let transfer_result = token.transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 20);
+        let expected_err =
+            ERC20TransferFromError::TransferError(ERC20TransferError::NotEnoughBalance);
+        assert_eq!(transfer_result.unwrap_err(), expected_err);
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 25);
+        assert_eq!(token.balance_of(&ADDRESS_1), 10);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.balance_of(&ADDRESS_3), 0);
     }
 
     #[test]
     fn test_transfer_from_too_low_allowance() {
-        Token::mint(&ADDRESS_1, 10);
-        Token::approve(&ADDRESS_1, &ADDRESS_2, 3);
-        let transfer_result = Token::transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 5);
+        let mut token = Token::new();
+        token.mint(&ADDRESS_1, 10);
+        token.approve(&ADDRESS_1, &ADDRESS_2, 3);
+        let transfer_result = token.transfer_from(&ADDRESS_2, &ADDRESS_1, &ADDRESS_3, 5);
         assert_eq!(
             transfer_result.unwrap_err(),
             ERC20TransferFromError::NotEnoughAllowance
         );
-        assert_eq!(Token::allowance(&ADDRESS_1, &ADDRESS_2), 3);
-        assert_eq!(Token::balance_of(&ADDRESS_1), 10);
-        assert_eq!(Token::balance_of(&ADDRESS_2), 0);
-        assert_eq!(Token::balance_of(&ADDRESS_3), 0);
+        assert_eq!(token.allowance(&ADDRESS_1, &ADDRESS_2), 3);
+        assert_eq!(token.balance_of(&ADDRESS_1), 10);
+        assert_eq!(token.balance_of(&ADDRESS_2), 0);
+        assert_eq!(token.balance_of(&ADDRESS_3), 0);
     }
 }

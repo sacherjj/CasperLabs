@@ -39,7 +39,7 @@ impl Api {
     }
 
     pub fn from_args_with_shift(arg_shift: u32) -> Api {
-        let method_name: String = get_arg(arg_shift + 0);
+        let method_name: String = get_arg(arg_shift);
         match method_name.as_str() {
             "deploy" => {
                 let token_name = get_arg(arg_shift + 1);
