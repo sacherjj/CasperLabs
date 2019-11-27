@@ -67,7 +67,8 @@ object ChainSpec extends ParserImplicits {
   /** Subsequent changes describe upgrades. */
   final case class UpgradeConf(
       upgrade: Upgrade,
-      wasmCosts: Option[WasmCosts]
+      wasmCosts: Option[WasmCosts],
+      deployConfig: Option[DeployConfig]
   )
   object UpgradeConf extends ConfCompanion[UpgradeConf](ConfParser.gen[UpgradeConf])
 
@@ -296,7 +297,7 @@ object ChainSpecReader {
   implicit val `ChainSpecReader[UpgradePoint]` = new ChainSpecReader[ipc.ChainSpec.UpgradePoint] {
     override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[UpgradeConf, ipc.ChainSpec.UpgradePoint](path, UpgradeConf.parseManifest) {
-        case UpgradeConf(upgrade, maybeWasmCosts) =>
+        case UpgradeConf(upgrade, maybeWasmCosts, maybeDeployConfig) =>
           upgrade.installerCodePath.fold(
             none[Array[Byte]].asRight[String]
           ) { file =>
@@ -309,7 +310,8 @@ object ChainSpecReader {
                     code = ByteString.copyFrom(bytes)
                   )
                 },
-                newCosts = maybeWasmCosts.map(toCostTable)
+                newCosts = maybeWasmCosts.map(toCostTable),
+                newDeployConfig = maybeDeployConfig.map(toDeployConfig)
               )
               .withActivationPoint(
                 ipc.ChainSpec.ActivationPoint(upgrade.activationPointRank)
