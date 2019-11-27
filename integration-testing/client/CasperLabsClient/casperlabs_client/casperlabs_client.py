@@ -721,6 +721,7 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
+        delay_in_seconds=5,
     ):
         """
         Generate DAG in DOT format.
@@ -733,21 +734,50 @@ class CasperLabsClient:
         :param show_justification_lines:  if justification lines should be shown
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
+        :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
         :return:                          generated DOT file or None, if out provided
         """
         block_infos = list(self.showBlocks(depth))
-        dot = vdag.generate_dot(block_infos, show_justification_lines)
+        dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
         if not out:
-            return dot
-        else:
-            file_format = out.split(".")[-1]
-            with tempfile.NamedTemporaryFile(mode="w") as f:
-                f.write(dot)
-                f.flush()
-                cmd = f"dot -T{file_format} -o {out} {f.name}"
-                rc = os.system(cmd)
-                if rc:
-                    raise Exception(f"Call to dot failed with error code {rc}")
+            return dot_dag_description
+
+        parts = out.split(".")
+        file_format = parts[-1]
+        file_name_base = ".".join(parts[:-1])
+
+        iteration = -1
+
+        def file_name():
+            nonlocal iteration, file_format
+            if not stream or stream == "single-output":
+                return out
+            else:
+                iteration += 1
+                return f"{file_name_base}_{iteration}.{file_format}"
+
+        self._call_dot(dot_dag_description, file_name(), file_format)
+        previous_block_hashes = set(b.summary.block_hash for b in block_infos)
+        while stream:
+            time.sleep(delay_in_seconds)
+            block_infos = list(self.showBlocks(depth))
+            block_hashes = set(b.summary.block_hash for b in block_infos)
+            if block_hashes != previous_block_hashes:
+                dot_dag_description = vdag.generate_dot(
+                    block_infos, show_justification_lines
+                )
+                self._call_dot(dot_dag_description, file_name(), file_format)
+                previous_block_hashes = block_hashes
+
+    def _call_dot(self, dot_dag_description, file_name, file_format):
+        with tempfile.NamedTemporaryFile(mode="w") as f:
+            f.write(dot_dag_description)
+            f.flush()
+            cmd = f"dot -T{file_format} -o {file_name} {f.name}"
+            rc = os.system(cmd)
+            if rc:
+                raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
+        print(f"Wrote {file_name}")
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
