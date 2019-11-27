@@ -100,11 +100,6 @@ trait CasperLabsProtocol[F[_]] {
 object CasperLabsProtocol {
   import ProtocolVersions.BlockThreshold
 
-  // Specifies what protocol version to choose at the `blockThreshold` height.
-  val thresholdsVersionMap: ProtocolVersions = ProtocolVersions(
-    List(BlockThreshold(0, state.ProtocolVersion(1, 0, 0)))
-  )
-
   def unsafe[F[_]: Applicative](
       versions: (Long, state.ProtocolVersion)*
   ): CasperLabsProtocol[F] = {
