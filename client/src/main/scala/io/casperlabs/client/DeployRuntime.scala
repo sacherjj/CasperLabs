@@ -17,7 +17,8 @@ import io.casperlabs.client.configuration.{DeployConfig, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1}
+import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
@@ -509,4 +510,55 @@ object DeployRuntime {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
+  def keygen[F[_]: Sync](
+      outputDirectory: File
+  ): F[Unit] = {
+    val dir                        = outputDirectory.toPath + "/"
+    val validatorPrivPath: String  = dir + "validator-private.pem"
+    val validatorPubPath: String   = dir + "validator-public.pem"
+    val validatorIdPath: String    = dir + "validator-id"
+    val validatorIdHexPath: String = dir + "validator-id-hex"
+    val nodePrivPath: String       = dir + "node.key.pem"
+    val nodeCertPath: String       = dir + "node.certificate.pem"
+    val nodeIdPath: String         = dir + "node-id"
+
+    val program = for {
+      (valPriv, valPub) <- Sync[F].delay(Ed25519.newKeyPair)
+      _                 <- writeToFile(validatorPrivPath, printValidatorPriv(valPriv))
+      _                 <- writeToFile(validatorPubPath, printValidatorPub(valPub))
+      _                 <- writeToFile(validatorIdPath, Base64.encode(valPub))
+      _                 <- writeToFile(validatorIdHexPath, Base16.encode(valPub))
+      nodeKeyPair       <- Sync[F].delay(CertificateHelper.generateKeyPair(false))
+      nodeCert          <- Sync[F].delay(CertificateHelper.generate(nodeKeyPair))
+      _                 <- writeToFile(nodePrivPath, CertificatePrinter.printPrivateKey(nodeKeyPair.getPrivate))
+      _                 <- writeToFile(nodeCertPath, CertificatePrinter.print(nodeCert))
+      nodeId <- Sync[F].fromOption(
+                 CertificateHelper.publicAddress(nodeKeyPair.getPublic),
+                 new IllegalArgumentException("Certificate's public key is corrupted.")
+               )
+      _ <- writeToFile(nodeIdPath, Base16.encode(nodeId))
+
+    } yield ()
+
+    gracefulExit(program.attempt)
+  }
+
+  private def writeToFile[F[_]: Sync](filePath: String, text: String): F[Unit] =
+    for {
+      buffer <- Sync[F].delay(new BufferedWriter(new FileWriter(new File(filePath))))
+      _      <- Sync[F].delay(buffer.write(text))
+      _      <- Sync[F].delay(buffer.close())
+    } yield ()
+
+  private def printValidatorPriv(privateKey: PrivateKey): String =
+    s"""-----BEGIN PRIVATE KEY-----
+       |${Base64.encode(privateKey)}
+       |-----END PRIVATE KEY-----
+       |""".stripMargin
+
+  private def printValidatorPub(publicKey: PublicKey): String =
+    s"""-----BEGIN PUBLIC KEY-----
+       |${Base64.encode(publicKey)}
+       |-----END PUBLIC KEY-----
+       |""".stripMargin
 }

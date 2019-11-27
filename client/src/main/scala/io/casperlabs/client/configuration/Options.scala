@@ -16,6 +16,8 @@ object Options {
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
 
+  val directoryCheck: File => Boolean = dir => dir.exists() && dir.canWrite && dir.isDirectory
+
   trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
     def paymentPathName: String  = "payment"
@@ -597,6 +599,32 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(balance)
+
+  val keygen = new Subcommand("keygen") {
+    descr("Generates keys.")
+    banner(
+      """| Usage: casperlabs-client keygen <existingOutputDirectory>
+         | Command will override existing files!
+         | Generated files:
+         |   node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+         |                         # derived from node.key.pem
+         |   node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+         |                         # derived from node.key.pem
+         |   node.key.pem          # secp256r1 private key
+         |   validator-id          # validator ID, used to run as a validator for validating transactions, used in bonds.txt file
+         |                         # derived from validator.public.pem
+         |   validator-id-hex      # validator ID in hex, derived from validator.public.pem
+         |   validator-private.pem # ed25519 private key
+         |   validator-public.pem  # ed25519 public key""".stripMargin
+    )
+
+    val outputDirectory = trailArg[File](
+      descr = "Output directory for keys. Should already exists.",
+      validate = directoryCheck,
+      required = true
+    )
+  }
+  addSubcommand(keygen)
 
   verify()
 }
