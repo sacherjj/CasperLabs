@@ -75,7 +75,7 @@ object FilesAPI {
   implicit def eitherTFilesApi[E, F[_]: Monad: FilesAPI]: FilesAPI[EitherT[F, E, ?]] =
     new FilesAPI[EitherT[F, E, ?]] {
       override def readBytes(path: Path): EitherT[F, E, Array[Byte]] =
-        FilesAPI[F].readBytes(path).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].readBytes(path).liftM[EitherT[*[_], E, ?]]
 
       override def readString(
           path: Path,
@@ -86,14 +86,14 @@ object FilesAPI {
             path,
             charset
           )
-          .liftM[EitherT[?[_], E, ?]]
+          .liftM[EitherT[*[_], E, ?]]
 
       override def writeBytes(
           path: Path,
           data: Array[Byte],
           options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
-        FilesAPI[F].writeBytes(path, data, options).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].writeBytes(path, data, options).liftM[EitherT[*[_], E, ?]]
 
       override def writeString(
           path: Path,
@@ -101,6 +101,6 @@ object FilesAPI {
           charset: Charset = Charset.defaultCharset(),
           options: List[OpenOption] = Nil
       ): EitherT[F, E, Unit] =
-        FilesAPI[F].writeString(path, data, charset, options).liftM[EitherT[?[_], E, ?]]
+        FilesAPI[F].writeString(path, data, charset, options).liftM[EitherT[*[_], E, ?]]
     }
 }

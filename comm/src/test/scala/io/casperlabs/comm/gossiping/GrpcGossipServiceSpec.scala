@@ -19,6 +19,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.models.Message
 import io.casperlabs.shared.{Compression, Log}
 import io.grpc.netty.{NegotiationType, NettyChannelBuilder}
 import io.netty.handler.ssl.ClientAuth
@@ -77,7 +78,7 @@ class GrpcGossipServiceSpec
     GetBlockChunkedSpec,
     StreamBlockSummariesSpec,
     StreamAncestorBlockSummariesSpec,
-    StreamDagTipBlockSummariesSpec,
+    StreamLatestMessagesSpec,
     NewBlocksSpec,
     GenesisApprovalSpec,
     StreamDagSliceBlockSummariesSpec
@@ -589,10 +590,10 @@ class GrpcGossipServiceSpec
                         Task.now(None)
                     }
                   }
-                  def hasBlock(blockHash: ByteString)             = ???
-                  def getBlockSummary(blockHash: ByteString)      = ???
-                  def listTips                                    = ???
-                  def dagTopoSort(startRank: Long, endRank: Long) = ???
+                  def hasBlock(blockHash: ByteString)                = ???
+                  def getBlockSummary(blockHash: ByteString)         = ???
+                  def latestMessages: Task[Set[Block.Justification]] = ???
+                  def dagTopoSort(startRank: Long, endRank: Long)    = ???
                 }
               }
 
@@ -989,24 +990,24 @@ class GrpcGossipServiceSpec
     }
   }
 
-  object StreamDagTipBlockSummariesSpec extends WordSpecLike {
+  object StreamLatestMessagesSpec extends WordSpecLike {
     implicit val config          = PropertyCheckConfiguration(minSuccessful = 5)
     implicit val consensusConfig = ConsensusConfig()
 
-    "streamDagTipBlockSummaries" should {
-      "return the tips from the consensus" in {
+    "streamLatestMessages" should {
+      "return latest messages in the DAG" in {
         forAll(genSummaryDagFromGenesis) { dag =>
-          // Tips are the ones without children.
-          val tips = dag.filterNot { parent =>
-            dag.exists { child =>
-              child.parentHashes.contains(parent.blockHash)
-            }
-          }
-          runTestUnsafe(TestData(summaries = dag, tips = tips)) {
+          // ProtoUtil.removeRedundantJustifications is not available here.
+          val expected = dag
+            .groupBy(_.getHeader.validatorPublicKey)
+            .values
+            .flatten
+            .map(s => Block.Justification(s.getHeader.validatorPublicKey, s.blockHash))
+            .toList
+          runTestUnsafe(TestData(summaries = dag)) {
             TestEnvironment(testDataRef).use { stub =>
-              stub.streamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest()).toListL map {
-                res =>
-                  res should contain theSameElementsInOrderAs tips
+              stub.streamLatestMessages(StreamLatestMessagesRequest()).toListL map { res =>
+                res should contain theSameElementsAs expected
               }
             }
           }
@@ -1317,7 +1318,6 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
   trait TestData {
     def summaries: Map[ByteString, BlockSummary]
     def blocks: Map[ByteString, Block]
-    def tips: Seq[BlockSummary]
   }
 
   object TestData {
@@ -1327,16 +1327,13 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
     def apply(
         summaries: Seq[BlockSummary] = Seq.empty,
-        blocks: Seq[Block] = Seq.empty,
-        tips: Seq[BlockSummary] = Seq.empty
+        blocks: Seq[Block] = Seq.empty
     ): TestData = {
       val ss = summaries
       val bs = blocks
-      val ts = tips
       new TestData {
         val summaries = ss.groupBy(_.blockHash).mapValues(_.head)
         val blocks    = bs.groupBy(_.blockHash).mapValues(_.head)
-        val tips      = ts
       }
     }
   }
@@ -1363,8 +1360,13 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
           Task.delay(testDataRef.get.blocks.get(blockHash))
         def getBlockSummary(blockHash: ByteString) =
           Task.delay(testDataRef.get.summaries.get(blockHash))
-        def listTips =
-          Task.delay(testDataRef.get.tips)
+        def latestMessages: Task[Set[Block.Justification]] =
+          Task.delay(
+            testDataRef.get.summaries.values
+              .map(bs => Block.Justification(bs.getHeader.validatorPublicKey, bs.blockHash))
+              .toSet
+          )
+
         def dagTopoSort(startRank: Long, endRank: Long) =
           Iterant
             .liftF(

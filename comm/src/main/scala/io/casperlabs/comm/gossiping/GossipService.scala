@@ -1,6 +1,6 @@
 package io.casperlabs.comm.gossiping
 
-import io.casperlabs.casper.consensus.{BlockSummary, GenesisCandidate}
+import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
 import monix.tail.Iterant
 
 /** Intra-node gossiping based on the gRPC service definition in gossiping.proto. */
@@ -11,9 +11,9 @@ trait GossipService[F[_]] {
       request: StreamAncestorBlockSummariesRequest
   ): Iterant[F, BlockSummary]
 
-  def streamDagTipBlockSummaries(
-      request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary]
+  def streamLatestMessages(
+      request: StreamLatestMessagesRequest
+  ): Iterant[F, Block.Justification]
 
   def streamBlockSummaries(
       request: StreamBlockSummariesRequest

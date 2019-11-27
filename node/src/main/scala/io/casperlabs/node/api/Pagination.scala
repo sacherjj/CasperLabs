@@ -1,11 +1,14 @@
 package io.casperlabs.node.api
 
-import com.google.protobuf.ByteString
-import io.casperlabs.comm.ServiceError.InvalidArgument
-import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.storage.block.BlockStorage.DeployHash
+import java.util
 
-import scala.util.{Failure, Try}
+import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.Deploy
+import io.casperlabs.comm.ServiceError.InvalidArgument
+import pbdirect._
+import io.casperlabs.node.{ByteStringReader, ByteStringWriter}
+
+import scala.util.{Failure, Success, Try}
 
 trait Pagination {
   type PageTokenParams
@@ -22,58 +25,108 @@ trait Pagination {
       requestWithPagination: RequestWithPagination
   ): Try[(PageSize, PageTokenParams)]
 
-  def createNextPageToken(pageTokenParamsOpt: Option[PageTokenParams]): PageToken
+  def createPageToken(pageTokenParamsOpt: Option[PageTokenParams]): PageToken
 }
 
 object DeployInfoPagination extends Pagination {
-  val MAXSIZE = 50
+  case class DeployInfoPageTokenParams(
+      lastTimeStamp: Long,
+      lastDeployHash: ByteString,
+      isNext: Boolean
+  )
+  val MAXSIZE   = 50
+  val NEXT_PAGE = "N"
+  val PREV_PAGE = "P"
 
-  override type PageTokenParams = (Long, DeployHash)
+  override type PageTokenParams = DeployInfoPageTokenParams
 
   override def parsePageToken(
       request: RequestWithPagination
   ): Try[(PageSize, PageTokenParams)] = {
     val pageSize = math.max(0, math.min(request.pageSize, MAXSIZE))
     if (request.pageToken.isEmpty) {
-      Try { (pageSize, (Long.MaxValue, ByteString.EMPTY)) }
-    } else {
+      Try { (pageSize, DeployInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY, isNext = true)) }
+    } else
       Try {
-        request.pageToken
-          .split(':')
-          .map(Base16.decode)
-      }.filter(_.length == 2) map (
-          arr =>
-            (
-              pageSize,
-              (
-                BigInt(arr(0)).longValue(),
-                ByteString.copyFrom(arr(1))
-              )
-            )
-        ) match {
+        util.Base64.getUrlDecoder
+          .decode(request.pageToken.trim)
+          .pbTo[DeployInfoPageTokenParams]
+      } match {
         case Failure(_) =>
           Failure(
             InvalidArgument(
-              "Expected pageToken encoded as {lastTimeStamp}:{lastDeployHash}. Where both are hex encoded."
+              "Failed parsing pageToken"
             )
           )
-        case x => x
+        case Success(pageTokenParams) =>
+          Success {
+            (pageSize, pageTokenParams)
+          }
       }
-    }
   }
 
-  override def createNextPageToken(
+  override def createPageToken(
       pageTokenParamsOpt: Option[PageTokenParams]
   ): PageToken =
     pageTokenParamsOpt match {
       case None => ""
       case Some(pageTokenParams) =>
-        val (lastTimestamp, lastDeployHash) = pageTokenParams
-        val lastTimestampBase16 =
-          Base16.encode(
-            BigInt(lastTimestamp).toByteArray
+        util.Base64.getUrlEncoder.encodeToString(pageTokenParams.toPB)
+    }
+
+  /**
+    * Compute the nextPageToken and prevPageToken.
+    *
+    * If `deploys` is not empty, then the `nextPageToken` can be generated from the last element of `deploys`,
+    * and the `prevPageToken` can generate from the first element of `deploys`.
+    *
+    * If `deploys` is empty and we are fetching the next page, then the `prevPageToken` should be the MAX_CURSOR,
+    * and nextPageToken is "", to indicate there is no more elements, else if we are fetching the previous page,
+    * then the prevPageToken should be "", and nextPageToken should be the MIN_CURSOR.
+    */
+  def createNextAndPrePageToken(
+      deploys: List[Deploy],
+      pageTokenParams: PageTokenParams
+  ): (PageToken, PageToken) =
+    if (deploys.isEmpty) {
+      if (pageTokenParams.isNext) {
+        (
+          "",
+          DeployInfoPagination.createPageToken(
+            Some(DeployInfoPageTokenParams(Long.MinValue, ByteString.EMPTY, isNext = false))
           )
-        val lastDeployHashBase16 = Base16.encode(lastDeployHash.toByteArray)
-        s"$lastTimestampBase16:$lastDeployHashBase16"
+        )
+      } else {
+        (
+          DeployInfoPagination.createPageToken(
+            Some(DeployInfoPageTokenParams(Long.MaxValue, ByteString.EMPTY, isNext = true))
+          ),
+          ""
+        )
+      }
+    } else {
+      val nextPageToken = DeployInfoPagination.createPageToken(
+        deploys.lastOption
+          .map(
+            d =>
+              DeployInfoPageTokenParams(
+                d.getHeader.timestamp,
+                d.deployHash,
+                isNext = true
+              )
+          )
+      )
+      val prevPageToken = createPageToken(
+        deploys.headOption
+          .map(
+            d =>
+              DeployInfoPageTokenParams(
+                d.getHeader.timestamp,
+                d.deployHash,
+                isNext = false
+              )
+          )
+      )
+      (nextPageToken, prevPageToken)
     }
 }

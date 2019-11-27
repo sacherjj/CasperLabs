@@ -11,7 +11,7 @@ package object validation {
     def apply[F[_]](implicit ev: RaiseValidationError[F]): RaiseValidationError[F] = ev
   }
 
-  def raiseValidateErrorThroughApplicativeError[F[_]: ApplicativeError[?[_], Throwable]]
+  def raiseValidateErrorThroughApplicativeError[F[_]: ApplicativeError[*[_], Throwable]]
       : FunctorRaise[F, InvalidBlock] =
     new FunctorRaise[F, InvalidBlock] {
       override val functor: Functor[F] =

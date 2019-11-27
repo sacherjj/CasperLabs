@@ -23,6 +23,7 @@ import io.casperlabs.node.api.Utils.{
   validateDeployHash
 }
 import io.casperlabs.node.api.casper._
+import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -137,11 +138,12 @@ object GrpcCasperService {
                                          request.accountPublicKeyBase16,
                                          adaptToInvalidArgument
                                        )
-              (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F].fromTry(
-                                                              DeployInfoPagination.parsePageToken(
-                                                                request
-                                                              )
-                                                            )
+              (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
+                                              DeployInfoPagination
+                                                .parsePageToken(
+                                                  request
+                                                )
+                                            )
               accountPublicKeyBs = PublicKey(
                 ByteString.copyFrom(
                   Base16.decode(accountPublicKeyBase16)
@@ -152,18 +154,21 @@ object GrpcCasperService {
                           .getDeploysByAccount(
                             accountPublicKeyBs,
                             pageSize,
-                            lastTimeStamp,
-                            lastDeployHash
+                            pageTokenParams.lastTimeStamp,
+                            pageTokenParams.lastDeployHash,
+                            pageTokenParams.isNext
                           )
               deployInfos <- DeployStorage[F]
                               .reader(request.view)
                               .getDeployInfos(deploys)
-              nextPageToken = DeployInfoPagination.createNextPageToken(
-                deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+              (nextPageToken, prevPageToken) = DeployInfoPagination.createNextAndPrePageToken(
+                deploys,
+                pageTokenParams
               )
               result = ListDeployInfosResponse()
                 .withDeployInfos(deployInfos)
                 .withNextPageToken(nextPageToken)
+                .withPrevPageToken(prevPageToken)
             } yield result
           }
       }

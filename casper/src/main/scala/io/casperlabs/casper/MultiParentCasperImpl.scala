@@ -143,7 +143,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       status <- validateAndAddBlock(
                  StatelessExecutor.Context(genesis, lastFinalizedBlockHash).some,
                  block
-               ).timer("validateAndAddBlock")
+               )
       _          <- removeAdded(List(block -> status), canRemove = _ != MissingBlocks)
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
@@ -374,7 +374,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
       .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
-    val unexpired = earlierPendingDeploys.through(DeployFilters.Pipes.notExpired[F](timestamp))
+      .timer("timestampBeforeFilter")
+    val unexpired = earlierPendingDeploys
+      .through(
+        DeployFilters.Pipes.notExpired[F](timestamp)
+      )
+      .timer("notExpiredFilter")
 
     for {
       unexpiredList <- unexpired.map(_._1).compile.toList
@@ -460,35 +465,40 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          upgrades
                        )
-      } yield {
-        if (checkpoint.deploysForBlock.isEmpty) {
-          CreateBlockStatus.noNewDeploys
-        } else {
-          // Start numbering from 1 (validator's first block seqNum = 1)
-          val latestMessage =
-            latestMessages.get(ByteString.copyFrom(validatorId)).map(_.maxBy(_.validatorMsgSeqNum))
-          val validatorSeqNum        = latestMessage.fold(1)(_.validatorMsgSeqNum + 1)
-          val validatorPrevBlockHash = latestMessage.fold(ByteString.EMPTY)(_.messageHash)
-          val block = ProtoUtil.block(
-            justifications,
-            checkpoint.preStateHash,
-            checkpoint.postStateHash,
-            checkpoint.bondedValidators,
-            checkpoint.deploysForBlock,
-            protocolVersion,
-            merged.parents.map(_.blockHash),
-            validatorSeqNum,
-            validatorPrevBlockHash,
-            chainName,
-            timestamp,
-            rank,
-            validatorId,
-            privateKey,
-            sigAlgorithm
-          )
-          CreateBlockStatus.created(block)
-        }
-      }).handleErrorWith {
+        result <- Sync[F]
+                   .delay {
+                     if (checkpoint.deploysForBlock.isEmpty) {
+                       CreateBlockStatus.noNewDeploys
+                     } else {
+                       // Start numbering from 1 (validator's first block seqNum = 1)
+                       val latestMessage = latestMessages
+                         .get(ByteString.copyFrom(validatorId))
+                         .map(_.maxBy(_.validatorMsgSeqNum))
+                       val validatorSeqNum = latestMessage.fold(1)(_.validatorMsgSeqNum + 1)
+                       val validatorPrevBlockHash =
+                         latestMessage.fold(ByteString.EMPTY)(_.messageHash)
+                       val block = ProtoUtil.block(
+                         justifications,
+                         checkpoint.preStateHash,
+                         checkpoint.postStateHash,
+                         checkpoint.bondedValidators,
+                         checkpoint.deploysForBlock,
+                         protocolVersion,
+                         merged.parents.map(_.blockHash),
+                         validatorSeqNum,
+                         validatorPrevBlockHash,
+                         chainName,
+                         timestamp,
+                         rank,
+                         validatorId,
+                         privateKey,
+                         sigAlgorithm
+                       )
+                       CreateBlockStatus.created(block)
+                     }
+                   }
+                   .timer("blockInstance")
+      } yield result).handleErrorWith {
         case ex @ SmartContractEngineError(error) =>
           Log[F]
             .error(
@@ -538,7 +548,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 object MultiParentCasperImpl {
 
   def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocolVersions: Cell[
-    ?[_],
+    *[_],
     CasperState
   ]: DeploySelection](
       semaphoreMap: SemaphoreMap[F, ByteString],
@@ -621,9 +631,11 @@ object MultiParentCasperImpl {
                      Validation[F]
                        .parents(block, ctx.genesis.blockHash, dag)
                    }
-          _            <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
-          preStateHash <- ExecEngineUtil.computePrestate[F](merged, block.getHeader.rank, upgrades)
-          _            <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+          preStateHash <- ExecEngineUtil
+                           .computePrestate[F](merged, block.getHeader.rank, upgrades)
+                           .timer("computePrestate")
+          _ <- Log[F].debug(s"Computing the effects for ${hashPrefix -> "block"}")
           blockEffects <- ExecEngineUtil
                            .effectsForBlock[F](block, preStateHash)
                            .recoverWith {
@@ -633,6 +645,7 @@ object MultiParentCasperImpl {
                                ) *>
                                  FunctorRaise[F, InvalidBlock].raise(InvalidTransaction)
                            }
+                           .timer("effectsForBlock")
           gasSpent = block.getBody.deploys.foldLeft(0L) { case (acc, next) => acc + next.cost }
           _ <- Metrics[F]
                 .incrementCounter("gas_spent", gasSpent)

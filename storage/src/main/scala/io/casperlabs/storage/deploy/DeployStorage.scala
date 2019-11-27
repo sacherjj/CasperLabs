@@ -105,12 +105,20 @@ import cats.mtl.ApplicativeAsk
 
   def getDeployInfos(deploys: List[Deploy]): F[List[DeployInfo]]
 
-  /** @return List of deploys created by specified account*/
+  /**
+    * List of deploys created by specified account
+    *
+    *   If isNext is true, getting the next page, returns limit of deploys whose
+    *      timestamp < lastTimestamp or timestamp == lastTimestamp && deployHash < lastDeployHash
+    *   Else, getting the previous page, returns limit of deploys whose
+    *      timestamp > firstTimestamp or timestamp == firstTimestamp && deployHash > firstDeployHash
+    */
   def getDeploysByAccount(
       account: PublicKeyBS,
       limit: Int,
       lastTimeStamp: Long,
-      lastDeployHash: DeployHash
+      lastDeployHash: DeployHash,
+      isNext: Boolean
   ): F[List[Deploy]]
 }
 
@@ -213,7 +221,8 @@ object DeployStorageReader {
         account: PublicKeyBS,
         limit: Int,
         lastTimeStamp: Long,
-        lastDeployHash: DeployHash
+        lastDeployHash: DeployHash,
+        next: Boolean
     ) =
       incAndMeasure(
         "getDeploysByAccount",
@@ -221,7 +230,8 @@ object DeployStorageReader {
           account,
           limit,
           lastTimeStamp,
-          lastDeployHash
+          lastDeployHash,
+          next
         )
       )
   }

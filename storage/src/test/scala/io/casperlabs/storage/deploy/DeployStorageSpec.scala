@@ -418,45 +418,6 @@ trait DeployStorageSpec
           }
       }
     }
-
-    "getDeploysByAccount" should {
-      "return the correct paginated list of deploys for the specified account" in forAll(
-        deploysGen(),
-        Gen.oneOf(randomAccounts),
-        Gen.choose(0, Int.MaxValue)
-      ) {
-        case (deploys, accountKey, limit) =>
-          testFixture { (reader, writer) =>
-            val deploysByAccount = deploys
-              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
-              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
-              .reverse
-            val offset = if (deploysByAccount.isEmpty) {
-              0
-            } else {
-              scala.util.Random.nextInt(deploysByAccount.size)
-            }
-
-            val (lastTimeStamp, lastDeployHash) =
-              deploysByAccount
-                .get(offset.toLong)
-                .map(d => (d.getHeader.timestamp, d.deployHash))
-                .getOrElse((Long.MaxValue, ByteString.EMPTY))
-            val expectResult = deploysByAccount.drop(offset + 1).take(limit)
-
-            for {
-              _ <- writer.addAsPending(deploys)
-              all <- reader.getDeploysByAccount(
-                      PublicKey(accountKey.publicKey),
-                      limit,
-                      lastTimeStamp,
-                      lastDeployHash
-                    )
-              _ = assert(expectResult == all)
-            } yield ()
-          }
-      }
-    }
   }
 
   private def chooseHash(deploys: List[Deploy]): ByteString =
