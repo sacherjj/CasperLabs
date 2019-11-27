@@ -296,7 +296,11 @@ impl ExecuteRequestBuilder {
         ExecuteRequestBuilder::new().push_deploy(deploy)
     }
 
-    pub fn contract_call_by_hash(sender: [u8; 32], contract_hash: [u8; 32], args: impl ArgsParser) -> Self {
+    pub fn contract_call_by_hash(
+        sender: [u8; 32],
+        contract_hash: [u8; 32],
+        args: impl ArgsParser,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
@@ -308,7 +312,7 @@ impl ExecuteRequestBuilder {
             .with_deploy_hash(deploy_hash)
             .build();
 
-        ExecuteRequestBuilder::new().push_deploy(deploy)   
+        ExecuteRequestBuilder::new().push_deploy(deploy)
     }
 }
 

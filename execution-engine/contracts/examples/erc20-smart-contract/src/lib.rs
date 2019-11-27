@@ -3,10 +3,10 @@
 extern crate alloc;
 
 mod api;
-mod erc20;
-mod proxy;
 mod deployer;
+mod erc20;
 mod error;
+mod proxy;
 
 #[no_mangle]
 pub extern "C" fn call() {

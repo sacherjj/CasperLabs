@@ -1,14 +1,12 @@
 use alloc::vec;
 
-use contract_ffi::contract_api::runtime;
-use contract_ffi::contract_api::storage;
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::ContractRef;
-use contract_ffi::value::U512;
-use contract_ffi::key::Key;
+use contract_ffi::{
+    contract_api::{runtime, storage, ContractRef, TURef},
+    key::Key,
+    value::U512,
+};
 
-use crate::error::Error;
-use crate::api::Api;
+use crate::{api::Api, error::Error};
 
 // ERC20 smart contract.
 #[allow(unused_imports)]
@@ -24,7 +22,7 @@ pub fn deploy() {
             deploy_token(&name, initial_balance);
             deploy_proxy();
         }
-        _ => runtime::revert(Error::UnknownDeployCommand)
+        _ => runtime::revert(Error::UnknownDeployCommand),
     }
 }
 
@@ -50,6 +48,5 @@ fn deploy_proxy() {
     let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
 
     // Save TURef under readalbe name.
-    runtime::put_key("erc20_proxy", &proxy_turef.into());   
+    runtime::put_key("erc20_proxy", &proxy_turef.into());
 }
-
