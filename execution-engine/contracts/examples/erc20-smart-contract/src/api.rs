@@ -9,6 +9,18 @@ use contract_ffi::{
 
 use crate::error::Error;
 
+pub const DEPLOY: &str = "deploy";
+pub const INIT_ERC20: &str = "init_erc20";
+pub const BALANCE_OF: &str = "balance_of";
+pub const TOTAL_SUPPLY: &str = "total_supply";
+pub const TRANSFER: &str = "transfer";
+pub const TRANSFER_FROM: &str = "transfer_from";
+pub const APPROVE: &str = "approve";
+pub const ASSERT_BALLANCE: &str = "assert_balance";
+pub const ASSERT_TOTAL_SUPPLY: &str = "assert_total_supply";
+pub const ASSERT_ALLOWANCE: &str = "assert_allowance";
+pub const ALLOWANCE: &str = "allowance";
+
 pub enum Api {
     Deploy(String, U512),
     InitErc20(U512),
@@ -41,52 +53,52 @@ impl Api {
     pub fn from_args_with_shift(arg_shift: u32) -> Api {
         let method_name: String = get_arg(arg_shift);
         match method_name.as_str() {
-            "deploy" => {
+            DEPLOY => {
                 let token_name = get_arg(arg_shift + 1);
                 let initial_balance = get_arg(arg_shift + 2);
                 Api::Deploy(token_name, initial_balance)
             }
-            "init_erc20" => {
+            INIT_ERC20 => {
                 let amount = get_arg(arg_shift + 1);
                 Api::InitErc20(amount)
             }
-            "balance_of" => {
+            BALANCE_OF => {
                 let public_key: PublicKey = get_arg(arg_shift + 1);
                 Api::BalanceOf(public_key)
             }
-            "total_supply" => Api::TotalSupply,
-            "transfer" => {
+            TOTAL_SUPPLY => Api::TotalSupply,
+            TRANSFER => {
                 let recipient = get_arg(arg_shift + 1);
                 let amount = get_arg(arg_shift + 2);
                 Api::Transfer(recipient, amount)
             }
-            "transfer_from" => {
+            TRANSFER_FROM => {
                 let owner = get_arg(arg_shift + 1);
                 let recipient = get_arg(arg_shift + 2);
                 let amount = get_arg(arg_shift + 3);
                 Api::TransferFrom(owner, recipient, amount)
             }
-            "approve" => {
+            APPROVE => {
                 let spender = get_arg(arg_shift + 1);
                 let amount = get_arg(arg_shift + 2);
                 Api::Approve(spender, amount)
             }
-            "assert_balance" => {
+            ASSERT_BALLANCE => {
                 let address = get_arg(arg_shift + 1);
                 let amount = get_arg(arg_shift + 2);
                 Api::AssertBalance(address, amount)
             }
-            "assert_total_supply" => {
+            ASSERT_TOTAL_SUPPLY => {
                 let total_supply = get_arg(arg_shift + 1);
                 Api::AssertTotalSupply(total_supply)
             }
-            "assert_allowance" => {
+            ASSERT_ALLOWANCE => {
                 let owner = get_arg(arg_shift + 1);
                 let spender = get_arg(arg_shift + 2);
                 let amount = get_arg(arg_shift + 3);
                 Api::AssertAllowance(owner, spender, amount)
             }
-            "allowance" => {
+            ALLOWANCE => {
                 let owner = get_arg(arg_shift + 1);
                 let spender = get_arg(arg_shift + 2);
                 Api::Allowance(owner, spender)
