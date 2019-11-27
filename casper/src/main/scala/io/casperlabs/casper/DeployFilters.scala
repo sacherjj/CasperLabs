@@ -4,11 +4,10 @@ import cats.implicits._
 
 import com.google.protobuf.ByteString
 
-import io.casperlabs.casper.consensus.{Block, Deploy}
+import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
-import io.casperlabs.casper.validation.Validation.MAX_TTL
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
@@ -30,8 +29,8 @@ object DeployFilters {
     * equal to the given timestamp. I.e. this takes deploys that are not expired as of
     * the provided timestamp.
     */
-  def notExpired(timestamp: Long): Deploy.Header => Boolean = header => {
-    val ttl = ProtoUtil.getTimeToLive(header, MAX_TTL)
+  def notExpired(timestamp: Long, maxTTL: Int): Deploy.Header => Boolean = header => {
+    val ttl = ProtoUtil.getTimeToLive(header, maxTTL)
     timestamp <= (header.timestamp + ttl)
   }
 
@@ -58,9 +57,10 @@ object DeployFilters {
       filter(tupleRight(DeployFilters.timestampBefore(timestamp)))
 
     def notExpired[F[_]](
-        timestamp: Long
+        timestamp: Long,
+        maxTTL: Int
     ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
-      filter(tupleRight(DeployFilters.notExpired(timestamp)))
+      filter(tupleRight(DeployFilters.notExpired(timestamp, maxTTL)))
 
     def dependenciesMet[F[_]: MonadThrowable: BlockStorage](
         dag: DagRepresentation[F],

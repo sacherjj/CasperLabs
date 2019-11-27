@@ -244,12 +244,19 @@ message ChainSpec {
         repeated GenesisAccount accounts = 6;
         // costs at genesis
         CostTable costs = 7;
+        DeployConfig deploy_config = 8;
     }
 
     message GenesisAccount {
         bytes public_key = 1;
         io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
         io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+    }
+
+    message DeployConfig {
+        uint32 min_ttl_milliseconds = 1;
+        uint32 max_ttl_milliseconds = 2;
+        uint32 max_dependencies_num = 3;
     }
 
     message CostTable {
@@ -289,6 +296,7 @@ message ChainSpec {
         DeployCode upgrade_installer = 3;
         // Note: this is optional; only needed when costs are changing
         CostTable new_costs = 4;
+        DeployConfig new_deploy_config = 5;
     }
 
     message ActivationPoint {
@@ -297,9 +305,9 @@ message ChainSpec {
     }
 }
 
-message UpgradeRequest{
+message UpgradeRequest {
     bytes parent_state_hash = 1;
-    ChainSpec.UpgradePoint upgrade_point =2;
+    ChainSpec.UpgradePoint upgrade_point = 2;
     io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
 }
 

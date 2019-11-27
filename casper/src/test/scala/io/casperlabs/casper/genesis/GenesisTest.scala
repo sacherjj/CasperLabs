@@ -58,11 +58,11 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
       for {
         genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
         implicit0(versions: CasperLabsProtocol[Task]) <- CasperLabsProtocol
-                                                                  .fromChainSpec[Task](
-                                                                    ipc
-                                                                      .ChainSpec()
-                                                                      .withGenesis(spec)
-                                                                  )
+                                                          .fromChainSpec[Task](
+                                                            ipc
+                                                              .ChainSpec()
+                                                              .withGenesis(spec)
+                                                          )
         BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
 
         _ = genesis.getHeader.chainName shouldBe "casperlabs"

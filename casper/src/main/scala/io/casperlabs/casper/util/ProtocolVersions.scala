@@ -7,15 +7,23 @@ import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import simulacrum.typeclass
+
 import scala.util.Try
 
 class ProtocolVersions private (l: List[Config]) {
-  def versionAt(blockHeight: Long): state.ProtocolVersion =
+  private def configAtHeight(blockHeight: Long): Config =
     l.collectFirst {
-      case Config(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
-        protocolVersion
+      case c @ Config(blockHeightMin, _, _) if blockHeightMin <= blockHeight =>
+        c
     }.get // This cannot throw because we validate in `apply` that list is never empty.
+
+  def versionAt(blockHeight: Long): state.ProtocolVersion =
+    configAtHeight(blockHeight).version
+
+  def configAt(blockHeight: Long): Config =
+    configAtHeight(blockHeight)
 
   def fromBlock(
       b: Block
@@ -24,8 +32,11 @@ class ProtocolVersions private (l: List[Config]) {
 }
 
 object ProtocolVersions {
-
-  final case class Config(blockHeightMin: Long, version: state.ProtocolVersion)
+  final case class Config(
+      blockHeightMin: Long,
+      version: state.ProtocolVersion,
+      deployConfig: DeployConfig
+  )
 
   // Order thresholds from newest to oldest descending.
   private implicit val blockThresholdOrdering: Ordering[Config] =
@@ -95,35 +106,53 @@ object ProtocolVersions {
 trait CasperLabsProtocol[F[_]] {
   def versionAt(blockHeight: Long): F[state.ProtocolVersion]
   def protocolFromBlock(b: Block): F[state.ProtocolVersion]
+  def configAt(blockHeight: Long): F[Config]
 }
 
 object CasperLabsProtocol {
   import ProtocolVersions.Config
 
   def unsafe[F[_]: Applicative](
-      versions: (Long, state.ProtocolVersion)*
+      versions: (Long, state.ProtocolVersion, Int, Int, Int)*
   ): CasperLabsProtocol[F] = {
-    val thresholds = versions.map {
-      case (rank, version) =>
-        Config(rank, version)
+    val configs = versions.map {
+      case (rank, protocolVersion, minTTL, maxTTL, maxDependencies) =>
+        Config(rank, protocolVersion, DeployConfig(minTTL, maxTTL, maxDependencies))
     }
 
-    val underlying = ProtocolVersions(thresholds.toList)
+    val underlying = ProtocolVersions(configs.toList)
 
     new CasperLabsProtocol[F] {
-      def versionAt(blockHeight: Long) = underlying.versionAt(blockHeight).pure[F]
-      def protocolFromBlock(b: Block)  = underlying.fromBlock(b).pure[F]
+      def versionAt(blockHeight: Long)           = underlying.versionAt(blockHeight).pure[F]
+      def protocolFromBlock(b: Block)            = underlying.fromBlock(b).pure[F]
+      def configAt(blockHeight: Long): F[Config] = underlying.configAt(blockHeight).pure[F]
+
     }
   }
 
   def apply[F[_]: MonadThrowable](
-      versions: (Long, state.ProtocolVersion)*
+      configs: (Long, state.ProtocolVersion, Int, Int, Int)*
   ): F[CasperLabsProtocol[F]] =
-    MonadThrowable[F].fromTry(Try(unsafe(versions: _*)))
+    MonadThrowable[F].fromTry(Try(unsafe(configs: _*)))
 
   def fromChainSpec[F[_]: MonadThrowable](spec: ipc.ChainSpec): F[CasperLabsProtocol[F]] = {
-    val versions = (0L, spec.getGenesis.getProtocolVersion) +:
-      spec.upgrades.map(up => (up.getActivationPoint.rank, up.getProtocolVersion))
+    val versions = (
+      0L,
+      spec.getGenesis.getProtocolVersion,
+      spec.getGenesis.getDeployConfig.minTtlMilliseconds,
+      spec.getGenesis.getDeployConfig.maxTtlMilliseconds,
+      spec.getGenesis.getDeployConfig.maxDependenciesNum
+    ) +:
+      spec.upgrades.map(
+        up =>
+          (
+            up.getActivationPoint.rank,
+            up.getProtocolVersion,
+            up.getNewDeployConfig.minTtlMilliseconds,
+            up.getNewDeployConfig.maxTtlMilliseconds,
+            up.getNewDeployConfig.maxDependenciesNum
+          )
+      )
     apply(versions: _*)
   }
 }

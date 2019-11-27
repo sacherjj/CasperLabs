@@ -26,6 +26,7 @@ import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
@@ -261,10 +262,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           }
       _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
       _ <- check("Invalid deploy signature.")(Validation.deploySignature[F](deploy))
-      _ <- Validation.deployHeader[F](deploy, chainName) >>= { headerErrors =>
-            illegal(headerErrors.map(_.errorMessage).mkString("\n"))
-              .whenA(headerErrors.nonEmpty)
-          }
+      _ <- check("Invalid chain name.")(
+            Validation.validateChainName[F](deploy, chainName).map(_.isEmpty)
+          )
     } yield ()
   }
 
@@ -333,8 +333,23 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           requeued <- requeueOrphanedDeploys(dag, merged)
           _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
 
-          timestamp       <- Time[F].currentMillis
-          remainingHashes <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp)
+          timestamp <- Time[F].currentMillis
+          // `bondedLatestMsgs` won't include Genesis block
+          // and in the case when it becomes the main parent we want to include its rank
+          // when calculating it for the current block.
+          rank <- MonadThrowable[F].fromTry(
+                   merged.parents.toList
+                     .traverse(Message.fromBlock(_))
+                     .map(_.toSet | latestMessages.values.flatten.toSet)
+                     .map(set => ProtoUtil.nextRank(set.toList))
+                 )
+          deployConfig <- CasperLabsProtocol[F].configAt(rank).map(_.deployConfig)
+          remainingHashes <- remainingDeploysHashes(
+                              dag,
+                              parents.map(_.blockHash).toSet,
+                              timestamp,
+                              deployConfig
+                            )
           proposal <- if (remainingHashes.nonEmpty || parents.length > 1) {
                        createProposal(
                          dag,
@@ -344,7 +359,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          publicKey,
                          privateKey,
                          sigAlgorithm,
-                         timestamp
+                         timestamp,
+                         rank
                        )
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
@@ -369,7 +385,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
       parents: Set[BlockHash],
-      timestamp: Long
+      timestamp: Long,
+      deployConfig: DeployConfig
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
@@ -377,7 +394,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       .timer("timestampBeforeFilter")
     val unexpired = earlierPendingDeploys
       .through(
-        DeployFilters.Pipes.notExpired[F](timestamp)
+        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMilliseconds)
       )
       .timer("notExpiredFilter")
 
@@ -428,7 +445,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      timestamp: Long
+      timestamp: Long,
+      rank: Long
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
       //We ensure that only the justifications given in the block are those
@@ -446,15 +464,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
             DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
           )
       (for {
-        // `bondedLatestMsgs` won't include Genesis block
-        // and in the case when it becomes the main parent we want to include its rank
-        // when calculating it for the current block.
-        rank <- MonadThrowable[F].fromTry(
-                 merged.parents.toList
-                   .traverse(Message.fromBlock(_))
-                   .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
-                   .map(set => ProtoUtil.nextRank(set.toList))
-               )
         protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
         checkpoint <- ExecEngineUtil
                        .computeDeploysCheckpoint[F](

@@ -35,6 +35,7 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
@@ -50,6 +51,7 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 import logstage.LogIO
+
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
@@ -64,7 +66,7 @@ class ValidationTest
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions = {
     CasperLabsProtocol.unsafe[Task](
-      0L -> state.ProtocolVersion(1)
+      (0L, state.ProtocolVersion(1), 60 * 60 * 1000, 24 * 60 * 60 * 1000, 10)
     )
   }
   import DeriveValidation._
@@ -299,45 +301,59 @@ class ValidationTest
     Validation.deploySignature[Task](deploy) shouldBeF false
   }
 
+  val deployConfig = DeployConfig(
+    minTtlMilliseconds = 60 * 60 * 1000,      // 1 hour
+    maxTtlMilliseconds = 24 * 60 * 60 * 1000, // 1 day
+    maxDependenciesNum = 10
+  )
+
   "Deploy header validation" should "accept valid headers" in {
     implicit val consensusConfig =
       ConsensusConfig(dagSize = 10, maxSessionCodeBytes = 5, maxPaymentCodeBytes = 5)
 
     forAll { (deploy: consensus.Deploy) =>
-      withoutStorage { Validation.deployHeader[Task](deploy, chainName) } shouldBe Nil
+      withoutStorage { Validation.deployHeader[Task](deploy, chainName, deployConfig) } shouldBe Nil
     }
   }
 
   it should "not accept too short time to live" in withoutStorage {
     val deploy = DeployOps.randomTooShortTTL()
-    Validation.deployHeader[Task](deploy, chainName) shouldBeF List(
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, Validation.MIN_TTL)
+        .timeToLiveTooShort(
+          deploy.deployHash,
+          deploy.getHeader.ttlMillis,
+          deployConfig.minTtlMilliseconds
+        )
     )
   }
 
   it should "not accept too long time to live" in withoutStorage {
     val deploy = DeployOps.randomTooLongTTL()
-    Validation.deployHeader[Task](deploy, chainName) shouldBeF List(
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
       DeployHeaderError
-        .timeToLiveTooLong(deploy.deployHash, deploy.getHeader.ttlMillis, Validation.MAX_TTL)
+        .timeToLiveTooLong(
+          deploy.deployHash,
+          deploy.getHeader.ttlMillis,
+          deployConfig.maxTtlMilliseconds
+        )
     )
   }
 
   it should "not accept too many dependencies" in withoutStorage {
     val deploy = DeployOps.randomTooManyDependencies()
-    Validation.deployHeader[Task](deploy, chainName) shouldBeF List(
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        Validation.MAX_DEPENDENCIES
+        deployConfig.maxDependenciesNum
       )
     )
   }
 
   it should "not accept invalid dependencies" in withoutStorage {
     val deploy = DeployOps.randomInvalidDependency()
-    Validation.deployHeader[Task](deploy, chainName) shouldBeF List(
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
       DeployHeaderError
         .invalidDependency(deploy.deployHash, deploy.getHeader.dependencies.head)
     )
@@ -349,7 +365,7 @@ class ValidationTest
       arbitrary[consensus.Deploy].map(_.withChainName(s"never say $chainName"))
     }
 
-    Validation.deployHeader[Task](deploy, chainName) shouldBeF List(
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
       DeployHeaderError
         .invalidChainName(deploy.deployHash, deploy.getHeader.chainName, chainName)
     )

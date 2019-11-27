@@ -314,6 +314,12 @@ object HashSetCasperTestNode {
     else x
 
   implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocol.unsafe[F](
-    0L -> consensus.state.ProtocolVersion(1)
+    (
+      0L,
+      consensus.state.ProtocolVersion(1),
+      60 * 60 * 1000,      // 1 hour
+      24 * 60 * 60 * 1000, // 1 day
+      10
+    )
   )
 }

@@ -4,13 +4,19 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.validation.Validation.{MAX_DEPENDENCIES, MAX_TTL, MIN_TTL}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.{ArbitraryConsensus, DeployImplicits}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 object DeployOps extends ArbitraryConsensus {
+  val deployConfig = DeployConfig(
+    minTtlMilliseconds = 60 * 60 * 1000,      // 1 hour
+    maxTtlMilliseconds = 24 * 60 * 60 * 1000, // 1 day
+    maxDependenciesNum = 10
+  )
+
   implicit class ChangeDeployOps(deploy: Deploy) {
     // Clears previous signatures and adds a new one.
     def signSingle: Deploy = {
@@ -62,7 +68,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, MIN_TTL - 1)
+      ttl <- Gen.choose(1, deployConfig.minTtlMilliseconds - 1)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -73,7 +79,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(MAX_TTL + 1, Int.MaxValue)
+      ttl <- Gen.choose(deployConfig.maxTtlMilliseconds + 1, Int.MaxValue)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -83,9 +89,12 @@ object DeployOps extends ArbitraryConsensus {
     implicit val c = ConsensusConfig()
 
     val genDeploy = for {
-      d               <- arbitrary[Deploy]
-      numDependencies <- Gen.chooseNum(MAX_DEPENDENCIES + 1, 2 * MAX_DEPENDENCIES)
-      dependencies    <- Gen.listOfN(numDependencies, genHash)
+      d <- arbitrary[Deploy]
+      numDependencies <- Gen.chooseNum(
+                          deployConfig.maxDependenciesNum + 1,
+                          2 * deployConfig.maxDependenciesNum
+                        )
+      dependencies <- Gen.listOfN(numDependencies, genHash)
     } yield d.withDependencies(dependencies)
 
     sample(genDeploy)

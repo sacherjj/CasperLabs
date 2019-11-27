@@ -50,10 +50,17 @@ object ChainSpec extends ParserImplicits {
       patch: Int
   )
 
+  final case class DeployConfig(
+      minTtlMillis: Int Refined NonNegative,
+      maxTtlMillis: Int Refined NonNegative,
+      maxDependenciesNum: Int Refined NonNegative
+  )
+
   /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
       genesis: Genesis,
-      wasmCosts: WasmCosts
+      wasmCosts: WasmCosts,
+      deployConfig: DeployConfig
   )
   object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
 
@@ -253,7 +260,7 @@ object ChainSpecReader {
   implicit val `ChainSpecReader[GenesisConfig]` = new ChainSpecReader[ipc.ChainSpec.GenesisConfig] {
     override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
-        case GenesisConf(genesis, wasmCosts) =>
+        case GenesisConf(genesis, wasmCosts, deployConfig) =>
           for {
             mintCodeBytes <- resolver.asBytes(resolvePath(path, genesis.mintCodePath))
             posCodeBytes  <- resolver.asBytes(resolvePath(path, genesis.posCodePath))
@@ -281,6 +288,7 @@ object ChainSpecReader {
                   )
               })
               .withCosts(toCostTable(wasmCosts))
+              .withDeployConfig(toDeployConfig(deployConfig))
           }
       }
   }
@@ -355,6 +363,13 @@ object ChainSpecReader {
           .withOpcodesMul(wasmCosts.opcodesMultiplier.value)
           .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
       )
+
+  private def toDeployConfig(deployConfig: DeployConfig): ipc.ChainSpec.DeployConfig =
+    ipc.ChainSpec.DeployConfig(
+      deployConfig.minTtlMillis.value,
+      deployConfig.maxTtlMillis.value,
+      deployConfig.maxDependenciesNum.value
+    )
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
       read: A => Either[String, B]
