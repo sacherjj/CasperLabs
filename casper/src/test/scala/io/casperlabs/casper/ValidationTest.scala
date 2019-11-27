@@ -302,9 +302,9 @@ class ValidationTest
   }
 
   val deployConfig = DeployConfig(
-    minTtlMilliseconds = 60 * 60 * 1000,      // 1 hour
-    maxTtlMilliseconds = 24 * 60 * 60 * 1000, // 1 day
-    maxDependenciesNum = 10
+    minTtlMillis = 60 * 60 * 1000,      // 1 hour
+    maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
+    maxDependencies = 10
   )
 
   "Deploy header validation" should "accept valid headers" in {
@@ -323,7 +323,7 @@ class ValidationTest
         .timeToLiveTooShort(
           deploy.deployHash,
           deploy.getHeader.ttlMillis,
-          deployConfig.minTtlMilliseconds
+          deployConfig.minTtlMillis
         )
     )
   }
@@ -335,7 +335,7 @@ class ValidationTest
         .timeToLiveTooLong(
           deploy.deployHash,
           deploy.getHeader.ttlMillis,
-          deployConfig.maxTtlMilliseconds
+          deployConfig.maxTtlMillis
         )
     )
   }
@@ -346,7 +346,7 @@ class ValidationTest
       DeployHeaderError.tooManyDependencies(
         deploy.deployHash,
         deploy.getHeader.dependencies.size,
-        deployConfig.maxDependenciesNum
+        deployConfig.maxDependencies
       )
     )
   }

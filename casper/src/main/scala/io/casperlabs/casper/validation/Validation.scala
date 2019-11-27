@@ -424,15 +424,15 @@ object Validation {
       case Some(header) =>
         Applicative[F].map3(
           validateTimeToLive[F](
-            ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMilliseconds),
+            ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMillis),
             d.deployHash,
-            deployConfig.minTtlMilliseconds,
-            deployConfig.maxTtlMilliseconds
+            deployConfig.minTtlMillis,
+            deployConfig.maxTtlMillis
           ),
           validateDependencies[F](
             header.dependencies,
             d.deployHash,
-            deployConfig.maxDependenciesNum
+            deployConfig.maxDependencies
           ),
           validateChainName[F](d, chainName)
         ) {
@@ -737,8 +737,8 @@ object Validation {
         header                 = d.getHeader
         isFromFuture           = !isFromPast(header)
         _                      <- raiseFutureDeploy(d.deployHash, header).whenA(isFromFuture)
-        isExpired              = !isNotExpired(config.maxTtlMilliseconds)(header)
-        _                      <- raiseExpiredDeploy(d.deployHash, header, config.maxTtlMilliseconds).whenA(isExpired)
+        isExpired              = !isNotExpired(config.maxTtlMillis)(header)
+        _                      <- raiseExpiredDeploy(d.deployHash, header, config.maxTtlMillis).whenA(isExpired)
         hasMissingDependencies <- dependenciesMet(d).map(!_)
         _                      <- raiseDeployDependencyNotMet(d).whenA(hasMissingDependencies)
       } yield ()

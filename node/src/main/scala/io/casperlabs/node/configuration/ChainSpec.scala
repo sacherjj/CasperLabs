@@ -53,7 +53,7 @@ object ChainSpec extends ParserImplicits {
   final case class DeployConfig(
       minTtlMillis: Int Refined NonNegative,
       maxTtlMillis: Int Refined NonNegative,
-      maxDependenciesNum: Int Refined NonNegative
+      maxDependencies: Int Refined NonNegative
   )
 
   /** The first set of changes should define the Genesis section and the costs. */
@@ -370,7 +370,7 @@ object ChainSpecReader {
     ipc.ChainSpec.DeployConfig(
       deployConfig.minTtlMillis.value,
       deployConfig.maxTtlMillis.value,
-      deployConfig.maxDependenciesNum.value
+      deployConfig.maxDependencies.value
     )
 
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(

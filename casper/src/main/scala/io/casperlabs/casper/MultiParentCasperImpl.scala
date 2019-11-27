@@ -394,7 +394,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       .timer("timestampBeforeFilter")
     val unexpired = earlierPendingDeploys
       .through(
-        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMilliseconds)
+        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
       )
       .timer("notExpiredFilter")
 

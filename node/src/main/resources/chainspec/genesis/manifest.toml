@@ -27,7 +27,7 @@ initial-accounts-path = "accounts.csv"
 min-ttl-millis = 3600000
 # 1 day
 max-ttl-millis = 86400000
-max-dependencies-num = 10
+max-dependencies = 10
 
 [wasm-costs]
 # Default opcode cost

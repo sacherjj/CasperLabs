@@ -12,7 +12,7 @@ installer-code-path = "installer.wasm"
 min-ttl-millis = 3600000
 # 10 days
 max-ttl-millis = 864000000
-max-dependencies-num = 10
+max-dependencies = 10
 
 [wasm-costs]
 # Default opcode cost

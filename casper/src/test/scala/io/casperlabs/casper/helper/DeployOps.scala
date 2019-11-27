@@ -12,9 +12,9 @@ import org.scalacheck.Gen
 
 object DeployOps extends ArbitraryConsensus {
   val deployConfig = DeployConfig(
-    minTtlMilliseconds = 60 * 60 * 1000,      // 1 hour
-    maxTtlMilliseconds = 24 * 60 * 60 * 1000, // 1 day
-    maxDependenciesNum = 10
+    minTtlMillis = 60 * 60 * 1000,      // 1 hour
+    maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
+    maxDependencies = 10
   )
 
   implicit class ChangeDeployOps(deploy: Deploy) {
@@ -68,7 +68,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, deployConfig.minTtlMilliseconds - 1)
+      ttl <- Gen.choose(1, deployConfig.minTtlMillis - 1)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -79,7 +79,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(deployConfig.maxTtlMilliseconds + 1, Int.MaxValue)
+      ttl <- Gen.choose(deployConfig.maxTtlMillis + 1, Int.MaxValue)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -91,8 +91,8 @@ object DeployOps extends ArbitraryConsensus {
     val genDeploy = for {
       d <- arbitrary[Deploy]
       numDependencies <- Gen.chooseNum(
-                          deployConfig.maxDependenciesNum + 1,
-                          2 * deployConfig.maxDependenciesNum
+                          deployConfig.maxDependencies + 1,
+                          2 * deployConfig.maxDependencies
                         )
       dependencies <- Gen.listOfN(numDependencies, genHash)
     } yield d.withDependencies(dependencies)

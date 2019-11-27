@@ -139,18 +139,18 @@ object CasperLabsProtocol {
     val versions = (
       0L,
       spec.getGenesis.getProtocolVersion,
-      spec.getGenesis.getDeployConfig.minTtlMilliseconds,
-      spec.getGenesis.getDeployConfig.maxTtlMilliseconds,
-      spec.getGenesis.getDeployConfig.maxDependenciesNum
+      spec.getGenesis.getDeployConfig.minTtlMillis,
+      spec.getGenesis.getDeployConfig.maxTtlMillis,
+      spec.getGenesis.getDeployConfig.maxDependencies
     ) +:
       spec.upgrades.map(
         up =>
           (
             up.getActivationPoint.rank,
             up.getProtocolVersion,
-            up.getNewDeployConfig.minTtlMilliseconds,
-            up.getNewDeployConfig.maxTtlMilliseconds,
-            up.getNewDeployConfig.maxDependenciesNum
+            up.getNewDeployConfig.minTtlMillis,
+            up.getNewDeployConfig.maxTtlMillis,
+            up.getNewDeployConfig.maxDependencies
           )
       )
     apply(versions: _*)
