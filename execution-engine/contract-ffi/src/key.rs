@@ -178,6 +178,20 @@ impl Key {
             _ => None,
         }
     }
+
+    pub fn as_hash(&self) -> Option<[u8; HASH_SIZE]> {
+        match self {
+            Key::Hash(hash) => Some(*hash),
+            _ => None,
+        }
+    }
+
+    pub fn as_local(&self) -> Option<[u8; LOCAL_KEY_SIZE]> {
+        match self {
+            Key::Local(local) => Some(*local),
+            _ => None,
+        }
+    }
 }
 
 impl From<URef> for Key {
@@ -294,7 +308,7 @@ mod tests {
 
     use crate::{
         bytesrepr::{Error, FromBytes},
-        key::Key,
+        key::{Key, HASH_SIZE, LOCAL_KEY_SIZE},
         uref::{AccessRights, URef},
     };
 
@@ -457,5 +471,45 @@ mod tests {
 
         let invalid_hex = "g".repeat(64);
         assert!(super::decode_from_hex(&invalid_hex).is_none());
+    }
+
+    #[test]
+    fn check_key_account_getters() {
+        let account = [42; 32];
+        let key1 = Key::Account(account);
+        assert_eq!(key1.as_account(), Some(account));
+        assert!(key1.as_hash().is_none());
+        assert!(key1.as_uref().is_none());
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_hash_getters() {
+        let hash = [42; HASH_SIZE];
+        let key1 = Key::Hash(hash);
+        assert!(key1.as_account().is_none());
+        assert_eq!(key1.as_hash(), Some(hash));
+        assert!(key1.as_uref().is_none());
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_uref_getters() {
+        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+        let key1 = Key::URef(uref);
+        assert!(key1.as_account().is_none());
+        assert!(key1.as_hash().is_none());
+        assert_eq!(key1.as_uref(), Some(&uref));
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_local_getters() {
+        let local = [42; LOCAL_KEY_SIZE];
+        let key1 = Key::Local(local);
+        assert!(key1.as_account().is_none());
+        assert!(key1.as_hash().is_none());
+        assert!(key1.as_uref().is_none());
+        assert_eq!(key1.as_local(), Some(local));
     }
 }
