@@ -504,7 +504,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
     val depth =
       opt[Int](
+        name = "depth",
         descr = "depth in terms of block height",
+        validate = _ > 0,
         required = true
       )
     val showJustificationLines =
