@@ -1268,6 +1268,18 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
+  it should "set node's LFB as block's key_block" in effectTest {
+    val node        = standaloneEff(genesis, transforms, validatorKeys.head)
+
+    for {
+      blockA <- node.deployAndPropose(ProtoUtil.basicDeploy(timestamp = 1L))
+      _      = assert(blockA.getHeader.keyBlock == genesis.blockHash)
+      _      <- node.lastFinalizedBlockHashContainer.set(blockA.blockHash)
+      blockB <- node.deployAndPropose(ProtoUtil.basicDeploy(timestamp = 2L))
+      _      = assert(blockB.getHeader.keyBlock == blockA.blockHash)
+    } yield ()
+  }
+
   private def buildBlockWithInvalidJustification(
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: Block

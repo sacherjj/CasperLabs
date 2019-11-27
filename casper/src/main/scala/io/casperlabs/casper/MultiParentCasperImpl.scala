@@ -465,6 +465,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          upgrades
                        )
+        lfb <- LastFinalizedBlockHashContainer[F].get
         result <- Sync[F]
                    .delay {
                      if (checkpoint.deploysForBlock.isEmpty) {
@@ -492,7 +493,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          validatorId,
                          privateKey,
-                         sigAlgorithm
+                         sigAlgorithm,
+                         lfb
                        )
                        CreateBlockStatus.created(block)
                      }
@@ -622,16 +624,9 @@ object MultiParentCasperImpl {
           casperState <- Cell[F, CasperState].read
           // Confirm the parents are correct (including checking they commute) and capture
           // the effect needed to compute the correct pre-state as well.
-          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
-          merged <- maybeContext.fold(
-                     ExecEngineUtil.MergeResult
-                       .empty[ExecEngineUtil.TransformMap, Block]
-                       .pure[F]
-                   ) { ctx =>
-                     Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag)
-                   }
-          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+          _      <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
+          merged <- Validation[F].parents(block, block.getHeader.keyBlock, dag)
+          _      <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
                            .computePrestate[F](merged, block.getHeader.rank, upgrades)
                            .timer("computePrestate")
