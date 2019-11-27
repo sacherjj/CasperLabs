@@ -868,10 +868,21 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let _test_result = builder.exec_commit_finish(exec_request);
+    builder.exec_commit_finish(exec_request);
 
-    let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let transferred_amount = 1;
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+
+    assert!(
+        default_account
+            .named_keys()
+            .contains_key(STANDARD_PAYMENT_CONTRACT_NAME),
+        "standard_payment should be present"
+    );
 
     //
     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm costs
@@ -896,10 +907,7 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(
-                &format!("{}.wasm", DO_NOTHING_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
-            )
+            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
                 (U512::from(payment_purse_amount),),
@@ -942,34 +950,21 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder.exec_commit_finish(exec_request);
-
-    let _response = test_result
-        .builder()
-        .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
-
-    let transforms = &test_result.builder().get_transforms()[0];
+    builder.exec_commit_finish(exec_request);
 
     // find the contract write transform, then get the hash from its key
-    let stored_payment_contract_hash = {
-        let mut ret = None;
-        for (k, t) in transforms {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::Hash(hash) = k {
-                    ret = Some(hash);
-                    break;
-                }
-            }
-        }
-        ret
-    };
-
-    assert_ne!(
-        stored_payment_contract_hash, None,
-        "stored_payment_contract_hash should exist"
-    );
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    let stored_payment_contract_hash = default_account
+        .named_keys()
+        .get(STANDARD_PAYMENT_CONTRACT_NAME)
+        .expect("should have standard_payment named key")
+        .as_hash()
+        .expect("standard_payment should be an uref");
 
     //
     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm costs
@@ -996,9 +991,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_hash(
-                stored_payment_contract_hash
-                    .expect("hash should exist")
-                    .to_vec(),
+                stored_payment_contract_hash.to_vec(),
                 (U512::from(payment_purse_amount),),
             )
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])
@@ -1039,30 +1032,21 @@ fn should_fail_payment_stored_at_uref_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder.exec_commit_finish(exec_request);
+    builder.exec_commit_finish(exec_request);
 
-    let _response = test_result
-        .builder()
-        .get_exec_response(0)
-        .expect("there should be a response")
-        .clone();
-
-    let transforms = &test_result.builder().get_transforms()[0];
-
-    // find the contract write transform, then get the hash from its key
-    let stored_payment_contract_uref = transforms
-        .into_iter()
-        .filter_map(|(k, t)| {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::URef(uref) = k {
-                    return Some(uref);
-                }
-            }
-            None
-        })
-        .nth(0)
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    let stored_payment_contract_uref = default_account
+        .named_keys()
+        .get(STANDARD_PAYMENT_CONTRACT_NAME)
+        .expect("should have standard_payment named key")
+        .as_uref()
         .cloned()
-        .expect("should have uref in tranforms");
+        .expect("standard_payment should be an uref");
 
     //
     // upgrade with new wasm costs with modified mint for given version to avoid missing wasm costs
@@ -1130,7 +1114,20 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let _test_result = builder.exec_commit_finish(exec_request_1);
+    builder.exec_commit_finish(exec_request_1);
+
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    assert!(
+        default_account
+            .named_keys()
+            .contains_key(DO_NOTHING_STORED_CONTRACT_NAME),
+        "do_nothing should be present in named keys"
+    );
 
     //
     // upgrade with new wasm costs with modified mint for given version
@@ -1198,22 +1195,20 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder.exec_commit_finish(exec_request_1);
-    let transforms = &test_result.builder().get_transforms()[0];
+    builder.exec_commit_finish(exec_request_1);
 
-    let do_nothing_contract_key = transforms
-        .iter()
-        .filter_map(|(k, t)| {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::Hash(hash) = k {
-                    return Some(hash);
-                }
-            }
-            None
-        })
-        .nth(0)
-        .cloned()
-        .expect("should have contract hash");
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    let do_nothing_contract_hash = default_account
+        .named_keys()
+        .get(DO_NOTHING_STORED_CONTRACT_NAME)
+        .expect("do_nothing should be present in named keys")
+        .as_hash()
+        .expect("do_nothing named key should be hash");
 
     //
     // upgrade with new wasm costs with modified mint for given version
@@ -1238,7 +1233,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(do_nothing_contract_key.to_vec(), ())
+            .with_stored_session_hash(do_nothing_contract_hash.to_vec(), ())
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
@@ -1281,22 +1276,21 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
-    let test_result = builder.exec_commit_finish(exec_request_1);
-    let transforms = &test_result.builder().get_transforms()[0];
+    builder.exec_commit_finish(exec_request_1);
 
-    let do_nothing_contract_key = transforms
-        .iter()
-        .filter_map(|(k, t)| {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::URef(uref) = k {
-                    return Some(uref);
-                }
-            }
-            None
-        })
-        .nth(0)
+    let query_result = builder
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    let do_nothing_contract_uref = default_account
+        .named_keys()
+        .get(DO_NOTHING_STORED_CONTRACT_NAME)
+        .expect("do_nothing should be present in named keys")
+        .as_uref()
         .cloned()
-        .expect("should have contract uref");
+        .expect("do_nothing named key should be hash");
 
     //
     // upgrade with new wasm costs with modified mint for given version
@@ -1321,7 +1315,7 @@ fn should_fail_session_stored_at_uref_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_uref(do_nothing_contract_key, ())
+            .with_stored_session_uref(do_nothing_contract_uref, ())
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(payment_purse_amount),),
@@ -1392,47 +1386,37 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     .with_protocol_version(new_protocol_version)
     .build();
 
-    //
-    // Obtain standard payment using hash
-    //
+    // store both contracts
+    let test_result = builder
+        .exec(exec_request_1)
+        .expect_success()
+        .commit()
+        .exec(exec_request_2)
+        .expect_success()
+        .commit()
+        .finish();
 
-    let test_result = builder.exec_commit_finish(exec_request_1);
-    let transforms = &test_result.builder().get_transforms()[0];
-
-    let standard_payment_stored_hash = transforms
-        .iter()
-        .filter_map(|(k, t)| {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::Hash(hash) = k {
-                    return Some(hash);
-                }
-            }
-            None
-        })
-        .nth(0)
+    // query both stored contracts by their named keys
+    let query_result = test_result
+        .builder()
+        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
+        .expect("should query default account");
+    let default_account = query_result
+        .as_account()
+        .expect("query result should be an account");
+    let standard_payment_stored_hash = default_account
+        .named_keys()
+        .get(STANDARD_PAYMENT_CONTRACT_NAME)
+        .expect("standard_payment should be present in named keys")
+        .as_hash()
+        .expect("standard_payment named key should be hash");
+    let do_nothing_stored_uref = default_account
+        .named_keys()
+        .get(DO_NOTHING_STORED_CONTRACT_NAME)
+        .expect("do_nothing should be present in named keys")
+        .as_uref()
         .cloned()
-        .expect("should have standard payment hash");
-
-    //
-    // obtain do nothing uref
-    //
-
-    let test_result = builder.exec_commit_finish(exec_request_2);
-    let transforms = &test_result.builder().get_transforms()[1];
-
-    let do_nothing_stored_uref = transforms
-        .iter()
-        .filter_map(|(k, t)| {
-            if let Transform::Write(Value::Contract(_)) = t {
-                if let Key::URef(uref) = k {
-                    return Some(uref);
-                }
-            }
-            None
-        })
-        .nth(0)
-        .cloned()
-        .expect("should have standard payment uref");
+        .expect("do_nothing named key should be hash");
 
     // Call stored session code
 
@@ -1454,10 +1438,13 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
             .build()
     };
 
-    let test_result = builder.exec(exec_request_stored_payment).commit();
+    let final_test_result = InMemoryWasmTestBuilder::from_result(test_result)
+        .exec(exec_request_stored_payment)
+        .commit()
+        .finish();
 
     assert!(
-        !test_result.is_error(),
+        !final_test_result.builder().is_error(),
         "calling upgraded stored payment and session code should work",
     );
 }
