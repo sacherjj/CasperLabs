@@ -4,16 +4,16 @@ import cats._
 import cats.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
+import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.ipc
 import simulacrum.typeclass
 import scala.util.Try
 
-class ProtocolVersions private (l: List[BlockThreshold]) {
+class ProtocolVersions private (l: List[Config]) {
   def versionAt(blockHeight: Long): state.ProtocolVersion =
     l.collectFirst {
-      case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
+      case Config(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
         protocolVersion
     }.get // This cannot throw because we validate in `apply` that list is never empty.
 
@@ -25,13 +25,13 @@ class ProtocolVersions private (l: List[BlockThreshold]) {
 
 object ProtocolVersions {
 
-  final case class BlockThreshold(blockHeightMin: Long, version: state.ProtocolVersion)
+  final case class Config(blockHeightMin: Long, version: state.ProtocolVersion)
 
   // Order thresholds from newest to oldest descending.
-  private implicit val blockThresholdOrdering: Ordering[BlockThreshold] =
-    Ordering.by[BlockThreshold, Long](_.blockHeightMin).reverse
+  private implicit val blockThresholdOrdering: Ordering[Config] =
+    Ordering.by[Config, Long](_.blockHeightMin).reverse
 
-  def apply(l: List[BlockThreshold]): ProtocolVersions = {
+  def apply(l: List[Config]): ProtocolVersions = {
     val descendingList = l.sorted(blockThresholdOrdering)
 
     require(descendingList.size >= 1, "List cannot be empty.")
@@ -98,14 +98,14 @@ trait CasperLabsProtocol[F[_]] {
 }
 
 object CasperLabsProtocol {
-  import ProtocolVersions.BlockThreshold
+  import ProtocolVersions.Config
 
   def unsafe[F[_]: Applicative](
       versions: (Long, state.ProtocolVersion)*
   ): CasperLabsProtocol[F] = {
     val thresholds = versions.map {
       case (rank, version) =>
-        BlockThreshold(rank, version)
+        Config(rank, version)
     }
 
     val underlying = ProtocolVersions(thresholds.toList)

@@ -1,6 +1,6 @@
 package io.casperlabs.casper.util
 
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
+import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import org.scalatest.{Assertion, Inspectors, Matchers, WordSpec}
 
@@ -26,7 +26,7 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
     "created with lower bound different than 0" should {
       "throw an assertion error" in {
         val thrown = the[java.lang.IllegalArgumentException] thrownBy {
-          ProtocolVersions(List(BlockThreshold(1, ProtocolVersion(1))))
+          ProtocolVersions(List(Config(1, ProtocolVersion(1))))
         }
         thrown.getMessage should equal(
           "requirement failed: Lowest block threshold MUST have 0 as lower bound."
@@ -39,8 +39,8 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
         val thrown = the[java.lang.AssertionError] thrownBy {
           ProtocolVersions(
             List(
-              BlockThreshold(0, ProtocolVersion(1)),
-              BlockThreshold(11, ProtocolVersion(3))
+              Config(0, ProtocolVersion(1)),
+              Config(11, ProtocolVersion(3))
             )
           )
         }
@@ -63,8 +63,8 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
             a[java.lang.AssertionError] should be thrownBy {
               ProtocolVersions(
                 List(
-                  BlockThreshold(0, semver(prev)),
-                  BlockThreshold(11, semver(next))
+                  Config(0, semver(prev)),
+                  Config(11, semver(next))
                 )
               )
             }
@@ -86,8 +86,8 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
             noException should be thrownBy {
               ProtocolVersions(
                 List(
-                  BlockThreshold(0, semver(prev)),
-                  BlockThreshold(11, semver(next))
+                  Config(0, semver(prev)),
+                  Config(11, semver(next))
                 )
               )
             }
@@ -100,9 +100,9 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
         val thrown = the[java.lang.AssertionError] thrownBy {
           ProtocolVersions(
             List(
-              BlockThreshold(0, ProtocolVersion(1)),
-              BlockThreshold(10, ProtocolVersion(2)),
-              BlockThreshold(10, ProtocolVersion(3))
+              Config(0, ProtocolVersion(1)),
+              Config(10, ProtocolVersion(2)),
+              Config(10, ProtocolVersion(3))
             )
           )
         }
@@ -114,9 +114,9 @@ class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
       "create instance of ProtocolVersions" in {
         val map = ProtocolVersions(
           List(
-            BlockThreshold(0, ProtocolVersion(1)),
-            BlockThreshold(11, ProtocolVersion(2)),
-            BlockThreshold(21, ProtocolVersion(3))
+            Config(0, ProtocolVersion(1)),
+            Config(11, ProtocolVersion(2)),
+            Config(21, ProtocolVersion(3))
           )
         )
         assert(map.versionAt(5) == ProtocolVersion(1))
