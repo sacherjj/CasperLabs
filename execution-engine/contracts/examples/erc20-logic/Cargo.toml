@@ -11,3 +11,6 @@ doctest = false
 [features]
 default = ["std"]
 std = []
+
+[dependencies]
+num-traits = { version = "0.2.10", default-features = false }

@@ -3,6 +3,8 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+extern crate num_traits;
+
 use core::ops::{Add, Sub};
 
 #[derive(PartialEq, Debug)]
@@ -23,7 +25,7 @@ impl From<ERC20TransferError> for ERC20TransferFromError {
 }
 
 pub trait ERC20Trait<
-    Amount: From<u32> + Add<Output = Amount> + Sub<Output = Amount> + PartialOrd + Copy,
+    Amount: num_traits::Zero + Add<Output = Amount> + Sub<Output = Amount> + PartialOrd + Copy,
     Address,
 >
 {
@@ -59,17 +61,16 @@ pub trait ERC20Trait<
     }
 
     fn balance_of(&mut self, address: &Address) -> Amount {
-        self.read_balance(address)
-            .unwrap_or_else(|| Amount::from(0))
+        self.read_balance(address).unwrap_or_else(Amount::zero)
     }
 
     fn total_supply(&mut self) -> Amount {
-        self.read_total_supply().unwrap_or_else(|| Amount::from(0))
+        self.read_total_supply().unwrap_or_else(Amount::zero)
     }
 
     fn allowance(&mut self, owner: &Address, spender: &Address) -> Amount {
         self.read_allowance(owner, spender)
-            .unwrap_or_else(|| Amount::from(0))
+            .unwrap_or_else(Amount::zero)
     }
 
     fn approve(&mut self, owner: &Address, spender: &Address, amount: Amount) {
