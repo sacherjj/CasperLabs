@@ -54,7 +54,7 @@ fn test_erc20_transfer() {
         token_hash,
         ACCOUNT_1,
         ACCOUNT_2,
-        U512::from(0),
+        U512::zero(),
     );
 
     // Transfer 20 tokens from ACCOUNT_1 to ACCOUNT_2.
@@ -150,7 +150,7 @@ fn test_erc20_approval_and_transfer_from() {
         ACCOUNT_1,
         ACCOUNT_1,
         ACCOUNT_2,
-        U512::from(0),
+        U512::zero(),
     );
 
     // ACCOUNT_1 allows ACCOUNT_2 to spend 10 tokens.
@@ -211,7 +211,7 @@ fn test_erc20_approval_and_transfer_from() {
         token_hash,
         ACCOUNT_1,
         ACCOUNT_2,
-        U512::from(0),
+        U512::zero(),
     );
     assert_balance(
         &mut builder,
