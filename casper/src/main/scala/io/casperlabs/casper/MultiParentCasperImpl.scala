@@ -624,9 +624,15 @@ object MultiParentCasperImpl {
           casperState <- Cell[F, CasperState].read
           // Confirm the parents are correct (including checking they commute) and capture
           // the effect needed to compute the correct pre-state as well.
-          _      <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
-          merged <- Validation[F].parents(block, block.getHeader.keyBlockHash, dag)
-          _      <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
+          _ <- Log[F].debug(s"Validating the parents of ${hashPrefix -> "block"}")
+          merged <- maybeContext.fold(
+                     ExecEngineUtil.MergeResult
+                       .empty[ExecEngineUtil.TransformMap, Block]
+                       .pure[F]
+                   ) { _ =>
+                     Validation[F].parents(block, block.getHeader.keyBlockHash, dag)
+                   }
+          _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
                            .computePrestate[F](merged, block.getHeader.rank, upgrades)
                            .timer("computePrestate")
