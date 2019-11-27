@@ -1269,7 +1269,7 @@ abstract class HashSetCasperTest
   }
 
   it should "set node's LFB as block's key_block" in effectTest {
-    val node        = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
     for {
       blockA <- node.deployAndPropose(ProtoUtil.basicDeploy(timestamp = 1L))
