@@ -54,7 +54,7 @@ object ChainSpec extends ParserImplicits {
       minTtlMillis: Int Refined NonNegative,
       maxTtlMillis: Int Refined NonNegative,
       maxDependencies: Int Refined NonNegative
-  )
+  ) extends SubConfig
 
   /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
