@@ -1273,10 +1273,10 @@ abstract class HashSetCasperTest
 
     for {
       blockA <- node.deployAndPropose(ProtoUtil.basicDeploy(timestamp = 1L))
-      _      = assert(blockA.getHeader.keyBlock == genesis.blockHash)
+      _      = assert(blockA.getHeader.keyBlockHash == genesis.blockHash)
       _      <- node.lastFinalizedBlockHashContainer.set(blockA.blockHash)
       blockB <- node.deployAndPropose(ProtoUtil.basicDeploy(timestamp = 2L))
-      _      = assert(blockB.getHeader.keyBlock == blockA.blockHash)
+      _      = assert(blockB.getHeader.keyBlockHash == blockA.blockHash)
     } yield ()
   }
 

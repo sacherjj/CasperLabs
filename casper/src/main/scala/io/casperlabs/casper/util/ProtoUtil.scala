@@ -481,7 +481,7 @@ object ProtoUtil {
   ): Block.Header =
     Block
       .Header()
-      .withKeyBlock(keyBlock)
+      .withKeyBlockHash(keyBlock)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
