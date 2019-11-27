@@ -66,7 +66,8 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
-DOT_FORMATS = "png,svg,svg_standalone,xdot,plain,plain_ext,ps,ps2,json,json0"
+
+DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 from google.protobuf import json_format
 
@@ -1290,7 +1291,7 @@ def main():
 
     parser.addCommand('vdag', vdag_command, 'DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it.',
                       [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=dot_output, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+                       [('-o', '--out'), dict(required=False, type=dot_output, help=f'output image filename, outputs to stdout if not specified, must end with one of {DOT_FORMATS}')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
                        [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
