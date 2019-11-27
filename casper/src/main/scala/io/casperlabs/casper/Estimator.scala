@@ -100,8 +100,7 @@ object Estimator {
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Weight]] = {
-    implicit val decreasingOrder = Ordering[Long].reverse
-    implicit val messageOrder    = DagOperations.blockTopoOrderingDesc
+    implicit val messageOrder = DagOperations.blockTopoOrderingDesc
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHashes)) =>
         for {
