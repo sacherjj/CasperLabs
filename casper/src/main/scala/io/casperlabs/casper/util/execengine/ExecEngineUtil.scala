@@ -209,7 +209,7 @@ object ExecEngineUtil {
       }
     } else {
       for {
-        protocolVersion <- CasperLabsProtocol[F].fromBlock(block)
+        protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         processedDeploys <- processDeploys[F](
                              prestate,
                              blocktime,

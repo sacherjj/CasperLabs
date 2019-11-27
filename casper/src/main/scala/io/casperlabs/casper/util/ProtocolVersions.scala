@@ -94,7 +94,7 @@ object ProtocolVersions {
 @typeclass
 trait CasperLabsProtocol[F[_]] {
   def versionAt(blockHeight: Long): F[state.ProtocolVersion]
-  def fromBlock(b: Block): F[state.ProtocolVersion]
+  def protocolFromBlock(b: Block): F[state.ProtocolVersion]
 }
 
 object CasperLabsProtocol {
