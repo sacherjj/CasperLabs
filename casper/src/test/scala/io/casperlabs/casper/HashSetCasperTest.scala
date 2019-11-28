@@ -1280,6 +1280,7 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
+  import io.casperlabs.models.BlockImplicits._
   it should "create block correctly when there is an equivocator amongst validators" in effectTest {
     // An attempt to replicate error that occured in the CI.
     // Setup:
@@ -1303,23 +1304,21 @@ abstract class HashSetCasperTest
       // Test that node-1 knows about node-0' equivocations
       _       <- nodes(1).getEquivocators shouldBeF Set(nodes(0).ownValidatorKey)
       blockB1 <- nodes(1).deployAndPropose(ProtoUtil.basicDeploy(3))
-      _ = blockB1.getHeader.justifications
-        .map(_.latestBlockHash) should contain theSameElementsAs Set(
+      _ = blockB1.justificationHashes should contain theSameElementsAs Set(
         blockA.blockHash,
         blockAPrime.blockHash
       )
       Left(selfEquivocationError) <- nodes(0).receive().attempt
       _                           = assert(selfEquivocationError.getMessage.contains("SelfEquivocatedBlock"))
       _                           = assert(blockB1.getHeader.keyBlockHash == genesis.blockHash)
-      _                           = assert(blockB1.getHeader.parentHashes.size == 1)
+      _                           = assert(blockB1.parentHashes.size == 1)
       blockB2                     <- nodes(1).deployAndPropose(ProtoUtil.basicDeploy(4))
-      _ = blockB2.getHeader.justifications
-        .map(_.latestBlockHash) should contain theSameElementsAs Set(
+      _ = blockB2.justificationHashes should contain theSameElementsAs Set(
         blockA.blockHash,
         blockAPrime.blockHash,
         blockB1.blockHash
       )
-      _ = blockB2.getHeader.parentHashes should contain theSameElementsAs Set(blockB1.blockHash)
+      _ = blockB2.parentHashes should contain theSameElementsAs Set(blockB1.blockHash)
     } yield ()
   }
 
