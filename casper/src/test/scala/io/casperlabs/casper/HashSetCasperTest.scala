@@ -1280,6 +1280,49 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
+  it should "create block correctly when there is an equivocator amongst validators" in effectTest {
+    // An attempt to replicate error that occured in the CI.
+    // Setup:
+    // Two nodes (A and B).
+    // Flow:
+    // 1. A & B are up.
+    // 2. A proposes blockA.
+    // 3. Propagate blockA across the network. B receives it.
+    // 3. Clear A's storage.
+    // 4. A proposes blockAPrime (because of point 3 we this creating an equivocation).
+    // 5. Propagate blockAPrime across the network. B sees A equivocating.
+    // 6. B proposes blockB1 (includes blockA and blockAPrime in its justifications, picks one as parent).
+    // 7. B proposes blockB2 (includes blockA, blockAPrime and blockB1 as justifications, blockB1 is a parent).
+    for {
+      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
+      blockA      <- nodes(0).deployAndPropose(ProtoUtil.basicDeploy(1))
+      _           <- nodes(1).receive()
+      _           <- nodes(0).clearStorage()
+      blockAPrime <- nodes(0).deployAndPropose(ProtoUtil.basicDeploy(2))
+      _           <- nodes(1).receive()
+      // Test that node-1 knows about node-0' equivocations
+      _       <- nodes(1).getEquivocators shouldBeF Set(nodes(0).ownValidatorKey)
+      blockB1 <- nodes(1).deployAndPropose(ProtoUtil.basicDeploy(3))
+      _ = blockB1.getHeader.justifications
+        .map(_.latestBlockHash) should contain theSameElementsAs Set(
+        blockA.blockHash,
+        blockAPrime.blockHash
+      )
+      Left(selfEquivocationError) <- nodes(0).receive().attempt
+      _                           = assert(selfEquivocationError.getMessage.contains("SelfEquivocatedBlock"))
+      _                           = assert(blockB1.getHeader.keyBlockHash == genesis.blockHash)
+      _                           = assert(blockB1.getHeader.parentHashes.size == 1)
+      blockB2                     <- nodes(1).deployAndPropose(ProtoUtil.basicDeploy(4))
+      _ = blockB2.getHeader.justifications
+        .map(_.latestBlockHash) should contain theSameElementsAs Set(
+        blockA.blockHash,
+        blockAPrime.blockHash,
+        blockB1.blockHash
+      )
+      _ = blockB2.getHeader.parentHashes should contain theSameElementsAs Set(blockB1.blockHash)
+    } yield ()
+  }
+
   private def buildBlockWithInvalidJustification(
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: Block
