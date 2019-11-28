@@ -121,7 +121,7 @@ the free graph visuallization software.
 For example:
 
 ```
-casperlabs_client --host deploy.casperlabs.io vdag --depth 5 --out dag.png
+casperlabs_client --host deploy.casperlabs.io vdag --depth 10 --out dag.png
 ```
 
 will produce an image file simillar to the one below:
