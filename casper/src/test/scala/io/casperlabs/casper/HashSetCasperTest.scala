@@ -1289,11 +1289,11 @@ abstract class HashSetCasperTest
     // 1. A & B are up.
     // 2. A proposes blockA.
     // 3. Propagate blockA across the network. B receives it.
-    // 3. Clear A's storage.
-    // 4. A proposes blockAPrime (because of point 3 we this creating an equivocation).
-    // 5. Propagate blockAPrime across the network. B sees A equivocating.
-    // 6. B proposes blockB1 (includes blockA and blockAPrime in its justifications, picks one as parent).
-    // 7. B proposes blockB2 (includes blockA, blockAPrime and blockB1 as justifications, blockB1 is a parent).
+    // 4. Clear A's storage.
+    // 5. A proposes blockAPrime (because of point 3, this creates an equivocation).
+    // 6. Propagate blockAPrime across the network. B sees A equivocating.
+    // 7. B proposes blockB1 (includes blockA and blockAPrime in its justifications, picks one as parent).
+    // 8. B proposes blockB2 (includes blockA, blockAPrime and blockB1 as justifications, blockB1 is a parent).
     for {
       nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
       blockA      <- nodes(0).deployAndPropose(ProtoUtil.basicDeploy(1))
