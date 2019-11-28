@@ -24,7 +24,9 @@ import io.casperlabs.node.api.Utils.{
   validateDeployHash
 }
 import io.casperlabs.node.api.casper._
-import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
+import io.casperlabs.node.api.graphql.FinalizedBlocksStream
+import fs2.interop.reactivestreams._
+import io.casperlabs.node.{Fs2StreamOps}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -34,7 +36,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: EventsStream: ConcurrentEffect]()
       : F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
@@ -184,6 +186,9 @@ object GrpcCasperService {
                 MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
               )
           }
+
+        override def streamEvents(request: StreamEventsRequest): Observable[Event] =
+          EventsStream[F].subscribe.toMonixObservable
       }
     }
 

@@ -2,7 +2,8 @@ import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo, Event} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { StreamEventsRequest } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
 
 export class DagStep {
   constructor(private container: DagContainer) {}
@@ -91,6 +92,13 @@ export class DagContainer {
         this.lastFinalizedBlock = block;
       })
     );
+
+    let client = this.casperService.subscribeEvents();
+    client.onMessage((msg: Event) => console.log(msg.getAddBlock().getBlockHash_asB64()));
+    client.onEnd((_, code) => console.log(code));
+    client.start();
+    client.send(new StreamEventsRequest());
+    client.finishSend();
   }
 }
 

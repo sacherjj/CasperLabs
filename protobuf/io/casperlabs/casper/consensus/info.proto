@@ -69,3 +69,13 @@ message DeployInfo {
         string message = 2;
     }
 }
+
+message Event{
+    oneof event_instance {
+        EventAddBlock add_block = 1;
+    }
+}
+
+message EventAddBlock{
+    bytes block_hash = 1;
+}

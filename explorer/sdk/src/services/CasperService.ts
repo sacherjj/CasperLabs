@@ -1,13 +1,7 @@
 import { grpc } from '@improbable-eng/grpc-web';
 import { Block } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import {
-  BlockInfo,
-  DeployInfo
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import {
-  Key,
-  Value as StateValue
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import { BlockInfo, DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { Key, Value as StateValue } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import {
   GetBlockInfoRequest,
   GetBlockStateRequest,
@@ -17,7 +11,7 @@ import {
   ListDeployInfosResponse,
   StateQuery,
   StreamBlockDeploysRequest,
-  StreamBlockInfosRequest
+  StreamBlockInfosRequest,
 } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
 import { CasperService as GrpcCasperService } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb_service';
 import { BlockHash, ByteArray } from '../index';
@@ -30,7 +24,8 @@ export default class CasperService {
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string
-  ) {}
+  ) {
+  }
 
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
@@ -272,8 +267,15 @@ export default class CasperService {
             reject(new GrpcError(res.status, res.statusMessage));
           }
         }
-      })
-    })
+      });
+    });
+  }
+
+  subscribeEvents(): grpc.Client<grpc.ProtobufMessage, grpc.ProtobufMessage> {
+    return grpc.client(GrpcCasperService.StreamEvents, {
+      host: this.url,
+      transport: grpc.WebsocketTransport()
+    });
   }
 }
 

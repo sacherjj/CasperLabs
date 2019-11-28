@@ -31,6 +31,7 @@ import io.casperlabs.comm.rp._
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
+import io.casperlabs.node.api.EventsStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
@@ -181,6 +182,10 @@ class NodeRuntime private[node] (
                                                                         FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
+      implicit0(eventsStream: EventsStream[Task]) <- Resource.liftF(
+                                                      EventsStream
+                                                        .of[Task]
+                                                    )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                         id,
