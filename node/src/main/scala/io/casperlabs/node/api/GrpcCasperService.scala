@@ -179,11 +179,7 @@ object GrpcCasperService {
           TaskLike[F].apply {
             MultiParentCasperRef
               .withCasper[F, BlockInfo](
-                casper =>
-                  for {
-                    lastFinalizedBlock <- casper.lastFinalizedBlock
-                    blockInfo          = lastFinalizedBlock.getBlockInfo
-                  } yield blockInfo,
+                _.lastFinalizedBlock.map(_.getBlockInfo),
                 "Could not get last finalized block.",
                 MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
               )

@@ -34,10 +34,9 @@ object BlockImplicits {
     def getSummary: BlockSummary =
       BlockSummary(block.blockHash, block.header, block.signature)
 
-    def getBlockInfo: BlockInfo = {
-      val summary = BlockSummary(block.blockHash, block.header, block.signature)
+    def getBlockInfo: BlockInfo =
       BlockInfo()
-        .withSummary(summary)
+        .withSummary(block.getSummary)
         .withStatus(
           BlockInfo
             .Status()
@@ -49,7 +48,6 @@ object BlockImplicits {
               )
             )
         )
-    }
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {
