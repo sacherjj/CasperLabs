@@ -1,7 +1,7 @@
 [package]
-name = "standard-payment-stored"
+name = "modified-system-upgrader"
 version = "0.1.0"
-authors = ["Henry Till <henrytill@gmail.com>", "Ed Hastings <ed@casperlabs.io>"]
+authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [lib]
@@ -16,4 +16,5 @@ std = ["contract-ffi/std"]
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
-standard-payment = { path = "../standard-payment", default-features = false, features = ["lib"] }
+pos = { path = "../../system/pos", default-features = false, features = ["lib"] }
+modified-mint = { path = "../modified-mint", default-features = false, features = ["lib"] }

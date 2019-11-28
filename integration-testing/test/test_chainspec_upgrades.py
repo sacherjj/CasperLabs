@@ -37,11 +37,12 @@ def check_upgrades_applied(network):
         "--public-key", cli.public_key_path(account),
     )
 
-    # When activation-point-rank of an upgrade is reached, and upgrade is executed,
-    # the cost of execution should change.
-
+    # First deploy
     cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
     propose_and_get_cost(cli)
+
+    # When activation-point-rank of an upgrade is reached, and upgrade is executed,
+    # the cost of execution should change.
 
     # We have spec of genesis, upgrade-1 and upgrade-2 in our custom chainspec
     # (in integration-testing/resources/test-chainspec)
@@ -56,7 +57,19 @@ def check_upgrades_applied(network):
     # upgrade-2/manifest.toml:activation-point-rank = 30
 
     # So, a number of deploys above 30 should be enough to activate both upgrades.
+    offset = 2  # First deploy after genesis
+    upgrade_1 = 20
+    upgrade_2 = 30
+
     for i in range(1, 35):
+        position = i + offset
+        if position == upgrade_1 or position == upgrade_2:
+            logging.info(f'Redeploying contract at position {position}')
+            cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_DEFINE))
+            propose_and_get_cost(cli)
+            # Add up, as another deploy shifts the block position
+            offset += 1
+
         cli("deploy", "--payment-amount", 10000000, "--session", cli.resource(Contract.COUNTER_CALL))
         cost, block_hash = propose_and_get_cost(cli)
         if cost not in costs:

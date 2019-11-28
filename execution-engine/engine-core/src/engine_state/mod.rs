@@ -616,31 +616,24 @@ where
         account: &Account,
         correlation_id: CorrelationId,
         preprocessor: &Preprocessor,
+        protocol_version: &ProtocolVersion,
     ) -> Result<Module, error::Error> {
-        match deploy_item {
+        let stored_contract_key = match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                Ok(module)
+                return Ok(module);
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
-                let stored_contract_key = {
-                    let hash_len = hash.len();
-                    if hash_len != HASH_SIZE {
-                        return Err(error::Error::InvalidHashLength {
-                            expected: HASH_SIZE,
-                            actual: hash_len,
-                        });
-                    }
-                    let mut arr = [0u8; HASH_SIZE];
-                    arr.copy_from_slice(&hash);
-                    Key::Hash(arr)
-                };
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = engine_wasm_prep::deserialize(&ret)?;
-                Ok(module)
+                let hash_len = hash.len();
+                if hash_len != HASH_SIZE {
+                    return Err(error::Error::InvalidHashLength {
+                        expected: HASH_SIZE,
+                        actual: hash_len,
+                    });
+                }
+                let mut arr = [0u8; HASH_SIZE];
+                arr.copy_from_slice(&hash);
+                Key::Hash(arr)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
@@ -653,62 +646,67 @@ where
                         )));
                     }
                 }
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, *stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = engine_wasm_prep::deserialize(&ret)?;
-                Ok(module)
+                *stored_contract_key
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
-                let stored_contract_key = {
-                    let len = uref.len();
-                    if len != UREF_ADDR_SIZE {
-                        return Err(error::Error::InvalidHashLength {
-                            expected: UREF_ADDR_SIZE,
-                            actual: len,
-                        });
-                    }
-                    let read_only_uref = {
-                        let mut arr = [0u8; UREF_ADDR_SIZE];
-                        arr.copy_from_slice(&uref);
-                        URef::new(arr, AccessRights::READ)
-                    };
-                    let normalized_uref = Key::URef(read_only_uref).normalize();
-                    let maybe_named_key = account
-                        .named_keys()
-                        .values()
-                        .find(|&named_key| named_key.normalize() == normalized_uref);
-                    match maybe_named_key {
-                        Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
-                        Some(Key::URef(_)) => {
-                            return Err(error::Error::ExecError(
-                                execution::Error::ForgedReference(read_only_uref),
-                            ));
-                        }
-                        Some(key) => {
-                            return Err(error::Error::ExecError(execution::Error::TypeMismatch(
-                                engine_shared::transform::TypeMismatch::new(
-                                    "Key::URef".to_string(),
-                                    key.type_string(),
-                                ),
-                            )));
-                        }
-                        None => {
-                            return Err(error::Error::ExecError(execution::Error::KeyNotFound(
-                                Key::URef(read_only_uref),
-                            )));
-                        }
-                    }
+                let len = uref.len();
+                if len != UREF_ADDR_SIZE {
+                    return Err(error::Error::InvalidHashLength {
+                        expected: UREF_ADDR_SIZE,
+                        actual: len,
+                    });
+                }
+                let read_only_uref = {
+                    let mut arr = [0u8; UREF_ADDR_SIZE];
+                    arr.copy_from_slice(&uref);
+                    URef::new(arr, AccessRights::READ)
                 };
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = engine_wasm_prep::deserialize(&ret)?;
-                Ok(module)
+                let normalized_uref = Key::URef(read_only_uref).normalize();
+                let maybe_named_key = account
+                    .named_keys()
+                    .values()
+                    .find(|&named_key| named_key.normalize() == normalized_uref);
+                match maybe_named_key {
+                    Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
+                    Some(Key::URef(_)) => {
+                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
+                            read_only_uref,
+                        )));
+                    }
+                    Some(key) => {
+                        return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                            engine_shared::transform::TypeMismatch::new(
+                                "Key::URef".to_string(),
+                                key.type_string(),
+                            ),
+                        )));
+                    }
+                    None => {
+                        return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                            Key::URef(read_only_uref),
+                        )));
+                    }
+                }
             }
+        };
+        let contract = tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, stored_contract_key)?;
+
+        // A contract may only call a stored contract that has the same protocol major version
+        // number.
+        let contract_version = contract.protocol_version();
+        if !contract_version.is_compatible_with(&protocol_version) {
+            let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
+                expected: protocol_version.value().major,
+                actual: contract_version.value().major,
+            };
+            return Err(error::Error::ExecError(exec_error));
         }
+
+        let (ret, _, _) = contract.destructure();
+        let module = engine_wasm_prep::deserialize(&ret)?;
+        Ok(module)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -788,6 +786,7 @@ where
             &account,
             correlation_id,
             preprocessor,
+            &protocol_version,
         ) {
             Ok(module) => module,
             Err(error) => {
@@ -941,6 +940,7 @@ where
                 &account,
                 correlation_id,
                 preprocessor,
+                &protocol_version,
             ) {
                 Ok(module) => module,
                 Err(error) => {
