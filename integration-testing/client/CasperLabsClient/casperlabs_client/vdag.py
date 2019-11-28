@@ -194,6 +194,7 @@ def generate_dot(block_infos, show_justification_lines=False):
                     arrowhead="none",
                 )
                 for j in justifications(b)
+                if j in block_hashes
             ]
             for b in block_infos
         ]
