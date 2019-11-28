@@ -952,7 +952,6 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
 
     builder.exec_commit_finish(exec_request);
 
-    // find the contract write transform, then get the hash from its key
     let query_result = builder
         .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
         .expect("should query default account");
