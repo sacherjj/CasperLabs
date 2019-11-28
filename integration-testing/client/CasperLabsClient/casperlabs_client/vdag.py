@@ -71,6 +71,10 @@ def parents(block_info):
     return ps
 
 
+def main_parent(block_info):
+    return parents(block_info)[0]
+
+
 def block_hash(block_info):
     return block_info.summary.block_hash.hex()
 
@@ -130,7 +134,6 @@ def lane(validator, block_infos, min_rank, max_rank, genesis_block_id):
     )
     return subgraph(
         nodes,
-        # lanes_alignment,
         alignment_in_lane,
         name=f"cluster_{validator_id}",
         label=f"{validator_id}",
@@ -147,6 +150,7 @@ def generate_dot(block_infos, show_justification_lines=False):
         else:
             genesis_block_id = block_id(b)
 
+    block_hashes = set(block_hash(b) for b in block_infos)
     ranks = set(rank(b) for b in block_infos)
     min_rank = min(ranks)
     max_rank = max(ranks)
@@ -155,12 +159,17 @@ def generate_dot(block_infos, show_justification_lines=False):
         for (validator, block_infos) in validator_blocks.items()
     ]
 
+    # Showing only the first, main parent of each block.
     parent_edges = [
         [
             edge(
-                block_id(b), short_hash(parents(b)[0]), style="bold", constraint="false"
+                block_id(b),
+                short_hash(main_parent(b)),
+                style="bold",
+                constraint="false",
             )
             for b in block_infos
+            if main_parent(b) in block_hashes
         ]
         for (validator, block_infos) in validator_blocks.items()
     ]
