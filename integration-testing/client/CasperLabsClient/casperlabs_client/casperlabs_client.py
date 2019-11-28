@@ -736,7 +736,8 @@ class CasperLabsClient:
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
         :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
-        :return:                          generated DOT file or None, if out provided
+        :return:                          Yields generated DOT source or file name when out provided.
+                                          Generates endless stream of file names if stream is not None.
         """
         block_infos = list(self.showBlocks(depth))
         dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
@@ -757,7 +758,7 @@ class CasperLabsClient:
                 iteration += 1
                 return f"{file_name_base}_{iteration}.{file_format}"
 
-        self._call_dot(dot_dag_description, file_name(), file_format)
+        yield self._call_dot(dot_dag_description, file_name(), file_format)
         previous_block_hashes = set(b.summary.block_hash for b in block_infos)
         while stream:
             time.sleep(delay_in_seconds)
@@ -767,7 +768,7 @@ class CasperLabsClient:
                 dot_dag_description = vdag.generate_dot(
                     block_infos, show_justification_lines
                 )
-                self._call_dot(dot_dag_description, file_name(), file_format)
+                yield self._call_dot(dot_dag_description, file_name(), file_format)
                 previous_block_hashes = block_hashes
 
     def _call_dot(self, dot_dag_description, file_name, file_format):
@@ -779,6 +780,7 @@ class CasperLabsClient:
             if rc:
                 raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
         print(f"Wrote {file_name}")
+        return file_name
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -1090,11 +1092,12 @@ def show_blocks_command(casperlabs_client, args):
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    dot = casperlabs_client.visualizeDag(
+    for o in casperlabs_client.visualizeDag(
         args.depth, args.out, args.show_justification_lines, args.stream
-    )
-    if dot:
-        print(dot)
+    ):
+        if not args.out:
+            print(o)
+            break
 
 
 @guarded_command
