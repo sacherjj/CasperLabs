@@ -48,7 +48,6 @@ trait Validation[F[_]] {
     */
   def parents(
       b: Block,
-      lastFinalizedBlockHash: BlockHash,
       dag: DagRepresentation[F]
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
