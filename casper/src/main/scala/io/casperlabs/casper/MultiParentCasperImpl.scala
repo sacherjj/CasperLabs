@@ -279,13 +279,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
   /** Return the list of tips. */
   def estimator(
       dag: DagRepresentation[F],
+      lfbHash: BlockHash,
       latestMessagesHashes: Map[ByteString, Set[BlockHash]],
       equivocators: Set[Validator]
   ): F[List[BlockHash]] =
     Metrics[F].timer("estimator") {
       Estimator.tips[F](
         dag,
-        genesis.blockHash,
+        lfbHash,
         latestMessagesHashes,
         equivocators
       )
@@ -312,7 +313,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           latestMessages      <- dag.latestMessages
           latestMessageHashes = latestMessages.mapValues(_.map(_.messageHash))
           equivocators        <- dag.getEquivocators
-          tipHashes           <- estimator(dag, latestMessageHashes, equivocators)
+          lfbHash             <- LastFinalizedBlockHashContainer[F].get
+          tipHashes           <- estimator(dag, lfbHash, latestMessageHashes, equivocators)
           tips                <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
           _ <- Log[F].info(
                 s"Estimates are ${tipHashes.map(PrettyPrinter.buildString).mkString(", ") -> "tips"}"
@@ -344,7 +346,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          publicKey,
                          privateKey,
                          sigAlgorithm,
-                         timestamp
+                         timestamp,
+                         lfbHash
                        )
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
@@ -428,7 +431,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      timestamp: Long
+      timestamp: Long,
+      lfbHash: BlockHash
   ): F[CreateBlockStatus] =
     Metrics[F].timer("createProposal") {
       //We ensure that only the justifications given in the block are those
@@ -465,7 +469,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          rank,
                          upgrades
                        )
-        lfb <- LastFinalizedBlockHashContainer[F].get
         result <- Sync[F]
                    .delay {
                      if (checkpoint.deploysForBlock.isEmpty) {
@@ -494,7 +497,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                          validatorId,
                          privateKey,
                          sigAlgorithm,
-                         lfb
+                         lfbHash
                        )
                        CreateBlockStatus.created(block)
                      }
