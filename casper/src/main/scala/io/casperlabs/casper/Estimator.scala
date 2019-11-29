@@ -62,7 +62,7 @@ object Estimator {
 
     NonEmptyList.fromList(latestMessagesFlattened).fold(List(lfbHash).pure[F]) { lmh =>
       for {
-        latestMessages <- lmh.toList.traverse(dag.lookup(_)).map(_.flatten)
+        latestMessages <- lmh.toList.traverse(dag.lookupUnsafe(_))
         lfb            <- dag.lookupUnsafe(lfbHash)
         _              <- Metrics[F].record("lfbDistance", latestMessages.maxBy(_.rank).rank - lfb.rank)
         scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
@@ -126,7 +126,7 @@ object Estimator {
                              .map(_.flatten.sortBy(_.rank))
           lmdScore <- DagOperations
                        .bfToposortTraverseF[F](sortedMessages)(
-                         _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
+                         _.parents.take(1).toList.traverse(dag.lookupUnsafe(_))
                        )
                        .takeUntil(_.messageHash == stopHash)
                        .foldLeftF(acc) {
