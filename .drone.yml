@@ -56,7 +56,7 @@ steps:
 
 - name: sbt-compile-test-pr
   commands:
-  - "sbt test"
+  - "sbt compile"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -189,7 +189,7 @@ steps:
 
 - name: sbt-test-docker-bors
   commands:
-  - "sbt test"
+  - "sbt compile"
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
   - "make docker-build/node docker-build/client"
   environment:
