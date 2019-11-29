@@ -99,9 +99,10 @@ object DagOperations {
   }
 
   val blockTopoOrderingAsc: Ordering[Message] =
-    Ordering.by[Message, Long](_.rank).reverse
+    Ordering.by[Message, (Long, String)](m => (m.rank, m.messageHash.toStringUtf8)).reverse
 
-  val blockTopoOrderingDesc: Ordering[Message] = Ordering.by(_.rank)
+  val blockTopoOrderingDesc: Ordering[Message] =
+    Ordering.by(m => (m.rank, m.messageHash.toStringUtf8))
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
