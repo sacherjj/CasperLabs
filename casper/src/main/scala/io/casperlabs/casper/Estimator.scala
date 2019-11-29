@@ -67,6 +67,15 @@ object Estimator {
         _              <- Metrics[F].record("lfbDistance", latestMessages.maxBy(_.rank).rank - lfb.rank)
         scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
+        msg = latestMessages
+          .map(
+            m =>
+              (PrettyPrinter.buildString(m.validatorId), PrettyPrinter.buildString(m.messageHash))
+          )
+          .mkString(", ")
+        _ <- Log[F].info(
+              s"Latest messages: $msg"
+            )
         scoresWithCreator <- scores.toList.traverse {
                               case (blockHash, score) =>
                                 dag
@@ -124,10 +133,15 @@ object Estimator {
           sortedMessages <- latestMessageHashes.toList
                              .traverse(dag.lookup(_))
                              .map(_.flatten.sortBy(_.rank))
+          _ <- Monad[F].unit.map(_ => println(s"Validator ${PrettyPrinter.buildString(validator)}"))
           lmdScore <- DagOperations
                        .bfToposortTraverseF[F](sortedMessages)(
                          _.parents.take(1).toList.traverse(dag.lookupUnsafe(_))
                        )
+                       .map { m =>
+                         println(s"Message hash: ${PrettyPrinter.buildString(m.messageHash)}")
+                         m
+                       }
                        .takeUntil(_.messageHash == stopHash)
                        .foldLeftF(acc) {
                          case (acc2, message) =>
