@@ -42,10 +42,10 @@ object ValidationImpl {
           underlying.neglectedInvalidBlock(block, invalidBlockTracker)
         )
 
-      override def parents(b: Block, lastFinalizedBlockHash: BlockHash, dag: DagRepresentation[F])(
+      override def parents(b: Block, dag: DagRepresentation[F])(
           implicit bs: BlockStorage[F]
       ): F[ExecEngineUtil.MergeResult[TransformMap, Block]] =
-        Metrics[F].timer("parents")(underlying.parents(b, lastFinalizedBlockHash, dag))
+        Metrics[F].timer("parents")(underlying.parents(b, dag))
 
       override def transactions(
           block: Block,
@@ -148,7 +148,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
                        dag,
                        latestMessagesHashes
                      )
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
+      tipHashes <- Estimator
+                    .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
       tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)

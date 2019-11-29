@@ -629,9 +629,8 @@ object MultiParentCasperImpl {
                      ExecEngineUtil.MergeResult
                        .empty[ExecEngineUtil.TransformMap, Block]
                        .pure[F]
-                   ) { ctx =>
-                     Validation[F]
-                       .parents(block, ctx.genesis.blockHash, dag)
+                   ) { _ =>
+                     Validation[F].parents(block, dag)
                    }
           _ <- Log[F].debug(s"Computing the pre-state hash of ${hashPrefix -> "block"}")
           preStateHash <- ExecEngineUtil
