@@ -66,7 +66,7 @@ class ValidationTest
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions = {
     CasperLabsProtocol.unsafe[Task](
-      (0L, state.ProtocolVersion(1), 60 * 60 * 1000, 24 * 60 * 60 * 1000, 10)
+      (0L, state.ProtocolVersion(1), 24 * 60 * 60 * 1000, 10)
     )
   }
   import DeriveValidation._
@@ -302,10 +302,11 @@ class ValidationTest
   }
 
   val deployConfig = DeployConfig(
-    minTtlMillis = 60 * 60 * 1000,      // 1 hour
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
     maxDependencies = 10
   )
+
+  val minTtlMillis = FiniteDuration(1, "hour")
 
   "Deploy header validation" should "accept valid headers" in {
     implicit val consensusConfig =
@@ -323,7 +324,7 @@ class ValidationTest
         .timeToLiveTooShort(
           deploy.deployHash,
           deploy.getHeader.ttlMillis,
-          deployConfig.minTtlMillis
+          minTtlMillis
         )
     )
   }

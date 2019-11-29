@@ -113,11 +113,11 @@ object CasperLabsProtocol {
   import ProtocolVersions.Config
 
   def unsafe[F[_]: Applicative](
-      versions: (Long, state.ProtocolVersion, Int, Int, Int)*
+      versions: (Long, state.ProtocolVersion, Int, Int)*
   ): CasperLabsProtocol[F] = {
     val configs = versions.map {
-      case (rank, protocolVersion, minTTL, maxTTL, maxDependencies) =>
-        Config(rank, protocolVersion, DeployConfig(minTTL, maxTTL, maxDependencies))
+      case (rank, protocolVersion, maxTTL, maxDependencies) =>
+        Config(rank, protocolVersion, DeployConfig(maxTTL, maxDependencies))
     }
 
     val underlying = ProtocolVersions(configs.toList)
@@ -131,7 +131,7 @@ object CasperLabsProtocol {
   }
 
   def apply[F[_]: MonadThrowable](
-      configs: (Long, state.ProtocolVersion, Int, Int, Int)*
+      configs: (Long, state.ProtocolVersion, Int, Int)*
   ): F[CasperLabsProtocol[F]] =
     MonadThrowable[F].fromTry(Try(unsafe(configs: _*)))
 
@@ -139,7 +139,6 @@ object CasperLabsProtocol {
     val versions = (
       0L,
       spec.getGenesis.getProtocolVersion,
-      spec.getGenesis.getDeployConfig.minTtlMillis,
       spec.getGenesis.getDeployConfig.maxTtlMillis,
       spec.getGenesis.getDeployConfig.maxDependencies
     ) +:
@@ -148,7 +147,6 @@ object CasperLabsProtocol {
           (
             up.getActivationPoint.rank,
             up.getProtocolVersion,
-            up.getNewDeployConfig.minTtlMillis,
             up.getNewDeployConfig.maxTtlMillis,
             up.getNewDeployConfig.maxDependencies
           )

@@ -133,6 +133,9 @@ block-upload-rate-period = "0s"
 # if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response.
 block-upload-rate-max-throttled = 0
 
+# Minimum TTL value of a deploy
+min-ttl-millis = "1hour"
+
 # io.casperlabs.node.configuration.Configuration.BlockStorage
 [blockstorage]
 

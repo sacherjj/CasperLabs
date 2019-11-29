@@ -22,6 +22,8 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 
+import scala.concurrent.duration.FiniteDuration
+
 trait MultiParentCasper[F[_]] {
   //// Brought from Casper trait
   def addBlock(block: Block): F[BlockStatus]
@@ -65,6 +67,7 @@ sealed abstract class MultiParentCasperInstances {
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       chainName: String,
+      minTtlMillis: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ): F[MultiParentCasper[F]] =
     for {
@@ -82,6 +85,7 @@ sealed abstract class MultiParentCasperInstances {
                  validatorId,
                  genesis,
                  chainName,
+                 minTtlMillis,
                  upgrades
                )
     } yield casper

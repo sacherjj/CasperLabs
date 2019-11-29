@@ -254,7 +254,6 @@ message ChainSpec {
     }
 
     message DeployConfig {
-        uint32 min_ttl_millis = 1;
         uint32 max_ttl_millis = 2;
         uint32 max_dependencies = 3;
     }

@@ -21,7 +21,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
-import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.ipc.ChainSpec.{DeployConfig => IPCDeployConfig}
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
@@ -418,7 +418,7 @@ object Validation {
   def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log](
       d: consensus.Deploy,
       chainName: String,
-      deployConfig: DeployConfig
+      deployConfig: IPCDeployConfig
   ): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
@@ -426,7 +426,6 @@ object Validation {
           validateTimeToLive[F](
             ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMillis),
             d.deployHash,
-            deployConfig.minTtlMillis,
             deployConfig.maxTtlMillis
           ),
           validateDependencies[F](
@@ -447,13 +446,22 @@ object Validation {
   private def validateTimeToLive[F[_]: MonadThrowable: RaiseValidationError: Log](
       ttl: Int,
       deployHash: ByteString,
-      minTTL: Int,
       maxTTL: Int
   ): F[Option[Errors.DeployHeaderError]] =
-    if (ttl < minTTL)
-      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, minTTL).logged[F].map(_.some)
-    else if (ttl > maxTTL)
+    if (ttl > maxTTL)
       Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, maxTTL).logged[F].map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def validateMinTtl[F[_]: Applicative: Log](
+      deploy: Deploy,
+      minTtlMillis: FiniteDuration
+  ): F[Option[Errors.DeployHeaderError]] =
+    if (deploy.getHeader.ttlMillis < minTtlMillis.toMillis)
+      Errors.DeployHeaderError
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtlMillis)
+        .logged[F]
+        .map(_.some)
     else
       none[Errors.DeployHeaderError].pure[F]
 

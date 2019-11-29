@@ -8,7 +8,6 @@ import org.scalatest.{Assertion, Inspectors, Matchers, WordSpec}
 class ProtocolVersionsTest extends WordSpec with Matchers with Inspectors {
 
   val deployConfig = DeployConfig(
-    minTtlMillis = 60 * 60 * 1000,      // 1 hour
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
     maxDependencies = 10
   )

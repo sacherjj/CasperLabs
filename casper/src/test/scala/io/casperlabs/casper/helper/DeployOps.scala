@@ -11,8 +11,8 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 object DeployOps extends ArbitraryConsensus {
+  val minTtlMillis = 60 * 60 * 1000 // 1 hour
   val deployConfig = DeployConfig(
-    minTtlMillis = 60 * 60 * 1000,      // 1 hour
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
     maxDependencies = 10
   )
@@ -68,7 +68,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, deployConfig.minTtlMillis - 1)
+      ttl <- Gen.choose(1, minTtlMillis - 1)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)

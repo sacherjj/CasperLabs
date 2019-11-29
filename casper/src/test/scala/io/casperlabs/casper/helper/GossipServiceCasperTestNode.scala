@@ -27,7 +27,9 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.tail.Iterant
 import logstage.LogIO
+
 import scala.collection.immutable.Queue
+import scala.concurrent.duration.FiniteDuration
 
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
@@ -80,6 +82,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
+      minTtlMillis = FiniteDuration(1, "hour"),
       upgrades = Nil
     )
 

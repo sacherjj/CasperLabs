@@ -51,7 +51,6 @@ object ChainSpec extends ParserImplicits {
   )
 
   final case class Deploy(
-      minTtlMillis: Int Refined NonNegative,
       maxTtlMillis: Int Refined NonNegative,
       maxDependencies: Int Refined NonNegative
   ) extends SubConfig
@@ -368,7 +367,6 @@ object ChainSpecReader {
 
   private def toDeployConfig(deployConfig: Deploy): ipc.ChainSpec.DeployConfig =
     ipc.ChainSpec.DeployConfig(
-      deployConfig.minTtlMillis.value,
       deployConfig.maxTtlMillis.value,
       deployConfig.maxDependencies.value
     )

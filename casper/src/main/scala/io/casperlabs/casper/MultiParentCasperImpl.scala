@@ -39,7 +39,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployS
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
 
-import scala.reflect.internal.FatalError
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 /**
@@ -59,6 +59,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainName: String,
+    minTtlMillis: FiniteDuration,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint]
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
@@ -265,6 +266,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       _ <- check("Invalid chain name.")(
             Validation.validateChainName[F](deploy, chainName).map(_.isEmpty)
           )
+      _ <- check(
+            s"Invalid deploy TTL. Deploy TTL: ${deploy.getHeader.ttlMillis} ms, minimum TTL: ${minTtlMillis.toMillis}."
+          )(Validation.validateMinTtl[F](deploy, minTtlMillis).map(_.isEmpty))
     } yield ()
   }
 
@@ -565,6 +569,7 @@ object MultiParentCasperImpl {
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       chainName: String,
+      minTtlMillis: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       faultToleranceThreshold: Double = 0.1
   ): F[MultiParentCasper[F]] =
@@ -590,6 +595,7 @@ object MultiParentCasperImpl {
       validatorId,
       genesis,
       chainName,
+      minTtlMillis,
       upgrades
     )
 

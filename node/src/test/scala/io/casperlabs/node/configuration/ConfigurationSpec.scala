@@ -100,7 +100,8 @@ class ConfigurationSpec
       cleanBlockStorage = false,
       blockUploadRateMaxRequests = 0,
       blockUploadRatePeriod = Duration.Zero,
-      blockUploadRateMaxThrottled = 0
+      blockUploadRateMaxThrottled = 0,
+      minTtlMillis = FiniteDuration(1, TimeUnit.SECONDS)
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),
