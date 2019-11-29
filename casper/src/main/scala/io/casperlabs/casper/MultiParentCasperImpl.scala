@@ -349,11 +349,15 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
                      }
-          signedBlock = proposal match {
-            case Created(block) =>
-              Created(signBlock(block, privateKey, sigAlgorithm))
-            case _ => proposal
-          }
+          signedBlock <- proposal match {
+                          case Created(block) =>
+                            Log[F]
+                              .info(
+                                s"Created ${PrettyPrinter.buildString(block.blockHash) -> "block"}"
+                              )
+                              .as(Created(signBlock(block, privateKey, sigAlgorithm)))
+                          case _ => proposal.pure[F]
+                        }
         } yield signedBlock
       }
     case None => CreateBlockStatus.readOnlyMode.pure[F]

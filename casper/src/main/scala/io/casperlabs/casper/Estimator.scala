@@ -67,8 +67,21 @@ object Estimator {
         _              <- Metrics[F].record("lfbDistance", latestMessages.maxBy(_.rank).rank - lfb.rank)
         scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
-        scoresStr     = scores map { case (block, score) => (PrettyPrinter.buildString(block), score) }
-        _             <- Log[F].info(s"${scoresStr -> "scores"}")
+        scoresWithCreator <- scores.toList.traverse {
+                              case (blockHash, score) =>
+                                dag
+                                  .lookupUnsafe(blockHash)
+                                  .map(_.validatorId)
+                                  .map(
+                                    v =>
+                                      (
+                                        PrettyPrinter.buildString(v),
+                                        PrettyPrinter.buildString(blockHash),
+                                        score
+                                      )
+                                  )
+                            }
+        _             <- Log[F].info(s"${scoresWithCreator -> "scores"}")
         _             <- Log[F].info(s"${equivocators.map(PrettyPrinter.buildString) -> "equivocators"}")
         newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
         parents <- tipsOfLatestMessages(latestMessagesFlattened, lfb.messageHash)
