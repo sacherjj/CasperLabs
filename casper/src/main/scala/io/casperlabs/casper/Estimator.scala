@@ -148,7 +148,7 @@ object Estimator {
           startingBlock.pure[F]
         } else {
           val highestScoreChild =
-            reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
+            reachableMainChildren.maxBy(b => scores(b) -> b)(DagOperations.bigIntByteStringOrdering)
           forkChoiceTip[F](
             dag,
             highestScoreChild,

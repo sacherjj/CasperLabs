@@ -98,11 +98,41 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
+  implicit val longByteStringOrdering: Ordering[(Long, ByteString)] =
+    Ordering.fromLessThan[(Long, ByteString)] {
+      case (a, b) =>
+        if (a._1 < b._1) true
+        else if (b._1 < a._1) false
+        else {
+          val aStr = a._2.toStringUtf8
+          val bStr = b._2.toStringUtf8
+          if (aStr < bStr) true
+          else if (bStr < aStr) false
+          else true
+        }
+    }
+
+  implicit val bigIntByteStringOrdering: Ordering[(BigInt, ByteString)] =
+    Ordering.fromLessThan[(BigInt, ByteString)] {
+      case (a, b) =>
+        if (a._1 < b._1) true
+        else if (b._1 < a._1) false
+        else {
+          val aStr = a._2.toStringUtf8
+          val bStr = b._2.toStringUtf8
+          if (aStr < bStr) true
+          else if (bStr < aStr) false
+          else true
+        }
+    }
+
   val blockTopoOrderingAsc: Ordering[Message] =
-    Ordering.by[Message, (Long, String)](m => (m.rank, m.messageHash.toStringUtf8)).reverse
+    Ordering
+      .by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+      .reverse
 
   val blockTopoOrderingDesc: Ordering[Message] =
-    Ordering.by(m => (m.rank, m.messageHash.toStringUtf8))
+    Ordering.by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
