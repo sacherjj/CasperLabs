@@ -249,8 +249,7 @@ class ValidationTest
       0,
       pk,
       sk,
-      Ed25519,
-      ByteString.EMPTY
+      Ed25519
     )
     Validation.blockSignature[Task](block) shouldBeF true
   }
@@ -695,42 +694,50 @@ class ValidationTest
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
         b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0) //empty justification
         result <- for {
-                   dag <- dagStorage.getRepresentation
+                   dag              <- dagStorage.getRepresentation
+                   genesisBlockHash = b0.blockHash
+
                    // Valid
                    _ <- Validation[Task].parents(
                          b1,
+                         genesisBlockHash,
                          dag
                        )
                    _ <- Validation[Task].parents(
                          b2,
+                         genesisBlockHash,
                          dag
                        )
                    _ <- Validation[Task].parents(
                          b3,
+                         genesisBlockHash,
                          dag
                        )
                    _ <- Validation[Task].parents(
                          b4,
+                         genesisBlockHash,
                          dag
                        )
                    _ <- Validation[Task].parents(
                          b5,
+                         genesisBlockHash,
                          dag
                        )
                    _ <- Validation[Task].parents(
                          b6,
+                         genesisBlockHash,
                          dag
                        )
 
                    // Not valid
                    _ <- Validation[Task]
-                         .parents(b7, dag)
+                         .parents(b7, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b8, dag)
+                         .parents(b8, genesisBlockHash, dag)
                          .attempt
                    _ <- Validation[Task]
-                         .parents(b9, dag)
+                         .parents(b9, genesisBlockHash, dag)
                          .attempt
 
                    _ = log.warns should have size 3
@@ -743,7 +750,7 @@ class ValidationTest
                    )
 
                    result <- Validation[Task]
-                              .parents(b10, dag)
+                              .parents(b10, genesisBlockHash, dag)
                               .attempt shouldBeF Left(ValidateErrorWrapper(InvalidParents))
 
                  } yield result
@@ -778,14 +785,14 @@ class ValidationTest
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.
         _ <- Validation[Task]
-              .parents(d, dag)
+              .parents(d, genesis.blockHash, dag)
               .map(_.parents.map(_.blockHash))
               .attempt shouldBeF Right(
               Vector(c.blockHash, a.blockHash)
             )
         // While v0 has seen everything so it will use 0 as v2's weight when scoring.
         _ <- Validation[Task]
-              .parents(e, dag)
+              .parents(e, genesis.blockHash, dag)
               .map(_.parents.map(_.blockHash)) shouldBeF e.getHeader.parentHashes.toVector
       } yield ()
   }
