@@ -150,8 +150,6 @@ message Block {
         // Distance from Genesis.
         uint64 rank = 11;
         MessageType message_type = 12;
-        // A block from where the fork choice is calculated.
-        bytes key_block_hash = 15;
     }
 
     enum MessageType {

@@ -10,7 +10,6 @@ import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
-import io.casperlabs.shared.Log
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable.Map
@@ -24,9 +23,9 @@ object Estimator {
   implicit val metricsSource   = CasperMetricsSource
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: MonadThrowable: Metrics: Log](
+  def tips[F[_]: MonadThrowable: Metrics](
       dag: DagRepresentation[F],
-      lfbHash: BlockHash,
+      genesis: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocators: Set[Validator]
   ): F[List[BlockHash]] = {
@@ -37,7 +36,7 @@ object Estimator {
         latestMessages: List[BlockHash],
         stopHash: BlockHash
     ): F[List[Message]] =
-      if (latestMessages.isEmpty) dag.lookup(lfbHash).map(_.toList)
+      if (latestMessages.isEmpty) dag.lookup(genesis).map(_.toList)
       else {
         // Start from the highest latest messages and traverse backwards
         implicit val ord = DagOperations.blockTopoOrderingDesc
@@ -60,40 +59,15 @@ object Estimator {
 
     val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
 
-    NonEmptyList.fromList(latestMessagesFlattened).fold(List(lfbHash).pure[F]) { lmh =>
+    NonEmptyList.fromList(latestMessagesFlattened).fold(List(genesis).pure[F]) { lmh =>
       for {
-        latestMessages <- lmh.toList.traverse(dag.lookupUnsafe(_))
-        lfb            <- dag.lookupUnsafe(lfbHash)
-        _              <- Metrics[F].record("lfbDistance", latestMessages.maxBy(_.rank).rank - lfb.rank)
-        scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
+        latestMessages <- lmh.toList.traverse(dag.lookup(_)).map(_.flatten)
+        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, lmh).timer("calculateLCA")
+        _              <- Metrics[F].record("lcaDistance", latestMessages.maxBy(_.rank).rank - lca.rank)
+        scores <- lmdScoring(dag, lca.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
-        msg = latestMessages
-          .map(
-            m =>
-              (PrettyPrinter.buildString(m.validatorId), PrettyPrinter.buildString(m.messageHash))
-          )
-          .mkString(", ")
-        _ <- Log[F].info(
-              s"Latest messages: $msg"
-            )
-        scoresWithCreator <- scores.toList.traverse {
-                              case (blockHash, score) =>
-                                dag
-                                  .lookupUnsafe(blockHash)
-                                  .map(_.validatorId)
-                                  .map(
-                                    v =>
-                                      (
-                                        PrettyPrinter.buildString(v),
-                                        PrettyPrinter.buildString(blockHash),
-                                        score
-                                      )
-                                  )
-                            }
-        _             <- Log[F].info(s"${scoresWithCreator -> "scores"}")
-        _             <- Log[F].info(s"${equivocators.map(PrettyPrinter.buildString) -> "equivocators"}")
-        newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
-        parents <- tipsOfLatestMessages(latestMessagesFlattened, lfb.messageHash)
+        newMainParent <- forkChoiceTip(dag, lca.messageHash, scores).timer("forkChoiceTip")
+        parents <- tipsOfLatestMessages(latestMessagesFlattened, lca.messageHash)
                     .timer("tipsOfLatestMessages")
         secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
           // Filter out blocks created by equivocators from the secondary parents.
@@ -126,22 +100,17 @@ object Estimator {
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Weight]] = {
-    implicit val messageOrder = DagOperations.blockTopoOrderingDesc
+    implicit val decreasingOrder = Ordering[Long].reverse
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHashes)) =>
         for {
           sortedMessages <- latestMessageHashes.toList
                              .traverse(dag.lookup(_))
                              .map(_.flatten.sortBy(_.rank))
-          _ <- Monad[F].unit.map(_ => println(s"Validator ${PrettyPrinter.buildString(validator)}"))
           lmdScore <- DagOperations
-                       .bfToposortTraverseF[F](sortedMessages)(
-                         _.parents.take(1).toList.traverse(dag.lookupUnsafe(_))
+                       .bfTraverseF[F, Message](sortedMessages)(
+                         _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
                        )
-                       .map { m =>
-                         println(s"Message hash: ${PrettyPrinter.buildString(m.messageHash)}")
-                         m
-                       }
                        .takeUntil(_.messageHash == stopHash)
                        .foldLeftF(acc) {
                          case (acc2, message) =>
