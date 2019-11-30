@@ -51,7 +51,8 @@ class DockerConfig:
     # Function that returns bonds amount for each account to be placed in accounts.csv.
     bond_amount: Callable = default_bond_amount
     custom_docker_tag: Optional[str] = None
-    chainspec_directory: str = "chainspec"
+    chainspec_directory: Optional[str] = None
+    etc_casperlabs_directory: str = "etc_casperlabs_empty"
 
     def __post_init__(self):
         if self.rand_str is None:
@@ -99,7 +100,7 @@ class DockerConfig:
             options["--server-bootstrap"] = self.bootstrap_address
         if self.node_public_key:
             options["--casper-validator-public-key"] = self.node_public_key
-        if self.chainspec_directory != "chainspec":
+        if self.chainspec_directory and "empty" in self.etc_casperlabs_directory:
             # If the chainspec_directory doesn't match the name of directory with chainspec
             # in resources bundled with node, then we have to provide the
             # option --casper-chain-spec-path pointing to it.
