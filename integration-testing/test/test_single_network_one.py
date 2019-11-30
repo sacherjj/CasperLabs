@@ -1013,3 +1013,31 @@ def check_ttl_late(cli, temp_dir):
 
     expected = "OUT_OF_RANGE: No new deploys"
     assert expected in str(excinfo.value) or expected in excinfo.value.output
+
+
+def test_cli_local_key_scala(scala_cli):
+    check_cli_local_key(scala_cli)
+
+
+def test_cli_local_key_python(cli):
+    check_cli_local_key(cli)
+
+
+def check_cli_local_key(cli):
+    account = cli.node.test_account
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+# CasperLabs/docker $ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
+    local_key = account.public_key_hex + ":" + "66" * 32
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local",
+                 # --path should not be really needed but it is obligatory for Python client atm
+                 "--path", "")
+    logging.info(f"query-state result => {result}")
