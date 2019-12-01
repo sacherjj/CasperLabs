@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 PYTEST_ARGS="-vv -ra "
+TEST_RUN_ARGS=test/test_chainspec_upgrades.py  # TODO: REMOVE ME!!!
 
 # $TAG_NAME should have value of "DRONE-####" from docker_run_tests.sh in CI
 if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "latest" ]]; then
