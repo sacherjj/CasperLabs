@@ -242,7 +242,7 @@ class DockerNode(LoggingDockerBase):
             self.config.socket_volume: {"bind": self.CL_SOCKETS_DIR, "mode": "rw"},
         }
         for k in d:
-            logging.debug(f"================ VOLUME: {k} => {d[k]}")
+            logging.info(f"================ VOLUME: {k} => {d[k]}")
         return d
 
     def _get_container(self):
@@ -284,9 +284,7 @@ class DockerNode(LoggingDockerBase):
         )
         if self.cl_network.EMPTY_ETC_CASPERlABS != self.config.etc_casperlabs_directory:
             etc_casperlabs_chainspec = os.path.join(
-                self.cl_network.RESOURCES,
-                self.config.etc_casperlabs_directory,
-                "chainspec",
+                self.host_mount_dir, self.config.etc_casperlabs_directory, "chainspec"
             )
             accounts_file = f"{etc_casperlabs_chainspec}/genesis/accounts.csv"
             self.create_genesis_accounts_file(accounts_file)
