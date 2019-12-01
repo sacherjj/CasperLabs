@@ -24,7 +24,7 @@ def test_upgrades_applied_major_versions(chainspec_upgrades_network_major):
 
 def test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
     costs = check_upgrades_applied(chainspec_upgrades_network_minor)
-    assert len(costs) == 3, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
+    assert len(costs) == 2, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
 
 
 def test_upgrades_applied_major_versions_etc(chainspec_upgrades_network_etc):
