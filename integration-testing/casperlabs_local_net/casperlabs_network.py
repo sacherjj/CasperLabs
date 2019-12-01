@@ -62,6 +62,9 @@ class CasperLabsNetwork:
     behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
 
+    # Empty /etc/casperlabs means it has no chainspec.
+    EMPTY_ETC_CASPERlABS = "etc_casperlabs_empty"
+
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
         self._next_key_number = FIRST_VALIDATOR_ACCOUNT
@@ -344,9 +347,6 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     RESOURCES = f"{THIS_DIRECTORY}/../resources/"
     EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
 
-    # Empty /etc/casperlabs means it has no chainspec.
-    EMPTY_ETC_CASPERlABS = "etc_casperlabs_empty"
-
     # We need to copy all required contracts in test chainspecs
     REQUIRED_CONTRACTS = (
         "mint_install.wasm",
@@ -359,7 +359,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
         docker_client: DockerClient,
         extra_docker_params: Dict = None,
         chainspec_directory: str = "test-chainspec",
-        etc_casperlabs_directory: str = EMPTY_ETC_CASPERlABS,
+        etc_casperlabs_directory: str = CasperLabsNetwork.EMPTY_ETC_CASPERlABS,
     ):
         super().__init__(docker_client, extra_docker_params)
         self.chainspec_directory = chainspec_directory
