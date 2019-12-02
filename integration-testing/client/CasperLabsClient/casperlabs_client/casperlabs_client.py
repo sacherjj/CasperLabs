@@ -391,6 +391,10 @@ def extract_common_name(certificate_file: str) -> str:
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
 
 
+def abi_byte_array(a: bytes) -> bytes:
+    return struct.pack("<I", len(a)) + a
+
+
 class SecureGRPCService:
     def __init__(self, host, port, serviceStub, node_id, certificate_file):
         self.address = f"{host}:{port}"
@@ -798,7 +802,6 @@ class CasperLabsClient:
         """
 
         def key_variant(keyType):
-
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
                 raise InternalError(
@@ -806,7 +809,16 @@ class CasperLabsClient:
                 )
             return variant
 
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        def encode_local_key(key: str) -> str:
+            seed, rest = key.split(":")
+            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            r = f"{seed}:{abi_encoded_rest}"
+            logging.info(f"encode_local_key => {r}")
+            return r
+
+        key_value = encode_local_key(key) if keyType.lower() == "local" else key
+
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -832,11 +844,8 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
-        def abi_byte_array(a: bytes) -> bytes:
-            return struct.pack("<I", len(a)) + a
-
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        purseAddrHex = account.purse_id.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -1102,8 +1111,9 @@ def vdag_command(casperlabs_client, args):
 
 @guarded_command
 def query_state_command(casperlabs_client, args):
+
     response = casperlabs_client.queryState(
-        args.block_hash, args.key, args.path, getattr(args, "type")
+        args.block_hash, args.key, args.path or "", getattr(args, "type")
     )
     print(hexify(response))
 
@@ -1301,7 +1311,7 @@ def main():
     parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-p', '--path'), dict(required=False, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
