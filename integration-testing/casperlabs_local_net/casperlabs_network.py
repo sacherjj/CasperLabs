@@ -18,6 +18,7 @@ from casperlabs_local_net.common import (
     INITIAL_MOTES_AMOUNT,
     MAX_PAYMENT_COST,
     TEST_ACCOUNT_INITIAL_BALANCE,
+    EMPTY_ETC_CASPERLABS,
     random_string,
 )
 from casperlabs_local_net.docker_base import DockerConfig
@@ -343,6 +344,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
     RESOURCES = f"{THIS_DIRECTORY}/../resources/"
     EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
+
     # We need to copy all required contracts in test chainspecs
     REQUIRED_CONTRACTS = (
         "mint_install.wasm",
@@ -354,16 +356,29 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
         self,
         docker_client: DockerClient,
         extra_docker_params: Dict = None,
-        chainspec_directory="test-chainspec",
+        chainspec_directory: str = "test-chainspec",
+        etc_casperlabs_directory: str = EMPTY_ETC_CASPERLABS,
     ):
         super().__init__(docker_client, extra_docker_params)
         self.chainspec_directory = chainspec_directory
+        self.etc_casperlabs_directory = etc_casperlabs_directory
+        self.etc_casperlabs_chainspec = os.path.join(
+            self.RESOURCES, self.etc_casperlabs_directory, "chainspec"
+        )
+
         source_directory = (
             os.environ.get("TAG_NAME")
             and "/root/system_contracts/"
             or self.EE_CONTRACTS_DIR
         )
-        destination_base = os.path.join(self.RESOURCES, self.chainspec_directory)
+        self.copy_system_contracts(
+            source_directory, os.path.join(self.RESOURCES, self.chainspec_directory)
+        )
+
+        if self.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
+            self.copy_system_contracts(source_directory, self.etc_casperlabs_chainspec)
+
+    def copy_system_contracts(self, source_directory, destination_base):
         for (_, subdirectories, _) in os.walk(destination_base):
             for subdirectory in subdirectories:
                 destination_directory = os.path.join(destination_base, subdirectory)
@@ -380,6 +395,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
     def docker_config(self, account):
         config = super().docker_config(account)
         config.chainspec_directory = self.chainspec_directory
+        config.etc_casperlabs_directory = self.etc_casperlabs_directory
         return config
 
 

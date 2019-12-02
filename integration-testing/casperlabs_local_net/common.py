@@ -59,6 +59,11 @@ USER_ERROR_MIN = 65536
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
 
+# Empty /etc/casperlabs means it has no chainspec.
+# This is a directory in resources that will be mounted
+# as /etc/casperlabs in the node's docker container.
+EMPTY_ETC_CASPERLABS = "etc_casperlabs_empty"
+
 
 @dataclasses.dataclass(eq=True, frozen=True)
 class KeyPair:

@@ -27,7 +27,21 @@ def test_upgrades_applied_minor_versions(chainspec_upgrades_network_minor):
     assert len(costs) == 2, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
 
 
+def test_upgrades_applied_major_versions_etc(chainspec_upgrades_network_etc):
+    costs = check_upgrades_applied(chainspec_upgrades_network_etc)
+    assert len(costs) == 3, f"The number of distinct observable costs should equal 1 + count of upgraded cost tables, received {costs!r} instead"
+
+
 def check_upgrades_applied(network):
+    node = network.docker_nodes[0]
+
+    cmd = "ls -la /etc/casperlabs /root/.casperlabs/chainspec /root/.casperlabs/chainspec/genesis"
+    rc, output = node.exec_run(cmd)
+    logging.info(f"============================ {cmd} => {rc}")
+    logging.info(f"============================ [")
+    logging.info(f"============================ {output}")
+    logging.info(f"============================ ]")
+
     cli = CLI(network.docker_nodes[0], "casperlabs_client")
     account = cli.node.test_account
 
