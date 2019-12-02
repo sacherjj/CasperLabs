@@ -162,11 +162,18 @@ object DeployRuntime {
       bytesStandard: Boolean,
       json: Boolean
   ): F[Unit] =
-    gracefulExit(
+    gracefulExit({
+      val key = if (keyVariant == "local") {
+        val parts          = keyValue.split(":")
+        val seed           = parts(0)
+        val rest           = parts(1)
+        val abiEncodedRest = Base16.encode(serializeArray(Base16.decode(rest)))
+        s"$seed:$abiEncodedRest"
+      } else keyValue
       DeployService[F]
-        .queryState(blockHash, keyVariant, keyValue, path)
+        .queryState(blockHash, keyVariant, key, path)
         .map(_.map(Printer.print(_, bytesStandard, json)))
-    )
+    })
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
     gracefulExit {
@@ -184,11 +191,7 @@ object DeployRuntime {
                      )
         localKeyValue = {
           val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mintPublic` is of `URef` type.
-          val purseAddrHex = {
-            val purseAddr    = account.getPurseId.uref.toByteArray
-            val purseAddrSer = serializeArray(purseAddr)
-            Base16.encode(purseAddrSer)
-          }
+          val purseAddrHex  = Base16.encode(account.getPurseId.uref.toByteArray)
           s"$mintPublicHex:$purseAddrHex"
         }
         balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
