@@ -433,7 +433,7 @@ object ProtoUtil {
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
       sigAlgorithm: SignatureAlgorithm,
-      keyBlock: ByteString
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -454,7 +454,7 @@ object ProtoUtil {
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
       validatorPrevBlockHash = validatorPrevBlockHash,
-      keyBlock = keyBlock
+      keyBlockHash = keyBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
@@ -477,11 +477,11 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       timestamp: Long,
       chainName: String,
-      keyBlock: ByteString = ByteString.EMPTY // For Genesis it will be empty.
+      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
   ): Block.Header =
     Block
       .Header()
-      .withKeyBlockHash(keyBlock)
+      .withKeyBlockHash(keyBlockHash)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)

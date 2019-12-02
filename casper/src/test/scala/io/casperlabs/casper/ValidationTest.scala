@@ -47,15 +47,17 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.forAll
 import logstage.LogIO
+
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 
 class ValidationTest
     extends FlatSpec
     with Matchers
+    with EitherValues
     with BeforeAndAfterEach
     with BlockGenerator
     with StorageFixture
@@ -106,6 +108,7 @@ class ValidationTest
           justifications = latestMsgs.mapValues(_.map(_.messageHash))
           bnext <- createAndStoreBlockNew[F](
                     Seq(bprev.blockHash),
+                    maybeGenesis.map(_.blockHash).getOrElse(ByteString.EMPTY),
                     creator,
                     bonds,
                     justifications
@@ -658,12 +661,14 @@ class ValidationTest
       parents: Seq[Block],
       bonds: Seq[Bond],
       justifications: Seq[Block],
-      validator: ByteString
+      validator: ByteString,
+      keyBlock: Block
   ): F[Block] =
     for {
       deploy <- ProtoUtil.basicProcessedDeploy[F]()
       block <- createAndStoreBlockNew[F](
                 parents.map(_.blockHash),
+                keyBlock.blockHash,
                 creator = validator,
                 bonds = bonds,
                 deploys = Seq(deploy),
@@ -683,17 +688,17 @@ class ValidationTest
 
       for {
         b0 <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v0)
-        b2 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v1)
-        b3 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v2)
-        b4 <- createValidatorBlock[Task](Seq(b1), bonds, Seq(b1), v0)
-        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), bonds, Seq(b1, b2, b3), v1)
-        b6 <- createValidatorBlock[Task](Seq(b5, b4), bonds, Seq(b1, b4, b5), v0)
-        b7 <- createValidatorBlock[Task](Seq(b4), bonds, Seq(b1, b4, b5), v1) //not highest score parent
-        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2) //parents wrong order
-        b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0)
+        b1 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v0, b0)
+        b2 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v1, b0)
+        b3 <- createValidatorBlock[Task](Seq(b0), bonds, Seq(b0), v2, b0)
+        b4 <- createValidatorBlock[Task](Seq(b1), bonds, Seq(b1), v0, b0)
+        b5 <- createValidatorBlock[Task](Seq(b3, b2, b1), bonds, Seq(b1, b2, b3), v1, b0)
+        b6 <- createValidatorBlock[Task](Seq(b5, b4), bonds, Seq(b1, b4, b5), v0, b0)
+        b7 <- createValidatorBlock[Task](Seq(b4), bonds, Seq(b1, b4, b5), v1, b0) //not highest score parent
+        b8 <- createValidatorBlock[Task](Seq(b1, b2, b3), bonds, Seq(b1, b2, b3), v2, b0) //parents wrong order
+        b9 <- createValidatorBlock[Task](Seq(b6), bonds, Seq.empty, v0, b0)
                .map(b => b.withHeader(b.getHeader.withJustifications(Seq.empty))) //empty justification
-        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0) //empty justification
+        b10 <- createValidatorBlock[Task](Seq.empty, bonds, Seq.empty, v0, b0) //empty justification
         result <- for {
                    dag <- dagStorage.getRepresentation
                    // Valid
@@ -726,12 +731,24 @@ class ValidationTest
                    _ <- Validation[Task]
                          .parents(b7, dag)
                          .attempt
+                         .map(r => {
+                           println(r)
+                           assert(r.isLeft)
+                         })
                    _ <- Validation[Task]
                          .parents(b8, dag)
                          .attempt
+                         .map(r => {
+                           println(r)
+                           assert(r.isLeft)
+                         })
                    _ <- Validation[Task]
                          .parents(b9, dag)
                          .attempt
+                         .map(r => {
+                           println(r)
+                           assert(r.isLeft)
+                         })
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
@@ -769,20 +786,17 @@ class ValidationTest
 
       for {
         genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1)
-        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
-        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2)
-        d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3)
-        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v1, genesis)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2, genesis)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(genesis), v2, genesis)
+        d       <- createValidatorBlock[Task](Seq(c, a), bonds, Seq(a, c), v3, genesis)
+        e       <- createValidatorBlock[Task](Seq(a), bonds, Seq(a, b, c), v3, genesis)
         dag     <- dagStorage.getRepresentation
         // v3 hasn't seen v2 equivocating (in contrast to what "local" node saw).
         // It will choose C as a main parent and A as a secondary one.
         _ <- Validation[Task]
               .parents(d, dag)
-              .map(_.parents.map(_.blockHash))
-              .attempt shouldBeF Right(
-              Vector(c.blockHash, a.blockHash)
-            )
+              .map(_.parents.map(_.blockHash)) shouldBeF Vector(c.blockHash, a.blockHash)
         // While v0 has seen everything so it will use 0 as v2's weight when scoring.
         _ <- Validation[Task]
               .parents(e, dag)
@@ -1096,7 +1110,10 @@ class ValidationTest
     implicit blockStorage => implicit dagStorage => _ =>
       val deploysWithCost = Vector(deploy.processed(1))
       for {
-        block  <- createBlock[Task](Seq.empty, deploys = deploysWithCost)
+        block <- createBlock[Task](
+                  Seq.empty,
+                  deploys = deploysWithCost
+                )
         dag    <- dagStorage.getRepresentation
         result <- Validation.deployHeaders[Task](block, dag, chainName).attempt
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
@@ -1303,10 +1320,10 @@ class ValidationTest
 
       for {
         genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
-        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
-        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
-        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0, genesis)
+        b       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0, genesis)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
+        d       <- createValidatorBlock[Task](Seq(b), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
         _ <- Validation.swimlane[Task](d, dag).attempt shouldBeF Left(
               ValidateErrorWrapper(SwimlaneMerged)
@@ -1328,10 +1345,10 @@ class ValidationTest
 
       for {
         genesis <- createAndStoreBlock[Task](Seq.empty, bonds = bonds)
-        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
-        _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0)
-        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1)
-        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0)
+        a       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0, genesis)
+        _       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq.empty, v0, genesis)
+        c       <- createValidatorBlock[Task](Seq(genesis), bonds, Seq(a), v1, genesis)
+        d       <- createValidatorBlock[Task](Seq(a), bonds, Seq(c), v0, genesis)
         dag     <- dagStorage.getRepresentation
         _       <- Validation.swimlane[Task](d, dag).attempt shouldBeF Right(())
       } yield ()
