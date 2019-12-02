@@ -98,7 +98,7 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  implicit val longByteStringOrdering: Ordering[(Long, ByteString)] =
+  val longByteStringOrdering: Ordering[(Long, ByteString)] =
     Ordering.fromLessThan[(Long, ByteString)] {
       case (a, b) =>
         if (a._1 < b._1) true
@@ -112,7 +112,7 @@ object DagOperations {
         }
     }
 
-  implicit val bigIntByteStringOrdering: Ordering[(BigInt, ByteString)] =
+  val bigIntByteStringOrdering: Ordering[(BigInt, ByteString)] =
     Ordering.fromLessThan[(BigInt, ByteString)] {
       case (a, b) =>
         if (a._1 < b._1) true
