@@ -18,6 +18,7 @@ from casperlabs_local_net.common import (
     INITIAL_MOTES_AMOUNT,
     MAX_PAYMENT_COST,
     TEST_ACCOUNT_INITIAL_BALANCE,
+    EMPTY_ETC_CASPERLABS,
     random_string,
 )
 from casperlabs_local_net.docker_base import DockerConfig
@@ -61,9 +62,6 @@ class CasperLabsNetwork:
     grpc_encryption = False
     behind_proxy = False
     initial_motes = INITIAL_MOTES_AMOUNT
-
-    # Empty /etc/casperlabs means it has no chainspec.
-    EMPTY_ETC_CASPERlABS = "etc_casperlabs_empty"
 
     def __init__(self, docker_client: DockerClient, extra_docker_params: Dict = None):
         self.extra_docker_params = extra_docker_params or {}
@@ -359,7 +357,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
         docker_client: DockerClient,
         extra_docker_params: Dict = None,
         chainspec_directory: str = "test-chainspec",
-        etc_casperlabs_directory: str = CasperLabsNetwork.EMPTY_ETC_CASPERlABS,
+        etc_casperlabs_directory: str = EMPTY_ETC_CASPERLABS,
     ):
         super().__init__(docker_client, extra_docker_params)
         self.chainspec_directory = chainspec_directory
@@ -377,7 +375,7 @@ class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
             source_directory, os.path.join(self.RESOURCES, self.chainspec_directory)
         )
 
-        if self.etc_casperlabs_directory != self.EMPTY_ETC_CASPERlABS:
+        if self.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
             self.copy_system_contracts(source_directory, self.etc_casperlabs_chainspec)
 
     def copy_system_contracts(self, source_directory, destination_base):

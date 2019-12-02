@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 import requests
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, EMPTY_ETC_CASPERLABS
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -282,7 +282,7 @@ class DockerNode(LoggingDockerBase):
         self.create_genesis_accounts_file(
             f"{self.host_chainspec_dir}/genesis/accounts.csv"
         )
-        if self.cl_network.EMPTY_ETC_CASPERlABS != self.config.etc_casperlabs_directory:
+        if self.config.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
             etc_casperlabs_chainspec = os.path.join(
                 self.host_mount_dir, self.config.etc_casperlabs_directory, "chainspec"
             )
@@ -318,10 +318,7 @@ class DockerNode(LoggingDockerBase):
         if self.proxy_kademlia:
             self.proxy_kademlia.stop()
         if os.path.exists(self.host_mount_dir):
-            try:
-                shutil.rmtree(self.deploy_dir)
-            except PermissionError as e:
-                logging.info(f"Could not delete {self.deploy_dir}: {str(e)}")
+            shutil.rmtree(self.host_mount_dir)
         if os.path.exists(self.deploy_dir):
             shutil.rmtree(self.deploy_dir)
 
