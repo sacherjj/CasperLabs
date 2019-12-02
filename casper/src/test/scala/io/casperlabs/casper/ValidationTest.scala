@@ -731,24 +731,15 @@ class ValidationTest
                    _ <- Validation[Task]
                          .parents(b7, dag)
                          .attempt
-                         .map(r => {
-                           println(r)
-                           assert(r.isLeft)
-                         })
+                         .map(_ shouldBe 'left)
                    _ <- Validation[Task]
                          .parents(b8, dag)
                          .attempt
-                         .map(r => {
-                           println(r)
-                           assert(r.isLeft)
-                         })
+                         .map(_ shouldBe 'left)
                    _ <- Validation[Task]
                          .parents(b9, dag)
                          .attempt
-                         .map(r => {
-                           println(r)
-                           assert(r.isLeft)
-                         })
+                         .map(_ shouldBe 'left)
 
                    _ = log.warns should have size 3
                    _ = log.warns.forall(
