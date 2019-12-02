@@ -1033,14 +1033,12 @@ def check_cli_local_key(cli):
         "--session", cli.resource("local_state.wasm"))
     block_hash = propose_check_no_errors(cli)
 # CasperLabs/docker $ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
-    local_key = account.public_key_hex + ":" + bytes([66 for _ in range(32)]).hex()
+    local_key = account.public_key_hex + ":" + bytes([66] * 32).hex()
     result = cli("query-state",
                  "--block-hash", block_hash,
                  "--key", local_key,
-                 "--type", "local",
-                 # --path should not be really needed but it is obligatory for Python client atm
-                 "--path", "")
-    logging.info(f"query-state result => {result}")
+                 "--type", "local")
+    assert result.string_value == 'Hello, world!'
 
     cli("deploy",
         "--from", account.public_key_hex,
@@ -1053,7 +1051,5 @@ def check_cli_local_key(cli):
     result = cli("query-state",
                  "--block-hash", block_hash,
                  "--key", local_key,
-                 "--type", "local",
-                 # --path should not be really needed but it is obligatory for Python client atm
-                 "--path", "")
-    logging.info(f"query-state result => {result}")
+                 "--type", "local")
+    assert result.string_value == 'Hello, world! Hello, world!'
