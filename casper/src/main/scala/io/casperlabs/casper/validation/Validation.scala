@@ -454,12 +454,12 @@ object Validation {
       none[Errors.DeployHeaderError].pure[F]
 
   def validateMinTtl[F[_]: Applicative: Log](
-      deploy: Deploy,
-      minTtlMillis: FiniteDuration
+                                              deploy: Deploy,
+                                              minTtl: FiniteDuration
   ): F[Option[Errors.DeployHeaderError]] =
-    if (deploy.getHeader.ttlMillis < minTtlMillis.toMillis)
+    if (deploy.getHeader.ttlMillis < minTtl.toMillis)
       Errors.DeployHeaderError
-        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtlMillis)
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtl)
         .logged[F]
         .map(_.some)
     else

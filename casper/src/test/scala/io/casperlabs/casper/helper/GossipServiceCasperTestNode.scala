@@ -82,7 +82,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
-      minTtlMillis = FiniteDuration(1, "hour"),
+      minTtl = FiniteDuration(1, "hour"),
       upgrades = Nil
     )
 

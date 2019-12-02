@@ -169,7 +169,7 @@ package object gossiping {
                                        prestate,
                                        transforms,
                                        genesis.getHeader.chainName,
-                                       conf.server.minTtlMillis,
+                                       conf.server.minTtl,
                                        chainSpec.upgrades
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)

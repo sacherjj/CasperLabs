@@ -306,7 +306,7 @@ class ValidationTest
     maxDependencies = 10
   )
 
-  val minTtlMillis = FiniteDuration(1, "hour")
+  val minTtl = FiniteDuration(1, "hour")
 
   "Deploy header validation" should "accept valid headers" in {
     implicit val consensusConfig =
@@ -324,7 +324,7 @@ class ValidationTest
         .timeToLiveTooShort(
           deploy.deployHash,
           deploy.getHeader.ttlMillis,
-          minTtlMillis
+          minTtl
         )
     )
   }
