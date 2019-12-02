@@ -100,7 +100,7 @@ object Estimator {
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocatingValidators: Set[Validator]
   ): F[Map[BlockHash, Weight]] = {
-    implicit val decreasingOrder = Ordering[Long].reverse
+    implicit val messageOrder = DagOperations.blockTopoOrderingDesc
     latestMessageHashes.toList.foldLeftM(Map.empty[BlockHash, Weight]) {
       case (acc, (validator, latestMessageHashes)) =>
         for {
@@ -108,7 +108,7 @@ object Estimator {
                              .traverse(dag.lookup(_))
                              .map(_.flatten.sortBy(_.rank))
           lmdScore <- DagOperations
-                       .bfTraverseF[F, Message](sortedMessages)(
+                       .bfToposortTraverseF[F](sortedMessages)(
                          _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
                        )
                        .takeUntil(_.messageHash == stopHash)
@@ -148,7 +148,7 @@ object Estimator {
           startingBlock.pure[F]
         } else {
           val highestScoreChild =
-            reachableMainChildren.maxBy(b => scores(b) -> b.toStringUtf8)
+            reachableMainChildren.maxBy(b => scores(b) -> b)(DagOperations.bigIntByteStringOrdering)
           forkChoiceTip[F](
             dag,
             highestScoreChild,

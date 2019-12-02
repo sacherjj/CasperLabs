@@ -89,7 +89,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     1,
     Keys.PublicKey(secondBlockSender.toByteArray),
     Keys.PrivateKey(secondBlockSender.toByteArray),
-    Ed25519
+    Ed25519,
+    ByteString.EMPTY
   )
   val secondHashString     = Base16.encode(secondBlock.blockHash.toByteArray)
   val blockHash: BlockHash = secondBlock.blockHash
