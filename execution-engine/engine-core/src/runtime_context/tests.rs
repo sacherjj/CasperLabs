@@ -8,20 +8,26 @@ use std::{
 use rand::RngCore;
 
 use contract_ffi::{
+    block_time::BlockTime,
     execution::Phase,
     key::{Key, LOCAL_SEED_SIZE},
     uref::{AccessRights, URef},
     value::{
-        self,
         account::{
-            ActionType, AddKeyFailure, AssociatedKeys, BlockTime, PublicKey, PurseId,
-            RemoveKeyFailure, SetThresholdFailure, Weight,
+            ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+            Weight,
         },
-        Account, Contract, ProtocolVersion, Value,
+        CLValue, ProtocolVersion,
     },
 };
 use engine_shared::{
-    additive_map::AdditiveMap, gas::Gas, newtypes::CorrelationId, transform::Transform,
+    account::{Account, AssociatedKeys},
+    additive_map::AdditiveMap,
+    contract::Contract,
+    gas::Gas,
+    newtypes::CorrelationId,
+    stored_value::StoredValue,
+    transform::Transform,
 };
 use engine_storage::global_state::{
     in_memory::{InMemoryGlobalState, InMemoryGlobalStateView},
@@ -38,11 +44,11 @@ use crate::{
 const DEPLOY_HASH: [u8; 32] = [1u8; 32];
 const PHASE: Phase = Phase::Session;
 
-fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemoryGlobalStateView> {
+fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalStateView> {
     let correlation_id = CorrelationId::new();
     let hist = InMemoryGlobalState::empty().unwrap();
     let root_hash = hist.empty_root_hash;
-    let transform = Transform::Write(value::Value::Account(init_account.clone()));
+    let transform = Transform::Write(StoredValue::Account(init_account.clone()));
 
     let mut m = AdditiveMap::new();
     m.insert(init_key, transform);
@@ -63,9 +69,9 @@ fn mock_tc(init_key: Key, init_account: value::Account) -> TrackingCopy<InMemory
     TrackingCopy::new(reader)
 }
 
-fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value::Account) {
+fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, Account) {
     let associated_keys = AssociatedKeys::new(PublicKey::new(addr), Weight::new(1));
-    let account = value::account::Account::new(
+    let account = Account::new(
         addr,
         BTreeMap::new(),
         PurseId::new(URef::new(purse_id, AccessRights::READ_ADD_WRITE)),
@@ -77,7 +83,7 @@ fn mock_account_with_purse_id(addr: [u8; 32], purse_id: [u8; 32]) -> (Key, value
     (key, account)
 }
 
-fn mock_account(addr: [u8; 32]) -> (Key, value::Account) {
+fn mock_account(addr: [u8; 32]) -> (Key, Account) {
     mock_account_with_purse_id(addr, [0; 32])
 }
 
@@ -157,7 +163,7 @@ fn assert_invalid_access<T: std::fmt::Debug>(result: Result<T, Error>, expecting
 
 fn test<T, F>(access_rights: HashMap<Address, HashSet<AccessRights>>, query: F) -> Result<T, Error>
 where
-    F: Fn(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
+    F: FnOnce(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
     let deploy_hash = [1u8; 32];
@@ -182,7 +188,8 @@ fn use_uref_valid() {
     let access_rights = extract_access_rights_from_keys(vec![uref]);
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, Value::Int32(43)));
+    let value = StoredValue::CLValue(CLValue::from_t(&43_i32).unwrap());
+    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, value));
     query_result.expect("writing using valid uref should succeed");
 }
 
@@ -192,7 +199,8 @@ fn use_uref_forged() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = HashMap::new();
-    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, Value::Int32(43)));
+    let value = StoredValue::CLValue(CLValue::from_t(&43_i32).unwrap());
+    let query_result = test(access_rights, |mut rc| rc.write_gs(uref, value));
 
     assert_forged_reference(query_result);
 }
@@ -203,7 +211,7 @@ fn store_contract_with_uref_valid() {
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref]);
 
-    let contract = Value::Contract(Contract::new(
+    let contract = StoredValue::Contract(Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -228,7 +236,7 @@ fn store_contract_with_uref_valid() {
 fn store_contract_with_uref_forged() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let contract = Value::Contract(Contract::new(
+    let contract = StoredValue::Contract(Contract::new(
         Vec::new(),
         iter::once(("ForgedURef".to_owned(), uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -248,12 +256,11 @@ fn store_contract_under_uref_valid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract: Value = Contract::new(
+    let contract = StoredValue::Contract(Contract::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
         ProtocolVersion::V1_0_0,
-    )
-    .into();
+    ));
 
     let query_result = test(access_rights, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -274,8 +281,11 @@ fn store_contract_under_uref_forged() {
     // ForgedReference error.
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let contract: Value =
-        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
+    let contract = StoredValue::Contract(Contract::new(
+        Vec::new(),
+        BTreeMap::new(),
+        ProtocolVersion::V1_0_0,
+    ));
 
     let query_result = test(HashMap::new(), |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -291,8 +301,11 @@ fn store_contract_uref_invalid_access() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract: Value =
-        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
+    let contract = StoredValue::Contract(Contract::new(
+        Vec::new(),
+        BTreeMap::new(),
+        ProtocolVersion::V1_0_0,
+    ));
 
     let query_result = test(access_rights, |mut rc| {
         rc.write_gs(contract_uref, contract.clone())
@@ -306,7 +319,10 @@ fn account_key_not_writeable() {
     let mut rng = rand::thread_rng();
     let acc_key = random_account_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| {
-        rc.write_gs(acc_key, Value::Int32(1))
+        rc.write_gs(
+            acc_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
     assert_invalid_access(query_result, AccessRights::WRITE);
 }
@@ -323,7 +339,7 @@ fn account_key_readable_valid() {
             .expect("Account key is readable.")
             .expect("Account is found in GS.");
 
-        assert_eq!(result, Value::Account(rc.account().clone()));
+        assert_eq!(result, StoredValue::Account(rc.account().clone()));
         Ok(())
     });
 
@@ -351,7 +367,7 @@ fn account_key_addable_valid() {
     let query_result = test(access_rights, |mut rc| {
         let base_key = rc.base_key();
         let uref_name = "NewURef".to_owned();
-        let named_key = Value::NamedKey(uref_name.clone(), uref);
+        let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
 
         rc.add_gs(base_key, named_key).expect("Adding should work.");
 
@@ -377,7 +393,10 @@ fn account_key_addable_invalid() {
     let other_acc_key = random_account_key(&mut rng);
 
     let query_result = test(HashMap::new(), |mut rc| {
-        rc.add_gs(other_acc_key, Value::Int32(1))
+        rc.add_gs(
+            other_acc_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
 
     assert_invalid_access(query_result, AccessRights::ADD);
@@ -401,7 +420,10 @@ fn contract_key_not_writeable() {
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let query_result = test(HashMap::new(), |mut rc| {
-        rc.write_gs(contract_key, Value::Int32(1))
+        rc.write_gs(
+            contract_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
 
     assert_invalid_access(query_result, AccessRights::WRITE);
@@ -416,8 +438,11 @@ fn contract_key_addable_valid() {
     let mut address_generator = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
-    let contract: Value =
-        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
+    let contract = StoredValue::Contract(Contract::new(
+        Vec::new(),
+        BTreeMap::new(),
+        ProtocolVersion::V1_0_0,
+    ));
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(contract_key, contract);
@@ -447,18 +472,17 @@ fn contract_key_addable_valid() {
     );
 
     let uref_name = "NewURef".to_owned();
-    let named_key = Value::NamedKey(uref_name.clone(), uref);
+    let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
 
     runtime_context
         .add_gs(contract_key, named_key)
         .expect("Adding should work.");
 
-    let updated_contract: Value = Contract::new(
+    let updated_contract = StoredValue::Contract(Contract::new(
         Vec::new(),
         iter::once((uref_name, uref)).collect(),
         ProtocolVersion::V1_0_0,
-    )
-    .into();
+    ));
 
     assert_eq!(
         *tc.borrow().effect().transforms.get(&contract_key).unwrap(),
@@ -476,8 +500,11 @@ fn contract_key_addable_invalid() {
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
-    let contract: Value =
-        Contract::new(Vec::new(), BTreeMap::new(), ProtocolVersion::V1_0_0).into();
+    let contract = StoredValue::Contract(Contract::new(
+        Vec::new(),
+        BTreeMap::new(),
+        ProtocolVersion::V1_0_0,
+    ));
     let tc = Rc::new(RefCell::new(mock_tc(account_key, account.clone())));
     // Store contract in the GlobalState so that we can mainpulate it later.
     tc.borrow_mut().write(contract_key, contract);
@@ -506,7 +533,7 @@ fn contract_key_addable_invalid() {
     );
 
     let uref_name = "NewURef".to_owned();
-    let named_key = Value::NamedKey(uref_name.clone(), uref);
+    let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
 
     let result = runtime_context.add_gs(contract_key, named_key);
 
@@ -537,7 +564,10 @@ fn uref_key_writeable_valid() {
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
-        rc.write_gs(uref_key, Value::Int32(1))
+        rc.write_gs(
+            uref_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
     assert!(query_result.is_ok());
 }
@@ -548,7 +578,10 @@ fn uref_key_writeable_invalid() {
     let uref_key = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
-        rc.write_gs(uref_key, Value::Int32(1))
+        rc.write_gs(
+            uref_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
     assert_invalid_access(query_result, AccessRights::WRITE);
 }
@@ -559,9 +592,15 @@ fn uref_key_addable_valid() {
     let uref_key = create_uref(&mut rng, AccessRights::ADD_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
     let query_result = test(access_rights, |mut rc| {
-        rc.write_gs(uref_key, Value::Int32(10))
-            .expect("Writing to the GlobalState should work.");
-        rc.add_gs(uref_key, Value::Int32(1))
+        rc.write_gs(
+            uref_key,
+            StoredValue::CLValue(CLValue::from_t(&10_i32).unwrap()),
+        )
+        .expect("Writing to the GlobalState should work.");
+        rc.add_gs(
+            uref_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
     });
     assert!(query_result.is_ok());
 }
@@ -571,7 +610,12 @@ fn uref_key_addable_invalid() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref_key = create_uref(&mut rng, AccessRights::WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref_key]);
-    let query_result = test(access_rights, |mut rc| rc.add_gs(uref_key, Value::Int32(1)));
+    let query_result = test(access_rights, |mut rc| {
+        rc.add_gs(
+            uref_key,
+            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        )
+    });
     assert_invalid_access(query_result, AccessRights::ADD);
 }
 
@@ -671,7 +715,7 @@ fn manage_associated_keys() {
         let effect = runtime_context.effect();
         let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
         let account = match transform {
-            Transform::Write(Value::Account(account)) => account,
+            Transform::Write(StoredValue::Account(account)) => account,
             _ => panic!("Invalid transform operation found"),
         };
         account
@@ -686,7 +730,7 @@ fn manage_associated_keys() {
         let effect = runtime_context.effect();
         let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
         let account = match transform {
-            Transform::Write(Value::Account(account)) => account,
+            Transform::Write(StoredValue::Account(account)) => account,
             _ => panic!("Invalid transform operation found"),
         };
         let value = account
@@ -704,7 +748,7 @@ fn manage_associated_keys() {
         let effect = runtime_context.effect();
         let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
         let account = match transform {
-            Transform::Write(Value::Account(account)) => account,
+            Transform::Write(StoredValue::Account(account)) => account,
             _ => panic!("Invalid transform operation found"),
         };
 
@@ -739,7 +783,7 @@ fn action_thresholds_management() {
         let effect = runtime_context.effect();
         let transform = effect.transforms.get(&runtime_context.base_key()).unwrap();
         let mutated_account = match transform {
-            Transform::Write(Value::Account(account)) => account,
+            Transform::Write(StoredValue::Account(account)) => account,
             _ => panic!("Invalid transform operation found"),
         };
 
@@ -838,10 +882,10 @@ fn can_roundtrip_key_value_pairs_into_local_state() {
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let test_key = b"test_key";
-        let test_value = Value::String("test_value".to_string());
+        let test_value = CLValue::from_t(&"test_value".to_string()).unwrap();
 
         runtime_context
-            .write_ls(test_key, test_value.to_owned())
+            .write_ls(test_key, test_value.clone())
             .expect("should write_ls");
 
         let result = runtime_context.read_ls(test_key).expect("should read_ls");
@@ -876,7 +920,7 @@ fn remove_uref_works() {
     let effects = runtime_context.effect();
     let transform = effects.transforms.get(&key).unwrap();
     let account = match transform {
-        Transform::Write(Value::Account(account)) => account,
+        Transform::Write(StoredValue::Account(account)) => account,
         _ => panic!("Invalid transform operation found"),
     };
     assert!(!account.named_keys().contains_key(&uref_name));

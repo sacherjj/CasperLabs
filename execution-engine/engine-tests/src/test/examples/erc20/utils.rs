@@ -1,7 +1,5 @@
-use contract_ffi::{
-    key::Key,
-    value::{Value, U512},
-};
+use contract_ffi::{key::Key, value::U512};
+use engine_shared::stored_value::StoredValue;
 
 use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder as TestBuilder};
 
@@ -20,9 +18,14 @@ const UREF_NAME_ERC20_PROXY: &str = "erc20_proxy";
 
 pub fn contract_hash(builder: &mut TestBuilder, account: [u8; 32], name: &str) -> [u8; 32] {
     let account_key = Key::Account(account);
-    let value: Value = builder.query(None, account_key, &[name]).unwrap();
-    if let Value::Key(Key::Hash(contract_hash)) = value {
-        contract_hash
+    let stored_value = builder.query(None, account_key, &[name]).unwrap();
+    if let StoredValue::CLValue(cl_value) = stored_value {
+        let key: Key = cl_value.to_t().unwrap();
+        if let Key::Hash(contract_hash) = key {
+            contract_hash
+        } else {
+            panic!("Key isn't Hash type");
+        }
     } else {
         panic!("Can't extract contract hash.");
     }

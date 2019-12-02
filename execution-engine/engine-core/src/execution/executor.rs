@@ -7,17 +7,15 @@ use std::{
 use parity_wasm::elements::Module;
 
 use contract_ffi::{
+    block_time::BlockTime,
     bytesrepr::{self, FromBytes},
     execution::Phase,
     key::Key,
-    value::{
-        account::{BlockTime, PublicKey},
-        cl_type::CLTyped,
-        cl_value::CLValue,
-        Account, ProtocolVersion, Value,
-    },
+    value::{account::PublicKey, CLTyped, CLValue, ProtocolVersion},
 };
-use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_shared::{
+    account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
+};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 
 use super::{extract_access_rights_from_keys, instance_and_memory, Error, Runtime};
@@ -70,7 +68,7 @@ pub struct Executor;
 
 #[allow(clippy::too_many_arguments)]
 impl Executor {
-    pub fn exec<R: StateReader<Key, Value>>(
+    pub fn exec<R>(
         &self,
         parity_module: Module,
         args: &[u8],
@@ -88,6 +86,7 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> ExecutionResult
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
         let (instance, memory) =
@@ -111,7 +110,7 @@ impl Executor {
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
-        let arguments: Vec<Vec<u8>> = if args.is_empty() {
+        let arguments: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
@@ -156,7 +155,7 @@ impl Executor {
         }
     }
 
-    pub fn exec_direct<R: StateReader<Key, Value>>(
+    pub fn exec_direct<R>(
         &self,
         parity_module: Module,
         args: &[u8],
@@ -175,6 +174,7 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> ExecutionResult
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
         let mut named_keys = named_keys.clone();
@@ -197,7 +197,7 @@ impl Executor {
         // can be returned.
         let effects_snapshot = state.borrow().effect();
 
-        let args: Vec<Vec<u8>> = if args.is_empty() {
+        let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             on_fail_charge!(
@@ -276,7 +276,7 @@ impl Executor {
         }
     }
 
-    pub fn better_exec<R: StateReader<Key, Value>, T>(
+    pub fn better_exec<R, T>(
         &self,
         module: Module,
         args: &[u8],
@@ -296,6 +296,7 @@ impl Executor {
         system_contract_cache: SystemContractCache,
     ) -> Result<T, Error>
     where
+        R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
         T: FromBytes + CLTyped,
     {
@@ -308,7 +309,7 @@ impl Executor {
                 extract_access_rights_from_keys(keys)
             };
 
-        let args: Vec<Vec<u8>> = if args.is_empty() {
+        let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
             bytesrepr::deserialize(args)?
@@ -344,7 +345,7 @@ impl Executor {
             Err(error) => error,
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.
-                let result = runtime.take_result().unwrap_or(CLValue::from_t(&())?);
+                let result = runtime.take_host_buf().unwrap_or(CLValue::from_t(&())?);
                 let ret = result.to_t()?;
                 return Ok(ret);
             }
@@ -354,7 +355,7 @@ impl Executor {
             .as_host_error()
             .and_then(|host_error| host_error.downcast_ref::<Error>())
         {
-            Some(Error::Ret(_)) => runtime.take_result().ok_or(Error::ExpectedReturnValue)?,
+            Some(Error::Ret(_)) => runtime.take_host_buf().ok_or(Error::ExpectedReturnValue)?,
             Some(Error::Revert(code)) => return Err(Error::Revert(*code)),
             _ => return Err(Error::Interpreter(return_error)),
         };

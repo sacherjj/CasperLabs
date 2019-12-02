@@ -7,6 +7,7 @@ use hex_fmt::HexFmt;
 use crate::{
     bytesrepr::{self, OPTION_SIZE, U32_SIZE},
     contract_api::TURef,
+    value::CLTyped,
 };
 
 pub const UREF_ADDR_SIZE: usize = 32;
@@ -228,7 +229,7 @@ impl bytesrepr::ToBytes for Vec<URef> {
     }
 }
 
-impl<T> From<TURef<T>> for URef {
+impl<T: CLTyped> From<TURef<T>> for URef {
     fn from(input: TURef<T>) -> Self {
         URef(input.addr(), Some(input.access_rights()))
     }

@@ -2,10 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::vec::Vec;
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
@@ -37,10 +34,10 @@ pub extern "C" fn call() {
         .to_t()
         .unwrap_or_revert();
 
-    let forged_reference: TURef<String> = {
+    let forged_reference: TURef<&str> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
         TURef::from_uref(ret).unwrap_or_revert()
     };
 
-    storage::write(forged_reference, REPLACEMENT_DATA.to_string())
+    storage::write(forged_reference, &REPLACEMENT_DATA)
 }

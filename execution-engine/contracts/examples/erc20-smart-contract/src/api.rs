@@ -2,9 +2,9 @@ use alloc::string::String;
 
 use contract_ffi::{
     bytesrepr::FromBytes,
-    contract_api::{account::PublicKey, runtime, ContractRef, Error as ApiError},
+    contract_api::{runtime, ContractRef, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
-    value::U512,
+    value::{account::PublicKey, CLTyped, U512},
 };
 
 use crate::error::Error;
@@ -35,7 +35,7 @@ pub enum Api {
     AssertAllowance(PublicKey, PublicKey, U512),
 }
 
-fn get_arg<T: FromBytes>(i: u32) -> T {
+fn get_arg<T: CLTyped + FromBytes>(i: u32) -> T {
     runtime::get_arg(i)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument)

@@ -8,7 +8,7 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const COUNT_KEY: &str = "count";
@@ -39,7 +39,7 @@ pub extern "C" fn counter_ext() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     match method_name.as_str() {
-        INC_METHOD => storage::add(turef, 1),
+        INC_METHOD => storage::add(turef, &1),
         GET_METHOD => {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(ApiError::Read)
@@ -53,7 +53,7 @@ pub extern "C" fn counter_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let counter_local_key = storage::new_turef(0); //initialize counter
+    let counter_local_key = storage::new_turef(&0); //initialize counter
 
     //create map of references for stored contract
     let mut counter_urefs: BTreeMap<String, Key> = BTreeMap::new();

@@ -1,114 +1,285 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus.state;
 
+// Fundamental type of a user-facing value stored under a key in global state.
+message CLType {
+    enum Simple {
+        BOOL = 0;
+        I32 = 1;
+        I64 = 2;
+        U8 = 3;
+        U32 = 4;
+        U64 = 5;
+        U128 = 6;
+        U256 = 7;
+        U512 = 8;
+        UNIT = 9;
+        STRING = 10;
+        KEY = 11;
+        UREF = 12;
+    }
+
+    message Option {
+        CLType inner = 1;
+    }
+
+    message List {
+        CLType inner = 1;
+    }
+
+    message FixedList {
+        CLType inner = 1;
+        uint64 len = 2;
+    }
+
+    message Result {
+        CLType ok = 1;
+        CLType err = 2;
+    }
+
+    message Map {
+        CLType key = 1;
+        CLType value = 2;
+    }
+
+    message Tuple1 {
+        CLType type0 = 1;
+    }
+
+    message Tuple2 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+    }
+
+    message Tuple3 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+    }
+
+    message Tuple4 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+    }
+
+    message Tuple5 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+    }
+
+    message Tuple6 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+        CLType type5 = 6;
+    }
+
+    message Tuple7 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+        CLType type5 = 6;
+        CLType type6 = 7;
+    }
+
+    message Tuple8 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+        CLType type5 = 6;
+        CLType type6 = 7;
+        CLType type7 = 8;
+    }
+
+    message Tuple9 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+        CLType type5 = 6;
+        CLType type6 = 7;
+        CLType type7 = 8;
+        CLType type8 = 9;
+    }
+
+    message Tuple10 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+        CLType type3 = 4;
+        CLType type4 = 5;
+        CLType type5 = 6;
+        CLType type6 = 7;
+        CLType type7 = 8;
+        CLType type8 = 9;
+        CLType type9 = 10;
+    }
+
+    oneof variants {
+        Simple simple_type = 1;
+        Option option_type = 2;
+        List list_type = 3;
+        FixedList fixed_list_type = 4;
+        Result result_type = 5;
+        Map map_type = 6;
+        Tuple1 tuple1_type = 7;
+        Tuple2 tuple2_type = 8;
+        Tuple3 tuple3_type = 9;
+        Tuple4 tuple4_type = 10;
+        Tuple5 tuple5_type = 11;
+        Tuple6 tuple6_type = 12;
+        Tuple7 tuple7_type = 13;
+        Tuple8 tuple8_type = 14;
+        Tuple9 tuple9_type = 15;
+        Tuple10 tuple10_type = 16;
+    }
+}
+
+// User-facing value stored under a key in global state.
+message CLValue {
+    CLType cl_type = 1;
+    bytes serialized_value = 2;
+}
+
 // Value stored under a key in global state.
+message StoredValue {
+    oneof variants {
+        CLValue cl_value = 1;
+        Account account = 2;
+        Contract contract = 3;
+    }
+}
+
+// DEPRECATED
 message Value {
-	oneof value {
-		int32 int_value = 1;
-		bytes bytes_value = 2;
-		IntList int_list = 3;
-		string string_value = 4;
-		Account account = 5;
-		Contract contract = 6;
-		StringList string_list = 7;
-		NamedKey named_key = 8;
-		BigInt big_int = 9;
-		Key key = 10;
-		Unit unit = 11;
-		uint64 long_value = 12;
-	}
+    oneof value {
+        int32 int_value = 1;
+        bytes bytes_value = 2;
+        IntList int_list = 3;
+        string string_value = 4;
+        Account account = 5;
+        Contract contract = 6;
+        StringList string_list = 7;
+        NamedKey named_key = 8;
+        BigInt big_int = 9;
+        Key key = 10;
+        Unit unit = 11;
+        uint64 long_value = 12;
+    }
 }
 
+// DEPRECATED
 message IntList {
-	repeated int32 values = 1;
+    repeated int32 values = 1;
 }
 
+// DEPRECATED
 message StringList {
-	repeated string values = 1;
+    repeated string values = 1;
 }
 
 message BigInt {
-	string value = 1;
-	// Number of bits: 128 | 256 | 512.
-	uint32 bit_width = 2;
+    string value = 1;
+    // Number of bits: 128 | 256 | 512.
+    uint32 bit_width = 2;
 }
 
 message Key {
-	oneof value {
-		Address address = 1;
-		Hash hash = 2;
-		URef uref = 3;
-		Local local = 4;
-	}
+    oneof value {
+        Address address = 1;
+        Hash hash = 2;
+        URef uref = 3;
+        Local local = 4;
+    }
 
-	message Address {
-		bytes account = 1;
-	}
+    message Address {
+        bytes account = 1;
+    }
 
-	message Hash {
-		bytes hash = 1;
-	}
+    message Hash {
+        bytes hash = 1;
+    }
 
-	message URef {
-		bytes uref = 1;
-		AccessRights access_rights = 2;
+    message URef {
+        bytes uref = 1;
+        AccessRights access_rights = 2;
 
         // NOTE: Numeric values correspond to values of the domain
         // AccessRights struct. DO NOT CHANGE.
-		enum AccessRights {
-			UNKNOWN        = 0;
-			READ           = 1;
-			WRITE          = 2;
-			ADD            = 4;
-			READ_ADD       = 5;
-			READ_WRITE     = 3;
-			ADD_WRITE      = 6;
-			READ_ADD_WRITE = 7;
-		}
-	}
+        enum AccessRights {
+            UNKNOWN        = 0;
+            READ           = 1;
+            WRITE          = 2;
+            ADD            = 4;
+            READ_ADD       = 5;
+            READ_WRITE     = 3;
+            ADD_WRITE      = 6;
+            READ_ADD_WRITE = 7;
+        }
+    }
 
-	message Local {
-		bytes hash = 1;
-	}
+    message Local {
+        bytes hash = 1;
+    }
 }
 
 message NamedKey {
-	string name = 1;
-	Key key = 2;
+    string name = 1;
+    Key key = 2;
 }
 
 message Contract {
-	bytes body = 1;
-	repeated NamedKey named_keys = 2;
+    bytes body = 1;
+    repeated NamedKey named_keys = 2;
     ProtocolVersion protocol_version = 3;
 }
 
 message Account {
-	// Removed: nonce.
-	reserved 2;
-	// Removed: account_activity
-	reserved 7;
+    // Removed: nonce.
+    reserved 2;
+    // Removed: account_activity
+    reserved 7;
 
-	bytes public_key = 1;
-	Key.URef purse_id = 3;
-	repeated NamedKey named_keys = 4;
-	repeated AssociatedKey associated_keys = 5;
-	ActionThresholds action_thresholds = 6;
+    bytes public_key = 1;
+    Key.URef purse_id = 3;
+    repeated NamedKey named_keys = 4;
+    repeated AssociatedKey associated_keys = 5;
+    ActionThresholds action_thresholds = 6;
 
-	message AssociatedKey {
-		bytes public_key = 1;
-		uint32 weight = 2;
-	}
-	message ActionThresholds {
-		uint32 deployment_threshold = 1;
-		uint32 key_management_threshold = 2;
-	}
+    message AssociatedKey {
+        bytes public_key = 1;
+        uint32 weight = 2;
+    }
+    message ActionThresholds {
+        uint32 deployment_threshold = 1;
+        uint32 key_management_threshold = 2;
+    }
 }
 
+// DEPRECATED
 message Unit {}
 
 message ProtocolVersion {
     uint32 major = 1;
     uint32 minor = 2;
     uint32 patch = 3;
+}
+
+enum BytesReprError {
+    EARLY_END_OF_STREAM = 0;
+    FORMATTING_ERROR = 1;
+    LEFT_OVER_BYTES = 2;
+    OUT_OF_MEMORY_ERROR = 3;
 }

@@ -8,7 +8,7 @@ use failure::Fail;
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     system_contracts::mint::purse_id::PurseIdError,
-    value::cl_type::{CLType, CLTyped},
+    value::{CLType, CLTyped},
 };
 
 /// An enum error that is capable of carrying a value across FFI-Host

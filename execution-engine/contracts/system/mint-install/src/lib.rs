@@ -8,7 +8,7 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const MINT_FUNCTION_NAME: &str = "mint_ext";
@@ -21,9 +21,8 @@ pub extern "C" fn mint_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let uref: URef = storage::store_function(MINT_FUNCTION_NAME, Default::default())
-        .into_turef()
-        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
-        .into();
+        .into_uref()
+        .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
 
     let return_value = CLValue::from_t(&uref).unwrap_or_revert();
 

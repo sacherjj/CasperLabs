@@ -31,7 +31,7 @@ pub enum FunctionIndex {
     RemoveAssociatedKeyFuncIndex = 22,
     UpdateAssociatedKeyFuncIndex = 23,
     SetActionThresholdFuncIndex = 24,
-    SerNamedKeysFuncIndex = 25,
+    LoadNamedKeysFuncIndex = 25,
     ListNamedKeysFuncIndex = 26,
     RemoveKeyFuncIndex = 27,
     GetCallerIndex = 28,

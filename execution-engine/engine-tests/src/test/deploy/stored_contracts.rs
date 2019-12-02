@@ -1,13 +1,18 @@
-use std::collections::{hash_map::RandomState, BTreeMap};
+use std::{
+    collections::{hash_map::RandomState, BTreeMap},
+    convert::TryInto,
+};
 
 use contract_ffi::{
     key::Key,
-    value::{account::PublicKey, ProtocolVersion, Value, U512},
+    value::{account::PublicKey, ProtocolVersion, U512},
 };
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
-use engine_shared::{additive_map::AdditiveMap, gas::Gas, motes::Motes, transform::Transform};
-use std::convert::TryInto;
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, motes::Motes, stored_value::StoredValue,
+    transform::Transform,
+};
 
 use crate::{
     support::test_support::{
@@ -147,7 +152,7 @@ fn should_exec_stored_code_by_hash() {
     let stored_payment_contract_hash = {
         let mut ret = None;
         for (k, t) in transforms {
-            if let Transform::Write(Value::Contract(_)) = t {
+            if let Transform::Write(StoredValue::Contract(_)) = t {
                 if let Key::Hash(hash) = k {
                     ret = Some(hash);
                     break;
@@ -599,7 +604,9 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
         let stored_payment_contract_uref = transforms
             .iter()
             .find_map(|key_transform| match key_transform {
-                (Key::URef(uref), Transform::Write(Value::Contract(_))) if uref != &pos_uref => {
+                (Key::URef(uref), Transform::Write(StoredValue::Contract(_)))
+                    if uref != &pos_uref =>
+                {
                     Some(uref)
                 }
                 _ => None,
@@ -733,7 +740,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
             store_transforms
                 .iter()
                 .find_map(|key_transform| match key_transform {
-                    (Key::Hash(hash), Transform::Write(Value::Contract(_))) => Some(hash),
+                    (Key::Hash(hash), Transform::Write(StoredValue::Contract(_))) => Some(hash),
                     _ => None,
                 });
 
@@ -826,10 +833,18 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
     // ...but a few different values
     for lr in left.values().zip(right.values()) {
         match lr {
-            (Transform::Write(Value::UInt512(_)), Transform::Write(Value::UInt512(_))) => {
+            (
+                Transform::Write(StoredValue::CLValue(l_value)),
+                Transform::Write(StoredValue::CLValue(r_value)),
+            ) => {
                 // differing refunds and balances
+                let _ = l_value.to_t::<U512>().expect("should be U512");
+                let _ = r_value.to_t::<U512>().expect("should be U512");
             }
-            (Transform::Write(Value::Account(la)), Transform::Write(Value::Account(ra))) => {
+            (
+                Transform::Write(StoredValue::Account(la)),
+                Transform::Write(StoredValue::Account(ra)),
+            ) => {
                 assert_eq!(la.pub_key(), ra.pub_key());
                 assert_eq!(la.purse_id(), ra.purse_id());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());

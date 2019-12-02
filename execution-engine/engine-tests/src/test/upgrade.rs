@@ -1,5 +1,5 @@
-use contract_ffi::value::Value;
-use engine_shared::transform::Transform;
+use contract_ffi::value::CLValue;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -154,7 +154,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         original_version,
-        Value::String("1.0.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t(&"1.0.0".to_string()).unwrap()),
         "should be original version"
     );
 
@@ -185,7 +185,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         upgraded_version,
-        Value::String("1.0.1".to_string()),
+        StoredValue::CLValue(CLValue::from_t(&"1.0.1".to_string()).unwrap()),
         "should be original version"
     );
 }
@@ -416,7 +416,14 @@ fn should_maintain_local_state_across_upgrade() {
     let (local_state_key, original_local_state_value) = transform_map
         .iter()
         .find_map(|(key, transform)| match transform {
-            Transform::Write(Value::String(s)) if s.contains(HELLO) => Some((*key, s.clone())),
+            Transform::Write(StoredValue::CLValue(cl_value)) => {
+                let s = cl_value.to_t::<String>().unwrap_or_default();
+                if s.contains(HELLO) {
+                    Some((*key, s.clone()))
+                } else {
+                    None
+                }
+            }
             _ => None,
         })
         .expect("local state Write should exist");
@@ -455,7 +462,7 @@ fn should_maintain_local_state_across_upgrade() {
 
     let write = {
         match transform {
-            Transform::Write(Value::String(s)) => Some(s.to_owned()),
+            Transform::Write(StoredValue::CLValue(cl_value)) => cl_value.to_t::<String>().ok(),
             _ => None,
         }
     }

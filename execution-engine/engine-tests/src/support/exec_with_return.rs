@@ -2,11 +2,12 @@ use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
 use contract_ffi::{
     args_parser::ArgsParser,
+    block_time::BlockTime,
     bytesrepr::FromBytes,
     execution::Phase,
     key::Key,
     uref::URef,
-    value::{account::BlockTime, cl_type::CLTyped, ProtocolVersion, U512},
+    value::{CLTyped, CLValue, ProtocolVersion, U512},
 };
 use engine_core::{
     engine_state::{
@@ -69,7 +70,7 @@ where
     let gas_limit = Gas::new(U512::from(std::u64::MAX));
     let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
-    let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
+    let arguments: Vec<CLValue> = args.parse().expect("should be able to serialize args");
     let base_key = Key::Account(address);
 
     let account = builder.get_account(address).expect("should find account");
@@ -142,8 +143,8 @@ where
                         let urefs = ret_urefs.clone();
 
                         let value: T = runtime
-                            .take_result()
-                            .expect("should have return value")
+                            .take_host_buf()
+                            .expect("should have return value in the host_buf")
                             .to_t()
                             .expect("should deserialize return value");
 

@@ -21,7 +21,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::InvalidArgument);
 
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = storage::read_local::<PublicKey, U512>(public_key)
+    let already_funded = storage::read_local::<PublicKey, U512>(&public_key)
         .unwrap_or_default()
         .is_some();
 
@@ -30,6 +30,6 @@ pub extern "C" fn call() {
     } else {
         system::transfer_to_account(public_key, amount).unwrap_or_revert();
         // Transfer successful; Store the fact of funding in the local state.
-        storage::write_local(public_key, amount);
+        storage::write_local(public_key, &amount);
     }
 }

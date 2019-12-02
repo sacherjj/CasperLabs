@@ -1,153 +1,111 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::{
-    convert::{From, TryFrom, TryInto},
-    u8,
-};
+use core::convert::From;
 
-use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
 use crate::{
-    bytesrepr::{self, deserialize, ToBytes},
-    contract_api::{runtime, Error},
+    bytesrepr::{self, FromBytes, ToBytes},
+    contract_api::{self, runtime, ContractRef, Error, TURef},
     ext_ffi,
     key::{Key, UREF_SIZE},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::AccessRights,
-    value::{Contract, Value},
+    uref::{AccessRights, URef},
+    value::{CLTyped, CLValue},
 };
 
-pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error> {
-    // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is
-    //      dropped then key_ptr becomes invalid.
-
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
-    };
-    deserialize(&value_bytes)
-}
-
-fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
-where
-    T: TryFrom<Value>,
-{
-    match maybe_value {
-        None => Ok(None),
-        Some(value) => {
-            let ret = value.try_into();
-            let ret = ret.map_err(|_| Error::ValueConversion).unwrap_or_revert();
-            Ok(Some(ret))
-        }
-    }
-}
-
-/// Read value under the key in the global state
-pub fn read<T>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error>
-where
-    T: Into<Value> + TryFrom<Value>,
-{
+/// Reads value under `turef` in the global state.
+pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error> {
     let key: Key = turef.into();
-    let maybe_value = read_untyped(&key)?;
-    try_into(maybe_value)
+    // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is dropped then key_ptr
+    // becomes invalid.
+    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(&key);
+    let cl_value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
+    get_read(cl_value_size)
 }
 
-/// Reads the value at the given key in the context-local partition of global
-/// state
-pub fn read_local<K, V>(key: K) -> Result<Option<V>, bytesrepr::Error>
-where
-    K: ToBytes,
-    V: TryFrom<Value>,
-{
+/// Reads the value under `key` in the context-local partition of global state.
+pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
+    key: &K,
+) -> Result<Option<V>, bytesrepr::Error> {
     let key_bytes = key.to_bytes()?;
-    let maybe_value = read_untyped_local(&key_bytes)?;
-    try_into(maybe_value)
-}
-
-fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    let cl_value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
+    get_read(cl_value_size)
+}
+
+/// Retrieves a value from the host buffer which has previously been populated via a call to
+/// `ext_ffi::read_value` or `ext_ffi::read_value_local`.
+fn get_read<T: CLTyped + FromBytes>(cl_value_size: usize) -> Result<Option<T>, bytesrepr::Error> {
+    if cl_value_size == 0 {
+        return Ok(None);
+    }
+
+    let cl_value_ptr = contract_api::alloc_bytes(cl_value_size);
+    let cl_value_bytes = unsafe {
+        ext_ffi::get_read(cl_value_ptr);
+        Vec::from_raw_parts(cl_value_ptr, cl_value_size, cl_value_size)
     };
-    deserialize(&value_bytes)
+    let cl_value: CLValue = bytesrepr::deserialize(&cl_value_bytes)?;
+    let ret = cl_value.to_t().unwrap_or_revert();
+    Ok(Some(ret))
 }
 
-/// Write the value under the key in the global state
-pub fn write<T: Into<Value>>(turef: TURef<T>, t: T) {
-    let key = turef.into();
-    let value = t.into();
-    write_untyped(&key, &value)
-}
+/// Writes `value` under `turef` in the global state.
+pub fn write<T: CLTyped + ToBytes>(turef: TURef<T>, value: &T) {
+    let key = Key::from(turef);
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&key);
 
-fn write_untyped(key: &Key, value: &Value) {
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let (value_ptr, value_size, _bytes2) = to_ptr(value);
+    let cl_value = CLValue::from_t(value).unwrap_or_revert();
+    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::to_ptr(&cl_value);
+
     unsafe {
-        ext_ffi::write(key_ptr, key_size, value_ptr, value_size);
+        ext_ffi::write(key_ptr, key_size, cl_value_ptr, cl_value_size);
     }
 }
 
-/// Writes the given value at the given key in the context-local partition of
-/// global state
-pub fn write_local<K, V>(key: K, value: V)
-where
-    K: ToBytes,
-    V: Into<Value>,
-{
+/// Writes `value` under `key` in the context-local partition of global state.
+pub fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: &V) {
     let key_bytes = key.to_bytes().unwrap_or_revert();
-    write_untyped_local(&key_bytes, &value.into());
-}
-
-fn write_untyped_local(key_bytes: &[u8], value: &Value) {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let (value_ptr, value_size, _bytes2) = to_ptr(value);
+
+    let cl_value = CLValue::from_t(value).unwrap_or_revert();
+    let (cl_value_ptr, cl_value_size, _bytes) = contract_api::to_ptr(&cl_value);
+
     unsafe {
-        ext_ffi::write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size);
+        ext_ffi::write_local(key_bytes_ptr, key_bytes_size, cl_value_ptr, cl_value_size);
     }
 }
 
-/// Add the given value to the one currently under the key in the global state
-pub fn add<T>(turef: TURef<T>, t: T)
-where
-    Value: From<T>,
-{
-    let key = turef.into();
-    let value = t.into();
-    add_untyped(&key, &value)
-}
+/// Adds `value` to the one currently under `turef` in the global state.
+pub fn add<T: CLTyped + ToBytes>(turef: TURef<T>, value: &T) {
+    let key = Key::from(turef);
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&key);
 
-fn add_untyped(key: &Key, value: &Value) {
-    let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let (value_ptr, value_size, _bytes2) = to_ptr(value);
+    let cl_value = CLValue::from_t(value).unwrap_or_revert();
+    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::to_ptr(&cl_value);
+
     unsafe {
-        // Could panic if the value under the key cannot be added to
-        // the given value in memory
-        ext_ffi::add(key_ptr, key_size, value_ptr, value_size);
+        // Could panic if `value` cannot be added to the given value in memory.
+        ext_ffi::add(key_ptr, key_size, cl_value_ptr, cl_value_size);
     }
 }
 
 /// Stores the serialized bytes of an exported function under a URef generated by the host.
 pub fn store_function(name: &str, named_keys: BTreeMap<String, Key>) -> ContractRef {
-    let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let (fn_ptr, fn_size, _bytes1) = contract_api::str_ref_to_ptr(name);
+    let (keys_ptr, keys_size, _bytes2) = contract_api::to_ptr(&named_keys);
     let mut addr = [0u8; 32];
     unsafe {
         ext_ffi::store_function(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
     }
-    ContractRef::TURef(TURef::<Contract>::new(addr, AccessRights::READ_ADD_WRITE))
+    ContractRef::URef(URef::new(addr, AccessRights::READ_ADD_WRITE))
 }
 
 /// Stores the serialized bytes of an exported function at an immutable address generated by the
 /// host.
 pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> ContractRef {
-    let (fn_ptr, fn_size, _bytes1) = str_ref_to_ptr(name);
-    let (keys_ptr, keys_size, _bytes2) = to_ptr(&named_keys);
+    let (fn_ptr, fn_size, _bytes1) = contract_api::str_ref_to_ptr(name);
+    let (keys_ptr, keys_size, _bytes2) = contract_api::to_ptr(&named_keys);
     let mut addr = [0u8; 32];
     unsafe {
         ext_ffi::store_function_at_hash(fn_ptr, fn_size, keys_ptr, keys_size, addr.as_mut_ptr());
@@ -156,15 +114,15 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 }
 
 /// Returns a new unforgable pointer, where value is initialized to `init`
-pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
-    let key_ptr = alloc_bytes(UREF_SIZE);
-    let value: Value = init.into();
-    let (value_ptr, value_size, _bytes2) = to_ptr(&value);
+pub fn new_turef<T: CLTyped + ToBytes>(init: &T) -> TURef<T> {
+    let key_ptr = contract_api::alloc_bytes(UREF_SIZE);
+    let cl_value = CLValue::from_t(init).unwrap_or_revert();
+    let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(&cl_value);
     let bytes = unsafe {
-        ext_ffi::new_uref(key_ptr, value_ptr, value_size); // new_uref creates a URef with ReadWrite access writes
+        ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE` access
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
-    let key: Key = deserialize(&bytes).unwrap_or_revert();
+    let key: Key = bytesrepr::deserialize(&bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap_or_revert()
     } else {

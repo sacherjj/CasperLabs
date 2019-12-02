@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use num_traits::{Bounded, Num, One, Unsigned, WrappingAdd, WrappingSub, Zero};
+use num_traits::{AsPrimitive, Bounded, Num, One, Unsigned, WrappingAdd, WrappingSub, Zero};
 
 use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
 
@@ -111,7 +111,7 @@ macro_rules! ser_and_num_impls {
             }
         }
 
-        // Instead of implementing arbitrary methods we can use existing traits from num
+        // Instead of implementing arbitrary methods we can use existing traits from num_trait
         // crate.
         impl WrappingAdd for $type {
             fn wrapping_add(&self, other: &$type) -> $type {
@@ -124,6 +124,76 @@ macro_rules! ser_and_num_impls {
                 self.overflowing_sub(*other).0
             }
         }
+
+        impl AsPrimitive<$type> for i32 {
+            fn as_(self) -> $type {
+                if self >= 0 {
+                    $type::from(self as u64)
+                } else {
+                    let abs = 0u64 - self as u64;
+                    $type::zero().wrapping_sub(&$type::from(abs))
+                }
+            }
+        }
+
+        impl AsPrimitive<$type> for i64 {
+            fn as_(self) -> $type {
+                if self >= 0 {
+                    $type::from(self as u64)
+                } else {
+                    let abs = 0u64 - self as u64;
+                    $type::zero().wrapping_sub(&$type::from(abs))
+                }
+            }
+        }
+
+        impl AsPrimitive<$type> for u8 {
+            fn as_(self) -> $type {
+                $type::from(self)
+            }
+        }
+
+        impl AsPrimitive<$type> for u32 {
+            fn as_(self) -> $type {
+                $type::from(self)
+            }
+        }
+
+        impl AsPrimitive<$type> for u64 {
+            fn as_(self) -> $type {
+                $type::from(self)
+            }
+        }
+
+        impl AsPrimitive<i32> for $type {
+            fn as_(self) -> i32 {
+                self.0[0] as i32
+            }
+        }
+
+        impl AsPrimitive<i64> for $type {
+            fn as_(self) -> i64 {
+                self.0[0] as i64
+            }
+        }
+
+        impl AsPrimitive<u8> for $type {
+            fn as_(self) -> u8 {
+                self.0[0] as u8
+            }
+        }
+
+        impl AsPrimitive<u32> for $type {
+            fn as_(self) -> u32 {
+                self.0[0] as u32
+            }
+        }
+
+        impl AsPrimitive<u64> for $type {
+            fn as_(self) -> u64 {
+                self.0[0]
+            }
+        }
     };
 }
 
@@ -131,35 +201,106 @@ ser_and_num_impls!(U128, 16);
 ser_and_num_impls!(U256, 32);
 ser_and_num_impls!(U512, 64);
 
-#[test]
-fn wrapping_test_u512() {
-    let max = U512::max_value();
-    let value = max.wrapping_add(&1.into());
-    assert_eq!(value, 0.into());
-
-    let min = U512::min_value();
-    let value = min.wrapping_sub(&1.into());
-    assert_eq!(value, U512::max_value());
+impl AsPrimitive<U128> for U128 {
+    fn as_(self) -> U128 {
+        self
+    }
 }
 
-#[test]
-fn wrapping_test_u256() {
-    let max = U256::max_value();
-    let value = max.wrapping_add(&1.into());
-    assert_eq!(value, 0.into());
-
-    let min = U256::min_value();
-    let value = min.wrapping_sub(&1.into());
-    assert_eq!(value, U256::max_value());
+impl AsPrimitive<U256> for U128 {
+    fn as_(self) -> U256 {
+        let mut result = U256::zero();
+        result.0[..2].clone_from_slice(&self.0[..2]);
+        result
+    }
 }
 
-#[test]
-fn wrapping_test_u128() {
-    let max = U128::max_value();
-    let value = max.wrapping_add(&1.into());
-    assert_eq!(value, 0.into());
+impl AsPrimitive<U512> for U128 {
+    fn as_(self) -> U512 {
+        let mut result = U512::zero();
+        result.0[..2].clone_from_slice(&self.0[..2]);
+        result
+    }
+}
 
-    let min = U128::min_value();
-    let value = min.wrapping_sub(&1.into());
-    assert_eq!(value, U128::max_value());
+impl AsPrimitive<U128> for U256 {
+    fn as_(self) -> U128 {
+        let mut result = U128::zero();
+        result.0[..2].clone_from_slice(&self.0[..2]);
+        result
+    }
+}
+
+impl AsPrimitive<U256> for U256 {
+    fn as_(self) -> U256 {
+        self
+    }
+}
+
+impl AsPrimitive<U512> for U256 {
+    fn as_(self) -> U512 {
+        let mut result = U512::zero();
+        result.0[..4].clone_from_slice(&self.0[..4]);
+        result
+    }
+}
+
+impl AsPrimitive<U128> for U512 {
+    fn as_(self) -> U128 {
+        let mut result = U128::zero();
+        result.0[..2].clone_from_slice(&self.0[..2]);
+        result
+    }
+}
+
+impl AsPrimitive<U256> for U512 {
+    fn as_(self) -> U256 {
+        let mut result = U256::zero();
+        result.0[..4].clone_from_slice(&self.0[..4]);
+        result
+    }
+}
+
+impl AsPrimitive<U512> for U512 {
+    fn as_(self) -> U512 {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapping_test_u512() {
+        let max = U512::max_value();
+        let value = max.wrapping_add(&1.into());
+        assert_eq!(value, 0.into());
+
+        let min = U512::min_value();
+        let value = min.wrapping_sub(&1.into());
+        assert_eq!(value, U512::max_value());
+    }
+
+    #[test]
+    fn wrapping_test_u256() {
+        let max = U256::max_value();
+        let value = max.wrapping_add(&1.into());
+        assert_eq!(value, 0.into());
+
+        let min = U256::min_value();
+        let value = min.wrapping_sub(&1.into());
+        assert_eq!(value, U256::max_value());
+    }
+
+    #[test]
+    fn wrapping_test_u128() {
+        let max = U128::max_value();
+        let value = max.wrapping_add(&1.into());
+        assert_eq!(value, 0.into());
+
+        let min = U128::min_value();
+        let value = min.wrapping_sub(&1.into());
+        assert_eq!(value, U128::max_value());
+    }
 }

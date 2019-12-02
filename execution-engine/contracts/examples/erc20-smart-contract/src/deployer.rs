@@ -45,9 +45,9 @@ fn deploy_token(name: &str, initial_balance: U512) {
     );
 
     // Save it under a new TURef.
-    let token_turef: TURef<Key> = storage::new_turef(token_ref.into());
+    let token_turef: TURef<Key> = storage::new_turef(&token_ref.into());
 
-    // Save TURef under readalbe name.
+    // Save TURef under readable name.
     runtime::put_key(&name, &token_turef.into());
 }
 
@@ -57,8 +57,8 @@ fn deploy_proxy() {
         storage::store_function_at_hash(ERC20_PROXY_CONTRACT_NAME, Default::default());
 
     // Save it under a new TURef.
-    let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
+    let proxy_turef: TURef<Key> = storage::new_turef(&proxy_ref.into());
 
-    // Save TURef under readalbe name.
+    // Save TURef under readable name.
     runtime::put_key(ERC20_PROXY_CONTRACT_NAME, &proxy_turef.into());
 }

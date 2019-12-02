@@ -7,7 +7,7 @@ use alloc::vec;
 use contract_ffi::{
     contract_api::{runtime, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::uint::U512,
+    value::U512,
 };
 
 const UNBOND_METHOD_NAME: &str = "unbond";

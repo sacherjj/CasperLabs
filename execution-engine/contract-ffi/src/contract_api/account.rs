@@ -2,13 +2,12 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 
 use super::to_ptr;
-pub use crate::value::account::PublicKey;
 use crate::{
     bytesrepr::deserialize,
     contract_api, ext_ffi,
     unwrap_or_revert::UnwrapOrRevert,
     value::account::{
-        ActionType, AddKeyFailure, PurseId, RemoveKeyFailure, SetThresholdFailure,
+        ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight, PURSE_ID_SIZE_SERIALIZED,
     },
 };

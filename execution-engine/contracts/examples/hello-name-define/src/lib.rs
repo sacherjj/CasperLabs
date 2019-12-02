@@ -7,7 +7,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const HELLO_NAME_EXT: &str = "hello_name_ext";

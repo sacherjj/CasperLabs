@@ -3,6 +3,7 @@ use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
 #[rustfmt::skip]
 use alloc::vec;
 use alloc::collections::BTreeMap;
+use core::mem;
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
@@ -10,31 +11,6 @@ use crate::{
     uref::URef,
     value::{U128, U256, U512},
 };
-
-fn serialize_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
-    tag: u8,
-    cl_type_array: T,
-) -> Result<Vec<u8>, bytesrepr::Error> {
-    let mut result = vec![tag];
-    for cl_type in cl_type_array {
-        result.append(&mut cl_type.to_bytes()?);
-    }
-    Ok(result)
-}
-
-fn parse_cl_tuple_types(
-    count: usize,
-    mut bytes: &[u8],
-) -> Result<(VecDeque<Box<CLType>>, &[u8]), bytesrepr::Error> {
-    let mut cl_types = VecDeque::with_capacity(count);
-    for _ in 0..count {
-        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
-        cl_types.push_back(Box::new(cl_type));
-        bytes = remainder;
-    }
-
-    Ok((cl_types, bytes))
-}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLType {
@@ -84,6 +60,48 @@ pub enum CLType {
     Tuple8([Box<CLType>; 8]),
     Tuple9([Box<CLType>; 9]),
     Tuple10([Box<CLType>; 10]),
+}
+
+impl CLType {
+    /// The `len()` of the `Vec<u8>` resulting from `self.to_bytes()?`.
+    pub fn serialized_len(&self) -> usize {
+        mem::size_of::<CLTypeTag>()
+            + match self {
+                CLType::Bool
+                | CLType::I32
+                | CLType::I64
+                | CLType::U8
+                | CLType::U32
+                | CLType::U64
+                | CLType::U128
+                | CLType::U256
+                | CLType::U512
+                | CLType::Unit
+                | CLType::String
+                | CLType::Key
+                | CLType::URef => 0,
+                CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_len(),
+                CLType::FixedList(cl_type, list_len) => {
+                    cl_type.serialized_len() + list_len.to_le_bytes().len()
+                }
+                CLType::Result { ok, err } => ok.serialized_len() + err.serialized_len(),
+                CLType::Map { key, value } => key.serialized_len() + value.serialized_len(),
+                CLType::Tuple1(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple2(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple3(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple4(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple5(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple6(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple7(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple8(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple9(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+                CLType::Tuple10(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
+            }
+    }
+}
+
+pub fn named_key_type() -> CLType {
+    CLType::Tuple2([Box::new(CLType::String), Box::new(CLType::Key)])
 }
 
 #[repr(u8)]
@@ -363,6 +381,40 @@ impl FromBytes for CLType {
             Err(bytesrepr::Error::FormattingError)
         }
     }
+}
+
+fn serialize_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
+    tag: u8,
+    cl_type_array: T,
+) -> Result<Vec<u8>, bytesrepr::Error> {
+    let mut result = vec![tag];
+    for cl_type in cl_type_array {
+        result.append(&mut cl_type.to_bytes()?);
+    }
+    Ok(result)
+}
+
+fn parse_cl_tuple_types(
+    count: usize,
+    mut bytes: &[u8],
+) -> Result<(VecDeque<Box<CLType>>, &[u8]), bytesrepr::Error> {
+    let mut cl_types = VecDeque::with_capacity(count);
+    for _ in 0..count {
+        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
+        cl_types.push_back(Box::new(cl_type));
+        bytes = remainder;
+    }
+
+    Ok((cl_types, bytes))
+}
+
+fn serialized_len_of_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
+    cl_type_array: T,
+) -> usize {
+    cl_type_array
+        .into_iter()
+        .map(|cl_type| cl_type.serialized_len())
+        .sum()
 }
 
 pub trait CLTyped {
@@ -705,13 +757,14 @@ mod tests {
     use crate::{
         bytesrepr::{FromBytes, ToBytes},
         uref::AccessRights,
-        value::cl_value::CLValue,
+        value::CLValue,
     };
 
     fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug>(value: &T) {
         let cl_value = CLValue::from_t(value).unwrap();
 
         let serialized_cl_value = cl_value.to_bytes().unwrap();
+        assert_eq!(serialized_cl_value.len(), cl_value.serialized_len());
         let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
         assert_eq!(cl_value, parsed_cl_value);
 

@@ -9,7 +9,6 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::Value,
 };
 
 const BAR_KEY: &str = "Bar";
@@ -21,7 +20,7 @@ const TEST_TUREF: &str = "Test";
 #[no_mangle]
 pub extern "C" fn list_named_keys_ext() {
     let passed_in_uref = runtime::get_key(FOO_KEY).unwrap_or_revert_with(Error::GetKey);
-    let uref = storage::new_turef(Value::String(TEST_TUREF.to_owned()));
+    let uref = storage::new_turef(&TEST_TUREF);
     runtime::put_key(BAR_KEY, &uref.clone().into());
     let contracts_named_keys = runtime::list_named_keys();
     let expected_urefs: BTreeMap<String, Key> = {
@@ -36,7 +35,7 @@ pub extern "C" fn list_named_keys_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let turef = storage::new_turef(Value::Int32(1));
+    let turef = storage::new_turef(&1i32);
     runtime::put_key(FOO_KEY, &turef.clone().into());
     let _accounts_named_keys = runtime::list_named_keys();
     let expected_urefs: BTreeMap<String, Key> =

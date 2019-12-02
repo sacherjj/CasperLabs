@@ -9,7 +9,7 @@ use contract_ffi::{
     system_contracts::mint::{Error, PurseIdError},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
-    value::{cl_value::CLValue, U512},
+    value::{CLValue, U512},
 };
 use mint_token::{
     internal_purse_id::{DepositId, WithdrawId},

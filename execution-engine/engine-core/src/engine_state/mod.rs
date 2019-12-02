@@ -22,21 +22,24 @@ use parity_wasm::elements::Module;
 
 use contract_ffi::{
     args_parser::ArgsParser,
+    block_time::BlockTime,
     bytesrepr::ToBytes,
     execution::Phase,
     key::{Key, HASH_SIZE},
     system_contracts::mint,
     uref::{AccessRights, URef, UREF_ADDR_SIZE},
     value::{
-        account::{BlockTime, PublicKey, PurseId},
-        Account, ProtocolVersion, Value, U512,
+        account::{PublicKey, PurseId},
+        ProtocolVersion, U512,
     },
 };
 use engine_shared::{
+    account::Account,
     additive_map::AdditiveMap,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
+    stored_value::StoredValue,
     transform::Transform,
 };
 use engine_storage::{
@@ -159,7 +162,7 @@ where
         let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let value = {
             let virtual_system_account = virtual_system_account.clone();
-            Value::Account(virtual_system_account)
+            StoredValue::Account(virtual_system_account)
         };
 
         tracking_copy.borrow_mut().write(key, value);
@@ -239,7 +242,8 @@ where
                     .collect();
                 let args = (mint_reference, bonded_validators);
                 ArgsParser::parse(&args)
-                    .and_then(|args| args.to_bytes())
+                    .expect("args should convert to `Vec<CLValue>`")
+                    .to_bytes()
                     .expect("args should parse")
             };
             let mut named_keys = BTreeMap::new();
@@ -352,7 +356,8 @@ where
                     let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME, motes);
                     ArgsParser::parse(&args)
-                        .and_then(|args| args.to_bytes())
+                        .expect("args should convert to `Vec<CLValue>`")
+                        .to_bytes()
                         .expect("args should parse")
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
@@ -393,7 +398,7 @@ where
                 let value = {
                     let account_main_purse = mint_result?;
                     let purse_id = PurseId::new(account_main_purse);
-                    Value::Account(Account::create(
+                    StoredValue::Account(Account::create(
                         account_public_key.value(),
                         named_keys,
                         purse_id,
@@ -507,7 +512,7 @@ where
                 let system_account = {
                     let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                     match tracking_copy.borrow_mut().read(correlation_id, &key) {
-                        Ok(Some(Value::Account(account))) => account,
+                        Ok(Some(StoredValue::Account(account))) => account,
                         Ok(_) => panic!("system account must exist"),
                         Err(error) => return Err(Error::ExecError(error.into())),
                     }
@@ -1088,7 +1093,8 @@ where
                 let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
                 let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
                 ArgsParser::parse(&args)
-                    .and_then(|args| args.to_bytes())
+                    .expect("args should convert to `Vec<CLValue>`")
+                    .to_bytes()
                     .expect("args should parse")
             };
 
@@ -1192,7 +1198,7 @@ where
         };
 
         let contract = match reader.read(correlation_id, &proof_of_stake)? {
-            Some(Value::Contract(contract)) => contract,
+            Some(StoredValue::Contract(contract)) => contract,
             _ => return Err(MissingSystemContractError("proof of stake".to_string())),
         };
 

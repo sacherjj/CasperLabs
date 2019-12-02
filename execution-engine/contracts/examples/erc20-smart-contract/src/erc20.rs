@@ -1,10 +1,10 @@
 use alloc::vec;
 
 use contract_ffi::{
-    contract_api::{account::PublicKey, runtime, storage},
+    contract_api::{runtime, storage},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::{cl_value::CLValue, U512},
+    value::{account::PublicKey, CLValue, U512},
 };
 
 use erc20_logic::{ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -20,32 +20,32 @@ struct ERC20Token;
 impl ERC20Trait<U512, PublicKey> for ERC20Token {
     fn read_balance(&mut self, address: &PublicKey) -> Option<U512> {
         let key = Key::local(SEED, &address.value());
-        storage::read_local(key).unwrap_or_revert()
+        storage::read_local(&key).unwrap_or_revert()
     }
 
     fn save_balance(&mut self, address: &PublicKey, balance: U512) {
         let key = Key::local(SEED, &address.value());
-        storage::write_local(key, balance);
+        storage::write_local(key, &balance);
     }
 
     fn read_total_supply(&mut self) -> Option<U512> {
         let key = Key::local(SEED, &TOTAL_SUPPLY_KEY);
-        storage::read_local(key).unwrap_or_revert()
+        storage::read_local(&key).unwrap_or_revert()
     }
 
     fn save_total_supply(&mut self, total_supply: U512) {
         let key = Key::local(SEED, &TOTAL_SUPPLY_KEY);
-        storage::write_local(key, total_supply);
+        storage::write_local(key, &total_supply);
     }
 
     fn read_allowance(&mut self, owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
         let key = Key::local(owner.value(), &spender.value());
-        storage::read_local(key).unwrap_or_revert()
+        storage::read_local(&key).unwrap_or_revert()
     }
 
     fn save_allowance(&mut self, owner: &PublicKey, spender: &PublicKey, amount: U512) {
         let key = Key::local(owner.value(), &spender.value());
-        storage::write_local(key, amount);
+        storage::write_local(key, &amount);
     }
 }
 
@@ -99,12 +99,12 @@ fn entry_point() {
 }
 
 fn is_not_initialized() -> bool {
-    let flag: Option<i32> = storage::read_local(INIT_FLAG_KEY).unwrap_or_revert();
+    let flag: Option<i32> = storage::read_local(&INIT_FLAG_KEY).unwrap_or_revert();
     flag.is_none()
 }
 
 fn mark_as_initialized() {
-    storage::write_local(INIT_FLAG_KEY, 1);
+    storage::write_local(INIT_FLAG_KEY, &1);
 }
 
 #[no_mangle]

@@ -16,7 +16,7 @@ use std::{
 
 use grpc::{RequestOptions, ServerBuilder, SingleResponse};
 
-use contract_ffi::value::{account::BlockTime, ProtocolVersion};
+use contract_ffi::{block_time::BlockTime, value::ProtocolVersion};
 use engine_core::{
     engine_state::{
         deploy_item::DeployItem,
@@ -306,6 +306,11 @@ where
                     logging::log_warning("TypeMismatch");
 
                     ret.set_type_mismatch(type_mismatch.into());
+                }
+                Ok(CommitResult::Serialization(error)) => {
+                    logging::log_warning("Serialization");
+
+                    ret.set_serialization(error.into());
                 }
                 Err(error) => {
                     let log_message = format!("State error {:?} when applying transforms", error);

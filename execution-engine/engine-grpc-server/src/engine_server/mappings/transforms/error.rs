@@ -23,6 +23,9 @@ impl From<transform::Error> for TransformFailure {
             transform::Error::TypeMismatch(type_mismatch) => {
                 pb_transform_failure.set_type_mismatch(type_mismatch.into())
             }
+            transform::Error::Serialization(error) => {
+                pb_transform_failure.set_serialization(error.into())
+            }
         }
         pb_transform_failure
     }
@@ -43,6 +46,9 @@ impl TryFrom<TransformFailure> for transform::Error {
             }) => {
                 let type_mismatch = TypeMismatch { expected, found };
                 Ok(transform::Error::TypeMismatch(type_mismatch))
+            }
+            TransformFailure_oneof_failure_instance::serialization(pb_error) => {
+                Ok(transform::Error::Serialization(pb_error.into()))
             }
         }
     }

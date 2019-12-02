@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use contract_ffi::{
     contract_api::{account, runtime, system, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, uint::U512},
+    value::{account::PurseId, U512},
 };
 
 #[repr(u16)]

@@ -8,18 +8,19 @@ use contract_ffi::{
     key::Key,
     value::{
         account::{PublicKey, PurseId},
-        Value, U512,
+        CLValue, U512,
     },
 };
 
-use engine_shared::gas::Gas;
+use engine_shared::{gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 
 use super::{args::Args, Error, Runtime};
 use crate::resolvers::v1_function_index::FunctionIndex;
 
-impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
+impl<'a, R> Externals for Runtime<'a, R>
 where
+    R: StateReader<Key, StoredValue>,
     R::Error: Into<Error>,
 {
     fn invoke_index(
@@ -45,9 +46,9 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
-            FunctionIndex::SerNamedKeysFuncIndex => {
-                // No args, returns byte size of the known URefs.
-                let size = self.serialize_named_keys()?;
+            FunctionIndex::LoadNamedKeysFuncIndex => {
+                // No args, returns byte size of the named keys which are loaded in `self.host_buf`
+                let size = self.load_named_keys()?;
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
@@ -154,8 +155,8 @@ where
                 let urefs_bytes =
                     self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                self.call_contract(key_contract, args_bytes, urefs_bytes)?;
-                Ok(Some(RuntimeValue::I32(self.host_buf.len() as i32)))
+                let serialized_len = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
+                Ok(Some(RuntimeValue::I32(serialized_len as i32)))
             }
 
             FunctionIndex::GetCallResultFuncIndex => {
@@ -184,7 +185,8 @@ where
             FunctionIndex::PutKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                // args(2) = pointer to destination in Wasm memory
+                // args(2) = pointer to key in Wasm memory
+                // args(3) = size of key
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
@@ -272,11 +274,9 @@ where
                 // args(1) = size of value
                 let (uref_ptr, uref_size) = Args::parse(args)?;
 
-                if self.is_valid_uref(uref_ptr, uref_size)? {
-                    Ok(Some(RuntimeValue::I32(1)))
-                } else {
-                    Ok(Some(RuntimeValue::I32(0)))
-                }
+                Ok(Some(RuntimeValue::I32(i32::from(
+                    self.is_valid_uref(uref_ptr, uref_size)?,
+                ))))
             }
 
             FunctionIndex::RevertFuncIndex => {
@@ -296,7 +296,6 @@ where
 
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
-                // args(1) = size of serialized bytes of public key
                 let public_key_ptr: u32 = Args::parse(args)?;
                 let value = self.remove_associated_key(public_key_ptr)?;
                 Ok(Some(RuntimeValue::I32(value)))
@@ -414,11 +413,13 @@ where
 
                 let ret = match self.get_balance(purse_id)? {
                     Some(balance) => {
-                        let balance_bytes = balance.to_bytes().map_err(Error::BytesRepr)?;
-                        self.host_buf = balance_bytes;
-                        self.host_buf.len() as i32
+                        let balance_as_cl_value =
+                            CLValue::from_t(&balance).map_err(Error::CLValue)?;
+                        let serialized_len = balance_as_cl_value.serialized_len();
+                        self.host_buf = Some(balance_as_cl_value);
+                        serialized_len as i32
                     }
-                    None => 0i32,
+                    None => 0_i32,
                 };
 
                 Ok(Some(RuntimeValue::I32(ret)))

@@ -5,9 +5,9 @@ extern crate alloc;
 use alloc::{string::String, vec};
 
 use contract_ffi::{
-    contract_api::{runtime, storage, ContractRef, Error, TURef},
+    contract_api::{runtime, storage, ContractRef, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
+    uref::{AccessRights, URef},
 };
 
 pub const METHOD_VERSION: &str = "version";
@@ -39,10 +39,8 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::User(CustomError::MissingMethodNameArg as u16))
         .unwrap_or_revert_with(Error::User(CustomError::InvalidMethodNameArg as u16));
 
-    let purse_holder_contract_pointer = ContractRef::TURef(TURef::new(
-        purse_holder_uref.addr(),
-        contract_ffi::uref::AccessRights::READ,
-    ));
+    let purse_holder_contract_pointer =
+        ContractRef::URef(URef::new(purse_holder_uref.addr(), AccessRights::READ));
 
     match method_name.as_str() {
         METHOD_VERSION => {
@@ -53,7 +51,7 @@ pub extern "C" fn call() {
             )
             .to_t()
             .unwrap_or_revert();
-            let version_key = storage::new_turef(version).into();
+            let version_key = storage::new_turef(&version).into();
             runtime::put_key(METHOD_VERSION, &version_key);
         }
         _ => {

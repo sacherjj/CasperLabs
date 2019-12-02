@@ -1,7 +1,5 @@
-use contract_ffi::{
-    key::Key,
-    value::{Value, U512},
-};
+use contract_ffi::{key::Key, value::U512};
+use engine_shared::stored_value::StoredValue;
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -59,7 +57,7 @@ fn should_run_ee_572_regression() {
 
     let contract: Key = {
         let account = match builder.query(None, Key::Account(ACCOUNT_1_ADDR), &[]) {
-            Some(Value::Account(account)) => account,
+            Some(StoredValue::Account(account)) => account,
             _ => panic!("Could not find account at: {:?}", ACCOUNT_1_ADDR),
         };
         *account

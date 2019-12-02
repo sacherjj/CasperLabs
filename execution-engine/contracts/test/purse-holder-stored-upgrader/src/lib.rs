@@ -2,16 +2,13 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::{string::String, vec};
 
 use contract_ffi::{
-    contract_api::{runtime, storage, system, Error, TURef},
+    contract_api::{runtime, storage, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -80,12 +77,10 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(CustomError::MissingPurseHolderURefArg)
         .unwrap_or_revert_with(CustomError::InvalidPurseHolderURefArg);
 
-    let turef = TURef::from_uref(uref).unwrap_or_revert();
-
     // this should overwrite the previous contract obj with the new contract obj at the same uref
-    runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, turef);
+    runtime::upgrade_contract_at_uref(ENTRY_FUNCTION_NAME, uref);
 
     // set new version
-    let version_key = storage::new_turef(VERSION.to_string()).into();
+    let version_key = storage::new_turef(&VERSION).into();
     runtime::put_key(METHOD_VERSION, &version_key);
 }

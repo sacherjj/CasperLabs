@@ -11,6 +11,7 @@ use crate::{
     bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
     contract_api::{ContractRef, TURef},
     uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+    value::CLTyped,
 };
 
 const ACCOUNT_ID: u8 = 0;
@@ -111,7 +112,7 @@ fn decode_from_hex(input: &str) -> Option<[u8; HASH_SIZE]> {
 }
 
 impl Key {
-    pub fn to_turef<T>(self) -> Option<TURef<T>> {
+    pub fn to_turef<T: CLTyped>(self) -> Option<TURef<T>> {
         if let Key::URef(uref) = self {
             TURef::from_uref(uref).ok()
         } else {
@@ -121,7 +122,7 @@ impl Key {
 
     pub fn to_c_ptr(self) -> Option<ContractRef> {
         match self {
-            Key::URef(uref) => TURef::from_uref(uref).map(ContractRef::TURef).ok(),
+            Key::URef(uref) => Some(ContractRef::URef(uref)),
             Key::Hash(id) => Some(ContractRef::Hash(id)),
             _ => None,
         }
@@ -200,7 +201,7 @@ impl From<URef> for Key {
     }
 }
 
-impl<T> From<TURef<T>> for Key {
+impl<T: CLTyped> From<TURef<T>> for Key {
     fn from(turef: TURef<T>) -> Self {
         let uref = URef::new(turef.addr(), turef.access_rights());
         Key::URef(uref)

@@ -9,7 +9,7 @@ use contract_ffi::{
         Error as ApiError,
     },
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, uint::U512},
+    value::{account::PublicKey, U512},
 };
 
 #[repr(u16)]

@@ -1,8 +1,8 @@
 use contract_ffi::{
     key::Key,
-    value::{account::PublicKey, Value},
+    value::{account::PublicKey, CLValue},
 };
-use engine_shared::transform::Transform;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -61,23 +61,23 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     builder.commit();
 
-    let payment_value: Value = builder
+    let payment_value: StoredValue = builder
         .query(None, *pay_uref, &[])
         .expect("should find payment value");
 
     assert_eq!(
         payment_value,
-        Value::String("payment".to_string()),
+        StoredValue::CLValue(CLValue::from_t(&"payment".to_string()).unwrap()),
         "expected payment"
     );
 
-    let session_value: Value = builder
+    let session_value: StoredValue = builder
         .query(None, *session_uref, &[])
         .expect("should find session value");
 
     assert_eq!(
         session_value,
-        Value::String("session".to_string()),
+        StoredValue::CLValue(CLValue::from_t(&"session".to_string()).unwrap()),
         "expected session"
     );
 }

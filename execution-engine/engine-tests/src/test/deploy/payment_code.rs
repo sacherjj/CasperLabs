@@ -1,15 +1,15 @@
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use contract_ffi::{
     bytesrepr::ToBytes,
     key::Key,
     value::{
         account::{PublicKey, PurseId},
-        Value, U512,
+        CLValue, U512,
     },
 };
 use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
-use engine_shared::{gas::Gas, motes::Motes, transform::Transform};
+use engine_shared::{gas::Gas, motes::Motes, stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{
@@ -118,8 +118,10 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
     let transform = &transforms[0];
 
     for t in transform.values() {
-        if let Transform::Write(Value::UInt512(v)) = t {
-            modified_balance = Some(*v);
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
+            if let Ok(v) = cl_value.to_t() {
+                modified_balance = Some(v);
+            }
         }
         if let Transform::AddUInt512(v) = t {
             reward_balance = Some(*v);
@@ -207,8 +209,10 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
     let mut reward_balance: Option<U512> = None;
 
     for t in transform.values() {
-        if let Transform::Write(Value::UInt512(v)) = t {
-            modified_balance = Some(*v);
+        if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
+            if let Ok(v) = cl_value.to_t() {
+                modified_balance = Some(v);
+            }
         }
         if let Transform::AddUInt512(v) = t {
             reward_balance = Some(*v);
@@ -705,12 +709,14 @@ fn should_charge_non_main_purse() {
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.to_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.to_t().ok())
             .expect("should parse balance into a U512");
 
         balance
@@ -767,12 +773,14 @@ fn should_charge_non_main_purse() {
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.to_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.to_t().ok())
             .expect("should parse balance into a U512");
 
         balance

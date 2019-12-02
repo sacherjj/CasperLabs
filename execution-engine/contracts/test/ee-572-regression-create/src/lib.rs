@@ -2,18 +2,15 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
-use core::{clone::Clone, convert::Into};
+use alloc::vec;
+use core::convert::Into;
 
 use contract_ffi::{
     contract_api::{runtime, storage, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const DATA: &str = "data";
@@ -21,10 +18,10 @@ const CONTRACT_NAME: &str = "create";
 
 #[no_mangle]
 pub extern "C" fn create() {
-    let reference: TURef<String> = storage::new_turef(DATA.to_string());
+    let reference: TURef<&str> = storage::new_turef(&DATA);
 
     let read_only_reference: URef = {
-        let mut ret: TURef<String> = reference.clone();
+        let mut ret: TURef<&str> = reference;
         ret.set_access_rights(AccessRights::READ);
         ret.into()
     };

@@ -1,10 +1,15 @@
+use std::convert::TryInto;
+
 use contract_ffi::{
     bytesrepr::ToBytes,
     key::Key,
     uref::URef,
-    value::{Account, Contract, Value},
+    value::{CLValue, U512},
 };
-use engine_shared::{motes::Motes, newtypes::CorrelationId, transform::TypeMismatch};
+use engine_shared::{
+    account::Account, contract::Contract, motes::Motes, newtypes::CorrelationId,
+    stored_value::StoredValue, transform::TypeMismatch,
+};
 use engine_storage::global_state::StateReader;
 
 use crate::{
@@ -45,8 +50,9 @@ pub trait TrackingCopyExt<R> {
     ) -> Result<Contract, Self::Error>;
 }
 
-impl<R: StateReader<Key, Value>> TrackingCopyExt<R> for TrackingCopy<R>
+impl<R> TrackingCopyExt<R> for TrackingCopy<R>
 where
+    R: StateReader<Key, StoredValue>,
     R::Error: Into<execution::Error>,
 {
     type Error = execution::Error;
@@ -58,10 +64,10 @@ where
     ) -> Result<Account, Self::Error> {
         let account_key = Key::Account(account_address);
         match self.get(correlation_id, &account_key).map_err(Into::into)? {
-            Some(Value::Account(account)) => Ok(account),
+            Some(StoredValue::Account(account)) => Ok(account),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Account".to_string(),
-                other.type_string(),
+                other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(account_key)),
         }
@@ -82,10 +88,12 @@ where
             .query(correlation_id, balance_mapping_key, &[])
             .map_err(Into::into)?
         {
-            TrackingCopyQueryResult::Success(Value::Key(key)) => Ok(key),
-            TrackingCopyQueryResult::Success(other) => Err(execution::Error::TypeMismatch(
-                TypeMismatch::new("Value::Key".to_string(), other.type_string()),
-            )),
+            TrackingCopyQueryResult::Success(stored_value) => {
+                let cl_value: CLValue = stored_value
+                    .try_into()
+                    .map_err(execution::Error::TypeMismatch)?;
+                Ok(cl_value.to_t()?)
+            }
             TrackingCopyQueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
         }
     }
@@ -100,10 +108,13 @@ where
             Err(_) => return Err(execution::Error::KeyNotFound(key)),
         };
         match query_result {
-            TrackingCopyQueryResult::Success(Value::UInt512(balance)) => Ok(Motes::new(balance)),
-            TrackingCopyQueryResult::Success(other) => Err(execution::Error::TypeMismatch(
-                TypeMismatch::new("Value::UInt512".to_string(), other.type_string()),
-            )),
+            TrackingCopyQueryResult::Success(stored_value) => {
+                let cl_value: CLValue = stored_value
+                    .try_into()
+                    .map_err(execution::Error::TypeMismatch)?;
+                let balance: U512 = cl_value.to_t()?;
+                Ok(Motes::new(balance))
+            }
             TrackingCopyQueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),
         }
     }
@@ -117,10 +128,10 @@ where
             .get(correlation_id, &key.normalize())
             .map_err(Into::into)?
         {
-            Some(Value::Contract(contract)) => Ok(contract),
+            Some(StoredValue::Contract(contract)) => Ok(contract),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Value::Contract".to_string(),
-                other.type_string(),
+                other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(key)),
         }

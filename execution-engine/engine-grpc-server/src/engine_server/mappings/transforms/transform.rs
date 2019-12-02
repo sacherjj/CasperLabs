@@ -1,7 +1,10 @@
 use std::convert::{TryFrom, TryInto};
 
-use contract_ffi::value::Value;
-use engine_shared::transform::{Error as TransformError, Transform};
+use contract_ffi::value::{CLType, CLValue, U128, U256, U512};
+use engine_shared::{
+    stored_value::StoredValue,
+    transform::{Error as TransformError, Transform},
+};
 
 use crate::engine_server::{
     mappings::{state::NamedKeyMap, ParsingError},
@@ -60,11 +63,26 @@ impl TryFrom<transforms::Transform> for Transform {
             Transform_oneof_transform_instance::add_i32(pb_add_int32) => pb_add_int32.value.into(),
             Transform_oneof_transform_instance::add_u64(pb_add_u64) => pb_add_u64.value.into(),
             Transform_oneof_transform_instance::add_big_int(mut pb_big_int) => {
-                let value = pb_big_int.take_value().try_into()?;
-                match value {
-                    Value::UInt128(uint128) => uint128.into(),
-                    Value::UInt256(uint256) => uint256.into(),
-                    Value::UInt512(uint512) => uint512.into(),
+                let cl_value: CLValue = pb_big_int.take_value().try_into()?;
+                match cl_value.cl_type() {
+                    CLType::U128 => {
+                        let u128: U128 = cl_value
+                            .to_t()
+                            .map_err(|error| ParsingError(format!("{:?}", error)))?;
+                        u128.into()
+                    }
+                    CLType::U256 => {
+                        let u256: U256 = cl_value
+                            .to_t()
+                            .map_err(|error| ParsingError(format!("{:?}", error)))?;
+                        u256.into()
+                    }
+                    CLType::U512 => {
+                        let u512: U512 = cl_value
+                            .to_t()
+                            .map_err(|error| ParsingError(format!("{:?}", error)))?;
+                        u512.into()
+                    }
                     other => {
                         return Err(ParsingError(format!(
                             "Protobuf BigInt was turned into a non-uint Value type: {:?}",
@@ -74,7 +92,7 @@ impl TryFrom<transforms::Transform> for Transform {
                 }
             }
             Transform_oneof_transform_instance::write(mut pb_write) => {
-                let value = Value::try_from(pb_write.take_value())?;
+                let value = StoredValue::try_from(pb_write.take_value())?;
                 Transform::Write(value)
             }
             Transform_oneof_transform_instance::failure(pb_failure) => {

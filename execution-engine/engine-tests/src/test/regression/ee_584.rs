@@ -1,5 +1,4 @@
-use contract_ffi::value::Value;
-use engine_shared::transform::Transform;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -27,10 +26,12 @@ fn should_run_ee_584_no_errored_session_transforms() {
 
     assert!(transforms[0]
         .iter()
-        .find(|(_, t)| if let Transform::Write(Value::String(s)) = t {
-            s == "Hello, World!"
-        } else {
-            false
-        })
+        .find(
+            |(_, t)| if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
+                cl_value.to_t::<String>().unwrap_or_default() == "Hello, World!"
+            } else {
+                false
+            }
+        )
         .is_none());
 }

@@ -1,11 +1,10 @@
 use proptest::{collection::vec, option, prelude::*};
 
-use contract_ffi::{
-    gens::{key_arb, value_arb},
-    key::Key,
-    value::Value,
+use contract_ffi::{gens::key_arb, key::Key};
+use engine_shared::{
+    newtypes::Blake2bHash,
+    stored_value::{gens::stored_value_arb, StoredValue},
 };
-use engine_shared::newtypes::Blake2bHash;
 
 use super::{Pointer, PointerBlock, Trie};
 
@@ -28,9 +27,9 @@ pub fn trie_pointer_block_arb() -> impl Strategy<Value = PointerBlock> {
     }))
 }
 
-pub fn trie_arb() -> impl Strategy<Value = Trie<Key, Value>> {
+pub fn trie_arb() -> impl Strategy<Value = Trie<Key, StoredValue>> {
     prop_oneof![
-        (key_arb(), value_arb()).prop_map(|(key, value)| Trie::Leaf { key, value }),
+        (key_arb(), stored_value_arb()).prop_map(|(key, value)| Trie::Leaf { key, value }),
         trie_pointer_block_arb().prop_map(|pointer_block| Trie::Node {
             pointer_block: Box::new(pointer_block)
         }),

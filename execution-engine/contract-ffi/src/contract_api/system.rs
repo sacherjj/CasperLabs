@@ -1,14 +1,17 @@
 use alloc::vec::Vec;
 use core::{fmt::Debug, u8};
 
-use super::{alloc_bytes, error::Error, runtime::revert, to_ptr, ContractRef, TURef};
 use crate::{
     bytesrepr::deserialize,
-    contract_api::{error::result_from, runtime},
+    contract_api::{
+        self,
+        error::{self, Error},
+        runtime, ContractRef,
+    },
     ext_ffi,
     system_contracts::SystemContract,
     unwrap_or_revert::UnwrapOrRevert,
-    uref::UREF_SIZE_SERIALIZED,
+    uref::{URef, UREF_SIZE_SERIALIZED},
     value::{
         account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED},
         U512,
@@ -22,7 +25,7 @@ pub const POS_NAME: &str = "pos";
 
 fn get_system_contract(system_contract: SystemContract) -> ContractRef {
     let system_contract_index = system_contract.into();
-    let uref = {
+    let uref: URef = {
         let result = {
             let mut uref_data_raw = [0u8; UREF_SIZE_SERIALIZED];
             let value = unsafe {
@@ -32,15 +35,17 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
                     uref_data_raw.len(),
                 )
             };
-            result_from(value).map(|_| uref_data_raw)
+            error::result_from(value).map(|_| uref_data_raw)
         };
         // Revert for any possible error that happened on host side
-        let uref_bytes = result.unwrap_or_else(|e| revert(e));
+        let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e));
         // Deserializes a valid URef passed from the host side
         deserialize(&uref_bytes).unwrap_or_revert()
     };
-    let reference = TURef::from_uref(uref).unwrap_or_else(|_| revert(Error::NoAccessRights));
-    ContractRef::TURef(reference)
+    if uref.access_rights().is_none() {
+        runtime::revert(Error::NoAccessRights);
+    }
+    ContractRef::URef(uref)
 }
 
 /// Returns a read-only pointer to the Mint Contract.  Any failure will trigger `revert()` with a
@@ -56,7 +61,7 @@ pub fn get_proof_of_stake() -> ContractRef {
 }
 
 pub fn create_purse() -> PurseId {
-    let purse_id_ptr = alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let purse_id_ptr = contract_api::alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
     unsafe {
         let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SIZE_SERIALIZED);
         if ret == 0 {
@@ -74,14 +79,14 @@ pub fn create_purse() -> PurseId {
 
 /// Gets the balance of a given purse
 pub fn get_balance(purse_id: PurseId) -> Option<U512> {
-    let (purse_id_ptr, purse_id_size, _bytes) = to_ptr(&purse_id);
+    let (purse_id_ptr, purse_id_size, _bytes) = contract_api::to_ptr(&purse_id);
 
     let balance_bytes: Vec<u8> = unsafe {
         let value_size = ext_ffi::get_balance(purse_id_ptr, purse_id_size) as usize;
         if value_size == 0 {
             return None;
         }
-        let dest_ptr = alloc_bytes(value_size);
+        let dest_ptr = contract_api::alloc_bytes(value_size);
         ext_ffi::get_read(dest_ptr);
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
@@ -118,8 +123,8 @@ impl TransferredTo {
 /// Transfers `amount` of motes from default purse of the account to `target`
 /// account. If `target` does not exist it will create it.
 pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
-    let (target_ptr, target_size, _bytes) = to_ptr(&target);
-    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    let (target_ptr, target_size, _bytes1) = contract_api::to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes2) = contract_api::to_ptr(&amount);
     let return_code =
         unsafe { ext_ffi::transfer_to_account(target_ptr, target_size, amount_ptr, amount_size) };
     TransferredTo::result_from(return_code)
@@ -132,9 +137,9 @@ pub fn transfer_from_purse_to_account(
     target: PublicKey,
     amount: U512,
 ) -> TransferResult {
-    let (source_ptr, source_size, _bytes) = to_ptr(&source);
-    let (target_ptr, target_size, _bytes) = to_ptr(&target);
-    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    let (source_ptr, source_size, _bytes1) = contract_api::to_ptr(&source);
+    let (target_ptr, target_size, _bytes2) = contract_api::to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes3) = contract_api::to_ptr(&amount);
     let return_code = unsafe {
         ext_ffi::transfer_from_purse_to_account(
             source_ptr,
@@ -154,9 +159,9 @@ pub fn transfer_from_purse_to_purse(
     target: PurseId,
     amount: U512,
 ) -> Result<(), Error> {
-    let (source_ptr, source_size, _bytes) = to_ptr(&source);
-    let (target_ptr, target_size, _bytes) = to_ptr(&target);
-    let (amount_ptr, amount_size, _bytes) = to_ptr(&amount);
+    let (source_ptr, source_size, _bytes1) = contract_api::to_ptr(&source);
+    let (target_ptr, target_size, _bytes2) = contract_api::to_ptr(&target);
+    let (amount_ptr, amount_size, _bytes3) = contract_api::to_ptr(&amount);
     let result = unsafe {
         ext_ffi::transfer_from_purse_to_purse(
             source_ptr,

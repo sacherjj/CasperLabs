@@ -9,7 +9,7 @@ use crate::{
     system_contracts::{mint, pos},
     value::{
         account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-        cl_value,
+        CLValueError,
     },
 };
 
@@ -191,11 +191,11 @@ impl From<AccessRightsError> for Error {
     }
 }
 
-impl From<cl_value::Error> for Error {
-    fn from(error: cl_value::Error) -> Self {
+impl From<CLValueError> for Error {
+    fn from(error: CLValueError) -> Self {
         match error {
-            cl_value::Error::Serialization(bytesrepr_error) => bytesrepr_error.into(),
-            cl_value::Error::Type(_) => Error::CLTypeMismatch,
+            CLValueError::Serialization(bytesrepr_error) => bytesrepr_error.into(),
+            CLValueError::Type(_) => Error::CLTypeMismatch,
         }
     }
 }

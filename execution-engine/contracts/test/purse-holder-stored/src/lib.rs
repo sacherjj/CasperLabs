@@ -4,15 +4,12 @@ extern crate alloc;
 
 #[cfg(not(feature = "lib"))]
 use alloc::collections::BTreeMap;
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::{string::String, vec};
 
 use contract_ffi::{
     contract_api::{runtime, storage, system, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "apply_method";
@@ -62,13 +59,13 @@ pub extern "C" fn apply_method() {
 #[no_mangle]
 pub extern "C" fn call() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
-        .into_turef()
+        .into_uref()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
     runtime::put_key(CONTRACT_NAME, &key);
 
     // set version
-    let version_key = storage::new_turef(VERSION.to_string()).into();
+    let version_key = storage::new_turef(&VERSION).into();
     runtime::put_key(METHOD_VERSION, &version_key);
 }

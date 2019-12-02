@@ -19,7 +19,7 @@ pub extern "C" fn call() {
     let value: String = runtime::call_contract(mint_pointer, &(NEW_ENDPOINT_NAME,), &vec![])
         .to_t()
         .unwrap_or_revert();
-    let value_turef = storage::new_turef(value);
+    let value_turef = storage::new_turef(&value);
     let key = Key::URef(value_turef.into());
     runtime::put_key(RESULT_TUREF_NAME, &key);
 }

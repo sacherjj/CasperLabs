@@ -7,7 +7,6 @@ use alloc::{string::String, vec::Vec};
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::Value,
 };
 
 const HELLO_NAME_KEY: &str = "hello_name";
@@ -27,8 +26,5 @@ pub extern "C" fn call() {
     assert_eq!("Hello, World", result);
 
     // Store the result at a uref so it can be seen as an effect on the global state
-    runtime::put_key(
-        HELLOWORLD_KEY,
-        &storage::new_turef(Value::String(result)).into(),
-    );
+    runtime::put_key(HELLOWORLD_KEY, &storage::new_turef(&result).into());
 }

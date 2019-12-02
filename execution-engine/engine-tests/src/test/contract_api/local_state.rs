@@ -1,5 +1,5 @@
-use contract_ffi::{bytesrepr::ToBytes, key::Key, value::Value};
-use engine_shared::transform::Transform;
+use contract_ffi::{bytesrepr::ToBytes, key::Key, value::CLValue};
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
@@ -37,13 +37,17 @@ fn should_run_local_state_contract() {
         transforms[0]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
-        &Transform::Write(Value::String(String::from("Hello, world!")))
+        &Transform::Write(StoredValue::CLValue(
+            CLValue::from_t(&String::from("Hello, world!")).unwrap()
+        ))
     );
 
     assert_eq!(
         transforms[1]
             .get(&expected_local_key)
             .expect("Should have expected local key"),
-        &Transform::Write(Value::String(String::from("Hello, world! Hello, world!")))
+        &Transform::Write(StoredValue::CLValue(
+            CLValue::from_t(&String::from("Hello, world! Hello, world!")).unwrap()
+        ))
     );
 }

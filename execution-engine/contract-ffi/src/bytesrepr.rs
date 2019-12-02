@@ -967,11 +967,6 @@ mod proptests {
         }
 
         #[test]
-        fn test_value_account(acct in account_arb()) {
-            bytesrepr::test_serialization_roundtrip(&acct)
-        }
-
-        #[test]
         fn test_u128_serialization(u in u128_arb()) {
             bytesrepr::test_serialization_roundtrip(&u);
         }
@@ -992,8 +987,8 @@ mod proptests {
         }
 
         #[test]
-        fn test_value_serialization(v in value_arb()) {
-            bytesrepr::test_serialization_roundtrip(&v);
+        fn test_cl_value_serialization(cl_value in cl_value_arb()) {
+            bytesrepr::test_serialization_roundtrip(&cl_value);
         }
 
         #[test]

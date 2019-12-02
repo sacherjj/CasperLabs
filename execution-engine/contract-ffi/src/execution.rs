@@ -6,7 +6,10 @@ use alloc::vec::Vec;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use crate::bytesrepr::{Error, FromBytes, ToBytes};
+use crate::{
+    bytesrepr::{Error, FromBytes, ToBytes},
+    value::{CLType, CLTyped},
+};
 
 pub const PHASE_SIZE: usize = 1;
 
@@ -32,5 +35,11 @@ impl FromBytes for Phase {
         let (id, rest): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         let phase = FromPrimitive::from_u8(id).ok_or(Error::FormattingError)?;
         Ok((phase, rest))
+    }
+}
+
+impl CLTyped for Phase {
+    fn cl_type() -> CLType {
+        CLType::U8
     }
 }

@@ -5,7 +5,7 @@ use crate::capabilities::{Addable, Readable, Writable};
 pub trait Mint<A, RW>
 where
     A: Addable<U512>,
-    RW: Readable<U512> + Writable<U512>,
+    RW: Readable<U512> + Writable<U512> + Clone,
 {
     type PurseId;
     type DepOnlyId;
@@ -26,14 +26,14 @@ where
         amount: U512,
     ) -> Result<(), Error> {
         let source_bal = self.lookup(source).ok_or(Error::SourceNotFound)?;
-        let source_value = source_bal.read();
+        let source_value = source_bal.clone().read();
         if amount > source_value {
             return Err(Error::InsufficientFunds);
         }
 
         let dest_bal = self.dep_lookup(dest).ok_or(Error::DestNotFound)?;
-        source_bal.write(source_value - amount);
-        dest_bal.add(amount);
+        source_bal.write(&(source_value - amount));
+        dest_bal.add(&amount);
         Ok(())
     }
 }
@@ -41,10 +41,7 @@ where
 #[cfg(test)]
 mod tests {
     use alloc::{collections::BTreeMap, rc::Rc};
-    use core::{
-        cell::{Cell, RefCell},
-        ops::Add,
-    };
+    use core::cell::{Cell, RefCell};
 
     use contract_ffi::value::U512;
 
@@ -58,39 +55,21 @@ mod tests {
 
     type Balance = Rc<Cell<U512>>;
 
-    impl<T: Copy> Readable<T> for Cell<T> {
-        fn read(&self) -> T {
+    impl Readable<U512> for Balance {
+        fn read(self) -> U512 {
             self.get()
         }
     }
 
-    impl<T> Writable<T> for Cell<T> {
-        fn write(&self, t: T) {
-            self.set(t);
+    impl Writable<U512> for Balance {
+        fn write(self, value: &U512) {
+            self.set(*value);
         }
     }
 
-    impl<T: Add<Output = T> + Copy> Addable<T> for Cell<T> {
-        fn add(&self, t: T) {
-            self.update(|x| x + t);
-        }
-    }
-
-    impl<T, R: Readable<T>> Readable<T> for Rc<R> {
-        fn read(&self) -> T {
-            R::read(self)
-        }
-    }
-
-    impl<T, W: Writable<T>> Writable<T> for Rc<W> {
-        fn write(&self, t: T) {
-            W::write(self, t)
-        }
-    }
-
-    impl<T, A: Addable<T>> Addable<T> for Rc<A> {
-        fn add(&self, t: T) {
-            A::add(self, t)
+    impl Addable<U512> for Balance {
+        fn add(self, value: &U512) {
+            self.update(|x| x + *value);
         }
     }
 

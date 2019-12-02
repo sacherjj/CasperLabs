@@ -8,11 +8,17 @@ use contract_ffi::{
     key::Key,
     uref::{AccessRights, URef},
     value::{
-        account::{AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE},
-        Account, Contract, ProtocolVersion, Value,
+        account::{PublicKey, PurseId, Weight, KEY_SIZE},
+        CLValue, ProtocolVersion,
     },
 };
-use engine_shared::{newtypes::CorrelationId, transform::Transform};
+use engine_shared::{
+    account::{Account, AssociatedKeys},
+    contract::Contract,
+    newtypes::CorrelationId,
+    stored_value::{gens::stored_value_arb, StoredValue},
+    transform::Transform,
+};
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 
 use super::{
@@ -22,7 +28,7 @@ use crate::engine_state::op::Op;
 
 struct CountingDb {
     count: Rc<Cell<i32>>,
-    value: Option<Value>,
+    value: Option<StoredValue>,
 }
 
 impl CountingDb {
@@ -33,7 +39,7 @@ impl CountingDb {
         }
     }
 
-    fn new_init(v: Value) -> CountingDb {
+    fn new_init(v: StoredValue) -> CountingDb {
         CountingDb {
             count: Rc::new(Cell::new(0)),
             value: Some(v),
@@ -41,17 +47,17 @@ impl CountingDb {
     }
 }
 
-impl StateReader<Key, Value> for CountingDb {
+impl StateReader<Key, StoredValue> for CountingDb {
     type Error = !;
     fn read(
         &self,
         _correlation_id: CorrelationId,
         _key: &Key,
-    ) -> Result<Option<Value>, Self::Error> {
+    ) -> Result<Option<StoredValue>, Self::Error> {
         let count = self.count.get();
         let value = match self.value {
             Some(ref v) => v.clone(),
-            None => Value::Int32(count),
+            None => StoredValue::CLValue(CLValue::from_t(&count).unwrap()),
         };
         self.count.set(count + 1);
         Ok(Some(value))
@@ -76,7 +82,7 @@ fn tracking_copy_caching() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let zero = Value::Int32(0);
+    let zero = StoredValue::CLValue(CLValue::from_t(&0_i32).unwrap());
     // first read
     let value = tc.read(correlation_id, &k).unwrap().unwrap();
     assert_eq!(value, zero);
@@ -97,7 +103,7 @@ fn tracking_copy_read() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let zero = Value::Int32(0);
+    let zero = StoredValue::CLValue(CLValue::from_t(&0_i32).unwrap());
     let value = tc.read(correlation_id, &k).unwrap().unwrap();
     // value read correctly
     assert_eq!(value, zero);
@@ -116,8 +122,8 @@ fn tracking_copy_write() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let one = Value::Int32(1);
-    let two = Value::Int32(2);
+    let one = StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap());
+    let two = StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap());
 
     // writing should work
     tc.write(k, one.clone());
@@ -149,7 +155,7 @@ fn tracking_copy_add_i32() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let three = Value::Int32(3);
+    let three = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
 
     // adding should work
     let add = tc.add(correlation_id, k, three.clone());
@@ -176,30 +182,32 @@ fn tracking_copy_add_named_key() {
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
-    let account = contract_ffi::value::Account::new(
+    let account = Account::new(
         [0u8; KEY_SIZE],
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
         Default::default(),
     );
-    let db = CountingDb::new_init(Value::Account(account));
+    let db = CountingDb::new_init(StoredValue::Account(account));
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
     let u1 = Key::URef(URef::new([1u8; 32], AccessRights::READ_WRITE));
     let u2 = Key::URef(URef::new([2u8; 32], AccessRights::READ_WRITE));
 
-    let named_key = Value::NamedKey("test".to_string(), u1);
-    let other_named_key = Value::NamedKey("test2".to_string(), u2);
+    let name1 = "test".to_string();
+    let named_key = StoredValue::CLValue(CLValue::from_t(&(name1.clone(), u1)).unwrap());
+    let name2 = "test2".to_string();
+    let other_named_key = StoredValue::CLValue(CLValue::from_t(&(name2.clone(), u2)).unwrap());
     let mut map: BTreeMap<String, Key> = BTreeMap::new();
-    // This is written as an `if`, but it is clear from the line
-    // where `named_key` is defined that it will always match
-    if let Value::NamedKey(name, key) = named_key.clone() {
-        map.insert(name, key);
-    }
+    map.insert(name1, u1);
 
     // adding the wrong type should fail
-    let failed_add = tc.add(correlation_id, k, Value::Int32(3));
+    let failed_add = tc.add(
+        correlation_id,
+        k,
+        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+    );
     assert_matches!(failed_add, Ok(AddResult::TypeMismatch(_)));
     assert_eq!(tc.ops.is_empty(), true);
     assert_eq!(tc.fns.is_empty(), true);
@@ -215,9 +223,7 @@ fn tracking_copy_add_named_key() {
     assert_eq!(tc.ops.get(&k), Some(&Op::Add));
 
     // adding again updates the values
-    if let Value::NamedKey(name, key) = other_named_key.clone() {
-        map.insert(name, key);
-    }
+    map.insert(name2, u2);
     let add = tc.add(correlation_id, k, other_named_key);
     assert_matches!(add, Ok(_));
     assert_eq!(tc.fns.len(), 1);
@@ -235,7 +241,7 @@ fn tracking_copy_rw() {
     let k = Key::Hash([0u8; 32]);
 
     // reading then writing should update the op
-    let value = Value::Int32(3);
+    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
     let _ = tc.read(correlation_id, &k);
     tc.write(k, value.clone());
     assert_eq!(tc.fns.len(), 1);
@@ -253,7 +259,7 @@ fn tracking_copy_ra() {
     let k = Key::Hash([0u8; 32]);
 
     // reading then adding should update the op
-    let value = Value::Int32(3);
+    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
     let _ = tc.read(correlation_id, &k);
     let _ = tc.add(correlation_id, k, value);
     assert_eq!(tc.fns.len(), 1);
@@ -272,8 +278,8 @@ fn tracking_copy_aw() {
     let k = Key::Hash([0u8; 32]);
 
     // adding then writing should update the op
-    let value = Value::Int32(3);
-    let write_value = Value::Int32(7);
+    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
+    let write_value = StoredValue::CLValue(CLValue::from_t(&7_i32).unwrap());
     let _ = tc.add(correlation_id, k, value);
     tc.write(k, write_value.clone());
     assert_eq!(tc.fns.len(), 1);
@@ -284,7 +290,7 @@ fn tracking_copy_aw() {
 
 proptest! {
     #[test]
-    fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in value_arb()) {
+    fn query_empty_path(k in key_arb(), missing_key in key_arb(), v in stored_value_arb()) {
         let correlation_id = CorrelationId::new();
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[(k, v.to_owned())]).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
@@ -305,7 +311,7 @@ proptest! {
     #[test]
     fn query_contract_state(
         k in key_arb(), // key state is stored at
-        v in value_arb(), // value in contract state
+        v in stored_value_arb(), // value in contract state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
         body in vec(any::<u8>(), 1..1000), // contract body
@@ -314,7 +320,8 @@ proptest! {
         let correlation_id = CorrelationId::new();
         let mut named_keys = BTreeMap::new();
         named_keys.insert(name.clone(), k);
-        let contract: Value = Contract::new(body, named_keys, ProtocolVersion::V1_0_0).into();
+        let contract =
+            StoredValue::Contract(Contract::new(body, named_keys, ProtocolVersion::V1_0_0));
         let contract_key = Key::Hash(hash);
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
@@ -340,7 +347,7 @@ proptest! {
     #[test]
     fn query_account_state(
         k in key_arb(), // key state is stored at
-        v in value_arb(), // value in account state
+        v in stored_value_arb(), // value in account state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
         pk in u8_slice_32(), // account public key
@@ -361,7 +368,7 @@ proptest! {
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
             correlation_id,
-            &[(k, v.to_owned()), (account_key, Value::Account(account))],
+            &[(k, v.to_owned()), (account_key, StoredValue::Account(account))],
         ).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
@@ -381,7 +388,7 @@ proptest! {
     #[test]
     fn query_path(
         k in key_arb(), // key state is stored at
-        v in value_arb(), // value in contract state
+        v in stored_value_arb(), // value in contract state
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
         pk in u8_slice_32(), // account public key
@@ -393,7 +400,9 @@ proptest! {
         // create contract which knows about value
         let mut contract_named_keys = BTreeMap::new();
         contract_named_keys.insert(state_name.clone(), k);
-        let contract: Value = Contract::new(body, contract_named_keys, ProtocolVersion::V1_0_0).into();
+        let contract = StoredValue::Contract(
+            Contract::new(body, contract_named_keys, ProtocolVersion::V1_0_0)
+        );
         let contract_key = Key::Hash(hash);
 
         // create account which knows about contract
@@ -413,7 +422,7 @@ proptest! {
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[
             (k, v.to_owned()),
             (contract_key, contract),
-            (account_key, Value::Account(account)),
+            (account_key, StoredValue::Account(account)),
         ]).unwrap();
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
@@ -429,9 +438,18 @@ proptest! {
 #[test]
 fn cache_reads_invalidation() {
     let mut tc_cache = TrackingCopyCache::new(2, Count);
-    let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
-    let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
-    let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+    let (k1, v1) = (
+        Key::Hash([1u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+    );
+    let (k2, v2) = (
+        Key::Hash([2u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap()),
+    );
+    let (k3, v3) = (
+        Key::Hash([3u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+    );
     tc_cache.insert_read(k1, v1);
     tc_cache.insert_read(k2, v2.clone());
     tc_cache.insert_read(k3, v3.clone());
@@ -443,9 +461,18 @@ fn cache_reads_invalidation() {
 #[test]
 fn cache_writes_not_invalidated() {
     let mut tc_cache = TrackingCopyCache::new(2, Count);
-    let (k1, v1) = (Key::Hash([1u8; 32]), Value::Int32(1));
-    let (k2, v2) = (Key::Hash([2u8; 32]), Value::Int32(2));
-    let (k3, v3) = (Key::Hash([3u8; 32]), Value::Int32(3));
+    let (k1, v1) = (
+        Key::Hash([1u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+    );
+    let (k2, v2) = (
+        Key::Hash([2u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap()),
+    );
+    let (k3, v3) = (
+        Key::Hash([3u8; 32]),
+        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+    );
     tc_cache.insert_write(k1, v1.clone());
     tc_cache.insert_read(k2, v2.clone());
     tc_cache.insert_read(k3, v3.clone());

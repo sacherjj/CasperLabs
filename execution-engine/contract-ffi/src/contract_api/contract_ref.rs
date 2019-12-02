@@ -1,26 +1,25 @@
-use super::TURef;
-use crate::{key::Key, value::Contract};
+use crate::{key::Key, uref::URef};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractRef {
     Hash([u8; 32]),
-    TURef(TURef<Contract>),
+    URef(URef),
 }
 
 impl ContractRef {
-    pub fn into_turef(self) -> Option<TURef<Contract>> {
+    pub fn into_uref(self) -> Option<URef> {
         match self {
-            ContractRef::TURef(ret) => Some(ret),
+            ContractRef::URef(ret) => Some(ret),
             _ => None,
         }
     }
 }
 
 impl From<ContractRef> for Key {
-    fn from(c_ptr: ContractRef) -> Self {
-        match c_ptr {
+    fn from(contract_ptr: ContractRef) -> Self {
+        match contract_ptr {
             ContractRef::Hash(h) => Key::Hash(h),
-            ContractRef::TURef(turef) => turef.into(),
+            ContractRef::URef(uref) => uref.into(),
         }
     }
 }

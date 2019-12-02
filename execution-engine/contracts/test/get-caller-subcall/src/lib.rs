@@ -7,7 +7,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PublicKey, cl_value::CLValue},
+    value::{account::PublicKey, CLValue},
 };
 
 #[no_mangle]

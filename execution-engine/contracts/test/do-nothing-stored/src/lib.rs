@@ -41,7 +41,7 @@ fn store_at_hash() -> Key {
 
 fn store_at_uref() -> Key {
     storage::store_function(ENTRY_FUNCTION_NAME, BTreeMap::new())
-        .into_turef()
+        .into_uref()
         .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
         .into()
 }

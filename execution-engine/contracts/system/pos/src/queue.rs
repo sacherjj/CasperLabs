@@ -1,14 +1,12 @@
-use alloc::vec::Vec;
-use core::{convert::TryFrom, result};
+use alloc::{boxed::Box, vec::Vec};
+use core::result;
 
 use contract_ffi::{
+    block_time::BlockTime,
     bytesrepr::{self, FromBytes, ToBytes},
     contract_api::storage,
     system_contracts::pos::{Error, Result},
-    value::{
-        account::{BlockTime, PublicKey},
-        Value, U512,
-    },
+    value::{account::PublicKey, CLType, CLTyped, U512},
 };
 
 const BONDING_KEY: u8 = 1;
@@ -59,6 +57,12 @@ impl ToBytes for QueueEntry {
     }
 }
 
+impl CLTyped for QueueEntry {
+    fn cl_type() -> CLType {
+        CLType::List(Box::new(u8::cl_type()))
+    }
+}
+
 pub trait QueueProvider {
     /// Reads bonding queue.
     fn read_bonding() -> Queue;
@@ -80,14 +84,14 @@ pub struct QueueLocal;
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
     fn read_bonding() -> Queue {
-        storage::read_local(BONDING_KEY)
+        storage::read_local(&BONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
 
     /// Reads unbonding queue from the local state of the contract.
     fn read_unbonding() -> Queue {
-        storage::read_local(UNBONDING_KEY)
+        storage::read_local(&UNBONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
@@ -136,29 +140,6 @@ impl Queue {
     }
 }
 
-impl TryFrom<Value> for Queue {
-    type Error = Error;
-
-    fn try_from(value: Value) -> Result<Self> {
-        let bytes = match value {
-            Value::ByteArray(bytes) => bytes,
-            _ => return Err(Error::QueueNotStoredAsByteArray),
-        };
-        let (queue, rest) =
-            Queue::from_bytes(&bytes).map_err(|_| Error::QueueDeserializationFailed)?;
-        if !rest.is_empty() {
-            return Err(Error::QueueDeserializationExtraBytes);
-        }
-        Ok(queue)
-    }
-}
-
-impl Into<Value> for &Queue {
-    fn into(self) -> Value {
-        Value::ByteArray(self.to_bytes().expect("Serialization cannot fail"))
-    }
-}
-
 impl FromBytes for Queue {
     fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (len, mut bytes) = u64::from_bytes(bytes)?;
@@ -182,14 +163,18 @@ impl ToBytes for Queue {
     }
 }
 
+impl CLTyped for Queue {
+    fn cl_type() -> CLType {
+        CLType::List(Box::new(QueueEntry::cl_type()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use contract_ffi::{
+        block_time::BlockTime,
         system_contracts::pos::Error,
-        value::{
-            account::{BlockTime, PublicKey},
-            U512,
-        },
+        value::{account::PublicKey, U512},
     };
 
     use crate::queue::{Queue, QueueEntry};

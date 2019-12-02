@@ -21,14 +21,14 @@ pub extern "C" fn call() {
     }
 
     // Add new urefs
-    let hello_world_key: Key = storage::new_turef(String::from("Hello, world!")).into();
+    let hello_world_key: Key = storage::new_turef(&String::from("Hello, world!")).into();
     runtime::put_key("hello-world", &hello_world_key);
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 1);
 
     // Verify if the uref is present
     assert!(runtime::has_key("hello-world"));
 
-    let big_value_key: Key = storage::new_turef(U512::max_value()).into();
+    let big_value_key: Key = storage::new_turef(&U512::max_value()).into();
     runtime::put_key("big-value", &big_value_key);
 
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 2);
@@ -67,12 +67,12 @@ pub extern "C" fn call() {
     assert_eq!(big_value, Ok(Some(U512::max_value())));
 
     // Increase by 1
-    storage::add(big_value_ref, U512::one());
+    storage::add(big_value_ref, &U512::one());
     let new_big_value = storage::read(big_value_ref);
     assert_eq!(new_big_value, Ok(Some(U512::zero())));
 
     // I can overwrite some data under the pointer
-    storage::write(big_value_ref, U512::from(123_456_789u64));
+    storage::write(big_value_ref, &U512::from(123_456_789u64));
     let new_value = storage::read(big_value_ref);
     assert_eq!(new_value, Ok(Some(U512::from(123_456_789u64))));
 

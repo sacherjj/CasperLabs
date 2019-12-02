@@ -10,7 +10,7 @@ use contract_ffi::{
     uref::{AccessRights, URef},
     value::{
         account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
-        cl_value,
+        CLValueError,
     },
 };
 use engine_shared::transform::TypeMismatch;
@@ -51,7 +51,8 @@ pub enum Error {
         expected: u32,
         actual: u32,
     },
-    CLValue(cl_value::Error),
+    CLValue(CLValueError),
+    HostBufferEmpty,
 }
 
 impl fmt::Display for Error {
@@ -128,8 +129,8 @@ impl From<system_contracts::Error> for Error {
     }
 }
 
-impl From<cl_value::Error> for Error {
-    fn from(e: cl_value::Error) -> Self {
+impl From<CLValueError> for Error {
+    fn from(e: CLValueError) -> Self {
         Error::CLValue(e)
     }
 }

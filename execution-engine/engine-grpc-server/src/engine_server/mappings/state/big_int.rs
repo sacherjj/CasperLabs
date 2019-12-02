@@ -1,19 +1,20 @@
 use std::convert::TryFrom;
 
-use contract_ffi::value::{Value, U128, U256, U512};
+use contract_ffi::value::{CLValue, U128, U256, U512};
 
 use crate::engine_server::{mappings::ParsingError, state::BigInt};
 
-impl TryFrom<BigInt> for Value {
+impl TryFrom<BigInt> for CLValue {
     type Error = ParsingError;
 
-    fn try_from(pb_big_int: BigInt) -> Result<Value, Self::Error> {
-        match pb_big_int.get_bit_width() {
-            128 => Ok(U128::try_from(pb_big_int)?.into()),
-            256 => Ok(U256::try_from(pb_big_int)?.into()),
-            512 => Ok(U512::try_from(pb_big_int)?.into()),
-            other => Err(invalid_bit_width(other)),
-        }
+    fn try_from(pb_big_int: BigInt) -> Result<CLValue, Self::Error> {
+        let cl_value_result = match pb_big_int.get_bit_width() {
+            128 => CLValue::from_t(&U128::try_from(pb_big_int)?),
+            256 => CLValue::from_t(&U256::try_from(pb_big_int)?),
+            512 => CLValue::from_t(&U512::try_from(pb_big_int)?),
+            other => return Err(invalid_bit_width(other)),
+        };
+        cl_value_result.map_err(|error| ParsingError(format!("{:?}", error)))
     }
 }
 
@@ -97,7 +98,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            Value::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
         );
     }
 
@@ -118,7 +119,7 @@ mod tests {
         );
         assert_eq!(
             expected_error,
-            Value::try_from(invalid_pb_big_int.clone()).unwrap_err()
+            CLValue::try_from(invalid_pb_big_int.clone()).unwrap_err()
         );
     }
 

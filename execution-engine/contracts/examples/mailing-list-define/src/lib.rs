@@ -12,7 +12,7 @@ use contract_ffi::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::cl_value::CLValue,
+    value::CLValue,
 };
 
 const LIST_KEY: &str = "list";
@@ -47,16 +47,16 @@ fn update_list(name: String) {
         .unwrap_or_revert_with(ApiError::Read)
         .unwrap_or_revert_with(ApiError::ValueNotFound);
     list.push(name);
-    storage::write(list_key, list);
+    storage::write(list_key, &list);
 }
 
 fn sub(name: String) -> Option<TURef<Vec<String>>> {
     if runtime::has_key(&name) {
         let init_message = vec![String::from("Hello again!")];
-        Some(storage::new_turef(init_message))
+        Some(storage::new_turef(&init_message))
     } else {
         let init_message = vec![String::from("Welcome!")];
-        let new_key = storage::new_turef(init_message);
+        let new_key = storage::new_turef(&init_message);
         runtime::put_key(&name, &new_key.clone().into());
         update_list(name);
         Some(new_key)
@@ -73,7 +73,7 @@ fn publish(msg: String) {
             .unwrap_or_revert_with(ApiError::Read)
             .unwrap_or_revert_with(ApiError::ValueNotFound);
         messages.push(msg.clone());
-        storage::write(uref, messages);
+        storage::write(uref, &messages);
     }
 }
 
@@ -112,7 +112,7 @@ pub extern "C" fn mailing_list_ext() {
 #[no_mangle]
 pub extern "C" fn call() {
     let init_list: Vec<String> = Vec::new();
-    let list_key = storage::new_turef(init_list);
+    let list_key = storage::new_turef(&init_list);
 
     //create map of references for stored contract
     let mut mailing_list_urefs: BTreeMap<String, Key> = BTreeMap::new();

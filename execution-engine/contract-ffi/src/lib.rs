@@ -14,6 +14,7 @@ extern crate alloc;
 pub static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 pub mod args_parser;
+pub mod block_time;
 pub mod bytesrepr;
 pub mod contract_api;
 pub mod execution;

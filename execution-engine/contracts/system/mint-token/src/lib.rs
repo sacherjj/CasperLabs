@@ -21,10 +21,10 @@ use contract_ffi::{
     system_contracts::mint::{Error, PurseIdError},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
-    value::{account::KEY_SIZE, cl_value::CLValue, U512},
+    value::{account::KEY_SIZE, CLValue, U512},
 };
 
-use capabilities::{ARef, RAWRef};
+use capabilities::{RefWithAddRights, RefWithReadAddWriteRights};
 use internal_purse_id::{DepositId, WithdrawId};
 use mint::Mint;
 
@@ -32,7 +32,7 @@ const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
 
 pub struct CLMint;
 
-impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
+impl Mint<RefWithAddRights<U512>, RefWithReadAddWriteRights<U512>> for CLMint {
     type PurseId = WithdrawId;
     type DepOnlyId = DepositId;
 
@@ -42,9 +42,9 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
-        let balance_uref: Key = storage::new_turef(initial_balance).into();
+        let balance_uref: Key = storage::new_turef(&initial_balance).into();
 
-        let purse_key: URef = storage::new_turef(()).into();
+        let purse_key: URef = storage::new_turef(&()).into();
         let purse_uref_name = purse_key.remove_access_rights().as_string();
 
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
@@ -61,19 +61,19 @@ impl Mint<ARef<U512>, RAWRef<U512>> for CLMint {
         // performed in the "owner" context   so it aligns with other semantics
         // of write but I would prefer if were able to enforce   uniqueness
         // somehow.
-        storage::write_local(purse_id.raw_id(), balance_uref);
+        storage::write_local(purse_id.raw_id(), &balance_uref);
 
         Ok(purse_id)
     }
 
-    fn lookup(&self, p: Self::PurseId) -> Option<RAWRef<U512>> {
-        storage::read_local(p.raw_id())
+    fn lookup(&self, p: Self::PurseId) -> Option<RefWithReadAddWriteRights<U512>> {
+        storage::read_local(&p.raw_id())
             .ok()?
             .and_then(|key: Key| key.try_into().ok())
     }
 
-    fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<ARef<U512>> {
-        storage::read_local(p.raw_id())
+    fn dep_lookup(&self, p: Self::DepOnlyId) -> Option<RefWithAddRights<U512>> {
+        storage::read_local(&p.raw_id())
             .ok()?
             .and_then(|key: Key| key.try_into().ok())
     }

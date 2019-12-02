@@ -11,6 +11,7 @@ use alloc::vec;
 use alloc::{string::String, vec::Vec};
 
 use contract_ffi::{
+    block_time::BlockTime,
     contract_api::{runtime, system},
     execution::Phase,
     key::Key,
@@ -18,9 +19,8 @@ use contract_ffi::{
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
     value::{
-        account::{BlockTime, PublicKey, PurseId},
-        cl_value::CLValue,
-        U512,
+        account::{PublicKey, PurseId},
+        CLValue, U512,
     },
 };
 
@@ -365,11 +365,9 @@ mod tests {
     use std::{cell::RefCell, iter};
 
     use contract_ffi::{
+        block_time::BlockTime,
         system_contracts::pos::Result,
-        value::{
-            account::{BlockTime, PublicKey},
-            U512,
-        },
+        value::{account::PublicKey, U512},
     };
 
     use crate::{
