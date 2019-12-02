@@ -326,12 +326,23 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, is_scala_clien
     ), "Total number of nodes should be 2."
 
     node0, node1 = one_node_network_fn.docker_nodes
-    r = node0.d_client.unbond(bonding_amount, account.private_key_docker_path)
-    assert "Success!" in r
-    r = node0.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(r)
-    assert block_hash is not None
-
+    if is_scala_client:
+        r = node0.d_client.unbond(bonding_amount, account.private_key_docker_path)
+        assert "Success!" in r
+        r = node0.d_client.propose()
+        block_hash = extract_block_hash_from_propose_output(r)
+        assert block_hash is not None
+    else:
+        cli = CLI(node0)
+        # fmt: off
+        cli("unbond",
+            "--amount", bonding_amount,
+            '--public-key', account.public_key_path,
+            "--private-key", account.private_key_path,
+            "--payment-amount", EXECUTION_PAYMENT_AMOUNT,
+            "--from", account.public_key_hex)
+        # fmt: on
+        block_hash = cli("propose")
     r = node0.client.show_deploys(block_hash)[0]
     assert r.is_error is True
     assert r.error_message == "Exit code: 65280"
