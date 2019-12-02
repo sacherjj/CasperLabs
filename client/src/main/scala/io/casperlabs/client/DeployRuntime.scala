@@ -191,7 +191,11 @@ object DeployRuntime {
                      )
         localKeyValue = {
           val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mintPublic` is of `URef` type.
-          val purseAddrHex  = Base16.encode(account.getPurseId.uref.toByteArray)
+          val purseAddrHex = {
+            val purseAddr    = account.getPurseId.uref.toByteArray
+            val purseAddrSer = serializeArray(purseAddr)
+            Base16.encode(purseAddrSer)
+          }
           s"$mintPublicHex:$purseAddrHex"
         }
         balanceURef <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
