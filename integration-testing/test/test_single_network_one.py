@@ -1033,7 +1033,7 @@ def check_cli_local_key(cli):
         "--session", cli.resource("local_state.wasm"))
     block_hash = propose_check_no_errors(cli)
 # CasperLabs/docker $ ./client.sh node-0 query-state --block-hash '"9d"' --key '"a91208047c"' --path file.xxx --type hash
-    local_key = account.public_key_hex + ":" + "66" * 32
+    local_key = account.public_key_hex + ":" + bytes([66 for _ in range(32)]).hex()
     result = cli("query-state",
                  "--block-hash", block_hash,
                  "--key", local_key,
