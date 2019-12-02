@@ -1041,3 +1041,19 @@ def check_cli_local_key(cli):
                  # --path should not be really needed but it is obligatory for Python client atm
                  "--path", "")
     logging.info(f"query-state result => {result}")
+
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local",
+                 # --path should not be really needed but it is obligatory for Python client atm
+                 "--path", "")
+    logging.info(f"query-state result => {result}")
