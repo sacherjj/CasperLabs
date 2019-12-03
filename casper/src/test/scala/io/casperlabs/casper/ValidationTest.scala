@@ -1126,10 +1126,6 @@ class ValidationTest
       } yield result shouldBe Left(ValidateErrorWrapper(InvalidDeployHeader))
   }
 
-  "Block deploy header validity check" should "return InvalidDeployHeader when a deploy has too short a TTL" in {
-    shouldBeInvalidDeployHeader(DeployOps.randomTooShortTTL())
-  }
-
   it should "return InvalidDeployHeader when a deploy has too long a TTL" in {
     shouldBeInvalidDeployHeader(DeployOps.randomTooLongTTL())
   }
@@ -1242,7 +1238,7 @@ class ValidationTest
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
       val deploys = Vector(ByteString.EMPTY)
-        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+        .map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, minTtl))
       val processedDeploys = deploys.map(d => Block.ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
@@ -1274,7 +1270,7 @@ class ValidationTest
       val deploys =
         Vector(
           ByteString.EMPTY
-        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+        ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis, minTtl))
       implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
