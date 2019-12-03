@@ -130,7 +130,7 @@ where
         {
             Some(StoredValue::Contract(contract)) => Ok(contract),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                "Value::Contract".to_string(),
+                "Contract".to_string(),
                 other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(key)),

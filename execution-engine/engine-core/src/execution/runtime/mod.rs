@@ -188,6 +188,7 @@ where
 
     match result {
         // TODO(Fraser) - comment why we default to unit.  Same for other place we do this.
+        // if OK and no host_buf value treat as unit
         Ok(_) => Ok(runtime.take_host_buf().unwrap_or(CLValue::from_t(&())?)),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
@@ -201,6 +202,7 @@ where
                         let ret_urefs_map: HashMap<Address, HashSet<AccessRights>> =
                             extract_access_rights_from_urefs(ret_urefs.clone());
                         current_runtime.context.access_rights_extend(ret_urefs_map);
+                        // if ret has not set host_buf consider it programmer error
                         return runtime.take_host_buf().ok_or(Error::ExpectedReturnValue);
                     }
                     Error::Revert(status) => {
@@ -240,6 +242,7 @@ where
         }
     }
 
+    /// If host_buf set, clears the host_buf and returns value, else None
     pub fn take_host_buf(&mut self) -> Option<CLValue> {
         self.host_buf.take()
     }

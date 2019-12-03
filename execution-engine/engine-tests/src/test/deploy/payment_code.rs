@@ -558,6 +558,7 @@ fn should_finalize_to_rewards_purse() {
 fn independent_standard_payments_should_not_write_the_same_keys() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
     let payment_purse_amount = 10_000_000;
+    let transfer_amount = 15_000_000;
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -566,7 +567,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(payment_purse_amount)),
+                (account_1_public_key, U512::from(transfer_amount)),
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (U512::from(payment_purse_amount),))
             .with_authorization_keys(&[*DEFAULT_ACCOUNT_KEY])

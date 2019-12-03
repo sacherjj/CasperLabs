@@ -337,7 +337,7 @@ pub fn delegate() {
                 let return_value = CLValue::from_t(&Some(PurseId::new(uref))).unwrap_or_revert();
                 runtime::ret(return_value, vec![uref]);
             } else {
-                let return_value = CLValue::from_t(&maybe_purse_uref).unwrap_or_revert();
+                let return_value = CLValue::from_t::<Option<URef>>(&None).unwrap_or_revert();
                 runtime::ret(return_value, Vec::new());
             }
         }
