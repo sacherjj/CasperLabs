@@ -128,9 +128,9 @@ macro_rules! ser_and_num_impls {
         impl AsPrimitive<$type> for i32 {
             fn as_(self) -> $type {
                 if self >= 0 {
-                    $type::from(self as u64)
+                    $type::from(self as u32)
                 } else {
-                    let abs = 0u64 - self as u64;
+                    let abs = 0u32.wrapping_sub(self as u32);
                     $type::zero().wrapping_sub(&$type::from(abs))
                 }
             }
@@ -141,7 +141,7 @@ macro_rules! ser_and_num_impls {
                 if self >= 0 {
                     $type::from(self as u64)
                 } else {
-                    let abs = 0u64 - self as u64;
+                    let abs = 0u64.wrapping_sub(self as u64);
                     $type::zero().wrapping_sub(&$type::from(abs))
                 }
             }

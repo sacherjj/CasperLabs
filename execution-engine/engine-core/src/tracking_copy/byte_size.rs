@@ -43,37 +43,7 @@ impl<K: HeapSizeOf, V: HeapSizeOf> ByteSize for BTreeMap<K, V> {
     }
 }
 
-// TODO(Fraser) - delete.  Leaving for now as reference in case we need to implement for CLValue
-// or StoredValue
-//impl ByteSize for Value {
-//    fn byte_size(&self) -> usize {
-//        mem::size_of::<Self>()
-//            + match self {
-//                Value::Int32(_)
-//                | Value::UInt128(_)
-//                | Value::UInt256(_)
-//                | Value::UInt512(_)
-//                | Value::Unit
-//                | Value::UInt64(_) => 0,
-//                Value::ByteArray(vec) => mem::size_of::<Vec<u8>>() + vec.capacity(),
-//                Value::ListInt32(list) => {
-//                    mem::size_of::<Vec<i32>>() + list.capacity() * I32_SIZE
-//                }
-//                Value::String(s) => s.byte_size(),
-//                Value::ListString(list) => list.iter().fold(0, |sum, el| sum + el.byte_size()),
-//                // NOTE: We don't measure `key` as its size will be returned with
-//                // `mem::size_of::<Value>()` call Similarly, we don't measure
-//                // stack size of name, account and contract as they're accounted for
-//                // in the `mem::size_of::<Self>()` call.
-//                Value::Key(_) => 0,
-//                Value::NamedKey(name, _key) => name.heap_size(),
-//                Value::Account(account) => account.heap_size(),
-//                Value::Contract(contract) => contract.heap_size(),
-//            }
-//    }
-//}
-
-// TODO(Fraser) - fix
+// TODO(Fraser) - fix -- heap size for account & contract vs serialize_len for everything else?
 impl ByteSize for StoredValue {
     fn byte_size(&self) -> usize {
         mem::size_of::<Self>()
@@ -97,12 +67,14 @@ impl HeapSizeOf for Key {
     }
 }
 
+// TODO: contract has other fields (re a bunch) that are not repr here...on purpose?
 impl HeapSizeOf for Account {
     fn heap_size(&self) -> usize {
         self.named_keys().heap_size()
     }
 }
 
+// TODO: contract has other fields (re protocol version) that are not repr here...on purpose?
 impl HeapSizeOf for Contract {
     fn heap_size(&self) -> usize {
         self.named_keys().heap_size() + self.bytes().len()
