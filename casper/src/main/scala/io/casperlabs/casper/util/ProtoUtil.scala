@@ -568,11 +568,8 @@ object ProtoUtil {
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
     basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy), cost = 1L))
 
-  def sourceDeploy(source: String, timestamp: Long, ttl: FiniteDuration): Deploy =
-    sourceDeploy(ByteString.copyFromUtf8(source), timestamp, ttl)
-
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long, ttl: FiniteDuration): Deploy =
-    deploy(timestamp, sessionCode, ttl)
+  def sourceDeploy(source: String, timestamp: Long, ttl: FiniteDuration = 1.minute): Deploy =
+    deploy(timestamp, ByteString.copyFromUtf8(source), ttl)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1

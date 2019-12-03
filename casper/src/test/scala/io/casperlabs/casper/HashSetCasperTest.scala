@@ -25,6 +25,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
+import scala.concurrent.duration._
 
 import scala.collection.immutable
 
@@ -67,6 +68,8 @@ abstract class HashSetCasperTest
   private val bonds                       = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) =
     buildGenesis(wallets, bonds, 0L)
+  private val minTtl       = 1.minute
+  private val minTtlMillis = minTtl.toMillis.toInt
 
   private def deployAndCreate(node: HashSetCasperTestNode[Task]) =
     for {
@@ -80,12 +83,12 @@ abstract class HashSetCasperTest
   behavior of "HashSetCasper"
 
   it should "accept deploys" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
     implicit val timeEff = new LogicalTime[Task]
 
     for {
-      deploy <- ProtoUtil.basicDeploy[Task]()
+      deploy <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _      <- MultiParentCasper[Task].deploy(deploy)
 
       _      = logEff.infos.size should be(1)
@@ -100,11 +103,11 @@ abstract class HashSetCasperTest
   it should "not allow multiple threads to process the same block at the same time" in {
     val scheduler = Scheduler.fixedPool("three-threads", 3)
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)(scheduler)
+      standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)(scheduler)
     val casper = node.casperEff
 
     val testProgram = for {
-      deploy <- ProtoUtil.basicDeploy[Task]()
+      deploy <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _      <- casper.deploy(deploy)
       block  <- casper.createBlock.map { case Created(block) => block }
       result <- Task
@@ -131,11 +134,11 @@ abstract class HashSetCasperTest
   }
 
   it should "create blocks based on deploys" in effectTest {
-    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     implicit val casper = node.casperEff
 
     for {
-      deploy <- ProtoUtil.basicDeploy[Task]()
+      deploy <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _      <- MultiParentCasper[Task].deploy(deploy)
 
       createBlockResult <- MultiParentCasper[Task].createBlock
@@ -152,12 +155,12 @@ abstract class HashSetCasperTest
   }
 
   it should "accept signed blocks" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
     implicit val timeEff = new LogicalTime[Task]
 
     for {
-      deploy               <- ProtoUtil.basicDeploy[Task]()
+      deploy               <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _                    <- MultiParentCasper[Task].deploy(deploy)
       createBlockResult    <- MultiParentCasper[Task].createBlock
       Created(signedBlock) = createBlockResult
@@ -177,12 +180,13 @@ abstract class HashSetCasperTest
       s =>
         ProtoUtil.deploy(
           0,
-          ByteString.copyFromUtf8((start + s._2).toString)
+          ByteString.copyFromUtf8((start + s._2).toString),
+          minTtl * 2
         )
     )
 
   it should "be able to create a chain of blocks from different deploys" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
 
     val start = System.currentTimeMillis()
@@ -219,7 +223,7 @@ abstract class HashSetCasperTest
   }
 
   it should "allow multiple deploys in a single block" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
 
     val startTime = System.currentTimeMillis()
@@ -237,12 +241,12 @@ abstract class HashSetCasperTest
   }
 
   it should "reject unsigned blocks" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
     implicit val timeEff = new LogicalTime[Task]
 
     for {
-      basicDeployData <- ProtoUtil.basicDeploy[Task]()
+      basicDeployData <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       createBlockResult <- MultiParentCasper[Task].deploy(basicDeployData) *> MultiParentCasper[
                             Task
                           ].createBlock
@@ -261,11 +265,11 @@ abstract class HashSetCasperTest
     val dummyContract =
       ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
 
-    val data0 = ProtoUtil.deploy(1, dummyContract)
-    val data1 = ProtoUtil.deploy(2, dummyContract)
+    val data0 = ProtoUtil.deploy(1, dummyContract, minTtl * 2)
+    val data1 = ProtoUtil.deploy(2, dummyContract, minTtl * 2)
 
     for {
-      nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes              <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
       List(node0, node1) = nodes.toList
       unsignedBlock <- (node0.casperEff.deploy(data0) *> node0.casperEff.createBlock)
                         .map {
@@ -295,12 +299,12 @@ abstract class HashSetCasperTest
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    val node = standaloneEff(genesis, transforms, otherSk)
+    val node = standaloneEff(genesis, transforms, otherSk, minTtl = minTtl)
     import node._
     implicit val timeEff = new LogicalTime[Task]
 
     for {
-      basicDeployData <- ProtoUtil.basicDeploy[Task]()
+      basicDeployData <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       createBlockResult <- MultiParentCasper[Task].deploy(basicDeployData) *> MultiParentCasper[
                             Task
                           ].createBlock
@@ -336,18 +340,24 @@ abstract class HashSetCasperTest
 
   it should "start numbering validators' blocks from 1" in effectTest {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
+      standaloneEff(
+        genesis,
+        transforms,
+        validatorKeys.head,
+        faultToleranceThreshold = 0.1,
+        minTtl = minTtl
+      )
     val validator = ByteString.copyFrom(validators.head)
 
     for {
-      deploy1         <- ProtoUtil.basicDeploy[Task]()
+      deploy1         <- ProtoUtil.basicDeploy[Task](minTtl * 2)
       _               <- node.casperEff.deploy(deploy1) shouldBeF Right(())
       Created(block1) <- node.casperEff.createBlock
       _               = assertCreator(block1, validator)
       _               = assertValidatorSeqNum(block1, 1)
       _               = assertValidatorPrevMessage(block1, validator, None)
       _               <- node.casperEff.addBlock(block1) shouldBeF Valid
-      deploy2         <- ProtoUtil.basicDeploy[Task]()
+      deploy2         <- ProtoUtil.basicDeploy[Task](minTtl * 2)
       _               <- node.casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block2) <- node.casperEff.createBlock
       _               <- node.casperEff.addBlock(block2) shouldBeF Valid
@@ -366,13 +376,18 @@ abstract class HashSetCasperTest
     val validatorA = (ByteString.copyFrom(validators(0)), validatorKeys(0))
     val validatorB = (ByteString.copyFrom(validators(1)), validatorKeys(1))
     for {
-      nodes           <- networkEff(IndexedSeq(validatorA._2, validatorB._2), genesis, transforms)
-      deploy1         <- ProtoUtil.basicDeploy[Task]()
+      nodes <- networkEff(
+                IndexedSeq(validatorA._2, validatorB._2),
+                genesis,
+                transforms,
+                minTtl = minTtl
+              )
+      deploy1         <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _               <- nodes(0).casperEff.deploy(deploy1) shouldBeF Right(())
       Created(block1) <- nodes(0).casperEff.createBlock
       _               = assertValidatorPrevMessage(block1, validatorB._1, None)
       _               <- nodes(1).casperEff.addBlock(block1) shouldBeF Valid
-      deploy2         <- ProtoUtil.basicDeploy[Task]()
+      deploy2         <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _               <- nodes(1).casperEff.deploy(deploy2) shouldBeF Right(())
       Created(block2) <- nodes(1).casperEff.createBlock
       _               = assertValidatorPrevMessage(block2, validatorA._1, Some(block1.blockHash))
@@ -382,8 +397,8 @@ abstract class HashSetCasperTest
 
   it should "propose blocks it adds to peers" in effectTest {
     for {
-      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
-      deploy      <- ProtoUtil.basicDeploy[Task]()
+      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
+      deploy      <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _           <- nodes(0).casperEff.deploy(deploy)
       signedBlock <- nodes(0).propose()
       _           <- nodes(1).receive()
@@ -402,8 +417,8 @@ abstract class HashSetCasperTest
 
   it should "add a valid block from peer" in effectTest {
     for {
-      nodes             <- networkEff(validatorKeys.take(2), genesis, transforms)
-      deploy            <- ProtoUtil.basicDeploy[Task]()
+      nodes             <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
+      deploy            <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       _                 <- nodes(0).casperEff.deploy(deploy)
       signedBlock1Prime <- nodes(0).propose()
       _                 <- nodes(1).receive()
@@ -422,14 +437,14 @@ abstract class HashSetCasperTest
 
   def createTestBlock(node: HashSetCasperTestNode[Task]) =
     for {
-      deploy         <- ProtoUtil.basicDeploy[Task]()
+      deploy         <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       result         <- node.casperEff.deploy(deploy) *> node.casperEff.createBlock
       Created(block) = result
     } yield block
 
   it should "process blocks in parallel" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(4), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(4), genesis, transforms, minTtl = minTtl)
       // Create blocks on different nodes that can add in parallel.
       // NOTE: GossipServiceCasperTestNode would feed notifications one by one.
       blocks <- Task.sequence(nodes.map(createTestBlock))
@@ -446,10 +461,10 @@ abstract class HashSetCasperTest
 
   it should "handle multi-parent blocks correctly" in effectTest {
     for {
-      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms)
-      deployData0 <- ProtoUtil.basicDeploy[Task]()
-      deployData1 <- ProtoUtil.basicDeploy[Task]()
-      deployData2 <- ProtoUtil.basicDeploy[Task]()
+      nodes       <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
+      deployData0 <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
+      deployData1 <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
+      deployData2 <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
       deploys = Vector(
         deployData0,
         deployData1,
@@ -489,7 +504,8 @@ abstract class HashSetCasperTest
       nodes <- networkEff(
                 localValidators,
                 localGenesis,
-                localTransforms
+                localTransforms,
+                minTtl = minTtl
               )
 
       (sk, pk)    = Ed25519.newKeyPair
@@ -498,14 +514,18 @@ abstract class HashSetCasperTest
       bondingCode <- BondingUtil.faucetBondDeploy[Task](50, "ed25519", pkStr, sk)(
                       Sync[Task]
                     )
-      forwardDeploy = ProtoUtil.sourceDeploy(
-        forwardCode,
-        System.currentTimeMillis()
-      )
-      bondingDeploy = ProtoUtil.sourceDeploy(
-        bondingCode,
-        forwardDeploy.getHeader.timestamp + 1
-      )
+      forwardDeploy = ProtoUtil
+        .sourceDeploy(
+          forwardCode,
+          System.currentTimeMillis(),
+          minTtl * 2
+        )
+      bondingDeploy = ProtoUtil
+        .sourceDeploy(
+          bondingCode,
+          forwardDeploy.getHeader.timestamp + 1,
+          minTtl * 2
+        )
 
       _ <- nodes.head.casperEff.deploy(forwardDeploy)
       _ <- nodes.head.casperEff.deploy(bondingDeploy)
@@ -515,18 +535,24 @@ abstract class HashSetCasperTest
       _ <- nodes.head.receive()
       _ <- nodes(2).clearMessages() //nodes(2) misses bonding
 
-      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes(1).casperEff.deploy) *> nodes(1).propose()
+      _ <- (ProtoUtil
+            .basicDeploy[Task]()
+            .map(_.withTtl(minTtlMillis * 2)) >>= nodes(1).casperEff.deploy) *> nodes(1).propose()
       _ <- nodes.head.receive()
       _ <- nodes(1).receive()
       _ <- nodes(2).clearMessages() //nodes(2) misses block built on bonding
 
-      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes(2).casperEff.deploy) *> nodes(2).propose()
+      _ <- (ProtoUtil
+            .basicDeploy[Task]()
+            .map(_.withTtl(minTtlMillis * 2)) >>= nodes(2).casperEff.deploy) *> nodes(2).propose()
       _ <- nodes.toList.traverse_(_.receive())
       //Since weight of nodes(2) is higher than nodes(0) and nodes(1)
       //their fork-choice changes, thus the new validator
       //is no longer bonded
 
-      _ <- (ProtoUtil.basicDeploy[Task]() >>= nodes.head.casperEff.deploy) *> nodes.head
+      _ <- (ProtoUtil
+            .basicDeploy[Task]()
+            .map(_.withTtl(minTtlMillis * 2)) >>= nodes.head.casperEff.deploy) *> nodes.head
             .propose()
       _ <- nodes.toList.traverse_(_.receive())
 
@@ -538,7 +564,7 @@ abstract class HashSetCasperTest
 
   it should "reject addBlock when there exist deploy by the same (user, millisecond timestamp) in the chain" in {
     for {
-      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
       deployDatas <- (0L to 2L).toList
                       .traverse[Task, Deploy](_ => ProtoUtil.basicDeploy[Task]())
       deployPrim0 = deployDatas(1)
@@ -588,7 +614,7 @@ abstract class HashSetCasperTest
 
   it should "ask peers for blocks it is missing" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(3), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(3), genesis, transforms, minTtl = minTtl)
       deployDatas = deploysFromString(
         System.currentTimeMillis(),
         List("for(_ <- @1){ Nil } | @1!(1)", "@2!(2)")
@@ -733,7 +759,7 @@ abstract class HashSetCasperTest
 
   it should "add equivocation blocks" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
 
       // Creates a pair that constitutes equivocation blocks
       basicDeployData0 <- ProtoUtil.basicDeploy[Task]()
@@ -776,7 +802,7 @@ abstract class HashSetCasperTest
 
   it should "track equivocating blocks added at the same time" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
 
       blockA <- deployAndCreate(nodes(0))
       blockB <- deployAndCreate(nodes(0))
@@ -793,7 +819,7 @@ abstract class HashSetCasperTest
 
   it should "not ignore adding equivocation blocks when a child is revealed later" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
 
       makeDeploy = (n: Int) => {
         for {
@@ -833,7 +859,12 @@ abstract class HashSetCasperTest
   it should "detect self equivocation when validating an incoming block" in effectTest {
     for {
       // Starting 2 nodes with the same validator key.
-      nodes <- networkEff(IndexedSeq(validatorKeys.head, validatorKeys.head), genesis, transforms)
+      nodes <- networkEff(
+                IndexedSeq(validatorKeys.head, validatorKeys.head),
+                genesis,
+                transforms,
+                minTtl = minTtl
+              )
       // Creates a pair that constitutes equivocation blocks
       signedBlock1 <- createTestBlock(nodes(0))
       signedBlock2 <- createTestBlock(nodes(1))
@@ -849,7 +880,7 @@ abstract class HashSetCasperTest
 
   it should "not relay blocks that create a self equivocation" in effectTest {
     for {
-      nodes <- networkEff(validatorKeys.take(2), genesis, transforms)
+      nodes <- networkEff(validatorKeys.take(2), genesis, transforms, minTtl = minTtl)
       // Creates a pair that constitutes equivocation blocks
       signedBlock1      <- createTestBlock(nodes(0))
       signedBlock1Prime <- createTestBlock(nodes(0))
@@ -868,7 +899,7 @@ abstract class HashSetCasperTest
 
   it should "reject blocks that include an invalid block pointer" in effectTest {
     for {
-      nodes           <- networkEff(validatorKeys.take(3), genesis, transforms)
+      nodes           <- networkEff(validatorKeys.take(3), genesis, transforms, minTtl = minTtl)
       deploys         <- (1L to 6L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
       deploysWithCost = deploys.map(d => ProcessedDeploy(deploy = Some(d))).toIndexedSeq
 
@@ -916,7 +947,8 @@ abstract class HashSetCasperTest
                 validatorKeys.take(2),
                 genesis,
                 transforms,
-                storageSize = 1024L * 1024 * 10
+                storageSize = 1024L * 1024 * 10,
+                minTtl = minTtl
               )
 
       _ <- (1L to 10L).toList.traverse_[Task, Unit] { _ =>
@@ -956,7 +988,8 @@ abstract class HashSetCasperTest
       nodes <- networkEff(
                 validatorKeys.take(2),
                 genesis,
-                transforms
+                transforms,
+                minTtl = minTtl
               )
       deployData1 <- ProtoUtil.basicDeploy[Task]()
       createBlock1Result <- nodes(0).casperEff
@@ -1015,7 +1048,8 @@ abstract class HashSetCasperTest
                 validatorKeys.take(3),
                 genesisWithEqualBonds,
                 transformsWithEqualBonds,
-                faultToleranceThreshold = 0f // With equal bonds this should allow the final block to move as expected.
+                faultToleranceThreshold = 0f, // With equal bonds this should allow the final block to move as expected., minTtl = minTtl
+                minTtl = minTtl
               )
       deployDatas <- (1L to 10L).toList.traverse(_ => ProtoUtil.basicDeploy[Task]())
 
@@ -1090,7 +1124,8 @@ abstract class HashSetCasperTest
                 genesis,
                 transforms,
                 maybeMakeEE =
-                  Some(HashSetCasperTestNode.simpleEEApi[Task](_, generateConflict = true))
+                  Some(HashSetCasperTestNode.simpleEEApi[Task](_, generateConflict = true)),
+                minTtl = minTtl
               )
 
       sessionCode = ByteString.copyFromUtf8("Do the thing")
@@ -1120,7 +1155,13 @@ abstract class HashSetCasperTest
   it should "not execute deploys until dependencies are met" in effectTest {
     import io.casperlabs.models.DeployImplicits._
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
+      standaloneEff(
+        genesis,
+        transforms,
+        validatorKeys.head,
+        faultToleranceThreshold = 0.1,
+        minTtl = minTtl
+      )
 
     for {
       deploy1 <- ProtoUtil.basicDeploy[Task]()
@@ -1141,7 +1182,13 @@ abstract class HashSetCasperTest
   it should "only execute deploys during the appropriate time window" in effectTest {
     import io.casperlabs.models.DeployImplicits._
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head, faultToleranceThreshold = 0.1)
+      standaloneEff(
+        genesis,
+        transforms,
+        validatorKeys.head,
+        faultToleranceThreshold = 0.1,
+        minTtl = minTtl
+      )
     val minTTL = 60 * 60 * 1000
     for {
       deploy1 <- ProtoUtil
@@ -1187,7 +1234,8 @@ abstract class HashSetCasperTest
       nodes <- networkEff(
                 validatorKeys.take(2),
                 genesis,
-                transforms
+                transforms,
+                minTtl = minTtl
               )
 
       deploy <- deploySomething(nodes, 0)
@@ -1224,7 +1272,8 @@ abstract class HashSetCasperTest
       nodes <- networkEff(
                 validatorKeys.take(2),
                 genesis,
-                transforms
+                transforms,
+                minTtl = minTtl
               )
 
       deployA          <- ProtoUtil.basicDeploy[Task]()
@@ -1256,7 +1305,7 @@ abstract class HashSetCasperTest
   }
 
   it should "return NoNewDeploys status if there are no deploys to put into the block after executing contracts" in effectTest {
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     import node._
 
     val deploy = ProtoUtil.deploy(timestamp = 1L)

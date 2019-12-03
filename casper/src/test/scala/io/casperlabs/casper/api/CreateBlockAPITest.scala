@@ -32,6 +32,8 @@ import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import io.casperlabs.casper.helper.DeployOps._
+import io.casperlabs.comm.ServiceError.OutOfRange
 
 import scala.concurrent.duration._
 
@@ -55,6 +57,9 @@ class CreateBlockAPITest
   private val bonds                                            = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), transforms) = createGenesis(bonds)
 
+  val minTtl: FiniteDuration = 1.second
+  val minTtlMillis           = minTtl.toMillis.toInt
+
   "createBlock" should "not allow simultaneous calls" in {
     implicit val scheduler = Scheduler.fixedPool("three-threads", 3)
     implicit val time = new Time[Task] {
@@ -63,12 +68,13 @@ class CreateBlockAPITest
       def nanoTime: Task[Long]                        = timer.clock.monotonic(NANOSECONDS)
       def sleep(duration: FiniteDuration): Task[Unit] = timer.sleep(duration)
     }
-    val node   = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node   = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
     val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
     val deploys = List.fill(2)(
       ProtoUtil.deploy(
         0,
-        ByteString.copyFromUtf8(System.currentTimeMillis().toString)
+        ByteString.copyFromUtf8(System.currentTimeMillis().toString),
+        minTtl * 2
       )
     )
 
@@ -113,7 +119,7 @@ class CreateBlockAPITest
     // taken and put into blocks. The blocks we created should form a simple
     // chain, there shouldn't be any forks in it, which we should see from the
     // fact that each rank is occupied by a single block.
-    val node = standaloneEff(genesis, transforms, validatorKeys.head)
+    val node = standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
 
     implicit val bs = node.blockStorage
 
@@ -121,7 +127,7 @@ class CreateBlockAPITest
         blockApiLock: Semaphore[Task]
     )(implicit casperRef: MultiParentCasperRef[Task]) =
       for {
-        d <- ProtoUtil.basicDeploy[Task]()
+        d <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(minTtlMillis * 2))
         _ <- BlockAPI.deploy[Task](d)
         _ <- BlockAPI.propose[Task](blockApiLock)
       } yield ()
@@ -172,7 +178,7 @@ class CreateBlockAPITest
   "deploy" should "reject replayed deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
 
     implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
@@ -181,10 +187,11 @@ class CreateBlockAPITest
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[Unit] =
       for {
-        d <- ProtoUtil.basicDeploy[Task]()
+        d <- ProtoUtil.basicDeploy[Task](minTtl * 2)
         _ <- BlockAPI.deploy[Task](d)
         _ <- BlockAPI.propose[Task](blockApiLock)
         _ <- BlockAPI.deploy[Task](d)
+        _ <- BlockAPI.propose[Task](blockApiLock)
       } yield ()
 
     try {
@@ -192,11 +199,10 @@ class CreateBlockAPITest
         casperRef    <- MultiParentCasperRef.of[Task]
         _            <- casperRef.set(node.casperEff)
         blockApiLock <- Semaphore[Task](1)
-        result       <- testProgram(blockApiLock)(casperRef)
+        result       <- testProgram(blockApiLock)(casperRef).attempt
+        Left(ex)     = result
+        _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
-    } catch {
-      case ex: io.grpc.StatusRuntimeException =>
-        ex.getMessage should include("already contains")
     } finally {
       node.tearDown()
     }
@@ -205,13 +211,13 @@ class CreateBlockAPITest
   "getDeployInfo" should "return DeployInfo for specified deployHash" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    val deploy = ProtoUtil.deploy(0)
+    val deploy = ProtoUtil.deploy(0, ttl = minTtl * 2)
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -272,13 +278,14 @@ class CreateBlockAPITest
 
   "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    def mkDeploy(code: String) = ProtoUtil.deploy(0, ByteString.copyFromUtf8(code))
+    def mkDeploy(code: String) =
+      ProtoUtil.deploy(0, ByteString.copyFromUtf8(code), minTtl * 2)
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -312,7 +319,7 @@ class CreateBlockAPITest
   "getDeployInfos" should "return a list of DeployInfo for the list of deploys" in {
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
-      standaloneEff(genesis, transforms, validatorKeys.head)
+      standaloneEff(genesis, transforms, validatorKeys.head, minTtl = minTtl)
 
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
@@ -320,9 +327,10 @@ class CreateBlockAPITest
 
     val deploys = (1L to 10L)
       .map(
-        t =>
-          ProtoUtil.deploy(
-            t
+        ProtoUtil
+          .deploy(
+            _,
+            ttl = minTtl * 2
           )
       )
       .toList

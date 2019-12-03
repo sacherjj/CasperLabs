@@ -2,7 +2,6 @@ package io.casperlabs.casper.helper
 
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
-import cats.mtl.FunctorRaise
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
@@ -10,10 +9,8 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -32,6 +29,9 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.LogIO
+
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -122,7 +122,8 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Double = 0.1
+      faultToleranceThreshold: Double = 0.1,
+      minTtl: FiniteDuration = 1.minute
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -136,11 +137,12 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Double = 0.1
+      faultToleranceThreshold: Double = 0.1,
+      minTtl: FiniteDuration = 1.minute
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
-    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold, minTtl)(
       Concurrent[Task],
       Parallel[Task],
       Timer[Task],
@@ -153,6 +155,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
+      minTtl: FiniteDuration = 1.minute,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -168,6 +171,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
+      minTtl: FiniteDuration = 1.minute,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
   ): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
@@ -176,6 +180,7 @@ trait HashSetCasperTestNodeFactory {
       transforms,
       storageSize,
       faultToleranceThreshold,
+      minTtl,
       maybeMakeEE
     )(
       Concurrent[Task],

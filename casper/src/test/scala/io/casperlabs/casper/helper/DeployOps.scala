@@ -10,8 +10,9 @@ import io.casperlabs.models.{ArbitraryConsensus, DeployImplicits}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
+import scala.concurrent.duration.FiniteDuration
+
 object DeployOps extends ArbitraryConsensus {
-  val minTtlMillis = 60 * 60 * 1000 // 1 hour
   val deployConfig = DeployConfig(
     maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
     maxDependencies = 10
@@ -60,16 +61,17 @@ object DeployOps extends ArbitraryConsensus {
 
   private def rehash(deploy: Deploy): Deploy = {
     val header = deploy.getHeader.withBodyHash(ProtoUtil.protoHash(deploy.getBody))
-    deploy.withDeployHash(ProtoUtil.protoHash(header)).withHeader(header)
+    val d      = deploy.withDeployHash(ProtoUtil.protoHash(header)).withHeader(header)
+    d.signSingle
   }
 
-  def randomTooShortTTL(): Deploy = {
+  def randomTooShortTTL(minTtl: FiniteDuration): Deploy = {
     implicit val c = ConsensusConfig()
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, minTtlMillis - 1)
-    } yield d.withTtl(ttl)
+      ttl <- Gen.choose(1, minTtl.toMillis - 1)
+    } yield d.withTtl(ttl.toInt)
 
     sample(genDeploy)
   }
