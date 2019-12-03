@@ -7,7 +7,7 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.CachingBlockStorageTest.{
   createSQLiteBlockStorage,
   CachingBlockStorageTestData,
@@ -242,6 +242,11 @@ object CachingBlockStorageTest {
 
       override def findBlockHashesWithDeployHash(deployHash: BlockHash): Task[Seq[BlockHash]] =
         underlyingBlockStorage.findBlockHashesWithDeployHash(deployHash)
+
+      override def findBlockHashesWithDeployHashes(
+          deployHashes: List[DeployHash]
+      ): Task[Map[DeployHash, Seq[BlockHash]]] =
+        underlyingBlockStorage.findBlockHashesWithDeployHashes(deployHashes)
 
       override def checkpoint(): Task[Unit] = ???
 

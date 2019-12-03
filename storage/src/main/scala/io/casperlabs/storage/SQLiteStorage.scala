@@ -15,7 +15,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Time
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.block.{BlockStorage, SQLiteBlockStorage}
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, SQLiteDagStorage}
@@ -106,6 +106,11 @@ object SQLiteStorage {
 
       override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
         blockStorage.findBlockHashesWithDeployHash(deployHash)
+
+      override def findBlockHashesWithDeployHashes(
+          deployHashes: List[DeployHash]
+      ): F[Map[DeployHash, Seq[BlockHash]]] =
+        blockStorage.findBlockHashesWithDeployHashes(deployHashes)
 
       override def children(blockHash: BlockHash): F[Set[BlockHash]] =
         dagStorage.children(blockHash)

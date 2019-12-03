@@ -9,7 +9,7 @@ import io.casperlabs.casper.consensus.BlockSummary
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
@@ -68,6 +68,11 @@ class CachingBlockStorage[F[_]: Sync](
 
   override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
     underlying.findBlockHashesWithDeployHash(deployHash)
+
+  override def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Seq[BlockHash]]] =
+    underlying.findBlockHashesWithDeployHashes(deployHashes)
 
   override def checkpoint(): F[Unit] =
     underlying.checkpoint()
