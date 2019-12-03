@@ -21,8 +21,6 @@ pos-code-path = "pos.wasm"
 initial-accounts-path = "accounts.csv"
 
 [deploys]
-# 1 hour
-min-ttl-millis = 3600000
 # 1 day
 max-ttl-millis = 86400000
 max-dependencies = 10

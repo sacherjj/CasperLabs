@@ -8,8 +8,6 @@ protocol-version = "1.0.2"
 installer-code-path = "installer.wasm"
 
 [deploys]
-# 1 hour
-min-ttl-millis = 3600000
 # 10 days
 max-ttl-millis = 864000000
 max-dependencies = 10

@@ -558,7 +558,6 @@ object ProtoUtil {
       .Header()
       .withAccountPublicKey(ByteString.copyFrom(pk))
       .withTimestamp(timestamp)
-      .withTtlMillis(ttl.toMillis.toInt)
       .withBodyHash(protoHash(b))
       .withTtlMillis(ttl.toMillis.toInt)
     Deploy()
