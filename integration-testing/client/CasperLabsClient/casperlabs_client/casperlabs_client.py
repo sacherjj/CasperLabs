@@ -314,6 +314,10 @@ def signature(private_key, data: bytes):
     )
 
 
+def private_to_public_key(private_key) -> bytes:
+    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
+
+
 def _serialize(o) -> bytes:
     return o.SerializeToString()
 
@@ -658,9 +662,12 @@ class CasperLabsClient:
             dependencies=dependencies,
         )
 
-        deploy = self.sign_deploy(
-            deploy, (public_key and read_pem_key(public_key)) or from_addr, private_key
+        pk = (
+            (public_key and read_pem_key(public_key))
+            or from_addr
+            or private_to_public_key(private_key)
         )
+        deploy = self.sign_deploy(deploy, pk, private_key)
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
@@ -993,10 +1000,14 @@ def transfer_command(casperlabs_client, args):
     _set_session(args, "transfer_to_account.wasm")
 
     if not args.session_args:
+        target_account_bytes = base64.b64decode(args.target_account)
+        if len(target_account_bytes) != 32:
+            raise Exception("--target_account must be 32 bytes base64 encoded")
+
         args.session_args = ABI.args_to_json(
             ABI.args(
                 [
-                    ABI.account("account", args.account),
+                    ABI.account("account", target_account_bytes),
                     ABI.long_value("amount", args.amount),
                 ]
             )
@@ -1006,8 +1017,12 @@ def transfer_command(casperlabs_client, args):
 
 
 def _deploy_kwargs(args, private_key_accepted=True):
-    from_addr = bytes.fromhex(getattr(args, "from"))
-    if len(from_addr) != 32:
+    from_addr = (
+        getattr(args, "from")
+        and bytes.fromhex(getattr(args, "from"))
+        or private_to_public_key(args.private_key)
+    )
+    if from_addr and len(from_addr) != 32:
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
@@ -1180,8 +1195,8 @@ def natural(number):
 # fmt: off
 def deploy_options(keys_required=False, private_key_accepted=True):
     return ([
-        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-        [('-chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
+        [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
         [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
@@ -1198,7 +1213,7 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
         [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
-           and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
+           and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
            or []))
 # fmt:on
 
@@ -1307,7 +1322,7 @@ def main():
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 representation of target account's public key")],
-                       ] + deploy_options(keys_required=True))
+                       ] + deploy_options(keys_required=False, private_key_accepted=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
