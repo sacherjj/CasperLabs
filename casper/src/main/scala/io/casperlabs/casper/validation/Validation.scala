@@ -454,8 +454,8 @@ object Validation {
       none[Errors.DeployHeaderError].pure[F]
 
   def validateMinTtl[F[_]: Applicative: Log](
-                                              deploy: Deploy,
-                                              minTtl: FiniteDuration
+      deploy: Deploy,
+      minTtl: FiniteDuration
   ): F[Option[Errors.DeployHeaderError]] =
     if (deploy.getHeader.ttlMillis < minTtl.toMillis)
       Errors.DeployHeaderError

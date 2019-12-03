@@ -175,7 +175,7 @@ abstract class HashSetCasperTest
   def deploysFromString(start: Long, strs: List[String]): List[Deploy] =
     strs.zipWithIndex.map(
       s =>
-        ProtoUtil.basicDeploy(
+        ProtoUtil.deploy(
           0,
           ByteString.copyFromUtf8((start + s._2).toString)
         )
@@ -261,8 +261,8 @@ abstract class HashSetCasperTest
     val dummyContract =
       ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
 
-    val data0 = ProtoUtil.basicDeploy(1, dummyContract)
-    val data1 = ProtoUtil.basicDeploy(2, dummyContract)
+    val data0 = ProtoUtil.deploy(1, dummyContract)
+    val data1 = ProtoUtil.deploy(2, dummyContract)
 
     for {
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -1094,8 +1094,8 @@ abstract class HashSetCasperTest
               )
 
       sessionCode = ByteString.copyFromUtf8("Do the thing")
-      deployA     = ProtoUtil.basicDeploy(0, sessionCode)
-      deployB     = ProtoUtil.basicDeploy(0, sessionCode)
+      deployA     = ProtoUtil.deploy(0, sessionCode)
+      deployB     = ProtoUtil.deploy(0, sessionCode)
 
       _                <- nodes(0).casperEff.deploy(deployA)
       createA          <- nodes(0).casperEff.createBlock
@@ -1259,7 +1259,7 @@ abstract class HashSetCasperTest
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
 
-    val deploy = ProtoUtil.basicDeploy(timestamp = 1L)
+    val deploy = ProtoUtil.deploy(timestamp = 1L)
 
     for {
       Created(block) <- node.casperEff.deploy(deploy) *> MultiParentCasper[Task].createBlock

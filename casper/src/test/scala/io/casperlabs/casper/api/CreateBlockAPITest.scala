@@ -66,7 +66,7 @@ class CreateBlockAPITest
     val node   = standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
     val deploys = List.fill(2)(
-      ProtoUtil.basicDeploy(
+      ProtoUtil.deploy(
         0,
         ByteString.copyFromUtf8(System.currentTimeMillis().toString)
       )
@@ -211,7 +211,7 @@ class CreateBlockAPITest
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    val deploy = ProtoUtil.basicDeploy(0)
+    val deploy = ProtoUtil.deploy(0)
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -278,7 +278,7 @@ class CreateBlockAPITest
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code))
+    def mkDeploy(code: String) = ProtoUtil.deploy(0, ByteString.copyFromUtf8(code))
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -321,7 +321,7 @@ class CreateBlockAPITest
     val deploys = (1L to 10L)
       .map(
         t =>
-          ProtoUtil.basicDeploy(
+          ProtoUtil.deploy(
             t
           )
       )

@@ -62,13 +62,13 @@ sealed abstract class MultiParentCasperInstances {
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
   def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocol](
-                                                                                                                                                                                                                   validatorId: Option[ValidatorIdentity],
-                                                                                                                                                                                                                   genesis: Block,
-                                                                                                                                                                                                                   genesisPreState: StateHash,
-                                                                                                                                                                                                                   genesisEffects: ExecEngineUtil.TransformMap,
-                                                                                                                                                                                                                   chainName: String,
-                                                                                                                                                                                                                   minTtl: FiniteDuration,
-                                                                                                                                                                                                                   upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+      validatorId: Option[ValidatorIdentity],
+      genesis: Block,
+      genesisPreState: StateHash,
+      genesisEffects: ExecEngineUtil.TransformMap,
+      chainName: String,
+      minTtl: FiniteDuration,
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ): F[MultiParentCasper[F]] =
     for {
       implicit0(casperState: Cell[F, CasperState]) <- init(

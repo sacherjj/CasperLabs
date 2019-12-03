@@ -54,13 +54,13 @@ final case class CasperState(
 
 @silent("is never used")
 class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
-                                                                                                                                                                                                                                                           validatorSemaphoreMap: SemaphoreMap[F, ByteString],
-                                                                                                                                                                                                                                                           statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
-                                                                                                                                                                                                                                                           validatorId: Option[ValidatorIdentity],
-                                                                                                                                                                                                                                                           genesis: Block,
-                                                                                                                                                                                                                                                           chainName: String,
-                                                                                                                                                                                                                                                           minTtl: FiniteDuration,
-                                                                                                                                                                                                                                                           upgrades: Seq[ipc.ChainSpec.UpgradePoint]
+    validatorSemaphoreMap: SemaphoreMap[F, ByteString],
+    statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
+    validatorId: Option[ValidatorIdentity],
+    genesis: Block,
+    chainName: String,
+    minTtl: FiniteDuration,
+    upgrades: Seq[ipc.ChainSpec.UpgradePoint]
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
 
@@ -564,14 +564,14 @@ object MultiParentCasperImpl {
     *[_],
     CasperState
   ]: DeploySelection](
-                                    semaphoreMap: SemaphoreMap[F, ByteString],
-                                    statelessExecutor: StatelessExecutor[F],
-                                    validatorId: Option[ValidatorIdentity],
-                                    genesis: Block,
-                                    chainName: String,
-                                    minTtl: FiniteDuration,
-                                    upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-                                    faultToleranceThreshold: Double = 0.1
+      semaphoreMap: SemaphoreMap[F, ByteString],
+      statelessExecutor: StatelessExecutor[F],
+      validatorId: Option[ValidatorIdentity],
+      genesis: Block,
+      chainName: String,
+      minTtl: FiniteDuration,
+      upgrades: Seq[ipc.ChainSpec.UpgradePoint],
+      faultToleranceThreshold: Double = 0.1
   ): F[MultiParentCasper[F]] =
     for {
       dag <- DagStorage[F].getRepresentation
