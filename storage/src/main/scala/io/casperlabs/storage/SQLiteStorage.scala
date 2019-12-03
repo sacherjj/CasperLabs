@@ -106,7 +106,7 @@ object SQLiteStorage {
 
       override def findBlockHashesWithDeployHashes(
           deployHashes: List[DeployHash]
-      ): F[Map[DeployHash, Seq[BlockHash]]] =
+      ): F[Map[DeployHash, Set[BlockHash]]] =
         blockStorage.findBlockHashesWithDeployHashes(deployHashes)
 
       override def children(blockHash: BlockHash): F[Set[BlockHash]] =

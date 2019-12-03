@@ -242,7 +242,7 @@ object CachingBlockStorageTest {
 
       override def findBlockHashesWithDeployHashes(
           deployHashes: List[DeployHash]
-      ): Task[Map[DeployHash, Seq[BlockHash]]] =
+      ): Task[Map[DeployHash, Set[BlockHash]]] =
         underlyingBlockStorage.findBlockHashesWithDeployHashes(deployHashes)
 
       override def checkpoint(): Task[Unit] = ???

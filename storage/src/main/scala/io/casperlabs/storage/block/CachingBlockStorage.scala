@@ -68,7 +68,7 @@ class CachingBlockStorage[F[_]: Sync](
 
   override def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
-  ): F[Map[DeployHash, Seq[BlockHash]]] =
+  ): F[Map[DeployHash, Set[BlockHash]]] =
     underlying.findBlockHashesWithDeployHashes(deployHashes)
 
   override def checkpoint(): F[Unit] =

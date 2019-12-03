@@ -163,10 +163,10 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
   override def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
-  ): F[Map[DeployHash, Seq[BlockHash]]] =
+  ): F[Map[DeployHash, Set[BlockHash]]] =
     NonEmptyList
       .fromList[ByteString](deployHashes)
-      .fold(Map.empty[DeployHash, Seq[BlockHash]].pure[F]) { nfl =>
+      .fold(Map.empty[DeployHash, Set[BlockHash]].pure[F]) { nfl =>
         val sql = fr"""|SELECT deploy_hash, block_hash
                        |FROM deploy_process_results
                        |WHERE """.stripMargin ++ Fragments.in(fr"deploy_hash", nfl)
@@ -178,7 +178,8 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
           .map(_.groupBy(_._1))
           .map { deployHashToBlockHashesMap: Map[DeployHash, Seq[(DeployHash, BlockHash)]] =>
             deployHashes.map { d =>
-              val value = deployHashToBlockHashesMap.get(d).fold(Seq.empty[BlockHash])(_.map(_._2))
+              val value =
+                deployHashToBlockHashesMap.get(d).fold(Set.empty[BlockHash])(_.map(_._2).toSet)
               (d, value)
             }.toMap
           }

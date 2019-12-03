@@ -114,36 +114,30 @@ trait BlockStorageTest
   }
 
   it should "be able to get a Map from deploy to the blocks containing the deploy on findBlockHashesWithDeployHashes" in {
-    forAll(blockElementsGen, Gen.listOf(genHash)) {
-      (blockStorageElements, deployHashesWithNoBlocks) =>
-        val deployHashToBlockHashes =
-          blockStorageElements
-            .flatMap(
-              b =>
-                b.getBlockMessage.getBody.deploys
-                  .map(
-                    _.getDeploy.deployHash -> b.getBlockMessage.blockHash
-                  )
-                  .toSet
-            )
-            .groupBy(_._1)
-            .mapValues(_.map(_._2))
+    forAll(blockElementsGen) { blockStorageElements =>
+      val deployHashToBlockHashes =
+        blockStorageElements
+          .flatMap(
+            b =>
+              b.getBlockMessage.getBody.deploys
+                .map(
+                  _.getDeploy.deployHash -> b.getBlockMessage.blockHash
+                )
+                .toSet
+          )
+          .groupBy(_._1)
+          .mapValues(_.map(_._2).toSet)
 
-        withStorage { storage =>
-          val items = blockStorageElements
-          for {
-            _            <- items.traverse_(storage.put)
-            deployHashes = deployHashToBlockHashes.keys.toList ++ deployHashesWithNoBlocks
+      withStorage { storage =>
+        val items = blockStorageElements
+        for {
+          _            <- items.traverse_(storage.put)
+          deployHashes = deployHashToBlockHashes.keys.toList
 
-            result <- storage.findBlockHashesWithDeployHashes(deployHashes)
-            _ = deployHashes.foreach { deployHash =>
-              result(deployHash) shouldBe deployHashToBlockHashes.getOrElse(
-                deployHash,
-                Seq.empty[BlockHash]
-              )
-            }
-          } yield ()
-        }
+          result <- storage.findBlockHashesWithDeployHashes(deployHashes)
+          _      = result shouldBe deployHashToBlockHashes
+        } yield ()
+      }
     }
   }
 
@@ -157,7 +151,7 @@ trait BlockStorageTest
       withStorage { storage =>
         for {
           result <- storage.findBlockHashesWithDeployHashes(deployHashes)
-          _      = deployHashes.foreach(d => result.get(d) shouldBe (Some(Seq.empty[BlockHash])))
+          _      = deployHashes.foreach(d => result.get(d) shouldBe (Some(Set.empty[BlockHash])))
         } yield ()
       }
     }

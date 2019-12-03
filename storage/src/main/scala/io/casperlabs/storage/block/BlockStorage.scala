@@ -55,7 +55,7 @@ trait BlockStorage[F[_]] {
     */
   def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
-  ): F[Map[DeployHash, Seq[BlockHash]]]
+  ): F[Map[DeployHash, Set[BlockHash]]]
 
   def checkpoint(): F[Unit]
 
@@ -109,7 +109,7 @@ object BlockStorage {
 
     abstract override def findBlockHashesWithDeployHashes(
         deployHashes: List[DeployHash]
-    ): F[Map[DeployHash, Seq[BlockHash]]] =
+    ): F[Map[DeployHash, Set[BlockHash]]] =
       incAndMeasure(
         "findBlockHashesWithDeployHashes",
         super.findBlockHashesWithDeployHashes(deployHashes)
