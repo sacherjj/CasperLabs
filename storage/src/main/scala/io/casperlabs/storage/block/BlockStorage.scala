@@ -51,7 +51,7 @@ trait BlockStorage[F[_]] {
 
   /**
     * Note: if there are no blocks for the specified deployHash,
-    * Result.get(deployHash) returns Some(Seq.empty[BlockHash]) instead of None
+    * Result.get(deployHash) returns Some(Set.empty[BlockHash]) instead of None
     */
   def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
