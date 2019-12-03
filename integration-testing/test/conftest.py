@@ -151,6 +151,15 @@ def chainspec_upgrades_network_minor(docker_client_fixture):
         yield net
 
 
+@pytest.fixture()
+def chainspec_upgrades_network_etc(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, etc_casperlabs_directory="etc_casperlabs"
+    ) as net:
+        net.create_cl_network()
+        yield net
+
+
 @pytest.fixture(scope="module")
 def nodes(three_node_network):
     return three_node_network.docker_nodes

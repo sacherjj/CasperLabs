@@ -195,6 +195,7 @@ object AutoProposerTest {
     override def contains(block: Block): F[Boolean]     = ???
     override def estimator(
         dag: DagRepresentation[F],
+        lfbHash: ByteString,
         lm: Map[Validator, Set[ByteString]],
         equivocators: Set[Validator]
     ): F[List[ByteString]]                    = ???

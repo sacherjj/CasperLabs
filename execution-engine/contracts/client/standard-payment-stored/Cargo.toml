@@ -16,3 +16,4 @@ std = ["contract-ffi/std"]
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }
+standard-payment = { path = "../standard-payment", default-features = false, features = ["lib"] }

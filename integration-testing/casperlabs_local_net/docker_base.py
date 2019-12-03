@@ -112,6 +112,10 @@ class DockerBase:
         return f"{self.host_mount_dir}/{self.config.chainspec_directory}"
 
     @property
+    def host_etc_casperlabs_dir(self) -> str:
+        return f"{self.host_mount_dir}/{self.config.etc_casperlabs_directory}"
+
+    @property
     def host_bootstrap_dir(self) -> str:
         return f"{self.host_mount_dir}/bootstrap_certificate"
 

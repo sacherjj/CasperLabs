@@ -71,6 +71,12 @@ service CasperService {
             get: "v2/accounts/{account_public_key_base16=*}/deploys"
         };
     }
+
+    rpc GetLastFinalizedBlockInfo (GetLastFinalizedBlockInfoRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
+        option (google.api.http) = {
+    		get: "v2/last-finalized-block"
+    	};
+    }
 }
 
 message DeployRequest {
@@ -148,3 +154,6 @@ message ListDeployInfosResponse {
     string next_page_token = 2;
     string prev_page_token = 3;
 }
+
+
+message GetLastFinalizedBlockInfoRequest {}

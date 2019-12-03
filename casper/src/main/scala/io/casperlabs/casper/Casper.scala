@@ -31,6 +31,7 @@ trait MultiParentCasper[F[_]] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
+      lfbHash: ByteString,
       latestMessages: Map[ByteString, Set[ByteString]],
       equivocators: Set[Validator]
   ): F[List[ByteString]]

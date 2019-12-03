@@ -16,7 +16,7 @@ use crate::{
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
-const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
+const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
 const PAYMENT_AMOUNT: u64 = 200_000_000;
 
@@ -84,7 +84,7 @@ fn should_upgrade_system_contract() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -162,7 +162,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -240,7 +240,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -361,7 +361,7 @@ fn should_allow_only_wasm_costs_minor_version() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -405,7 +405,7 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -489,7 +489,7 @@ fn should_not_downgrade() {
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()

@@ -12,6 +12,7 @@ import {
   GetBlockInfoRequest,
   GetBlockStateRequest,
   GetDeployInfoRequest,
+  GetLastFinalizedBlockInfoRequest,
   ListDeployInfosRequest,
   ListDeployInfosResponse,
   StateQuery,
@@ -255,6 +256,24 @@ export default class CasperService {
       res => res.getBigInt()!
     );
     return Number(balance.getValue());
+  }
+
+  getLastFinalizedBlockInfo(): Promise<BlockInfo> {
+    return new Promise<BlockInfo>((resolve, reject) => {
+      const request = new GetLastFinalizedBlockInfoRequest();
+
+      grpc.unary(GrpcCasperService.GetLastFinalizedBlockInfo, {
+        host: this.url,
+        request,
+        onEnd: res => {
+          if (res.status === grpc.Code.OK) {
+            resolve(res.message as BlockInfo);
+          } else {
+            reject(new GrpcError(res.status, res.statusMessage));
+          }
+        }
+      })
+    })
   }
 }
 

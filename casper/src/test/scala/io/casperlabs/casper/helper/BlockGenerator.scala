@@ -101,6 +101,7 @@ object BlockGenerator {
 trait BlockGenerator {
   def createBlock[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: ByteString = ByteString.EMPTY,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty,
@@ -112,6 +113,7 @@ trait BlockGenerator {
   ): F[Block] =
     createBlockNew[F](
       parentsHashList,
+      keyBlockHash,
       creator,
       bonds,
       justifications.mapValues(Set(_)),
@@ -124,6 +126,7 @@ trait BlockGenerator {
 
   def createBlockNew[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, Set[BlockHash]] = HashMap.empty,
@@ -203,7 +206,8 @@ trait BlockGenerator {
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
           timestamp = now,
-          chainName = chainName
+          chainName = chainName,
+          keyBlockHash = keyBlockHash
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)
@@ -220,9 +224,11 @@ trait BlockGenerator {
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      keyBlockHash: BlockHash = ByteString.EMPTY
   ): F[Block] = createAndStoreBlockNew[F](
     parentsHashList,
+    keyBlockHash,
     creator,
     bonds,
     justifications.mapValues(Set(_)),
@@ -236,6 +242,7 @@ trait BlockGenerator {
 
   def createAndStoreBlockNew[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: ByteString,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, Set[BlockHash]],
@@ -257,7 +264,8 @@ trait BlockGenerator {
                 chainName = chainName,
                 preStateHash = preStateHash,
                 maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
-                maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+                maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
+                keyBlockHash = keyBlockHash
               )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
     } yield block
