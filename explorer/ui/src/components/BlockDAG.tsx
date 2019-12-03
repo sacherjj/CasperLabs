@@ -362,9 +362,12 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
   const minRank = Math.min(...graph.nodes.map(x => x.rank));
   const horizontalStep = width / (maxRank - minRank + 2);
 
+  // count how many nodes having the same (validator, rank)
   let countOfRanks = new Map<string, number>();
-  let indexOfRanks = new Map<string, number>();
+  // current index, for the specified key, curIndexOfRanks[key] = [0, countOfRanks[key])
+  let curIndexOfRanks = new Map<string, number>();
 
+  // since JavaScript doesn't support tuple as key of Map, we need to encode the primary keys
   let key = (node: d3Node) => `${node.validator},${node.rank}`;
 
   graph.nodes.forEach(node => {
@@ -381,12 +384,16 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
     let count = countOfRanks.get(k)!;
     let step = 0;
 
-    if(count !== 1){
-      let index = indexOfRanks.has(k) ? indexOfRanks.get(k)! : 0;
-      step = (index - (count - 1) / 2) / (count - 1) * (1 - marginPercent);
-      indexOfRanks.set(k, index + 1);
+    if (count !== 1) {
+      let index = curIndexOfRanks.has(k) ? curIndexOfRanks.get(k)! : 0;
+      // for each node i of nodes NS having the same (validator, rank), c is the size of NS
+      // its distance from the baseline of swimlane is (i / (c - 1) - 0.5) * height of swimlane
+      // the height of swimlane is (1 - marginPercent) * verticalStep
+      step = (index  / (count - 1) - 0.5) * (1 - marginPercent);
+      curIndexOfRanks.set(k, index + 1);
     }
 
+    // (validators.indexOf(node.validator) + 0.5) * verticalStep is the y of the baseline of swimlane of node.validator
     node.y = (validators.indexOf(node.validator) + 0.5 + step) * verticalStep;
     node.x = (node.rank - minRank + 1) * horizontalStep;
   });
