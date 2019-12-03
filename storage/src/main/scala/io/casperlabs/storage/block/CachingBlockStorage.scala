@@ -66,9 +66,6 @@ class CachingBlockStorage[F[_]: Sync](
     // Not caching because in the future the finality status will get updated.
     underlying.getBlockInfo(blockHash)
 
-  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-    underlying.findBlockHashesWithDeployHash(deployHash)
-
   override def findBlockHashesWithDeployHashes(
       deployHashes: List[DeployHash]
   ): F[Map[DeployHash, Seq[BlockHash]]] =

@@ -113,41 +113,6 @@ trait BlockStorageTest
     }
   }
 
-  it should "be able to get blocks containing the specific deploy" in {
-    forAll(blockElementsGen) { blockStorageElements =>
-      val deployHashToBlockHashes =
-        blockStorageElements
-          .flatMap(
-            b =>
-              b.getBlockMessage.getBody.deploys
-                .map(
-                  _.getDeploy.deployHash -> b.getBlockMessage.blockHash
-                )
-                .toSet
-          )
-          .groupBy(_._1)
-          .mapValues(_.map(_._2))
-
-      withStorage { storage =>
-        val items = blockStorageElements
-        for {
-          _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Seq[Assertion]] { block =>
-                block.getBlockMessage.getBody.deploys.toList.traverse { deploy =>
-                  storage
-                    .findBlockHashesWithDeployHash(deploy.getDeploy.deployHash)
-                    .map(
-                      _ should contain theSameElementsAs (
-                        deployHashToBlockHashes(deploy.getDeploy.deployHash)
-                      )
-                    )
-                }
-              }
-        } yield ()
-      }
-    }
-  }
-
   it should "be able to get a Map from deploy to the blocks containing the deploy on findBlockHashesWithDeployHashes" in {
     forAll(blockElementsGen, Gen.listOf(genHash)) {
       (blockStorageElements, deployHashesWithNoBlocks) =>

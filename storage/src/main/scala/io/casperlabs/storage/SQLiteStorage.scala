@@ -104,9 +104,6 @@ object SQLiteStorage {
       override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
         dagStorage.lookup(blockHash).map(_.map(_.blockSummary))
 
-      override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-        blockStorage.findBlockHashesWithDeployHash(deployHash)
-
       override def findBlockHashesWithDeployHashes(
           deployHashes: List[DeployHash]
       ): F[Map[DeployHash, Seq[BlockHash]]] =

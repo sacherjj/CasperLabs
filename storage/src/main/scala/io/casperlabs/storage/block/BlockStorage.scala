@@ -49,8 +49,6 @@ trait BlockStorage[F[_]] {
 
   def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]]
 
-  def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
-
   /**
     * Note: if there are no blocks for the specified deployHash,
     * Result.get(deployHash) returns Some(Seq.empty[BlockHash]) instead of None
@@ -108,14 +106,6 @@ object BlockStorage {
         blockHash: BlockHash
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
-
-    abstract override def findBlockHashesWithDeployHash(
-        deployHash: BlockHash
-    ): F[Seq[BlockHash]] =
-      incAndMeasure(
-        "findBlockHashesWithDeployHash",
-        super.findBlockHashesWithDeployHash(deployHash)
-      )
 
     abstract override def findBlockHashesWithDeployHashes(
         deployHashes: List[DeployHash]

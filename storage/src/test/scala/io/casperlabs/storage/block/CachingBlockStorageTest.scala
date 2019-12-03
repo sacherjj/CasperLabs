@@ -240,9 +240,6 @@ object CachingBlockStorageTest {
       override def getBlockInfoByPrefix(blockHashPrefix: String): Task[Option[BlockInfo]] =
         underlyingBlockStorage.getBlockInfoByPrefix(blockHashPrefix)
 
-      override def findBlockHashesWithDeployHash(deployHash: BlockHash): Task[Seq[BlockHash]] =
-        underlyingBlockStorage.findBlockHashesWithDeployHash(deployHash)
-
       override def findBlockHashesWithDeployHashes(
           deployHashes: List[DeployHash]
       ): Task[Map[DeployHash, Seq[BlockHash]]] =
