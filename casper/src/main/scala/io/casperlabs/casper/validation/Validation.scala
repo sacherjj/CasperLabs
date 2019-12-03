@@ -200,11 +200,7 @@ object Validation {
 
       case None =>
         for {
-          deployToBlocksMap <- bs
-                                .findBlockHashesWithDeployHashes(deploys.map(_.deployHash))
-                                .map(_.mapValues { blockHashes =>
-                                  blockHashes.filterNot(_ == block.blockHash)
-                                })
+          deployToBlocksMap <- bs.findBlockHashesWithDeployHashes(deploys.map(_.deployHash))
 
           blockHashes = deployToBlocksMap.values.flatten.toSet
 
