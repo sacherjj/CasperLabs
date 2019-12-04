@@ -113,8 +113,7 @@ object Options {
       descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false,
-      noshort = true,
-      default = Some(FiniteDuration(1, TimeUnit.HOURS).toMillis.toInt) // Make sure default value is aligned with minTTL in `default-configuration.toml` file.
+      noshort = true
     )
 
     val dependencies = opt[List[String]](

@@ -456,7 +456,7 @@ object Validation {
       deploy: Deploy,
       minTtl: FiniteDuration
   ): F[Option[Errors.DeployHeaderError]] =
-    if (deploy.getHeader.ttlMillis < minTtl.toMillis)
+    if (deploy.getHeader.ttlMillis != 0 && deploy.getHeader.ttlMillis < minTtl.toMillis)
       Errors.DeployHeaderError
         .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtl)
         .logged[F]
