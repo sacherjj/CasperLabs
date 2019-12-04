@@ -74,7 +74,7 @@ impl Key {
     }
 
     /// Returns max size a [`Key`] can be serialized into.
-    pub fn serialized_size_hint() -> usize {
+    pub const fn serialized_size_hint() -> usize {
         UREF_SIZE
     }
 }

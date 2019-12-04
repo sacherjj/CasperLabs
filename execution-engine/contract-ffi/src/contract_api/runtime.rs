@@ -135,21 +135,39 @@ pub fn get_phase() -> Phase {
     deserialize(&bytes).unwrap_or_revert()
 }
 
+/// Returns serialized size of given [`key::Key`] referenced by name.
+///
+/// Returns [`error::Error`] if given key can not be found.
+pub fn get_key_size(name: &str) -> Result<usize, Error> {
+    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let mut size: usize = 0;
+    let ret = unsafe { ext_ffi::get_key_size(name_ptr, name_size, &mut size as *mut usize) };
+    result_from(ret).map(|_| size)
+}
+
 /// Return the unforgable reference known by the current module under the given
 /// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
+    let mut key_bytes = [0u8; Key::serialized_size_hint()];
+    let mut total_bytes: usize = 0;
+    let ret = unsafe {
+        ext_ffi::get_key(
+            name_ptr,
+            name_size,
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+            &mut total_bytes as *mut usize,
+        )
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap_or_revert()
+    match result_from(ret) {
+        Ok(_) => {}
+        Err(Error::MissingKey) => return None,
+        Err(e) => revert(e),
+    }
+    let key: Key = deserialize(&key_bytes[..total_bytes]).unwrap_or_revert();
+    Some(key)
 }
 
 /// Check if the given name corresponds to a known unforgable reference

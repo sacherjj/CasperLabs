@@ -117,6 +117,8 @@ pub enum Error {
     PurseNotCreated,
     /// An unhandled value, likely representing a bug in the code.
     Unhandled,
+    /// Passing a buffer of a size that is too small to complete an operation
+    BufferTooSmall,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -234,6 +236,7 @@ impl From<Error> for u32 {
             Error::InvalidSystemContract => 31,
             Error::PurseNotCreated => 32,
             Error::Unhandled => 33,
+            Error::BufferTooSmall => 34,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -279,6 +282,7 @@ impl Debug for Error {
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::PurseNotCreated => write!(f, "Error::PurseNotCreated")?,
             Error::Unhandled => write!(f, "Error::Unhandled")?,
+            Error::BufferTooSmall => write!(f, "Error::BufferTooSmall")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
