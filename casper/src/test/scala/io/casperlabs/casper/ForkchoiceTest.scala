@@ -286,7 +286,7 @@ class ForkchoiceTest
         equivocators        <- dag.getEquivocators
         latestMessageHashes <- dag.latestMessageHashes
         tips                <- Estimator.tips(dag, genesis.blockHash, latestMessageHashes, equivocators)
-        _                   = tips shouldBe List(b.blockHash)
+        _                   = tips.toList shouldBe List(b.blockHash)
       } yield ()
   }
 
