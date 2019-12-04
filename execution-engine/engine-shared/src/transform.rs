@@ -313,9 +313,16 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use contract_ffi::value::{U128, U256, U512};
+    use contract_ffi::{
+        uref::{AccessRights, URef},
+        value::{account::PurseId, ProtocolVersion, U128, U256, U512},
+    };
 
     use super::*;
+    use crate::{
+        account::{Account, ActionThresholds, AssociatedKeys},
+        contract::Contract,
+    };
 
     #[test]
     fn i32_overflow() {
@@ -389,20 +396,370 @@ mod tests {
         uint_overflow_test::<U512>();
     }
 
-    // TODO(Fraser) - fix
-    //    #[test]
-    //    fn u64_to_i32_addition() {
-    //        let i32_max_as_u64 = i32::max_value().to_u64().unwrap();
-    //        assert_eq!(
-    //            i32::max_value(),
-    //            super::u64_wrapping_addition(i32_max_as_u64, 0)
-    //        );
-    //
-    //        // Plus 1 is for "wrapping" the number (going from i32::max to i32::min).
-    //        let base_u64 = (5 * i32_max_as_u64) + 100 + 1;
-    //        assert_eq!(
-    //            i32::min_value() + 100,
-    //            super::u64_wrapping_addition(base_u64, i32::max_value())
-    //        )
-    //    }
+    #[test]
+    fn wrapping_addition_should_fail() {
+        fn assert_yields_type_mismatch_error(stored_value: StoredValue) {
+            match wrapping_addition(stored_value, 0_i32) {
+                Err(Error::TypeMismatch(_)) => (),
+                _ => panic!("wrapping addition should yield TypeMismatch error"),
+            };
+        }
+
+        let contract = StoredValue::Contract(Contract::new(
+            vec![],
+            BTreeMap::new(),
+            ProtocolVersion::default(),
+        ));
+        assert_yields_type_mismatch_error(contract);
+
+        let uref = URef::new([0; 32], AccessRights::READ);
+        let account = StoredValue::Account(Account::new(
+            [0; 32],
+            BTreeMap::new(),
+            PurseId::new(uref),
+            AssociatedKeys::default(),
+            ActionThresholds::default(),
+        ));
+        assert_yields_type_mismatch_error(account);
+
+        let cl_bool = StoredValue::CLValue(CLValue::from_t(&true).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_bool);
+
+        let cl_unit = StoredValue::CLValue(CLValue::from_t(&()).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_unit);
+
+        let cl_string = StoredValue::CLValue(CLValue::from_t(&"a").expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_string);
+
+        let cl_key = StoredValue::CLValue(
+            CLValue::from_t(&Key::Hash([0; 32])).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_key);
+
+        let cl_uref = StoredValue::CLValue(CLValue::from_t(&uref).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_uref);
+
+        let cl_option =
+            StoredValue::CLValue(CLValue::from_t(&Some(0_u8)).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_option);
+
+        let cl_list =
+            StoredValue::CLValue(CLValue::from_t(&vec![0_u8]).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_list);
+
+        let cl_fixed_list =
+            StoredValue::CLValue(CLValue::from_t(&[0_u8]).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_fixed_list);
+
+        let cl_result = StoredValue::CLValue(
+            CLValue::from_t(&Result::<(), _>::Err(0_u8)).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_result);
+
+        let cl_map = StoredValue::CLValue(
+            CLValue::from_t(&BTreeMap::<u8, u8>::new()).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_map);
+
+        let cl_tuple1 =
+            StoredValue::CLValue(CLValue::from_t(&(0_u8,)).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_tuple1);
+
+        let cl_tuple2 =
+            StoredValue::CLValue(CLValue::from_t(&(0_u8, 0_u8)).expect("should create CLValue"));
+        assert_yields_type_mismatch_error(cl_tuple2);
+
+        let cl_tuple3 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8)).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple3);
+
+        let cl_tuple4 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8)).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple4);
+
+        let cl_tuple5 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8)).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple5);
+
+        let cl_tuple6 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8)).expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple6);
+
+        let cl_tuple7 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8))
+                .expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple7);
+
+        let cl_tuple8 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8))
+                .expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple8);
+
+        let cl_tuple9 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8))
+                .expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple9);
+
+        let cl_tuple10 = StoredValue::CLValue(
+            CLValue::from_t(&(0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8, 0_u8))
+                .expect("should create CLValue"),
+        );
+        assert_yields_type_mismatch_error(cl_tuple10);
+    }
+}
+
+#[test]
+#[allow(clippy::cognitive_complexity)]
+fn wrapping_addition_should_succeed() {
+    fn add<X, Y>(current_value: X, to_add: Y) -> X
+    where
+        X: CLTyped + ToBytes + FromBytes + PartialEq + fmt::Debug,
+        Y: AsPrimitive<i32>
+            + AsPrimitive<i64>
+            + AsPrimitive<u8>
+            + AsPrimitive<u32>
+            + AsPrimitive<u64>
+            + AsPrimitive<U128>
+            + AsPrimitive<U256>
+            + AsPrimitive<U512>,
+    {
+        let current =
+            StoredValue::CLValue(CLValue::from_t(&current_value).expect("should create CLValue"));
+        let result = wrapping_addition(current, to_add).expect("wrapping addition should succeed");
+        CLValue::try_from(result)
+            .expect("should be CLValue")
+            .to_t()
+            .expect("should parse to X")
+    }
+
+    // Adding to i32
+    assert_eq!(1, add(0_i32, 1_i32));
+    assert_eq!(i32::min_value(), add(i32::max_value(), 1_i32));
+    assert_eq!(-2, add(i32::max_value(), i32::max_value()));
+    assert_eq!(0, add(1_i32, -1_i32));
+    assert_eq!(-1, add(0, -1_i32));
+    assert_eq!(i32::max_value(), add(-1_i32, i32::min_value()));
+
+    assert_eq!(1, add(0_i32, 1_u64));
+    assert_eq!(i32::min_value(), add(i32::max_value(), 1_u64));
+    assert_eq!(-2, add(i32::max_value(), i32::max_value() as u64));
+
+    assert_eq!(1, add(0_i32, U128::from(1)));
+    assert_eq!(i32::min_value(), add(i32::max_value(), U128::from(1)));
+    assert_eq!(-2, add(i32::max_value(), U128::from(i32::max_value())));
+
+    assert_eq!(1, add(0_i32, U256::from(1)));
+    assert_eq!(i32::min_value(), add(i32::max_value(), U256::from(1)));
+    assert_eq!(-2, add(i32::max_value(), U256::from(i32::max_value())));
+
+    assert_eq!(1, add(0_i32, U512::from(1)));
+    assert_eq!(i32::min_value(), add(i32::max_value(), U512::from(1)));
+    assert_eq!(-2, add(i32::max_value(), U512::from(i32::max_value())));
+
+    // Adding to i64
+    assert_eq!(1, add(0_i64, 1_i32));
+    assert_eq!(i64::min_value(), add(i64::max_value(), 1_i32));
+    assert_eq!(0, add(1_i32, -1_i32));
+    assert_eq!(-1, add(0, -1_i32));
+    assert_eq!(i64::max_value(), add(i64::min_value(), -1_i32));
+
+    assert_eq!(1, add(0_i64, 1_u64));
+    assert_eq!(i64::min_value(), add(i64::max_value(), 1_u64));
+    assert_eq!(-2, add(i64::max_value(), i64::max_value() as u64));
+
+    assert_eq!(1, add(0_i64, U128::from(1)));
+    assert_eq!(i64::min_value(), add(i64::max_value(), U128::from(1)));
+    assert_eq!(-2, add(i64::max_value(), U128::from(i64::max_value())));
+
+    assert_eq!(1, add(0_i64, U256::from(1)));
+    assert_eq!(i64::min_value(), add(i64::max_value(), U256::from(1)));
+    assert_eq!(-2, add(i64::max_value(), U256::from(i64::max_value())));
+
+    assert_eq!(1, add(0_i64, U512::from(1)));
+    assert_eq!(i64::min_value(), add(i64::max_value(), U512::from(1)));
+    assert_eq!(-2, add(i64::max_value(), U512::from(i64::max_value())));
+
+    // Adding to u8
+    assert_eq!(1, add(0_u8, 1_i32));
+    assert_eq!(0, add(u8::max_value(), 1_i32));
+    assert_eq!(u8::max_value(), add(u8::max_value(), 256_i32));
+    assert_eq!(0, add(u8::max_value(), 257_i32));
+    assert_eq!(0, add(1_u8, -1_i32));
+    assert_eq!(u8::max_value(), add(0, -1_i32));
+    assert_eq!(0, add(0_u8, -256_i32));
+    assert_eq!(u8::max_value(), add(0, -257_i32));
+    assert_eq!(u8::max_value(), add(0, i32::max_value()));
+    assert_eq!(0, add(0_u8, i32::min_value()));
+
+    assert_eq!(1, add(0_u8, 1_u64));
+    assert_eq!(0, add(u8::max_value(), 1_u64));
+    assert_eq!(1, add(0_u8, u64::from(u8::max_value()) + 2));
+    assert_eq!(u8::max_value(), add(0, u64::max_value()));
+
+    assert_eq!(1, add(0_u8, U128::from(1)));
+    assert_eq!(0, add(u8::max_value(), U128::from(1)));
+    assert_eq!(1, add(0_u8, U128::from(u8::max_value()) + 2));
+    assert_eq!(u8::max_value(), add(0, U128::max_value()));
+
+    assert_eq!(1, add(0_u8, U256::from(1)));
+    assert_eq!(0, add(u8::max_value(), U256::from(1)));
+    assert_eq!(1, add(0_u8, U256::from(u8::max_value()) + 2));
+    assert_eq!(u8::max_value(), add(0, U256::max_value()));
+
+    assert_eq!(1, add(0_u8, U512::from(1)));
+    assert_eq!(0, add(u8::max_value(), U512::from(1)));
+    assert_eq!(1, add(0_u8, U512::from(u8::max_value()) + 2));
+    assert_eq!(u8::max_value(), add(0, U512::max_value()));
+
+    // Adding to u32
+    assert_eq!(1, add(0_u32, 1_i32));
+    assert_eq!(0, add(u32::max_value(), 1_i32));
+    assert_eq!(0, add(1_u32, -1_i32));
+    assert_eq!(u32::max_value(), add(0, -1_i32));
+    assert_eq!(i32::max_value() as u32 + 1, add(0, i32::min_value()));
+
+    assert_eq!(1, add(0_u32, 1_u64));
+    assert_eq!(0, add(u32::max_value(), 1_u64));
+    assert_eq!(1, add(0_u32, u64::from(u32::max_value()) + 2));
+    assert_eq!(u32::max_value(), add(0, u64::max_value()));
+
+    assert_eq!(1, add(0_u32, U128::from(1)));
+    assert_eq!(0, add(u32::max_value(), U128::from(1)));
+    assert_eq!(1, add(0_u32, U128::from(u32::max_value()) + 2));
+    assert_eq!(u32::max_value(), add(0, U128::max_value()));
+
+    assert_eq!(1, add(0_u32, U256::from(1)));
+    assert_eq!(0, add(u32::max_value(), U256::from(1)));
+    assert_eq!(1, add(0_u32, U256::from(u32::max_value()) + 2));
+    assert_eq!(u32::max_value(), add(0, U256::max_value()));
+
+    assert_eq!(1, add(0_u32, U512::from(1)));
+    assert_eq!(0, add(u32::max_value(), U512::from(1)));
+    assert_eq!(1, add(0_u32, U512::from(u32::max_value()) + 2));
+    assert_eq!(u32::max_value(), add(0, U512::max_value()));
+
+    // Adding to u64
+    assert_eq!(1, add(0_u64, 1_i32));
+    assert_eq!(0, add(u64::max_value(), 1_i32));
+    assert_eq!(0, add(1_u64, -1_i32));
+    assert_eq!(u64::max_value(), add(0, -1_i32));
+
+    assert_eq!(1, add(0_u64, 1_u64));
+    assert_eq!(0, add(u64::max_value(), 1_u64));
+    assert_eq!(
+        u64::max_value() - 1,
+        add(u64::max_value(), u64::max_value())
+    );
+
+    assert_eq!(1, add(0_u64, U128::from(1)));
+    assert_eq!(0, add(u64::max_value(), U128::from(1)));
+    assert_eq!(1, add(0_u64, U128::from(u64::max_value()) + 2));
+    assert_eq!(u64::max_value(), add(0, U128::max_value()));
+
+    assert_eq!(1, add(0_u64, U256::from(1)));
+    assert_eq!(0, add(u64::max_value(), U256::from(1)));
+    assert_eq!(1, add(0_u64, U256::from(u64::max_value()) + 2));
+    assert_eq!(u64::max_value(), add(0, U256::max_value()));
+
+    assert_eq!(1, add(0_u64, U512::from(1)));
+    assert_eq!(0, add(u64::max_value(), U512::from(1)));
+    assert_eq!(1, add(0_u64, U512::from(u64::max_value()) + 2));
+    assert_eq!(u64::max_value(), add(0, U512::max_value()));
+
+    // Adding to U128
+    assert_eq!(U128::from(1), add(U128::zero(), 1_i32));
+    assert_eq!(U128::zero(), add(U128::max_value(), 1_i32));
+    assert_eq!(U128::zero(), add(U128::from(1), -1_i32));
+    assert_eq!(U128::max_value(), add(U128::zero(), -1_i32));
+
+    assert_eq!(U128::from(1), add(U128::zero(), 1_u64));
+    assert_eq!(U128::zero(), add(U128::max_value(), 1_u64));
+
+    assert_eq!(U128::from(1), add(U128::zero(), U128::from(1)));
+    assert_eq!(U128::zero(), add(U128::max_value(), U128::from(1)));
+    assert_eq!(
+        U128::max_value() - 1,
+        add(U128::max_value(), U128::max_value())
+    );
+
+    assert_eq!(U128::from(1), add(U128::zero(), U256::from(1)));
+    assert_eq!(U128::zero(), add(U128::max_value(), U256::from(1)));
+    assert_eq!(
+        U128::from(1),
+        add(
+            U128::zero(),
+            U256::from_dec_str(&U128::max_value().to_string()).unwrap() + 2
+        )
+    );
+    assert_eq!(U128::max_value(), add(U128::zero(), U256::max_value()));
+
+    assert_eq!(U128::from(1), add(U128::zero(), U512::from(1)));
+    assert_eq!(U128::zero(), add(U128::max_value(), U512::from(1)));
+    assert_eq!(
+        U128::from(1),
+        add(
+            U128::zero(),
+            U512::from_dec_str(&U128::max_value().to_string()).unwrap() + 2
+        )
+    );
+    assert_eq!(U128::max_value(), add(U128::zero(), U512::max_value()));
+
+    // Adding to U256
+    assert_eq!(U256::from(1), add(U256::zero(), 1_i32));
+    assert_eq!(U256::zero(), add(U256::max_value(), 1_i32));
+    assert_eq!(U256::zero(), add(U256::from(1), -1_i32));
+    assert_eq!(U256::max_value(), add(U256::zero(), -1_i32));
+
+    assert_eq!(U256::from(1), add(U256::zero(), 1_u64));
+    assert_eq!(U256::zero(), add(U256::max_value(), 1_u64));
+
+    assert_eq!(U256::from(1), add(U256::zero(), U128::from(1)));
+    assert_eq!(U256::zero(), add(U256::max_value(), U128::from(1)));
+
+    assert_eq!(U256::from(1), add(U256::zero(), U256::from(1)));
+    assert_eq!(U256::zero(), add(U256::max_value(), U256::from(1)));
+    assert_eq!(
+        U256::max_value() - 1,
+        add(U256::max_value(), U256::max_value())
+    );
+
+    assert_eq!(U256::from(1), add(U256::zero(), U512::from(1)));
+    assert_eq!(U256::zero(), add(U256::max_value(), U512::from(1)));
+    assert_eq!(
+        U256::from(1),
+        add(
+            U256::zero(),
+            U512::from_dec_str(&U256::max_value().to_string()).unwrap() + 2
+        )
+    );
+    assert_eq!(U256::max_value(), add(U256::zero(), U512::max_value()));
+
+    // Adding to U512
+    assert_eq!(U512::from(1), add(U512::zero(), 1_i32));
+    assert_eq!(U512::zero(), add(U512::max_value(), 1_i32));
+    assert_eq!(U512::zero(), add(U512::from(1), -1_i32));
+    assert_eq!(U512::max_value(), add(U512::zero(), -1_i32));
+
+    assert_eq!(U512::from(1), add(U512::zero(), 1_u64));
+    assert_eq!(U512::zero(), add(U512::max_value(), 1_u64));
+
+    assert_eq!(U512::from(1), add(U512::zero(), U128::from(1)));
+    assert_eq!(U512::zero(), add(U512::max_value(), U128::from(1)));
+
+    assert_eq!(U512::from(1), add(U512::zero(), U256::from(1)));
+    assert_eq!(U512::zero(), add(U512::max_value(), U256::from(1)));
+
+    assert_eq!(U512::from(1), add(U512::zero(), U512::from(1)));
+    assert_eq!(U512::zero(), add(U512::max_value(), U512::from(1)));
+    assert_eq!(
+        U256::max_value() - 1,
+        add(U256::max_value(), U256::max_value())
+    );
 }

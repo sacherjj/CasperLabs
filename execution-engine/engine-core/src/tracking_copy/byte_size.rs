@@ -43,7 +43,6 @@ impl<K: HeapSizeOf, V: HeapSizeOf> ByteSize for BTreeMap<K, V> {
     }
 }
 
-// TODO(Fraser) - fix -- heap size for account & contract vs serialize_len for everything else?
 impl ByteSize for StoredValue {
     fn byte_size(&self) -> usize {
         mem::size_of::<Self>()

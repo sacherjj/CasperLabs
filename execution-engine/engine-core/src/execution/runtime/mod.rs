@@ -187,8 +187,9 @@ where
     let result = instance.invoke_export("call", &[], &mut runtime);
 
     match result {
-        // TODO(Fraser) - comment why we default to unit.  Same for other place we do this.
-        // if OK and no host_buf value treat as unit
+        // If `Ok` and the `host_buf` is `None`, the contract's execution succeeded but did not
+        // explicitly call `runtime::ret()`.  Treat as though the execution returned the unit type
+        // `()` as per Rust functions which don't specify a return value.
         Ok(_) => Ok(runtime.take_host_buf().unwrap_or(CLValue::from_t(&())?)),
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {
