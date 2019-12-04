@@ -422,7 +422,7 @@ object Validation {
     d.header match {
       case Some(header) =>
         Applicative[F].map3(
-          validateTimeToLive[F](
+          maxTtl[F](
             ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMillis),
             d.deployHash,
             deployConfig.maxTtlMillis
@@ -442,7 +442,7 @@ object Validation {
         Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
     }
 
-  private def validateTimeToLive[F[_]: MonadThrowable: RaiseValidationError: Log](
+  private def maxTtl[F[_]: MonadThrowable: RaiseValidationError: Log](
       ttl: Int,
       deployHash: ByteString,
       maxTTL: Int
