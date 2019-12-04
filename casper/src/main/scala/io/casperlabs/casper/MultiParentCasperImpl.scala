@@ -185,12 +185,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
     Metrics[F].timer("removeFinalizedDeploys") {
       for {
         deployHashes <- DeployStorageReader[F].readProcessedHashes
-        blockHashes <- deployHashes
-                        .traverse { deployHash =>
-                          BlockStorage[F]
-                            .findBlockHashesWithDeployHash(deployHash)
-                        }
-                        .map(_.flatten.distinct)
+
+        blockHashes <- BlockStorage[F]
+                        .findBlockHashesWithDeployHashes(deployHashes)
+                        .map(_.values.flatten.toList.distinct)
 
         lastFinalizedBlock <- (LastFinalizedBlockHashContainer[F].get >>= dag.lookup).map(_.get)
 
