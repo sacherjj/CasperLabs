@@ -62,6 +62,21 @@ impl Key {
             Key::Local(_) => String::from("Key::Local"),
         }
     }
+
+    /// Calculates serialized size without actually serializing data.
+    pub fn serialized_size(&self) -> usize {
+        match self {
+            Key::Account(_) => ACCOUNT_KEY_SIZE,
+            Key::Hash(_) => HASH_KEY_SIZE,
+            Key::URef(_) => UREF_SIZE,
+            Key::Local(_) => LOCAL_SIZE,
+        }
+    }
+
+    /// Returns max size a [`Key`] can be serialized into.
+    pub fn serialized_size_hint() -> usize {
+        UREF_SIZE
+    }
 }
 
 impl core::fmt::Display for Key {
@@ -307,8 +322,10 @@ mod tests {
     };
 
     use crate::{
-        bytesrepr::{Error, FromBytes},
-        key::{Key, HASH_SIZE, LOCAL_KEY_SIZE},
+        bytesrepr::{Error, FromBytes, ToBytes},
+        key::{
+            Key, ACCOUNT_KEY_SIZE, HASH_KEY_SIZE, HASH_SIZE, LOCAL_KEY_SIZE, LOCAL_SIZE, UREF_SIZE,
+        },
         uref::{AccessRights, URef},
     };
 
@@ -511,5 +528,34 @@ mod tests {
         assert!(key1.as_hash().is_none());
         assert!(key1.as_uref().is_none());
         assert_eq!(key1.as_local(), Some(local));
+    }
+
+    #[test]
+    fn serialized_size() {
+        let account = [42; 32];
+        let hash = [42; HASH_SIZE];
+        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+        let local = [42; LOCAL_KEY_SIZE];
+
+        let keys = [
+            (Key::Account(account), ACCOUNT_KEY_SIZE),
+            (Key::Hash(hash), HASH_KEY_SIZE),
+            (Key::URef(uref), UREF_SIZE),
+            (Key::Local(local), LOCAL_SIZE),
+        ];
+
+        for &(key, const_size) in keys.iter() {
+            // println!("{:?}={}", key, const_size);
+            let bytes = key.to_bytes().expect("should serialize");
+            assert_eq!(key.serialized_size(), const_size);
+            assert_eq!(bytes.len(), key.serialized_size());
+        }
+    }
+
+    #[test]
+    fn key_size_hint() {
+        let mut sizes = vec![ACCOUNT_KEY_SIZE, HASH_KEY_SIZE, UREF_SIZE, LOCAL_SIZE];
+        sizes.sort();
+        assert_eq!(sizes.last().cloned().unwrap(), Key::serialized_size_hint());
     }
 }
