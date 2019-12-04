@@ -456,6 +456,9 @@ object Validation {
       deploy: Deploy,
       minTtl: FiniteDuration
   ): F[Option[Errors.DeployHeaderError]] =
+    // If deploy's TTL is set to 0 it means user didn't want to set the TTL and is OK with how
+    // node handles its deploy. If it's anything different than 0 (must be positive though) then
+    // it also has to be correct as per node's min TTL configuration.
     if (deploy.getHeader.ttlMillis != 0 && deploy.getHeader.ttlMillis < minTtl.toMillis)
       Errors.DeployHeaderError
         .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtl)
