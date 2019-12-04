@@ -268,7 +268,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           )
       _ <- check(
             s"Invalid deploy TTL. Deploy TTL: ${deploy.getHeader.ttlMillis} ms, minimum TTL: ${minTtl.toMillis}."
-          )(Validation.validateMinTtl[F](deploy, minTtl).map(_.isEmpty))
+          )(Validation.minTtl[F](deploy, minTtl).map(_.isEmpty))
     } yield ()
   }
 

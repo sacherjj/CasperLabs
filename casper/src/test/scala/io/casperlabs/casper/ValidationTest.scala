@@ -322,7 +322,7 @@ class ValidationTest
 
   it should "not accept too short time to live" in withoutStorage {
     val deploy = DeployOps.randomTooShortTTL(minTtl)
-    Validation.validateMinTtl[Task](deploy, minTtl) shouldBeF Some(
+    Validation.minTtl[Task](deploy, minTtl) shouldBeF Some(
       DeployHeaderError
         .timeToLiveTooShort(
           deploy.deployHash,

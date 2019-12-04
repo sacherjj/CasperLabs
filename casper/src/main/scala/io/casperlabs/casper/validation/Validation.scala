@@ -452,7 +452,7 @@ object Validation {
     else
       none[Errors.DeployHeaderError].pure[F]
 
-  def validateMinTtl[F[_]: Applicative: Log](
+  def minTtl[F[_]: Applicative: Log](
       deploy: Deploy,
       minTtl: FiniteDuration
   ): F[Option[Errors.DeployHeaderError]] =
