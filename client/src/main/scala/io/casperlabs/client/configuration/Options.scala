@@ -109,7 +109,7 @@ object Options {
       required = false
     )
 
-    val ttl = opt[Int](
+    val ttlMillis = opt[Int](
       descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false,

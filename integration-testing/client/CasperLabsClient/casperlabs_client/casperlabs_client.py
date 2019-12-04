@@ -1179,7 +1179,7 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+        [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
         [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
            and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
