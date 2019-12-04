@@ -226,7 +226,7 @@ auto-propose-enabled = false
 auto-propose-check-interval = "1second"
 
 # Maximum time to allow before proposing a ballot or block.
-auto-propose-ballot-interval = "1000years"
+auto-propose-ballot-interval = "36500days"
 
 # Time to accumulate deploys before proposing.
 auto-propose-acc-interval = "5seconds"
