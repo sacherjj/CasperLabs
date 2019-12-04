@@ -356,13 +356,45 @@ const toGraph = (blocks: BlockInfo[]) => {
 /** Calculate coordinates so that valiators are in horizontal swimlanes, time flowing left to right. */
 const calculateCoordinates = (graph: Graph, width: number, height: number) => {
   const validators = [...new Set(graph.nodes.map(x => x.validator))].sort();
-  const verticalStep = height / (validators.length + 1);
+  const marginPercent = 0.4; // so that there are space between swimlanes
+  const verticalStep = height / validators.length;
   const maxRank = Math.max(...graph.nodes.map(x => x.rank));
   const minRank = Math.min(...graph.nodes.map(x => x.rank));
   const horizontalStep = width / (maxRank - minRank + 2);
 
+  // count how many nodes having the same (validator, rank)
+  let countOfRanks = new Map<string, number>();
+  // current index, for the specified key, curIndexOfRanks[key] = [0, countOfRanks[key])
+  let curIndexOfRanks = new Map<string, number>();
+
+  // since JavaScript doesn't support tuple as key of Map, we need to encode the primary keys
+  let key = (node: d3Node) => `${node.validator},${node.rank}`;
+
   graph.nodes.forEach(node => {
-    node.y = (validators.indexOf(node.validator) + 1) * verticalStep;
+    let k = key(node);
+    if (countOfRanks.has(k)) {
+      countOfRanks.set(k, countOfRanks.get(k)! + 1);
+    } else {
+      countOfRanks.set(k, 1);
+    }
+  });
+
+  graph.nodes.forEach(node => {
+    let k = key(node);
+    let count = countOfRanks.get(k)!;
+    let step = 0;
+
+    if (count !== 1) {
+      let index = curIndexOfRanks.has(k) ? curIndexOfRanks.get(k)! : 0;
+      // for each node i of nodes NS having the same (validator, rank), c is the size of NS
+      // its distance from the baseline of swimlane is (i / (c - 1) - 0.5) * height of swimlane
+      // the height of swimlane is (1 - marginPercent) * verticalStep
+      step = (index  / (count - 1) - 0.5) * (1 - marginPercent);
+      curIndexOfRanks.set(k, index + 1);
+    }
+
+    // (validators.indexOf(node.validator) + 0.5) * verticalStep is the y of the baseline of swimlane of node.validator
+    node.y = (validators.indexOf(node.validator) + 0.5 + step) * verticalStep;
     node.x = (node.rank - minRank + 1) * horizontalStep;
   });
 
