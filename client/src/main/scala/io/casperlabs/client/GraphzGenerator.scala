@@ -17,27 +17,16 @@ final case class ValidatorBlock(
     justifications: List[String]
 )
 
-object ValidatorBlock {
-  implicit val validatorBlockMonoid: Monoid[ValidatorBlock] = new Monoid[ValidatorBlock] {
-    def empty: ValidatorBlock = ValidatorBlock("", List.empty[String], List.empty[String])
-    def combine(vb1: ValidatorBlock, vb2: ValidatorBlock): ValidatorBlock =
-      ValidatorBlock(
-        vb2.blockHash,
-        vb1.parentsHashes ++ vb2.parentsHashes,
-        vb1.justifications ++ vb2.justifications
-      )
-  }
-}
-
 final case class GraphConfig(showJustificationLines: Boolean = false)
 
 object GraphzGenerator {
   type BlockHash        = ByteString
-  type ValidatorsBlocks = Map[Long, ValidatorBlock]
+  type Rank             = Long
+  type ValidatorsBlocks = Map[Rank, List[ValidatorBlock]]
 
   final case class DagInfo[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
-      timeseries: List[Long] = List.empty
+      ranks: List[Rank] = List.empty
   )
 
   object DagInfo {
@@ -64,8 +53,8 @@ object GraphzGenerator {
         .map(x => hexShort(x.getSummary.blockHash))
         .getOrElse("")
 
-    val timeseries     = acc.timeseries.reverse
-    val firstTs        = timeseries.head
+    val ranks          = acc.ranks.reverse
+    val firstRank      = ranks.head
     val validators     = acc.validators
     val validatorsList = validators.toList.sortBy(_._1)
 
@@ -73,13 +62,13 @@ object GraphzGenerator {
       g <- initGraph[G]("dag")
       // block hashes of parents of the very first rank
       allAncestors = validatorsList
-        .flatMap {
-          case (_, blocks) =>
-            blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
-        }
+        .map(_._2.getOrElse(firstRank, List.empty[ValidatorBlock]))
+        .flatten
+        .map(_.parentsHashes)
+        .flatten
         .distinct
         .sorted
-      // draw ancesotrs first
+      // draw ancestors first
       _ <- allAncestors.traverse(
             ancestor =>
               g.node(
@@ -88,19 +77,28 @@ object GraphzGenerator {
                 shape = Box
               )
           )
-      // create invisible edges from ancestors to first node in each cluster for proper alligment
-      _ <- validatorsList.traverse {
-            case (id, blocks) =>
-              allAncestors.traverse(ancestor => {
-                val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
-                g.edge(ancestor, node, style = Some(Invis))
-              })
-          }
+      // create invisible edges from ancestors to first node in each cluster for proper alignment
+      _ <- validatorsList
+            .map {
+              case (id, blocks) =>
+                allAncestors.traverse(
+                  ancestor =>
+                    nodesForRank(id, firstRank, blocks, lastFinalizedBlockHash)
+                      .map(node => (node, ancestor))
+                )
+            }
+            .flatten
+            .flatten
+            .traverse {
+              case (node, ancestor) =>
+                g.edge(ancestor, node._2, style = Some(Invis))
+            }
+
       // draw clusters per validator
       _ <- validatorsList.traverse {
             case (id, blocks) =>
               g.subgraph(
-                validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
+                validatorCluster(id, blocks, ranks, lastFinalizedBlockHash)
               )
           }
       // draw parent dependencies
@@ -117,10 +115,9 @@ object GraphzGenerator {
   private def toDagInfo[G[_]](
       blockInfos: List[BlockInfo]
   ): DagInfo[G] = {
-    val timeseries = blockInfos.map(_.getSummary.rank).distinct
+    val ranks = blockInfos.map(_.getSummary.rank).distinct
 
     val validators = blockInfos.map(_.getSummary).foldMap { b =>
-      val timeEntry       = b.rank
       val blockHash       = hexShort(b.blockHash)
       val blockSenderHash = hexShort(b.validatorPublicKey)
       val parents         = b.parentHashes.toList.map(hexShort)
@@ -131,12 +128,12 @@ object GraphzGenerator {
         .toList
 
       val validatorBlocks =
-        Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
+        Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
       Map(blockSenderHash -> validatorBlocks)
     }
 
-    DagInfo[G](validators, timeseries)
+    DagInfo[G](validators, ranks)
   }
 
   private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
@@ -154,6 +151,7 @@ object GraphzGenerator {
   ): G[Unit] =
     validators
       .flatMap(_.values.toList)
+      .flatten
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) =>
           parentsHashes.zipWithIndex
@@ -176,6 +174,7 @@ object GraphzGenerator {
   ): G[Unit] =
     validators.values.toList
       .flatMap(_.values.toList)
+      .flatten
       .traverse {
         case ValidatorBlock(blockHash, _, justifications) =>
           justifications
@@ -193,27 +192,30 @@ object GraphzGenerator {
       }
       .as(())
 
-  private def nodeForTs(
+  private def nodesForRank(
       validatorId: String,
-      ts: Long,
+      rank: Rank,
       blocks: ValidatorsBlocks,
       lastFinalizedBlockHash: String
-  ): (Option[GraphStyle], String) =
-    blocks.get(ts) match {
-      case Some(ValidatorBlock(blockHash, _, _)) =>
-        (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
-      case None => (Some(Invis), s"${ts.show}_$validatorId")
+  ): List[(Option[GraphStyle], String)] = {
+    val blocksForRank = blocks.getOrElse(rank, List.empty)
+    blocksForRank.size match {
+      case 0 => List((Some(Invis), s"${rank.show}_$validatorId"))
+      case _ =>
+        blocksForRank
+          .map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
     }
+  }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](
       id: String,
       blocks: ValidatorsBlocks,
-      timeseries: List[Long],
+      ranks: List[Rank],
       lastFinalizedBlockHash: String
   ): G[Graphz[G]] =
     for {
       g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
-      nodes = timeseries.map(ts => nodeForTs(id, ts, blocks, lastFinalizedBlockHash))
+      nodes = ranks.map(rank => nodesForRank(id, rank, blocks, lastFinalizedBlockHash)).flatten
       _ <- nodes.traverse {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
