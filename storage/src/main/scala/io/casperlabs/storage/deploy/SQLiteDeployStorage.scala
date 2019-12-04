@@ -479,7 +479,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
               .transact(readXa)
               .map(_.groupBy(_._1).map {
                 case (deployHash: DeployHash, l: Seq[(DeployHash, ProcessingResult)]) =>
-                  (deployHash, l.map(_._2))
+                  (deployHash, l.map(_._2).sortBy(-_.getBlockInfo.getSummary.getHeader.timestamp))
               })
           })
 
