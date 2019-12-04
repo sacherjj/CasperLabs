@@ -1,11 +1,17 @@
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::string::String;
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+};
 use core::fmt::Write;
 
-use contract_ffi::contract_api::runtime;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::pos::{Error, Result};
-use contract_ffi::value::{account::PublicKey, U512};
+use base16;
+
+use contract_ffi::{
+    contract_api::runtime,
+    key::Key,
+    system_contracts::pos::{Error, Result},
+    value::{account::PublicKey, U512},
+};
 
 use super::{MAX_DECREASE, MAX_INCREASE, MAX_REL_DECREASE, MAX_REL_INCREASE, MAX_SPREAD};
 
@@ -30,11 +36,13 @@ impl StakesProvider for ContractStakes {
             let hex_key = split_name
                 .next()
                 .ok_or(Error::StakesKeyDeserializationFailed)?;
-            let mut key_bytes = [0u8; 32];
-            for i in 0..32 {
-                key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16)
-                    .map_err(|_| Error::StakesKeyDeserializationFailed)?;
+            if hex_key.len() != 64 {
+                return Err(Error::StakesKeyDeserializationFailed);
             }
+            let mut key_bytes = [0u8; 32];
+            let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
+                .map_err(|_| Error::StakesKeyDeserializationFailed)?;
+            debug_assert!(_bytes_written == key_bytes.len());
             let pub_key = PublicKey::new(key_bytes);
             let balance = split_name
                 .next()
@@ -194,8 +202,10 @@ impl Stakes {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::system_contracts::pos::Error;
-    use contract_ffi::value::{account::PublicKey, U512};
+    use contract_ffi::{
+        system_contracts::pos::Error,
+        value::{account::PublicKey, U512},
+    };
 
     use crate::stakes::Stakes;
 

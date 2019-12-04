@@ -1,36 +1,33 @@
-extern crate clap;
-extern crate ctrlc;
-extern crate dirs;
-extern crate grpc;
-#[macro_use]
-extern crate lazy_static;
-extern crate lmdb;
-
-extern crate casperlabs_engine_grpc_server;
-extern crate engine_core;
-extern crate engine_shared;
-extern crate engine_storage;
-
-use std::collections::btree_map::BTreeMap;
-use std::fs;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use clap::{App, Arg, ArgMatches};
 use dirs::home_dir;
 use engine_core::engine_state::{EngineConfig, EngineState};
+use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
 
-use engine_shared::logging::log_settings::{LogLevelFilter, LogSettings};
-use engine_shared::logging::{log_level, log_settings};
-use engine_shared::os::get_page_size;
-use engine_shared::{logging, socket};
-use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_storage::transaction_source::lmdb::LmdbEnvironment;
-use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_shared::{
+    logging::{
+        self, log_level,
+        log_settings::{self, LogLevelFilter, LogSettings},
+    },
+    os::get_page_size,
+    socket,
+};
+use engine_storage::{
+    global_state::lmdb::LmdbGlobalState, transaction_source::lmdb::LmdbEnvironment,
+    trie_store::lmdb::LmdbTrieStore,
+};
 
 use casperlabs_engine_grpc_server::engine_server;
 use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
@@ -70,7 +67,8 @@ const DEFAULT_PAGES: usize = 196_608_000;
 
 // socket
 const ARG_SOCKET: &str = "socket";
-const ARG_SOCKET_HELP: &str = "socket file";
+const ARG_SOCKET_HELP: &str =
+    "Path to socket.  Note that this path is independent of the data directory.";
 const ARG_SOCKET_EXPECT: &str = "socket required";
 const REMOVING_SOCKET_FILE_MESSAGE: &str = "removing old socket file";
 const REMOVING_SOCKET_FILE_EXPECT: &str = "failed to remove old socket file";
@@ -87,11 +85,6 @@ const ARG_THREAD_COUNT_DEFAULT: &str = "1";
 const ARG_THREAD_COUNT_VALUE: &str = "NUM";
 const ARG_THREAD_COUNT_HELP: &str = "Worker thread count";
 const ARG_THREAD_COUNT_EXPECT: &str = "expected valid thread count";
-
-// use-payment-code feature flag
-const ARG_USE_PAYMENT_CODE: &str = "use-payment-code";
-const ARG_USE_PAYMENT_CODE_SHORT: &str = "x";
-const ARG_USE_PAYMENT_CODE_HELP: &str = "Enables the use of payment code";
 
 // runnable
 const SIGINT_HANDLE_EXPECT: &str = "Error setting Ctrl-C handler";
@@ -204,12 +197,6 @@ fn get_args() -> ArgMatches<'static> {
                 .help(ARG_THREAD_COUNT_HELP),
         )
         .arg(
-            Arg::with_name(ARG_USE_PAYMENT_CODE)
-                .short(ARG_USE_PAYMENT_CODE_SHORT)
-                .long(ARG_USE_PAYMENT_CODE)
-                .help(ARG_USE_PAYMENT_CODE_HELP),
-        )
-        .arg(
             Arg::with_name(ARG_SOCKET)
                 .required(true)
                 .help(ARG_SOCKET_HELP)
@@ -269,10 +256,10 @@ fn get_thread_count(matches: &ArgMatches) -> usize {
         .expect(ARG_THREAD_COUNT_EXPECT)
 }
 
-/// Parses `use-payment-code` argument and returns an [`EngineConfig`].
-fn get_engine_config(matches: &ArgMatches) -> EngineConfig {
-    let use_payment_code = matches.is_present(ARG_USE_PAYMENT_CODE);
-    EngineConfig::new().set_use_payment_code(use_payment_code)
+/// Returns an [`EngineConfig`].
+fn get_engine_config(_matches: &ArgMatches) -> EngineConfig {
+    // feature flags go here
+    EngineConfig::new()
 }
 
 /// Builds and returns a gRPC server.

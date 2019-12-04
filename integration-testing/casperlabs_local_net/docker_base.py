@@ -69,10 +69,16 @@ class DockerBase:
         self.config = config
         self.connected_networks = []
 
-        self.docker_tag: str = "test"
-        if self.is_in_docker:
-            self.docker_tag = os.environ.get("TAG_NAME")
         self.container = self._get_container()
+
+    @property
+    def docker_tag(self) -> str:
+        if self.is_in_docker:
+            return os.environ.get("TAG_NAME")
+        elif self.config.custom_docker_tag is not None:
+            return self.config.custom_docker_tag
+        else:
+            return "latest"
 
     @property
     def is_in_docker(self) -> bool:
@@ -103,7 +109,11 @@ class DockerBase:
     @property
     def host_chainspec_dir(self) -> str:
         # Mirror the default chainspec packaged in the node so we can apply partial overrides.
-        return f"{self.host_mount_dir}/chainspec"
+        return f"{self.host_mount_dir}/{self.config.chainspec_directory}"
+
+    @property
+    def host_etc_casperlabs_dir(self) -> str:
+        return f"{self.host_mount_dir}/{self.config.etc_casperlabs_directory}"
 
     @property
     def host_bootstrap_dir(self) -> str:

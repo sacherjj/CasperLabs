@@ -14,8 +14,8 @@ service GossipService {
     // as necessary to synchronize DAGs between peers.
     rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
 
-    // Retrieve the tips of the DAG as the callee knows them, to kick off synchronization between peers.
-    rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+    // Retrieve latest messages as the callee knows them.
+    rpc StreamLatestMessages(StreamLatestMessagesRequest) returns (stream io.casperlabs.casper.consensus.Block.Justification);
 
     // Retrieve arbitrary block summaries, if the callee knows about them.
     rpc StreamBlockSummaries(StreamBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
@@ -32,6 +32,10 @@ service GossipService {
     // Add a signature to the list of approvals of a given candidate. If the block hash in the request doesn't match
     // the callee's candidate it will return INVALID_ARGUMENT, otherwise add the signature and forward it to its peers.
     rpc AddApproval(AddApprovalRequest) returns (google.protobuf.Empty);
+
+    // Returns block summaries between two ranks (inclusive) in ascending topological order.
+    // Used to gradually perform initial synchronization for new peers in the network.
+    rpc StreamDagSliceBlockSummaries(StreamDagSliceBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
 }
 
 message NewBlocksRequest {
@@ -67,7 +71,7 @@ message StreamAncestorBlockSummariesRequest {
     uint32 max_depth = 3;
 }
 
-message StreamDagTipBlockSummariesRequest {}
+message StreamLatestMessagesRequest {}
 
 message GetBlockChunkedRequest {
     bytes block_hash = 1;
@@ -99,4 +103,10 @@ message Chunk {
         // The original content length before any compression was applied.
         uint32 original_content_length = 3;
     }
+}
+
+message StreamDagSliceBlockSummariesRequest {
+    uint32 start_rank = 1;
+    // Inclusive
+    uint32 end_rank   = 2;
 }

@@ -4,9 +4,10 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.storage.deploy.DeployStorageReader
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.{Log, Time}
 
@@ -15,7 +16,7 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
+class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
     checkInterval: FiniteDuration,
     ballotInterval: FiniteDuration,
     accInterval: FiniteDuration,
@@ -26,7 +27,6 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
   val ballotIntervalMillis = ballotInterval.toMillis
 
   private def run(lastProposeMillis: Long): F[Unit] = {
-
     def loop(
         // Deploys we tried to propose last time.
         prevDeploys: Set[ByteString],
@@ -73,24 +73,24 @@ class AutoProposer[F[_]: Bracket[?[_], Throwable]: Time: Log: Metrics: MultiPare
 
     loop(Set.empty, 0, lastProposeMillis) onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Auto-proposal stopped unexpectedly.", ex)
+        Log[F].error(s"Auto-proposal stopped unexpectedly: $ex")
     }
   }
 
   /** Try to propose a block or ballot. Return true if anything was created. */
   private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
     BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
-      Log[F].info(s"Proposed block ${PrettyPrinter.buildString(blockHash)}").as(true)
+      Log[F].info(s"Proposed ${PrettyPrinter.buildString(blockHash) -> "block"}").as(true)
     } handleErrorWith {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not propose block.", ex).as(false)
+        Log[F].error(s"Could not propose block: $ex").as(false)
     }
 }
 
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorageReader](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
       checkInterval: FiniteDuration,
       ballotInterval: FiniteDuration,
       accInterval: FiniteDuration,

@@ -3,6 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.effect._
 import cats.implicits._
 import cats.kernel.Monoid
+import cats.data.NonEmptyList
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -14,15 +15,16 @@ import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
 import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
-import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
-import cats.data.NonEmptyList
+import io.casperlabs.metrics.implicits._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -39,16 +41,18 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
+  import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
+
+  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       rank: Long,
       upgrades: Seq[ChainSpec.UpgradePoint]
-  ): F[DeploysCheckpoint] =
+  ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
-      preStateHash <- computePrestate[F](merged, rank, upgrades)
+      preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )
@@ -75,6 +79,7 @@ object ExecEngineUtil {
       deploysForBlock,
       protocolVersion
     )
+  }
 
   // Discard deploys that will never be included because they failed some precondition.
   // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
@@ -82,15 +87,15 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log: Metrics](
       invalidDeploys: List[NoEffectsFailure]
-  ): F[Unit] =
+  ): F[Unit] = Metrics[F].timer("handleInvalidDeploys") {
     for {
       invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
                          case (acc, d: PreconditionFailure) =>
                            // Log precondition failures as we will be getting rid of them.
                            Log[F].warn(
-                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                             s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
                            ) as {
                              acc.copy(preconditionFailures = d :: acc.preconditionFailures)
                            }
@@ -99,11 +104,12 @@ object ExecEngineUtil {
       // as by default buffer is cleared when deploy gets included in
       // the finalized block. If that strategy ever changes, we will have to
       // put them back into the buffer explicitly.
-      _ <- DeployStorage[F]
+      _ <- DeployStorageWriter[F]
             .markAsDiscarded(
               invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
             ) whenA invalidDeploys.preconditionFailures.nonEmpty
     } yield ()
+  }
 
   def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
       prestate: StateHash,
@@ -224,7 +230,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def computePrestate[F[_]: MonadError[*[_], Throwable]: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
@@ -249,15 +255,17 @@ object ExecEngineUtil {
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
         val maxRank         = merged.parents.map(_.getHeader.rank).max
+
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank
         }
         activatedUpgrades.toList.foldLeftM(postStateHash) {
           case (postStateHash, upgrade) =>
-            ExecutionEngineService[F]
-              .upgrade(postStateHash, upgrade, protocolVersion)
-              .rethrow
-              .map(_.postStateHash)
+            Log[F].info(s"Applying upgrade ${upgrade.getProtocolVersion}") *>
+              ExecutionEngineService[F]
+                .upgrade(postStateHash, upgrade, protocolVersion)
+                .rethrow
+                .map(_.postStateHash)
           // NOTE: We are dropping the effects here, so they won't be part of the block.
         }
       } else {
@@ -400,8 +408,14 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
+        candidateVector                    = candidates.toList.toVector
         blocks                             = chosenParents.map(i => candidateVector(i))
-      } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, blocks.tail)
+        // We only keep secondary parents which are not related in any way to other candidates.
+        // Note: a block is not found in `uncommonAncestors` if it is common to all
+        // candidates, so we cannot assume it is present.
+        nonFirstParents = blocks.tail
+          .filter(block => uncommonAncestors.get(block).fold(false)(_.size == 1))
+      } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, nonFirstParents)
   }
 
   def merge[F[_]: MonadThrowable: BlockStorage](

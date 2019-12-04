@@ -27,16 +27,15 @@ trait DeployStorageSpec
   /* Implement this method in descendants substituting various DeployStorageReader and DeployStorageWriter implementations */
   protected def testFixture(
       test: (DeployStorageReader[Task], DeployStorageWriter[Task]) => Task[Unit],
-      timeout: FiniteDuration = 5.seconds,
-      deployBufferChunkSize: Int = 100
+      timeout: FiniteDuration = 5.seconds
   ): Unit
 
-  private implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+  protected implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
-  private implicit val consensusConfig: ConsensusConfig =
+  protected implicit val consensusConfig: ConsensusConfig =
     ConsensusConfig(maxSessionCodeBytes = 50, maxPaymentCodeBytes = 10)
 
-  private def deploysGen(min: Int = 1): Gen[List[Deploy]] =
+  protected def deploysGen(min: Int = 1): Gen[List[Deploy]] =
     for {
       n       <- Gen.choose(min, 10)
       deploys <- Gen.listOfN(n, arbDeploy.arbitrary)
@@ -415,45 +414,6 @@ trait DeployStorageSpec
                         assert(a.toByteArray.sameElements(b.toByteArray))
                     }
                   }
-            } yield ()
-          }
-      }
-    }
-
-    "getDeploysByAccount" should {
-      "return the correct paginated list of deploys for the specified account" in forAll(
-        deploysGen(),
-        Gen.oneOf(randomAccounts),
-        Gen.choose(0, Int.MaxValue)
-      ) {
-        case (deploys, accountKey, limit) =>
-          testFixture { (reader, writer) =>
-            val deploysByAccount = deploys
-              .filter(_.getHeader.accountPublicKey == accountKey.publicKey)
-              .sortBy(d => (d.getHeader.timestamp, d.deployHash))
-              .reverse
-            val offset = if (deploysByAccount.isEmpty) {
-              0
-            } else {
-              scala.util.Random.nextInt(deploysByAccount.size)
-            }
-
-            val (lastTimeStamp, lastDeployHash) =
-              deploysByAccount
-                .get(offset.toLong)
-                .map(d => (d.getHeader.timestamp, d.deployHash))
-                .getOrElse((Long.MaxValue, ByteString.EMPTY))
-            val expectResult = deploysByAccount.drop(offset + 1).take(limit)
-
-            for {
-              _ <- writer.addAsPending(deploys)
-              all <- reader.getDeploysByAccount(
-                      PublicKey(accountKey.publicKey),
-                      limit,
-                      lastTimeStamp,
-                      lastDeployHash
-                    )
-              _ = assert(expectResult == all)
             } yield ()
           }
       }

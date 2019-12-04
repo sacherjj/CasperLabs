@@ -241,7 +241,7 @@ object GraphQLServiceSpec {
   implicit val concurrentEffectMonix: ConcurrentEffect[Task] =
     new CatsConcurrentEffectForTask() (global, Task.defaultOptions)
 
-  implicit val noOpLog: Log[Task] = new NOPLog[Task]
+  implicit val noOpLog: Log[Task] = Log.NOPLog[Task]
 
   implicit val fs2SubscriptionStream: Fs2SubscriptionStream[Task] =
     new Fs2SubscriptionStream[Task]()

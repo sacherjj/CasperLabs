@@ -2,16 +2,17 @@
 
 extern crate alloc;
 
-extern crate contract_ffi;
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-
-use contract_ffi::contract_api::TURef;
-use contract_ffi::contract_api::{runtime, storage, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::{AccessRights, URef};
+use contract_ffi::{
+    contract_api::{runtime, storage, Error as ApiError, TURef},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef},
+};
 
 const CONTRACT_POINTER: u32 = 0;
 

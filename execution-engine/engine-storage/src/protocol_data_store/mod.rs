@@ -6,8 +6,7 @@ pub mod lmdb;
 #[cfg(test)]
 mod tests;
 
-use crate::protocol_data::ProtocolData;
-use crate::store::Store;
+use crate::{protocol_data::ProtocolData, store::Store};
 
 const NAME: &str = "PROTOCOL_DATA_STORE";
 

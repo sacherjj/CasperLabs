@@ -8,24 +8,43 @@ EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 IT_RES_DIR = $(realpath $(EE_DIR)/../integration-testing/resources)
 
 # Directory names should match crate names
-BENCH_CONTRACTS       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -exec basename {} \;)
-CLIENT_CONTRACTS      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -exec basename {} \;)
-EXPLORER_CONTRACTS    = $(shell find ./contracts/explorer    -mindepth 1 -maxdepth 1 -exec basename {} \;)
-INTEGRATION_CONTRACTS = $(shell find ./contracts/integration -mindepth 1 -maxdepth 1 -exec basename {} \;)
-PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdepth 1 -exec basename {} \;)
-SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -exec basename {} \;)
-SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -exec basename {} \;)
-TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -exec basename {} \;)
+BENCH_CONTRACTS       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+CLIENT_CONTRACTS      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+EXAMPLE_CONTRACTS     = $(shell find ./contracts/examples    -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+EXPLORER_CONTRACTS    = $(shell find ./contracts/explorer    -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+INTEGRATION_CONTRACTS = $(shell find ./contracts/integration -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 
 BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
 CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
+EXAMPLE_CONTRACTS   := $(patsubst %, build-contract/%, $(EXAMPLE_CONTRACTS))
 EXPLORER_CONTRACTS  := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
 PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
 SRE_CONTRACTS       := $(patsubst %, build-contract/%, $(SRE_CONTRACTS))
 SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
 
-INTEGRATION_CONTRACTS += endless-loop pos-bonding remove-associated-key standard-payment
+INTEGRATION_CONTRACTS += \
+	bonding-call \
+	counter-call \
+	counter-define \
+	endless-loop \
+	hello-name-call \
+	hello-name-define \
+	local-state \
+	mailing-list-call \
+	mailing-list-define \
+	modified-system-upgrader \
+	pos-bonding \
+	remove-associated-key \
+	standard-payment \
+	transfer-to-account \
+	unbonding-call
+
+
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 
 CONTRACT_TARGET_DIR       = target/wasm32-unknown-unknown/release
@@ -56,6 +75,7 @@ build-integration-contract/%:
 build-contracts: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
+	$(EXAMPLE_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
 	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
@@ -65,6 +85,9 @@ build-contracts: \
 
 .PHONY: build-integration-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
+
+.PHONY: build-example-contracts
+build-example-contracts: $(EXAMPLE_CONTRACTS)
 
 .PHONY: test
 test:

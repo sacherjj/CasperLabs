@@ -2,8 +2,7 @@ package io.casperlabs.casper.util
 
 import cats.implicits._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Block}
-import io.casperlabs.casper.equivocations.EquivocationsTracker
+import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.finality.FinalityDetectorUtil
 import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
@@ -20,7 +19,7 @@ import org.scalatest.{Assertion, FlatSpec, Matchers}
 
 class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff                  = new LogStub[Task]()
+  implicit val logEff                  = LogStub[Task]()
   implicit val casperSmartContractsApi = ExecutionEngineServiceStub.noOpApi[Task]()
 
   /**
@@ -297,21 +296,19 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
         b1 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v0,
-               bonds,
-               Map(v0 -> genesis.blockHash)
+               bonds
              )
         b2 <- createAndStoreBlock[Task](
                Seq(genesis.blockHash),
                v3,
-               bonds,
-               Map(v3 -> genesis.blockHash)
+               bonds
              )
-        b3 <- createAndStoreBlock[Task](
-               Seq(b1.blockHash),
-               v1,
-               bonds,
-               Map(v0 -> b1.blockHash, v1 -> genesis.blockHash)
-             )
+        _ <- createAndStoreBlock[Task](
+              Seq(b1.blockHash),
+              v1,
+              bonds,
+              Map(v0 -> b1.blockHash)
+            )
         b4 <- createAndStoreBlock[Task](
                Seq(b1.blockHash),
                v0,
@@ -323,13 +320,13 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                Seq(b2.blockHash),
                v3,
                bonds,
-               Map(v1 -> b3.blockHash, v3 -> b2.blockHash)
+               Map(v3 -> b2.blockHash)
              )
         b6 <- createAndStoreBlock[Task](
                Seq(b4.blockHash),
                v2,
                bonds,
-               Map(v0 -> b4.blockHash, v2 -> genesis.blockHash, v3 -> b5.blockHash)
+               Map(v0 -> b4.blockHash, v3 -> b5.blockHash)
              )
         b7 <- createAndStoreBlock[Task](
                Seq(b6.blockHash),
@@ -337,14 +334,17 @@ class CasperUtilTest extends FlatSpec with Matchers with BlockGenerator with Sto
                bonds,
                Map(v2 -> b6.blockHash)
              )
+        _ <- createAndStoreBlock[Task](
+              Seq(b7.blockHash),
+              v1,
+              bonds,
+              Map(v2 -> b4.blockHash) // skip v1 last message in justifications
+            )
         dag <- blockDagStorage.getRepresentation
-        // Assume we know that v1 equivocated
-        equivocationsTracker = EquivocationsTracker.empty.updated(v1, 0)
         panoramaM <- FinalityDetectorUtil.panoramaM(
                       dag,
                       validatorsToIndex,
-                      Message.fromBlock(b7).get,
-                      equivocationsTracker
+                      Message.fromBlock(b7).get
                     )
         _ = panoramaM.size shouldBe (validatorsToIndex.size)
         _ = panoramaM shouldBe IndexedSeq(

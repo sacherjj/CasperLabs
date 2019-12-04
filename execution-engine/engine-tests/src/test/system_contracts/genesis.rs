@@ -1,13 +1,17 @@
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::{ProtocolVersion, Value, U512};
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::SYSTEM_ACCOUNT_ADDR;
+use contract_ffi::{
+    key::Key,
+    value::{account::PublicKey, ProtocolVersion, Value, U512},
+};
+use engine_core::engine_state::{
+    genesis::{GenesisAccount, GenesisConfig},
+    SYSTEM_ACCOUNT_ADDR,
+};
 use engine_shared::motes::Motes;
 
-use crate::support::test_support;
-use crate::support::test_support::InMemoryWasmTestBuilder;
-use crate::test::DEFAULT_WASM_COSTS;
+use crate::{
+    support::test_support::{self, InMemoryWasmTestBuilder},
+    test::DEFAULT_WASM_COSTS,
+};
 
 const MINT_INSTALL: &str = "mint_install.wasm";
 const POS_INSTALL: &str = "pos_install.wasm";
@@ -24,7 +28,7 @@ const ACCOUNT_2_BALANCE: u64 = 2_000_000_000;
 
 #[ignore]
 #[test]
-fn should_run_genesis_with_chainspec() {
+fn should_run_genesis() {
     let account_1_balance = Motes::new(ACCOUNT_1_BALANCE.into());
     let account_1 = {
         let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);

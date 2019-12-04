@@ -1,7 +1,6 @@
 //! Core types for a Merkle Trie
 
-use std::mem::size_of;
-use std::ops::Deref;
+use std::{mem::size_of, ops::Deref};
 
 use contract_ffi::bytesrepr::{self, FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;

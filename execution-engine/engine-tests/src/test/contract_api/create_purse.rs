@@ -1,12 +1,16 @@
-use crate::support::test_support::{ExecuteRequestBuilder, WasmTestBuilder};
+use base16;
+use lazy_static::lazy_static;
 
-use contract_ffi::base16;
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use contract_ffi::{
+    key::Key,
+    value::{account::PurseId, U512},
+};
 use engine_shared::transform::Transform;
 
-use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT};
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, WasmTestBuilder},
+    test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -40,7 +44,7 @@ fn get_purse_key_from_mint_transform(mint_transform: &Transform) -> Key {
         )
     );
 
-    let decoded_purse_id = base16::decode_lower(&map_key[5..69]).expect("should decode base16");
+    let decoded_purse_id = base16::decode(&map_key[5..69]).expect("should decode base16");
     assert_eq!(decoded_purse_id.len(), 32);
 
     *map_value

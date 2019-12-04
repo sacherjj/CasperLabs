@@ -1,16 +1,17 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use contract_ffi::contract_api::{runtime, system, Error as ApiError};
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts::mint;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use alloc::vec;
+
+use contract_ffi::{
+    contract_api::{runtime, system, Error as ApiError},
+    key::Key,
+    system_contracts::mint,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+    value::{account::PurseId, U512},
+};
 
 #[repr(u16)]
 enum Error {

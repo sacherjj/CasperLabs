@@ -23,7 +23,7 @@ purpose. `Address`-type keys have accounts as the associated value
 (more details on accounts will follow), `Hash`-type keys store "smart
 contracts", and `URef`-type keys store any data which can be
 represented in the [CasperLabs
-ABI](https://techspec.casperlabs.io/technical-details/block-storage/global-state#abi)
+ABI](https://techspec.casperlabs.io/en/latest/implementation/appendix.html#b-serialization-format)
 (except accounts). An account is a cryptographically-secured
 entry-point into the system. All changes to the global state must be
 tied to an account. These changes occur via "session code" submitted
@@ -55,7 +55,7 @@ contents (just block hash for short).
 ## Example
 
 Consider the [counter contract from our contract examples
-repo](https://github.com/CasperLabs/contract-examples/blob/master/counter-define/src/lib.rs).
+repo](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/counter-define/src/lib.rs).
 The contract logic is given in the function `counter_ext()`, while the
 `call()` function contains the session code that would be executed by
 a user storing the contract in the global state.
@@ -137,7 +137,7 @@ the contract's state variable). The result of this query will be `0`,
 the initial value of the counter contract's state variable. If we were
 to deploy code calling the "inc" method of this contract ([which is
 also given in the examples
-repo](https://github.com/CasperLabs/contract-examples/blob/master/counter-call/src/lib.rs))
+repo](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/counter-call/src/lib.rs))
 then query again, the result would be `1`.
 
 To further illustrate the semantics of the "path" in the query,

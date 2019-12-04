@@ -4,7 +4,7 @@ import cats.implicits._
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash}
 import io.casperlabs.storage.{
   ArbitraryStorageData,
   BlockMsgWithTransform,
@@ -99,10 +99,10 @@ trait BlockStorageTest
                               .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                           )
                         }
-                  _ <- storage.getSummaryByPrefix(randomPrefix).map { maybeSummary =>
-                        maybeSummary should not be empty
+                  _ <- storage.getBlockInfoByPrefix(randomPrefix).map { maybeInfo =>
+                        maybeInfo should not be empty
                         assert(
-                          maybeSummary.get.blockHash
+                          maybeInfo.get.getSummary.blockHash
                             .startsWith(ByteString.copyFrom(Base16.decode(randomPrefix)))
                         )
                       }
@@ -113,7 +113,7 @@ trait BlockStorageTest
     }
   }
 
-  it should "be able to get blocks containing the specific deploy" in {
+  it should "be able to get a Map from deploy to the blocks containing the deploy on findBlockHashesWithDeployHashes" in {
     forAll(blockElementsGen) { blockStorageElements =>
       val deployHashToBlockHashes =
         blockStorageElements
@@ -126,23 +126,32 @@ trait BlockStorageTest
                 .toSet
           )
           .groupBy(_._1)
-          .mapValues(_.map(_._2))
+          .mapValues(_.map(_._2).toSet)
 
       withStorage { storage =>
         val items = blockStorageElements
         for {
-          _ <- items.traverse_(storage.put)
-          _ <- items.traverse[Task, Seq[Assertion]] { block =>
-                block.getBlockMessage.getBody.deploys.toList.traverse { deploy =>
-                  storage
-                    .findBlockHashesWithDeployHash(deploy.getDeploy.deployHash)
-                    .map(
-                      _ should contain theSameElementsAs (
-                        deployHashToBlockHashes(deploy.getDeploy.deployHash)
-                      )
-                    )
-                }
-              }
+          _            <- items.traverse_(storage.put)
+          deployHashes = deployHashToBlockHashes.keys.toList
+
+          result <- storage.findBlockHashesWithDeployHashes(deployHashes)
+          _      = result shouldBe deployHashToBlockHashes
+        } yield ()
+      }
+    }
+  }
+
+  it should "returns a empty list for the deploy which is not contained in any blocks on findBlockHashesWithDeployHashes" in {
+    forAll(blockElementsGen) { blockStorageElements =>
+      val deployHashes = blockStorageElements
+        .flatMap(
+          b => b.getBlockMessage.getBody.deploys.map(_.getDeploy.deployHash)
+        )
+
+      withStorage { storage =>
+        for {
+          result <- storage.findBlockHashesWithDeployHashes(deployHashes)
+          _      = deployHashes.foreach(d => result.get(d) shouldBe (Some(Set.empty[BlockHash])))
         } yield ()
       }
     }
@@ -191,5 +200,5 @@ class SQLiteBlockStorageTest extends BlockStorageTest with SQLiteFixture[BlockSt
   override def db: String = "/tmp/block_storage.db"
 
   override def createTestResource: Task[BlockStorage[Task]] =
-    SQLiteStorage.create[Task]()
+    SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 }

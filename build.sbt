@@ -32,6 +32,7 @@ lazy val projectSettings = Seq(
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
     Resolver.sonatypeRepo("snapshots"),
+    Resolver.bintrayRepo("beyondthelines", "maven"),
     "jitpack" at "https://jitpack.io"
   ),
   scalafmtOnCompile := true,
@@ -76,7 +77,7 @@ lazy val shared = (project in file("shared"))
     version := "0.1",
     libraryDependencies ++= commonDependencies ++ Seq(
       sqlLite,
-      fs2,
+      fs2Io,
       catsCore,
       catsEffect,
       catsEffectLaws,
@@ -209,7 +210,7 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(crypto % "compile->compile;test->test")
 
-val nodeAndClientVersion = "0.8.1"
+val nodeAndClientVersion = "0.10.0"
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -224,13 +225,15 @@ lazy val node = (project in file("node"))
     packageSummary := "CasperLabs Node",
     packageDescription := "CasperLabs Node - the Casperlabs blockchain node server software.",
     libraryDependencies ++=
-      apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
+      apiServerDependencies ++ commonDependencies ++ slf4jAdapters ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         grpcNetty,
+        fs2ReactiveStreams,
         jline,
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
+        pbdirect,
         tomlScala,
         sangria,
         javaWebsocket,
@@ -409,7 +412,7 @@ lazy val client = (project in file("client"))
     javacOptions ++= Seq("-Dnashorn.args=\"--no-deprecation-warning\""),
     packageSummary := "CasperLabs Client",
     packageDescription := "CLI tool for interaction with the CasperLabs Node",
-    libraryDependencies ++= commonDependencies ++ Seq(
+    libraryDependencies ++= commonDependencies ++ slf4jAdapters ++ Seq(
       scallop,
       grpcNetty,
       graphvizJava,

@@ -1,21 +1,24 @@
 use std::convert::TryInto;
 
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::{Value, U512};
-use engine_core::engine_state::genesis::POS_REWARDS_PURSE;
-use engine_core::engine_state::{CONV_RATE, MAX_PAYMENT};
-use engine_shared::gas::Gas;
-use engine_shared::motes::Motes;
-use engine_shared::transform::Transform;
-
-use crate::support::test_support::{
-    self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+use contract_ffi::{
+    bytesrepr::ToBytes,
+    key::Key,
+    value::{
+        account::{PublicKey, PurseId},
+        Value, U512,
+    },
 };
-use crate::test::{
-    DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
-    DEFAULT_GENESIS_CONFIG,
+use engine_core::engine_state::{genesis::POS_REWARDS_PURSE, CONV_RATE, MAX_PAYMENT};
+use engine_shared::{gas::Gas, motes::Motes, transform::Transform};
+
+use crate::{
+    support::test_support::{
+        self, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder,
+    },
+    test::{
+        DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE, DEFAULT_ACCOUNT_KEY,
+        DEFAULT_GENESIS_CONFIG,
+    },
 };
 
 const ACCOUNT_1_ADDR: [u8; 32] = [42u8; 32];
@@ -335,9 +338,9 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -406,9 +409,9 @@ fn should_correctly_charge_when_session_code_fails() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -472,9 +475,9 @@ fn should_correctly_charge_when_session_code_succeeds() {
         .expect("there should be a response")
         .clone();
 
-    let success_result = test_support::get_success_result(&response);
+    let mut success_result = test_support::get_success_result(&response);
     let cost = success_result
-        .get_cost()
+        .take_cost()
         .try_into()
         .expect("should map to U512");
     let gas = Gas::new(cost);
@@ -746,8 +749,8 @@ fn should_charge_non_main_purse() {
         .expect("there should be a response")
         .clone();
 
-    let result = test_support::get_success_result(&response);
-    let cost = result.get_cost().try_into().expect("should map to U512");
+    let mut result = test_support::get_success_result(&response);
+    let cost = result.take_cost().try_into().expect("should map to U512");
     let gas = Gas::new(cost);
     let motes = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 

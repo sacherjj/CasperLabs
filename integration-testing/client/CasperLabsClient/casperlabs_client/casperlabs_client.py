@@ -12,6 +12,7 @@ parent, root = file.parent, file.parents[1]
 sys.path.append(str(root))
 
 # end of hack #
+import os
 import time
 import argparse
 import grpc
@@ -24,6 +25,8 @@ import base64
 import json
 import struct
 import logging
+import pkg_resources
+import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -44,12 +47,12 @@ def _hex(text, as_utf8):
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
-from .control_pb2_grpc import ControlServiceStub
+from . import control_pb2_grpc
 from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
 from . import casper_pb2 as casper
-from .casper_pb2_grpc import CasperServiceStub
+from . import casper_pb2_grpc
 
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/consensus.proto
 from . import consensus_pb2 as consensus, state_pb2 as state
@@ -57,10 +60,14 @@ from . import consensus_pb2 as consensus, state_pb2 as state
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
+from . import vdag
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
+
+DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 from google.protobuf import json_format
 
@@ -77,7 +84,7 @@ class ABI:
     def optional_value(name, a):
         if a is None:
             return Arg(name=name, value=Value(optional_value=Value()))
-        return Arg(name=name, value=Value(optional_value=a))
+        return Arg(name=name, value=Value(optional_value=a.value))
 
     @staticmethod
     def bytes_value(name, a: bytes):
@@ -92,22 +99,47 @@ class ABI:
         raise Exception("account must be 32 bytes or 64 characters long string")
 
     @staticmethod
-    def int_value(name, a: int):
-        return Arg(name=name, value=Value(int_value=a))
+    def int_value(name, i: int):
+        return Arg(name=name, value=Value(int_value=i))
 
     @staticmethod
-    def long_value(name, a: int):
-        return Arg(name=name, value=Value(long_value=a))
+    def long_value(name, n: int):
+        return Arg(name=name, value=Value(long_value=n))
 
     @staticmethod
-    def big_int(name, a):
+    def big_int(name, n):
         return Arg(
-            name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
+            name=name, value=Value(big_int=state.BigInt(value=str(n), bit_width=512))
         )
 
     @staticmethod
-    def string_value(name, a):
-        return Arg(name=name, value=Value(string_value=a))
+    def string_value(name, s):
+        return Arg(name=name, value=Value(string_value=s))
+
+    @staticmethod
+    def key_hash(name, h):
+        return Arg(name=name, value=Value(key=state.Key(hash=state.Key.Hash(hash=h))))
+
+    @staticmethod
+    def key_address(name, a):
+        return Arg(
+            name=name, value=Value(key=state.Key(address=state.Key.Address(account=a)))
+        )
+
+    @staticmethod
+    def key_uref(name, uref, access_rights):
+        return Arg(
+            name=name,
+            value=Value(
+                key=state.Key(
+                    uref=state.Key.URef(uref=uref, access_rights=access_rights)
+                )
+            ),
+        )
+
+    @staticmethod
+    def key_local(name, h):
+        return Arg(name=name, value=Value(key=state.Key(local=state.Key.Local(hash=h))))
 
     @staticmethod
     def args(l: list):
@@ -116,42 +148,18 @@ class ABI:
 
     @staticmethod
     def args_from_json(s):
-        base64_b64decode = base64.b64decode
-        try:
-            # Change JSON protobuf format of binary data from base64 to base16
-            base64.b64decode = lambda s: bytes.fromhex(s)
-            parsed_json = json.loads(s)
-            args = [
-                json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json
-            ]
-            c = consensus.Deploy.Code(args=args)
-            return c.args
-        finally:
-            base64.b64decode = base64_b64decode
+        parsed_json = ABI.hex2base64(json.loads(s))
+        args = [json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json]
+        c = consensus.Deploy.Code(args=args)
+        return c.args
 
     @staticmethod
-    def args_to_json(args):
-        base64_b64encode = base64.b64encode
-        try:
-            # We can't just call MessageToDict or MessageToJson on the args object,
-            # which is a 'repeated Arg', because we get:
-            # AttributeError: 'google.protobuf.pyext._message.RepeatedCompositeCo' object has no attribute 'DESCRIPTOR'
-            class Mock:
-                def __init__(self, v):
-                    self.value = v
-
-                def decode(self, s):
-                    return self.value
-
-            base64.b64encode = lambda b: Mock(b.hex())
-            return json.dumps(
-                [
-                    json_format.MessageToDict(arg, preserving_proto_field_name=True)
-                    for arg in args
-                ]
-            )
-        finally:
-            base64.b64encode = base64_b64encode
+    def args_to_json(args, **kwargs):
+        lst = [
+            json_format.MessageToDict(arg, preserving_proto_field_name=True)
+            for arg in args
+        ]
+        return json.dumps(ABI.base64_2hex(lst), **kwargs)
 
     # Below methods for backwards compatibility
 
@@ -170,6 +178,58 @@ class ABI:
     @staticmethod
     def byte_array(name, a):
         return Arg(name=name, value=Value(bytes_value=a))
+
+    # These are kinds of Arg that are of type bytes.
+    # We want to represent them in JSON in hex format, rather than base64.
+    HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
+
+    # Standard protobuf JSON representation encodes fields of type bytes
+    # in base64. We like base16 (hex) more. Below helper functions
+    # help in converting output of protobuf JSON args serialization (base64 -> base16)
+    # and in preparing user suplied JSON for parsing with protobuf (base16 -> base64).
+
+    @staticmethod
+    def h2b64(name, x):
+        """
+        Convert value of a field of a given name from hex to base64,
+        if the field is known to be of the bytes type.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
+        return ABI.hex2base64(x)
+
+    @staticmethod
+    def hex2base64(d):
+        """
+        Convert decoded JSON list of args so fields of type bytes
+        are in base64, in order to make it compatible with the format
+        required by protobuf JSON parser.
+        """
+        if type(d) == list:
+            return [ABI.hex2base64(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.h2b64(k, d[k]) for k in d}
+        return d
+
+    @staticmethod
+    def b64_2h(name, x):
+        """
+        Helper function of base64_2hex.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64decode(x).hex()
+        return ABI.base64_2hex(x)
+
+    @staticmethod
+    def base64_2hex(d):
+        """
+        Convert JSON serialized args so fields of type bytes are shown in base16 (hex).
+        """
+        if type(d) == list:
+            return [ABI.base64_2hex(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.b64_2h(k, d[k]) for k in d}
+        return d
 
 
 def read_pem_key(file_name: str):
@@ -271,9 +331,9 @@ def retry_wrapper(function, *args):
             return function(*args)
         except _Rendezvous as e:
             if e.code() == grpc.StatusCode.UNAVAILABLE and i < NUMBER_OF_RETRIES - 1:
+                delay += delay
                 logging.warning(f"Retrying after {e} in {delay} seconds")
                 time.sleep(delay)
-                delay += delay
             else:
                 raise
 
@@ -329,6 +389,10 @@ class InsecureGRPCService:
 def extract_common_name(certificate_file: str) -> str:
     cert_dict = ssl._ssl._test_decode_cert(certificate_file)
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
+def abi_byte_array(a: bytes) -> bytes:
+    return struct.pack("<I", len(a)) + a
 
 
 class SecureGRPCService:
@@ -387,7 +451,7 @@ class CasperLabsClient:
         self,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
-        internal_port: int = DEFAULT_INTERNAL_PORT,
+        port_internal: int = DEFAULT_INTERNAL_PORT,
         node_id: str = None,
         certificate_file: str = None,
     ):
@@ -396,19 +460,19 @@ class CasperLabsClient:
 
         :param host:            Hostname or IP of node on which gRPC service is running
         :param port:            Port used for external gRPC API
-        :param internal_port:   Port used for internal gRPC API
+        :param port_internal:   Port used for internal gRPC API
         :param certificate_file:      Certificate file for TLS
         :param node_id:         node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
-        self.internal_port = internal_port
+        self.port_internal = port_internal
         self.node_id = node_id
         self.certificate_file = certificate_file
 
         if node_id:
             self.casperService = SecureGRPCService(
-                host, port, CasperServiceStub, node_id, certificate_file
+                host, port, casper_pb2_grpc.CasperServiceStub, node_id, certificate_file
             )
             self.controlService = SecureGRPCService(
                 # We currently assume that if node_id is given then
@@ -418,65 +482,55 @@ class CasperLabsClient:
                 # to open a secure grpc connection in Python without supplying any
                 # certificate on the client side.
                 host,
-                internal_port,
-                ControlServiceStub,
+                port_internal,
+                control_pb2_grpc.ControlServiceStub,
                 node_id,
                 certificate_file,
             )
         else:
-            self.casperService = InsecureGRPCService(host, port, CasperServiceStub)
+            self.casperService = InsecureGRPCService(
+                host, port, casper_pb2_grpc.CasperServiceStub
+            )
             self.controlService = InsecureGRPCService(
-                host, internal_port, ControlServiceStub
+                host, port_internal, control_pb2_grpc.ControlServiceStub
             )
 
     @api
-    def deploy(
+    def make_deploy(
         self,
         from_addr: bytes = None,
         gas_price: int = 10,
         payment: str = None,
         session: str = None,
         public_key: str = None,
-        private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
         payment_uref: bytes = None,
         session_hash: bytes = None,
         session_name: str = None,
         session_uref: bytes = None,
+        ttl_millis: int = 0,
+        dependencies: list = None,
     ):
         """
-        Deploy a smart contract source file to Casper on an existing running node.
-        The deploy will be packaged and sent as a block to the network depending
-        on the configuration of the Casper instance.
-
-        :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_price:     The price of gas for this transaction in units dust/gas.
-                              Must be positive integer.
-        :param payment:       Path to the file with payment code.
-        :param session:       Path to the file with session code.
-        :param public_key:    Path to a file with public key (Ed25519)
-        :param private_key:   Path to a file with private key (Ed25519)
-        :param session_args:  List of ABI encoded arguments of session contract
-        :param payment_args:  List of ABI encoded arguments of payment contract
-        :param session-hash:  Hash of the stored contract to be called in the
-                              session; base16 encoded.
-        :param session-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the session.
-        :param session-uref:  URef of the stored contract to be called in the
-                              session; base16 encoded.
-        :param payment-hash:  Hash of the stored contract to be called in the
-                              payment; base16 encoded.
-        :param payment-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the payment.
-        :param payment-uref:  URef of the stored contract to be called in the
-                              payment; base16 encoded.
-        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
+        Create a protobuf deploy object. See deploy for description of parameters.
         """
+        # Convert from hex to binary.
+        if from_addr and len(from_addr) == 64:
+            from_addr = bytes.fromhex(from_addr)
+
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
+
+        if payment_amount:
+            payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
+
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not any((payment, payment_name, payment_hash, payment_uref)):
+            payment = bundled_contract("standard_payment.wasm")
 
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)
@@ -504,34 +558,118 @@ class CasperLabsClient:
             payment=_encode_contract(payment_options, payment_args),
         )
 
-        approval_public_key = public_key and read_pem_key(public_key)
-        account_public_key = from_addr or approval_public_key
-
         header = consensus.Deploy.Header(
-            account_public_key=account_public_key,
+            account_public_key=from_addr or (public_key and read_pem_key(public_key)),
             timestamp=int(1000 * time.time()),
             gas_price=gas_price,
             body_hash=blake2b_hash(_serialize(body)),
+            ttl_millis=ttl_millis,
+            dependencies=dependencies
+            and [bytes.fromhex(d) for d in dependencies]
+            or [],
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
-        approvals = (
-            []
-            if not account_public_key
-            else [
+
+        return consensus.Deploy(deploy_hash=deploy_hash, header=header, body=body)
+
+    @api
+    def sign_deploy(self, deploy, public_key, private_key_file):
+        deploy.approvals.extend(
+            [
                 consensus.Approval(
-                    approver_public_key=approval_public_key,
-                    signature=signature(private_key, deploy_hash),
+                    approver_public_key=public_key,
+                    signature=signature(private_key_file, deploy.deploy_hash),
                 )
             ]
         )
-        d = consensus.Deploy(
-            deploy_hash=deploy_hash, approvals=approvals, header=header, body=body
+        return deploy
+
+    @api
+    def deploy(
+        self,
+        from_addr: bytes = None,
+        gas_price: int = 10,
+        payment: str = None,
+        session: str = None,
+        public_key: str = None,
+        private_key: str = None,
+        session_args: bytes = None,
+        payment_args: bytes = None,
+        payment_amount: int = None,
+        payment_hash: bytes = None,
+        payment_name: str = None,
+        payment_uref: bytes = None,
+        session_hash: bytes = None,
+        session_name: str = None,
+        session_uref: bytes = None,
+        ttl_millis: int = 0,
+        dependencies=None,
+    ):
+        """
+        Deploy a smart contract source file to Casper on an existing running node.
+        The deploy will be packaged and sent as a block to the network depending
+        on the configuration of the Casper instance.
+
+        :param from_addr:     Purse address that will be used to pay for the deployment.
+        :param gas_price:     The price of gas for this transaction in units dust/gas.
+                              Must be positive integer.
+        :param payment:       Path to the file with payment code.
+        :param session:       Path to the file with session code.
+        :param public_key:    Path to a file with public key (Ed25519)
+        :param private_key:   Path to a file with private key (Ed25519)
+        :param session_args:  List of ABI encoded arguments of session contract
+        :param payment_args:  List of ABI encoded arguments of payment contract
+        :param session-hash:  Hash of the stored contract to be called in the
+                              session; base16 encoded.
+        :param session-name:  Name of the stored contract (associated with the
+                              executing account) to be called in the session.
+        :param session-uref:  URef of the stored contract to be called in the
+                              session; base16 encoded.
+        :param payment-hash:  Hash of the stored contract to be called in the
+                              payment; base16 encoded.
+        :param payment-name:  Name of the stored contract (associated with the
+                              executing account) to be called in the payment.
+        :param payment-uref:  URef of the stored contract to be called in the
+                              payment; base16 encoded.
+        :ttl_millis:          Time to live. Time (in milliseconds) that the
+                              deploy will remain valid for.
+        :dependencies:        List of deploy hashes (base16 encoded) which
+                              must be executed before this deploy.
+        :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
+        """
+
+        deploy = self.make_deploy(
+            from_addr=from_addr,
+            gas_price=gas_price,
+            payment=payment,
+            session=session,
+            public_key=public_key,
+            session_args=session_args,
+            payment_args=payment_args,
+            payment_amount=payment_amount,
+            payment_hash=payment_hash,
+            payment_name=payment_name,
+            payment_uref=payment_uref,
+            session_hash=session_hash,
+            session_name=session_name,
+            session_uref=session_uref,
+            ttl_millis=ttl_millis,
+            dependencies=dependencies,
         )
 
-        # TODO: Deploy returns Empty, error handing via exceptions, apparently,
+        deploy = self.sign_deploy(
+            deploy, (public_key and read_pem_key(public_key)) or from_addr, private_key
+        )
+
+        # TODO: Return only deploy_hash
+        return self.send_deploy(deploy), deploy.deploy_hash
+
+    @api
+    def send_deploy(self, deploy):
+        # TODO: Deploy returns Empty, error handling via exceptions, apparently,
         # so no point in returning it.
-        return self.casperService.Deploy(casper.DeployRequest(deploy=d)), deploy_hash
+        return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
@@ -588,9 +726,10 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
+        delay_in_seconds=5,
     ):
         """
-        Retrieve DAG in DOT format.
+        Generate DAG in DOT format.
 
         :param depth:                     depth in terms of block height
         :param out:                       output image filename, outputs to stdout if
@@ -600,9 +739,52 @@ class CasperLabsClient:
         :param show_justification_lines:  if justification lines should be shown
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
-        :return:                          VisualizeBlocksResponse object
+        :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
+        :return:                          Yields generated DOT source or file name when out provided.
+                                          Generates endless stream of file names if stream is not None.
         """
-        raise Exception("Not implemented yet")
+        block_infos = list(self.showBlocks(depth))
+        dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
+        if not out:
+            return dot_dag_description
+
+        parts = out.split(".")
+        file_format = parts[-1]
+        file_name_base = ".".join(parts[:-1])
+
+        iteration = -1
+
+        def file_name():
+            nonlocal iteration, file_format
+            if not stream or stream == "single-output":
+                return out
+            else:
+                iteration += 1
+                return f"{file_name_base}_{iteration}.{file_format}"
+
+        yield self._call_dot(dot_dag_description, file_name(), file_format)
+        previous_block_hashes = set(b.summary.block_hash for b in block_infos)
+        while stream:
+            time.sleep(delay_in_seconds)
+            block_infos = list(self.showBlocks(depth))
+            block_hashes = set(b.summary.block_hash for b in block_infos)
+            if block_hashes != previous_block_hashes:
+                dot_dag_description = vdag.generate_dot(
+                    block_infos, show_justification_lines
+                )
+                yield self._call_dot(dot_dag_description, file_name(), file_format)
+                previous_block_hashes = block_hashes
+
+    def _call_dot(self, dot_dag_description, file_name, file_format):
+        with tempfile.NamedTemporaryFile(mode="w") as f:
+            f.write(dot_dag_description)
+            f.flush()
+            cmd = f"dot -T{file_format} -o {file_name} {f.name}"
+            rc = os.system(cmd)
+            if rc:
+                raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
+        print(f"Wrote {file_name}")
+        return file_name
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -620,7 +802,6 @@ class CasperLabsClient:
         """
 
         def key_variant(keyType):
-
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
                 raise InternalError(
@@ -628,7 +809,16 @@ class CasperLabsClient:
                 )
             return variant
 
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        def encode_local_key(key: str) -> str:
+            seed, rest = key.split(":")
+            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            r = f"{seed}:{abi_encoded_rest}"
+            logging.info(f"encode_local_key => {r}")
+            return r
+
+        key_value = encode_local_key(key) if keyType.lower() == "local" else key
+
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -654,11 +844,8 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
-        def abi_byte_array(a: bytes) -> bytes:
-            return struct.pack("<I", len(a)) + a
-
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        purseAddrHex = account.purse_id.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -749,6 +936,24 @@ def _show_block(response):
     print(hexify(response))
 
 
+def bundled_contract(file_name):
+    """
+    Return path to contract file bundled with the package.
+    """
+    p = pkg_resources.resource_filename(__name__, file_name)
+    if not os.path.exists(p):
+        raise Exception(f"Missing bundled contract {file_name} ({p})")
+    return p
+
+
+def _set_session(args, file_name):
+    """
+    Use bundled contract unless one of the session* args is set.
+    """
+    if not any((args.session, args.session_hash, args.session_name, args.session_uref)):
+        args.session = bundled_contract(file_name)
+
+
 @guarded_command
 def no_command(casperlabs_client, args):
     print("You must provide a command. --help for documentation of commands.")
@@ -756,20 +961,58 @@ def no_command(casperlabs_client, args):
 
 
 @guarded_command
-def deploy_command(casperlabs_client, args):
+def bond_command(casperlabs_client, args):
+    logging.info(f"BOND {args}")
+    _set_session(args, "bonding.wasm")
+
+    if not args.session_args:
+        args.session_args = ABI.args_to_json(
+            ABI.args([ABI.long_value("amount", args.amount)])
+        )
+
+    return deploy_command(casperlabs_client, args)
+
+
+@guarded_command
+def unbond_command(casperlabs_client, args):
+    logging.info(f"UNBOND {args}")
+    _set_session(args, "unbonding.wasm")
+
+    if not args.session_args:
+        args.session_args = ABI.args_to_json(
+            ABI.args(
+                [ABI.optional_value("amount", ABI.long_value("amount", args.amount))]
+            )
+        )
+
+    logging.info(f" XXX unbond_command: args.session_args={args.session_args}")
+
+    return deploy_command(casperlabs_client, args)
+
+
+def _deploy_kwargs(args, private_key_accepted=True):
     from_addr = bytes.fromhex(getattr(args, "from"))
     if len(from_addr) != 32:
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
 
-    kwargs = dict(
+    if args.payment_amount:
+        args.payment_args = ABI.args_to_json(
+            ABI.args([ABI.big_int("amount", int(args.payment_amount))])
+        )
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not any(
+            (args.payment, args.payment_name, args.payment_hash, args.payment_uref)
+        ):
+            args.payment = bundled_contract("standard_payment.wasm")
+
+    d = dict(
         from_addr=from_addr,
         gas_price=args.gas_price,
         payment=args.payment or args.session,
         session=args.session,
         public_key=args.public_key or None,
-        private_key=args.private_key or None,
         session_args=args.session_args
         and ABI.args_from_json(args.session_args)
         or None,
@@ -782,7 +1025,58 @@ def deploy_command(casperlabs_client, args):
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
+        ttl_millis=args.ttl,
+        dependencies=args.dependencies,
     )
+    if private_key_accepted:
+        d["private_key"] = args.private_key or None
+    return d
+
+
+@guarded_command
+def make_deploy_command(casperlabs_client, args):
+    kwargs = _deploy_kwargs(args, private_key_accepted=False)
+    deploy = casperlabs_client.make_deploy(**kwargs)
+    data = deploy.SerializeToString()
+    if not args.deploy_path:
+        sys.stdout.write(data)
+    else:
+        with open(args.deploy_path, "wb") as f:
+            f.write(data)
+
+
+@guarded_command
+def sign_deploy_command(casperlabs_client, args):
+    deploy = consensus.Deploy()
+    if args.deploy_path:
+        with open(args.deploy_path, "rb") as input_file:
+            deploy.ParseFromString(input_file.read())
+    else:
+        deploy.ParseFromString(sys.stdin.read())
+
+    deploy = casperlabs_client.sign_deploy(
+        deploy, read_pem_key(args.public_key), args.private_key
+    )
+
+    if not args.signed_deploy_path:
+        sys.stdout.write(deploy.SerializeToString())
+    else:
+        with open(args.signed_deploy_path, "wb") as output_file:
+            output_file.write(deploy.SerializeToString())
+
+
+@guarded_command
+def send_deploy_command(casperlabs_client, args):
+    deploy = consensus.Deploy()
+    with open(args.deploy_path, "rb") as f:
+        deploy.ParseFromString(f.read())
+        casperlabs_client.send_deploy(deploy)
+    print(f"Success! Deploy {deploy.deploy_hash.hex()} deployed")
+
+
+@guarded_command
+def deploy_command(casperlabs_client, args):
+    kwargs = _deploy_kwargs(args)
     _, deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash.hex()} deployed")
 
@@ -807,15 +1101,19 @@ def show_blocks_command(casperlabs_client, args):
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    response = casperlabs_client.visualizeDag(args.depth)
-    # TODO: call Graphviz
-    print(hexify(response))
+    for o in casperlabs_client.visualizeDag(
+        args.depth, args.out, args.show_justification_lines, args.stream
+    ):
+        if not args.out:
+            print(o)
+            break
 
 
 @guarded_command
 def query_state_command(casperlabs_client, args):
+
     response = casperlabs_client.queryState(
-        args.block_hash, args.key, args.path, getattr(args, "type")
+        args.block_hash, args.key, args.path or "", getattr(args, "type")
     )
     print(hexify(response))
 
@@ -836,6 +1134,57 @@ def show_deploy_command(casperlabs_client, args):
 def show_deploys_command(casperlabs_client, args):
     response = casperlabs_client.showDeploys(args.hash, full_view=False)
     _show_blocks(response, element_name="deploy")
+
+
+def dot_output(file_name):
+    """
+    Check file name has an extension of one of file formats supported by Graphviz.
+    """
+    parts = file_name.split(".")
+    if len(parts) == 1:
+        raise argparse.ArgumentTypeError(
+            f"'{file_name}' has no extension indicating file format"
+        )
+    else:
+        file_format = parts[-1]
+        if file_format not in DOT_FORMATS.split(","):
+            raise argparse.ArgumentTypeError(
+                f"File extension {file_format} not_recognized, must be one of {DOT_FORMATS}"
+            )
+    return file_name
+
+
+def natural(number):
+    """Check number is an integer greater than 0"""
+    n = int(number)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{number} is not a positive int value")
+    return n
+
+
+# fmt: off
+def deploy_options(keys_required=False, private_key_accepted=True):
+    return ([
+        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
+        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
+        [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
+        [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
+        [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
+        [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
+        [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
+        [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
+        [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
+        [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
+        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
+        [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+        [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
+        + (private_key_accepted
+           and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
+           or []))
+# fmt:on
 
 
 def main():
@@ -869,7 +1218,7 @@ def main():
                 help="Port used for external gRPC API.",
             )
             self.parser.add_argument(
-                "--internal-port",
+                "--port-internal",
                 required=False,
                 default=DEFAULT_INTERNAL_PORT,
                 type=int,
@@ -907,7 +1256,7 @@ def main():
                 CasperLabsClient(
                     args.host,
                     args.port,
-                    args.internal_port,
+                    args.port_internal,
                     args.node_id,
                     args.certificate_file,
                 ),
@@ -918,20 +1267,26 @@ def main():
 
     # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      [[('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-                       [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-                       [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code, by default fallbacks to the --session code')],
-                       [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
-                       [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
-                       [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
-                       [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
-                       [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
-                       [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
-                       [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
-                       [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
-                       [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-                       [('--private-key',), dict(required=True, type=str, help='Path to the file with account public key (Ed25519)')],
-                       [('--public-key',), dict(required=True, type=str, help='Path to the file with account private key (Ed25519)')]])
+                      deploy_options(keys_required=True))
+
+    parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options(keys_required=False, private_key_accepted=False))
+
+    parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
+                      [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
+                       [('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the deploy file.")],
+                       [('--private-key',), dict(required=True, help="Path to the file with account private key (Ed25519)")],
+                       [('--public-key',), dict(required=True, help="Path to the file with account public key (Ed25519)")]])
+
+    parser.addCommand('send-deploy', send_deploy_command, "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.",
+                      [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
+
+    parser.addCommand('bond', bond_command, 'Issues bonding request',
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=True))
+
+    parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
+                      [[('-a', '--amount'),
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
@@ -947,24 +1302,31 @@ def main():
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it.',
+                      [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=dot_output, help=f'output image filename, outputs to stdout if not specified, must end with one of {DOT_FORMATS}')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
                        [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
     parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
-                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+                       [('-p', '--path'), dict(required=False, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+
     # fmt:on
     sys.exit(parser.run())
+
+
+def check_bundled_contracts():
+    print(dir(pkg_resources))
+    p = pkg_resources.resource_filename(__name__, "bonding.wasm")
+    if not os.path.exists(p):
+        raise Exception(f"No bundled contract {p}")
 
 
 if __name__ == "__main__":

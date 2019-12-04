@@ -18,19 +18,21 @@ Or you can run the client commands from the root directory of the repo, using ex
 
 ## Instructions
 
-##### Step 1: Clone the [examples](https://github.com/CasperLabs/contract-examples) and set up your toolchain
+##### Step 1: Clone the [main repo](https://github.com/CasperLabs/CasperLabs/) to obtain the [example contracts](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples) and set up your toolchain
 ```
-git clone git@github.com:CasperLabs/contract-examples.git
-cd contract-examples
+git clone git@github.com:CasperLabs/CasperLabs.git
+cd CasperLabs/execution-engine
 rustup toolchain install $(cat rust-toolchain)
 rustup target add --toolchain $(cat rust-toolchain) wasm32-unknown-unknown
 ```
 
+Source code of contract examples are currently located in `./execution-engine/contracts/examples` directory inside the main repo.
+
 ##### Step 2: Build the example contracts
 ```
-cargo build --release
-export COUNTER_DEFINE="$(pwd)/target/wasm32-unknown-unknown/release/counterdefine.wasm"
-export COUNTER_CALL="$(pwd)/target/wasm32-unknown-unknown/release/countercall.wasm"
+make build-example-contracts
+export COUNTER_DEFINE="$(pwd)/target/wasm32-unknown-unknown/release/counter_define.wasm"
+export COUNTER_CALL="$(pwd)/target/wasm32-unknown-unknown/release/counter_call.wasm"
 ```
 
 ##### Step 3: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
@@ -83,9 +85,10 @@ Success!
 ###### Alternative way of creating, signing and deploying contracts
 
 Every account can associate multiple keys with it and give each a weight. Collective weight of signing keys decides whether an action of certain type can be made. In order to collect weight of different associated keys a deploy has to be signed by corresponding private keys. `deploy` command does it all (creates a deploy, signs it and deploys to the node) but doesn't allow for signing with multiple keys. Therefore we split `deploy` into three separate commands:
-* `make-deploy` - creates a deploy from input parameters
-* `sign-deploy` - signs a deploy with given private key
-* `send-deploy` - sends a deploy to CasperLabs node
+* `make-deploy`  - creates a deploy from input parameters
+* `sign-deploy`  - signs a deploy with given private key
+* `print-deploy` - prints information of a deploy
+* `send-deploy`  - sends a deploy to CasperLabs node
 
 Commands read input deploy from both a file (`-i` flag) and STDIN. They can also write to both file and STDOUT.
 
@@ -120,6 +123,14 @@ casperlabs-client \
     --private-key private-key.pem
 ```
 This will read a deploy to sign from STDIN and output signed deploy to STDOUT. There are `-i` and `-o` flags for, respectively, reading a deploy from a file and writing signed deploy to a file.
+
+**Printing a deploy**
+```
+casperlabs-client \
+    --host localhost \
+    print-deploy
+```
+This will print information of a deploy into STDOUT. There are `--json` and `--bytes-standard` flags for, respectively, using standard JSON vs Protobuf text encoding and standard ASCII-escaped for Protobuf or Base64 for JSON bytes encoding vs custom Base16. The same set of flags also available for all `show-*` and `query-state` commands. 
 
 **Sending deploy to the node**
 ```

@@ -3,7 +3,7 @@
 PYTEST_ARGS="-vv -ra "
 
 # $TAG_NAME should have value of "DRONE-####" from docker_run_tests.sh in CI
-if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "test" ]]; then
+if [[ -n $TAG_NAME ]] && [[ "$TAG_NAME" != "latest" ]]; then
     # We only want to limit maxfail in CI
     PYTEST_ARGS="${PYTEST_ARGS} --maxfail=3 --tb=short"
 else
@@ -20,4 +20,4 @@ pip install pipenv
 pipenv sync
 pipenv run client/CasperLabsClient/install.sh
 pipenv run pytest ${PYTEST_ARGS} $TEST_RUN_ARGS
-pipenv run python3 ./docker_cleanup_assurance.py
+pipenv run python3 casperlabs_local_net/docker_cleanup_assurance.py

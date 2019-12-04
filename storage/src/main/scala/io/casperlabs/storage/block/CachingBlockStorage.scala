@@ -6,9 +6,10 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import com.google.common.cache.{Cache, CacheBuilder, Weigher}
 import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
 import scala.collection.JavaConverters._
@@ -35,29 +36,11 @@ class CachingBlockStorage[F[_]: Sync](
     )
 
   override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] =
-    cacheOrUnderlying(
-      cache.asMap().asScala.collectFirst {
-        case (blockHash, blockMsg)
-            if Base16.encode(blockHash.toByteArray).startsWith(blockHashPrefix) =>
-          blockMsg
-      },
-      underlying.getByPrefix(blockHashPrefix)
-    )
+    underlying.getByPrefix(blockHashPrefix)
 
-  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] =
-    cacheOrUnderlying(
-      cache
-        .asMap()
-        .asScala
-        .collectFirst {
-          case (blockHash, blockMsg)
-              if Base16.encode(blockHash.toByteArray).startsWith(blockHashPrefix) =>
-            blockMsg.blockMessage
-        }
-        .flatten
-        .map(b => BlockSummary(b.blockHash, b.header, b.signature)),
-      underlying.getSummaryByPrefix(blockHashPrefix)
-    )
+  override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] =
+    // Not caching because the DB has clever indexing.
+    underlying.getBlockInfoByPrefix(blockHashPrefix)
 
   override def isEmpty: F[Boolean] = underlying.isEmpty
 
@@ -79,8 +62,14 @@ class CachingBlockStorage[F[_]: Sync](
       underlying.getBlockSummary(blockHash)
     )
 
-  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-    underlying.findBlockHashesWithDeployHash(deployHash)
+  override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+    // Not caching because in the future the finality status will get updated.
+    underlying.getBlockInfo(blockHash)
+
+  override def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]] =
+    underlying.findBlockHashesWithDeployHashes(deployHashes)
 
   override def checkpoint(): F[Unit] =
     underlying.checkpoint()

@@ -28,8 +28,6 @@ final case class ValidatorIdentity(
 }
 
 object ValidatorIdentity {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   private def fileContent[F[_]: Sync](path: Path): F[String] =
     Resource
       .fromAutoCloseable(Sync[F].delay(Source.fromFile(path.toFile)))
@@ -48,7 +46,7 @@ object ValidatorIdentity {
             .error(s"Failed to parse keys, ${parseError.errorMessage}") >> none[ValidatorIdentity]
             .pure[F], {
           case (privateKey, publicKey, sa) =>
-            Log[F].info(s"Validator identity: ${Base64.encode(publicKey)}") >>
+            Log[F].info(s"Validator identity: ${Base64.encode(publicKey) -> "validator"}") >>
               ValidatorIdentity(publicKey, privateKey, sa).some.pure[F]
         }
       )

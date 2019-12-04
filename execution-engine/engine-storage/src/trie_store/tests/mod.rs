@@ -5,8 +5,7 @@ mod simple;
 use contract_ffi::bytesrepr::ToBytes;
 use engine_shared::newtypes::Blake2bHash;
 
-use crate::trie::Trie;
-use crate::trie::{Pointer, PointerBlock};
+use crate::trie::{Pointer, PointerBlock, Trie};
 
 #[derive(Clone)]
 struct TestData<K, V>(Blake2bHash, Trie<K, V>);

@@ -13,13 +13,15 @@ import eu.timepit.refined.auto._
 import eu.timepit.refined.numeric._
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.GossipError
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.Utils._
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{Compression, Log}
+import io.casperlabs.shared.{Compression, FatalErrorShutdown, Log}
+import io.casperlabs.shared.Log.LogOps
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.control.NonFatal
@@ -43,6 +45,9 @@ trait DownloadManager[F[_]] {
 object DownloadManagerImpl {
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(GossipingMetricsSource, "DownloadManager")
+
+  // to use .minimumOption on collections of (Node, Int)
+  implicit val sourcesAndCountersOrder: Order[(Node, Int)] = Order[Int].contramap[(Node, Int)](_._2)
 
   /** Export base 0 values so we have non-empty series for charts. */
   def establishMetrics[F[_]: Monad: Metrics] =
@@ -229,7 +234,9 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start.attempt.flatMap(scheduleFeedback.complete) >> run
+        start
+          .attemptAndLog("An error occurred when handling Download signal.")
+          .flatMap(scheduleFeedback.complete) >> run
 
       case Signal.DownloadSuccess(blockHash) =>
         val finish = for {
@@ -253,7 +260,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _                      <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attemptAndLog("An error occurred when handling DownloadSuccess signal.") >> run
 
       case Signal.DownloadFailure(blockHash, ex) =>
         val finish = for {
@@ -272,7 +279,7 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
           _ <- setScheduledGauge
         } yield ()
 
-        finish.attempt >> run
+        finish.attemptAndLog("An error occurred when handling DownloadFailure signal.") >> run
     }
 
   // Indicate how many items we have in the queue.
@@ -371,67 +378,68 @@ class DownloadManagerImpl[F[_]: Concurrent: Log: Timer: Metrics](
         _ <- Metrics[F].incrementCounter("downloads_succeeded")
       } yield ()
 
-    def downloadWithRetries(summary: BlockSummary, source: Node, relay: Boolean): F[Unit] = {
-      val downloadEffect = tryDownload(summary, source, relay)
-
-      def loop(counter: Int): F[Unit] =
-        downloadEffect.handleErrorWith {
-          case NonFatal(ex) if counter > retriesConf.maxRetries.toInt =>
-            // Let's just return the last error, unwrapped, so callers don't have to anticipate
-            // whether this component is going to do retries or not.
-            // Alternatively we could use `Throwable.addSupressed` to collect all of them.
-            Sync[F].raiseError[Unit](ex)
-
-          case NonFatal(ex) =>
-            val duration = retriesConf.initialBackoffPeriod *
-              math.pow(retriesConf.backoffFactor, counter.toDouble)
-
-            val nextCounter = counter + 1
-
-            duration match {
-              case delay: FiniteDuration =>
-                // Downloads never fail forever, even if the signal is raised, a new schedule can restart it,
-                // maybe from a different source, so let's count every time it doesn't succeed.
-                Metrics[F].incrementCounter("downloads_failed") *>
-                  Log[F].warn(
-                    s"Retrying downloading of block $id, source: ${source.show}, attempt: $nextCounter, delay: $delay, error: $ex"
-                  ) >>
-                  Timer[F].sleep(delay) >>
-                  loop(nextCounter)
-
-              case _: Duration.Infinite =>
-                Sync[F].raiseError[Unit](
-                  new RuntimeException(
-                    s"Failed to retry downloading block $id, source: ${source.show}, got Infinite backoff delay"
-                  )
-                )
-            }
-        }
-
-      if (retriesConf.maxRetries.toInt == 0) downloadEffect else loop(0)
-    }
-
     // Try to download until we succeed or give up.
-    def loop(tried: Set[Node], errors: List[Throwable]): F[Unit] =
-      // Get the latest sources.
+    def loop(counterPerSource: Map[Node, Int], lastError: Option[Throwable]): F[Unit] =
       itemsRef.get.map(_(blockHash)).flatMap { item =>
-        (item.sources -- tried).headOption match {
-          case Some(source) =>
-            downloadWithRetries(item.summary, source, item.relay).recoverWith {
-              case NonFatal(ex) =>
-                Log[F].error(s"Failed to download block $id from ${source.host}", ex) >>
-                  loop(tried + source, ex :: errors)
-            }
-          case None =>
-            Log[F].error(
-              s"Could not download block $id from any of the sources; tried ${tried.size}."
-            ) *> failure(errors.head)
+        val prevSources           = counterPerSource.keySet
+        val potentiallyNewSources = item.sources
+        if (potentiallyNewSources.size > prevSources.size) {
+          val newSources = potentiallyNewSources.map((_, 0)).toMap |+| counterPerSource
+          // We've got new sources during download, so need to recheck the least tried source
+          loop(newSources, lastError)
+        } else {
+          // No sources changes, can continue.
+          // Finding least tried source.
+          counterPerSource.toList.minimumOption match {
+            case None =>
+              failure(new IllegalStateException("No source to download from."))
+
+            case Some((_, attempt)) if attempt > retriesConf.maxRetries.toInt =>
+              // Least tried source is tried more than allowed => don't have sources to try anymore.
+              // Let's just return the last error, unwrapped, so callers don't have to anticipate
+              // whether this component is going to do retries or not.
+              // Alternatively we could use `Throwable.addSupressed` to collect all of them.
+              val countersSum = counterPerSource.values.sum
+              val sourcesNum  = counterPerSource.size
+              val ex          = lastError.getOrElse(new IllegalStateException("No errors captured."))
+              Log[F]
+                .error(
+                  s"Could not download block $id from any of the sources; tried $countersSum requests for $sourcesNum sources: $ex"
+                ) *> failure(ex)
+
+            case Some((source, attempt)) =>
+              val duration = if (attempt > 0) {
+                retriesConf.initialBackoffPeriod *
+                  math.pow(retriesConf.backoffFactor, (attempt - 1).toDouble)
+              } else {
+                Duration.Zero
+              }
+              duration match {
+                case delay: FiniteDuration =>
+                  Log[F].debug(
+                    s"Scheduling download of block $id from ${source.show -> "peer"} later, $attempt, $delay"
+                  ) *>
+                    Timer[F].sleep(delay) *>
+                    tryDownload(item.summary, source, item.relay).handleErrorWith {
+                      case NonFatal(ex) =>
+                        val nextAttempt = attempt + 1
+                        Metrics[F].incrementCounter("downloads_failed") *>
+                          Log[F].warn(
+                            s"Retrying download of block $id from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
+                          ) *>
+                          loop(counterPerSource.updated(source, nextAttempt), ex.some)
+                    }
+                case _: Duration.Infinite => sys.error("Unreachable")
+              }
+          }
         }
       }
 
-    // Make sure the manager knows we're done, even if we fail unexpectedly.
-    loop(Set.empty, List(new IllegalStateException("No source to download from."))) recoverWith {
-      case NonFatal(ex) => failure(ex)
+    itemsRef.get.map(_(blockHash)).flatMap { item =>
+      // Make sure the manager knows we're done, even if we fail unexpectedly.
+      loop(item.sources.map((_, 0)).toMap, lastError = none[Throwable]) recoverWith {
+        case NonFatal(ex) => failure(ex)
+      }
     }
   }
 

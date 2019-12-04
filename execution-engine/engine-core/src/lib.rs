@@ -1,37 +1,4 @@
-#![feature(result_map_or_else)]
 #![feature(never_type)]
-
-// core dependencies
-extern crate core;
-
-// third-party dependencies
-extern crate blake2;
-extern crate failure;
-extern crate itertools;
-extern crate linked_hash_map;
-extern crate parity_wasm;
-extern crate parking_lot;
-extern crate pwasm_utils;
-extern crate rand;
-extern crate rand_chacha;
-extern crate wasmi;
-
-// internal dependencies
-extern crate contract_ffi;
-extern crate engine_shared;
-extern crate engine_storage;
-extern crate engine_wasm_prep;
-
-// third-party dev-dependencies
-#[cfg(test)]
-#[macro_use]
-extern crate matches;
-#[cfg(test)]
-extern crate proptest;
-
-#[macro_use]
-extern crate num_derive;
-extern crate num_traits;
 
 use contract_ffi::key::Key;
 use std::collections::BTreeMap;
@@ -40,10 +7,13 @@ pub mod engine_state;
 pub mod execution;
 pub mod resolvers;
 pub mod runtime_context;
-pub mod tracking_copy;
+pub(crate) mod tracking_copy;
 
 pub const ADDRESS_LENGTH: usize = 32;
+pub const DEPLOY_HASH_LENGTH: usize = 32;
 
-type Address = [u8; ADDRESS_LENGTH];
+pub type Address = [u8; ADDRESS_LENGTH];
+
+pub type DeployHash = [u8; DEPLOY_HASH_LENGTH];
 
 type KnownKeys = BTreeMap<String, Key>;

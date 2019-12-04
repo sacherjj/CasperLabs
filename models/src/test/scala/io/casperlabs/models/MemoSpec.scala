@@ -1,8 +1,9 @@
 package io.casperlabs.models
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
+import io.casperlabs.shared.Log
 
-class MemoSpec extends FlatSpec with Matchers {
+class MemoSpec extends FlatSpec with Matchers with Log.LogId {
 
   behavior of "Memo"
 

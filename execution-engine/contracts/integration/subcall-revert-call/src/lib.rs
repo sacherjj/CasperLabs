@@ -1,22 +1,25 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::vec::Vec;
 
-use contract_ffi::contract_api::{runtime, ContractRef, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+use contract_ffi::{
+    contract_api::{runtime, ContractRef, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+};
+
+const REVERT_TEST_KEY: &str = "revert_test";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let revert_test_uref = runtime::get_key("revert_test").unwrap_or_revert_with(Error::User(100));
-    let pointer = if let Key::Hash(hash) = revert_test_uref {
-        ContractRef::Hash(hash)
-    } else {
-        runtime::revert(Error::User(66)); // exit code is currently arbitrary
+    let revert_test_uref = runtime::get_key(REVERT_TEST_KEY).unwrap_or_revert_with(Error::GetKey);
+
+    let contract_ref = match revert_test_uref {
+        Key::Hash(hash) => ContractRef::Hash(hash),
+        _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
-    runtime::call_contract::<_, ()>(pointer, &(), &Vec::new());
+    runtime::call_contract::<_, ()>(contract_ref, &(), &Vec::new());
 }

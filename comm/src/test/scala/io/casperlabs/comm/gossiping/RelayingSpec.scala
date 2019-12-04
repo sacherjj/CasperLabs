@@ -5,17 +5,18 @@ import cats.effect._
 import cats.mtl.DefaultApplicativeAsk
 import cats.syntax.option._
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.shared.Log
-import io.casperlabs.shared.Log.NOPLog
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
+import monix.tail.Iterant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Gen, Shrink}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
@@ -98,7 +99,7 @@ class RelayingSpec
         }
       "not stop gossiping if received an error" in
         forAll(genListNode, genHash) { (peers: List[Node], hash: ByteString) =>
-          val log = new LogStub[Task]()
+          val log = LogStub[Task]()
 
           TestFixture(peers.size, 100, peers, acceptOrFailure = _ => none[Boolean], log) {
             (relaying, asked, _) =>
@@ -135,7 +136,7 @@ object RelayingSpec {
     def ask: Task[Node]                = Task.pure(local)
   }
 
-  private val noOpLog: Log[Task] = new NOPLog[Task]
+  private val noOpLog: Log[Task] = Log.NOPLog[Task]
   implicit val metrics           = new Metrics.MetricsNOP[Task]
 
   object TestFixture {
@@ -177,12 +178,16 @@ object RelayingSpec {
           override def streamAncestorBlockSummaries(
               request: StreamAncestorBlockSummariesRequest
           ) = ???
-          override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
-            ???
+          override def streamLatestMessages(
+              request: StreamLatestMessagesRequest
+          ): Iterant[Task, Block.Justification]                                   = ???
           override def streamBlockSummaries(request: StreamBlockSummariesRequest) = ???
           override def getBlockChunked(request: GetBlockChunkedRequest)           = ???
           override def addApproval(request: AddApprovalRequest)                   = ???
           override def getGenesisCandidate(request: GetGenesisCandidateRequest)   = ???
+          override def streamDagSliceBlockSummaries(
+              request: StreamDagSliceBlockSummariesRequest
+          ): Iterant[Task, BlockSummary] = ???
         }
 
       val relayingImpl = RelayingImpl[Task](nd, gossipService, relayFactor, relaySaturation)(

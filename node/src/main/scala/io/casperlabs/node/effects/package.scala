@@ -17,14 +17,11 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
-
-  def log: Log[Task] = Log.log
 
   def nodeDiscovery(
       id: NodeIdentifier,
@@ -82,36 +79,63 @@ package object effects {
       def ask: Task[List[Node]]          = state.get.map(_.bootstraps)
     }
 
-  // https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
-  def doobieTransactor(
-      connectEC: ExecutionContext,  // for waiting on connections, should be bounded
-      transactEC: ExecutionContext, // for JDBC, can be unbounded
+  /**
+    * @see https://tpolecat.github.io/doobie/docs/14-Managing-Connections.html#about-threading
+    * @param connectEC for waiting on connections, should be bounded
+    * @param transactEC for JDBC, can be unbounded
+    * @return Write and read Transactors
+    */
+  def doobieTransactors(
+      connectEC: ExecutionContext,
+      transactEC: ExecutionContext,
       serverDataDir: Path
-  ): Resource[Task, Transactor[Task]] = {
-    val config = new HikariConfig()
-    config.setDriverClassName("org.sqlite.JDBC")
-    config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
-    config.setMinimumIdle(1)
-    config.setMaximumPoolSize(1)
-    // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
-    // From doobie's docs:
-    // * - Auto-commit will be set to `false`;
-    // * - the transaction will `commit` on success and `rollback` on failure;
-    config.setAutoCommit(false)
-    // Using a connection pool with maximum size of 1 becuase with the default settings we got SQLITE_BUSY errors.
+  ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
+    def mkConfig(poolSize: Int, foreignKeys: Boolean) = {
+      val config = new HikariConfig()
+      config.setDriverClassName("org.sqlite.JDBC")
+      config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
+      config.setMinimumIdle(1)
+      config.setMaximumPoolSize(poolSize)
+      // `autoCommit=true` is a default for Hikari; doobie sets `autoCommit=false`.
+      // From doobie's docs:
+      // * - Auto-commit will be set to `false`;
+      // * - the transaction will `commit` on success and `rollback` on failure;
+      // Setting it to false to avoid seeing resets in the log every time.
+      config.setAutoCommit(false)
+      // Foreign keys support must be enabled explicitly in SQLite; it doesn't affect read logic though.
+      // https://www.sqlite.org/foreignkeys.html#fk_enable
+      config.addDataSourceProperty("foreign_keys", foreignKeys.toString)
+      // NOTE: We still saw at least one SQLITE_BUSY error in testing, despite the 1 sized pool.
+      // NODE-1019 will add logging, maybe we'll learn more.
+      config.addDataSourceProperty("busy_timeout", "5000")
+      config.addDataSourceProperty("journal_mode", "WAL")
+      config
+    }
+
+    // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    HikariTransactor
-      .fromHikariConfig[Task](
-        config,
-        connectEC,
-        Blocker.liftExecutionContext(transactEC)
-      )
-      .map { xa =>
-        // Foreign keys support must be enabled explicitly in SQLite
-        // https://www.sqlite.org/foreignkeys.html#fk_enable
-        Transactor.before
-          .set(xa, sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa))
-      }
+    val writeXaconfig = mkConfig(poolSize = 1, foreignKeys = true)
+
+    // Using a separate Transactor for read operations because
+    // we use fs2.Stream as a return type in some places which hold an opened connection
+    // preventing acquiring a connection in other places if we use a connection pool with size of 1.
+    val readXaconfig = mkConfig(poolSize = 10, foreignKeys = false)
+
+    // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
+    for {
+      writeXa <- HikariTransactor
+                  .fromHikariConfig[Task](
+                    writeXaconfig,
+                    connectEC,
+                    Blocker.liftExecutionContext(transactEC)
+                  )
+      readXa <- HikariTransactor
+                 .fromHikariConfig[Task](
+                   readXaconfig,
+                   connectEC,
+                   Blocker.liftExecutionContext(transactEC)
+                 )
+    } yield (writeXa, readXa)
   }
 }

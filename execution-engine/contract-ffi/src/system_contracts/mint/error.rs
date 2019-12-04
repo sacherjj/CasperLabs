@@ -3,8 +3,12 @@
 use alloc::vec::Vec;
 use core::convert::{TryFrom, TryInto};
 
-use crate::bytesrepr::{self, FromBytes, ToBytes};
-use crate::system_contracts::mint::purse_id::PurseIdError;
+use failure::Fail;
+
+use crate::{
+    bytesrepr::{self, FromBytes, ToBytes},
+    system_contracts::mint::purse_id::PurseIdError,
+};
 
 /// An enum error that is capable of carrying a value across FFI-Host
 /// boundary.

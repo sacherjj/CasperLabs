@@ -1,29 +1,45 @@
+import inspect
 import logging
 import os
 import threading
-from casperlabs_local_net.casperlabs_node import CasperLabsNode
-from casperlabs_local_net.common import (
-    random_string,
-    MAX_PAYMENT_COST,
-    INITIAL_MOTES_AMOUNT,
-    TEST_ACCOUNT_INITIAL_BALANCE,
-)
-from casperlabs_local_net.docker_base import DockerConfig
-from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
-from casperlabs_local_net.docker_node import DockerNode, FIRST_VALIDATOR_ACCOUNT
-from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
-from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
-from casperlabs_local_net.wait import (
-    wait_for_block_hash_propagated_to_all_nodes,
-    wait_for_approved_block_received_handler_state,
-    wait_for_node_started,
-    wait_for_peers_count_at_least,
-    wait_for_genesis_block,
-)
+import errno
+import shutil
 from typing import Callable, Dict, List
+
 from docker import DockerClient
 from docker.errors import NotFound
-import inspect
+from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.remote.webdriver import WebDriver
+
+from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT, Account
+from casperlabs_local_net.casperlabs_node import CasperLabsNode
+from casperlabs_local_net.common import (
+    INITIAL_MOTES_AMOUNT,
+    MAX_PAYMENT_COST,
+    TEST_ACCOUNT_INITIAL_BALANCE,
+    EMPTY_ETC_CASPERLABS,
+    random_string,
+)
+from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.docker_clarity import (
+    DockerClarity,
+    DockerGrpcWebProxy,
+    DockerSelenium,
+)
+from casperlabs_local_net.docker_config import DEFAULT_NODE_ENV
+from casperlabs_local_net.docker_execution_engine import DockerExecutionEngine
+from casperlabs_local_net.docker_node import FIRST_VALIDATOR_ACCOUNT, DockerNode
+from casperlabs_local_net.log_watcher import GoodbyeInLogLine, wait_for_log_watcher
+from casperlabs_local_net.wait import (
+    wait_for_approved_block_received_handler_state,
+    wait_for_block_hash_propagated_to_all_nodes,
+    wait_for_clarity_started,
+    wait_for_genesis_block,
+    wait_for_node_started,
+    wait_for_peers_count_at_least,
+    wait_for_selenium_started,
+)
 
 
 def test_name():
@@ -52,6 +68,10 @@ class CasperLabsNetwork:
         self._next_key_number = FIRST_VALIDATOR_ACCOUNT
         self.docker_client = docker_client
         self.cl_nodes: List[CasperLabsNode] = []
+        self.clarity_node: DockerClarity = None
+        self.selenium_node: DockerSelenium = None
+        self.selenium_driver: WebDriver = None
+        self.grpc_web_proxy_node: DockerGrpcWebProxy = None
         self._created_networks: List[str] = []
         self._lock = (
             threading.RLock()
@@ -78,6 +98,10 @@ class CasperLabsNetwork:
     def genesis_account(self):
         """ Genesis Account Address """
         return GENESIS_ACCOUNT
+
+    @property
+    def in_docker(self) -> bool:
+        return os.getenv("IN_DOCKER") == "true"
 
     def lookup_node(self, node_id):
         m = {node.node_id: node for node in self.docker_nodes}
@@ -169,6 +193,34 @@ class CasperLabsNetwork:
         self.wait_method(wait_for_node_started, 0)
         wait_for_genesis_block(self.docker_nodes[0])
 
+    def add_clarity(self, config: DockerConfig):
+        if self.node_count < 1:
+            raise Exception("There must be at lease one casperlabs node")
+        with self._lock:
+            node_name = self.cl_nodes[0].node.container_name
+            self.grpc_web_proxy_node = DockerGrpcWebProxy(config, node_name)
+            self.clarity_node = DockerClarity(
+                config, self.grpc_web_proxy_node.container_name
+            )
+            self.selenium_node = DockerSelenium(config)
+            wait_for_clarity_started(self.clarity_node, config.command_timeout, 1)
+            # Since we need pull selenium images from docker hub, it will take more time
+            wait_for_selenium_started(self.selenium_node, 5 * 60, 1)
+            if self.in_docker:
+                # If these integration tests are running in a docker container, then we need connect the docker container
+                # to the network of selenium
+                network = self.selenium_node.network_from_name(config.network)
+                # Gets name of container name of integration_testing
+                integration_test_node = os.getenv("HOSTNAME")
+                network.connect(integration_test_node)
+                remote_drive = f"http://{self.selenium_node.name}:4444/wd/hub"
+            else:
+                remote_drive = f"http://127.0.0.1:4444/wd/hub"
+            self.selenium_driver = webdriver.Remote(
+                remote_drive, DesiredCapabilities.CHROME
+            )
+            self.selenium_driver.implicitly_wait(30)
+
     def add_cl_node(
         self, config: DockerConfig, network_with_bootstrap: bool = True
     ) -> None:
@@ -232,8 +284,24 @@ class CasperLabsNetwork:
             )
 
         with self._lock:
+            if self.clarity_node:
+                self.clarity_node.cleanup()
+            if self.grpc_web_proxy_node:
+                self.grpc_web_proxy_node.cleanup()
+            if self.selenium_node:
+                self.selenium_node.cleanup()
             for node in self.cl_nodes:
                 node.cleanup()
+            if self.in_docker and self.selenium_node:
+                # If these integration tests are running in a docker container,
+                # then we need disconnect the docker container from the network of selenium
+                network = self.selenium_node.network_from_name(
+                    self.selenium_node.config.network
+                )
+                # Gets name of container name of integration_testing
+                integration_test_node = os.getenv("HOSTNAME")
+                network.disconnect(integration_test_node)
+
             self.cleanup()
 
         return True
@@ -272,6 +340,65 @@ class OneNodeNetwork(CasperLabsNetwork):
         return config
 
 
+class OneNodeNetworkWithChainspecUpgrades(OneNodeNetwork):
+    THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
+    RESOURCES = f"{THIS_DIRECTORY}/../resources/"
+    EE_CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../execution-engine/target/wasm32-unknown-unknown/release/"
+
+    # We need to copy all required contracts in test chainspecs
+    REQUIRED_CONTRACTS = (
+        "mint_install.wasm",
+        "modified_system_upgrader.wasm",
+        "pos_install.wasm",
+    )
+
+    def __init__(
+        self,
+        docker_client: DockerClient,
+        extra_docker_params: Dict = None,
+        chainspec_directory: str = "test-chainspec",
+        etc_casperlabs_directory: str = EMPTY_ETC_CASPERLABS,
+    ):
+        super().__init__(docker_client, extra_docker_params)
+        self.chainspec_directory = chainspec_directory
+        self.etc_casperlabs_directory = etc_casperlabs_directory
+        self.etc_casperlabs_chainspec = os.path.join(
+            self.RESOURCES, self.etc_casperlabs_directory, "chainspec"
+        )
+
+        source_directory = (
+            os.environ.get("TAG_NAME")
+            and "/root/system_contracts/"
+            or self.EE_CONTRACTS_DIR
+        )
+        self.copy_system_contracts(
+            source_directory, os.path.join(self.RESOURCES, self.chainspec_directory)
+        )
+
+        if self.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
+            self.copy_system_contracts(source_directory, self.etc_casperlabs_chainspec)
+
+    def copy_system_contracts(self, source_directory, destination_base):
+        for (_, subdirectories, _) in os.walk(destination_base):
+            for subdirectory in subdirectories:
+                destination_directory = os.path.join(destination_base, subdirectory)
+                try:
+                    os.makedirs(destination_directory)
+                except OSError as e:
+                    if e.errno != errno.EEXIST:
+                        raise
+                for file_name in self.REQUIRED_CONTRACTS:
+                    shutil.copy(
+                        os.path.join(source_directory, file_name), destination_directory
+                    )
+
+    def docker_config(self, account):
+        config = super().docker_config(account)
+        config.chainspec_directory = self.chainspec_directory
+        config.etc_casperlabs_directory = self.etc_casperlabs_directory
+        return config
+
+
 class ReadOnlyNodeNetwork(OneNodeNetwork):
     is_payment_code_enabled = True
 
@@ -303,6 +430,18 @@ class PaymentNodeNetworkWithNoMinBalance(OneNodeNetwork):
 
 class OneNodeWithGRPCEncryption(OneNodeNetwork):
     grpc_encryption = True
+
+
+class OneNodeWithClarity(OneNodeNetwork):
+    def create_cl_network(self):
+        account = self.get_key()
+        config = self.docker_config(account)
+        # Enable auto proposing
+        new_env = DEFAULT_NODE_ENV.copy()
+        new_env["CL_CASPER_AUTO_PROPOSE_ENABLED"] = "true"
+        config.node_env = new_env
+        self.add_bootstrap(config)
+        self.add_clarity(config)
 
 
 class TwoNodeNetwork(CasperLabsNetwork):
@@ -350,6 +489,24 @@ class TwoNodeWithDifferentAccountsCSVNetwork(CasperLabsNetwork):
 
 class EncryptedTwoNodeNetwork(TwoNodeNetwork):
     grpc_encryption = True
+
+
+class InterceptedOneNodeNetwork(OneNodeNetwork):
+    grpc_encryption = True
+    behind_proxy = True
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            behind_proxy=True,
+        )
+        self.add_bootstrap(config)
 
 
 class InterceptedTwoNodeNetwork(TwoNodeNetwork):
@@ -513,6 +670,30 @@ class CustomConnectionNetwork(CasperLabsNetwork):
             for node_num in connection:
                 self.docker_nodes[node_num].disconnect_from_network(network_name)
             del self.network_names[tuple(connection)]
+
+
+class NetworkWithTaggedDev(CasperLabsNetwork):
+    def create_cl_network(self, node_count=2):
+        kp = self.get_key()
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+        )
+        self.add_bootstrap(config)
+        config = DockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            custom_docker_tag="dev",
+        )
+        self.add_cl_node(config)
 
 
 if __name__ == "__main__":

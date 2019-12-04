@@ -25,7 +25,7 @@ import org.scalatest.Suite
 trait StorageFixture { self: Suite =>
   val scheduler: SchedulerService     = Scheduler.fixedPool("storage-fixture-scheduler", 4)
   implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-  implicit val log: Log[Task]         = new Log.NOPLog[Task]()
+  implicit val log: Log[Task]         = Log.NOPLog[Task]
 
   def withStorage[R](
       f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => Task[R]
@@ -69,12 +69,12 @@ object StorageFixture {
         )
 
     for {
-      db                                     <- createDbFile
-      jdbcUrl                                = createJdbcUrl(db)
-      implicit0(xa: Transactor.Aux[F, Unit]) = createTransactor(jdbcUrl)
-      _                                      <- initTables(jdbcUrl)
-      storage                                <- SQLiteStorage.create[F]()
-      indexedDagStorage                      <- IndexedDagStorage.create[F](storage)
+      db                <- createDbFile
+      jdbcUrl           = createJdbcUrl(db)
+      xa                = createTransactor(jdbcUrl)
+      _                 <- initTables(jdbcUrl)
+      storage           <- SQLiteStorage.create[F](readXa = xa, writeXa = xa)
+      indexedDagStorage <- IndexedDagStorage.create[F](storage)
     } yield (storage, indexedDagStorage, storage)
   }
 }

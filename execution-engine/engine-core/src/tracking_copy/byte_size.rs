@@ -1,8 +1,10 @@
-use std::collections::btree_map::BTreeMap;
+use std::collections::BTreeMap;
 
-use contract_ffi::bytesrepr::I32_SIZE;
-use contract_ffi::key::Key;
-use contract_ffi::value::{Account, Contract, Value};
+use contract_ffi::{
+    bytesrepr::I32_SIZE,
+    key::Key,
+    value::{Account, Contract, Value},
+};
 
 /// Returns byte size of the element - both heap size and stack size.
 pub trait ByteSize {
@@ -119,7 +121,7 @@ impl HeapSizeOf for String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::btree_map::BTreeMap;
+    use std::collections::BTreeMap;
 
     use contract_ffi::key::Key;
 

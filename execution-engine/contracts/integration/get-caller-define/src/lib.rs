@@ -1,12 +1,16 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
-use alloc::collections::btree_map::BTreeMap;
+use alloc::collections::BTreeMap;
 
-use contract_ffi::contract_api::{runtime, storage};
-use contract_ffi::value::account::PublicKey;
+use contract_ffi::{
+    contract_api::{runtime, storage},
+    value::account::PublicKey,
+};
+
+const GET_CALLER_EXT: &str = "get_caller_ext";
+const GET_CALLER_KEY: &str = "get_caller";
 
 fn test_get_caller() {
     // Assumes that will be called using test framework genesis account with
@@ -30,6 +34,6 @@ pub extern "C" fn get_caller_ext() {
 pub extern "C" fn call() {
     // works in session code
     test_get_caller();
-    let pointer = storage::store_function_at_hash("get_caller_ext", BTreeMap::new());
-    runtime::put_key("get_caller", &pointer.into());
+    let pointer = storage::store_function_at_hash(GET_CALLER_EXT, BTreeMap::new());
+    runtime::put_key(GET_CALLER_KEY, &pointer.into());
 }

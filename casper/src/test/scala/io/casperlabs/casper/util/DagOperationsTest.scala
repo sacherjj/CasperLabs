@@ -10,6 +10,7 @@ import io.casperlabs.casper.helper.BlockGenerator._
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
+import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.models.Message
 import io.casperlabs.shared.Sorting.messageSummaryOrdering
 import io.casperlabs.storage.dag.DagRepresentation
@@ -135,9 +136,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 2) DAG looks like this:
        *         b2
@@ -155,9 +156,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 3) DAG looks like this:
        * v1  v2  v3
@@ -184,9 +185,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 4) DAG looks like this:
        * v1  v2  v3
@@ -213,9 +214,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 5) DAG looks like this:
        *  b6     b7
@@ -241,9 +242,9 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         latestMessages <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestMessages.values.toList)
+                NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == b4.blockHash)
+      } yield assert(lca.messageHash == b4.blockHash)
 
       /* 6) DAG looks like:
        *
@@ -268,23 +269,23 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         a            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1)
         b            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v2)
         c            <- createAndStoreBlock[Task](Seq(genesis.blockHash), v3)
-        d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1)
-        e            <- createAndStoreBlock[Task](Seq(c.blockHash), v2)
-        f            <- createAndStoreBlock[Task](Seq(d.blockHash), v2)
-        g            <- createAndStoreBlock[Task](Seq(f.blockHash), v1)
-        h            <- createAndStoreBlock[Task](Seq(f.blockHash), v2)
-        i            <- createAndStoreBlock[Task](Seq(f.blockHash), v3)
-        j            <- createAndStoreBlock[Task](Seq(g.blockHash), v1)
-        k            <- createAndStoreBlock[Task](Seq(h.blockHash), v2)
-        l            <- createAndStoreBlock[Task](Seq(i.blockHash), v3)
-        m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2)
+        d            <- createAndStoreBlock[Task](Seq(a.blockHash), v1, Seq.empty)
+        e            <- createAndStoreBlock[Task](Seq(c.blockHash), v2, Seq.empty, Map(v2 -> b.blockHash))
+        f            <- createAndStoreBlock[Task](Seq(d.blockHash), v2, Seq.empty, Map(v2 -> e.blockHash))
+        g            <- createAndStoreBlock[Task](Seq(f.blockHash), v1, Seq.empty, Map(v1 -> d.blockHash))
+        h            <- createAndStoreBlock[Task](Seq(f.blockHash), v2, Seq.empty)
+        i            <- createAndStoreBlock[Task](Seq(f.blockHash), v3, Seq.empty, Map(v3 -> c.blockHash))
+        j            <- createAndStoreBlock[Task](Seq(g.blockHash), v1, Seq.empty)
+        k            <- createAndStoreBlock[Task](Seq(h.blockHash), v2, Seq.empty)
+        l            <- createAndStoreBlock[Task](Seq(i.blockHash), v3, Seq.empty)
+        m            <- createAndStoreBlock[Task](Seq(l.blockHash), v2, Seq.empty, Map(v2 -> k.blockHash))
         dag          <- dagStorage.getRepresentation
         latestBlocks <- dag.latestMessageHashes
         lca <- DagOperations.latestCommonAncestorsMainParent(
                 dag,
-                NonEmptyList.fromListUnsafe(latestBlocks.values.toList)
+                NonEmptyList.fromListUnsafe(latestBlocks.values.flatten.toList)
               )
-      } yield assert(lca == f.blockHash)
+      } yield assert(lca.messageHash == f.blockHash)
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {
@@ -447,6 +448,26 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
         _ <- collect(dag, Set(b2, b4), Set(b1)) shouldBeF Set.empty
         // not to sibling
         _ <- collect(dag, Set(b2), Set(b3)) shouldBeF Set.empty
+      } yield ()
+  }
+
+  "swimlaneV" should "return correct stream of blocks even if they are referenced indirectly" in withStorage {
+    implicit blockStorage => implicit dagStorage => _ =>
+      val v1    = generateValidator("v1")
+      val v2    = generateValidator("v2")
+      val bonds = Seq(Bond(v1, 10), Bond(v2, 10))
+
+      for {
+        genesis <- createAndStoreBlock[Task](Seq.empty)
+        b1      <- createAndStoreBlock[Task](Seq(genesis.blockHash), v1, bonds)
+        b2      <- createAndStoreBlock[Task](Seq(b1.blockHash), v2, bonds, Map(v1 -> b1.blockHash))
+        b3      <- createAndStoreBlock[Task](Seq(b2.blockHash), v1, bonds, Map(v2 -> b2.blockHash))
+        dag     <- dagStorage.getRepresentation
+        message <- Task.fromTry(Message.fromBlock(b3))
+        _ <- DagOperations
+              .swimlaneV[Task](v1, message, dag)
+              .map(_.messageHash)
+              .toList shouldBeF List(b3.blockHash, b1.blockHash)
       } yield ()
   }
 

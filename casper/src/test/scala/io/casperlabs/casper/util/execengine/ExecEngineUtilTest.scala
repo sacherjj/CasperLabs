@@ -26,7 +26,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff: LogStub[Task] = new LogStub[Task]()
+  implicit val logEff = LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
@@ -126,7 +126,7 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit0(deploySelection: DeploySelection[Task]) = DeploySelection.create[Task](
         5 * 1024 * 1024
       )
-      _ <- deployStorage.addAsPending(deploy.toList)
+      _ <- deployStorage.writer.addAsPending(deploy.toList)
       computeResult <- ExecEngineUtil
                         .computeDeploysCheckpoint[Task](
                           ExecEngineUtil.MergeResult.empty,
@@ -436,6 +436,72 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     result2 shouldBe ((nonFirstEffect2, Vector(j, l)))
     result3 shouldBe ((nonFirstEffect3, Vector(k, j)))
     result4 shouldBe result3
+  }
+
+  it should "filter redundant secondary parents from the output list" in {
+    /*
+     * The DAG looks like:
+     *       i     j
+     *     /  \    |
+     *     f   g   h
+     *    /\    \ /
+     *    c d    e
+     *     \/    |
+     *     a     b
+     *      \    /
+     *      genesis
+     */
+
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val ops: Map[Char, OpMap[Int]] = ('a' to 'j').zipWithIndex
+      .map {
+        case (char, index) => char -> Map(index -> Op.Write)
+      }
+      .toMap
+      .updated('a', Map(100 -> Op.Write)) // a, d, f all update the same key, but are sequential
+      .updated('d', Map(100 -> Op.Write))
+      .updated('f', Map(100 -> Op.Write))
+
+    val a = OpDagNode.withParents(ops('a'), List(genesis))
+    val b = OpDagNode.withParents(ops('b'), List(genesis))
+    val c = OpDagNode.withParents(ops('c'), List(a))
+    val d = OpDagNode.withParents(ops('d'), List(a))
+    val e = OpDagNode.withParents(ops('e'), List(b))
+    val f = OpDagNode.withParents(ops('f'), List(c, d))
+    val g = OpDagNode.withParents(ops('g'), List(e))
+    val h = OpDagNode.withParents(ops('h'), List(e))
+    val i = OpDagNode.withParents(ops('i'), List(f, g))
+    val j = OpDagNode.withParents(ops('j'), List(h))
+
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val allBlocks                           = Vector(j, i, h, g, f, e, d, c, b, a)
+    val result1                             = OpDagNode.merge(allBlocks) // includes many redundant parents in input
+    val result2                             = OpDagNode.merge(Vector(j, i)) // includes only DAG tips
+
+    val nonFirstEffect = Vector('a', 'c', 'd', 'f', 'g', 'i').map(ops.apply).reduce(_ + _)
+
+    // output does not include any redundant parents
+    result1 shouldBe ((nonFirstEffect, Vector(j, i)))
+    // output is the same as if the input had only included the DAG tips
+    result2 shouldBe result1
+  }
+
+  it should "filter redundant secondary parents, but not main parent" in {
+    // Dag looks like:
+    // genesis <- a <- b
+    val ops     = Map(1 -> Op.Read)
+    val genesis = OpDagNode.genesis(ops)
+    val a       = OpDagNode.withParents(ops, List(genesis))
+    val b       = OpDagNode.withParents(ops, List(a))
+
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val redundantMainParentResult           = OpDagNode.merge(Vector(a, b))
+    val redundantSecondaryParentResult      = OpDagNode.merge(Vector(b, a))
+
+    // main parent is not filtered out even though it is redundant with b
+    redundantMainParentResult shouldBe (ops -> Vector(a, b))
+    // secondary parent is filtered out because it is redundant with the main
+    redundantSecondaryParentResult shouldBe (Map.empty -> Vector(b))
   }
 }
 

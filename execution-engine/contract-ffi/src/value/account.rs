@@ -1,23 +1,38 @@
-use crate::bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE};
-use crate::contract_api::runtime;
-use crate::contract_api::Error as ApiError;
-use crate::key::{addr_to_hex, Key, UREF_SIZE};
-use crate::unwrap_or_revert::UnwrapOrRevert;
-use crate::uref::{AccessRights, URef, UREF_SIZE_SERIALIZED};
-use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-use alloc::string::String;
-use alloc::vec::Vec;
-use core::convert::TryFrom;
-use core::fmt::{Debug, Display, Formatter};
-use failure::Fail;
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
+use core::{
+    convert::TryFrom,
+    fmt::{Debug, Display, Formatter},
+};
 
-const DEFAULT_CURRENT_BLOCK_TIME: BlockTime = BlockTime(0);
-const DEFAULT_INACTIVITY_PERIOD_TIME: BlockTime = BlockTime(100);
+use failure::Fail;
+use hex_fmt::HexFmt;
+
+use crate::{
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE},
+    contract_api::{runtime, Error as ApiError},
+    key::{Key, UREF_SIZE},
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+};
 
 pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
 
 #[derive(Debug)]
 pub struct TryFromIntError(());
+
+impl<T> UnwrapOrRevert<T> for Result<T, TryFromIntError> {
+    fn unwrap_or_revert(self) -> T {
+        self.unwrap_or_else(|_| runtime::revert(ApiError::Unhandled))
+    }
+
+    fn unwrap_or_revert_with<E: Into<ApiError>>(self, error: E) -> T {
+        self.unwrap_or_else(|_| runtime::revert(error.into()))
+    }
+}
 
 #[derive(Debug)]
 pub struct TryFromSliceForPublicKeyError(());
@@ -42,6 +57,12 @@ impl PurseId {
 
     pub fn value(&self) -> URef {
         self.0
+    }
+}
+
+impl From<PurseId> for URef {
+    fn from(purse_id: PurseId) -> URef {
+        purse_id.value()
     }
 }
 
@@ -220,57 +241,21 @@ impl Default for ActionThresholds {
 }
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd)]
-pub struct BlockTime(pub u64);
+pub struct BlockTime(u64);
 
-/// Holds information about last usage time of specific action.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct AccountActivity {
-    // Last time `KeyManagementAction` was used.
-    key_management_last_used: BlockTime,
-    // Last time `Deployment` action was used.
-    deployment_last_used: BlockTime,
-    // Inactivity period set for the account.
-    inactivity_period_limit: BlockTime,
+impl BlockTime {
+    pub fn new(value: u64) -> Self {
+        BlockTime(value)
+    }
+
+    pub fn saturating_sub(self, other: BlockTime) -> Self {
+        BlockTime(self.0.saturating_sub(other.0))
+    }
 }
 
-impl AccountActivity {
-    // TODO: We need default for inactivity_period_limit.
-    // `current_block_time` value is passed in from the node and is coming from the
-    // parent block. [inactivity_period_limit] block time period after which
-    // account is eligible for recovery.
-    pub fn new(
-        current_block_time: BlockTime,
-        inactivity_period_limit: BlockTime,
-    ) -> AccountActivity {
-        AccountActivity {
-            key_management_last_used: current_block_time,
-            deployment_last_used: current_block_time,
-            inactivity_period_limit,
-        }
-    }
-
-    pub fn update_key_management_last_used(&mut self, last_used: BlockTime) {
-        self.key_management_last_used = last_used;
-    }
-
-    pub fn update_deployment_last_used(&mut self, last_used: BlockTime) {
-        self.deployment_last_used = last_used;
-    }
-
-    pub fn update_inactivity_period_limit(&mut self, new_inactivity_period_limit: BlockTime) {
-        self.inactivity_period_limit = new_inactivity_period_limit;
-    }
-
-    pub fn key_management_last_used(&self) -> BlockTime {
-        self.key_management_last_used
-    }
-
-    pub fn deployment_last_used(&self) -> BlockTime {
-        self.deployment_last_used
-    }
-
-    pub fn inactivity_period_limit(&self) -> BlockTime {
-        self.inactivity_period_limit
+impl Into<u64> for BlockTime {
+    fn into(self) -> u64 {
+        self.0
     }
 }
 
@@ -300,7 +285,7 @@ pub struct PublicKey([u8; KEY_SIZE]);
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "PublicKey({})", addr_to_hex(&self.0))
+        write!(f, "PublicKey({})", HexFmt(&self.0))
     }
 }
 
@@ -489,10 +474,6 @@ impl TryFrom<i32> for UpdateKeyFailure {
 pub struct AssociatedKeys(BTreeMap<PublicKey, Weight>);
 
 impl AssociatedKeys {
-    pub fn empty() -> AssociatedKeys {
-        AssociatedKeys(BTreeMap::new())
-    }
-
     pub fn new(key: PublicKey, weight: Weight) -> AssociatedKeys {
         let mut bt: BTreeMap<PublicKey, Weight> = BTreeMap::new();
         bt.insert(key, weight);
@@ -585,7 +566,6 @@ pub struct Account {
     purse_id: PurseId,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
-    account_activity: AccountActivity,
 }
 
 impl Account {
@@ -595,7 +575,6 @@ impl Account {
         purse_id: PurseId,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
-        account_activity: AccountActivity,
     ) -> Self {
         Account {
             public_key,
@@ -603,7 +582,6 @@ impl Account {
             purse_id,
             associated_keys,
             action_thresholds,
-            account_activity,
         }
     }
 
@@ -614,15 +592,12 @@ impl Account {
     ) -> Self {
         let associated_keys = AssociatedKeys::new(PublicKey::new(account_addr), Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
-        let account_activity =
-            AccountActivity::new(DEFAULT_CURRENT_BLOCK_TIME, DEFAULT_INACTIVITY_PERIOD_TIME);
         Account::new(
             account_addr,
             named_keys,
             purse_id,
             associated_keys,
             action_thresholds,
-            account_activity,
         )
     }
 
@@ -659,10 +634,6 @@ impl Account {
 
     pub fn action_thresholds(&self) -> &ActionThresholds {
         &self.action_thresholds
-    }
-
-    pub fn account_activity(&self) -> &AccountActivity {
-        &self.account_activity
     }
 
     pub fn add_associated_key(
@@ -751,9 +722,10 @@ impl Account {
 
     /// Checks whether all authorization keys are associated with this account
     pub fn can_authorize(&self, authorization_keys: &BTreeSet<PublicKey>) -> bool {
-        authorization_keys
-            .iter()
-            .all(|e| self.associated_keys.contains_key(e))
+        !authorization_keys.is_empty()
+            && authorization_keys
+                .iter()
+                .all(|e| self.associated_keys.contains_key(e))
     }
 
     /// Checks whether the sum of the weights of all authorization keys is
@@ -799,7 +771,7 @@ impl ToBytes for AssociatedKeys {
 impl FromBytes for AssociatedKeys {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (keys_map, rem): (BTreeMap<PublicKey, Weight>, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
         keys_map.into_iter().for_each(|(k, v)| {
             // NOTE: we're ignoring potential errors (duplicate key, maximum number of
             // elements). This is safe, for now, as we were the ones that
@@ -821,7 +793,7 @@ impl ToBytes for BlockTime {
 impl FromBytes for BlockTime {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (time, rem) = FromBytes::from_bytes(bytes)?;
-        Ok((BlockTime(time), rem))
+        Ok((BlockTime::new(time), rem))
     }
 }
 
@@ -846,52 +818,9 @@ impl FromBytes for ActionThresholds {
     }
 }
 
-const KEY_MANAGEMENT_LAST_USED_ID: u8 = 0;
-const DEPLOYMENT_LAST_USED_ID: u8 = 1;
-const INACTIVITY_PERIOD_LIMIT_ID: u8 = 2;
-
-impl ToBytes for AccountActivity {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(3 * (BLOCKTIME_SER_SIZE + U8_SIZE));
-        result.push(KEY_MANAGEMENT_LAST_USED_ID);
-        result.extend(&self.key_management_last_used.to_bytes()?);
-        result.push(DEPLOYMENT_LAST_USED_ID);
-        result.extend(&self.deployment_last_used.to_bytes()?);
-        result.push(INACTIVITY_PERIOD_LIMIT_ID);
-        result.extend(&self.inactivity_period_limit.to_bytes()?);
-        Ok(result)
-    }
-}
-
-fn account_activity_parser_helper<'a>(
-    acc_activity: &mut AccountActivity,
-    bytes: &'a [u8],
-) -> Result<&'a [u8], Error> {
-    let (id, rem) = FromBytes::from_bytes(bytes)?;
-    let (block_time, rest): (BlockTime, &[u8]) = FromBytes::from_bytes(rem)?;
-    match id {
-        KEY_MANAGEMENT_LAST_USED_ID => acc_activity.update_key_management_last_used(block_time),
-        DEPLOYMENT_LAST_USED_ID => acc_activity.update_deployment_last_used(block_time),
-        INACTIVITY_PERIOD_LIMIT_ID => acc_activity.update_inactivity_period_limit(block_time),
-        _ => return Err(Error::FormattingError),
-    };
-    Ok(rest)
-}
-
-impl FromBytes for AccountActivity {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut acc_activity = AccountActivity::new(BlockTime(0), BlockTime(0));
-        let rem = account_activity_parser_helper(&mut acc_activity, bytes)?;
-        let rem2 = account_activity_parser_helper(&mut acc_activity, rem)?;
-        let rem3 = account_activity_parser_helper(&mut acc_activity, rem2)?;
-        Ok((acc_activity, rem3))
-    }
-}
-
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let account_activity_size: usize = 3 * (BLOCKTIME_SER_SIZE + U8_SIZE);
         let associated_keys_size =
             self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
         let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
@@ -900,8 +829,7 @@ impl ToBytes for Account {
             + named_keys_size
             + purse_id_size
             + associated_keys_size
-            + action_thresholds_size
-            + account_activity_size;
+            + action_thresholds_size;
         if serialized_account_size >= u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
@@ -911,7 +839,6 @@ impl ToBytes for Account {
         result.append(&mut self.purse_id.value().to_bytes()?);
         result.append(&mut self.associated_keys.to_bytes()?);
         result.append(&mut self.action_thresholds.to_bytes()?);
-        result.append(&mut self.account_activity.to_bytes()?);
         Ok(result)
     }
 }
@@ -923,7 +850,6 @@ impl FromBytes for Account {
         let (purse_id, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
         let (associated_keys, rem): (AssociatedKeys, &[u8]) = FromBytes::from_bytes(rem)?;
         let (action_thresholds, rem): (ActionThresholds, &[u8]) = FromBytes::from_bytes(rem)?;
-        let (account_activity, rem): (AccountActivity, &[u8]) = FromBytes::from_bytes(rem)?;
         let purse_id = PurseId::new(purse_id);
         Ok((
             Account {
@@ -932,7 +858,6 @@ impl FromBytes for Account {
                 purse_id,
                 associated_keys,
                 action_thresholds,
-                account_activity,
             },
             rem,
         ))
@@ -941,16 +866,23 @@ impl FromBytes for Account {
 
 #[cfg(test)]
 mod tests {
-    use crate::uref::{AccessRights, URef};
-    use crate::value::account::{
-        Account, AccountActivity, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys,
-        BlockTime, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-        Weight, KEY_SIZE, MAX_KEYS,
+    // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+    #[rustfmt::skip]
+    use alloc::vec;
+    use alloc::{
+        collections::{BTreeMap, BTreeSet},
+        vec::Vec,
     };
-    use alloc::collections::{btree_map::BTreeMap, btree_set::BTreeSet};
-    use alloc::vec::Vec;
-    use core::convert::TryFrom;
-    use core::iter::FromIterator;
+    use core::{convert::TryFrom, iter::FromIterator};
+
+    use crate::{
+        uref::{AccessRights, URef},
+        value::account::{
+            Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey,
+            PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE,
+            MAX_KEYS,
+        },
+    };
 
     #[test]
     fn associated_keys_add() {
@@ -966,7 +898,7 @@ mod tests {
         let map = (0..MAX_KEYS).map(|k| (PublicKey([k as u8; KEY_SIZE]), Weight::new(k as u8)));
         assert_eq!(map.len(), 10);
         let mut keys = {
-            let mut tmp = AssociatedKeys::empty();
+            let mut tmp = AssociatedKeys::default();
             map.for_each(|(key, weight)| assert!(tmp.add_key(key, weight).is_ok()));
             tmp
         };
@@ -1002,7 +934,7 @@ mod tests {
         let key_1 = PublicKey::new([0; 32]);
         let key_2 = PublicKey::new([1; 32]);
         let key_3 = PublicKey::new([2; 32]);
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
             .expect("should add key_1");
@@ -1019,7 +951,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         assert!(account.can_authorize(&BTreeSet::from_iter(vec![key_3, key_2, key_1])));
@@ -1043,6 +974,7 @@ mod tests {
             PublicKey::new([44; 32]),
             PublicKey::new([42; 32])
         ])));
+        assert!(!account.can_authorize(&BTreeSet::new()));
     }
 
     #[test]
@@ -1050,7 +982,7 @@ mod tests {
         let key_1 = PublicKey::new([0; 32]);
         let key_2 = PublicKey::new([1; 32]);
         let key_3 = PublicKey::new([2; 32]);
-        let mut keys = AssociatedKeys::empty();
+        let mut keys = AssociatedKeys::default();
 
         keys.add_key(key_2, Weight::new(2))
             .expect("should add key_1");
@@ -1087,7 +1019,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         // sum: 22, required 33 - can't deploy
@@ -1177,7 +1108,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(11), Weight::new(33))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         // sum: 22, required 33 - can't manage
@@ -1259,7 +1189,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(33), Weight::new(48))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         assert_eq!(
@@ -1300,7 +1229,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(Weight::new(1 + 2 + 3 + 4), Weight::new(1 + 2 + 3 + 4 + 5))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         assert_eq!(
@@ -1343,7 +1271,6 @@ mod tests {
             // deploy: 33 (3*11)
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         // Decreases by 3
@@ -1436,7 +1363,6 @@ mod tests {
             associated_keys,
             ActionThresholds::new(Weight::new(1), Weight::new(254))
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         account.remove_associated_key(key_1).expect("should work")
@@ -1472,7 +1398,6 @@ mod tests {
             associated_keys,
             ActionThresholds::new(deployment_threshold, key_management_threshold)
                 .expect("should create thresholds"),
-            AccountActivity::new(BlockTime(0), BlockTime(0)),
         );
 
         // decrease so total weight would be changed from 1 + 3 + 255 to 1 + 1 + 255

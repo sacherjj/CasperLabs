@@ -6,8 +6,9 @@ import shutil
 import tempfile
 from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
+import requests
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, EMPTY_ETC_CASPERLABS
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -33,6 +34,7 @@ class DockerNode(LoggingDockerBase):
 
     CL_NODE_BINARY = "/opt/docker/bin/bootstrap"
     CL_NODE_DIRECTORY = "/root/.casperlabs"
+    CL_ETC_CASPERLABS_DIR = "/etc/casperlabs"
     CL_NODE_DEPLOY_DIR = f"{CL_NODE_DIRECTORY}/deploy"
     CL_CHAINSPEC_DIR = f"{CL_NODE_DIRECTORY}/chainspec"
     CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
@@ -158,9 +160,7 @@ class DockerNode(LoggingDockerBase):
     def resources_folder(self) -> Path:
         """ This will return the resources folder that is copied into the correct location for testing """
         cur_path = Path(os.path.realpath(__file__)).parent
-        while cur_path.name != "integration-testing":
-            cur_path = cur_path.parent
-        return cur_path / "resources"
+        return cur_path.parent / "resources"
 
     @property
     def timeout(self):
@@ -230,13 +230,20 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def volumes(self) -> dict:
-        return {
+        d = {
+            self.host_etc_casperlabs_dir: {
+                "bind": self.CL_ETC_CASPERLABS_DIR,
+                "mode": "rw",
+            },
             self.host_chainspec_dir: {"bind": self.CL_CHAINSPEC_DIR, "mode": "rw"},
             self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
             self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
             self.deploy_dir: {"bind": self.CL_NODE_DEPLOY_DIR, "mode": "rw"},
             self.config.socket_volume: {"bind": self.CL_SOCKETS_DIR, "mode": "rw"},
         }
+        for k in d:
+            logging.info(f"================ VOLUME: {k} => {d[k]}")
+        return d
 
     def _get_container(self):
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="deploy_")
@@ -271,16 +278,28 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
-        self.create_genesis_accounts_file()
+        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
+        self.create_genesis_accounts_file(
+            f"{self.host_chainspec_dir}/genesis/accounts.csv"
+        )
+        if self.config.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
+            etc_casperlabs_chainspec = os.path.join(
+                self.host_mount_dir, self.config.etc_casperlabs_directory, "chainspec"
+            )
+            accounts_file = f"{etc_casperlabs_chainspec}/genesis/accounts.csv"
+            self.create_genesis_accounts_file(accounts_file)
+            logging.info(f"======= CREATED accounts file in: {accounts_file}")
 
     # TODO: Should be changed to using validator-id from accounts
-    def create_genesis_accounts_file(self) -> None:
+    def create_genesis_accounts_file(self, path: str = None) -> None:
         bond_amount = self.config.bond_amount
         N = self.NUMBER_OF_BONDS
-        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
-        path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
-        os.makedirs(os.path.dirname(path))
-        with open(path, "a") as f:
+        try:
+            os.makedirs(os.path.dirname(path))
+        except OSError:
+            pass
+
+        with open(path, "w") as f:
             # Give the initial motes to the genesis account, so that tests which use
             # this way of creating accounts work. But the accounts could be just
             # created this way, without having to do a transfer.
@@ -321,26 +340,32 @@ class DockerNode(LoggingDockerBase):
         options = [
             f"{opt} {arg}"
             for opt, arg in self.config.node_command_options(
-                self.container_name
+                self, self.container_name
             ).items()
         ]
         return f"run {bootstrap_flag} {' '.join(options)}"
 
+    @property
+    def metrics_url(self) -> str:
+        server_name = self.container_name if self.is_in_docker else "localhost"
+        return f"http://{server_name}:{self.http_port}/metrics"
+
     def get_metrics(self) -> Tuple[int, str]:
-        cmd = "curl -s http://localhost:40403/metrics"
-        output = self.exec_run(cmd=cmd)
-        return output
+        try:
+            return 0, self.get_metrics_strict()
+        except Exception as e:
+            return -1, str(e)
 
     def get_metrics_strict(self):
-        output = self.shell_out("curl", "-s", "http://localhost:40403/metrics")
-        return output
+        response = requests.get(self.metrics_url)
+        return response.text
 
     def transfer_to_account(
         self,
         to_account_id: int,
         amount: int,
         from_account_id: Union[str, int] = "genesis",
-        session_contract: str = Contract.TRANSFER_TO_ACCOUNT_IT,
+        session_contract: str = Contract.TRANSFER_TO_ACCOUNT,
         payment_contract: str = Contract.STANDARD_PAYMENT,
         payment_args: bytes = MAX_PAYMENT_ABI,
         gas_price: int = 1,
@@ -375,7 +400,7 @@ class DockerNode(LoggingDockerBase):
         session_args = ABI.args(
             [
                 ABI.account("account", to_account.public_key_binary),
-                ABI.u32("amount", amount),
+                ABI.u64("amount", amount),
             ]
         )
 
@@ -498,7 +523,7 @@ class DockerNode(LoggingDockerBase):
             return addr
 
         m = re.search(
-            f"Listening for traffic on (casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
+            f"Listening for traffic on peer=(casperlabs://.+@{self.container.name}\\?protocol=\\d+&discovery=\\d+)\\.$",
             self.logs(),
             re.MULTILINE | re.DOTALL,
         )

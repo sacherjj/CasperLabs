@@ -10,7 +10,7 @@ Run `make docker-build-all` in the main project directory to prepare the images.
 
 ## Build contract-examples
 
-See instructions [here](https://github.com/CasperLabs/contract-examples/blob/master/README.md).
+See instructions [here](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/README.md).
 
 ## Required: docker-compose
 
@@ -30,6 +30,10 @@ See instructions [here](https://github.com/CasperLabs/contract-examples/blob/mas
 We will create multiple nodes in docker with names such as `node-0`, `node-1` etc. Each will have a corresponding container running the Execution Engine.
 
 The setup process will establish validator keys in `.casperlabs/node-*` and bonds in `.casperlabs/genesis` by executing [docker-gen-keys.sh](/hack/key-management/docker-gen-keys.sh). By default 3 nodes' keys are created but you can generate more by setting the `CL_CASPER_NUM_VALIDATORS` variable.
+
+Up to 10 nodes can be created due to the way ports are being exposed on the host: you can deploy to `node-0` on 40401, `node-1` on 40411, `node-2` on 40421, and so on.
+
+If you plan to do lots of deploys it can help to enable auto-proposing, so you don't have to issue `propose` commands after each deploy. To do so just run `export CL_CASPER_AUTO_PROPOSE_ENABLED=true` prior to running the `make` commands.
 
 `node-0` will be the bootstrap node that all subsequent nodes connect to, so create that first.
 
@@ -70,21 +74,27 @@ To cleanup the network stopping and removing all containers run the command `mak
 
 ## Signing Deploys
 
-To sign deploy you'll need to [generate and ed25519 keypair](/hack/VALIDATOR.md#setting-up-keys) and save them into `docker/keys`. The `client.sh` script will automatically mount this as a volume and you can pass them as CLI arguments.
+The Makefile will have automatically generated some keys to test with under the `keys` directory: there will be the `faucet-account` for Clarity, and an `account-0` .. `account-$n` file up to the number of nodes. Apart from the faucet, these don't have any initial funds, but you can transfer to them from the Faucet.
 
 ## Deploy some WASM code
 
-Assuming that you cloned and compiled the [contract-examples](https://github.com/CasperLabs/contract-examples) you can deploy them by running the following:
+To deploy you'll need a client. You have multiple options:
+* Install the [Scala client](../../docs/INSTALL.md),
+* Install the [Python client](../../integration-testing/client/CasperLabsClient)
+* If you built the project, you can set an alias in the console: `alias casperlabs-client=$PWD/../../client/target/universal/stage/bin/casperlabs-client`
+* You can use the dockerized client as well, if you mount directories with the Wasm files, the keys, and use the `--network casperlabs` option.
+
+Assuming that you compiled the [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples) you can deploy them by running the following:
 
 ```console
 ACCOUNT_ID="$(cat keys/faucet-account/account-id-hex)"
-./client.sh node-0 deploy $PWD/../../../contract-examples/hello-name/define/target/wasm32-unknown-unknown/release\
+casperlabs-client --host localhost --port 40401 deploy \
      --gas-price 1 \
      --from "$ACCOUNT_ID" \
-     --session /data/helloname.wasm \
-     --payment /data/helloname.wasm \
-     --public-key /keys/faucet-account/account-public.pem \
-     --private-key /keys/faucet-account/account-private.pem
+     --session $PWD/../../execution-engine/target/wasm32-unknown-unknown/release/hello_name_define.wasm \
+     --payment $PWD/../../execution-engine/target/wasm32-unknown-unknown/release/standard_payment.wasm \
+     --public-key keys/faucet-account/account-public.pem \
+     --private-key keys/faucet-account/account-private.pem
 ```
 
 As you may notice we make use of the `faucet-account` for deploys signing. This is just a test account that has some initial balance to play with and fund other accounts, it has no other role.
@@ -98,7 +108,7 @@ Success!
 At the moment you have to trigger block proposal by invoking the following command:
 
 ```console
-./client.sh node-0 propose
+casperlabs-client --host localhost --port-internal 40402 propose
 ```
 
 After a successful deploy, the response will contain the block ID:
@@ -108,6 +118,19 @@ Response: Success! Block f876efed8d... created and added.
 ```
 
 If you check the log output, each node should get the block and provide some feedback about the execution as well.
+
+### TLS
+
+If the nodes have the `CL_GRPC_USE_TLS` set to `true` they'll expect the client to use an encrypted gRPC connection.
+What you have to do is get the node ID from the files that were generated for the node and pass it as a CLI option,
+for example:
+
+```bash
+# Get the node-id for TLS.
+NODE=0
+NODE_ID=$(cat $DIR/.casperlabs/node-$NODE/node-id)
+casperlabs-client --host localhost --port 404${NODE}1 --node-id $NODE_ID show-blocks --depth 10
+```
 
 ## Monitoring
 
@@ -122,6 +145,10 @@ To see some of the metrics in [Grafana](https://grafana.com/) go to http://local
 The Block Gossiping dashboard will display charts that show communication overhead.  Click on the dashboards (2x2 blocks) icon on the left if you don't see the Block Gossiping dashboard link.
 
 Note that you'll need to run `docker login` with your DockerHub username and password to be able to pull 3rd party images.
+
+## Clarity
+
+Running `make up` will also start a local instance of Clarity at https://localhost:8443 where you can use the Faucet, visualize the DAG with the Explorer. The UI will connect to `node-0`, so that container needs to be running already.
 
 ## Visualizing the DAG
 

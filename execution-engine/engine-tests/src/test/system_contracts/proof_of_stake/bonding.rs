@@ -1,17 +1,23 @@
-use contract_ffi::base16;
-use contract_ffi::contract_api::Error;
-use contract_ffi::key::Key;
-use contract_ffi::value::account::PublicKey;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::{Value, U512};
+use base16;
 
-use engine_core::engine_state::genesis::{GenesisAccount, POS_BONDING_PURSE};
-use engine_core::engine_state::CONV_RATE;
-use engine_shared::motes::Motes;
-use engine_shared::transform::Transform;
+use contract_ffi::{
+    contract_api::Error,
+    key::Key,
+    value::{
+        account::{PublicKey, PurseId},
+        Value, U512,
+    },
+};
+use engine_core::engine_state::{
+    genesis::{GenesisAccount, POS_BONDING_PURSE},
+    CONV_RATE,
+};
+use engine_shared::{motes::Motes, transform::Transform};
 
-use crate::support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT};
+use crate::{
+    support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR, DEFAULT_PAYMENT},
+};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: [u8; 32] = [1u8; 32];

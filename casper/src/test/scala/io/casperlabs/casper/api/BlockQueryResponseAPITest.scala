@@ -10,10 +10,6 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.BondingUtil.Bond
@@ -28,12 +24,10 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-
+import logstage.LogIO
 import scala.collection.immutable.HashMap
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 
-//TODO: Remove
-@silent("deprecated")
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   val badTestHashQuery = "No such a hash"
@@ -55,7 +49,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       timestamp = 1527191663,
       chainName = "casperlabs",
       creator = Keys.PublicKey(Array.emptyByteArray),
-      validatorSeqNum = 0
+      validatorSeqNum = 0,
+      validatorPrevBlockHash = ByteString.EMPTY
     )
     ProtoUtil.unsignedBlockProto(body, header)
   }
@@ -88,12 +83,14 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
     ProtocolVersion(1),
     Seq(genesisBlock.blockHash),
     1,
+    ByteString.EMPTY,
     chainName,
     timestamp,
     1,
     Keys.PublicKey(secondBlockSender.toByteArray),
     Keys.PrivateKey(secondBlockSender.toByteArray),
-    Ed25519
+    Ed25519,
+    ByteString.EMPTY
   )
   val secondHashString     = Base16.encode(secondBlock.blockHash.toByteArray)
   val blockHash: BlockHash = secondBlock.blockHash
@@ -104,43 +101,46 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "showBlock" should "return successful block info response" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
-        effects                                     <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
-        (logEff, casperRef, finalityDetectorEffect) = effects
+        effects             <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
+        (logEff, casperRef) = effects
 
-        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, full = true)(
+        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery)(
                       Sync[Task],
                       logEff,
                       casperRef,
-                      finalityDetectorEffect,
-                      blockStorage
+                      blockStorage,
+                      deployStorage
                     )
-        _      = blockInfo.getSummary.blockHash should be(blockHash)
-        _      = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
-        _      = blockInfo.getSummary.getHeader.rank should be(blockNumber)
-        _      = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
-        _      = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
-        _      = blockInfo.getStatus.faultTolerance should be(faultTolerance)
-        _      = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
-        _      = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
-        _      = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
-        result = blockInfo.getSummary.getHeader.chainName should be(chainName)
-      } yield result
+        _ = blockInfo.getSummary.blockHash should be(blockHash)
+        _ = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
+        _ = blockInfo.getStatus.getStats.deployCostTotal should be(
+          secondBlock.getBody.deploys.map(_.cost).sum
+        )
+        _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
+        _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)
+        _ = blockInfo.getSummary.getHeader.deployCount should be(deployCount)
+        _ = blockInfo.getStatus.faultTolerance should be(faultTolerance)
+        _ = blockInfo.getSummary.getHeader.parentHashes.head should be(genesisHash)
+        _ = blockInfo.getSummary.getHeader.parentHashes should be(parentsHashList)
+        _ = blockInfo.getSummary.getHeader.validatorPublicKey should be(secondBlockSender)
+        _ = blockInfo.getSummary.getHeader.chainName should be(chainName)
+      } yield ()
   }
 
   it should "return error when no block exists" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
-        effects                                     <- emptyEffects(blockStorage, dagStorage)
-        (logEff, casperRef, finalityDetectorEffect) = effects
+        effects             <- emptyEffects(blockStorage, dagStorage)
+        (logEff, casperRef) = effects
         blockQueryResponse <- BlockAPI
                                .getBlockInfo[Task](badTestHashQuery)(
                                  Sync[Task],
                                  logEff,
                                  casperRef,
-                                 finalityDetectorEffect,
-                                 blockStorage
+                                 blockStorage,
+                                 deployStorage
                                )
                                .attempt
       } yield {
@@ -152,32 +152,20 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   private def effectsForSimpleCasperSetup(
       blockStorage: BlockStorage[Task],
       dagStorage: DagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
+  ): Task[(LogStub with LogIO[Task], MultiParentCasperRef[Task])] =
     for {
-      _ <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
-      _ <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
-      casperEffect <- NoOpsCasperEffect[Task](
-                       HashMap[BlockHash, BlockMsgWithTransform](
-                         (
-                           ProtoUtil.stringToByteString(genesisHashString),
-                           BlockMsgWithTransform(Some(genesisBlock), Seq.empty)
-                         ),
-                         (
-                           ProtoUtil.stringToByteString(secondHashString),
-                           BlockMsgWithTransform(Some(secondBlock), Seq.empty)
-                         )
-                       )
-                     )(Sync[Task], blockStorage, dagStorage)
-      logEff                 = new LogStub[Task]()
-      casperRef              <- MultiParentCasperRef.of[Task]
-      _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
-    } yield (logEff, casperRef, finalityDetectorEffect)
+      _            <- blockStorage.put(genesisBlock.blockHash, genesisBlock, Seq.empty)
+      _            <- blockStorage.put(secondBlock.blockHash, secondBlock, Seq.empty)
+      casperEffect <- NoOpsCasperEffect[Task]()(Sync[Task], blockStorage, dagStorage)
+      logEff       = LogStub[Task]()
+      casperRef    <- MultiParentCasperRef.of[Task]
+      _            <- casperRef.set(casperEffect)
+    } yield (logEff, casperRef)
 
   private def emptyEffects(
       blockStorage: BlockStorage[Task],
       dagStorage: DagStorage[Task]
-  ): Task[(LogStub[Task], MultiParentCasperRef[Task], FinalityDetector[Task])] =
+  ): Task[(LogStub with LogIO[Task], MultiParentCasperRef[Task])] =
     for {
       casperEffect <- NoOpsCasperEffect(
                        HashMap[BlockHash, BlockMsgWithTransform](
@@ -191,9 +179,8 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                          )
                        )
                      )(Sync[Task], blockStorage, dagStorage)
-      logEff                 = new LogStub[Task]()
-      casperRef              <- MultiParentCasperRef.of[Task]
-      _                      <- casperRef.set(casperEffect)
-      finalityDetectorEffect = new FinalityDetectorBySingleSweepImpl[Task]() (Sync[Task], logEff)
-    } yield (logEff, casperRef, finalityDetectorEffect)
+      logEff    = LogStub[Task]()
+      casperRef <- MultiParentCasperRef.of[Task]
+      _         <- casperRef.set(casperEffect)
+    } yield (logEff, casperRef)
 }

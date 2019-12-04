@@ -3,12 +3,12 @@ use core::fmt;
 use parity_wasm::elements;
 use wasmi;
 
-use contract_ffi::bytesrepr;
-use contract_ffi::key::Key;
-use contract_ffi::system_contracts;
-use contract_ffi::uref::{AccessRights, URef};
-use contract_ffi::value::account::{
-    AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
+use contract_ffi::{
+    bytesrepr,
+    key::Key,
+    system_contracts,
+    uref::{AccessRights, URef},
+    value::account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
 };
 use engine_shared::transform::TypeMismatch;
 
@@ -43,6 +43,11 @@ pub enum Error {
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
+    InvalidContext,
+    IncompatibleProtocolMajorVersion {
+        expected: u32,
+        actual: u32,
+    },
 }
 
 impl fmt::Display for Error {

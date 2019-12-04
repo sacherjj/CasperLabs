@@ -22,6 +22,15 @@ class PropertyBag:
     def __getattr__(self, name):
         if name in self.d:
             return self.d[name]
+        # Hack to change Python protobuf implementation: if a field is set to default value
+        # the field will not be printed. This means, for example, that is_error set to False
+        # will never show up when the message is serialized, even to text format.
+        # This is here to make it possible to use output of show-deploy in test framework
+        # to make important assertions.
+        if name == "is_error" and "cost" in self.d:
+            return False
+        if name == "error_message" and "cost" in self.d:
+            return ""
         raise KeyError("Can't find '%s' in block; got %r" % (name, self.d.keys()))
 
     def __str__(self):

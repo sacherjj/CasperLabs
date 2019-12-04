@@ -1,45 +1,52 @@
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::ffi::OsStr;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::{
+    collections::HashMap, convert::TryInto, ffi::OsStr, fs, path::PathBuf, rc::Rc, sync::Arc,
+};
 
 use grpc::RequestOptions;
 use lmdb::DatabaseFlags;
 use rand::Rng;
 
-use contract_ffi::args_parser::ArgsParser;
-use contract_ffi::bytesrepr::ToBytes;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
-use contract_ffi::value::account::{Account, PublicKey, PurseId};
-use contract_ffi::value::contract::Contract;
-use contract_ffi::value::{SemVer, Value, U512};
-use engine_core::engine_state::genesis::{GenesisAccount, GenesisConfig};
-use engine_core::engine_state::{EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR};
-use engine_core::execution;
-use engine_grpc_server::engine_server::ipc::{
-    ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
-    CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
-    DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
-    ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-    StoredContractURef, UpgradeRequest, UpgradeResponse, ValidateRequest, ValidateResponse,
+use contract_ffi::{
+    args_parser::ArgsParser,
+    bytesrepr::ToBytes,
+    key::Key,
+    uref::URef,
+    value::{
+        account::{Account, PublicKey, PurseId},
+        contract::Contract,
+        SemVer, Value, U512,
+    },
 };
-use engine_grpc_server::engine_server::ipc_grpc::ExecutionEngineService;
-use engine_grpc_server::engine_server::mappings::{CommitTransforms, MappingError};
-use engine_grpc_server::engine_server::state::ProtocolVersion;
-use engine_grpc_server::engine_server::{state, transforms};
-use engine_shared::gas::Gas;
-use engine_shared::newtypes::Blake2bHash;
-use engine_shared::os::get_page_size;
-use engine_shared::transform::Transform;
-use engine_storage::global_state::in_memory::InMemoryGlobalState;
-use engine_storage::global_state::lmdb::LmdbGlobalState;
-use engine_storage::global_state::StateProvider;
-use engine_storage::protocol_data_store::lmdb::LmdbProtocolDataStore;
-use engine_storage::transaction_source::lmdb::LmdbEnvironment;
-use engine_storage::trie_store::lmdb::LmdbTrieStore;
+use engine_core::{
+    engine_state::{
+        genesis::{GenesisAccount, GenesisConfig},
+        EngineConfig, EngineState, SYSTEM_ACCOUNT_ADDR,
+    },
+    execution,
+};
+use engine_grpc_server::engine_server::{
+    ipc::{
+        ChainSpec_ActivationPoint, ChainSpec_CostTable_WasmCosts, ChainSpec_UpgradePoint,
+        CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
+        DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
+        ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
+        StoredContractURef, UpgradeRequest, UpgradeResponse,
+    },
+    ipc_grpc::ExecutionEngineService,
+    mappings::{MappingError, TransformMap},
+    state::{self, ProtocolVersion},
+    transforms,
+};
+use engine_shared::{
+    additive_map::AdditiveMap, gas::Gas, newtypes::Blake2bHash, os::get_page_size,
+    transform::Transform,
+};
+use engine_storage::{
+    global_state::{in_memory::InMemoryGlobalState, lmdb::LmdbGlobalState, StateProvider},
+    protocol_data_store::lmdb::LmdbProtocolDataStore,
+    transaction_source::lmdb::LmdbEnvironment,
+    trie_store::lmdb::LmdbTrieStore,
+};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use protobuf::RepeatedField;
 use transforms::TransformEntry;
@@ -60,6 +67,10 @@ pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
 ///
 /// This default value should give 1MiB initial map size by default.
 const DEFAULT_LMDB_PAGES: usize = 2560;
+
+/// This is appended to the data dir path provided to the `LmdbWasmTestBuilder` in order to match
+/// the behavior of `get_data_dir()` in "engine-grpc-server/src/main.rs".
+const GLOBAL_STATE_DIR: &str = "global_state";
 
 pub type InMemoryWasmTestBuilder = WasmTestBuilder<InMemoryGlobalState>;
 pub type LmdbWasmTestBuilder = WasmTestBuilder<LmdbGlobalState>;
@@ -284,6 +295,25 @@ impl ExecuteRequestBuilder {
 
         ExecuteRequestBuilder::new().push_deploy(deploy)
     }
+
+    pub fn contract_call_by_hash(
+        sender: [u8; 32],
+        contract_hash: [u8; 32],
+        args: impl ArgsParser,
+    ) -> Self {
+        let mut rng = rand::thread_rng();
+        let deploy_hash: [u8; 32] = rng.gen();
+
+        let deploy = DeployItemBuilder::new()
+            .with_address(sender)
+            .with_stored_session_hash(contract_hash.to_vec(), args)
+            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[PublicKey::new(sender)])
+            .with_deploy_hash(deploy_hash)
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy)
+    }
 }
 
 impl Default for ExecuteRequestBuilder {
@@ -431,12 +461,12 @@ pub struct WasmTestBuilder<S> {
     post_state_hash: Option<Vec<u8>>,
     /// Cached transform maps after subsequent successful runs
     /// i.e. transforms[0] is for first run() call etc.
-    transforms: Vec<HashMap<Key, Transform>>,
+    transforms: Vec<AdditiveMap<Key, Transform>>,
     bonded_validators: Vec<HashMap<PublicKey, U512>>,
     /// Cached genesis transforms
     genesis_account: Option<Account>,
     /// Genesis transforms
-    genesis_transforms: Option<HashMap<Key, Transform>>,
+    genesis_transforms: Option<AdditiveMap<Key, Transform>>,
     /// Mint contract uref
     mint_contract_uref: Option<URef>,
     /// PoS contract uref
@@ -445,7 +475,7 @@ pub struct WasmTestBuilder<S> {
 
 impl Default for InMemoryWasmTestBuilder {
     fn default() -> Self {
-        let engine_config = EngineConfig::new().set_use_payment_code(true);
+        let engine_config = EngineConfig::new();
         let global_state = InMemoryGlobalState::empty().expect("should create global state");
         let engine_state = EngineState::new(global_state, engine_config);
 
@@ -518,8 +548,9 @@ impl LmdbWasmTestBuilder {
         engine_config: EngineConfig,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store = Arc::new(
@@ -578,8 +609,9 @@ impl LmdbWasmTestBuilder {
         post_state_hash: Vec<u8>,
     ) -> Self {
         let page_size = get_page_size().expect("should get page size");
+        let global_state_dir = Self::create_and_get_global_state_dir(data_dir);
         let environment = Arc::new(
-            LmdbEnvironment::new(&data_dir.into(), page_size * DEFAULT_LMDB_PAGES)
+            LmdbEnvironment::new(&global_state_dir, page_size * DEFAULT_LMDB_PAGES)
                 .expect("should create LmdbEnvironment"),
         );
         let trie_store =
@@ -604,6 +636,17 @@ impl LmdbWasmTestBuilder {
             pos_contract_uref: None,
             genesis_transforms: None,
         }
+    }
+
+    fn create_and_get_global_state_dir<T: AsRef<OsStr> + ?Sized>(data_dir: &T) -> PathBuf {
+        let global_state_path = {
+            let mut path = PathBuf::from(data_dir);
+            path.push(GLOBAL_STATE_DIR);
+            path
+        };
+        fs::create_dir_all(&global_state_path)
+            .unwrap_or_else(|_| panic!("Expected to create {}", global_state_path.display()));
+        global_state_path
     }
 }
 
@@ -690,14 +733,14 @@ where
 
         let query_request = create_query_request(post_state, base_key, path_vec);
 
-        let query_response = self
+        let mut query_response = self
             .engine_state
             .query(RequestOptions::new(), query_request)
             .wait_drop_metadata()
-            .expect("should query");
+            .expect("should get query response");
 
         if query_response.has_success() {
-            query_response.get_success().try_into().ok()
+            query_response.take_success().try_into().ok()
         } else {
             None
         }
@@ -725,13 +768,14 @@ where
             .get_deploy_results()
             .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
-        let commit_transforms: CommitTransforms = deploy_result
+        let commit_transforms: TransformMap = deploy_result
             .get_execution_result()
             .get_effects()
             .get_transform_map()
+            .to_vec()
             .try_into()
             .expect("should convert");
-        let transforms = commit_transforms.value();
+        let transforms = commit_transforms.into_inner();
         // Cache transformations
         self.transforms.push(transforms);
         self
@@ -755,7 +799,7 @@ where
     pub fn commit_transforms(
         &self,
         prestate_hash: Vec<u8>,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> CommitResponse {
         let commit_request = create_commit_request(&prestate_hash, &effects);
 
@@ -765,34 +809,25 @@ where
             .expect("Should have commit response")
     }
 
-    pub fn validate(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
-        let validate_request = create_validate_request(wasm_bytes);
-
-        self.engine_state
-            .validate(RequestOptions::new(), validate_request)
-            .wait_drop_metadata()
-            .expect("Should have validate response")
-    }
-
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
     pub fn commit_effects(
         &mut self,
         prestate_hash: Vec<u8>,
-        effects: HashMap<Key, Transform>,
+        effects: AdditiveMap<Key, Transform>,
     ) -> &mut Self {
-        let commit_response = self.commit_transforms(prestate_hash, effects);
+        let mut commit_response = self.commit_transforms(prestate_hash, effects);
         if !commit_response.has_success() {
             panic!(
                 "Expected commit success but received a failure instead: {:?}",
                 commit_response
             );
         }
-        let commit_success = commit_response.get_success();
-        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let mut commit_success = commit_response.take_success();
+        self.post_state_hash = Some(commit_success.take_poststate_hash().to_vec());
         let bonded_validators = commit_success
-            .get_bonded_validators()
-            .iter()
+            .take_bonded_validators()
+            .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<HashMap<PublicKey, U512>, MappingError>>()
             .unwrap();
@@ -866,7 +901,7 @@ where
     }
 
     /// Gets the transform map that's cached between runs
-    pub fn get_transforms(&self) -> Vec<HashMap<Key, Transform>> {
+    pub fn get_transforms(&self) -> Vec<AdditiveMap<Key, Transform>> {
         self.transforms.clone()
     }
 
@@ -891,7 +926,7 @@ where
             .expect("Unable to obtain pos contract uref. Please run genesis first.")
     }
 
-    pub fn get_genesis_transforms(&self) -> &HashMap<Key, engine_shared::transform::Transform> {
+    pub fn get_genesis_transforms(&self) -> &AdditiveMap<Key, engine_shared::transform::Transform> {
         &self
             .genesis_transforms
             .as_ref()
@@ -1012,12 +1047,6 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
         .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
 }
 
-fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
-    let mut validate_request = ValidateRequest::new();
-    validate_request.set_wasm_code(wasm_bytes);
-    validate_request
-}
-
 pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
     let name = DEFAULT_CHAIN_NAME.to_string();
     let timestamp = DEFAULT_GENESIS_TIMESTAMP;
@@ -1049,7 +1078,7 @@ pub fn create_query_request(post_state: Vec<u8>, base_key: Key, path: Vec<String
 #[allow(clippy::implicit_hasher)]
 pub fn create_commit_request(
     prestate_hash: &[u8],
-    effects: &HashMap<Key, Transform>,
+    effects: &AdditiveMap<Key, Transform>,
 ) -> CommitRequest {
     let effects: Vec<TransformEntry> = effects
         .iter()
@@ -1063,14 +1092,15 @@ pub fn create_commit_request(
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> HashMap<Key, Transform> {
-    let commit_transforms: CommitTransforms = genesis_response
+pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
+    let commit_transforms: TransformMap = genesis_response
         .get_success()
         .get_effect()
         .get_transform_map()
+        .to_vec()
         .try_into()
         .expect("should convert");
-    commit_transforms.value()
+    commit_transforms.into_inner()
 }
 
 pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
@@ -1082,6 +1112,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
             let execution_result = deploy_result.get_execution_result();
             let cost = execution_result
                 .get_cost()
+                .clone()
                 .try_into()
                 .expect("cost should map to U512");
             Gas::new(cost)
@@ -1090,7 +1121,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 }
 
 #[allow(clippy::implicit_hasher)]
-pub fn get_account(transforms: &HashMap<Key, Transform>, account: &Key) -> Option<Account> {
+pub fn get_account(transforms: &AdditiveMap<Key, Transform>, account: &Key) -> Option<Account> {
     transforms.get(account).and_then(|transform| {
         if let Transform::Write(Value::Account(account)) = transform {
             Some(account.to_owned())
@@ -1135,14 +1166,14 @@ pub fn get_error_message(execution_result: DeployResult_ExecutionResult) -> Stri
 /// Represents the difference between two [`HashMap`]s.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Diff {
-    left: HashMap<Key, Transform>,
-    both: HashMap<Key, Transform>,
-    right: HashMap<Key, Transform>,
+    left: AdditiveMap<Key, Transform>,
+    both: AdditiveMap<Key, Transform>,
+    right: AdditiveMap<Key, Transform>,
 }
 
 impl Diff {
     /// Creates a diff from two [`HashMap`]s.
-    pub fn new(left: HashMap<Key, Transform>, right: HashMap<Key, Transform>) -> Diff {
+    pub fn new(left: AdditiveMap<Key, Transform>, right: AdditiveMap<Key, Transform>) -> Diff {
         let both = Default::default();
         let left_clone = left.clone();
         let mut ret = Diff { left, both, right };
@@ -1174,17 +1205,17 @@ impl Diff {
     }
 
     /// Returns the entries that are unique to the `left` input.
-    pub fn left(&self) -> &HashMap<Key, Transform> {
+    pub fn left(&self) -> &AdditiveMap<Key, Transform> {
         &self.left
     }
 
     /// Returns the entries that are unique to the `right` input.
-    pub fn right(&self) -> &HashMap<Key, Transform> {
+    pub fn right(&self) -> &AdditiveMap<Key, Transform> {
         &self.right
     }
 
     /// Returns the entries shared by both inputs.
-    pub fn both(&self) -> &HashMap<Key, Transform> {
+    pub fn both(&self) -> &AdditiveMap<Key, Transform> {
         &self.both
     }
 }

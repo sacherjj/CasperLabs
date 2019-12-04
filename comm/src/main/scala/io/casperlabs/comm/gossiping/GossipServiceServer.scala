@@ -7,13 +7,11 @@ import cats.effect.implicits._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary, GenesisCandidate}
-import io.casperlabs.comm.ServiceError.{NotFound, ResourceExhausted, Unauthenticated}
-import io.casperlabs.comm.auth.Principal
+import io.casperlabs.comm.ServiceError.NotFound
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.discovery.NodeUtils.showNode
-import io.casperlabs.comm.gossiping.Synchronizer.SyncError
-import io.casperlabs.comm.gossiping.Utils.hex
-import io.casperlabs.comm.grpc.ContextKeys
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
+import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{Compression, Log}
@@ -97,14 +95,16 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
-      val prefix  = s"Failed to sync DAG, source: ${source.show}."
+      val prefix  = s"Failed to sync DAG, source: ${source.show -> "peer"}."
       val message = syncError.getMessage
       Log[F].warn(s"$prefix $message").as(syncError.asLeft)
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].info(
-            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show}: ${newBlockHashes.map(Utils.hex).mkString(", ")}"
+            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
+              .map(Utils.hex)
+              .mkString(", ") -> "blocks"}"
           )
       errorOrDag <- synchronizer.syncDag(
                      source = source,
@@ -112,7 +112,9 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                    )
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
-                           Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
+                           Log[F].info(
+                             s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
+                           ) *>
                              dag.traverse { summary =>
                                downloadManager.scheduleDownload(
                                  summary,
@@ -128,7 +130,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
     trySync.onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not synchronize with ${source.show}: $ex")
+        Log[F].error(s"Could not synchronize with ${source.show -> "peer"}: $ex")
     }
   }
 
@@ -187,10 +189,10 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     }
   }
 
-  override def streamDagTipBlockSummaries(
-      request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary] =
-    Iterant.liftF(backend.listTips).flatMap(Iterant.fromSeq(_))
+  override def streamLatestMessages(
+      request: StreamLatestMessagesRequest
+  ): Iterant[F, Block.Justification] =
+    Iterant.liftF(backend.latestMessages).flatMap(set => Iterant.fromSeq(set.toSeq))
 
   override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
@@ -226,6 +228,11 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
   override def addApproval(request: AddApprovalRequest): F[Unit] =
     rethrow(genesisApprover.addApproval(request.blockHash, request.getApproval)).void
+
+  override def streamDagSliceBlockSummaries(
+      request: StreamDagSliceBlockSummariesRequest
+  ): Iterant[F, BlockSummary] =
+    backend.dagTopoSort(request.startRank.toLong, request.endRank.toLong)
 
   private def effectiveChunkSize(chunkSize: Int): Int =
     if (0 < chunkSize && chunkSize < maxChunkSize) chunkSize
@@ -276,8 +283,12 @@ object GossipServiceServer {
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString): F[Option[Block]]
 
-    /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
-    def listTips: F[Seq[BlockSummary]]
+    /** Returns latest messages as seen currently by the node.
+      * NOTE: In the future we will remove redundant messages. */
+    def latestMessages: F[Set[Block.Justification]]
+
+    /* Retrieve the DAG slice in topological order, inclusive */
+    def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]
   }
 
   def apply[F[_]: Concurrent: Parallel: Log: Metrics](

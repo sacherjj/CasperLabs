@@ -36,16 +36,17 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStorage: DagStorage] private (
   def deploy(r: Deploy): F[Either[Throwable, Unit]] = Applicative[F].pure(Right(()))
   def estimator(
       dag: DagRepresentation[F],
-      latestMessageHashes: Map[ByteString, ByteString]
+      lfbHash: ByteString,
+      latestMessageHashes: Map[Validator, Set[ByteString]],
+      equivocators: Set[Validator]
   ): F[NonEmptyList[BlockHash]] =
     estimatorFunc.pure[F]
   def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
     CreateBlockStatus.noNewDeploys.pure[F]
-  def dag: F[DagRepresentation[F]]                                      = DagStorage[F].getRepresentation
-  def normalizedInitialFault(weights: Map[Validator, Weight]): F[Float] = 0f.pure[F]
-  def lastFinalizedBlock: F[Block]                                      = Block().pure[F]
-  def fetchDependencies: F[Unit]                                        = ().pure[F]
-  def faultToleranceThreshold                                           = 0f
+  def dag: F[DagRepresentation[F]] = DagStorage[F].getRepresentation
+  def lastFinalizedBlock: F[Block] = Block().pure[F]
+  def fetchDependencies: F[Unit]   = ().pure[F]
+  def faultToleranceThreshold      = 0f
 }
 
 object NoOpsCasperEffect {

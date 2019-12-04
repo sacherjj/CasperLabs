@@ -1,16 +1,22 @@
-use crate::execution::Phase;
-use crate::key::*;
-use crate::uref::{AccessRights, URef};
-use crate::value::account::{
-    AccountActivity, ActionThresholds, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
-    MAX_KEYS,
+use alloc::{collections::BTreeMap, string::String, vec};
+
+use proptest::{
+    array, bits,
+    collection::{btree_map, vec},
+    option,
+    prelude::*,
+    result,
 };
-use crate::value::*;
-use alloc::collections::BTreeMap;
-use alloc::string::String;
-use proptest::collection::{btree_map, vec};
-use proptest::prelude::*;
-use proptest::{array, bits, option, result};
+
+use crate::{
+    execution::Phase,
+    key::*,
+    uref::{AccessRights, URef},
+    value::{
+        account::{ActionThresholds, AssociatedKeys, PublicKey, PurseId, Weight, MAX_KEYS},
+        *,
+    },
+};
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     vec(any::<u8>(), 32).prop_map(|b| {
@@ -71,7 +77,7 @@ pub fn weight_arb() -> impl Strategy<Value = Weight> {
 
 pub fn associated_keys_arb(size: usize) -> impl Strategy<Value = AssociatedKeys> {
     proptest::collection::btree_map(public_key_arb(), weight_arb(), size).prop_map(|keys| {
-        let mut associated_keys = AssociatedKeys::empty();
+        let mut associated_keys = AssociatedKeys::default();
         keys.into_iter().for_each(|(k, v)| {
             associated_keys.add_key(k, v).unwrap();
         });
@@ -83,17 +89,12 @@ pub fn action_threshold_arb() -> impl Strategy<Value = ActionThresholds> {
     Just(Default::default())
 }
 
-pub fn account_activity_arb() -> impl Strategy<Value = AccountActivity> {
-    Just(AccountActivity::new(BlockTime(1), BlockTime(1000)))
-}
-
 prop_compose! {
     pub fn account_arb()(
         pub_key in u8_slice_32(),
         urefs in named_keys_arb(3),
         purse_id in uref_arb(),
         thresholds in action_threshold_arb(),
-        account_activity in account_activity_arb(),
         mut associated_keys in associated_keys_arb(MAX_KEYS - 1),
     ) -> Account {
             let purse_id = PurseId::new(purse_id);
@@ -104,7 +105,6 @@ prop_compose! {
                 purse_id,
                 associated_keys.clone(),
                 thresholds.clone(),
-                account_activity.clone(),
             )
     }
 }

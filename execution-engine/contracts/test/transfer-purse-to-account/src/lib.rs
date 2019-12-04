@@ -1,14 +1,18 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use contract_ffi::contract_api::{account, runtime, storage, system, Error};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{PublicKey, PurseId};
-use contract_ffi::value::U512;
+use alloc::format;
+
+use contract_ffi::{
+    contract_api::{account, runtime, storage, system, Error},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{
+        account::{PublicKey, PurseId},
+        U512,
+    },
+};
 
 const TRANSFER_RESULT_UREF_NAME: &str = "transfer_result";
 const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";

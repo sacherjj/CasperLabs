@@ -10,6 +10,13 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.transport._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.shared._
+import logstage.{IzLogger, LogIO}
+import logstage.UnsafeLogIO.UnsafeLogIOSyncSafeInstance
+import izumi.logstage.api.logger.LogSink
+import izumi.logstage.api.rendering.logunits.LogFormat
+import izumi.logstage.api.{Log => IzLog}
+import izumi.fundamentals.platform.language.CodePositionMaterializer
+import izumi.functional.mono.SyncSafe
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
@@ -54,7 +61,9 @@ object EffectsTestInstances {
       RPConf(local, List(local), defaultTimeout, clearConnections)
     )
 
-  class LogStub[F[_]: Sync](prefix: String = "", printEnabled: Boolean = false) extends Log[F] {
+  // https://medium.com/@rtwnk/logstage-zero-cost-structured-logging-in-scala-part-2-practical-example-3ef27e67e7ee
+  // https://github.com/7mind/izumi/blob/baea35e54dd482e54cd2d075e774cfd26806897a/logstage/logstage-core/src/main/scala/izumi/logstage/api/rendering/StringRenderingPolicy.scala
+  class LogSinkStub(prefix: String = "", printEnabled: Boolean = false) extends LogSink {
 
     @volatile var debugs: Vector[String]    = Vector.empty[String]
     @volatile var infos: Vector[String]     = Vector.empty[String]
@@ -73,36 +82,72 @@ object EffectsTestInstances {
       causes = Vector.empty[Throwable]
       all = Vector.empty[String]
     }
-    def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
-    def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"DEBUG $prefix $msg")
-      debugs = debugs :+ msg
+
+    override def flush(entry: IzLog.Entry): Unit = synchronized {
+      val msg = LogFormat.Default.formatMessage(entry, false).message
       all = all :+ msg
+      val lvl = entry.context.dynamic.level match {
+        case IzLog.Level.Trace => ???
+        case IzLog.Level.Debug =>
+          debugs = debugs :+ msg
+          "DEBUG"
+        case IzLog.Level.Info =>
+          infos = infos :+ msg
+          "INFO"
+        case IzLog.Level.Warn =>
+          warns = warns :+ msg
+          "WARN"
+        case IzLog.Level.Error =>
+          errors = errors :+ msg
+          entry.firstThrowable.foreach { cause =>
+            causes = causes :+ cause
+          }
+          "ERROR"
+        case IzLog.Level.Crit => ???
+      }
+      if (printEnabled) println(s"${lvl.padTo(5, " ").mkString("")} $prefix $msg")
     }
-    def info(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"INFO  $prefix $msg")
-      infos = infos :+ msg
-      all = all :+ msg
-    }
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"WARN  $prefix $msg")
-      warns = warns :+ msg
-      all = all :+ msg
-    }
-    def error(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"ERROR $prefix $msg")
-      errors = errors :+ msg
-      all = all :+ msg
-    }
-    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"ERROR $prefix $msg: $cause")
-      causes = causes :+ cause
-      errors = errors :+ msg
-      all = all :+ msg
+  }
+
+  trait LogStub {
+    protected def sink: LogSinkStub
+
+    def debugs = sink.debugs
+    def infos  = sink.infos
+    def warns  = sink.warns
+    def errors = sink.errors
+    def causes = sink.causes
+    def all    = sink.all
+
+    def reset() = sink.reset()
+  }
+
+  object LogStub {
+    def apply[F[_]: Sync](
+        prefix: String = "",
+        printEnabled: Boolean = false
+    ): LogIO[F] with LogStub = {
+      val sink   = new LogSinkStub(prefix, printEnabled)
+      val logger = IzLogger(IzLog.Level.Debug, List(sink))
+      apply[F](logger, sink)
     }
 
-    private def sync(thunk: => Unit): F[Unit] = Sync[F].delay(synchronized(thunk))
+    // Based on LogIO.fromLogger
+    private def apply[F[_]: SyncSafe](logger: IzLogger, sink0: LogSinkStub): LogIO[F] with LogStub =
+      new UnsafeLogIOSyncSafeInstance[F](logger) (SyncSafe[F]) with LogIO[F] with LogStub {
+        override val sink = sink0
+
+        override def log(entry: IzLog.Entry): F[Unit] =
+          F.syncSafe(logger.log(entry))
+
+        override def log(
+            logLevel: IzLog.Level
+        )(messageThunk: => IzLog.Message)(implicit pos: CodePositionMaterializer): F[Unit] =
+          F.syncSafe(logger.log(logLevel)(messageThunk))
+
+        override def withCustomContext(context: IzLog.CustomContext): LogIO[F] =
+          LogStub.apply[F](logger.withCustomContext(context), sink)
+      }
   }
 
 }

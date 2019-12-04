@@ -521,7 +521,8 @@ class NodeDiscoverySpec extends WordSpecLike with GeneratorDrivenPropertyChecks 
         TestFixture.prefilledTable(
           connections = peers,
           k = totalN(peers),
-          alivePeersCacheSize = totalN(peers)
+          alivePeersCacheSize = totalN(peers),
+          timeout = 15.seconds
         ) { (k, nd) =>
           for {
             _                            <- nd.discover.startAndForget
@@ -604,7 +605,7 @@ object NodeDiscoverySpec {
     override def shutdown(): Task[Unit] = ???
   }
 
-  implicit val logNoOp: Log[Task] = new NOPLog[Task]
+  implicit val logNoOp: Log[Task] = Log.NOPLog[Task]
   implicit val time: Time[Task] = new Time[Task] {
     def currentMillis: Task[Long]                   = Timer[Task].clock.realTime(MILLISECONDS)
     def nanoTime: Task[Long]                        = Timer[Task].clock.monotonic(NANOSECONDS)
@@ -629,7 +630,8 @@ object NodeDiscoverySpec {
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
         alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
-        alivePeersCachePingsBatchSize: Int = 10
+        alivePeersCachePingsBatchSize: Int = 10,
+        timeout: FiniteDuration = 5.seconds
     )(test: (KademliaMock, NodeDiscoveryImpl[Task]) => Task[Unit]): Unit = {
       val effect = for {
         table                 <- PeerTable[Task](id, k)
@@ -656,7 +658,7 @@ object NodeDiscoverySpec {
         )
         _ <- test(kademliaMock, nd)
       } yield ()
-      effect.runSyncUnsafe(5.seconds)
+      effect.runSyncUnsafe(timeout)
     }
 
     def customInitial(
@@ -669,7 +671,8 @@ object NodeDiscoverySpec {
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
         alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
-        alivePeersCachePingsBatchSize: Int = 10
+        alivePeersCachePingsBatchSize: Int = 10,
+        timeout: FiniteDuration = 5.seconds
     )(test: (KademliaMock, NodeDiscoveryImpl[Task]) => Task[Unit]): Unit =
       customInitialWithFailures(
         connections.mapValues(Option(_)),
@@ -681,7 +684,8 @@ object NodeDiscoverySpec {
         alivePeersCacheMinThreshold,
         alivePeersCacheExpirationPeriod,
         alivePeersCacheUpdatePeriod,
-        alivePeersCachePingsBatchSize
+        alivePeersCachePingsBatchSize,
+        timeout
       )(test)
 
     def prefilledTable(
@@ -693,7 +697,8 @@ object NodeDiscoverySpec {
         alivePeersCacheMinThreshold: Int = 10,
         alivePeersCacheExpirationPeriod: FiniteDuration = 10.minutes,
         alivePeersCacheUpdatePeriod: FiniteDuration = 1.minute,
-        alivePeersCachePingsBatchSize: Int = 10
+        alivePeersCachePingsBatchSize: Int = 10,
+        timeout: FiniteDuration = 5.seconds
     )(test: (KademliaMock, NodeDiscoveryImpl[Task]) => Task[Unit]): Unit =
       customInitial(
         connections,
@@ -708,7 +713,8 @@ object NodeDiscoverySpec {
         alivePeersCacheMinThreshold,
         alivePeersCacheExpirationPeriod,
         alivePeersCacheUpdatePeriod,
-        alivePeersCachePingsBatchSize
+        alivePeersCachePingsBatchSize,
+        timeout
       )(test)
   }
 }

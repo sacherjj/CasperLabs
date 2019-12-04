@@ -1,25 +1,21 @@
 #![feature(test)]
 
-extern crate casperlabs_contract_ffi;
-
-use std::collections::BTreeMap;
-use std::iter;
-
 extern crate test;
-use test::black_box;
-use test::Bencher;
 
-use casperlabs_contract_ffi::bytesrepr::{FromBytes, ToBytes};
-use casperlabs_contract_ffi::key::Key;
-use casperlabs_contract_ffi::uref::{AccessRights, URef};
-use casperlabs_contract_ffi::value::account::{
-    AccountActivity, AssociatedKeys, BlockTime, PublicKey, PurseId, Weight,
-};
-use casperlabs_contract_ffi::value::{
-    account::Account,
-    contract::Contract,
-    uint::{U128, U256, U512},
-    ProtocolVersion, Value,
+use std::{collections::BTreeMap, iter};
+
+use test::{black_box, Bencher};
+
+use casperlabs_contract_ffi::{
+    bytesrepr::{FromBytes, ToBytes},
+    key::Key,
+    uref::{AccessRights, URef},
+    value::{
+        account::{Account, AssociatedKeys, PublicKey, PurseId, Weight},
+        contract::Contract,
+        uint::{U128, U256, U512},
+        ProtocolVersion, Value,
+    },
 };
 
 static KB: usize = 1024;
@@ -367,14 +363,12 @@ fn make_account() -> Account {
     let purse_id = make_purse_id();
     let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; 32]), Weight::new(1));
     let action_thresholds = Default::default();
-    let account_activity = AccountActivity::new(BlockTime(0), BlockTime(100));
     Account::new(
         [0u8; 32],
         named_keys,
         purse_id,
         associated_keys,
         action_thresholds,
-        account_activity,
     )
 }
 

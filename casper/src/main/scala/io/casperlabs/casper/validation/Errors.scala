@@ -18,7 +18,7 @@ object Errors {
     def errorMessage: String
 
     def logged[F[_]: Log: Functor]: F[DeployHeaderError] =
-      Log[F].warn(self.errorMessage).as(self)
+      Log[F].warn(s"${self.errorMessage -> "error" -> null}").as(self)
   }
   object DeployHeaderError {
     def missingHeader(deployHash: ByteString): DeployHeaderError = MissingHeader(deployHash)
@@ -38,6 +38,13 @@ object Errors {
 
     def invalidDependency(deployHash: ByteString, dependency: ByteString): DeployHeaderError =
       InvalidDependency(deployHash, dependency)
+
+    def invalidChainName(
+        deployHash: ByteString,
+        deployChainName: String,
+        expectedChainName: String
+    ): DeployHeaderError =
+      InvalidChainName(deployHash, deployChainName, expectedChainName)
 
     final case class MissingHeader(deployHash: ByteString) extends DeployHeaderError {
       def errorMessage: String =
@@ -73,6 +80,15 @@ object Errors {
 
         s"Deploy $deploy with dependency $dep is invalid. Dependencies are expected to be 32 bytes."
       }
+    }
+
+    final case class InvalidChainName(
+        deployHash: ByteString,
+        deployChainName: String,
+        expectedChainName: String
+    ) extends DeployHeaderError {
+      def errorMessage: String =
+        s"Deploy ${PrettyPrinter.buildString(deployHash)} with chain name '$deployChainName' is invalid. Expected empty chain or '$expectedChainName'."
     }
   }
 }

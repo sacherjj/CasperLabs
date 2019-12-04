@@ -1,14 +1,15 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::string::ToString;
 
-use contract_ffi::contract_api::{runtime, storage, ContractRef, Error, TURef};
-use contract_ffi::key::Key;
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::uref::URef;
+use contract_ffi::{
+    contract_api::{runtime, storage, ContractRef, Error, TURef},
+    key::Key,
+    unwrap_or_revert::UnwrapOrRevert,
+    uref::URef,
+};
 
 #[no_mangle]
 pub extern "C" fn call() {

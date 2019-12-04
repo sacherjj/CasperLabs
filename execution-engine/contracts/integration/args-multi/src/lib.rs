@@ -1,16 +1,21 @@
 #![no_std]
 
-extern crate contract_ffi;
+use contract_ffi::{
+    contract_api::{runtime, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 
-use contract_ffi::contract_api::{runtime, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
+enum Arg {
+    AccountNumber = 0,
+    Number = 1,
+}
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account_number: [u8; 32] = runtime::get_arg(0)
+    let account_number: [u8; 32] = runtime::get_arg(Arg::AccountNumber as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let number: u32 = runtime::get_arg(1)
+    let number: u32 = runtime::get_arg(Arg::Number as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
 

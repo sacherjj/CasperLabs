@@ -87,6 +87,7 @@ class ConfigurationSpec
       initSyncMinSuccessful = 1,
       initSyncMemoizeNodes = false,
       initSyncSkipFailedNodes = false,
+      initSyncStep = 1,
       initSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       initSyncMaxBlockCount = 1,
       periodicSyncRoundPeriod = FiniteDuration(1, TimeUnit.SECONDS),
@@ -149,8 +150,13 @@ class ConfigurationSpec
       "user".some,
       "password".some
     )
+    val log = Configuration.Log(
+      level = izumi.logstage.api.Log.Level.Info,
+      jsonPath = Paths.get("/tmp/json.log").some
+    )
 
     Configuration(
+      log,
       server,
       grpcServer,
       tls,

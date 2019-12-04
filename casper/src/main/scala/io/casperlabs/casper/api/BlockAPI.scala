@@ -1,32 +1,34 @@
 package io.casperlabs.casper.api
 
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Bracket, Concurrent, Resource}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-import cats.{Functor, Monad}
-import com.github.ghik.silencer.silent
+import cats.Monad
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
+import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
+import cats.Applicative
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 
 object BlockAPI {
+
+  // GraphQL can serve processed deploys, if asked for.
+  type BlockAndMaybeDeploys = (BlockInfo, Option[List[Block.ProcessedDeploy]])
 
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "block-api")
@@ -50,24 +52,11 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: FinalityDetector: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
       d: Deploy
   ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
-    def check(msg: String)(f: F[Boolean]): F[Unit] =
-      f flatMap { ok =>
-        MonadThrowable[F].raiseError(InvalidArgument(msg)).whenA(!ok)
-      }
-
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      _ <- check("Invalid deploy hash.")(Validation[F].deployHash(d))
-      _ <- check("Invalid deploy signature.")(Validation[F].deploySignature(d))
-      _ <- Validation[F].deployHeader(d) >>= { headerErrors =>
-            MonadThrowable[F]
-              .raiseError(InvalidArgument(headerErrors.map(_.errorMessage).mkString("\n")))
-              .whenA(headerErrors.nonEmpty)
-          }
-
       r <- MultiParentCasper[F].deploy(d)
       _ <- r match {
             case Right(_) =>
@@ -82,7 +71,7 @@ object BlockAPI {
     } yield ()
   }
 
-  def propose[F[_]: Bracket[?[_], Throwable]: MultiParentCasperRef: Log: Metrics](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
       blockApiLock: Semaphore[F],
       canCreateBallot: Boolean
   ): F[ByteString] = {
@@ -99,9 +88,17 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
+                           _      <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]
+                                   case SelfEquivocatedBlock =>
+                                     Concurrent[F].start(
+                                       FatalError.selfEquivocationError(block.blockHash)
+                                     ) >> raise(
+                                       Internal(s"Node has equivocated with block ${PrettyPrinter
+                                         .buildString(block.blockHash)}")
+                                     )
                                    case _: InvalidBlock =>
                                      raise(InvalidArgument(s"Invalid block: $status"))
                                    case UnexpectedBlockException(ex) =>
@@ -133,101 +130,86 @@ object BlockAPI {
     }
   }
 
-  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorageReader](
-      deployHashBase16: String
+  def getDeployInfoOpt[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+      deployHashBase16: String,
+      deployView: DeployInfo.View
   ): F[Option[DeployInfo]] =
     if (deployHashBase16.length != 64) {
       Log[F].warn("Deploy hash must be 32 bytes long") >> none[DeployInfo].pure[F]
     } else {
       val deployHash = ByteString.copyFrom(Base16.decode(deployHashBase16))
-      DeployStorageReader[F].getDeployInfo(deployHash)
+      DeployStorage[F].reader(deployView).getDeployInfo(deployHash)
     }
 
-  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: DeployStorage](
-      deployHashBase16: String
+  def getDeployInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+      deployHashBase16: String,
+      deployView: DeployInfo.View
   ): F[DeployInfo] =
-    getDeployInfoOpt[F](deployHashBase16).flatMap(
+    getDeployInfoOpt[F](deployHashBase16, deployView).flatMap(
       _.fold(
         MonadThrowable[F]
-          .raiseError[DeployInfo](NotFound(s"Cannot find deploy with hash $deployHashBase16"))
+          .raiseError[DeployInfo](NotFound.deploy(deployHashBase16))
       )(_.pure[F])
     )
 
-  def getBlockDeploys[F[_]: Functor: BlockStorage](
-      blockHashBase16: String
-  ): F[Seq[Block.ProcessedDeploy]] =
+  def getBlockDeploys[F[_]: Monad: BlockStorage: DeployStorage](
+      blockHashBase16: String,
+      deployView: DeployInfo.View
+  ): F[List[Block.ProcessedDeploy]] =
     BlockStorage[F]
-      .getByPrefix(blockHashBase16)
-      .map(_.fold(Seq.empty[Block.ProcessedDeploy])(_.getBlockMessage.getBody.deploys))
-
-  def makeBlockInfo(
-      summary: BlockSummary,
-      maybeBlock: Option[Block]
-  ): BlockInfo = {
-    val maybeStats = maybeBlock.map { block =>
-      BlockInfo.Status
-        .Stats()
-        .withBlockSizeBytes(block.serializedSize)
-        .withDeployErrorCount(
-          block.getBody.deploys.count(_.isError)
-        )
-    }
-    val status = BlockInfo.Status(stats = maybeStats)
-    BlockInfo()
-      .withSummary(summary)
-      .withStatus(status)
-  }
-
-  def makeBlockInfo[F[_]: Monad: BlockStorage: MultiParentCasper: FinalityDetector](
-      summary: BlockSummary,
-      full: Boolean
-  ): F[(BlockInfo, Option[Block])] =
-    for {
-      maybeBlock <- if (full) {
-                     BlockStorage[F]
-                       .get(summary.blockHash)
-                       .map(_.get.blockMessage)
-                   } else {
-                     none[Block].pure[F]
-                   }
-      info = makeBlockInfo(summary, maybeBlock)
-    } yield (info, maybeBlock)
-
-  def getBlockInfoWithBlock[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
-      blockHash: BlockHash,
-      full: Boolean = false
-  ): F[(BlockInfo, Option[Block])] =
-    unsafeWithCasper[F, (BlockInfo, Option[Block])]("Could not show block.") { implicit casper =>
-      BlockStorage[F].getBlockSummary(blockHash).flatMap { maybeSummary =>
-        maybeSummary.fold(
-          MonadThrowable[F]
-            .raiseError[(BlockInfo, Option[Block])](
-              NotFound(s"Cannot find block matching hash ${Base16.encode(blockHash.toByteArray)}")
-            )
-        )(makeBlockInfo[F](_, full))
+      .getBlockInfoByPrefix(blockHashBase16)
+      .flatMap {
+        _.fold(List.empty[Block.ProcessedDeploy].pure[F]) { info =>
+          DeployStorage[F].reader(deployView).getProcessedDeploys(info.getSummary.blockHash)
+        }
       }
+
+  def getBlockInfoWithDeploys[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: DeployStorage](
+      blockHash: BlockHash,
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[BlockAndMaybeDeploys] =
+    for {
+      blockInfo <- BlockStorage[F]
+                    .getBlockInfo(blockHash)
+                    .flatMap(
+                      _.fold(
+                        MonadThrowable[F]
+                          .raiseError[BlockInfo](
+                            NotFound.block(blockHash)
+                          )
+                      )(_.pure[F])
+                    )
+      withDeploys <- maybeWithDeploys[F](blockInfo, maybeDeployView)
+    } yield withDeploys
+
+  def getBlockInfoWithDeploysOpt[F[_]: Monad: BlockStorage: DeployStorage](
+      blockHashBase16: String,
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[Option[BlockAndMaybeDeploys]] =
+    BlockStorage[F]
+      .getBlockInfoByPrefix(blockHashBase16)
+      .flatMap(
+        _.traverse(
+          maybeWithDeploys[F](_, maybeDeployView)
+        )
+      )
+
+  private def maybeWithDeploys[F[_]: Applicative: DeployStorage](
+      blockInfo: BlockInfo,
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[BlockAndMaybeDeploys] =
+    maybeDeployView.fold((blockInfo -> none[List[Block.ProcessedDeploy]]).pure[F]) { implicit dv =>
+      DeployStorageReader[F]
+        .getProcessedDeploys(blockInfo.getSummary.blockHash)
+        .map { deploys =>
+          blockInfo -> deploys.some
+        }
     }
 
-  def getBlockInfoOpt[F[_]: MonadThrowable: Log: BlockStorage: MultiParentCasperRef: FinalityDetector](
-      blockHashBase16: String,
-      full: Boolean = false
-  ): F[Option[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, Option[(BlockInfo, Option[Block])]]("Could not show block") {
-      implicit casper =>
-        BlockStorage[F]
-          .getSummaryByPrefix(blockHashBase16)
-          .flatMap(
-            _.fold(none[(BlockInfo, Option[Block])].pure[F])(
-              makeBlockInfo[F](_, full).map(_.some)
-            )
-          )
-    }
-
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage](
-      blockHashBase16: String,
-      full: Boolean = false
+  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage](
+      blockHashBase16: String
   ): F[BlockInfo] =
-    getBlockInfoOpt[F](blockHashBase16, full).flatMap(
+    getBlockInfoWithDeploysOpt[F](blockHashBase16, None).flatMap(
       _.fold(
         MonadThrowable[F]
           .raiseError[BlockInfo](
@@ -236,44 +218,45 @@ object BlockAPI {
       )(_._1.pure[F])
     )
 
-  /** Return block infos and maybe according blocks (if 'full' is true) in the a slice of the DAG.
+  /** Return block infos and maybe the corresponding deploy summaries in the a slice of the DAG.
     * Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfosMaybeWithBlocks[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
+  def getBlockInfosWithDeploys[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: Fs2Compiler](
       depth: Int,
       maxRank: Long = 0,
-      full: Boolean = false
-  ): F[List[(BlockInfo, Option[Block])]] =
-    unsafeWithCasper[F, List[(BlockInfo, Option[Block])]]("Could not show blocks.") {
-      implicit casper =>
-        casper.dag flatMap { dag =>
-          maxRank match {
-            case 0 => dag.topoSortTail(depth).compile.toVector
-            case r =>
-              dag
-                .topoSort(
-                  endBlockNumber = r,
-                  startBlockNumber = math.max(r - depth + 1, 0)
-                )
-                .compile
-                .toVector
-          }
-        } handleErrorWith {
-          case ex: StorageError =>
-            MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
-          case ex: IllegalArgumentException =>
-            MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
-        } flatMap { summariesByRank =>
-          summariesByRank.flatten.reverse.toList.traverse(makeBlockInfo[F](_, full))
+      maybeDeployView: Option[DeployInfo.View]
+  ): F[List[BlockAndMaybeDeploys]] =
+    unsafeWithCasper[F, List[BlockAndMaybeDeploys]]("Could not show blocks.") { implicit casper =>
+      casper.dag flatMap { dag =>
+        maxRank match {
+          case 0 =>
+            dag.topoSortTail(depth).compile.toVector
+          case r =>
+            dag
+              .topoSort(
+                endBlockNumber = r,
+                startBlockNumber = math.max(r - depth + 1, 0)
+              )
+              .compile
+              .toVector
         }
+      } handleErrorWith {
+        case ex: StorageError =>
+          MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
+        case ex: IllegalArgumentException =>
+          MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
+      } flatMap { infosByRank =>
+        infosByRank.flatten.reverse.toList.traverse { info =>
+          maybeWithDeploys[F](info, maybeDeployView)
+        }
+      }
     }
 
   /** Return block infos in the a slice of the DAG. Use `maxRank` 0 to get the top slice,
     * then we pass previous ranks to paginate backwards. */
-  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: FinalityDetector: BlockStorage: Fs2Compiler](
+  def getBlockInfos[F[_]: MonadThrowable: Log: MultiParentCasperRef: DeployStorage: Fs2Compiler](
       depth: Int,
-      maxRank: Long = 0,
-      full: Boolean = false
+      maxRank: Long = 0
   ): F[List[BlockInfo]] =
-    getBlockInfosMaybeWithBlocks[F](depth, maxRank, full).map(_.map(_._1))
+    getBlockInfosWithDeploys[F](depth, maxRank, None).map(_.map(_._1))
 }

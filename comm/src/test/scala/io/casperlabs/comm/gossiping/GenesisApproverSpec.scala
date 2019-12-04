@@ -456,7 +456,7 @@ class GenesisApproverSpec extends WordSpecLike with Matchers with ArbitraryConse
 }
 
 object GenesisApproverSpec extends ArbitraryConsensusAndComm {
-  implicit val noLog               = new Log.NOPLog[Task]
+  implicit val noLog               = Log.NOPLog[Task]
   implicit val consensusConfig     = ConsensusConfig()
   implicit val chainId: ByteString = sample(genHash)
 
@@ -487,7 +487,9 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
   class MockGossipService extends GossipService[Task] {
     override def newBlocks(request: NewBlocksRequest)                                       = ???
     override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+    override def streamLatestMessages(
+        request: StreamLatestMessagesRequest
+    ): Iterant[Task, Block.Justification] = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[Task, BlockSummary]                                    = ???
@@ -496,6 +498,10 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): Task[GenesisCandidate] = ???
+
+    override def streamDagSliceBlockSummaries(
+        request: StreamDagSliceBlockSummariesRequest
+    ): Iterant[Task, BlockSummary] = ???
   }
   object MockGossipService {
     class Bootstrap(getCandidate: () => Task[GenesisCandidate]) extends MockGossipService() {

@@ -1,13 +1,14 @@
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
-extern crate contract_ffi;
 
-use contract_ffi::contract_api::{account, runtime, system, Error};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::PurseId;
-use contract_ffi::value::U512;
+use alloc::vec;
+
+use contract_ffi::{
+    contract_api::{account, runtime, system, Error},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::{account::PurseId, U512},
+};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
@@ -15,8 +16,7 @@ enum Arg {
     Amount = 0,
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let amount: U512 = runtime::get_arg(Arg::Amount as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
@@ -29,4 +29,10 @@ pub extern "C" fn call() {
         runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
 
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert();
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }

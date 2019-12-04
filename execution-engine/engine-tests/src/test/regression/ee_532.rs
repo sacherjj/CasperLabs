@@ -1,6 +1,9 @@
-use crate::support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder};
-use crate::test::DEFAULT_GENESIS_CONFIG;
-use engine_core::engine_state::error;
+use engine_core::engine_state::Error;
+
+use crate::{
+    support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
+    test::DEFAULT_GENESIS_CONFIG,
+};
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
 const UNKNOWN_ADDR: [u8; 32] = [42u8; 32];
@@ -37,7 +40,7 @@ fn should_run_ee_532_get_uref_regression_test() {
     let message = deploy_result.get_precondition_failure().get_message();
     assert_eq!(
         message,
-        format!("{}", error::Error::AuthorizationError),
+        format!("{}", Error::AuthorizationError),
         "expected AuthorizationError"
     )
 }

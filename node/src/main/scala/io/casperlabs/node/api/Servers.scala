@@ -4,9 +4,9 @@ import cats.Id
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Effect => _, _}
 import cats.implicits._
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
@@ -24,7 +24,7 @@ import io.casperlabs.node.diagnostics.{JvmMetrics, NewPrometheusReporter, NodeMe
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
-import io.casperlabs.storage.deploy.{DeployStorageReader, DeployStorageWriter}
+import io.casperlabs.storage.deploy.DeployStorage
 import io.netty.handler.ssl.SslContext
 import kamon.Kamon
 import monix.eval.{Task, TaskLike}
@@ -38,7 +38,7 @@ import scala.concurrent.ExecutionContext
 object Servers {
 
   private def logStarted[F[_]: Log](name: String, port: Int, isSsl: Boolean) =
-    Log[F].info(s"$name gRPC services started on port ${port}${if (isSsl) " using SSL" else ""}.")
+    Log[F].info(s"$name gRPC services started on $port with $isSsl")
 
   /** Start a gRPC server with services meant for the operators.
     * This port shouldn't be exposed to the internet, or some endpoints
@@ -59,7 +59,8 @@ object Servers {
       jvmMetrics: JvmMetrics[Task],
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
-      multiParentCasperRef: MultiParentCasperRef[Task]
+      multiParentCasperRef: MultiParentCasperRef[Task],
+      broadcaster: Broadcaster[Task]
   ): Resource[Task, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer[Task](
@@ -86,7 +87,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: FinalityDetector: BlockStorage: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Validation: Fs2Compiler](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
@@ -113,7 +114,7 @@ object Servers {
       )
   }
 
-  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: FinalityDetector: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorageReader: DeployStorageWriter: Fs2Compiler: Metrics](
+  def httpServerR[F[_]: Log: NodeDiscovery: ConnectionsCell: Timer: ConcurrentEffect: MultiParentCasperRef: BlockStorage: ContextShift: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
       port: Int,
       conf: Configuration,
       id: NodeIdentifier,

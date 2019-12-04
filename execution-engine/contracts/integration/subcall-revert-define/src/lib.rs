@@ -1,11 +1,13 @@
 #![no_std]
 
 extern crate alloc;
-extern crate contract_ffi;
 
 use alloc::collections::BTreeMap;
 
 use contract_ffi::contract_api::{runtime, storage, Error};
+
+const REVERT_TEST_EXT: &str = "revert_test_ext";
+const REVERT_TEST_KEY: &str = "revert_test";
 
 #[no_mangle]
 pub extern "C" fn revert_test_ext() {
@@ -16,6 +18,6 @@ pub extern "C" fn revert_test_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pointer = storage::store_function_at_hash("revert_test_ext", BTreeMap::new());
-    runtime::put_key("revert_test", &pointer.into())
+    let pointer = storage::store_function_at_hash(REVERT_TEST_EXT, BTreeMap::new());
+    runtime::put_key(REVERT_TEST_KEY, &pointer.into())
 }

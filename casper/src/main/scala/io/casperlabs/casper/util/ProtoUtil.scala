@@ -6,18 +6,18 @@ import cats.Monad
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
-import io.casperlabs.casper.finality.votingmatrix
-import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, Weight}
@@ -178,35 +178,31 @@ object ProtoUtil {
 
   def nextValidatorBlockSeqNum[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
-      justifications: Seq[Justification],
-      creator: Validator
+      validatorPrevBlockHash: ByteString
   ): F[Int] =
-    justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == creator
-      }
-      .foldM(1) {
-        case (_, Justification(_, latestBlockHash)) =>
-          dag.lookup(latestBlockHash).flatMap {
-            case Some(meta) =>
-              (1 + meta.validatorMsgSeqNum).pure[F]
+    if (validatorPrevBlockHash.isEmpty) {
+      1.pure[F]
+    } else {
 
-            case None =>
-              MonadThrowable[F].raiseError[Int](
-                new NoSuchElementException(
-                  s"DagStorage is missing hash ${PrettyPrinter.buildString(latestBlockHash)}"
-                )
-              )
-          }
-      }
+      // TODO: Replace with lookupUnsafe
+      dag.lookup(validatorPrevBlockHash).flatMap {
+        case Some(meta) =>
+          (1 + meta.validatorMsgSeqNum).pure[F]
 
-  def creatorJustification(header: Block.Header): Option[Justification] =
-    header.justifications
-      .find {
-        case Justification(validator: Validator, _) =>
-          validator == header.validatorPublicKey
+        case None =>
+          MonadThrowable[F].raiseError[Int](
+            new NoSuchElementException(
+              s"DagStorage is missing previous block hash ${PrettyPrinter.buildString(validatorPrevBlockHash)}"
+            )
+          )
       }
+    }
+
+  def creatorJustification(header: Block.Header): Set[Justification] =
+    header.justifications.collect {
+      case j @ Justification(validator: Validator, _) if validator == header.validatorPublicKey =>
+        j
+    }.toSet
 
   def weightMap(block: Block): Map[ByteString, Weight] =
     weightMap(block.getHeader)
@@ -287,9 +283,6 @@ object ProtoUtil {
                   .buildString(message.messageHash)}"
               )
             )
-          // For some reason scalac produces a warning that we are missing a case
-          // Some(x for x not in {Message.Block, Message.Ballot}), which is strange b/c such type doesn't exist.
-          case Some(_) => ???
           case None =>
             MonadThrowable[F].raiseError[Map[ByteString, Weight]](
               new IllegalArgumentException(
@@ -340,6 +333,27 @@ object ProtoUtil {
   def blockNumber(b: Block): Long =
     b.getHeader.rank
 
+  /** Removes redundant messages that are available in the immediate justifications of another message in the set */
+  def removeRedundantMessages(
+      messages: Iterable[Message]
+  ): Set[Message] = {
+    // Builds a dependencies map.
+    // ancestor -> {descendant}
+    // Allows for quick test whether a block is in justifications of another one.
+    val dependantsOf = messages
+      .foldLeft(Map.empty[ByteString, Set[Message]]) {
+        case (acc, m) =>
+          m.justifications
+            .map(_.latestBlockHash)
+            .map(_ -> Set(m))
+            .toMap |+| acc
+      }
+    val ancestors   = dependantsOf.keySet
+    val descendants = dependantsOf.values.flatten.toSet
+    // Filter out messages that are in justifications of another one.
+    descendants.filterNot(m => ancestors.contains(m.messageHash))
+  }
+
   def toJustification(
       latestMessages: Seq[Message]
   ): Seq[Justification] =
@@ -352,24 +366,21 @@ object ProtoUtil {
 
   def getJustificationMsgHashes(
       justifications: Seq[Justification]
-  ): immutable.Map[Validator, BlockHash] =
-    justifications.foldLeft(Map.empty[Validator, BlockHash]) {
-      case (acc, Justification(validator, block)) =>
-        acc.updated(validator, block)
-    }
+  ): immutable.Map[Validator, Set[BlockHash]] =
+    justifications.groupBy(_.validatorPublicKey).mapValues(_.map(_.latestBlockHash).toSet)
 
   def getJustificationMsgs[F[_]: MonadThrowable](
       dag: DagRepresentation[F],
       justifications: Seq[Justification]
-  ): F[Map[Validator, Message]] =
-    justifications.toList.foldM(Map.empty[Validator, Message]) {
+  ): F[Map[Validator, Set[Message]]] =
+    justifications.toList.foldM(Map.empty[Validator, Set[Message]]) {
       case (acc, Justification(validator, hash)) =>
         dag.lookup(hash).flatMap {
           case Some(meta) =>
-            acc.updated(validator, meta).pure[F]
+            acc.combine(Map(validator -> Set(meta))).pure[F]
 
           case None =>
-            MonadThrowable[F].raiseError[Map[Validator, Message]](
+            MonadThrowable[F].raiseError(
               new NoSuchElementException(
                 s"DagStorage is missing hash ${PrettyPrinter.buildString(hash)}"
               )
@@ -377,14 +388,8 @@ object ProtoUtil {
         }
     }
 
-  def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
-    protoSeqHash(protoSeq)
-
-  def protoSeqHash[A <: scalapb.GeneratedMessage](protoSeq: Seq[A]): ByteString =
-    hashByteArrays(protoSeq.map(_.toByteArray): _*)
-
-  def hashByteArrays(items: Array[Byte]*): ByteString =
-    ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
+  def protoHash[A <: scalapb.GeneratedMessage](data: A): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
   /* Creates a Genesis block. Genesis is not signed */
   def genesis(
@@ -421,12 +426,14 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parents: Seq[ByteString],
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -445,7 +452,9 @@ object ProtoUtil {
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
-      validatorSeqNum = validatorSeqNum
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
@@ -464,6 +473,7 @@ object ProtoUtil {
       protocolVersion: ProtocolVersion,
       parent: ByteString,
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       chainName: String,
       now: Long,
       rank: Long,
@@ -489,7 +499,8 @@ object ProtoUtil {
       timestamp = now,
       chainName = chainName,
       creator = publicKey,
-      validatorSeqNum = validatorSeqNum
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
     ).withMessageType(Block.MessageType.BALLOT)
 
     val unsigned = unsignedBlockProto(body, header)
@@ -509,12 +520,15 @@ object ProtoUtil {
       state: Block.GlobalState,
       rank: Long,
       validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
-      chainName: String
+      chainName: String,
+      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
   ): Block.Header =
     Block
       .Header()
+      .withKeyBlockHash(keyBlockHash)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
@@ -522,6 +536,7 @@ object ProtoUtil {
       .withRank(rank)
       .withValidatorPublicKey(ByteString.copyFrom(creator))
       .withValidatorBlockSeqNum(validatorSeqNum)
+      .withValidatorPrevBlockHash(validatorPrevBlockHash)
       .withProtocolVersion(protocolVersion)
       .withTimestamp(timestamp)
       .withChainName(chainName)
@@ -576,26 +591,28 @@ object ProtoUtil {
   // This is only used for tests.
   def basicDeploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY,
-      accountPublicKey: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY
   ): Deploy = {
+    val (sk, pk) = Ed25519.newKeyPair
     val b = Deploy
       .Body()
       .withSession(Deploy.Code().withWasm(sessionCode))
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountPublicKey(accountPublicKey)
+      .withAccountPublicKey(ByteString.copyFrom(pk))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
     Deploy()
-      .withDeployHash(protoHash(h))
       .withHeader(h)
       .withBody(b)
+      .withHashes
+      .sign(sk, pk)
+
   }
 
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
-    basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy)))
+    basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy), cost = 1L))
 
   def sourceDeploy(source: String, timestamp: Long): Deploy =
     sourceDeploy(ByteString.copyFromUtf8(source), timestamp)

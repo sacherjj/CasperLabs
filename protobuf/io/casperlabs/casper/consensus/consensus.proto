@@ -51,6 +51,10 @@ message Deploy {
         // List of `Deploy.deploy_hash`s  that must be executed in past blocks
         // before this deploy can be executed.
         repeated bytes dependencies = 7;
+        // If present, the deploy can only be included in a block on the right chain.
+        // This can be used to preotect against accidental or malicious cross chain
+        // deploys, in case the same account exists on multiple networks.
+        string chain_name = 8;
     }
 
     message Body {
@@ -137,9 +141,17 @@ message Block {
         string chain_name = 8;
         uint32 validator_block_seq_num = 9;
         bytes validator_public_key = 10;
+        // The hash of the previous block (or ballot) from this validator.
+        // It has to be stated even if it's part of the justifications directly,
+        // and it must be part of the j-past-cone of the block, in case transitive
+        // justifications are omitted. It must be the one corresponding to
+        // validator_block_seq_num - 1.
+        bytes validator_prev_block_hash = 14;
         // Distance from Genesis.
         uint64 rank = 11;
         MessageType message_type = 12;
+        // A block from where the fork choice is calculated.
+        bytes key_block_hash = 15;
     }
 
     enum MessageType {

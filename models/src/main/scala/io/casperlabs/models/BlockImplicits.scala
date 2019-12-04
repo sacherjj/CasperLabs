@@ -3,6 +3,8 @@ package io.casperlabs.models
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 object BlockImplicits {
@@ -28,6 +30,24 @@ object BlockImplicits {
       block.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))
         .toMap
+
+    def getSummary: BlockSummary =
+      BlockSummary(block.blockHash, block.header, block.signature)
+
+    def getBlockInfo: BlockInfo =
+      BlockInfo()
+        .withSummary(block.getSummary)
+        .withStatus(
+          BlockInfo
+            .Status()
+            .withStats(
+              Stats(
+                block.serializedSize,
+                block.getBody.deploys.count(_.isError),
+                block.getBody.deploys.map(_.cost).sum
+              )
+            )
+        )
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {

@@ -1,4 +1,10 @@
-#[derive(PartialEq, Eq, Debug, Clone)]
+use std::{
+    default::Default,
+    fmt::{self, Display, Formatter},
+    ops::{Add, AddAssign},
+};
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Op {
     Read,
     Write,
@@ -6,7 +12,7 @@ pub enum Op {
     NoOp,
 }
 
-impl std::ops::Add for Op {
+impl Add for Op {
     type Output = Op;
 
     fn add(self, other: Op) -> Op {
@@ -20,8 +26,20 @@ impl std::ops::Add for Op {
     }
 }
 
-impl std::fmt::Display for Op {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl AddAssign for Op {
+    fn add_assign(&mut self, other: Self) {
+        *self = *self + other;
+    }
+}
+
+impl Display for Op {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl Default for Op {
+    fn default() -> Self {
+        Op::NoOp
     }
 }

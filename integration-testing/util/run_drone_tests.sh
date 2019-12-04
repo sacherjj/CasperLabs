@@ -13,11 +13,15 @@ drone -v foo >/dev/null 2>&1 || { echo >&2 "I require drone but it's not install
 
 cd ../..
 make docker-build-all
+make docker-build/grpcwebproxy
 
-docker tag casperlabs/node:test casperlabs/node:test-DRONE-1
-docker tag casperlabs/execution-engine:test casperlabs/execution-engine:test-DRONE-1
-docker tag casperlabs/client:test casperlabs/client:test-DRONE-1
-docker tag casperlabs/integration-testing:test casperlabs/integration-testing:test-DRONE-1
+docker pull selenium/standalone-chrome:3.141.59-xenon
+
+docker tag casperlabs/node:latest casperlabs/node:DRONE-1
+docker tag casperlabs/execution-engine:latest casperlabs/execution-engine:DRONE-1
+docker tag casperlabs/client:latest casperlabs/client:DRONE-1
+docker tag casperlabs/integration-testing:latest casperlabs/integration-testing:DRONE-1
+docker tag casperlabs/explorer:latest casperlabs/explorer:DRONE-1
+docker tag casperlabs/grpcwebproxy:latest casperlabs/grpcwebproxy:DRONE-1
 
 drone exec --include 'run-integration-tests' --branch trying --trusted --env-file integration-testing/util/env_file  2>&1 | tee integration-testing/util/drone_run.log
-

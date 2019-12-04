@@ -1,22 +1,19 @@
 package io.casperlabs.casper.helper
 
-import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
 import cats.mtl.FunctorRaise
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
-import io.casperlabs.casper.finality.singlesweep.FinalityDetector
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.casper.util.CasperLabsProtocolVersions
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
@@ -33,10 +30,8 @@ import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
-import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
-
-import scala.collection.mutable.{Map => MutMap}
+import logstage.LogIO
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -54,15 +49,19 @@ abstract class HashSetCasperTestNode[F[_]](
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
-  implicit val logEff: LogStub[F]
+  implicit val logEff: LogStub with LogIO[F]
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
-  implicit val safetyOracleEff: FinalityDetector[F]
+  implicit val broadcaster: Broadcaster[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
+
+  val ownValidatorKey = validatorId match {
+    case ValidatorIdentity(key, _, _) => ByteString.copyFrom(key)
+  }
 
   val bonds = genesis.getHeader.getState.bonds
     .map(b => PublicKey(b.validatorPublicKey.toByteArray) -> Weight(b.stake))
@@ -99,7 +98,7 @@ abstract class HashSetCasperTestNode[F[_]](
       _ <- tearDownNode()
       _ <- blockStorage.clear()
       _ <- dagStorage.clear()
-      _ <- deployStorage.clear()
+      _ <- deployStorage.writer.clear()
     } yield ()
 
   /** Close storage. */
@@ -107,7 +106,7 @@ abstract class HashSetCasperTestNode[F[_]](
     for {
       _ <- blockStorage.close()
       _ <- dagStorage.close()
-      _ <- deployStorage.close()
+      _ <- deployStorage.writer.close()
     } yield ()
 
   def validateBlockStorage[A](f: BlockStorage[F] => F[A]): F[A] = f(blockStorage)
@@ -123,7 +122,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -137,7 +136,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
@@ -153,7 +152,7 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f,
+      faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -168,7 +167,7 @@ trait HashSetCasperTestNodeFactory {
       genesis: Block,
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Float = 0f,
+      faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
   ): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
@@ -313,13 +312,6 @@ object HashSetCasperTestNode {
   private def pad(x: Array[Byte], length: Int): Array[Byte] =
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
-
-  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
-      : Validation[F] =
-    new ValidationImpl[F] {
-      // Tests are not signing the deploys.
-      override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
-    }
 
   implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
     0L -> consensus.state.ProtocolVersion(1)

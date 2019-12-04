@@ -1,22 +1,80 @@
 # CasperLabs Python Client API library and command line tool
 
-[CasperLabs](https://casperlabs.io/) Python client is a library that can be used to
-interact with a CasperLabs node via its gRPC API.
+`casperlabs-client` is a Python package consisting of
+- a client library `casperlabs_client` that can be used to interact with
+  a [CasperLabs](https://casperlabs.io/) node
+  via its gRPC API and
+- a command line interface (CLI) script with the same name: `casperlabs_client`.
+
+Note, the name of the package available on PyPi is `casperlabs-client` (with hyphen),
+but the name of the library as well as the CLI is written with underscore: `casperlabs_client`.
+The name of the CLI is written with underscore to make it different from the Scala client,
+which is written with hyphen.
 
 ## Installation
 
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
-You can install it with
+
+### Linux
+
+You can install the `casperlabs_client` package with
+
+```
+pip3 install casperlabs-client
+```
+
+or, if you have only Python 3 installed (Python 3 installed as `python`, rather than `python3`):
 
 ```
 pip install casperlabs-client
 ```
 
-or, if you have both Python 2 and Python 3 installed:
+
+### Mac OS X
+
+Install Python 3 with brew: https://docs.python-guide.org/starting/install3/osx/
+
+Next, type the following commands in the Terminal:
 
 ```
-pip3 install casperlabs-client
+brew update
+brew upgrade
+pip install casperlabs-client
 ```
+
+### Windows 10
+
+To install `casperlabs-client` on Windows 10 you need to install latest Python 3.7,
+it is curently not possible to install it on Python 3.8 due to
+https://github.com/grpc/grpc/issues/20831
+
+It is recommended to install Python from the python.org website:
+https://www.python.org/downloads/windows/
+
+If you install Python from the Windows Store
+you will need to manually add the `Scripts` folder of your Python installation to your `Path`
+in order to have the `casperlabs_client` command line tool
+available on the command line without providing full path to it.
+This will be located in a path similar to this:
+
+```
+C:\Users\[USERNAME]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.x_qbz5n2kfra8p0\LocalCache\local-packages\Python37\Scripts>
+```
+
+
+You also need to install free Microsoft Visual Studio C++ 14.0.
+Get it with "Build Tools for Visual Studio 2019":
+https://visualstudio.microsoft.com/downloads/
+(All downloads -> Tools for Visual Studio 2019 -> Build tools for Visual Studio 2019).
+This is required by the `pyblake2` extension module.
+
+After installing the above prerequisites you can install the `casperlabs-client` package by
+typing the following on the command line:
+
+```
+C:\Users\alice>pip install casperlabs-client
+```
+
 
 ## Getting started
 
@@ -29,7 +87,7 @@ import casperlabs_client
 client = casperlabs_client.CasperLabsClient('deploy.casperlabs.io', 40401)
 blockInfo = next(client.showBlocks(1, full_view=False))
 for bond in blockInfo.summary.header.state.bonds:
-    print(f'{bond.validator_public_key.hex()}: {bond.stake}')
+    print(f'{bond.validator_public_key.hex()}: {bond.stake.value}')
 ```
 
 When executed the script should print a list of bonded validators' public keys
@@ -41,6 +99,39 @@ and their stake:
 569b41d574c46390212d698660b5326269ddb0a761d1294258897ac717b4958b: 4000000000
 d286526663ca3766c80781543a148c635f2388bfe128981c3e4ac69cea88dc35: 3000000000
 ```
+
+Note, you will also see a warning:
+
+```
+WARNING:root:Creating insecure connection to deploy.casperlabs.io:40401 (<class 'casperlabs_client.casper_pb2_grpc.CasperServiceStub'>)
+```
+
+Currently it is possible to connect from client to node without SSL encryption,
+which is what the above example code does.
+In the future encryption will become obligatory
+and you will have to pass a `certificate_path` to the `CasperLabsClient` constructor.
+The warning about insecure connection is meant to remind about this.
+
+## Graph visualization
+
+`casperlabs_client` has `vdag` command that can be used to visualize DAG.
+If you want to use it you need to first install [Graphviz](https://www.graphviz.org/),
+the free graph visuallization software.
+
+For example:
+
+```
+casperlabs_client --host deploy.casperlabs.io vdag --depth 10 --out dag.png
+```
+
+will produce an image file simillar to the one below:
+
+![DAG visualization example](example_vdag_output.png)
+
+Small boxes represent blocks, labeled with short prefixes of their block hashes.
+Blocks are aligned in "lanes" representing validators that created them.
+Bold arrows point to main parents of blocks.
+
 
 ## Deploying smart contracts
 
@@ -55,9 +146,9 @@ and transfer (free) tokens to the account from the faucet.
    ```
 
 2. Compile a contract to the [WASM](https://webassembly.org) format,
-see CasperLabs [contract examples](https://github.com/CasperLabs/contract-examples)
+see CasperLabs [contract examples](https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples)
 to see example contracts and instructions on
-[how to compile](https://github.com/CasperLabs/contract-examples/blob/master/README.md)
+[how to compile](https://github.com/CasperLabs/CasperLabs/blob/dev/execution-engine/contracts/examples/README.md)
 them.
 
 To deploy a compiled contract from your account address:
@@ -65,7 +156,7 @@ To deploy a compiled contract from your account address:
 ```python
 response = client.deploy(from_addr="f2cbd19d054bd2b2c06ea26714275271663a5e4503d5d059de159c3b60d81ab7",
                          gas_price=1,
-                         payment="helloname.wasm",
+                         payment_amount=1000000,
                          session="helloname.wasm")
 ```
 

@@ -1,10 +1,10 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::{account, runtime, Error as ApiError};
-use contract_ffi::unwrap_or_revert::UnwrapOrRevert;
-use contract_ffi::value::account::{PublicKey, Weight};
+use contract_ffi::{
+    contract_api::{account, runtime, Error as ApiError},
+    unwrap_or_revert::UnwrapOrRevert,
+    value::account::{PublicKey, Weight},
+};
 
 const INIT_WEIGHT: u8 = 1;
 const MOD_WEIGHT: u8 = 2;

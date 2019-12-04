@@ -1,10 +1,6 @@
 #![no_std]
 
-extern crate contract_ffi;
-
-use contract_ffi::contract_api::runtime;
-use contract_ffi::key::Key;
-use contract_ffi::uref::URef;
+use contract_ffi::{contract_api::runtime, key::Key, uref::URef};
 
 #[allow(clippy::redundant_closure)]
 #[no_mangle]

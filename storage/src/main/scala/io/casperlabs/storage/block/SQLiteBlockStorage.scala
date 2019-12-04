@@ -1,26 +1,29 @@
 package io.casperlabs.storage.block
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
-import cats.effect.concurrent._
 import cats.implicits._
 import com.google.protobuf.ByteString
 import doobie._
 import doobie.implicits._
 import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
-class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
-    xa: Transactor[F]
+class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
+    readXa: Transactor[F],
+    writeXa: Transactor[F]
 ) extends BlockStorage[F]
     with DoobieCodecs {
 
@@ -34,7 +37,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
   ): F[Option[BlockMsgWithTransform]] = {
     def createTransaction(blockHash: BlockHash, blockSummary: BlockSummary) =
       for {
-        body <- sql"""|SELECT d.data, dpr.deploy_position, dpr.cost, dpr.execution_error_message
+        body <- sql"""|SELECT d.summary, d.body, dpr.deploy_position, dpr.cost, dpr.execution_error_message
                       |FROM deploy_process_results dpr
                       |INNER JOIN deploys d
                       |ON dpr.deploy_hash=d.hash
@@ -67,7 +70,7 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     val transaction = initial.flatMap(_.fold(none[BlockMsgWithTransform].pure[ConnectionIO]) {
       case (blockHash, blockSummary) => createTransaction(blockHash, blockSummary)
     })
-    transaction.transact(xa)
+    transaction.transact(readXa)
   }
 
   override def getByPrefix(blockHashPrefix: String): F[Option[BlockMsgWithTransform]] = {
@@ -88,19 +91,19 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     )
   }
 
-  override def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]] = {
+  override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
-      sql"""|SELECT data
+      sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
             |FROM block_metadata
             |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
             |LIMIT 1""".stripMargin
-        .query[BlockSummary]
+        .query[BlockInfo]
         .option
-        .transact(xa)
+        .transact(readXa)
 
-    getByPrefix[BlockSummary](
+    getByPrefix[BlockInfo](
       blockHashPrefix,
-      getBlockSummary,
+      getBlockInfo,
       (lowerBound, upperBound) => query(lowerBound, upperBound)
     )
   }
@@ -131,51 +134,74 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     }
 
   override def isEmpty: F[Boolean] =
-    sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(xa)
+    sql"SELECT COUNT(*) FROM blocks".query[Long].unique.map(_ == 0L).transact(readXa)
 
   override def put(blockHash: BlockHash, blockMsg: BlockMsgWithTransform): F[Unit] =
     Update[(BlockHash, TransformEntry)]("""|INSERT OR IGNORE INTO transforms
                                            |(block_hash, data)
                                            |VALUES (?, ?)""".stripMargin)
       .updateMany(blockMsg.transformEntry.map(t => (blockHash, t)).toList)
-      .transact(xa)
+      .transact(writeXa)
       .void
 
   override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
-    sql"""|SELECT data
+    getBlockInfo(blockHash).map(_.flatMap(_.summary))
+
+  override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+    sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
           |FROM block_metadata
           |WHERE block_hash=$blockHash""".stripMargin
-      .query[BlockSummary]
+      .query[BlockInfo]
       .option
-      .transact(xa)
+      .transact(readXa)
 
-  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-    sql"""|SELECT block_hash
-          |FROM deploy_process_results
-          |WHERE deploy_hash=$deployHash
-          |ORDER BY create_time_millis""".stripMargin.query[BlockHash].to[Seq].transact(xa)
+  override def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]] =
+    NonEmptyList
+      .fromList[ByteString](deployHashes)
+      .fold(Map.empty[DeployHash, Set[BlockHash]].pure[F]) { nfl =>
+        val sql = fr"""|SELECT deploy_hash, block_hash
+                       |FROM deploy_process_results
+                       |WHERE """.stripMargin ++ Fragments.in(fr"deploy_hash", nfl)
+
+        sql
+          .query[(DeployHash, BlockHash)]
+          .to[Seq]
+          .transact(readXa)
+          .map(_.groupBy(_._1))
+          .map { deployHashToBlockHashesMap: Map[DeployHash, Seq[(DeployHash, BlockHash)]] =>
+            deployHashes.map { d =>
+              val value =
+                deployHashToBlockHashesMap.get(d).fold(Set.empty[BlockHash])(_.map(_._2).toSet)
+              (d, value)
+            }.toMap
+          }
+      }
 
   override def checkpoint(): F[Unit] = ().pure[F]
 
   override def clear(): F[Unit] =
-    sql"DELETE FROM transforms".update.run.void.transact(xa)
+    sql"DELETE FROM transforms".update.run.void.transact(writeXa)
 
   override def close(): F[Unit] = ().pure[F]
 }
 
 object SQLiteBlockStorage {
-  private[storage] def create[F[_]](
-      implicit xa: Transactor[F],
+  private[storage] def create[F[_]](readXa: Transactor[F], writeXa: Transactor[F])(
+      implicit
       metricsF: Metrics[F],
       syncF: Sync[F],
       fs2Compiler: Fs2Compiler[F]
   ): F[BlockStorage[F]] =
     for {
-      blockStorage <- Sync[F].delay(new SQLiteBlockStorage[F](xa) with MeteredBlockStorage[F] {
-                       override implicit val m: Metrics[F] = metricsF
-                       override implicit val ms: Source =
-                         Metrics.Source(BlockStorageMetricsSource, "sqlite")
-                       override implicit val a: Apply[F] = syncF
-                     })
+      blockStorage <- Sync[F].delay(
+                       new SQLiteBlockStorage[F](readXa, writeXa) with MeteredBlockStorage[F] {
+                         override implicit val m: Metrics[F] = metricsF
+                         override implicit val ms: Source =
+                           Metrics.Source(BlockStorageMetricsSource, "sqlite")
+                         override implicit val a: Apply[F] = syncF
+                       }
+                     )
     } yield blockStorage: BlockStorage[F]
 }

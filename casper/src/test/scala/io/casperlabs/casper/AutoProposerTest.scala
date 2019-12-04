@@ -5,6 +5,8 @@ import cats.effect.concurrent._
 import cats.implicits._
 import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.Estimator.Validator
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.metrics.Metrics
@@ -146,8 +148,9 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
 object AutoProposerTest {
   import Scheduler.Implicits.global
   import io.casperlabs.storage.dag.DagRepresentation
-  implicit val log     = new Log.NOPLog[Task]()
-  implicit val metrics = new Metrics.MetricsNOP[Task]()
+  implicit val log         = Log.NOPLog[Task]
+  implicit val metrics     = new Metrics.MetricsNOP[Task]()
+  implicit val broadcaster = Broadcaster.noop[Task]
 
   implicit val time = new Time[Task] {
     val timer                                       = implicitly[Timer[Task]]
@@ -191,15 +194,14 @@ object AutoProposerTest {
   }
 
   object MockMultiParentCasper {
-    def apply[F[_]: Sync: MultiParentCasperRef: DeployStorageReader: DeployStorageWriter] =
+    def apply[F[_]: Sync: MultiParentCasperRef: DeployStorage] =
       for {
         c <- Sync[F].delay(new MockMultiParentCasper[F]())
         _ <- MultiParentCasperRef[F].set(c)
       } yield c
   }
 
-  class MockMultiParentCasper[F[_]: Sync: DeployStorageReader: DeployStorageWriter]
-      extends MultiParentCasper[F] {
+  class MockMultiParentCasper[F[_]: Sync: DeployStorage] extends MultiParentCasper[F] {
 
     @volatile var proposalCount = 0
     @volatile var ballotCount   = 0
@@ -226,11 +228,11 @@ object AutoProposerTest {
     override def contains(block: Block): F[Boolean]     = ???
     override def estimator(
         dag: DagRepresentation[F],
-        lm: Map[ByteString, ByteString]
-    ): F[NonEmptyList[ByteString]]                                                  = ???
-    override def dag: F[DagRepresentation[F]]                                       = ???
-    override def normalizedInitialFault(weights: Map[ByteString, Weight]): F[Float] = ???
-    override def lastFinalizedBlock: F[Block]                                       = ???
-    override def faultToleranceThreshold                                            = 0f
+        lfbHash: ByteString,
+        lm: Map[Validator, Set[ByteString]],
+        equivocators: Set[Validator]
+    ): F[NonEmptyList[ByteString]]            = ???
+    override def dag: F[DagRepresentation[F]] = ???
+    override def lastFinalizedBlock: F[Block] = ???
   }
 }

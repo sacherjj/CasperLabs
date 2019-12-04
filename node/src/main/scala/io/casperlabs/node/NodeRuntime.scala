@@ -11,15 +11,12 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
+import cats.effect.implicits._
 import com.olegpy.meow.effects._
-import doobie.util.transactor.Transactor
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.finality.singlesweep.{
-  FinalityDetector,
-  FinalityDetectorBySingleSweepImpl
-}
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.catscontrib.Catscontrib._
@@ -58,6 +55,7 @@ class NodeRuntime private[node] (
     mainScheduler: Scheduler
 )(
     implicit log: Log[Task],
+    logId: Log[Id],
     uncaughtExceptionHandler: UncaughtExceptionHandler
 ) {
 
@@ -96,7 +94,6 @@ class NodeRuntime private[node] (
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
 
   val main: Task[Unit] = {
-    implicit val logId: Log[Id]         = Log.logId
     implicit val metricsId: Metrics[Id] = diagnostics.effects.metrics[Id](syncId)
     implicit val filesApiEff            = FilesAPI.create[Task](Sync[Task], log)
 
@@ -118,11 +115,11 @@ class NodeRuntime private[node] (
                                                                           conf.server.maxMessageSize
                                                                         )
       //TODO: We may want to adjust threading model for better performance
-      implicit0(doobieTransactor: Transactor[Task]) <- effects.doobieTransactor(
-                                                        connectEC = dbConnScheduler,
-                                                        transactEC = dbIOScheduler,
-                                                        conf.server.dataDir
-                                                      )
+      (writeTransactor, readTransactor) <- effects.doobieTransactors(
+                                            connectEC = dbConnScheduler,
+                                            transactEC = dbIOScheduler,
+                                            conf.server.dataDir
+                                          )
       deployStorageChunkSize = 20 //TODO: Move to config
 
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
@@ -132,6 +129,8 @@ class NodeRuntime private[node] (
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
               deployStorageChunkSize = deployStorageChunkSize,
+              readXa = readTransactor,
+              writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
                 CachingBlockStorage[Task](
                   underlyingBlockStorage,
@@ -196,7 +195,7 @@ class NodeRuntime private[node] (
 
       implicit0(raise: FunctorRaise[Task, InvalidBlock]) = validation
         .raiseValidateErrorThroughApplicativeError[Task]
-      implicit0(validationEff: Validation[Task]) = new ValidationImpl[Task]
+      implicit0(validationEff: Validation[Task]) = ValidationImpl.metered[Task]
 
       // TODO: Only a loop started with the TransportLayer keeps filling this up,
       // so if we use the GossipService it's going to stay empty. The diagnostics
@@ -210,11 +209,16 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
-      implicit0(safetyOracle: FinalityDetector[Task]) = new FinalityDetectorBySingleSweepImpl[
-        Task
-      ]()
-
       blockApiLock <- Resource.liftF(Semaphore[Task](1))
+
+      implicit0(broadcaster: Broadcaster[Task]) <- casper.gossiping.apply[Task](
+                                                    port,
+                                                    conf,
+                                                    chainSpec,
+                                                    genesis,
+                                                    ingressScheduler,
+                                                    egressScheduler
+                                                  )
 
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
@@ -249,16 +253,7 @@ class NodeRuntime private[node] (
             id,
             ingressScheduler
           )
-
-      _ <- casper.gossiping.apply[Task](
-            port,
-            conf,
-            chainSpec,
-            genesis,
-            ingressScheduler,
-            egressScheduler
-          )
-    } yield (nodeAsk, nodeDiscovery, storage)
+    } yield (nodeAsk, nodeDiscovery, storage.writer)
 
     resources.allocated flatMap {
       case ((nodeAsk, nodeDiscovery, deployStorage), release) =>
@@ -298,7 +293,7 @@ class NodeRuntime private[node] (
         Log[Task].info(s"Starting stand-alone node.")
       else
         Log[Task].info(
-          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ")}"
+          s"Starting node that will bootstrap from ${conf.server.bootstrap.map(_.show).mkString(", ") -> "bootstraps"}"
         )
 
     val cleanupDiscardedDeploysLoop: Task[Unit] = for {
@@ -325,7 +320,7 @@ class NodeRuntime private[node] (
             .start
 
       localNode <- localAsk.ask
-      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show}.")
+      _         <- Log[Task].info(s"Listening for traffic on ${localNode.show -> "peer"}.")
       // This loop will keep the program from exiting until shutdown is initiated.
       _ <- NodeDiscovery[Task].discover.attemptAndLog.executeOn(loopScheduler)
     } yield ()
@@ -403,10 +398,10 @@ class NodeRuntime private[node] (
   ): Resource[F, Block] =
     Resource.liftF[F, Block] {
       for {
-        _       <- Log[F].info("Constructing Genesis block...")
+        _       <- Log[F].info(s"Constructing Genesis block...")
         genesis <- Genesis.fromChainSpec[F](chainSpec.getGenesis)
         _ <- Log[F].info(
-              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash)}"
+              s"Genesis hash is ${PrettyPrinter.buildString(genesis.getBlockMessage.blockHash) -> "genesis" -> null}"
             )
       } yield genesis.getBlockMessage
     }
@@ -420,6 +415,7 @@ object NodeRuntime {
       implicit
       scheduler: Scheduler,
       log: Log[Task],
+      logId: Log[Id],
       uncaughtExceptionHandler: UncaughtExceptionHandler
   ): Task[NodeRuntime] =
     for {

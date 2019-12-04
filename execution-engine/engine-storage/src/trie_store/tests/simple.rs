@@ -4,16 +4,16 @@ use tempfile::tempdir;
 use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 
 use super::TestData;
-use crate::error::{self, in_memory};
-use crate::store::StoreExt;
-use crate::transaction_source::in_memory::InMemoryEnvironment;
-use crate::transaction_source::lmdb::LmdbEnvironment;
-use crate::transaction_source::{Transaction, TransactionSource};
-use crate::trie::Trie;
-use crate::trie_store::in_memory::InMemoryTrieStore;
-use crate::trie_store::lmdb::LmdbTrieStore;
-use crate::trie_store::TrieStore;
-use crate::TEST_MAP_SIZE;
+use crate::{
+    error::{self, in_memory},
+    store::StoreExt,
+    transaction_source::{
+        in_memory::InMemoryEnvironment, lmdb::LmdbEnvironment, Transaction, TransactionSource,
+    },
+    trie::Trie,
+    trie_store::{in_memory::InMemoryTrieStore, lmdb::LmdbTrieStore, TrieStore},
+    TEST_MAP_SIZE,
+};
 
 fn put_succeeds<'a, K, V, S, X, E>(
     store: &S,

@@ -4,9 +4,11 @@ import cats.Applicative
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage.DeployHash
 
 import scala.language.higherKinds
 
@@ -43,9 +45,17 @@ trait BlockStorage[F[_]] {
 
   def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]]
 
-  def getSummaryByPrefix(blockHashPrefix: String): F[Option[BlockSummary]]
+  def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]]
 
-  def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
+  def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]]
+
+  /**
+    * Note: if there are no blocks for the specified deployHash,
+    * Result.get(deployHash) returns Some(Set.empty[BlockHash]) instead of None
+    */
+  def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]]
 
   def checkpoint(): F[Unit]
 
@@ -75,10 +85,13 @@ object BlockStorage {
     abstract override def getBlockSummary(blockHash: BlockHash): F[Option[BlockSummary]] =
       incAndMeasure("getBlockSummary", super.getBlockSummary(blockHash))
 
-    abstract override def getSummaryByPrefix(
+    abstract override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
+      incAndMeasure("getBlockInfo", super.getBlockInfo(blockHash))
+
+    abstract override def getBlockInfoByPrefix(
         blockHashPrefix: String
-    ): F[Option[BlockSummary]] =
-      incAndMeasure("getSummaryByPrefix", super.getSummaryByPrefix(blockHashPrefix))
+    ): F[Option[BlockInfo]] =
+      incAndMeasure("getSummaryByPrefix", super.getBlockInfoByPrefix(blockHashPrefix))
 
     abstract override def put(
         blockHash: BlockHash,
@@ -94,10 +107,12 @@ object BlockStorage {
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
 
-    abstract override def findBlockHashesWithDeployHash(deployHash: BlockHash): F[Seq[BlockHash]] =
+    abstract override def findBlockHashesWithDeployHashes(
+        deployHashes: List[DeployHash]
+    ): F[Map[DeployHash, Set[BlockHash]]] =
       incAndMeasure(
-        "findBlockHashesWithDeployHash",
-        super.findBlockHashesWithDeployHash(deployHash)
+        "findBlockHashesWithDeployHashes",
+        super.findBlockHashesWithDeployHashes(deployHashes)
       )
   }
 

@@ -20,17 +20,11 @@ class Contract:
     ARGS_MULTI = "args_multi.wasm"
     ARGS_U32 = "args_u32.wasm"
     ARGS_U512 = "args_u512.wasm"
-    BONDING_CALL = "bonding_call.wasm"
-    COMBINED_CONTRACTS_DEFINE = "combined_contracts_define.wasm"
     COUNTER_CALL = "counter_call.wasm"
     COUNTER_DEFINE = "counter_define.wasm"
     CREATE_NAMED_PURSE = "create_named_purse.wasm"
-    DIRECT_REVERT_CALL = "direct_revert_call.wasm"
-    DIRECT_REVERT_DEFINE = "direct_revert_define.wasm"
+    DIRECT_REVERT = "direct_revert.wasm"
     ENDLESS_LOOP = "endless_loop.wasm"
-    ERR_STANDARD_PAYMENT = "err_standard_payment.wasm"
-    ERR_TRANSFER_TO_ACCOUNT = "err_transfer_to_account.wasm"
-    FINALIZE_PAYMENT = "finalize_payment.wasm"
     GET_CALLER_CALL = "get_caller_call.wasm"
     GET_CALLER_DEFINE = "get_caller_define.wasm"
     HELLO_NAME_CALL = "hello_name_call.wasm"
@@ -40,16 +34,12 @@ class Contract:
     MAILING_LIST_CALL = "mailing_list_call.wasm"
     MAILING_LIST_DEFINE = "mailing_list_define.wasm"
     PAYMENT_FROM_NAMED_PURSE = "payment_from_named_purse.wasm"
-    PAYMENT_PURSE = "payment_purse.wasm"
-    POS_BONDING = "pos_bonding.wasm"
-    REFUND_PURSE = "refund_purse.wasm"
     REMOVE_ASSOCIATED_KEY = "remove_associated_key.wasm"
     SET_KEY_THRESHOLDS = "set_key_thresholds.wasm"
     STANDARD_PAYMENT = "standard_payment.wasm"
     SUBCALL_REVERT_CALL = "subcall_revert_call.wasm"
     SUBCALL_REVERT_DEFINE = "subcall_revert_define.wasm"
-    TRANSFER_TO_ACCOUNT_IT = "transfer_to_account_it.wasm"
-    UNBONDING_CALL = "unbonding_call.wasm"
+    TRANSFER_TO_ACCOUNT = "transfer_to_account.wasm"
     UPDATE_ASSOCIATED_KEY = "update_associated_key.wasm"
 
 
@@ -68,7 +58,11 @@ TEST_ACCOUNT_INITIAL_BALANCE = 1000000000
 USER_ERROR_MIN = 65536
 
 BOOTSTRAP_PATH = "/root/.casperlabs/bootstrap"
-CHAINSPEC_PATH = "/root/.casperlabs/chainspec"
+
+# Empty /etc/casperlabs means it has no chainspec.
+# This is a directory in resources that will be mounted
+# as /etc/casperlabs in the node's docker container.
+EMPTY_ETC_CASPERLABS = "etc_casperlabs_empty"
 
 
 @dataclasses.dataclass(eq=True, frozen=True)
@@ -79,9 +73,7 @@ class KeyPair:
 
 def testing_root_path() -> Path:
     cur_path = Path(os.path.realpath(__file__)).parent
-    while cur_path.name != "integration-testing":
-        cur_path = cur_path.parent
-    return cur_path
+    return cur_path.parent
 
 
 def resources_path() -> Path:
