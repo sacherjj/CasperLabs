@@ -11,6 +11,11 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.graphz._
 
+package object Constant {
+  // For debugging it is usefull to change Invis to Dotted.
+  val Invisible = Dotted
+}
+
 final case class ValidatorBlock(
     blockHash: String,
     parentsHashes: List[String],
@@ -91,7 +96,7 @@ object GraphzGenerator {
             .flatten
             .traverse {
               case (node, ancestor) =>
-                g.edge(ancestor, node._2, style = Some(Invis))
+                g.edge(ancestor, node._2, style = Some(Constant.Invisible))
             }
 
       // draw clusters per validator
@@ -117,21 +122,24 @@ object GraphzGenerator {
   ): DagInfo[G] = {
     val ranks = blockInfos.map(_.getSummary.rank).distinct
 
-    val validators = blockInfos.map(_.getSummary).foldMap { b =>
-      val blockHash       = hexShort(b.blockHash)
-      val blockSenderHash = hexShort(b.validatorPublicKey)
-      val parents         = b.parentHashes.toList.map(hexShort)
-      val justifications = b.justifications
-        .map(_.latestBlockHash)
-        .map(hexShort)
-        .toSet
-        .toList
+    val validators = blockInfos
+      .map(_.getSummary)
+      .filter(_.validatorPublicKey.size > 0)
+      .foldMap { b =>
+        val blockHash       = hexShort(b.blockHash)
+        val blockSenderHash = hexShort(b.validatorPublicKey)
+        val parents         = b.parentHashes.toList.map(hexShort)
+        val justifications = b.justifications
+          .map(_.latestBlockHash)
+          .map(hexShort)
+          .toSet
+          .toList
 
-      val validatorBlocks =
-        Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
+        val validatorBlocks =
+          Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
-      Map(blockSenderHash -> validatorBlocks)
-    }
+        Map(blockSenderHash -> validatorBlocks)
+      }
 
     DagInfo[G](validators, ranks)
   }
@@ -200,7 +208,7 @@ object GraphzGenerator {
   ): List[(Option[GraphStyle], String)] = {
     val blocksForRank = blocks.getOrElse(rank, List.empty)
     blocksForRank.size match {
-      case 0 => List((Some(Invis), s"${rank.show}_$validatorId"))
+      case 0 => List((Some(Constant.Invisible), s"${rank.show}_$validatorId"))
       case _ =>
         blocksForRank
           .map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
@@ -220,7 +228,7 @@ object GraphzGenerator {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
       _ <- nodes.zip(nodes.drop(1)).traverse {
-            case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invis))
+            case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Constant.Invisible))
           }
       _ <- g.close
     } yield g
