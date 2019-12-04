@@ -122,8 +122,7 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -137,12 +136,11 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
-    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold, minTtl)(
+    standaloneF[Task](genesis, transforms, sk, storageSize, faultToleranceThreshold)(
       Concurrent[Task],
       Parallel[Task],
       Timer[Task],
@@ -155,7 +153,6 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -171,7 +168,6 @@ trait HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
   ): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
@@ -180,7 +176,6 @@ trait HashSetCasperTestNodeFactory {
       transforms,
       storageSize,
       faultToleranceThreshold,
-      minTtl,
       maybeMakeEE
     )(
       Concurrent[Task],

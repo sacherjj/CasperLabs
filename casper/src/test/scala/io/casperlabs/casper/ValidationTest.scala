@@ -1237,7 +1237,7 @@ class ValidationTest
     implicit blockStorage => implicit dagStorage => _ =>
       implicit val executionEngineService: ExecutionEngineService[Task] =
         HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
-      val deploys          = Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY, minTtl))
+      val deploys          = Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
       val processedDeploys = deploys.map(d => Block.ProcessedDeploy().withDeploy(d).withCost(1))
       val invalidHash      = ByteString.copyFromUtf8("invalid")
       for {
@@ -1267,7 +1267,7 @@ class ValidationTest
       HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       val deploys =
-        Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY, minTtl))
+        Vector(ProtoUtil.deploy(System.currentTimeMillis, ByteString.EMPTY))
       implicit val deploySelection: DeploySelection[Task] = DeploySelection.create[Task](
         5 * 1024 * 1024
       )

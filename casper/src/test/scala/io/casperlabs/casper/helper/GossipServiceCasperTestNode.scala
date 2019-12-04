@@ -111,8 +111,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       sk: PrivateKey,
       storageSize: Long = 1024L * 1024 * 10,
-      faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute
+      faultToleranceThreshold: Double = 0.1
   )(
       implicit
       concurrentF: Concurrent[F],
@@ -154,8 +153,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             semaphoreMap,
             semaphore,
             relaying = relaying,
-            gossipService = new TestGossipService[F](),
-            minTtl = minTtl
+            gossipService = new TestGossipService[F]()
           ) (
             concurrentF,
             blockStorage,
@@ -178,7 +176,6 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
       transforms: Seq[TransformEntry],
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
-      minTtl: FiniteDuration = 1.minute,
       maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None
   )(
       implicit
@@ -245,8 +242,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   semaphore,
                   relaying = relaying,
                   gossipService = gossipService,
-                  maybeMakeEE = maybeMakeEE,
-                  minTtl = minTtl
+                  maybeMakeEE = maybeMakeEE
                 ) (
                   concurrentF,
                   blockStorage,
