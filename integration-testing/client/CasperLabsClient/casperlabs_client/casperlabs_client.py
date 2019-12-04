@@ -1025,7 +1025,7 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
-        ttl_millis=args.ttl,
+        ttl_millis=args.ttl_millis,
         dependencies=args.dependencies,
     )
     if private_key_accepted:
