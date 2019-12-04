@@ -2,12 +2,15 @@ package io.casperlabs.client.configuration
 
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
+
+import scala.concurrent.duration.FiniteDuration
 
 object Options {
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
@@ -110,7 +113,8 @@ object Options {
       descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false,
-      noshort = true
+      noshort = true,
+      default = Some(FiniteDuration(1, TimeUnit.HOURS).toMillis.toInt) // Make sure default value is aligned with minTTL in `default-configuration.toml` file.
     )
 
     val dependencies = opt[List[String]](
