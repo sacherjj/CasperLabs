@@ -843,7 +843,7 @@ object MultiParentCasperImpl {
         relaying: gossiping.Relaying[F]
     ): Broadcaster[F] = new Broadcaster[F] {
 
-      private val maybeOwnPublickKey = validatorId map {
+      private val maybeOwnPublicKey = validatorId map {
         case ValidatorIdentity(publicKey, _, _) =>
           ByteString.copyFrom(publicKey)
       }
@@ -854,7 +854,7 @@ object MultiParentCasperImpl {
       ): F[Unit] =
         status match {
           case Valid | EquivocatedBlock =>
-            maybeOwnPublickKey match {
+            maybeOwnPublicKey match {
               case Some(key) if key == block.getHeader.validatorPublicKey =>
                 relaying.relay(List(block.blockHash)).void
               case _ =>
