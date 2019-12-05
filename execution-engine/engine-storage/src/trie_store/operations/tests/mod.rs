@@ -587,6 +587,38 @@ where
     Ok(ret)
 }
 
+fn check_keys<K, V, T, S, E>(
+    correlation_id: CorrelationId,
+    txn: &T,
+    store: &S,
+    root: &Blake2bHash,
+    leaves: &[Trie<K, V>],
+) -> Result<bool, E>
+where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug + Clone + Ord,
+    V: ToBytes + FromBytes + Eq + std::fmt::Debug + Copy,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error>,
+    E: From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let expected = {
+        let mut tmp = leaves
+            .iter()
+            .filter_map(Trie::key)
+            .cloned()
+            .collect::<Vec<K>>();
+        tmp.sort();
+        tmp
+    };
+    let actual = {
+        let mut tmp = operations::keys::<_, _, _, _, E>(correlation_id, txn, store, root)?;
+        tmp.sort();
+        tmp
+    };
+    Ok(expected == actual)
+}
+
 fn check_leaves<'a, K, V, R, S, E>(
     correlation_id: CorrelationId,
     environment: &'a R,
@@ -616,6 +648,14 @@ where
             .into_iter()
             .all(|b| !b)
     );
+
+    assert!(check_keys::<_, _, _, _, E>(
+        correlation_id,
+        &txn,
+        store,
+        root,
+        present
+    )?);
 
     txn.commit()?;
     Ok(())
