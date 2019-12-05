@@ -134,39 +134,39 @@ fn public_key_arb() -> impl Strategy<Value = PublicKey> {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Key {
+pub enum TestKey {
     Account(PublicKey),
     Hash([u8; KEY_HASH_SIZE]),
     URef(URef),
     Local([u8; KEY_LOCAL_SIZE]),
 }
 
-impl Key {
+impl TestKey {
     pub fn local(seed: [u8; LOCAL_SEED_SIZE], key_bytes: &[u8]) -> Self {
         let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
         let hash: [u8; KEY_LOCAL_SIZE] = Blake2bHash::new(&bytes_to_hash).into();
-        Key::Local(hash)
+        TestKey::Local(hash)
     }
 }
 
-impl ToBytes for Key {
+impl ToBytes for TestKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         // TODO: use Vec::with_capacity
         let mut ret = Vec::new();
         match self {
-            Key::Account(public_key) => {
+            TestKey::Account(public_key) => {
                 ret.push(KEY_ACCOUNT_ID);
                 ret.extend(&public_key.to_bytes()?)
             }
-            Key::Hash(hash) => {
+            TestKey::Hash(hash) => {
                 ret.push(KEY_HASH_ID);
                 ret.extend(&hash.to_bytes()?)
             }
-            Key::URef(uref) => {
+            TestKey::URef(uref) => {
                 ret.push(KEY_UREF_ID);
                 ret.extend(&uref.to_bytes()?)
             }
-            Key::Local(local) => {
+            TestKey::Local(local) => {
                 ret.push(KEY_LOCAL_ID);
                 ret.extend(&local.to_bytes()?)
             }
@@ -175,37 +175,38 @@ impl ToBytes for Key {
     }
 }
 
-impl FromBytes for Key {
+impl FromBytes for TestKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (id, rem): (u8, &[u8]) = FromBytes::from_bytes(bytes)?;
         match id {
             KEY_ACCOUNT_ID => {
                 let (public_key, rem): (PublicKey, &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((Key::Account(public_key), rem))
+                Ok((TestKey::Account(public_key), rem))
             }
             KEY_HASH_ID => {
                 let (hash, rem): ([u8; KEY_HASH_SIZE], &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((Key::Hash(hash), rem))
+                Ok((TestKey::Hash(hash), rem))
             }
             KEY_UREF_ID => {
                 let (uref, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((Key::URef(uref), rem))
+                Ok((TestKey::URef(uref), rem))
             }
             KEY_LOCAL_ID => {
                 let (local, rem): ([u8; KEY_LOCAL_SIZE], &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((Key::Local(local), rem))
+                Ok((TestKey::Local(local), rem))
             }
             _ => Err(bytesrepr::Error::FormattingError),
         }
     }
 }
 
-fn key_arb() -> impl Strategy<Value = Key> {
+fn key_arb() -> impl Strategy<Value = TestKey> {
     prop_oneof![
-        public_key_arb().prop_map(Key::Account),
-        gens::u8_slice_32().prop_map(Key::Hash),
-        gens::uref_arb().prop_map(Key::URef),
-        (gens::u8_slice_32(), gens::u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))
+        public_key_arb().prop_map(TestKey::Account),
+        gens::u8_slice_32().prop_map(TestKey::Hash),
+        gens::uref_arb().prop_map(TestKey::URef),
+        (gens::u8_slice_32(), gens::u8_slice_32())
+            .prop_map(|(seed, key)| TestKey::local(seed, &key))
     ]
 }
 
