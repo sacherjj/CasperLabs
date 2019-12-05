@@ -118,19 +118,20 @@ where
         + AsPrimitive<U256>
         + AsPrimitive<U512>,
 {
+    let expected_type_name = stored_value.type_name();
     let cl_value = stored_value
         .as_cl_value()
-        .ok_or_else(|| TypeMismatch::new("CLValue".to_string(), stored_value.type_name()))?;
+        .ok_or_else(|| TypeMismatch::new("CLValue".to_string(), expected_type_name))?;
 
     match cl_value.cl_type() {
-        CLType::I32 => do_wrapping_addition::<i32, _>(cl_value, to_add),
-        CLType::I64 => do_wrapping_addition::<i64, _>(cl_value, to_add),
-        CLType::U8 => do_wrapping_addition::<u8, _>(cl_value, to_add),
-        CLType::U32 => do_wrapping_addition::<u32, _>(cl_value, to_add),
-        CLType::U64 => do_wrapping_addition::<u64, _>(cl_value, to_add),
-        CLType::U128 => do_wrapping_addition::<U128, _>(cl_value, to_add),
-        CLType::U256 => do_wrapping_addition::<U256, _>(cl_value, to_add),
-        CLType::U512 => do_wrapping_addition::<U512, _>(cl_value, to_add),
+        CLType::I32 => do_wrapping_addition::<i32, _>(&cl_value, to_add),
+        CLType::I64 => do_wrapping_addition::<i64, _>(&cl_value, to_add),
+        CLType::U8 => do_wrapping_addition::<u8, _>(&cl_value, to_add),
+        CLType::U32 => do_wrapping_addition::<u32, _>(&cl_value, to_add),
+        CLType::U64 => do_wrapping_addition::<u64, _>(&cl_value, to_add),
+        CLType::U128 => do_wrapping_addition::<U128, _>(&cl_value, to_add),
+        CLType::U256 => do_wrapping_addition::<U256, _>(&cl_value, to_add),
+        CLType::U512 => do_wrapping_addition::<U512, _>(&cl_value, to_add),
         other => {
             let expected = format!("integral type compatible with {}", any::type_name::<Y>());
             let found = format!("{:?}", other);

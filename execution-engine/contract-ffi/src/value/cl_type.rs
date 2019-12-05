@@ -755,20 +755,21 @@ mod tests {
 
     use super::*;
     use crate::{
-        bytesrepr::{FromBytes, ToBytes},
+        bytesrepr::{FromBytes, IntoBytes, ToBytes},
         uref::AccessRights,
         value::CLValue,
     };
 
     fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug>(value: &T) {
         let cl_value = CLValue::from_t(value).unwrap();
-
-        let serialized_cl_value = cl_value.to_bytes().unwrap();
-        assert_eq!(serialized_cl_value.len(), cl_value.serialized_len());
+        let expected_len = cl_value.serialized_len();
+        let serialized_cl_value = cl_value.into_bytes().unwrap();
+        assert_eq!(serialized_cl_value.len(), expected_len);
         let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
-        assert_eq!(cl_value, parsed_cl_value);
+        let expected_value = CLValue::from_t(value).unwrap();
+        assert_eq!(expected_value, parsed_cl_value);
 
-        let parsed_value = CLValue::to_t(&cl_value).unwrap();
+        let parsed_value = CLValue::to_t(&expected_value).unwrap();
         assert_eq!(*value, parsed_value);
     }
 
@@ -892,12 +893,13 @@ mod tests {
                     };
 
                     let cl_value = CLValue::from_t(&array).unwrap();
+                    let expected = CLValue::from_t(&array).unwrap();
 
-                    let serialized_cl_value = cl_value.to_bytes().unwrap();
+                    let serialized_cl_value = cl_value.into_bytes().unwrap();
                     let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
-                    assert_eq!(cl_value, parsed_cl_value);
+                    assert_eq!(expected, parsed_cl_value);
 
-                    let parsed_value: [u64; $N] = CLValue::to_t(&cl_value).unwrap();
+                    let parsed_value: [u64; $N] = CLValue::to_t(&expected).unwrap();
                     for i in 0..$N {
                         assert_eq!(array[i], parsed_value[i]);
                     }

@@ -55,7 +55,7 @@ pub fn write<T: CLTyped + ToBytes>(turef: TURef<T>, value: &T) {
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&key);
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
-    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::to_ptr(&cl_value);
+    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::into_ptr(cl_value);
 
     unsafe {
         ext_ffi::write(key_ptr, key_size, cl_value_ptr, cl_value_size);
@@ -69,7 +69,7 @@ pub fn write_local<K: ToBytes, V: CLTyped + ToBytes>(key: K, value: &V) {
     let key_bytes_size = key_bytes.len();
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
-    let (cl_value_ptr, cl_value_size, _bytes) = contract_api::to_ptr(&cl_value);
+    let (cl_value_ptr, cl_value_size, _bytes) = contract_api::into_ptr(cl_value);
 
     unsafe {
         ext_ffi::write_local(key_bytes_ptr, key_bytes_size, cl_value_ptr, cl_value_size);
@@ -82,7 +82,7 @@ pub fn add<T: CLTyped + ToBytes>(turef: TURef<T>, value: &T) {
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&key);
 
     let cl_value = CLValue::from_t(value).unwrap_or_revert();
-    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::to_ptr(&cl_value);
+    let (cl_value_ptr, cl_value_size, _bytes2) = contract_api::into_ptr(cl_value);
 
     unsafe {
         // Could panic if `value` cannot be added to the given value in memory.
@@ -117,7 +117,7 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 pub fn new_turef<T: CLTyped + ToBytes>(init: &T) -> TURef<T> {
     let key_ptr = contract_api::alloc_bytes(UREF_SIZE);
     let cl_value = CLValue::from_t(init).unwrap_or_revert();
-    let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::to_ptr(&cl_value);
+    let (cl_value_ptr, cl_value_size, _cl_value_bytes) = contract_api::into_ptr(cl_value);
     let bytes = unsafe {
         ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE` access
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)

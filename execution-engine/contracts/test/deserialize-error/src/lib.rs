@@ -9,7 +9,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::ToBytes,
+    bytesrepr::{IntoBytes, ToBytes},
     contract_api::{storage, ContractRef},
     key::Key,
 };
@@ -23,6 +23,14 @@ pub extern "C" fn do_nothing() {
 // Attacker copied to_ptr from `alloc_utils` as it was private
 fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
     let bytes = t.to_bytes().expect("Unable to serialize data");
+    let ptr = bytes.as_ptr();
+    let size = bytes.len();
+    (ptr, size, bytes)
+}
+
+// Attacker copied to_ptr from `alloc_utils` as it was private
+fn into_ptr<T: IntoBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
+    let bytes = t.into_bytes().expect("Unable to serialize data");
     let ptr = bytes.as_ptr();
     let size = bytes.len();
     (ptr, size, bytes)
@@ -47,7 +55,8 @@ mod malicious_ffi {
 fn my_call_contract<A: ArgsParser>(c_ptr: ContractRef, args: &A) {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = to_ptr(&contract_key);
-    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args).map(|args| to_ptr(&args)).unwrap();
+    let (args_ptr, args_size, _bytes2) =
+        ArgsParser::parse(args).map(|args| into_ptr(args)).unwrap();
 
     let mut extra_urefs = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
     let _res_size = unsafe {

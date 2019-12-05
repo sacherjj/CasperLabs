@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, iter};
 use test::{black_box, Bencher};
 
 use casperlabs_contract_ffi::{
-    bytesrepr::{self, FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, IntoBytes, ToBytes},
     key::Key,
     uref::{AccessRights, URef},
     value::{CLTyped, CLValue, U128, U256, U512},
@@ -328,7 +328,7 @@ fn deserialize_access_rights_add_write(b: &mut Bencher) {
 }
 
 fn serialize_cl_value<T: CLTyped + ToBytes>(raw_value: &T) -> Vec<u8> {
-    CLValue::from_t(raw_value).unwrap().to_bytes().unwrap()
+    CLValue::from_t(raw_value).unwrap().into_bytes().unwrap()
 }
 
 fn benchmark_deserialization<T: CLTyped + ToBytes + FromBytes>(b: &mut Bencher, raw_value: &T) {

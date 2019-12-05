@@ -13,7 +13,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{self, ToBytes, U32_SIZE},
+    bytesrepr::{self, IntoBytes, ToBytes, U32_SIZE},
     contract_api::{
         system::{TransferResult, TransferredTo},
         Error as ApiError,
@@ -440,7 +440,7 @@ where
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let buf = self.host_buf.take().ok_or(Error::HostBufferEmpty)?;
-        let serialized_buf = buf.to_bytes().map_err(Error::BytesRepr)?;
+        let serialized_buf = buf.into_bytes().map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &serialized_buf)
             .map_err(|e| Error::Interpreter(e).into())

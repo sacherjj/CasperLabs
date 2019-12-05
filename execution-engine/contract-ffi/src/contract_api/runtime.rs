@@ -22,7 +22,7 @@ use crate::{
 /// Note this function is only relevant to contracts stored on chain which return a value to their
 /// caller. The return value of a directly deployed contract is never looked at.
 pub fn ret(value: CLValue, extra_urefs: Vec<URef>) -> ! {
-    let (ptr, size, _bytes) = contract_api::to_ptr(&value);
+    let (ptr, size, _bytes) = contract_api::into_ptr(value);
     let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(&extra_urefs);
     unsafe {
         ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
@@ -49,7 +49,7 @@ pub fn call_contract<A: ArgsParser>(
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
-        .map(|args| contract_api::to_ptr(&args))
+        .map(|args| contract_api::into_ptr(args))
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
     let res_size = unsafe {
