@@ -35,6 +35,10 @@ pub trait ToBytes {
     }
 }
 
+pub trait IntoBytes {
+    fn into_bytes(self) -> Result<Vec<u8>, Error>;
+}
+
 pub trait FromBytes: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error>;
     fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
@@ -1034,189 +1038,189 @@ mod proptests {
     use crate::{bytesrepr, gens::*};
 
     proptest! {
-        #[test]
-        fn test_bool(u in any::<bool>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_bool(u in any::<bool>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_u8(u in any::<u8>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_u8(u in any::<u8>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_u32(u in any::<u32>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_u32(u in any::<u32>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_i32(u in any::<i32>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_i32(u in any::<i32>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_u64(u in any::<u64>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_u64(u in any::<u64>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_i64(u in any::<i64>()) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_i64(u in any::<i64>()) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_u8_slice_32(s in u8_slice_32()) {
-            bytesrepr::test_serialization_roundtrip(&s)
-        }
+            #[test]
+            fn test_u8_slice_32(s in u8_slice_32()) {
+                bytesrepr::test_serialization_roundtrip(&s)
+            }
 
-        #[test]
-        fn test_vec_u8(u in vec(any::<u8>(), 1..100)) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_vec_u8(u in vec(any::<u8>(), 1..100)) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_vec_i32(u in vec(any::<i32>(), 1..100)) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_vec_i32(u in vec(any::<i32>(), 1..100)) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_vec_vec_u8(u in vec(vec(any::<u8>(), 1..100), 10)) {
-            bytesrepr::test_serialization_roundtrip(&u)
-        }
+            #[test]
+            fn test_vec_vec_u8(u in vec(vec(any::<u8>(), 1..100), 10)) {
+                bytesrepr::test_serialization_roundtrip(&u)
+            }
 
-        #[test]
-        fn test_uref_map(m in named_keys_arb(20)) {
-            bytesrepr::test_serialization_roundtrip(&m)
-        }
+            #[test]
+            fn test_uref_map(m in named_keys_arb(20)) {
+                bytesrepr::test_serialization_roundtrip(&m)
+            }
 
-        #[test]
-        fn test_array_u8_32(arr in any::<[u8; 32]>()) {
-            bytesrepr::test_serialization_roundtrip(&arr)
-        }
+            #[test]
+            fn test_array_u8_32(arr in any::<[u8; 32]>()) {
+                bytesrepr::test_serialization_roundtrip(&arr)
+            }
 
-        #[test]
-        fn test_string(s in "\\PC*") {
-            bytesrepr::test_serialization_roundtrip(&s)
-        }
+            #[test]
+            fn test_string(s in "\\PC*") {
+                bytesrepr::test_serialization_roundtrip(&s)
+            }
 
-        #[test]
-        fn test_option(o in proptest::option::of(key_arb())) {
-            bytesrepr::test_serialization_roundtrip(&o)
-        }
+            #[test]
+            fn test_option(o in proptest::option::of(key_arb())) {
+                bytesrepr::test_serialization_roundtrip(&o)
+            }
 
-        #[test]
-        fn test_unit(unit in Just(())) {
-            bytesrepr::test_serialization_roundtrip(&unit)
-        }
+            #[test]
+            fn test_unit(unit in Just(())) {
+                bytesrepr::test_serialization_roundtrip(&unit)
+            }
 
-        #[test]
-        fn test_u128_serialization(u in u128_arb()) {
-            bytesrepr::test_serialization_roundtrip(&u);
-        }
+            #[test]
+            fn test_u128_serialization(u in u128_arb()) {
+                bytesrepr::test_serialization_roundtrip(&u);
+            }
 
-        #[test]
-        fn test_u256_serialization(u in u256_arb()) {
-            bytesrepr::test_serialization_roundtrip(&u);
-        }
+            #[test]
+            fn test_u256_serialization(u in u256_arb()) {
+                bytesrepr::test_serialization_roundtrip(&u);
+            }
 
-        #[test]
-        fn test_u512_serialization(u in u512_arb()) {
-            bytesrepr::test_serialization_roundtrip(&u);
-        }
+            #[test]
+            fn test_u512_serialization(u in u512_arb()) {
+                bytesrepr::test_serialization_roundtrip(&u);
+            }
 
-        #[test]
-        fn test_key_serialization(key in key_arb()) {
-            bytesrepr::test_serialization_roundtrip(&key);
-        }
+            #[test]
+            fn test_key_serialization(key in key_arb()) {
+                bytesrepr::test_serialization_roundtrip(&key);
+            }
+    //
+    //        #[test]
+    //        fn test_cl_value_serialization(cl_value in cl_value_arb()) {
+    //            bytesrepr::test_serialization_roundtrip(&cl_value);
+    //        }
 
-        #[test]
-        fn test_cl_value_serialization(cl_value in cl_value_arb()) {
-            bytesrepr::test_serialization_roundtrip(&cl_value);
-        }
+            #[test]
+            fn test_access_rights(access_right in access_rights_arb()) {
+                bytesrepr::test_serialization_roundtrip(&access_right)
+            }
 
-        #[test]
-        fn test_access_rights(access_right in access_rights_arb()) {
-            bytesrepr::test_serialization_roundtrip(&access_right)
-        }
+            #[test]
+            fn test_uref(uref in uref_arb()) {
+                bytesrepr::test_serialization_roundtrip(&uref);
+            }
 
-        #[test]
-        fn test_uref(uref in uref_arb()) {
-            bytesrepr::test_serialization_roundtrip(&uref);
-        }
+            #[test]
+            fn test_public_key(pk in public_key_arb()) {
+                bytesrepr::test_serialization_roundtrip(&pk)
+            }
 
-        #[test]
-        fn test_public_key(pk in public_key_arb()) {
-            bytesrepr::test_serialization_roundtrip(&pk)
-        }
+            #[test]
+            fn test_result(result in result_arb()) {
+                bytesrepr::test_serialization_roundtrip(&result)
+            }
 
-        #[test]
-        fn test_result(result in result_arb()) {
-            bytesrepr::test_serialization_roundtrip(&result)
-        }
+            #[test]
+            fn test_phase_serialization(phase in phase_arb()) {
+                bytesrepr::test_serialization_roundtrip(&phase)
+            }
 
-        #[test]
-        fn test_phase_serialization(phase in phase_arb()) {
-            bytesrepr::test_serialization_roundtrip(&phase)
-        }
+            #[test]
+            fn test_protocol_version(protocol_version in protocol_version_arb()) {
+                bytesrepr::test_serialization_roundtrip(&protocol_version)
+            }
 
-        #[test]
-        fn test_protocol_version(protocol_version in protocol_version_arb()) {
-            bytesrepr::test_serialization_roundtrip(&protocol_version)
-        }
+            #[test]
+            fn test_sem_ver(sem_ver in sem_ver_arb()) {
+                bytesrepr::test_serialization_roundtrip(&sem_ver)
+            }
 
-        #[test]
-        fn test_sem_ver(sem_ver in sem_ver_arb()) {
-            bytesrepr::test_serialization_roundtrip(&sem_ver)
-        }
+            #[test]
+            fn test_tuple1(t in (any::<u8>(),)) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple1(t in (any::<u8>(),)) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple2(t in (any::<u8>(),any::<u32>())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple2(t in (any::<u8>(),any::<u32>())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple3(t in (any::<u8>(),any::<u32>(),any::<i32>())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple3(t in (any::<u8>(),any::<u32>(),any::<i32>())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple4(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple4(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple5(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple5(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple6(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple6(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple7(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()))) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple7(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()))) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple8(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a")) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple8(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a")) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
+            #[test]
+            fn test_tuple9(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
 
-        #[test]
-        fn test_tuple9(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb())) {
-            bytesrepr::test_serialization_roundtrip(&t)
+            #[test]
+            fn test_tuple10(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb(), public_key_arb())) {
+                bytesrepr::test_serialization_roundtrip(&t)
+            }
         }
-
-        #[test]
-        fn test_tuple10(t in (any::<u8>(),any::<u32>(),any::<i32>(), any::<u64>(), u8_slice_32(), any::<[u8; 32]>(), Just(()), "a", uref_arb(), public_key_arb())) {
-            bytesrepr::test_serialization_roundtrip(&t)
-        }
-    }
 }

@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, iter};
 use test::{black_box, Bencher};
 
 use casperlabs_contract_ffi::{
-    bytesrepr::{self, FromBytes, ToBytes},
+    bytesrepr::{self, FromBytes, IntoBytes, ToBytes},
     key::Key,
     uref::{AccessRights, URef},
     value::{CLTyped, CLValue, U128, U256, U512},

@@ -9,7 +9,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::ToBytes,
+    bytesrepr::{IntoBytes, ToBytes},
     contract_api::{storage, ContractRef},
     key::Key,
 };
@@ -22,6 +22,14 @@ pub extern "C" fn do_nothing() {
 
 // Attacker copied to_ptr from `alloc_utils` as it was private
 fn to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
+    let bytes = t.into_bytes().expect("Unable to serialize data");
+    let ptr = bytes.as_ptr();
+    let size = bytes.len();
+    (ptr, size, bytes)
+}
+
+// Attacker copied to_ptr from `alloc_utils` as it was private
+fn into_ptr<T: IntoBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
     let bytes = t.into_bytes().expect("Unable to serialize data");
     let ptr = bytes.as_ptr();
     let size = bytes.len();
