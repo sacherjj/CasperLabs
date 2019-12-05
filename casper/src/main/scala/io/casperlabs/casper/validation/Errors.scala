@@ -60,13 +60,13 @@ object Errors {
     final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: FiniteDuration)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} shorter than minimum valid time to live ${minTTL.toMillis}"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is shorter than minimum valid time to live ${minTTL.toMillis}"
     }
 
     final case class TimeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} longer than maximum valid time to live $maxTTL"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is longer than maximum valid time to live $maxTTL"
     }
 
     final case class TooManyDependencies(

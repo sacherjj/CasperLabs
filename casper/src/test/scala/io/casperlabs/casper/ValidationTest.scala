@@ -65,11 +65,10 @@ class ValidationTest
     with ArbitraryConsensus {
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val versions = {
+  implicit val versions =
     CasperLabsProtocol.unsafe[Task](
-      (0L, state.ProtocolVersion(1), 24 * 60 * 60 * 1000, 10)
+      (0L, state.ProtocolVersion(1), Some(DeployConfig(24 * 60 * 60 * 1000, 10)))
     )
-  }
   import DeriveValidation._
 
   // Necessary because errors are returned via Sync which has an error type fixed to _ <: Throwable.

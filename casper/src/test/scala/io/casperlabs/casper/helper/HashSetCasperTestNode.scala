@@ -16,6 +16,7 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
@@ -317,8 +318,12 @@ object HashSetCasperTestNode {
     (
       0L,
       consensus.state.ProtocolVersion(1),
-      24 * 60 * 60 * 1000, // 1 day
-      10
+      Some(
+        DeployConfig(
+          24 * 60 * 60 * 1000, // 1 day
+          10
+        )
+      )
     )
   )
 }

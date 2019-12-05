@@ -49,6 +49,7 @@ def check_upgrades_applied(network):
         "--from", account.public_key_hex,
         "--private-key", cli.private_key_path(account),
         "--public-key", cli.public_key_path(account),
+        "--ttl-millis", 86400000
     )
 
     # First deploy

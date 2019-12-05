@@ -10,8 +10,6 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import simulacrum.typeclass
 
-import scala.util.Try
-
 class ProtocolVersions private (l: List[Config]) {
   private def configAtHeight(blockHeight: Long): Config =
     l.collectFirst {
@@ -37,6 +35,9 @@ object ProtocolVersions {
       version: state.ProtocolVersion,
       deployConfig: DeployConfig
   )
+
+  implicit val protocolVersionOrdering: Ordering[state.ProtocolVersion] =
+    Ordering.by[state.ProtocolVersion, (Int, Int, Int)](pv => (pv.major, pv.minor, pv.patch))
 
   // Order thresholds from newest to oldest descending.
   private implicit val blockThresholdOrdering: Ordering[Config] =
@@ -104,8 +105,19 @@ object ProtocolVersions {
 
 @typeclass
 trait CasperLabsProtocol[F[_]] {
+
+  /** Returns a [[state.ProtocolVersion]] at block height. */
   def versionAt(blockHeight: Long): F[state.ProtocolVersion]
+
+  /** Returns a [[state.ProtocolVersion]] at specific block. */
   def protocolFromBlock(b: Block): F[state.ProtocolVersion]
+
+  /** Returns a configuration at specific block height.
+    *
+    * Note that this "merges" all configurations up to that block height.
+    * Specifically if certain conifguration parameter isn't defined at latest
+    * upgrade point, latest one will be used.
+    */
   def configAt(blockHeight: Long): F[Config]
 }
 
@@ -113,42 +125,65 @@ object CasperLabsProtocol {
   import ProtocolVersions.Config
 
   def unsafe[F[_]: Applicative](
-      versions: (Long, state.ProtocolVersion, Int, Int)*
+      versions: (Long, state.ProtocolVersion, Option[ipc.ChainSpec.DeployConfig])*
   ): CasperLabsProtocol[F] = {
-    val configs = versions.map {
-      case (rank, protocolVersion, maxTTL, maxDependencies) =>
-        Config(rank, protocolVersion, DeployConfig(maxTTL, maxDependencies))
-    }
+    def toDeployConfig(ipcDeployConfig: Option[ipc.ChainSpec.DeployConfig]): DeployConfig =
+      ipcDeployConfig
+        .map(d => DeployConfig(d.maxTtlMillis, d.maxDependencies))
+        .getOrElse(DeployConfig())
 
-    val underlying = ProtocolVersions(configs.toList)
+    def toConfig(
+        blockHeightMin: Long,
+        protocolVersion: state.ProtocolVersion,
+        deployConfig: Option[ipc.ChainSpec.DeployConfig]
+    ): Config =
+      Config(blockHeightMin, protocolVersion, toDeployConfig(deployConfig))
+
+    val underlying = ProtocolVersions(versions.map {
+      case (rank, protocolVersion, ipcDeployConfig) =>
+        Config(rank, protocolVersion, toDeployConfig(ipcDeployConfig))
+    }.toList)
+
+    type T[A1] = (Long, state.ProtocolVersion, Option[A1])
+    def merge[A1](c1: T[A1], c2: T[A1]): T[A1] = (c2._1, c2._2, c2._3.orElse(c1._3))
+
+    // Merges configs, starting from Genesis and applying changes from later configs.
+    // Ex: Genesis => (Upgrade1 or Genesis) => (Upgrade2 or Upgrade1 or Genesis) => …
+    val merged =
+      ProtocolVersions(
+        versions
+          .sortBy(_._1)
+          .scan(versions.head)(merge)
+          .map((toConfig _).tupled)
+          .toList
+          .drop(1) // We have to drop the first element since `scan` will return Genesis twice (Genesis, Genesis or Genesis, …).
+      )
 
     new CasperLabsProtocol[F] {
-      def versionAt(blockHeight: Long)           = underlying.versionAt(blockHeight).pure[F]
-      def protocolFromBlock(b: Block)            = underlying.fromBlock(b).pure[F]
-      def configAt(blockHeight: Long): F[Config] = underlying.configAt(blockHeight).pure[F]
-
+      def versionAt(blockHeight: Long): F[state.ProtocolVersion] =
+        underlying.versionAt(blockHeight).pure[F]
+      def protocolFromBlock(b: Block): F[state.ProtocolVersion] = underlying.fromBlock(b).pure[F]
+      def configAt(blockHeight: Long): F[Config]                = merged.configAt(blockHeight).pure[F]
     }
   }
 
   def apply[F[_]: MonadThrowable](
-      configs: (Long, state.ProtocolVersion, Int, Int)*
+      configs: (Long, state.ProtocolVersion, Option[ipc.ChainSpec.DeployConfig])*
   ): F[CasperLabsProtocol[F]] =
-    MonadThrowable[F].fromTry(Try(unsafe(configs: _*)))
+    MonadThrowable[F].catchNonFatal(unsafe(configs: _*))
 
   def fromChainSpec[F[_]: MonadThrowable](spec: ipc.ChainSpec): F[CasperLabsProtocol[F]] = {
     val versions = (
       0L,
       spec.getGenesis.getProtocolVersion,
-      spec.getGenesis.getDeployConfig.maxTtlMillis,
-      spec.getGenesis.getDeployConfig.maxDependencies
+      spec.getGenesis.deployConfig
     ) +:
       spec.upgrades.map(
         up =>
           (
             up.getActivationPoint.rank,
             up.getProtocolVersion,
-            up.getNewDeployConfig.maxTtlMillis,
-            up.getNewDeployConfig.maxDependencies
+            up.newDeployConfig
           )
       )
     apply(versions: _*)
