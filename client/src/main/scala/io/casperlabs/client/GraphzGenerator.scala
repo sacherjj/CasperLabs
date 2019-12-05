@@ -86,17 +86,15 @@ object GraphzGenerator {
       // draw invisible edges from genesis block or the fake genesis block
       // to first node of each validator for alignment
       _ <- (if (genesisBlocks.size > 0) genesisBlocks else fakeGenesisBlocks)
-            .map(
+            .flatMap(
               genesisBlock =>
-                validatorsList.map {
+                validatorsList.flatMap {
                   case (id, blocks) =>
                     nodesForRank(id, firstRank, blocks, lastFinalizedBlockHash).map(
                       node => (genesisBlock, node)
                     )
                 }
             )
-            .flatten
-            .flatten
             .traverse {
               case (genesis_block, node) =>
                 g.edge(
@@ -242,16 +240,14 @@ object GraphzGenerator {
 
       // Draw invisible edges from nodes rank i to nodes rank i+1 for alignment.
       _ <- ranks.reverse.tail.reverse
-            .map(
+            .flatMap(
               rank =>
-                nodesForRank(id, rank, blocks, lastFinalizedBlockHash).map(n1 => {
+                nodesForRank(id, rank, blocks, lastFinalizedBlockHash).flatMap(n1 => {
                   nodesForRank(id, rank + 1, blocks, lastFinalizedBlockHash).map(n2 => {
                     (n1, n2)
                   })
                 })
             )
-            .flatten
-            .flatten
             .traverse {
               case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Constant.Invisible))
             }
