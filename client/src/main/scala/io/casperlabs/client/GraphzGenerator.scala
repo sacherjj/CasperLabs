@@ -13,7 +13,7 @@ import io.casperlabs.graphz._
 
 package object Constant {
   // For debugging it is usefull to change Invis to Dotted.
-  val Invisible = Dotted
+  val Invisible = Invis
 }
 
 final case class ValidatorBlock(
@@ -52,6 +52,17 @@ object GraphzGenerator {
   ): G[Graphz[G]] = {
     val acc = toDagInfo[G](blockInfos)
 
+    val allBlockHashes = blockInfos.map(b => hexShort(b.getSummary.blockHash)).toSet
+
+    val genesisBlocks =
+      blockInfos
+        .map(_.getSummary)
+        .filter(_.validatorPublicKey.size == 0)
+        .take(1)
+        .map(b => hexShort(b.blockHash))
+
+    val fakeGenesisBlocks = if (genesisBlocks.size > 0) List.empty else List("alignment_node")
+
     val lastFinalizedBlockHash =
       blockInfos
         .find(_.getStatus.faultTolerance > 0)
@@ -65,38 +76,34 @@ object GraphzGenerator {
 
     for {
       g <- initGraph[G]("dag")
-      // block hashes of parents of the very first rank
-      allAncestors = validatorsList
-        .map(_._2.getOrElse(firstRank, List.empty[ValidatorBlock]))
-        .flatten
-        .map(_.parentsHashes)
-        .flatten
-        .distinct
-        .sorted
-      // draw ancestors first
-      _ <- allAncestors.traverse(
-            ancestor =>
-              g.node(
-                ancestor,
-                style = styleFor(ancestor, lastFinalizedBlockHash),
-                shape = Box
-              )
-          )
-      // create invisible edges from ancestors to first node in each cluster for proper alignment
-      _ <- validatorsList
-            .map {
-              case (id, blocks) =>
-                allAncestors.traverse(
-                  ancestor =>
-                    nodesForRank(id, firstRank, blocks, lastFinalizedBlockHash)
-                      .map(node => (node, ancestor))
-                )
-            }
+
+      // draw genesis block first, if there is any
+      _ <- genesisBlocks.traverse(b => g.node(b, style = Some(Bold), shape = Box))
+
+      // draw invisible fake genesis block if needed
+      _ <- fakeGenesisBlocks.traverse(b => g.node(b, style = Some(Constant.Invisible), shape = Box))
+
+      // draw invisible edges from genesis block or the fake genesis block
+      // to first node of each validator for alignment
+      _ <- (if (genesisBlocks.size > 0) genesisBlocks else fakeGenesisBlocks)
+            .map(
+              genesisBlock =>
+                validatorsList.map {
+                  case (id, blocks) =>
+                    nodesForRank(id, firstRank, blocks, lastFinalizedBlockHash).map(
+                      node => (genesisBlock, node)
+                    )
+                }
+            )
             .flatten
             .flatten
             .traverse {
-              case (node, ancestor) =>
-                g.edge(ancestor, node._2, style = Some(Constant.Invisible))
+              case (genesis_block, node) =>
+                g.edge(
+                  genesis_block,
+                  node._2,
+                  style = Some(Constant.Invisible)
+                )
             }
 
       // draw clusters per validator
@@ -107,10 +114,10 @@ object GraphzGenerator {
               )
           }
       // draw parent dependencies
-      _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
+      _ <- drawParentDependencies[G](g, validatorsList.map(_._2), allBlockHashes)
       // draw justification dotted lines
       _ <- config.showJustificationLines.fold(
-            drawJustificationDottedLines[G](g, validators),
+            drawJustificationDottedLines[G](g, validators, allBlockHashes),
             ().pure[G]
           )
       _ <- g.close
@@ -155,17 +162,20 @@ object GraphzGenerator {
 
   private def drawParentDependencies[G[_]: Applicative](
       g: Graphz[G],
-      validators: List[ValidatorsBlocks]
+      validators: List[ValidatorsBlocks],
+      allBlockHashes: Set[String]
   ): G[Unit] =
     validators
       .flatMap(_.values.toList)
       .flatten
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) =>
-          parentsHashes.zipWithIndex
+          parentsHashes
+            .filter(p => allBlockHashes.contains(p))
+            .zipWithIndex
             .traverse {
               case (p, index) =>
-                // Bolding the edge to main parent
+                // Bolding the edge to main parent.
                 val style = if (index == 0) {
                   Some(Bold)
                 } else {
@@ -178,7 +188,8 @@ object GraphzGenerator {
 
   private def drawJustificationDottedLines[G[_]: Applicative](
       g: Graphz[G],
-      validators: Map[String, ValidatorsBlocks]
+      validators: Map[String, ValidatorsBlocks],
+      allBlockHashes: Set[String]
   ): G[Unit] =
     validators.values.toList
       .flatMap(_.values.toList)
@@ -186,6 +197,7 @@ object GraphzGenerator {
       .traverse {
         case ValidatorBlock(blockHash, _, justifications) =>
           justifications
+            .filter(p => allBlockHashes.contains(p))
             .traverse(
               j =>
                 g.edge(
@@ -228,6 +240,7 @@ object GraphzGenerator {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
 
+      // Draw invisible edges from nodes rank i to nodes rank i+1 for alignment.
       _ <- ranks.reverse.tail.reverse
             .map(
               rank =>
