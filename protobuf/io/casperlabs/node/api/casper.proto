@@ -86,7 +86,9 @@ message DeployRequest {
 message GetBlockInfoRequest {
 	// Either the full or just the first few characters of the block hash in base16 encoding,
 	// so that it works with the client's redacted displays.
-	string block_hash_base16 = 1;
+    string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes block_hash = 3;
 	io.casperlabs.casper.consensus.info.BlockInfo.View view = 2;
 }
 
@@ -105,11 +107,15 @@ message StreamBlockInfosRequest {
 
 message GetDeployInfoRequest {
     string deploy_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes deploy_hash = 3;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
 }
 
 message StreamBlockDeploysRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes block_hash = 3;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
 }
 
@@ -130,11 +136,15 @@ message StateQuery {
 
 message GetBlockStateRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes block_hash = 3;
     StateQuery query = 2;
 }
 
 message BatchGetBlockStateRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes block_hash = 3;
     repeated StateQuery queries = 2;
 }
 
@@ -144,6 +154,8 @@ message BatchGetBlockStateResponse {
 
 message ListDeployInfosRequest {
     string account_public_key_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+	bytes account_public_key = 5;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
     uint32 page_size = 3;
     string page_token = 4;
