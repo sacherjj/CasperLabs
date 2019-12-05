@@ -227,9 +227,22 @@ object GraphzGenerator {
       _ <- nodes.traverse {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
-      _ <- nodes.zip(nodes.drop(1)).traverse {
-            case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Constant.Invisible))
-          }
+
+      _ <- ranks.reverse.tail.reverse
+            .map(
+              rank =>
+                nodesForRank(id, rank, blocks, lastFinalizedBlockHash).map(n1 => {
+                  nodesForRank(id, rank + 1, blocks, lastFinalizedBlockHash).map(n2 => {
+                    (n1, n2)
+                  })
+                })
+            )
+            .flatten
+            .flatten
+            .traverse {
+              case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Constant.Invisible))
+            }
+
       _ <- g.close
     } yield g
 
