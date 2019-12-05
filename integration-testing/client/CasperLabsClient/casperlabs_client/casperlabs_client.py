@@ -518,6 +518,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies: list = None,
+        chain_name: str = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -571,6 +572,7 @@ class CasperLabsClient:
             dependencies=dependencies
             and [bytes.fromhex(d) for d in dependencies]
             or [],
+            chain_name=chain_name or "",
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
@@ -609,6 +611,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
+        chain_name: str = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -640,6 +643,9 @@ class CasperLabsClient:
                               deploy will remain valid for.
         :dependencies:        List of deploy hashes (base16 encoded) which
                               must be executed before this deploy.
+        :chain_name:          Name of the chain to optionally restrict the
+                              deploy from being accidentally included
+                              anywhere else.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -660,6 +666,7 @@ class CasperLabsClient:
             session_uref=session_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
+            chain_name=chain_name,
         )
 
         pk = (
@@ -1057,6 +1064,7 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
         ttl_millis=args.ttl,
         dependencies=args.dependencies,
+        chain_name=args.chain_name,
     )
     if private_key_accepted:
         d["private_key"] = args.private_key or None
