@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.Monad
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -28,7 +29,7 @@ object Estimator {
       genesis: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocators: Set[Validator]
-  ): F[List[BlockHash]] = {
+  ): F[NonEmptyList[BlockHash]] = {
 
     /** Eliminate any latest message which has a descendant which is a latest message
       * of another validator, because in that case those descendants should be the tips. */
@@ -59,7 +60,7 @@ object Estimator {
 
     val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
 
-    NonEmptyList.fromList(latestMessagesFlattened).fold(List(genesis).pure[F]) { lmh =>
+    NonEmptyList.fromList(latestMessagesFlattened).fold(NonEmptyList.one(genesis).pure[F]) { lmh =>
       for {
         latestMessages <- lmh.toList.traverse(dag.lookup(_)).map(_.flatten)
         lca            <- DagOperations.latestCommonAncestorsMainParent(dag, lmh).timer("calculateLCA")
@@ -81,7 +82,7 @@ object Estimator {
         sortedSecParents = secondaryParents
           .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
           .reverse
-      } yield newMainParent +: sortedSecParents.map(_.messageHash)
+      } yield NonEmptyList(newMainParent, sortedSecParents.map(_.messageHash))
     }
   }
 

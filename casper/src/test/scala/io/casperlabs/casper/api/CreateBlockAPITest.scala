@@ -1,6 +1,7 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -82,10 +83,10 @@ class CreateBlockAPITest
     ): Task[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
         t1 <- (BlockAPI.deploy[Task](deploys.head) *> BlockAPI
-               .propose[Task](blockApiLock)).start
+               .propose[Task](blockApiLock, canCreateBallot = false)).start
         _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Task](deploys.last) *> BlockAPI
-               .propose[Task](blockApiLock)).start //should fail because other not done
+               .propose[Task](blockApiLock, canCreateBallot = false)).start //should fail because other not done
         r1 <- t1.join.attempt
         r2 <- t2.join.attempt
       } yield (r1, r2)
@@ -125,7 +126,7 @@ class CreateBlockAPITest
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
       } yield ()
 
     val test: Task[Unit] = for {
@@ -185,9 +186,9 @@ class CreateBlockAPITest
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
       } yield ()
 
     try {
@@ -220,7 +221,7 @@ class CreateBlockAPITest
     ): Task[Unit] =
       for {
         _         <- BlockAPI.deploy[Task](deploy)
-        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        blockHash <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         deployInfo <- BlockAPI.getDeployInfo[Task](
                        Base16.encode(deploy.deployHash.toByteArray),
                        DeployInfo.View.FULL
@@ -289,7 +290,7 @@ class CreateBlockAPITest
       for {
         _         <- BlockAPI.deploy[Task](mkDeploy("a"))
         _         <- BlockAPI.deploy[Task](mkDeploy("b"))
-        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        blockHash <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         deploys <- BlockAPI.getBlockDeploys[Task](
                     Base16.encode(blockHash.toByteArray),
                     DeployInfo.View.FULL
@@ -328,7 +329,8 @@ class CreateBlockAPITest
     ): Task[Unit] =
       for {
         _ <- deploys.traverse(d => {
-              BlockAPI.deploy[Task](d) *> BlockAPI.propose[Task](blockApiLock)
+              BlockAPI.deploy[Task](d) *> BlockAPI
+                .propose[Task](blockApiLock, canCreateBallot = false)
             })
         deployInfos <- DeployStorageReader[Task].getDeployInfos(deploys)
         _ <- deployInfos.traverse(
@@ -366,14 +368,14 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
       lfbHash: ByteString,
       latestMessagesHashes: Map[Validator, Set[ByteString]],
       equivocators: Set[Validator]
-  ): F[List[BlockHash]] =
+  ): F[NonEmptyList[BlockHash]] =
     underlying.estimator(dag, lfbHash, latestMessagesHashes, equivocators)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
 
-  override def createBlock: F[CreateBlockStatus] =
+  override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
     for {
-      result <- underlying.createBlock
+      result <- underlying.createMessage(canCreateBallot)
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 

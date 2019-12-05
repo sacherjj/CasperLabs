@@ -18,6 +18,7 @@ import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.models.Message
 import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
@@ -152,6 +153,65 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
+  it should "create a ballot when asked to create a message and there are no deploys" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    for {
+      _                 <- MultiParentCasper[Task].createMessage(canCreateBallot = false) shouldBeF NoNewDeploys
+      createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(block)    = createBlockResult
+      parents           = ProtoUtil.parentHashes(block)
+
+      _ = parents should have size 1
+      _ = parents.head shouldBe genesis.blockHash
+      _ = Message.fromBlock(block).get shouldBe a[Message.Ballot]
+      _ <- node.tearDown()
+    } yield ()
+  }
+
+  it should "create a block if a ballot is allowed but it has deploys in the buffer" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    for {
+      deploy <- ProtoUtil.basicDeploy[Task]()
+      _      <- MultiParentCasper[Task].deploy(deploy)
+
+      createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+      Created(block)    = createBlockResult
+      _                 = Message.fromBlock(block).get shouldBe a[Message.Block]
+      _                 <- node.tearDown()
+    } yield ()
+  }
+
+  it should "always choose the last block as the parent, never a ballot" in effectTest {
+    val node            = standaloneEff(genesis, transforms, validatorKeys.head)
+    implicit val casper = node.casperEff
+
+    def createMessage(expectBallot: Boolean, expectedParent: ByteString) =
+      for {
+        createBlockResult <- MultiParentCasper[Task].createMessage(canCreateBallot = true)
+        Created(block)    = createBlockResult
+        _                 <- MultiParentCasper[Task].addBlock(block)
+        msg               = Message.fromBlock(block).get
+        _                 = if (expectBallot) msg shouldBe a[Message.Ballot] else msg shouldBe a[Message.Block]
+        _                 = ProtoUtil.parentHashes(block).head shouldBe expectedParent
+      } yield block
+
+    for {
+      deploy <- ProtoUtil.basicDeploy[Task]()
+      // A ballot on top of genesis should not be built upon by the upcoming block.
+      _      <- createMessage(expectBallot = true, expectedParent = genesis.blockHash)
+      _      <- MultiParentCasper[Task].deploy(deploy)
+      block1 <- createMessage(expectBallot = false, expectedParent = genesis.blockHash)
+      _      <- createMessage(expectBallot = true, expectedParent = block1.blockHash)
+      _      <- createMessage(expectBallot = true, expectedParent = block1.blockHash)
+
+      _ <- node.tearDown()
+    } yield ()
+  }
+
   it should "accept signed blocks" in effectTest {
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
     import node._
@@ -169,7 +229,7 @@ abstract class HashSetCasperTest
       equivocators         <- dag.getEquivocators
       lfbHash              <- LastFinalizedBlockHashContainer[Task].get
       estimate             <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
-      _                    = estimate shouldBe IndexedSeq(signedBlock.blockHash)
+      _                    = estimate.toList shouldBe List(signedBlock.blockHash)
       _                    = node.tearDown()
     } yield ()
   }
@@ -216,7 +276,7 @@ abstract class HashSetCasperTest
       lfbHash               <- LastFinalizedBlockHashContainer[Task].get
       estimate              <- MultiParentCasper[Task].estimator(dag, lfbHash, latestMessageHashes, equivocators)
 
-      _ = estimate shouldBe IndexedSeq(signedBlock2.blockHash)
+      _ = estimate.toList shouldBe List(signedBlock2.blockHash)
       _ <- node.tearDown()
     } yield ()
   }

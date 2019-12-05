@@ -3,6 +3,7 @@ package io.casperlabs.casper.validation
 import cats.Applicative
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
@@ -111,6 +112,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
       _ <- validatorPrevBlockHash[F](summary, dag)
       _ <- sequenceNumber[F](summary, dag)
       _ <- swimlane[F](summary, dag)
+      // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
       _ <- blockHash[F](block)
       _ <- deployCount[F](block)
@@ -137,8 +139,8 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
-    def printHashes(hashes: Iterable[ByteString]) =
-      hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
+    def printHashes(hashes: NonEmptyList[ByteString]) =
+      hashes.toList.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     val latestMessagesHashes = ProtoUtil
       .getJustificationMsgHashes(b.getHeader.justifications)
@@ -151,7 +153,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
       tipHashes <- Estimator
                     .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
-      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
       parentHashes         = ProtoUtil.parentHashes(b)

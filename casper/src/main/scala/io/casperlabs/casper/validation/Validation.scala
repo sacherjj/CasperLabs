@@ -196,14 +196,7 @@ object Validation {
 
       case None =>
         for {
-          deployToBlocksMap <- deploys
-                                .traverse { deploy =>
-                                  bs.findBlockHashesWithDeployHash(deploy.deployHash).map {
-                                    blockHashes =>
-                                      deploy -> blockHashes.filterNot(_ == block.blockHash)
-                                  }
-                                }
-                                .map(_.toMap)
+          deployToBlocksMap <- bs.findBlockHashesWithDeployHashes(deploys.map(_.deployHash))
 
           blockHashes = deployToBlocksMap.values.flatten.toSet
 
@@ -414,14 +407,14 @@ object Validation {
       ).as(false)
     }
 
-  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log: Time](
       d: consensus.Deploy,
       chainName: String,
       deployConfig: IPCDeployConfig
   ): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map3(
+        Applicative[F].map4(
           maxTtl[F](
             ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMillis),
             d.deployHash,
@@ -432,10 +425,11 @@ object Validation {
             d.deployHash,
             deployConfig.maxDependencies
           ),
-          validateChainName[F](d, chainName)
+          validateChainName[F](d, chainName),
+          validateTimestamp[F](d)
         ) {
-          case (validTTL, validDependencies, validChainNames) =>
-            validTTL.toList ::: validDependencies ::: validChainNames.toList
+          case (validTTL, validDependencies, validChainNames, validTimestamp) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList ::: validTimestamp.toList
         }
 
       case None =>
@@ -500,6 +494,20 @@ object Validation {
         .map(_.some)
     else
       none[Errors.DeployHeaderError].pure[F]
+
+  private def validateTimestamp[F[_]: Monad: Log: Time](
+      deploy: consensus.Deploy
+  ): F[Option[Errors.DeployHeaderError]] =
+    Time[F].currentMillis flatMap { currentTime =>
+      if (currentTime + DRIFT < deploy.getHeader.timestamp) {
+        Errors.DeployHeaderError
+          .timestampInFuture(deploy.deployHash, deploy.getHeader.timestamp, DRIFT)
+          .logged[F]
+          .map(_.some)
+      } else {
+        none[Errors.DeployHeaderError].pure[F]
+      }
+    }
 
   def deployHash[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] = {
     val bodyHash   = ProtoUtil.protoHash(d.getBody)
@@ -720,7 +728,7 @@ object Validation {
       )
     }
 
-  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log: CasperLabsProtocol](
+  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log: Time: CasperLabsProtocol](
       b: Block,
       dag: DagRepresentation[F],
       chainName: String

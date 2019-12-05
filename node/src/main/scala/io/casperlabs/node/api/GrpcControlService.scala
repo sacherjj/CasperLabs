@@ -19,7 +19,10 @@ object GrpcControlService {
       new ControlGrpcMonix.ControlService {
         override def propose(request: ProposeRequest): Task[ProposeResponse] =
           TaskLike[F].apply {
-            BlockAPI.propose[F](blockApiLock).map(ProposeResponse().withBlockHash(_))
+            // Agreed that it won't be possible to create ballots through the API.
+            BlockAPI
+              .propose[F](blockApiLock, canCreateBallot = false)
+              .map(ProposeResponse().withBlockHash(_))
           }
       }
     }

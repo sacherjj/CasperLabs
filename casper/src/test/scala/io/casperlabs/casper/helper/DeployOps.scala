@@ -4,6 +4,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
+import io.casperlabs.casper.validation.Validation.DRIFT
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.{ArbitraryConsensus, DeployImplicits}
@@ -83,6 +84,18 @@ object DeployOps extends ArbitraryConsensus {
       d   <- arbitrary[Deploy]
       ttl <- Gen.choose(deployConfig.maxTtlMillis + 1, Int.MaxValue)
     } yield d.withTtl(ttl)
+
+    sample(genDeploy)
+  }
+
+  def randomTimstampInFuture(): Deploy = {
+    implicit val c = ConsensusConfig()
+
+    val genDeploy = for {
+      d     <- arbitrary[Deploy]
+      now   = System.currentTimeMillis
+      drift <- Gen.choose(DRIFT + 1000, Int.MaxValue)
+    } yield d.withTimestamp(now + drift)
 
     sample(genDeploy)
   }

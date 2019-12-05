@@ -467,6 +467,53 @@ object ProtoUtil {
     )
   }
 
+  /* Creates a signed ballot */
+  def ballot(
+      justifications: Seq[Justification],
+      stateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      protocolVersion: ProtocolVersion,
+      parent: ByteString,
+      validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
+      chainName: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): Block = {
+    val body = Block.Body()
+
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(stateHash)
+      .withPostStateHash(stateHash)
+      .withBonds(bondedValidators)
+
+    val header = blockHeader(
+      body,
+      parentHashes = List(parent),
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion,
+      timestamp = now,
+      chainName = chainName,
+      creator = publicKey,
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
+    ).withMessageType(Block.MessageType.BALLOT)
+
+    val unsigned = unsignedBlockProto(body, header)
+
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
   def blockHeader(
       body: Block.Body,
       creator: Keys.PublicKey,

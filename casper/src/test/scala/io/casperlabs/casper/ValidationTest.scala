@@ -38,7 +38,7 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -63,6 +63,7 @@ class ValidationTest
     with BlockGenerator
     with StorageFixture
     with ArbitraryConsensus {
+  implicit val timeEff                                = new LogicalTime[Task](System.currentTimeMillis)
   override implicit val log: LogIO[Task] with LogStub = LogStub[Task]()
   implicit val raiseValidateErr                       = validation.raiseValidateErrorThroughApplicativeError[Task]
   implicit val versions =
@@ -343,6 +344,14 @@ class ValidationTest
     )
   }
 
+  it should "not accept deploys too far in the future" in withoutStorage {
+    val deploy = DeployOps.randomTimstampInFuture()
+    Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
+      DeployHeaderError
+        .timestampInFuture(deploy.deployHash, deploy.getHeader.timestamp, Validation.DRIFT)
+    )
+  }
+
   it should "not accept too many dependencies" in withoutStorage {
     val deploy = DeployOps.randomTooManyDependencies()
     Validation.deployHeader[Task](deploy, chainName, deployConfig) shouldBeF List(
@@ -379,7 +388,7 @@ class ValidationTest
       for {
         _                       <- createChain[Task](1)
         block                   <- dagStorage.lookupByIdUnsafe(0)
-        modifiedTimestampHeader = block.header.get.withTimestamp(99999999)
+        modifiedTimestampHeader = block.header.get.withTimestamp(Long.MaxValue)
         _ <- Validation
               .timestamp[Task](
                 block.withHeader(modifiedTimestampHeader)
@@ -1178,32 +1187,41 @@ class ValidationTest
   }
 
   it should "work for valid deploys" in withStorage {
-    implicit blockStorage => implicit dagStorage => _ =>
-      val deployA = DeployOps.randomNonzeroTTL()
-      val deployB = DeployOps
-        .randomNonzeroTTL()
-        .withTimestamp(deployA.getHeader.timestamp + deployA.getHeader.ttlMillis)
-      val deployC = DeployOps
-        .randomNonzeroTTL()
-        .withDependencies(List(deployA.deployHash, deployB.deployHash))
-        .withTimestamp(deployB.getHeader.timestamp + deployB.getHeader.ttlMillis)
-      val timeA = deployA.getHeader.timestamp + deployA.getHeader.ttlMillis - 1
-      val timeB = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
-      val timeC = deployC.getHeader.timestamp + deployC.getHeader.ttlMillis - 1
+    implicit blockStorage => implicit dagStorage =>
+      _ =>
+        // The last validation would fail if the deploy timestamp was in the future,
+        // so pretend that all these blocks with their deploys happened a week ago.
+        val timestamp = System.currentTimeMillis - 7 * 24 * 60 * 60 * 1000
+        val deployA   = DeployOps.randomNonzeroTTL().withTimestamp(timestamp)
+        val deployB = DeployOps
+          .randomNonzeroTTL()
+          .withTimestamp(deployA.getHeader.timestamp + deployA.getHeader.ttlMillis)
+        val deployC = DeployOps
+          .randomNonzeroTTL()
+          .withDependencies(List(deployA.deployHash, deployB.deployHash))
+          .withTimestamp(deployB.getHeader.timestamp + deployB.getHeader.ttlMillis)
 
-      for {
-        blockA <- createBlock[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
-                   .map(_.changeTimestamp(timeA))
-        _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
-        blockB <- createBlock[Task](List(blockA.blockHash), deploys = Vector(deployB.processed(1)))
-                   .map(_.changeTimestamp(timeB))
-        _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
-        blockC <- createBlock[Task](List(blockB.blockHash), deploys = Vector(deployC.processed(1)))
-                   .map(_.changeTimestamp(timeC))
-        _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
-        dag    <- dagStorage.getRepresentation
-        result <- Validation.deployHeaders[Task](blockC, dag, chainName).attempt
-      } yield result shouldBe Right(())
+        val timeA = deployA.getHeader.timestamp + deployA.getHeader.ttlMillis - 1
+        val timeB = deployB.getHeader.timestamp + deployB.getHeader.ttlMillis - 1
+        val timeC = deployC.getHeader.timestamp + deployC.getHeader.ttlMillis - 1
+
+        for {
+          blockA <- createBlock[Task](Seq.empty, deploys = Vector(deployA.processed(1)))
+                     .map(_.changeTimestamp(timeA))
+          _ <- blockStorage.put(blockA.blockHash, blockA, Seq.empty)
+          blockB <- createBlock[Task](
+                     List(blockA.blockHash),
+                     deploys = Vector(deployB.processed(1))
+                   ).map(_.changeTimestamp(timeB))
+          _ <- blockStorage.put(blockB.blockHash, blockB, Seq.empty)
+          blockC <- createBlock[Task](
+                     List(blockB.blockHash),
+                     deploys = Vector(deployC.processed(1))
+                   ).map(_.changeTimestamp(timeC))
+          _      <- blockStorage.put(blockC.blockHash, blockC, Seq.empty)
+          dag    <- dagStorage.getRepresentation
+          result <- Validation.deployHeaders[Task](blockC, dag, chainName).attempt
+        } yield result shouldBe Right(())
   }
 
   "deployUniqueness" should "return InvalidRepeatDeploy when a deploy is present in an ancestor" in withStorage {

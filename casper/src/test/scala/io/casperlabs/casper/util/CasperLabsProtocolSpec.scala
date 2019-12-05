@@ -13,8 +13,8 @@ class CasperLabsProtocolSpec extends WordSpec with Matchers {
       val deployConfigA = ChainSpec.DeployConfig(100, 100)
       // Deploy config is being changed in the upgradeA.
       // Should overwrite configuration from Genesis.
-      val upgradeA      = (1L, ProtocolVersion(1, 1, 0), Option(deployConfigA))
-      val clProtocol    = CasperLabsProtocol.unsafe(Seq(genesis, upgradeA): _*)
+      val upgradeA   = (1L, ProtocolVersion(1, 1, 0), Option(deployConfigA))
+      val clProtocol = CasperLabsProtocol.unsafe(Seq(genesis, upgradeA): _*)
 
       "return configuration from that config" in {
         clProtocol.configAt(upgradeA._1).deployConfig should be(deployConfigA)
@@ -22,8 +22,8 @@ class CasperLabsProtocolSpec extends WordSpec with Matchers {
     }
 
     "asked for configuration absent in the latest upgrade config" should {
-      val upgradeA   = (1L, ProtocolVersion(1, 1, 0), None)
-      val upgradeB   = (2L, ProtocolVersion(1, 2, 0), None)
+      val upgradeA = (1L, ProtocolVersion(1, 1, 0), None)
+      val upgradeB = (2L, ProtocolVersion(1, 2, 0), None)
       // Last deploy config is in the Genesis; neither upgradeA nor upgradeB changes it.
       val clProtocol = CasperLabsProtocol.unsafe(Seq(genesis, upgradeA, upgradeB): _*)
 
