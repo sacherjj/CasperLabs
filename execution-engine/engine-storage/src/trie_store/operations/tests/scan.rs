@@ -39,7 +39,7 @@ where
         match parent {
             Trie::Leaf { .. } => panic!("parents should not contain any leaves"),
             Trie::Node { pointer_block } => {
-                let pointer_tip_hash = pointer_block[index.into()].map(|ptr| *ptr.hash());
+                let pointer_tip_hash = pointer_block[<usize>::from(index)].map(|ptr| *ptr.hash());
                 assert_eq!(Some(expected_tip_hash), pointer_tip_hash);
                 tip = Trie::Node { pointer_block };
             }

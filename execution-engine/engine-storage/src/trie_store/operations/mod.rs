@@ -514,7 +514,7 @@ where
     let new_node = {
         let index: usize = existing_leaf_path[shared_path.len()].into();
         let existing_leaf_pointer =
-            pointer_block[child_index.into()].expect("parent has lost the existing leaf");
+            pointer_block[<usize>::from(child_index)].expect("parent has lost the existing leaf");
         Trie::node(&[(index, existing_leaf_pointer)])
     };
     // Re-add the parent node to parents
