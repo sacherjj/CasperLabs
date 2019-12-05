@@ -411,19 +411,20 @@ object Validation {
       ).as(false)
     }
 
-  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log: Time](
       d: consensus.Deploy,
       chainName: String
   ): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map3(
+        Applicative[F].map4(
           validateTimeToLive[F](ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
           validateDependencies[F](header.dependencies, d.deployHash),
-          validateChainName[F](chainName, header.chainName, d.deployHash)
+          validateChainName[F](chainName, header.chainName, d.deployHash),
+          validateTimestamp[F](header.timestamp, d.deployHash)
         ) {
-          case (validTTL, validDependencies, validChainNames) =>
-            validTTL.toList ::: validDependencies ::: validChainNames.toList
+          case (validTTL, validDependencies, validChainNames, validTimestamp) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList ::: validTimestamp.toList
         }
 
       case None =>
@@ -474,6 +475,21 @@ object Validation {
         .map(_.some)
     else
       none[Errors.DeployHeaderError].pure[F]
+
+  private def validateTimestamp[F[_]: Monad: Log: Time](
+      timestamp: Long,
+      deployHash: ByteString
+  ): F[Option[Errors.DeployHeaderError]] =
+    Time[F].currentMillis flatMap { currentTime =>
+      if (currentTime + DRIFT < timestamp) {
+        Errors.DeployHeaderError
+          .timestampInFuture(deployHash, timestamp, DRIFT)
+          .logged[F]
+          .map(_.some)
+      } else {
+        none[Errors.DeployHeaderError].pure[F]
+      }
+    }
 
   def deployHash[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] = {
     val bodyHash   = ProtoUtil.protoHash(d.getBody)
@@ -694,7 +710,7 @@ object Validation {
       )
     }
 
-  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log: Time](
       b: Block,
       dag: DagRepresentation[F],
       chainName: String
