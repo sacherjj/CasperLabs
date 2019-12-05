@@ -11,7 +11,7 @@ use engine_shared::{
 
 use crate::{
     transaction_source::{Readable, Writable},
-    trie::{self, Parents, Pointer, Trie},
+    trie::{self, Parents, Pointer, Trie, RADIX},
     trie_store::TrieStore,
 };
 
@@ -728,4 +728,80 @@ where
             Ok(WriteResult::Written(root_hash))
         }
     }
+}
+
+/// Returns the keys at a given root hash.
+///
+/// Notes:
+/// * This should be rewritten as an Iterator in the future.
+/// * The root doesn't necessarily need to be the apex of the trie. It can be the "root" of a
+///   sub-trie.
+#[allow(dead_code)]
+pub fn keys<K, V, T, S, E>(
+    _correlation_id: CorrelationId,
+    txn: &T,
+    store: &S,
+    root: &Blake2bHash,
+) -> Result<Vec<K>, E>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error>,
+    E: From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let mut ret = Vec::new();
+
+    #[allow(clippy::type_complexity)]
+    let mut visited: Vec<(Trie<K, V>, Option<usize>, Vec<u8>)> = {
+        let root = match store.get(txn, root)? {
+            None => return Ok(ret),
+            Some(current_root) => current_root,
+        };
+        vec![(root, None, vec![])]
+    };
+
+    while let Some((trie, maybe_index, mut path)) = visited.pop() {
+        let mut maybe_next_trie: Option<Trie<K, V>> = None;
+
+        match trie {
+            Trie::Leaf { key, .. } => {
+                debug_assert!({
+                    let key_bytes = key.to_bytes()?;
+                    key_bytes.starts_with(&path)
+                });
+                ret.push(key);
+            }
+            Trie::Node { ref pointer_block } => {
+                let mut index: usize = maybe_index.unwrap_or_default();
+                while index < RADIX {
+                    if let Some(ref pointer) = pointer_block[index] {
+                        maybe_next_trie = store.get(txn, pointer.hash())?;
+                        debug_assert!(maybe_next_trie.is_some());
+                        visited.push((trie, Some(index + 1), path.clone()));
+                        path.push(index as u8);
+                        break;
+                    }
+                    index += 1;
+                }
+            }
+            Trie::Extension { affix, pointer } => {
+                maybe_next_trie = store.get(txn, pointer.hash())?;
+                debug_assert!({
+                    match &maybe_next_trie {
+                        Some(Trie::Node { .. }) => true,
+                        _ => false,
+                    }
+                });
+                path.extend(affix);
+            }
+        }
+
+        if let Some(next_trie) = maybe_next_trie {
+            visited.push((next_trie, None, path));
+        }
+    }
+
+    Ok(ret)
 }
