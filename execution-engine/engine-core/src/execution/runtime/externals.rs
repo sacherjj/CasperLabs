@@ -112,10 +112,26 @@ where
             }
 
             FunctionIndex::GetArgFuncIndex => {
-                // args(0) = pointer to destination in Wasm memory
-                let dest_ptr = Args::parse(args)?;
-                self.set_mem_from_buf(dest_ptr)?;
-                Ok(None)
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to destination in Wasm memory
+                // args(2) = size of destination pointer memory
+                let (index, dest_ptr, dest_size, bytes_written_ptr): (u32, _, u32, u32) =
+                    Args::parse(args)?;
+                let ret = self.get_arg(
+                    index as usize,
+                    dest_ptr,
+                    dest_size as usize,
+                    bytes_written_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
+            FunctionIndex::GetArgSizeFuncIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to a argument size (output)
+                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
+                let ret = self.get_arg_size(index as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::RetFuncIndex => {

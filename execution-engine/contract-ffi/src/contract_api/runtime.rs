@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::ptr;
 
 use super::{
     alloc_bytes,
@@ -83,12 +84,13 @@ pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
     }
 }
 
-fn load_arg(index: u32) -> Option<usize> {
-    let arg_size = unsafe { ext_ffi::load_arg(index) };
-    if arg_size >= 0 {
-        Some(arg_size as usize)
-    } else {
-        None
+fn get_arg_size(i: u32) -> Option<usize> {
+    let mut arg_size: usize = 0;
+    let ret = unsafe { ext_ffi::get_arg_size(i as usize, &mut arg_size as *mut usize) };
+    match result_from(ret) {
+        Ok(_) => Some(arg_size),
+        Err(Error::MissingArgument) => None,
+        Err(e) => revert(e),
     }
 }
 
@@ -96,13 +98,17 @@ fn load_arg(index: u32) -> Option<usize> {
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
-    let arg_size = load_arg(i)?;
+    let arg_size = get_arg_size(i)?;
+
     let arg_bytes = {
-        let dest_ptr = alloc_bytes(arg_size);
-        unsafe {
-            ext_ffi::get_arg(dest_ptr);
-            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
-        }
+        let res = {
+            let data_ptr = alloc_bytes(arg_size);
+            let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size, ptr::null_mut()) };
+            let data = unsafe { Vec::from_raw_parts(data_ptr, arg_size, arg_size) };
+            result_from(ret).map(|_| data)
+        };
+        // Assumed to be safe as `get_arg_size` checks the argument already
+        res.unwrap_or_revert()
     };
     Some(deserialize(&arg_bytes))
 }
@@ -143,9 +149,8 @@ pub fn get_key(name: &str) -> Option<Key> {
     let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
     let dest_ptr = alloc_bytes(key_size);
     let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
+        // NOTE: This will be fixed once #1422 is in (EE-800)
+        ext_ffi::get_call_result(dest_ptr);
         Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
