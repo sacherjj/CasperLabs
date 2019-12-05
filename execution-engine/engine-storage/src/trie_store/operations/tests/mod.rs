@@ -22,6 +22,7 @@ use crate::{
     },
     trie::{Pointer, Trie},
     trie_store::{
+        self,
         in_memory::InMemoryTrieStore,
         lmdb::LmdbTrieStore,
         operations::{read, write, ReadResult, WriteResult},
@@ -591,13 +592,16 @@ where
 impl InMemoryEnvironment {
     pub fn dump<K, V>(
         &self,
-        name: Option<&str>,
+        maybe_name: Option<&str>,
     ) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
     where
         K: FromBytes,
         V: FromBytes,
     {
-        let data = self.data(name)?.unwrap();
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| trie_store::NAME.to_string());
+        let data = self.data(Some(&name))?.unwrap();
         data.iter()
             .map(|(hash_bytes, trie_bytes)| {
                 let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes)?;
