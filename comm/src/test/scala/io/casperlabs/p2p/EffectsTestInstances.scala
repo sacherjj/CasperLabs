@@ -21,8 +21,8 @@ import izumi.functional.mono.SyncSafe
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
 
-  class LogicalTime[F[_]: Sync] extends Time[F] {
-    var clock: Long = 0
+  class LogicalTime[F[_]: Sync](init: => Long = 0) extends Time[F] {
+    var clock: Long = init
 
     def currentMillis: F[Long] = Sync[F].delay {
       this.clock = clock + 1
@@ -36,7 +36,7 @@ object EffectsTestInstances {
 
     def sleep(duration: FiniteDuration): F[Unit] = Sync[F].delay(())
 
-    def reset(): Unit = this.clock = 0
+    def reset(): Unit = this.clock = init
   }
 
   class NodeDiscoveryStub[F[_]: Sync]() extends NodeDiscovery[F] {
