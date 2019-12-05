@@ -421,7 +421,7 @@ object Validation {
           validateTimeToLive[F](ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
           validateDependencies[F](header.dependencies, d.deployHash),
           validateChainName[F](chainName, header.chainName, d.deployHash),
-          validateTimestamp[F](header.timestamp, d.deployHash)
+          validateTimestamp[F](d)
         ) {
           case (validTTL, validDependencies, validChainNames, validTimestamp) =>
             validTTL.toList ::: validDependencies ::: validChainNames.toList ::: validTimestamp.toList
@@ -477,13 +477,12 @@ object Validation {
       none[Errors.DeployHeaderError].pure[F]
 
   private def validateTimestamp[F[_]: Monad: Log: Time](
-      timestamp: Long,
-      deployHash: ByteString
+      deploy: consensus.Deploy
   ): F[Option[Errors.DeployHeaderError]] =
     Time[F].currentMillis flatMap { currentTime =>
-      if (currentTime + DRIFT < timestamp) {
+      if (currentTime + DRIFT < deploy.getHeader.timestamp) {
         Errors.DeployHeaderError
-          .timestampInFuture(deployHash, timestamp, DRIFT)
+          .timestampInFuture(deploy.deployHash, deploy.getHeader.timestamp, DRIFT)
           .logged[F]
           .map(_.some)
       } else {
