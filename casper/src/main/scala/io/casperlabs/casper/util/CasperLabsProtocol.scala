@@ -45,10 +45,7 @@ object CasperLabsProtocol {
     ): Config =
       Config(blockHeightMin, protocolVersion, toDeployConfig(deployConfig))
 
-    val underlying = ProtocolVersions(versions.map {
-      case (rank, protocolVersion, ipcDeployConfig) =>
-        Config(rank, protocolVersion, toDeployConfig(ipcDeployConfig))
-    }.toList)
+    val underlying = ProtocolVersions(versions.toList.map((toConfig _).tupled))
 
     type T[A1] = (Long, state.ProtocolVersion, Option[A1])
     def merge[A1](c1: T[A1], c2: T[A1]): T[A1] = (c2._1, c2._2, c2._3.orElse(c1._3))
