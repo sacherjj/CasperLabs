@@ -499,15 +499,15 @@ where
                 | CLType::Tuple9(_)
                 | CLType::Tuple10(_) => Ok(()),
                 CLType::Key => {
-                    let key: Key = cl_value.clone().into_t()?;
+                    let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)
                 }
                 CLType::URef => {
-                    let uref: URef = cl_value.clone().into_t()?;
+                    let uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_uref(&uref)
                 }
                 tuple @ CLType::Tuple2(_) if *tuple == value::named_key_type() => {
-                    let (_name, key): (String, Key) = cl_value.clone().into_t()?;
+                    let (_name, key): (String, Key) = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)
                 }
                 CLType::Tuple2(_) => Ok(()),

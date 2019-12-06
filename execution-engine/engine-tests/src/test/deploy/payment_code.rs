@@ -119,7 +119,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.clone().into_t() {
+            if let Ok(v) = cl_value.to_owned().into_t() {
                 modified_balance = Some(v);
             }
         }
@@ -210,7 +210,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.clone().into_t() {
+            if let Ok(v) = cl_value.to_owned().into_t() {
                 modified_balance = Some(v);
             }
         }

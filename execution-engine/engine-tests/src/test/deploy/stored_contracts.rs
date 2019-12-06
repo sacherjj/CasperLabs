@@ -838,8 +838,8 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 Transform::Write(StoredValue::CLValue(r_value)),
             ) => {
                 // differing refunds and balances
-                let _ = l_value.clone().into_t::<U512>().expect("should be U512");
-                let _ = r_value.clone().into_t::<U512>().expect("should be U512");
+                let _ = l_value.to_owned().into_t::<U512>().expect("should be U512");
+                let _ = r_value.to_owned().into_t::<U512>().expect("should be U512");
             }
             (
                 Transform::Write(StoredValue::Account(la)),

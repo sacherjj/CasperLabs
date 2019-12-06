@@ -46,7 +46,7 @@ fn should_run_purse_to_purse_transfer() {
     let purse_transfer_result =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_transfer_result {
             cl_value
-                .clone()
+                .to_owned()
                 .into_t::<String>()
                 .expect("should be String")
         } else {
@@ -62,7 +62,10 @@ fn should_run_purse_to_purse_transfer() {
         &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = main_purse_balance {
-            cl_value.clone().into_t::<U512>().expect("should be U512")
+            cl_value
+                .to_owned()
+                .into_t::<U512>()
+                .expect("should be U512")
         } else {
             panic!(
                 "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -101,7 +104,10 @@ fn should_run_purse_to_purse_transfer() {
     let purse_secondary = &transform[&purse_secondary_key];
     let purse_secondary_balance =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_secondary {
-            cl_value.clone().into_t::<U512>().expect("should be U512")
+            cl_value
+                .to_owned()
+                .into_t::<U512>()
+                .expect("should be U512")
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
@@ -148,7 +154,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let purse_transfer_result =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_transfer_result {
             cl_value
-                .clone()
+                .to_owned()
                 .into_t::<String>()
                 .expect("should be String")
         } else {
@@ -165,7 +171,10 @@ fn should_run_purse_to_purse_transfer_with_error() {
         &transform[&default_account.named_keys()["main_purse_balance"].normalize()];
     let main_purse_balance =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = main_purse_balance {
-            cl_value.clone().into_t::<U512>().expect("should be U512")
+            cl_value
+                .to_owned()
+                .into_t::<U512>()
+                .expect("should be U512")
         } else {
             panic!(
                 "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -205,7 +214,10 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let purse_secondary = &transform[&purse_secondary_key];
     let purse_secondary_balance =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = purse_secondary {
-            cl_value.clone().into_t::<U512>().expect("should be U512")
+            cl_value
+                .to_owned()
+                .into_t::<U512>()
+                .expect("should be U512")
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
