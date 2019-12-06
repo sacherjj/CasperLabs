@@ -1203,7 +1203,7 @@ abstract class HashSetCasperTest
 
     for {
       deploy <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(2 * maxTtl.toMillis.toInt))
-      _      <- node.casperEff.deploy(deploy) shouldBeF Right(())
+      _      <- node.deployBuffer.addDeploy(deploy) shouldBeF Right(())
       status <- node.casperEff.createBlock
     } yield assert(status == NoNewDeploys)
 
