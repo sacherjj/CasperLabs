@@ -105,9 +105,10 @@ package object effects {
       // Foreign keys support must be enabled explicitly in SQLite; it doesn't affect read logic though.
       // https://www.sqlite.org/foreignkeys.html#fk_enable
       config.addDataSourceProperty("foreign_keys", foreignKeys.toString)
-      // NOTE: We still saw at least one SQLITE_BUSY error in testing, sepsite the 1 sized pool.
+      // NOTE: We still saw at least one SQLITE_BUSY error in testing, despite the 1 sized pool.
       // NODE-1019 will add logging, maybe we'll learn more.
       config.addDataSourceProperty("busy_timeout", "5000")
+      config.addDataSourceProperty("journal_mode", "WAL")
       config
     }
 

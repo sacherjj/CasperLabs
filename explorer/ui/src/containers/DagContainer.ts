@@ -55,6 +55,8 @@ export class DagContainer {
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
+  @observable toggleValidatorsList: boolean = false;
+  @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
 
   constructor(
     private errors: ErrorContainer,
@@ -63,6 +65,10 @@ export class DagContainer {
 
   get minRank() {
     return Math.max(0, this.maxRank - this.depth + 1);
+  }
+
+  toggleShowValidators() {
+    this.toggleValidatorsList = !this.toggleValidatorsList;
   }
 
   get hasBlocks() {
@@ -78,6 +84,12 @@ export class DagContainer {
         .then(blocks => {
           this.blocks = blocks;
         })
+    );
+
+    await this.errors.capture(
+      this.casperService.getLatestBlockInfo().then(block => {
+        this.lastFinalizedBlock = block;
+      })
     );
   }
 }

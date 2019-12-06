@@ -72,7 +72,8 @@ object BlockAPI {
   }
 
   def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      canCreateBallot: Boolean
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
       MonadThrowable[F].raiseError(ex)
@@ -82,7 +83,7 @@ object BlockAPI {
         case true =>
           for {
             _          <- Metrics[F].incrementCounter("create-blocks")
-            maybeBlock <- casper.createBlock
+            maybeBlock <- casper.createMessage(canCreateBallot)
             result <- maybeBlock match {
                        case Created(block) =>
                          for {

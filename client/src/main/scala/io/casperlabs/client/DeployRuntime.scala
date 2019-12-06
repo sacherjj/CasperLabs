@@ -163,11 +163,18 @@ object DeployRuntime {
       bytesStandard: Boolean,
       json: Boolean
   ): F[Unit] =
-    gracefulExit(
+    gracefulExit({
+      val key = if (keyVariant == "local") {
+        val parts          = keyValue.split(":")
+        val seed           = parts(0)
+        val rest           = parts(1)
+        val abiEncodedRest = Base16.encode(serializeArray(Base16.decode(rest)))
+        s"$seed:$abiEncodedRest"
+      } else keyValue
       DeployService[F]
-        .queryState(blockHash, keyVariant, keyValue, path)
+        .queryState(blockHash, keyVariant, key, path)
         .map(_.map(Printer.print(_, bytesStandard, json)))
-    )
+    })
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
     gracefulExit {

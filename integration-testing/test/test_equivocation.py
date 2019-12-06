@@ -1,3 +1,4 @@
+# fmt: off
 import logging
 import base64
 
@@ -92,17 +93,19 @@ class GenerateEquivocatingBlocksGossipInterceptor(grpc_proxy.GossipInterceptor):
                 )
                 response = [r for r in response]
                 self.last_block = block_from_chunks(response)
-                self.equivocating_block = self.modify_to_equivocate(block_from_chunks(response))
+                self.equivocating_block = self.modify_to_equivocate(
+                    block_from_chunks(response)
+                )
                 self.equivocating_block_summary = block_summary(self.equivocating_block)
-                self.equivocating_block_justification = block_justification(self.equivocating_block)
+                self.equivocating_block_justification = block_justification(
+                    self.equivocating_block
+                )
                 logging.info(
                     f"GOSSIP POST REQUEST STREAM: Equivocating block hash: {self.equivocating_block.block_hash.hex()}"
                 )
 
         for r in response:
-            logging.info(
-                f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:100]}..."
-            )
+            logging.info(f"GOSSIP POST REQUEST STREAM: {name} => {hexify(r)[:100]}...")
             yield r
 
     def modify_to_equivocate(self, block):

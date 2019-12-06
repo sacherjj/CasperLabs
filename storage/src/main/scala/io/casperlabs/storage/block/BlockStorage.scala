@@ -8,6 +8,7 @@ import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metered
 import io.casperlabs.storage.BlockMsgWithTransform
+import io.casperlabs.storage.block.BlockStorage.DeployHash
 
 import scala.language.higherKinds
 
@@ -48,7 +49,13 @@ trait BlockStorage[F[_]] {
 
   def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]]
 
-  def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]]
+  /**
+    * Note: if there are no blocks for the specified deployHash,
+    * Result.get(deployHash) returns Some(Set.empty[BlockHash]) instead of None
+    */
+  def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]]
 
   def checkpoint(): F[Unit]
 
@@ -100,10 +107,12 @@ object BlockStorage {
     )(implicit applicativeF: Applicative[F]): F[Boolean] =
       incAndMeasure("contains", super.contains(blockHash))
 
-    abstract override def findBlockHashesWithDeployHash(deployHash: BlockHash): F[Seq[BlockHash]] =
+    abstract override def findBlockHashesWithDeployHashes(
+        deployHashes: List[DeployHash]
+    ): F[Map[DeployHash, Set[BlockHash]]] =
       incAndMeasure(
-        "findBlockHashesWithDeployHash",
-        super.findBlockHashesWithDeployHash(deployHash)
+        "findBlockHashesWithDeployHashes",
+        super.findBlockHashesWithDeployHashes(deployHashes)
       )
   }
 

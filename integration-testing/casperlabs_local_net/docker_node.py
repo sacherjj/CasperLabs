@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Union, Optional
 import requests
 
-from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract
+from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, EMPTY_ETC_CASPERLABS
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
 from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
@@ -34,6 +34,7 @@ class DockerNode(LoggingDockerBase):
 
     CL_NODE_BINARY = "/opt/docker/bin/bootstrap"
     CL_NODE_DIRECTORY = "/root/.casperlabs"
+    CL_ETC_CASPERLABS_DIR = "/etc/casperlabs"
     CL_NODE_DEPLOY_DIR = f"{CL_NODE_DIRECTORY}/deploy"
     CL_CHAINSPEC_DIR = f"{CL_NODE_DIRECTORY}/chainspec"
     CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
@@ -229,13 +230,20 @@ class DockerNode(LoggingDockerBase):
 
     @property
     def volumes(self) -> dict:
-        return {
+        d = {
+            self.host_etc_casperlabs_dir: {
+                "bind": self.CL_ETC_CASPERLABS_DIR,
+                "mode": "rw",
+            },
             self.host_chainspec_dir: {"bind": self.CL_CHAINSPEC_DIR, "mode": "rw"},
             self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
             self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
             self.deploy_dir: {"bind": self.CL_NODE_DEPLOY_DIR, "mode": "rw"},
             self.config.socket_volume: {"bind": self.CL_SOCKETS_DIR, "mode": "rw"},
         }
+        for k in d:
+            logging.info(f"================ VOLUME: {k} => {d[k]}")
+        return d
 
     def _get_container(self):
         self.deploy_dir = tempfile.mkdtemp(dir="/tmp", prefix="deploy_")
@@ -270,14 +278,22 @@ class DockerNode(LoggingDockerBase):
         if os.path.exists(self.host_mount_dir):
             shutil.rmtree(self.host_mount_dir)
         shutil.copytree(str(self.resources_folder), self.host_mount_dir)
-        self.create_genesis_accounts_file()
+        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
+        self.create_genesis_accounts_file(
+            f"{self.host_chainspec_dir}/genesis/accounts.csv"
+        )
+        if self.config.etc_casperlabs_directory != EMPTY_ETC_CASPERLABS:
+            etc_casperlabs_chainspec = os.path.join(
+                self.host_mount_dir, self.config.etc_casperlabs_directory, "chainspec"
+            )
+            accounts_file = f"{etc_casperlabs_chainspec}/genesis/accounts.csv"
+            self.create_genesis_accounts_file(accounts_file)
+            logging.info(f"======= CREATED accounts file in: {accounts_file}")
 
     # TODO: Should be changed to using validator-id from accounts
-    def create_genesis_accounts_file(self) -> None:
+    def create_genesis_accounts_file(self, path: str = None) -> None:
         bond_amount = self.config.bond_amount
         N = self.NUMBER_OF_BONDS
-        # Creating a file where the node is expecting to see overrides, i.e. at ~/.casperlabs/chainspec/genesis
-        path = f"{self.host_chainspec_dir}/genesis/accounts.csv"
         try:
             os.makedirs(os.path.dirname(path))
         except OSError:

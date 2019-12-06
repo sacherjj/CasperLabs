@@ -101,13 +101,7 @@ object DeployFilters {
       deployHashes: List[ByteString]
   ): F[List[ByteString]] =
     for {
-      deployHashToBlocksMap <- deployHashes
-                                .traverse { deployHash =>
-                                  BlockStorage[F]
-                                    .findBlockHashesWithDeployHash(deployHash)
-                                    .map(deployHash -> _)
-                                }
-                                .map(_.toMap)
+      deployHashToBlocksMap <- BlockStorage[F].findBlockHashesWithDeployHashes(deployHashes)
 
       blockHashes = deployHashToBlocksMap.values.flatten.toList.distinct
 

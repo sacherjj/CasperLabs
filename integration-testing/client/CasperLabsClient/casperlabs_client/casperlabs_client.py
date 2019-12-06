@@ -26,6 +26,7 @@ import json
 import struct
 import logging
 import pkg_resources
+import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -59,10 +60,14 @@ from . import consensus_pb2 as consensus, state_pb2 as state
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
+from . import vdag
+
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
+
+DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 from google.protobuf import json_format
 
@@ -384,6 +389,10 @@ class InsecureGRPCService:
 def extract_common_name(certificate_file: str) -> str:
     cert_dict = ssl._ssl._test_decode_cert(certificate_file)
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
+def abi_byte_array(a: bytes) -> bytes:
+    return struct.pack("<I", len(a)) + a
 
 
 class SecureGRPCService:
@@ -717,9 +726,10 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
+        delay_in_seconds=5,
     ):
         """
-        Retrieve DAG in DOT format.
+        Generate DAG in DOT format.
 
         :param depth:                     depth in terms of block height
         :param out:                       output image filename, outputs to stdout if
@@ -729,9 +739,52 @@ class CasperLabsClient:
         :param show_justification_lines:  if justification lines should be shown
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
-        :return:                          VisualizeBlocksResponse object
+        :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
+        :return:                          Yields generated DOT source or file name when out provided.
+                                          Generates endless stream of file names if stream is not None.
         """
-        raise Exception("Not implemented yet")
+        block_infos = list(self.showBlocks(depth))
+        dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
+        if not out:
+            return dot_dag_description
+
+        parts = out.split(".")
+        file_format = parts[-1]
+        file_name_base = ".".join(parts[:-1])
+
+        iteration = -1
+
+        def file_name():
+            nonlocal iteration, file_format
+            if not stream or stream == "single-output":
+                return out
+            else:
+                iteration += 1
+                return f"{file_name_base}_{iteration}.{file_format}"
+
+        yield self._call_dot(dot_dag_description, file_name(), file_format)
+        previous_block_hashes = set(b.summary.block_hash for b in block_infos)
+        while stream:
+            time.sleep(delay_in_seconds)
+            block_infos = list(self.showBlocks(depth))
+            block_hashes = set(b.summary.block_hash for b in block_infos)
+            if block_hashes != previous_block_hashes:
+                dot_dag_description = vdag.generate_dot(
+                    block_infos, show_justification_lines
+                )
+                yield self._call_dot(dot_dag_description, file_name(), file_format)
+                previous_block_hashes = block_hashes
+
+    def _call_dot(self, dot_dag_description, file_name, file_format):
+        with tempfile.NamedTemporaryFile(mode="w") as f:
+            f.write(dot_dag_description)
+            f.flush()
+            cmd = f"dot -T{file_format} -o {file_name} {f.name}"
+            rc = os.system(cmd)
+            if rc:
+                raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
+        print(f"Wrote {file_name}")
+        return file_name
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -749,7 +802,6 @@ class CasperLabsClient:
         """
 
         def key_variant(keyType):
-
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
                 raise InternalError(
@@ -757,7 +809,16 @@ class CasperLabsClient:
                 )
             return variant
 
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        def encode_local_key(key: str) -> str:
+            seed, rest = key.split(":")
+            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            r = f"{seed}:{abi_encoded_rest}"
+            logging.info(f"encode_local_key => {r}")
+            return r
+
+        key_value = encode_local_key(key) if keyType.lower() == "local" else key
+
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -783,11 +844,8 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
-        def abi_byte_array(a: bytes) -> bytes:
-            return struct.pack("<I", len(a)) + a
-
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        purseAddrHex = account.purse_id.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -1043,15 +1101,19 @@ def show_blocks_command(casperlabs_client, args):
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    response = casperlabs_client.visualizeDag(args.depth)
-    # TODO: call Graphviz
-    print(hexify(response))
+    for o in casperlabs_client.visualizeDag(
+        args.depth, args.out, args.show_justification_lines, args.stream
+    ):
+        if not args.out:
+            print(o)
+            break
 
 
 @guarded_command
 def query_state_command(casperlabs_client, args):
+
     response = casperlabs_client.queryState(
-        args.block_hash, args.key, args.path, getattr(args, "type")
+        args.block_hash, args.key, args.path or "", getattr(args, "type")
     )
     print(hexify(response))
 
@@ -1072,6 +1134,32 @@ def show_deploy_command(casperlabs_client, args):
 def show_deploys_command(casperlabs_client, args):
     response = casperlabs_client.showDeploys(args.hash, full_view=False)
     _show_blocks(response, element_name="deploy")
+
+
+def dot_output(file_name):
+    """
+    Check file name has an extension of one of file formats supported by Graphviz.
+    """
+    parts = file_name.split(".")
+    if len(parts) == 1:
+        raise argparse.ArgumentTypeError(
+            f"'{file_name}' has no extension indicating file format"
+        )
+    else:
+        file_format = parts[-1]
+        if file_format not in DOT_FORMATS.split(","):
+            raise argparse.ArgumentTypeError(
+                f"File extension {file_format} not_recognized, must be one of {DOT_FORMATS}"
+            )
+    return file_name
+
+
+def natural(number):
+    """Check number is an integer greater than 0"""
+    n = int(number)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{number} is not a positive int value")
+    return n
 
 
 # fmt: off
@@ -1214,22 +1302,22 @@ def main():
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it.',
+                      [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=dot_output, help=f'output image filename, outputs to stdout if not specified, must end with one of {DOT_FORMATS}')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
                        [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
     parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
-                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+                       [('-p', '--path'), dict(required=False, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+
     # fmt:on
     sys.exit(parser.run())
 

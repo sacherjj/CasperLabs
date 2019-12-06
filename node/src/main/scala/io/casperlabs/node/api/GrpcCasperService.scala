@@ -10,8 +10,9 @@ import io.casperlabs.casper.consensus.{state, Block}
 import io.casperlabs.casper.consensus.info._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.validation.Validation
+import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.comm.ServiceError.InvalidArgument
+import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.metrics.Metrics
@@ -48,12 +49,15 @@ object GrpcCasperService {
 
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =
           TaskLike[F].apply {
-            validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
-              blockHashPrefix =>
-                BlockAPI
-                  .getBlockInfo[F](
-                    blockHashPrefix
-                  )
+            validateBlockHashPrefix[F](
+              request.blockHashBase16,
+              request.blockHash,
+              adaptToInvalidArgument
+            ) >>= { blockHashPrefix =>
+              BlockAPI
+                .getBlockInfo[F](
+                  blockHashPrefix
+                )
             }
           }
 
@@ -69,10 +73,13 @@ object GrpcCasperService {
 
         override def getDeployInfo(request: GetDeployInfoRequest): Task[DeployInfo] =
           TaskLike[F].apply {
-            validateDeployHash[F](request.deployHashBase16, adaptToInvalidArgument) >>= {
-              deployHash =>
-                BlockAPI
-                  .getDeployInfo[F](deployHash, request.view)
+            validateDeployHash[F](
+              request.deployHashBase16,
+              request.deployHash,
+              adaptToInvalidArgument
+            ) >>= { deployHash =>
+              BlockAPI
+                .getDeployInfo[F](deployHash, request.view)
             }
           }
 
@@ -80,9 +87,12 @@ object GrpcCasperService {
             request: StreamBlockDeploysRequest
         ): Observable[Block.ProcessedDeploy] = {
           val deploys = TaskLike[F].apply {
-            validateBlockHashPrefix[F](request.blockHashBase16, adaptToInvalidArgument) >>= {
-              blockHashPrefix =>
-                BlockAPI.getBlockDeploys[F](blockHashPrefix, request.view)
+            validateBlockHashPrefix[F](
+              request.blockHashBase16,
+              request.blockHash,
+              adaptToInvalidArgument
+            ) >>= { blockHashPrefix =>
+              BlockAPI.getBlockDeploys[F](blockHashPrefix, request.view)
             }
           }
           Observable.fromTask(deploys).flatMap(Observable.fromIterable)
@@ -90,7 +100,11 @@ object GrpcCasperService {
 
         override def getBlockState(request: GetBlockStateRequest): Task[state.Value] =
           batchGetBlockState(
-            BatchGetBlockStateRequest(request.blockHashBase16, List(request.getQuery))
+            BatchGetBlockStateRequest(
+              request.blockHashBase16,
+              request.blockHash,
+              List(request.getQuery)
+            )
           ) map {
             _.values.head
           }
@@ -101,6 +115,7 @@ object GrpcCasperService {
           for {
             blockHashPrefix <- validateBlockHashPrefix[F](
                                 request.blockHashBase16,
+                                request.blockHash,
                                 adaptToInvalidArgument
                               )
             info            <- BlockAPI.getBlockInfo[F](blockHashPrefix)
@@ -136,6 +151,7 @@ object GrpcCasperService {
             for {
               accountPublicKeyBase16 <- validateAccountPublicKey[F](
                                          request.accountPublicKeyBase16,
+                                         request.accountPublicKey,
                                          adaptToInvalidArgument
                                        )
               (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
@@ -170,6 +186,18 @@ object GrpcCasperService {
                 .withNextPageToken(nextPageToken)
                 .withPrevPageToken(prevPageToken)
             } yield result
+          }
+
+        override def getLastFinalizedBlockInfo(
+            request: GetLastFinalizedBlockInfoRequest
+        ): Task[BlockInfo] =
+          TaskLike[F].apply {
+            MultiParentCasperRef
+              .withCasper[F, BlockInfo](
+                _.lastFinalizedBlock.map(_.getBlockInfo),
+                "Could not get last finalized block.",
+                MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
+              )
           }
       }
     }

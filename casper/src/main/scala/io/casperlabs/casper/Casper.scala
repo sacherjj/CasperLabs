@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
@@ -29,14 +30,13 @@ trait MultiParentCasper[F[_]] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
+      lfbHash: ByteString,
       latestMessages: Map[ByteString, Set[ByteString]],
       equivocators: Set[Validator]
-  ): F[List[ByteString]]
-  def createBlock: F[CreateBlockStatus]
-  ////
-
+  ): F[NonEmptyList[ByteString]]
+  def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus]
+  def createBlock: F[CreateBlockStatus] = createMessage(false) // Left for the sake of unit tests.
   def dag: F[DagRepresentation[F]]
-
   def lastFinalizedBlock: F[Block]
 }
 

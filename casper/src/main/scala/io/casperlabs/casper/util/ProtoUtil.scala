@@ -432,7 +432,8 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -452,10 +453,58 @@ object ProtoUtil {
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
-      validatorPrevBlockHash = validatorPrevBlockHash
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
+  /* Creates a signed ballot */
+  def ballot(
+      justifications: Seq[Justification],
+      stateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      protocolVersion: ProtocolVersion,
+      parent: ByteString,
+      validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
+      chainName: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): Block = {
+    val body = Block.Body()
+
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(stateHash)
+      .withPostStateHash(stateHash)
+      .withBonds(bondedValidators)
+
+    val header = blockHeader(
+      body,
+      parentHashes = List(parent),
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion,
+      timestamp = now,
+      chainName = chainName,
+      creator = publicKey,
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
+    ).withMessageType(Block.MessageType.BALLOT)
+
+    val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
@@ -474,10 +523,12 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
-      chainName: String
+      chainName: String,
+      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
   ): Block.Header =
     Block
       .Header()
+      .withKeyBlockHash(keyBlockHash)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)

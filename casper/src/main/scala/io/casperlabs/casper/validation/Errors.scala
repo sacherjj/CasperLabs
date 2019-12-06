@@ -46,6 +46,13 @@ object Errors {
     ): DeployHeaderError =
       InvalidChainName(deployHash, deployChainName, expectedChainName)
 
+    def timestampInFuture(
+        deployHash: ByteString,
+        timestamp: Long,
+        drift: Int
+    ): DeployHeaderError =
+      TimestampInFuture(deployHash, timestamp, drift)
+
     final case class MissingHeader(deployHash: ByteString) extends DeployHeaderError {
       def errorMessage: String =
         s"Deploy ${PrettyPrinter.buildString(deployHash)} does not contain a header"
@@ -89,6 +96,15 @@ object Errors {
     ) extends DeployHeaderError {
       def errorMessage: String =
         s"Deploy ${PrettyPrinter.buildString(deployHash)} with chain name '$deployChainName' is invalid. Expected empty chain or '$expectedChainName'."
+    }
+
+    final case class TimestampInFuture(
+        deployHash: ByteString,
+        timestamp: Long,
+        drift: Int
+    ) extends DeployHeaderError {
+      def errorMessage: String =
+        s"Deploy ${PrettyPrinter.buildString(deployHash)} has timestamp $timestamp which is more than ${drift}ms in the future."
     }
   }
 }

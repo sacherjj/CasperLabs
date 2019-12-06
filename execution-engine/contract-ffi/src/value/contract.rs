@@ -49,6 +49,10 @@ impl Contract {
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
+
+    pub fn take_named_keys(self) -> BTreeMap<String, Key> {
+        self.named_keys
+    }
 }
 
 impl ToBytes for Contract {
