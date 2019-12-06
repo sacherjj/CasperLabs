@@ -11,11 +11,6 @@ import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.graphz._
 
-package object Constant {
-  // For debugging it is usefull to change Invis to Dotted.
-  val Invisible = Invis
-}
-
 final case class ValidatorBlock(
     blockHash: String,
     parentsHashes: List[String],
@@ -28,6 +23,10 @@ object GraphzGenerator {
   type BlockHash        = ByteString
   type Rank             = Long
   type ValidatorsBlocks = Map[Rank, List[ValidatorBlock]]
+
+  // For debugging it is usefull to change Invis to Dotted.
+  //
+  val Invisible = Invis
 
   final case class DagInfo[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
@@ -81,7 +80,7 @@ object GraphzGenerator {
       _ <- genesisBlocks.traverse(b => g.node(b, style = Some(Bold), shape = Box))
 
       // draw invisible fake genesis block if needed
-      _ <- fakeGenesisBlocks.traverse(b => g.node(b, style = Some(Constant.Invisible), shape = Box))
+      _ <- fakeGenesisBlocks.traverse(b => g.node(b, style = Some(Invisible), shape = Box))
 
       // draw invisible edges from genesis block or the fake genesis block
       // to first node of each validator for alignment
@@ -96,11 +95,11 @@ object GraphzGenerator {
                 }
             )
             .traverse {
-              case (genesis_block, node) =>
+              case (genesisBlock, node) =>
                 g.edge(
-                  genesis_block,
+                  genesisBlock,
                   node._2,
-                  style = Some(Constant.Invisible)
+                  style = Some(Invisible)
                 )
             }
 
@@ -219,7 +218,7 @@ object GraphzGenerator {
     blocks.get(rank) match {
       case Some(blocks) =>
         blocks.map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
-      case None => List((Some(Constant.Invisible), s"${rank.show}_$validatorId"))
+      case None => List((Some(Invisible), s"${rank.show}_$validatorId"))
     }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](
@@ -246,7 +245,7 @@ object GraphzGenerator {
                 })
             )
             .traverse {
-              case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Constant.Invisible))
+              case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invisible))
             }
 
       _ <- g.close
