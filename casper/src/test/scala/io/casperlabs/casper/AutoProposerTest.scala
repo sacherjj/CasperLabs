@@ -9,6 +9,7 @@ import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.{ArbitraryConsensus, Weight}
 import io.casperlabs.shared.{Log, Time}
@@ -40,13 +41,13 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "propose if more than acc-count deploys are accumulated within acc-interval" in TestFixture(
     accInterval = 5.seconds,
     accCount = 2
-  ) { _ => implicit casperRef => implicit deployStorage =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
     } yield ()
@@ -55,10 +56,10 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "propose if less than acc-count deploys are accumulated after acc-interval" in TestFixture(
     accInterval = 250.millis,
     accCount = 10
-  ) { _ => implicit casperRef => implicit deployStorage =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
       _      <- Timer[Task].sleep(1.second)
@@ -69,10 +70,10 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not propose if none of the thresholds are reached" in TestFixture(
     accInterval = 1.second,
     accCount = 2
-  ) { _ => implicit casperRef => implicit deployStorage =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
     } yield ()
@@ -82,7 +83,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     ballotInterval = 1.seconds,
     accInterval = 10.seconds,
     accCount = 10
-  ) { _ => implicit casperRef => implicit deployBuffer =>
+  ) { _ => implicit casperRef => implicit deployStorage => _ =>
     for {
       casper <- MockMultiParentCasper[Task]
       _      <- Timer[Task].sleep(1500.millis)
@@ -94,10 +95,10 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     ballotInterval = 1.seconds,
     accInterval = 500.millis,
     accCount = 10
-  ) { _ => implicit casperRef => implicit deployBuffer =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- Timer[Task].sleep(1500.millis)
       _      = casper.proposalCount shouldBe 1
       _      = casper.ballotCount shouldBe 0
@@ -107,18 +108,18 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not propose if there are no new deploys" in TestFixture(
     accInterval = 1.second,
     accCount = 1
-  ) { _ => implicit casperRef => implicit deployStorage =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
       d1     = sampleDeployData
-      _      <- casper.deploy(d1)
+      _      <- deployBuffer.deploy(d1)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
-      _      <- casper.deploy(d1)
+      _      <- deployBuffer.deploy(d1)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
       d2     = sampleDeployData
-      _      <- casper.deploy(d2)
+      _      <- deployBuffer.deploy(d2)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 2
     } yield ()
@@ -127,17 +128,17 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   it should "not stop if the proposal fails" in TestFixture(
     accInterval = 1.second,
     accCount = 1
-  ) { _ => implicit casperRef => implicit deployStorage =>
+  ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     val defectiveCasper = new MockMultiParentCasper[Task]() {
       override def createMessage(canCreateBallot: Boolean): Task[CreateBlockStatus] =
         throw new RuntimeException("Oh no!")
     }
     for {
       _      <- MultiParentCasperRef[Task].set(defectiveCasper)
-      _      <- defectiveCasper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       casper <- MockMultiParentCasper[Task]
-      _      <- casper.deploy(sampleDeployData)
+      _      <- deployBuffer.deploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
     } yield ()
@@ -168,7 +169,9 @@ object AutoProposerTest {
         accInterval: FiniteDuration,
         accCount: Int
     )(
-        f: AutoProposer[Task] => MultiParentCasperRef[Task] => DeployStorage[Task] => Task[Unit]
+        f: AutoProposer[Task] => MultiParentCasperRef[Task] => DeployStorage[Task] => DeployBuffer[
+          Task
+        ] => Task[Unit]
     ): Unit = {
       val resources = for {
         implicit0(deployStorage: DeployStorage[Task]) <- Resource.liftF(
@@ -176,6 +179,7 @@ object AutoProposerTest {
                                                         )
         implicit0(emptyRef: MultiParentCasperRef[Task]) = MultiParentCasperRef.unsafe[Task]()
         blockApiLock                                    <- Resource.liftF(Semaphore[Task](1))
+        deployBuffer                                    = DeployBuffer.create[Task]("casperlabs", 1.minute)
         proposer <- AutoProposer[Task](
                      checkInterval = checkInterval,
                      ballotInterval = ballotInterval,
@@ -183,10 +187,11 @@ object AutoProposerTest {
                      accCount = accCount,
                      blockApiLock = blockApiLock
                    )
-      } yield (proposer, emptyRef, deployStorage)
+      } yield (proposer, emptyRef, deployStorage, deployBuffer)
 
       val test = resources.use {
-        case (proposer, casperRef, deployStorage) => f(proposer)(casperRef)(deployStorage)
+        case (proposer, casperRef, deployStorage, deployBuffer) =>
+          f(proposer)(casperRef)(deployStorage)(deployBuffer)
       }
 
       test.runSyncUnsafe(5.seconds)
@@ -205,11 +210,6 @@ object AutoProposerTest {
 
     @volatile var proposalCount = 0
     @volatile var ballotCount   = 0
-
-    override def deploy(deployData: Deploy): F[Either[Throwable, Unit]] =
-      DeployStorageWriter[F].addAsPending(List(deployData)) >> Sync[F].delay {
-        Right(())
-      }
 
     override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
       for {

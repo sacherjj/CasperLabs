@@ -19,6 +19,7 @@ import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -47,6 +48,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val blockStorage: BlockStorage[F],
     val dagStorage: DagStorage[F],
     val deployStorage: DeployStorage[F],
+    val deployBuffer: DeployBuffer[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {

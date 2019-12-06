@@ -29,7 +29,6 @@ trait MultiParentCasper[F[_]] {
   //// Brought from Casper trait
   def addBlock(block: Block): F[BlockStatus]
   def contains(block: Block): F[Boolean]
-  def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
       lfbHash: ByteString,

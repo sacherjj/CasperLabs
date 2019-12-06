@@ -9,8 +9,9 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 
 import scala.concurrent.duration.FiniteDuration
 import io.casperlabs.shared.Log
+import simulacrum.typeclass
 
-trait DeployBuffer[F[_]] {
+@typeclass trait DeployBuffer[F[_]] {
 
   /** If a deploy is valid (according to node rules), adds is the deploy buffer.
     * Otherwise returns an error.

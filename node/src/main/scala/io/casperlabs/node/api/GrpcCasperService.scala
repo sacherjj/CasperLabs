@@ -15,6 +15,7 @@ import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
@@ -24,7 +25,6 @@ import io.casperlabs.node.api.Utils.{
   validateDeployHash
 }
 import io.casperlabs.node.api.casper._
-import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -34,8 +34,9 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler]()
-      : F[CasperGrpcMonix.CasperService] =
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer](
+      isReadOnlyNode: Boolean
+  ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
       val adaptToInvalidArgument: PartialFunction[Throwable, Throwable] = {
         case e => InvalidArgument(e.getMessage)
@@ -44,7 +45,13 @@ object GrpcCasperService {
       new CasperGrpcMonix.CasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
           TaskLike[F].apply {
-            BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
+            if (isReadOnlyNode)
+              MonadThrowable[F].raiseError[Empty](
+                new IllegalStateException(
+                  "Node is running as READ-only node. Deploys won't be accepted"
+                )
+              )
+            else BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
           }
 
         override def getBlockInfo(request: GetBlockInfoRequest): Task[BlockInfo] =

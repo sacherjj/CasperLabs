@@ -18,6 +18,7 @@ import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
@@ -39,7 +40,7 @@ class GossipServiceCasperTestNode[F[_]](
     semaphoresMap: SemaphoreMap[F, ByteString],
     semaphore: Semaphore[F],
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
-    minTtl: FiniteDuration = 1.minute,
+    minTTL: FiniteDuration = 1.minute,
     chainName: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
@@ -49,6 +50,7 @@ class GossipServiceCasperTestNode[F[_]](
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
     deployStorage: DeployStorage[F],
+    deployBuffer: DeployBuffer[F],
     finalityDetector: FinalityDetectorVotingMatrix[F],
     val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
@@ -59,10 +61,9 @@ class GossipServiceCasperTestNode[F[_]](
       sk,
       genesis,
       maybeMakeEE
-    ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
+    ) (concurrentF, blockStorage, dagStorage, deployStorage, deployBuffer, metricEff, casperState) {
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
@@ -84,7 +85,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
-      minTtl,
+      minTTL,
       upgrades = Nil
     )
 
@@ -138,10 +139,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     initStorage() flatMap {
       case (blockStorage, dagStorage, deployStorage) =>
+        implicit val ds = deployStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
           semaphore    <- Semaphore[F](1)
+          chainName    = "casperlabs"
+          minTTL       = 1.minute
+          deployBuffer = DeployBuffer.create[F](chainName, minTTL)
           dag          <- dagStorage.getRepresentation
           _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
@@ -153,12 +158,15 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             semaphoreMap,
             semaphore,
             relaying = relaying,
-            gossipService = new TestGossipService[F]()
+            gossipService = new TestGossipService[F](),
+            chainName = chainName,
+            minTTL = minTTL
           ) (
             concurrentF,
             blockStorage,
             dagStorage,
             deployStorage,
+            deployBuffer,
             finalityDetector,
             timeEff,
             metricEff,
@@ -225,6 +233,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
           initStorage() flatMap {
             case (blockStorage, dagStorage, deployStorage) =>
+              implicit val ds = deployStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
@@ -234,6 +243,9 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
                 dag              <- dagStorage.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
+                chainName        = "casperlabs"
+                minTTL           = 1.minute
+                deployBuffer     = DeployBuffer.create[F](chainName, minTTL)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
@@ -242,12 +254,15 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   semaphore,
                   relaying = relaying,
                   gossipService = gossipService,
-                  maybeMakeEE = maybeMakeEE
+                  maybeMakeEE = maybeMakeEE,
+                  chainName = chainName,
+                  minTTL = minTTL
                 ) (
                   concurrentF,
                   blockStorage,
                   dagStorage,
                   deployStorage,
+                  deployBuffer,
                   finalityDetector,
                   timeEff,
                   metricEff,
