@@ -72,7 +72,7 @@ use crate::{
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
-pub const MAX_PAYMENT: u64 = 11_250_000;
+pub const MAX_PAYMENT: u64 = 16_000_000;
 pub const CONV_RATE: u64 = 10;
 
 pub const SYSTEM_ACCOUNT_ADDR: [u8; 32] = [0u8; 32];
