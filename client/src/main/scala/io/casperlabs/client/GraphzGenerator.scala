@@ -56,8 +56,7 @@ object GraphzGenerator {
     val genesisBlocks =
       blockInfos
         .map(_.getSummary)
-        .filter(_.validatorPublicKey.size == 0)
-        .take(1)
+        .filter(_.validatorPublicKey.isEmpty)
         .map(b => hexShort(b.blockHash))
 
     val fakeGenesisBlocks = if (genesisBlocks.size > 0) List.empty else List("alignment_node")
