@@ -760,7 +760,8 @@ class CasperLabsClient:
         block_infos = list(self.showBlocks(depth))
         dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
         if not out:
-            return dot_dag_description
+            yield dot_dag_description
+            return
 
         parts = out.split(".")
         file_format = parts[-1]
