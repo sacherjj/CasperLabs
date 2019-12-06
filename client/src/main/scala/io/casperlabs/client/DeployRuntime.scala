@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
 import cats.Show
-import cats.effect.{Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
@@ -551,12 +551,11 @@ object DeployRuntime {
   }
 
   private def writeToFile[F[_]: Sync](path: Path, text: String): F[Unit] =
-    Sync[F].bracket(Sync[F].delay(new BufferedWriter(new FileWriter(new File(path.toString))))) {
-      buffer =>
-        Sync[F].delay(buffer.write(text))
-    } { buffer =>
-      Sync[F].delay(buffer.close())
-    }
+    Resource
+      .fromAutoCloseable {
+        Sync[F].delay { new BufferedWriter(new FileWriter(new File(path.toString))) }
+      }
+      .use(buff => Sync[F].delay(buff.write(text)))
 
   private def printValidatorPriv(privateKey: PrivateKey): String =
     s"""-----BEGIN PRIVATE KEY-----
