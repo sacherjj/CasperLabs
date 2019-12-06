@@ -128,7 +128,7 @@ object GraphzGenerator {
 
     val validators = blockInfos
       .map(_.getSummary)
-      .filter(_.validatorPublicKey.size > 0)
+      .filterNot(_.validatorPublicKey.isEmpty)
       .foldMap { b =>
         val blockHash       = hexShort(b.blockHash)
         val blockSenderHash = hexShort(b.validatorPublicKey)
@@ -168,7 +168,7 @@ object GraphzGenerator {
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) =>
           parentsHashes
-            .filter(p => allBlockHashes.contains(p))
+            .filter(allBlockHashes)
             .zipWithIndex
             .traverse {
               case (p, index) =>
