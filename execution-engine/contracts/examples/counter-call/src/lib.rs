@@ -28,7 +28,7 @@ pub extern "C" fn call() {
     let _result: i32 = {
         let args = (GET_METHOD,);
         runtime::call_contract(contract_ref, &args, &Vec::new())
-            .to_t()
+            .into_t()
             .unwrap_or_revert()
     };
 }

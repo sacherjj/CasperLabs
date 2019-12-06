@@ -62,7 +62,7 @@ pub fn call_contract<A: ArgsParser>(
         ext_ffi::get_call_result(res_ptr);
         Vec::from_raw_parts(res_ptr, res_size, res_size)
     };
-    deserialize(&res_bytes).unwrap_or_revert()
+    deserialize(res_bytes).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -102,9 +102,9 @@ pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, CLValueError>
         }
     };
     Some(
-        deserialize::<CLValue>(&arg_bytes)
+        deserialize::<CLValue>(arg_bytes)
             .map_err(CLValueError::Serialization)
-            .and_then(|cl_value| cl_value.to_t()),
+            .and_then(|cl_value| cl_value.into_t()),
     )
 }
 
@@ -117,7 +117,7 @@ pub fn get_caller() -> PublicKey {
     let dest_ptr = contract_api::alloc_bytes(36);
     unsafe { ext_ffi::get_caller(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_blocktime() -> BlockTime {
@@ -126,14 +126,14 @@ pub fn get_blocktime() -> BlockTime {
         ext_ffi::get_blocktime(dest_ptr);
         Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
     };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_phase() -> Phase {
     let dest_ptr = contract_api::alloc_bytes(PHASE_SIZE);
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 /// Return the unforgable reference known by the current module under the given
@@ -150,9 +150,9 @@ pub fn get_key(name: &str) -> Option<Key> {
         Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize::<CLValue>(&key_bytes)
+    deserialize::<CLValue>(key_bytes)
         .unwrap_or_revert()
-        .to_t()
+        .into_t()
         .unwrap_or_revert()
 }
 
@@ -183,9 +183,9 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
-    deserialize::<CLValue>(&bytes)
+    deserialize::<CLValue>(bytes)
         .unwrap_or_revert()
-        .to_t()
+        .into_t()
         .unwrap_or_revert()
 }
 

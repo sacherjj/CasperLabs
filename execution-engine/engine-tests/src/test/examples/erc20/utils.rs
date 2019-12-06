@@ -20,7 +20,7 @@ pub fn contract_hash(builder: &mut TestBuilder, account: [u8; 32], name: &str) -
     let account_key = Key::Account(account);
     let stored_value = builder.query(None, account_key, &[name]).unwrap();
     if let StoredValue::CLValue(cl_value) = stored_value {
-        let key: Key = cl_value.to_t().unwrap();
+        let key: Key = cl_value.into_t().unwrap();
         if let Key::Hash(contract_hash) = key {
             contract_hash
         } else {

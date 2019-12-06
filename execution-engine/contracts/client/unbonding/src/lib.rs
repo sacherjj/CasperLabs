@@ -27,6 +27,6 @@ pub extern "C" fn call() {
     let unbond_amount: Option<U512> = arg_0.map(Into::into);
 
     runtime::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
-        .to_t()
+        .into_t()
         .unwrap_or_revert()
 }

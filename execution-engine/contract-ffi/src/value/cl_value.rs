@@ -35,11 +35,11 @@ impl CLValue {
         })
     }
 
-    pub fn to_t<T: CLTyped + FromBytes>(&self) -> Result<T, CLValueError> {
+    pub fn into_t<T: CLTyped + FromBytes>(self) -> Result<T, CLValueError> {
         let expected = T::cl_type();
 
         if self.cl_type == expected {
-            bytesrepr::deserialize(&self.bytes).map_err(CLValueError::Serialization)
+            bytesrepr::deserialize(self.bytes).map_err(CLValueError::Serialization)
         } else {
             Err(CLValueError::Type(CLTypeMismatch {
                 expected,

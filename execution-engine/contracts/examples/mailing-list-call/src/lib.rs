@@ -40,7 +40,7 @@ pub extern "C" fn call() {
     let name = "CasperLabs";
     let args = (SUB_METHOD, name);
     let sub_key = runtime::call_contract(contract_ref.clone(), &args, &Vec::new())
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
 
     runtime::put_key(MAIL_FEED_KEY, &sub_key);

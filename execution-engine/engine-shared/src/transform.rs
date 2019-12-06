@@ -121,17 +121,18 @@ where
     let expected_type_name = stored_value.type_name();
     let cl_value = stored_value
         .as_cl_value()
-        .ok_or_else(|| TypeMismatch::new("CLValue".to_string(), expected_type_name))?;
+        .ok_or_else(|| TypeMismatch::new("CLValue".to_string(), expected_type_name))?
+        .clone();
 
     match cl_value.cl_type() {
-        CLType::I32 => do_wrapping_addition::<i32, _>(&cl_value, to_add),
-        CLType::I64 => do_wrapping_addition::<i64, _>(&cl_value, to_add),
-        CLType::U8 => do_wrapping_addition::<u8, _>(&cl_value, to_add),
-        CLType::U32 => do_wrapping_addition::<u32, _>(&cl_value, to_add),
-        CLType::U64 => do_wrapping_addition::<u64, _>(&cl_value, to_add),
-        CLType::U128 => do_wrapping_addition::<U128, _>(&cl_value, to_add),
-        CLType::U256 => do_wrapping_addition::<U256, _>(&cl_value, to_add),
-        CLType::U512 => do_wrapping_addition::<U512, _>(&cl_value, to_add),
+        CLType::I32 => do_wrapping_addition::<i32, _>(cl_value, to_add),
+        CLType::I64 => do_wrapping_addition::<i64, _>(cl_value, to_add),
+        CLType::U8 => do_wrapping_addition::<u8, _>(cl_value, to_add),
+        CLType::U32 => do_wrapping_addition::<u32, _>(cl_value, to_add),
+        CLType::U64 => do_wrapping_addition::<u64, _>(cl_value, to_add),
+        CLType::U128 => do_wrapping_addition::<U128, _>(cl_value, to_add),
+        CLType::U256 => do_wrapping_addition::<U256, _>(cl_value, to_add),
+        CLType::U512 => do_wrapping_addition::<U512, _>(cl_value, to_add),
         other => {
             let expected = format!("integral type compatible with {}", any::type_name::<Y>());
             let found = format!("{:?}", other);
@@ -141,12 +142,12 @@ where
 }
 
 /// Attempts a wrapping addition of `to_add` to the value represented by `cl_value`.
-fn do_wrapping_addition<X, Y>(cl_value: &CLValue, to_add: Y) -> Result<StoredValue, Error>
+fn do_wrapping_addition<X, Y>(cl_value: CLValue, to_add: Y) -> Result<StoredValue, Error>
 where
     X: WrappingAdd + CLTyped + ToBytes + FromBytes + Copy + 'static,
     Y: AsPrimitive<X>,
 {
-    let x: X = cl_value.to_t()?;
+    let x: X = cl_value.into_t()?;
     let result = x.wrapping_add(&(to_add.as_()));
     Ok(StoredValue::CLValue(CLValue::from_t(&result)?))
 }
@@ -536,7 +537,7 @@ fn wrapping_addition_should_succeed() {
         let result = wrapping_addition(current, to_add).expect("wrapping addition should succeed");
         CLValue::try_from(result)
             .expect("should be CLValue")
-            .to_t()
+            .into_t()
             .expect("should parse to X")
     }
 

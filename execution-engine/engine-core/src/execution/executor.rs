@@ -116,7 +116,7 @@ impl Executor {
             // TODO: figure out how this works with the cost model
             // https://casperlabs.atlassian.net/browse/EE-239
             on_fail_charge!(
-                bytesrepr::deserialize(args),
+                bytesrepr::deserialize(args.to_vec()),
                 Gas::new(args.len().into()),
                 effects_snapshot
             )
@@ -201,7 +201,7 @@ impl Executor {
             Vec::new()
         } else {
             on_fail_charge!(
-                bytesrepr::deserialize(args),
+                bytesrepr::deserialize(args.to_vec()),
                 Gas::new(args.len().into()),
                 effects_snapshot
             )
@@ -312,7 +312,7 @@ impl Executor {
         let args: Vec<CLValue> = if args.is_empty() {
             Vec::new()
         } else {
-            bytesrepr::deserialize(args)?
+            bytesrepr::deserialize(args.to_vec())?
         };
 
         let gas_counter = Gas::default();
@@ -351,7 +351,7 @@ impl Executor {
                 // Treat as though the execution returned the unit type `()` as per Rust functions
                 // which don't specify a return value.
                 let result = runtime.take_host_buf().unwrap_or(CLValue::from_t(&())?);
-                let ret = result.to_t()?;
+                let ret = result.into_t()?;
                 return Ok(ret);
             }
         };
@@ -365,7 +365,7 @@ impl Executor {
             _ => return Err(Error::Interpreter(return_error)),
         };
 
-        let ret = return_value.to_t()?;
+        let ret = return_value.into_t()?;
         Ok(ret)
     }
 }

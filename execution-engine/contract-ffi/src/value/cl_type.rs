@@ -765,11 +765,11 @@ mod tests {
         let expected_len = cl_value.serialized_len();
         let serialized_cl_value = cl_value.into_bytes().unwrap();
         assert_eq!(serialized_cl_value.len(), expected_len);
-        let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
+        let parsed_cl_value: CLValue = bytesrepr::deserialize(serialized_cl_value).unwrap();
         let expected_value = CLValue::from_t(value).unwrap();
         assert_eq!(expected_value, parsed_cl_value);
 
-        let parsed_value = CLValue::to_t(&expected_value).unwrap();
+        let parsed_value = CLValue::into_t(expected_value).unwrap();
         assert_eq!(*value, parsed_value);
     }
 
@@ -896,10 +896,10 @@ mod tests {
                     let expected = CLValue::from_t(&array).unwrap();
 
                     let serialized_cl_value = cl_value.into_bytes().unwrap();
-                    let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
+                    let parsed_cl_value: CLValue = bytesrepr::deserialize(serialized_cl_value).unwrap();
                     assert_eq!(expected, parsed_cl_value);
 
-                    let parsed_value: [u64; $N] = CLValue::to_t(&expected).unwrap();
+                    let parsed_value: [u64; $N] = CLValue::into_t(expected).unwrap();
                     for i in 0..$N {
                         assert_eq!(array[i], parsed_value[i]);
                     }

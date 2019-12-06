@@ -17,7 +17,7 @@ const RESULT_TUREF_NAME: &str = "output_version";
 pub extern "C" fn call() {
     let mint_pointer = system::get_mint();
     let value: String = runtime::call_contract(mint_pointer, &(NEW_ENDPOINT_NAME,), &vec![])
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
     let value_turef = storage::new_turef(&value);
     let key = Key::URef(value_turef.into());

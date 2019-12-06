@@ -18,7 +18,7 @@ pub fn get_main_purse() -> PurseId {
         ext_ffi::get_main_purse(dest_ptr);
         Vec::from_raw_parts(dest_ptr, PURSE_ID_SIZE_SERIALIZED, PURSE_ID_SIZE_SERIALIZED)
     };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn set_action_threshold(

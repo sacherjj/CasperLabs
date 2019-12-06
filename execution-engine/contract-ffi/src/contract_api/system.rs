@@ -38,9 +38,9 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
             error::result_from(value).map(|_| uref_data_raw)
         };
         // Revert for any possible error that happened on host side
-        let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e));
+        let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e)).to_vec();
         // Deserializes a valid URef passed from the host side
-        deserialize(&uref_bytes).unwrap_or_revert()
+        deserialize(uref_bytes).unwrap_or_revert()
     };
     if uref.access_rights().is_none() {
         runtime::revert(Error::NoAccessRights);
@@ -70,7 +70,7 @@ pub fn create_purse() -> PurseId {
                 PURSE_ID_SIZE_SERIALIZED,
                 PURSE_ID_SIZE_SERIALIZED,
             );
-            deserialize(&bytes).unwrap_or_revert()
+            deserialize(bytes).unwrap_or_revert()
         } else {
             runtime::revert(Error::PurseNotCreated)
         }
@@ -91,9 +91,9 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let cl_value: CLValue = deserialize(&balance_bytes).unwrap_or_revert();
+    let cl_value: CLValue = deserialize(balance_bytes).unwrap_or_revert();
 
-    let balance = cl_value.to_t().unwrap_or_revert();
+    let balance = cl_value.into_t().unwrap_or_revert();
 
     Some(balance)
 }

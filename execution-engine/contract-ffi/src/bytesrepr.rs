@@ -32,6 +32,9 @@ pub trait IntoBytes {
 
 pub trait FromBytes: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error>;
+    fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
+        Self::from_bytes(bytes.as_slice()).map(|(x, remainder)| (x, Vec::from(remainder)))
+    }
 }
 
 #[derive(Debug, Fail, PartialEq, Eq, Clone)]
@@ -56,8 +59,8 @@ impl From<TryReserveError> for Error {
     }
 }
 
-pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
-    let (t, rem): (T, &[u8]) = FromBytes::from_bytes(bytes)?;
+pub fn deserialize<T: FromBytes>(bytes: Vec<u8>) -> Result<T, Error> {
+    let (t, rem): (T, Vec<u8>) = FromBytes::from_vec(bytes)?;
     if rem.is_empty() {
         Ok(t)
     } else {
@@ -883,7 +886,7 @@ where
     T: ToBytes + FromBytes + PartialEq,
 {
     let serialized = ToBytes::to_bytes(t).expect("Unable to serialize data");
-    let deserialized = deserialize::<T>(&serialized).expect("Unable to deserialize data");
+    let deserialized = deserialize::<T>(serialized).expect("Unable to deserialize data");
     assert!(*t == deserialized)
 }
 

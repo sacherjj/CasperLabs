@@ -21,7 +21,7 @@ pub extern "C" fn call() {
 
     let args = ("World",);
     let result: String = runtime::call_contract(contract_ref, &args, &Vec::new())
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
     assert_eq!("Hello, World", result);
 
