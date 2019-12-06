@@ -57,5 +57,5 @@ pub extern "C" fn call() {
         DESTINATION_UREF => store_at_uref(),
         _ => runtime::revert(Error::UnknownDestination),
     };
-    runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, key);
 }

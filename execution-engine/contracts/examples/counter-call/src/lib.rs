@@ -22,12 +22,12 @@ pub extern "C" fn call() {
 
     {
         let args = (INC_METHOD,);
-        runtime::call_contract(contract_ref.clone(), &args, &Vec::new());
+        runtime::call_contract(contract_ref.clone(), args, Vec::new());
     }
 
     let _result: i32 = {
         let args = (GET_METHOD,);
-        runtime::call_contract(contract_ref, &args, &Vec::new())
+        runtime::call_contract(contract_ref, args, Vec::new())
             .to_t()
             .unwrap_or_revert()
     };

@@ -37,7 +37,7 @@ pub fn set_action_threshold(
 
 /// Adds a public key with associated weight to an account.
 pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), AddKeyFailure> {
-    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
     let result = unsafe { ext_ffi::add_associated_key(public_key_ptr, weight.value().into()) };
     if result == 0 {
@@ -49,7 +49,7 @@ pub fn add_associated_key(public_key: PublicKey, weight: Weight) -> Result<(), A
 
 /// Removes a public key from associated keys on an account
 pub fn remove_associated_key(public_key: PublicKey) -> Result<(), RemoveKeyFailure> {
-    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(public_key);
     let result = unsafe { ext_ffi::remove_associated_key(public_key_ptr) };
     if result == 0 {
         Ok(())
@@ -63,7 +63,7 @@ pub fn update_associated_key(
     public_key: PublicKey,
     weight: Weight,
 ) -> Result<(), UpdateKeyFailure> {
-    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(&public_key);
+    let (public_key_ptr, _public_key_size, _bytes) = to_ptr(public_key);
     // Cast of u8 (weight) into i32 is assumed to be always safe
     let result = unsafe { ext_ffi::update_associated_key(public_key_ptr, weight.value().into()) };
     if result == 0 {

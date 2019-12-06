@@ -291,7 +291,7 @@ where
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(36); //32 bytes for deploy hash + 4 bytes ID
         pre_hash_bytes.extend_from_slice(&self.deploy_hash);
-        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id().into_bytes()?);
 
         self.inc_fn_store_id();
 
@@ -317,7 +317,7 @@ where
     pub fn put_key(&mut self, name: String, key: Key) -> Result<(), Error> {
         // No need to perform actual validation on the base key because an account or contract (i.e.
         // the element stored under `base_key`) is allowed to add new named keys to itself.
-        let named_key_value = StoredValue::CLValue(CLValue::from_t(&(name.clone(), key))?);
+        let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
         self.validate_value(&named_key_value)?;
 
         self.add_gs_unsafe(self.base_key(), named_key_value)?;

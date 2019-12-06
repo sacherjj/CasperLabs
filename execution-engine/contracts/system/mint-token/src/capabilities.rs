@@ -20,13 +20,13 @@ pub trait Readable<T> {
 /// Trait representing the ability to write a value. See `Readable`
 /// for use case.
 pub trait Writable<T> {
-    fn write(self, value: &T);
+    fn write(self, value: T);
 }
 
 /// Trait representing the ability to add a value `t` to some stored
 /// value of the same type. See `Readable` for use case.
 pub trait Addable<T> {
-    fn add(self, value: &T);
+    fn add(self, value: T);
 }
 
 /// Add-only URef
@@ -53,7 +53,7 @@ impl<T> TryFrom<Key> for RefWithAddRights<T> {
 }
 
 impl<T: CLTyped + ToBytes> Addable<T> for RefWithAddRights<T> {
-    fn add(self, value: &T) {
+    fn add(self, value: T) {
         let turef = TURef::<T>::new(self.0, Self::access_rights());
         storage::add(turef, value);
     }
@@ -98,14 +98,14 @@ impl<T: CLTyped + FromBytes> Readable<T> for RefWithReadAddWriteRights<T> {
 }
 
 impl<T: CLTyped + ToBytes> Writable<T> for RefWithReadAddWriteRights<T> {
-    fn write(self, value: &T) {
+    fn write(self, value: T) {
         let turef = self.into();
         storage::write(turef, value);
     }
 }
 
 impl<T: CLTyped + ToBytes + FromBytes> Addable<T> for RefWithReadAddWriteRights<T> {
-    fn add(self, value: &T) {
+    fn add(self, value: T) {
         let turef = self.into();
         storage::add(turef, value);
     }

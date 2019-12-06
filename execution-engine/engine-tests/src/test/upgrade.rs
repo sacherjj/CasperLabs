@@ -154,7 +154,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         original_version,
-        StoredValue::CLValue(CLValue::from_t(&"1.0.0".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.0.0".to_string()).unwrap()),
         "should be original version"
     );
 
@@ -185,7 +185,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         upgraded_version,
-        StoredValue::CLValue(CLValue::from_t(&"1.0.1".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.0.1".to_string()).unwrap()),
         "should be original version"
     );
 }

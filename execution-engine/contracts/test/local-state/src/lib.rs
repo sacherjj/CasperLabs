@@ -20,7 +20,7 @@ pub fn delegate() {
 
     res.push_str(HELLO_PREFIX);
     // Write "Hello, "
-    storage::write_local(LOCAL_KEY, &res);
+    storage::write_local(LOCAL_KEY, res);
 
     // Read (this should exercise cache)
     let mut res: String = storage::read_local(&LOCAL_KEY)
@@ -29,7 +29,7 @@ pub fn delegate() {
     // Append
     res.push_str(WORLD_SUFFIX);
     // Write
-    storage::write_local(LOCAL_KEY, &res.trim().to_string());
+    storage::write_local(LOCAL_KEY, res.trim().to_string());
 }
 
 #[cfg(not(feature = "lib"))]

@@ -57,7 +57,7 @@ impl StateReader<Key, StoredValue> for CountingDb {
         let count = self.count.get();
         let value = match self.value {
             Some(ref v) => v.clone(),
-            None => StoredValue::CLValue(CLValue::from_t(&count).unwrap()),
+            None => StoredValue::CLValue(CLValue::from_t(count).unwrap()),
         };
         self.count.set(count + 1);
         Ok(Some(value))
@@ -82,7 +82,7 @@ fn tracking_copy_caching() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let zero = StoredValue::CLValue(CLValue::from_t(&0_i32).unwrap());
+    let zero = StoredValue::CLValue(CLValue::from_t(0_i32).unwrap());
     // first read
     let value = tc.read(correlation_id, &k).unwrap().unwrap();
     assert_eq!(value, zero);
@@ -103,7 +103,7 @@ fn tracking_copy_read() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let zero = StoredValue::CLValue(CLValue::from_t(&0_i32).unwrap());
+    let zero = StoredValue::CLValue(CLValue::from_t(0_i32).unwrap());
     let value = tc.read(correlation_id, &k).unwrap().unwrap();
     // value read correctly
     assert_eq!(value, zero);
@@ -122,8 +122,8 @@ fn tracking_copy_write() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let one = StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap());
-    let two = StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap());
+    let one = StoredValue::CLValue(CLValue::from_t(1_i32).unwrap());
+    let two = StoredValue::CLValue(CLValue::from_t(2_i32).unwrap());
 
     // writing should work
     tc.write(k, one.clone());
@@ -155,7 +155,7 @@ fn tracking_copy_add_i32() {
     let mut tc = TrackingCopy::new(db);
     let k = Key::Hash([0u8; 32]);
 
-    let three = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
+    let three = StoredValue::CLValue(CLValue::from_t(3_i32).unwrap());
 
     // adding should work
     let add = tc.add(correlation_id, k, three.clone());
@@ -196,9 +196,9 @@ fn tracking_copy_add_named_key() {
     let u2 = Key::URef(URef::new([2u8; 32], AccessRights::READ_WRITE));
 
     let name1 = "test".to_string();
-    let named_key = StoredValue::CLValue(CLValue::from_t(&(name1.clone(), u1)).unwrap());
+    let named_key = StoredValue::CLValue(CLValue::from_t((name1.clone(), u1)).unwrap());
     let name2 = "test2".to_string();
-    let other_named_key = StoredValue::CLValue(CLValue::from_t(&(name2.clone(), u2)).unwrap());
+    let other_named_key = StoredValue::CLValue(CLValue::from_t((name2.clone(), u2)).unwrap());
     let mut map: BTreeMap<String, Key> = BTreeMap::new();
     map.insert(name1, u1);
 
@@ -206,7 +206,7 @@ fn tracking_copy_add_named_key() {
     let failed_add = tc.add(
         correlation_id,
         k,
-        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
     );
     assert_matches!(failed_add, Ok(AddResult::TypeMismatch(_)));
     assert_eq!(tc.ops.is_empty(), true);
@@ -241,7 +241,7 @@ fn tracking_copy_rw() {
     let k = Key::Hash([0u8; 32]);
 
     // reading then writing should update the op
-    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
+    let value = StoredValue::CLValue(CLValue::from_t(3_i32).unwrap());
     let _ = tc.read(correlation_id, &k);
     tc.write(k, value.clone());
     assert_eq!(tc.fns.len(), 1);
@@ -259,7 +259,7 @@ fn tracking_copy_ra() {
     let k = Key::Hash([0u8; 32]);
 
     // reading then adding should update the op
-    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
+    let value = StoredValue::CLValue(CLValue::from_t(3_i32).unwrap());
     let _ = tc.read(correlation_id, &k);
     let _ = tc.add(correlation_id, k, value);
     assert_eq!(tc.fns.len(), 1);
@@ -278,8 +278,8 @@ fn tracking_copy_aw() {
     let k = Key::Hash([0u8; 32]);
 
     // adding then writing should update the op
-    let value = StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap());
-    let write_value = StoredValue::CLValue(CLValue::from_t(&7_i32).unwrap());
+    let value = StoredValue::CLValue(CLValue::from_t(3_i32).unwrap());
+    let write_value = StoredValue::CLValue(CLValue::from_t(7_i32).unwrap());
     let _ = tc.add(correlation_id, k, value);
     tc.write(k, write_value.clone());
     assert_eq!(tc.fns.len(), 1);
@@ -440,15 +440,15 @@ fn cache_reads_invalidation() {
     let mut tc_cache = TrackingCopyCache::new(2, Count);
     let (k1, v1) = (
         Key::Hash([1u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
     );
     let (k2, v2) = (
         Key::Hash([2u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(2_i32).unwrap()),
     );
     let (k3, v3) = (
         Key::Hash([3u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
     );
     tc_cache.insert_read(k1, v1);
     tc_cache.insert_read(k2, v2.clone());
@@ -463,15 +463,15 @@ fn cache_writes_not_invalidated() {
     let mut tc_cache = TrackingCopyCache::new(2, Count);
     let (k1, v1) = (
         Key::Hash([1u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
     );
     let (k2, v2) = (
         Key::Hash([2u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&2_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(2_i32).unwrap()),
     );
     let (k3, v3) = (
         Key::Hash([3u8; 32]),
-        StoredValue::CLValue(CLValue::from_t(&3_i32).unwrap()),
+        StoredValue::CLValue(CLValue::from_t(3_i32).unwrap()),
     );
     tc_cache.insert_write(k1, v1.clone());
     tc_cache.insert_read(k2, v2.clone());

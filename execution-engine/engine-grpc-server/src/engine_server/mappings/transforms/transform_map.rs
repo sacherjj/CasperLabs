@@ -42,8 +42,7 @@ mod tests {
                 let mut tmp = TransformEntry::new();
                 tmp.set_key(key.into());
                 tmp.set_transform(
-                    Transform::Write(StoredValue::CLValue(CLValue::from_t(&12_i32).unwrap()))
-                        .into(),
+                    Transform::Write(StoredValue::CLValue(CLValue::from_t(12_i32).unwrap())).into(),
                 );
                 tmp
             };
@@ -59,7 +58,7 @@ mod tests {
             .try_into()
             .expect("Transforming `Vec<TransformEntry>` into `TransformMap` should work.");
         let expected_transform =
-            Transform::Write(StoredValue::CLValue(CLValue::from_t(&22_i32).unwrap()));
+            Transform::Write(StoredValue::CLValue(CLValue::from_t(22_i32).unwrap()));
         let commit_transform = commit.0.get(&key);
         assert!(commit_transform.is_some());
         assert_eq!(expected_transform, *commit_transform.unwrap())

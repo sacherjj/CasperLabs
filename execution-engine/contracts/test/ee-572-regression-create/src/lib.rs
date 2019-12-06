@@ -25,7 +25,7 @@ pub extern "C" fn create() {
         ret.set_access_rights(AccessRights::READ);
         ret.into()
     };
-    let return_value = CLValue::from_t(&read_only_reference).unwrap_or_revert();
+    let return_value = CLValue::from_t(read_only_reference).unwrap_or_revert();
 
     let extra_urefs = vec![read_only_reference];
 
@@ -35,5 +35,5 @@ pub extern "C" fn create() {
 #[no_mangle]
 pub extern "C" fn call() {
     let contract: Key = storage::store_function_at_hash(CONTRACT_NAME, Default::default()).into();
-    runtime::put_key(CONTRACT_NAME, &contract)
+    runtime::put_key(CONTRACT_NAME, contract)
 }

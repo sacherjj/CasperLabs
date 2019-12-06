@@ -39,11 +39,11 @@ pub extern "C" fn call() {
 
     let name = "CasperLabs";
     let args = (SUB_METHOD, name);
-    let sub_key = runtime::call_contract(contract_ref.clone(), &args, &Vec::new())
+    let sub_key = runtime::call_contract(contract_ref.clone(), args, Vec::new())
         .to_t()
         .unwrap_or_revert();
 
-    runtime::put_key(MAIL_FEED_KEY, &sub_key);
+    runtime::put_key(MAIL_FEED_KEY, sub_key);
 
     let key_name_uref =
         runtime::get_key(MAIL_FEED_KEY).unwrap_or_revert_with(Error::GetKeyNameURef);
@@ -53,7 +53,7 @@ pub extern "C" fn call() {
 
     let message = "Hello, World!";
     let args = (PUB_METHOD, message);
-    runtime::call_contract(contract_ref, &args, &Vec::new());
+    runtime::call_contract(contract_ref, args, Vec::new());
 
     let list_key: TURef<Vec<String>> = sub_key
         .to_turef()

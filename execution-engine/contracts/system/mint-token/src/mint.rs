@@ -32,8 +32,8 @@ where
         }
 
         let dest_bal = self.dep_lookup(dest).ok_or(Error::DestNotFound)?;
-        source_bal.write(&(source_value - amount));
-        dest_bal.add(&amount);
+        source_bal.write(source_value - amount);
+        dest_bal.add(amount);
         Ok(())
     }
 }
@@ -62,14 +62,14 @@ mod tests {
     }
 
     impl Writable<U512> for Balance {
-        fn write(self, value: &U512) {
-            self.set(*value);
+        fn write(self, value: U512) {
+            self.set(value);
         }
     }
 
     impl Addable<U512> for Balance {
-        fn add(self, value: &U512) {
-            self.update(|x| x + *value);
+        fn add(self, value: U512) {
+            self.update(|x| x + value);
         }
     }
 

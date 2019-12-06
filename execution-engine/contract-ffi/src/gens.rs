@@ -134,33 +134,33 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
     };
 
     prop_oneof![
-        Just(CLValue::from_t(&()).expect("should create CLValue")),
-        any::<bool>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        any::<i32>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        any::<i64>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        any::<u8>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        any::<u32>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        any::<u64>().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        u128_arb().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        u256_arb().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        u512_arb().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        key_arb().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        uref_arb().prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        ".*".prop_map(|x: String| CLValue::from_t(&x).expect("should create CLValue")),
-        option::of(any::<u64>()).prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        vec(uref_arb(), 0..100).prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        [any::<u64>(); 32].prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+        Just(CLValue::from_t(()).expect("should create CLValue")),
+        any::<bool>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        any::<i32>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        any::<i64>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        any::<u8>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        any::<u32>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        any::<u64>().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        u128_arb().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        u256_arb().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        u512_arb().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        key_arb().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        uref_arb().prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        ".*".prop_map(|x: String| CLValue::from_t(x).expect("should create CLValue")),
+        option::of(any::<u64>()).prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        vec(uref_arb(), 0..100).prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        [any::<u64>(); 32].prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         result::maybe_err(key_arb(), ".*")
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         btree_map(".*", u512_arb(), 0..100)
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
-        (any::<bool>()).prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
+        (any::<bool>()).prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (any::<bool>(), any::<i32>())
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (any::<bool>(), any::<i32>(), any::<i64>())
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (any::<bool>(), any::<i32>(), any::<i64>(), any::<u8>())
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -168,7 +168,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             any::<u8>(),
             any::<u32>()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -177,7 +177,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             any::<u32>(),
             any::<u64>()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -187,7 +187,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             any::<u64>(),
             u128_arb()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -198,7 +198,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             u128_arb(),
             u256_arb()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -210,7 +210,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             u256_arb(),
             u512_arb()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (
             any::<bool>(),
             any::<i32>(),
@@ -223,7 +223,7 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             u512_arb(),
             key_arb()
         )
-            .prop_map(|x| CLValue::from_t(&x).expect("should create CLValue")),
+            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
     ]
 }
 

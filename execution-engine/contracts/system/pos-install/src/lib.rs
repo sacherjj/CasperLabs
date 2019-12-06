@@ -85,14 +85,14 @@ pub extern "C" fn call() {
     let uref: URef = storage::store_function(POS_FUNCTION_NAME, named_keys)
         .into_uref()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
-    let return_value = CLValue::from_t(&uref).unwrap_or_revert();
+    let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
     runtime::ret(return_value, vec![uref]);
 }
 
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
     let result: Result<URef, mint::Error> =
-        runtime::call_contract(mint.clone(), &("mint", amount), &vec![])
+        runtime::call_contract(mint.clone(), ("mint", amount), vec![])
             .to_t()
             .unwrap_or_revert();
 

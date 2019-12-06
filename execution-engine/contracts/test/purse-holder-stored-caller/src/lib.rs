@@ -46,13 +46,13 @@ pub extern "C" fn call() {
         METHOD_VERSION => {
             let version: String = runtime::call_contract(
                 purse_holder_contract_pointer.clone(),
-                &(method_name,),
-                &vec![],
+                (method_name,),
+                vec![],
             )
             .to_t()
             .unwrap_or_revert();
-            let version_key = storage::new_turef(&version).into();
-            runtime::put_key(METHOD_VERSION, &version_key);
+            let version_key = storage::new_turef(version).into();
+            runtime::put_key(METHOD_VERSION, version_key);
         }
         _ => {
             let purse_name: String = runtime::get_arg(Args::PurseName as u32)
@@ -61,8 +61,8 @@ pub extern "C" fn call() {
 
             runtime::call_contract(
                 purse_holder_contract_pointer.clone(),
-                &(method_name, purse_name),
-                &vec![],
+                (method_name, purse_name),
+                vec![],
             );
         }
     };

@@ -26,7 +26,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::InvalidArgument);
     let unbond_amount: Option<U512> = arg_0.map(Into::into);
 
-    runtime::call_contract(pos_pointer, &(UNBOND_METHOD_NAME, unbond_amount), &vec![])
+    runtime::call_contract(pos_pointer, (UNBOND_METHOD_NAME, unbond_amount), vec![])
         .to_t()
         .unwrap_or_revert()
 }

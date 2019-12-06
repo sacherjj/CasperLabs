@@ -760,8 +760,8 @@ mod tests {
         value::CLValue,
     };
 
-    fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug>(value: &T) {
-        let cl_value = CLValue::from_t(value).unwrap();
+    fn round_trip<T: CLTyped + FromBytes + ToBytes + PartialEq + Debug + Clone>(value: &T) {
+        let cl_value = CLValue::from_t(value.clone()).unwrap();
 
         let serialized_cl_value = cl_value.to_bytes().unwrap();
         assert_eq!(serialized_cl_value.len(), cl_value.serialized_len());
@@ -891,7 +891,7 @@ mod tests {
                         tmp
                     };
 
-                    let cl_value = CLValue::from_t(&array).unwrap();
+                    let cl_value = CLValue::from_t(array.clone()).unwrap();
 
                     let serialized_cl_value = cl_value.to_bytes().unwrap();
                     let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();

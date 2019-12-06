@@ -15,7 +15,7 @@ use contract_ffi::{
 pub extern "C" fn call() {
     let main_purse = account::get_main_purse();
     // add or update `main_purse` if it doesn't exist already
-    runtime::put_key("purse:main", &Key::from(main_purse.value()));
+    runtime::put_key("purse:main", Key::from(main_purse.value()));
 
     let src_purse_name: String = runtime::get_arg(0)
         .unwrap_or_revert_with(Error::MissingArgument)
@@ -35,7 +35,7 @@ pub extern "C" fn call() {
         // If `dst_purse_name` is not in known urefs list then create a new purse
         let purse = system::create_purse();
         // and save it in known urefs
-        runtime::put_key(&dst_purse_name, &purse.value().into());
+        runtime::put_key(&dst_purse_name, purse.value().into());
         purse
     } else {
         let uref_key = runtime::get_key(&dst_purse_name).unwrap_or_revert_with(Error::User(105));
@@ -55,10 +55,10 @@ pub extern "C" fn call() {
 
     let result = format!("{:?}", transfer_result);
     // Add new urefs
-    let result_key: Key = storage::new_turef(&result).into();
-    runtime::put_key("purse_transfer_result", &result_key);
+    let result_key: Key = storage::new_turef(result).into();
+    runtime::put_key("purse_transfer_result", result_key);
     runtime::put_key(
         "main_purse_balance",
-        &storage::new_turef(&final_balance).into(),
+        storage::new_turef(final_balance).into(),
     );
 }

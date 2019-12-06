@@ -30,13 +30,13 @@ fn purse_to_key(p: PurseId) -> Key {
 fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
     runtime::call_contract(
         pos.clone(),
-        &(POS_BOND, *amount, source),
-        &vec![purse_to_key(source)],
+        (POS_BOND, *amount, source),
+        vec![purse_to_key(source)],
     );
 }
 
 fn unbond(pos: &ContractRef, amount: Option<U512>) {
-    runtime::call_contract(pos.clone(), &(POS_UNBOND, amount), &Vec::<Key>::new());
+    runtime::call_contract(pos.clone(), (POS_UNBOND, amount), Vec::<Key>::new());
 }
 
 const POS_BOND: &str = "bond";

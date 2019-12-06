@@ -22,8 +22,8 @@ use crate::{
 /// Note this function is only relevant to contracts stored on chain which return a value to their
 /// caller. The return value of a directly deployed contract is never looked at.
 pub fn ret(value: CLValue, extra_urefs: Vec<URef>) -> ! {
-    let (ptr, size, _bytes) = contract_api::to_ptr(&value);
-    let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(&extra_urefs);
+    let (ptr, size, _bytes) = contract_api::to_ptr(value);
+    let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(extra_urefs);
     unsafe {
         ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
     }
@@ -41,15 +41,11 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser>(
-    c_ptr: ContractRef,
-    args: &A,
-    extra_urefs: &Vec<Key>,
-) -> CLValue {
+pub fn call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A, extra_urefs: Vec<Key>) -> CLValue {
     let contract_key: Key = c_ptr.into();
-    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&contract_key);
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
-        .map(|args| contract_api::to_ptr(&args))
+        .map(contract_api::to_ptr)
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
     let res_size = unsafe {
@@ -71,7 +67,7 @@ pub fn call_contract<A: ArgsParser>(
 pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
     let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
     let key: Key = uref.into();
-    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(&key);
+    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
     let result_value =
         unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
     match error::result_from(result_value) {
@@ -164,7 +160,7 @@ pub fn has_key(name: &str) -> bool {
 }
 
 /// Put the given key to the named_keys map under the given name
-pub fn put_key(name: &str, key: &Key) {
+pub fn put_key(name: &str, key: Key) {
     let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = contract_api::to_ptr(key);
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
@@ -191,7 +187,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
 
 /// checks if a uref is valid
 pub fn is_valid_uref(uref: URef) -> bool {
-    let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(&uref);
+    let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };
     result != 0
 }

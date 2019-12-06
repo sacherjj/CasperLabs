@@ -24,7 +24,7 @@ pub extern "C" fn call() {
         .into_uref()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant);
 
-    let return_value = CLValue::from_t(&uref).unwrap_or_revert();
+    let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
     runtime::ret(return_value, vec![uref]);
 }

@@ -38,7 +38,7 @@ fn should_run_local_state_contract() {
             .get(&expected_local_key)
             .expect("Should have expected local key"),
         &Transform::Write(StoredValue::CLValue(
-            CLValue::from_t(&String::from("Hello, world!")).unwrap()
+            CLValue::from_t(String::from("Hello, world!")).unwrap()
         ))
     );
 
@@ -47,7 +47,7 @@ fn should_run_local_state_contract() {
             .get(&expected_local_key)
             .expect("Should have expected local key"),
         &Transform::Write(StoredValue::CLValue(
-            CLValue::from_t(&String::from("Hello, world! Hello, world!")).unwrap()
+            CLValue::from_t(String::from("Hello, world! Hello, world!")).unwrap()
         ))
     );
 }

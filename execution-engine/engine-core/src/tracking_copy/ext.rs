@@ -82,7 +82,7 @@ where
         let uref = outer_key
             .as_uref()
             .ok_or_else(|| execution::Error::URefNotFound("public purse balance".to_string()))?;
-        let local_key_bytes = uref.addr().to_bytes()?;
+        let local_key_bytes = uref.addr().into_bytes()?;
         let balance_mapping_key = Key::local(mint_contract_uref.addr(), &local_key_bytes);
         match self
             .query(correlation_id, balance_mapping_key, &[])

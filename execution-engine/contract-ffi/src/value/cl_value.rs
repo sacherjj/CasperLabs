@@ -26,8 +26,8 @@ pub struct CLValue {
 }
 
 impl CLValue {
-    pub fn from_t<T: CLTyped + ToBytes>(t: &T) -> Result<CLValue, CLValueError> {
-        let bytes = t.to_bytes().map_err(CLValueError::Serialization)?;
+    pub fn from_t<T: CLTyped + ToBytes>(t: T) -> Result<CLValue, CLValueError> {
+        let bytes = t.into_bytes().map_err(CLValueError::Serialization)?;
 
         Ok(CLValue {
             cl_type: T::cl_type(),
@@ -73,21 +73,20 @@ impl CLValue {
 
 impl ToBytes for CLValue {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let serialized_len = self.serialized_len();
-        if serialized_len > u32::max_value() as usize {
-            return Err(bytesrepr::Error::OutOfMemoryError);
-        }
-        let mut result = Vec::with_capacity(serialized_len);
-        result.append(&mut self.cl_type.to_bytes()?);
-        result.append(&mut self.bytes.to_bytes()?);
+        self.clone().into_bytes()
+    }
+
+    fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let mut result = self.bytes.into_bytes()?;
+        result.append(&mut self.cl_type.into_bytes()?);
         Ok(result)
     }
 }
 
 impl FromBytes for CLValue {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
-        let (cl_type, remainder) = CLType::from_bytes(bytes)?;
-        let (bytes, remainder) = Vec::<u8>::from_bytes(remainder)?;
+        let (bytes, remainder) = Vec::<u8>::from_bytes(bytes)?;
+        let (cl_type, remainder) = CLType::from_bytes(remainder)?;
         let cl_value = CLValue { cl_type, bytes };
         Ok((cl_value, remainder))
     }
@@ -110,6 +109,23 @@ impl ToBytes for Vec<CLValue> {
 
         Ok(result)
     }
+
+    fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
+        let serialized_len = self.iter().map(CLValue::serialized_len).sum();
+        if serialized_len > u32::max_value() as usize - U32_SIZE {
+            return Err(bytesrepr::Error::OutOfMemoryError);
+        }
+
+        let mut result = Vec::with_capacity(serialized_len);
+        let len = self.len() as u32;
+        result.append(&mut len.to_bytes()?);
+
+        for cl_value in self {
+            result.append(&mut cl_value.into_bytes()?);
+        }
+
+        Ok(result)
+    }
 }
 
 impl FromBytes for Vec<CLValue> {
@@ -124,5 +140,25 @@ impl FromBytes for Vec<CLValue> {
             bytes = remainder;
         }
         Ok((result, bytes))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytesrepr::deserialize;
+    use alloc::collections::BTreeMap;
+
+    #[test]
+    fn ser_cl_value() {
+        let mut map: BTreeMap<String, u64> = BTreeMap::new();
+        map.insert(String::from("abc"), 1);
+        map.insert(String::from("xyz"), 2);
+        let v = CLValue::from_t(map.clone()).unwrap();
+        let ser_v = v.clone().into_bytes().unwrap();
+        let w = deserialize::<CLValue>(&ser_v).unwrap();
+        assert_eq!(v, w);
+        let x = w.to_t().unwrap();
+        assert_eq!(map, x);
     }
 }

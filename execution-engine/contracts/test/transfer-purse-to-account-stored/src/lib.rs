@@ -35,11 +35,11 @@ pub extern "C" fn transfer() {
 
     let result = format!("{:?}", transfer_result);
 
-    let result_uref: Key = storage::new_turef(&result).into();
-    runtime::put_key(TRANSFER_RESULT_UREF_NAME, &result_uref);
+    let result_uref: Key = storage::new_turef(result).into();
+    runtime::put_key(TRANSFER_RESULT_UREF_NAME, result_uref);
     runtime::put_key(
         MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
-        &storage::new_turef(&final_balance).into(),
+        storage::new_turef(final_balance).into(),
     );
 }
 
@@ -50,5 +50,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::put_key(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, &key);
+    runtime::put_key(TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME, key);
 }

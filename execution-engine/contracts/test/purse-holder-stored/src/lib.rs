@@ -48,9 +48,9 @@ pub extern "C" fn apply_method() {
         METHOD_ADD => {
             let purse_name = purse_name();
             let purse_id = system::create_purse();
-            runtime::put_key(&purse_name, &purse_id.value().into());
+            runtime::put_key(&purse_name, purse_id.value().into());
         }
-        METHOD_VERSION => runtime::ret(CLValue::from_t(&VERSION).unwrap_or_revert(), vec![]),
+        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert(), vec![]),
         _ => runtime::revert(Error::User(CustomError::UnknownMethodName as u16)),
     }
 }
@@ -63,9 +63,9 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, key);
 
     // set version
-    let version_key = storage::new_turef(&VERSION).into();
-    runtime::put_key(METHOD_VERSION, &version_key);
+    let version_key = storage::new_turef(VERSION).into();
+    runtime::put_key(METHOD_VERSION, version_key);
 }

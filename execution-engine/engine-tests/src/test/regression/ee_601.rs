@@ -67,7 +67,7 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     assert_eq!(
         payment_value,
-        StoredValue::CLValue(CLValue::from_t(&"payment".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("payment".to_string()).unwrap()),
         "expected payment"
     );
 
@@ -77,7 +77,7 @@ fn should_run_ee_601_pay_session_new_uref_collision() {
 
     assert_eq!(
         session_value,
-        StoredValue::CLValue(CLValue::from_t(&"session".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("session".to_string()).unwrap()),
         "expected session"
     );
 }

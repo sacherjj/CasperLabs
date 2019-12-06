@@ -30,5 +30,5 @@ pub extern "C" fn call() {
         ContractRef::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
-    runtime::call_contract(local_state_contract_pointer, &(), &vec![]);
+    runtime::call_contract(local_state_contract_pointer, (), vec![]);
 }

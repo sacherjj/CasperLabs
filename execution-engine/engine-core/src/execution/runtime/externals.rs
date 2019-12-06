@@ -322,7 +322,7 @@ where
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
                 let purse_id = self.create_purse()?;
-                let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
+                let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
                 assert_eq!(dest_size, purse_id_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_id_bytes)
@@ -414,7 +414,7 @@ where
                 let ret = match self.get_balance(purse_id)? {
                     Some(balance) => {
                         let balance_as_cl_value =
-                            CLValue::from_t(&balance).map_err(Error::CLValue)?;
+                            CLValue::from_t(balance).map_err(Error::CLValue)?;
                         let serialized_len = balance_as_cl_value.serialized_len();
                         self.host_buf = Some(balance_as_cl_value);
                         serialized_len as i32

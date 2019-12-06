@@ -138,10 +138,10 @@ fn delegate() -> Result<(), Error> {
             };
             // Install the contract with associated owner-related keys
             let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
-            runtime::put_key(TRANSFER_FUNDS_KEY, &contract_ref.into());
+            runtime::put_key(TRANSFER_FUNDS_KEY, contract_ref.into());
             // For easy access in outside world here `donation_box` purse is also attached
             // to the account
-            runtime::put_key(DONATION_BOX_COPY, &donation_box.value().into());
+            runtime::put_key(DONATION_BOX_COPY, donation_box.value().into());
         }
         METHOD_CALL => {
             // This comes from outside i.e. after deploying the contract, this key is queried, and
@@ -157,7 +157,7 @@ fn delegate() -> Result<(), Error> {
                     .map_err(|_| Error::InvalidArgument)?;
 
             let subcontract_args = (subcontract_method,);
-            runtime::call_contract(contract_ref, &subcontract_args, &Vec::new());
+            runtime::call_contract(contract_ref, subcontract_args, Vec::new());
         }
         _ => return Err(ContractError::InvalidDelegateMethod.into()),
     }

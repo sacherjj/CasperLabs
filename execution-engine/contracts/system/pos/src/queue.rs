@@ -71,10 +71,10 @@ pub trait QueueProvider {
     fn read_unbonding() -> Queue;
 
     /// Writes bonding queue.
-    fn write_bonding(queue: &Queue);
+    fn write_bonding(queue: Queue);
 
     /// Writes unbonding queue.
-    fn write_unbonding(queue: &Queue);
+    fn write_unbonding(queue: Queue);
 }
 
 /// A `QueueProvider` that reads and writes the queue to/from the contract's
@@ -97,12 +97,12 @@ impl QueueProvider for QueueLocal {
     }
 
     /// Writes bonding queue to the local state of the contract.
-    fn write_bonding(queue: &Queue) {
+    fn write_bonding(queue: Queue) {
         storage::write_local(BONDING_KEY, queue);
     }
 
     /// Writes unbonding queue to the local state of the contract.
-    fn write_unbonding(queue: &Queue) {
+    fn write_unbonding(queue: Queue) {
         storage::write_local(UNBONDING_KEY, queue);
     }
 }

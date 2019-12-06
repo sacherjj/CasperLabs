@@ -174,7 +174,7 @@ impl ExecutionResultBuilder {
         let mut transforms = AdditiveMap::new();
 
         let new_balance = account_main_purse_balance - max_payment_cost;
-        let new_balance_value = StoredValue::CLValue(CLValue::from_t(&new_balance.value()).ok()?);
+        let new_balance_value = StoredValue::CLValue(CLValue::from_t(new_balance.value()).ok()?);
 
         let account_main_purse_normalize = account_main_purse.normalize();
         let rewards_purse_normalize = rewards_purse.normalize();

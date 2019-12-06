@@ -176,7 +176,7 @@ where
         let install_deploy_hash = {
             let name: &[u8] = genesis_config.name().as_bytes();
             let timestamp: &[u8] = &genesis_config.timestamp().to_le_bytes();
-            let wasm_costs_bytes: &[u8] = &wasm_costs.to_bytes()?;
+            let wasm_costs_bytes: &[u8] = &wasm_costs.into_bytes()?;
             let bytes: Vec<u8> = {
                 let mut ret = Vec::new();
                 ret.extend_from_slice(name);
@@ -241,9 +241,9 @@ where
                     .map(|(k, v)| (k, v.value()))
                     .collect();
                 let args = (mint_reference, bonded_validators);
-                ArgsParser::parse(&args)
+                ArgsParser::parse(args)
                     .expect("args should convert to `Vec<CLValue>`")
-                    .to_bytes()
+                    .into_bytes()
                     .expect("args should parse")
             };
             let mut named_keys = BTreeMap::new();
@@ -355,9 +355,9 @@ where
                 let args = {
                     let motes = account.balance().value();
                     let args = (MINT_METHOD_NAME, motes);
-                    ArgsParser::parse(&args)
+                    ArgsParser::parse(args)
                         .expect("args should convert to `Vec<CLValue>`")
-                        .to_bytes()
+                        .into_bytes()
                         .expect("args should parse")
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
@@ -534,7 +534,7 @@ where
                     let bytes: Vec<u8> = upgrade_config
                         .new_protocol_version()
                         .value()
-                        .to_bytes()?
+                        .into_bytes()?
                         .to_vec();
                     Blake2bHash::new(&bytes).into()
                 };
@@ -1092,9 +1092,9 @@ where
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
                 let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
                 let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
-                ArgsParser::parse(&args)
+                ArgsParser::parse(args)
                     .expect("args should convert to `Vec<CLValue>`")
-                    .to_bytes()
+                    .into_bytes()
                     .expect("args should parse")
             };
 

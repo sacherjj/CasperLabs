@@ -22,15 +22,11 @@ fn purse_to_key(p: &PurseId) -> Key {
 }
 
 fn set_refund_purse(pos: &ContractRef, p: &PurseId) {
-    runtime::call_contract(
-        pos.clone(),
-        &("set_refund_purse", *p),
-        &vec![purse_to_key(p)],
-    );
+    runtime::call_contract(pos.clone(), ("set_refund_purse", *p), vec![purse_to_key(p)]);
 }
 
 fn get_payment_purse(pos: &ContractRef) -> PurseId {
-    runtime::call_contract(pos.clone(), &("get_payment_purse",), &Vec::new())
+    runtime::call_contract(pos.clone(), ("get_payment_purse",), Vec::new())
         .to_t()
         .unwrap_or_revert()
 }
@@ -44,8 +40,8 @@ fn submit_payment(pos: &ContractRef, amount: U512) {
 fn finalize_payment(pos: &ContractRef, amount_spent: U512, account: PublicKey) {
     runtime::call_contract(
         pos.clone(),
-        &("finalize_payment", amount_spent, account),
-        &Vec::new(),
+        ("finalize_payment", amount_spent, account),
+        Vec::new(),
     );
 }
 
@@ -69,7 +65,7 @@ pub extern "C" fn call() {
     submit_payment(&pos_pointer, payment_amount);
     if refund_purse_flag != 0 {
         let refund_purse = system::create_purse();
-        runtime::put_key("local_refund_purse", &Key::URef(refund_purse.value()));
+        runtime::put_key("local_refund_purse", Key::URef(refund_purse.value()));
         set_refund_purse(&pos_pointer, &refund_purse);
     }
 
