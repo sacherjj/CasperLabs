@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use core::u32;
 
 use crate::{
-    bytesrepr::{self, FromBytes, IntoBytes, ToBytes, U32_SIZE},
+    bytesrepr::{self, safe_split_at, FromBytes, IntoBytes, ToBytes, U32_SIZE},
     value::cl_type::{CLType, CLTyped},
 };
 
@@ -77,9 +77,12 @@ impl IntoBytes for CLValue {
         if serialized_len > u32::max_value() as usize {
             return Err(bytesrepr::Error::OutOfMemoryError);
         }
+        let bytes = self.bytes;
         let mut result = Vec::with_capacity(serialized_len);
         result.append(&mut self.cl_type.to_bytes()?);
-        result.append(&mut self.bytes.to_bytes()?);
+        let len = (bytes.len() as u32).to_le_bytes();
+        result.extend_from_slice(&len);
+        result.extend(bytes);
         Ok(result)
     }
 }
@@ -102,6 +105,17 @@ impl FromBytes for CLValue {
         let (cl_type, remainder) = CLType::from_bytes(remainder)?;
         let cl_value = CLValue { cl_type, bytes };
         Ok((cl_value, remainder))
+    }
+
+    fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), bytesrepr::Error> {
+        let (cl_type, remainder) = CLType::from_bytes(&bytes)?;
+        let (size, remainder) = <u32>::from_bytes(remainder)?;
+        let (bytes, remainder) = safe_split_at(remainder, size as usize)?;
+        let cl_value = CLValue {
+            cl_type,
+            bytes: bytes.to_vec(),
+        };
+        Ok((cl_value, remainder.to_vec()))
     }
 }
 
