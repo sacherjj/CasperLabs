@@ -53,6 +53,10 @@ object GraphzGenerator {
 
     val allBlockHashes = blockInfos.map(b => hexShort(b.getSummary.blockHash)).toSet
 
+    // In the current model only genesis block has empty validatorPublicKey,
+    // and there must be only one genesis block. However, if that ever changes
+    // or there is a bug and there is more than one block like that,
+    // then we want to visualise all of them.
     val genesisBlocks =
       blockInfos
         .map(_.getSummary)
