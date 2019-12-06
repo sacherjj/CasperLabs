@@ -215,15 +215,12 @@ object GraphzGenerator {
       rank: Rank,
       blocks: ValidatorsBlocks,
       lastFinalizedBlockHash: String
-  ): List[(Option[GraphStyle], String)] = {
-    val blocksForRank = blocks.getOrElse(rank, List.empty)
-    blocksForRank.size match {
-      case 0 => List((Some(Constant.Invisible), s"${rank.show}_$validatorId"))
-      case _ =>
-        blocksForRank
-          .map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
+  ): List[(Option[GraphStyle], String)] =
+    blocks.get(rank) match {
+      case Some(blocks) =>
+        blocks.map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
+      case None => List((Some(Constant.Invisible), s"${rank.show}_$validatorId"))
     }
-  }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](
       id: String,
