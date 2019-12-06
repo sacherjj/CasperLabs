@@ -2,7 +2,7 @@ package io.casperlabs.client
 import java.io._
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.Show
 import cats.effect.{Sync, Timer}
@@ -17,7 +17,7 @@ import io.casperlabs.client.configuration.{DeployConfig, Streaming}
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1}
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
 import io.casperlabs.models.DeployImplicits._
@@ -520,14 +520,14 @@ object DeployRuntime {
   def keygen[F[_]: Sync](
       outputDirectory: File
   ): F[Unit] = {
-    val dir                        = outputDirectory.toPath + "/"
-    val validatorPrivPath: String  = dir + "validator-private.pem"
-    val validatorPubPath: String   = dir + "validator-public.pem"
-    val validatorIdPath: String    = dir + "validator-id"
-    val validatorIdHexPath: String = dir + "validator-id-hex"
-    val nodePrivPath: String       = dir + "node.key.pem"
-    val nodeCertPath: String       = dir + "node.certificate.pem"
-    val nodeIdPath: String         = dir + "node-id"
+    val path                     = outputDirectory.toPath
+    val validatorPrivPath: Path  = path.resolve("validator-private.pem")
+    val validatorPubPath: Path   = path.resolve("validator-public.pem")
+    val validatorIdPath: Path    = path.resolve("validator-id")
+    val validatorIdHexPath: Path = path.resolve("validator-id-hex")
+    val nodePrivPath: Path       = path.resolve("node.key.pem")
+    val nodeCertPath: Path       = path.resolve("node.certificate.pem")
+    val nodeIdPath: Path         = path.resolve("node-id")
 
     val program = for {
       (valPriv, valPub) <- Sync[F].delay(Ed25519.newKeyPair)
@@ -545,17 +545,18 @@ object DeployRuntime {
                )
       _ <- writeToFile(nodeIdPath, Base16.encode(nodeId))
 
-    } yield ()
+    } yield s"Keys successfully created in directory: ${path.toAbsolutePath.toString}"
 
     gracefulExit(program.attempt)
   }
 
-  private def writeToFile[F[_]: Sync](filePath: String, text: String): F[Unit] =
-    for {
-      buffer <- Sync[F].delay(new BufferedWriter(new FileWriter(new File(filePath))))
-      _      <- Sync[F].delay(buffer.write(text))
-      _      <- Sync[F].delay(buffer.close())
-    } yield ()
+  private def writeToFile[F[_]: Sync](path: Path, text: String): F[Unit] =
+    Sync[F].bracket(Sync[F].delay(new BufferedWriter(new FileWriter(new File(path.toString))))) {
+      buffer =>
+        Sync[F].delay(buffer.write(text))
+    } { buffer =>
+      Sync[F].delay(buffer.close())
+    }
 
   private def printValidatorPriv(privateKey: PrivateKey): String =
     s"""-----BEGIN PRIVATE KEY-----

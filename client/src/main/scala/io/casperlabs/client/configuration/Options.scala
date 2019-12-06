@@ -202,7 +202,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val host =
     opt[String](
       descr = "Hostname or IP of node on which the gRPC service is running.",
-      required = true
+      required = false,
+      default = Option("localhost")
     )
 
   val nodeId =
@@ -613,7 +614,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
          |   node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
          |                         # derived from node.key.pem
          |   node.key.pem          # secp256r1 private key
-         |   validator-id          # validator ID, used to run as a validator for validating transactions, used in bonds.txt file
+         |   validator-id          # validator ID in Base64 format; can be used in accounts.csv
          |                         # derived from validator.public.pem
          |   validator-id-hex      # validator ID in hex, derived from validator.public.pem
          |   validator-private.pem # ed25519 private key
