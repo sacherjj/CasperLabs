@@ -405,6 +405,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       .through(
         DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
       )
+      .through(DeployFilters.Pipes.validMaxTtl[F](deployConfig.maxTtlMillis))
       .timer("notExpiredFilter")
 
     for {

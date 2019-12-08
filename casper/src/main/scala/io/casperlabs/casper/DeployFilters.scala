@@ -68,6 +68,11 @@ object DeployFilters {
     ): fs2.Pipe[F, Deploy, Deploy] =
       filterA(DeployFilters.dependenciesMet(dag, parents))
 
+    def validMaxTtl[F[_]: MonadThrowable](
+        maxTTL: Int
+    ): fs2.Pipe[F, (DeployHash, Deploy.Header), (DeployHash, Deploy.Header)] =
+      filter(tupleRight(d => d.ttlMillis < maxTTL))
+
     /**
       * Lifts a boolean function on A to one on (B, A) by acting only
       * on the right element of the tuple.

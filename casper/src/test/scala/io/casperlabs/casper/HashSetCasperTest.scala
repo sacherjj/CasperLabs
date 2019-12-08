@@ -1227,6 +1227,24 @@ abstract class HashSetCasperTest
     } yield ()
   }
 
+  it should "not include deploys with too long TTL in the block" in effectTest {
+    val maxTtl = 1.day // maximum TTL used in tests is 1 day
+    val node =
+      standaloneEff(
+        genesis,
+        transforms,
+        validatorKeys.head,
+        faultToleranceThreshold = 0.1
+      )
+
+    for {
+      deploy <- ProtoUtil.basicDeploy[Task]().map(_.withTtl(2 * maxTtl.toMillis.toInt))
+      _      <- node.casperEff.deploy(deploy) shouldBeF Right(())
+      status <- node.casperEff.createBlock
+    } yield assert(status == NoNewDeploys)
+
+  }
+
   it should "only execute deploys during the appropriate time window" in effectTest {
     import io.casperlabs.models.DeployImplicits._
     val node =
