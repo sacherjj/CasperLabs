@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.comm.ServiceError.{InvalidArgument, Unavailable}
+import io.casperlabs.comm.ServiceError.{FailedPrecondition, InvalidArgument, Unavailable}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.mempool.DeployBuffer
@@ -46,10 +46,8 @@ object GrpcCasperService {
         override def deploy(request: DeployRequest): Task[Empty] =
           TaskLike[F].apply {
             if (isReadOnlyNode)
-              MonadThrowable[F].raiseError[Empty](
-                new IllegalStateException(
-                  "Node is running as READ-only node. Deploys won't be accepted"
-                )
+              MonadThrowable[F].raiseError(
+                FailedPrecondition("Node is in read-only mode.")
               )
             else BlockAPI.deploy[F](request.getDeploy).map(_ => Empty())
           }
