@@ -44,10 +44,10 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
     } yield ()
@@ -59,7 +59,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
       _      <- Timer[Task].sleep(1.second)
@@ -73,7 +73,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 0
     } yield ()
@@ -98,7 +98,7 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
   ) { _ => implicit casperRef => implicit deployStorage => implicit deployBuffer =>
     for {
       casper <- MockMultiParentCasper[Task]
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- Timer[Task].sleep(1500.millis)
       _      = casper.proposalCount shouldBe 1
       _      = casper.ballotCount shouldBe 0
@@ -112,14 +112,14 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     for {
       casper <- MockMultiParentCasper[Task]
       d1     = sampleDeployData
-      _      <- deployBuffer.deploy(d1)
+      _      <- deployBuffer.addDeploy(d1)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
-      _      <- deployBuffer.deploy(d1)
+      _      <- deployBuffer.addDeploy(d1)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
       d2     = sampleDeployData
-      _      <- deployBuffer.deploy(d2)
+      _      <- deployBuffer.addDeploy(d2)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 2
     } yield ()
@@ -135,10 +135,10 @@ class AutoProposerTest extends FlatSpec with Matchers with ArbitraryConsensus {
     }
     for {
       _      <- MultiParentCasperRef[Task].set(defectiveCasper)
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       casper <- MockMultiParentCasper[Task]
-      _      <- deployBuffer.deploy(sampleDeployData)
+      _      <- deployBuffer.addDeploy(sampleDeployData)
       _      <- waitForCheck
       _      = casper.proposalCount shouldBe 1
     } yield ()

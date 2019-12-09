@@ -58,7 +58,7 @@ object BlockAPI {
   ): F[Unit] =
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      r <- DeployBuffer[F].deploy(d)
+      r <- DeployBuffer[F].addDeploy(d)
       _ <- r match {
             case Right(_) =>
               Metrics[F].incrementCounter("deploys-success") *> ().pure[F]

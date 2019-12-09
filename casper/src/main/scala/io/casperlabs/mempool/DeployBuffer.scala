@@ -16,7 +16,7 @@ import simulacrum.typeclass
   /** If a deploy is valid (according to node rules), adds is the deploy buffer.
     * Otherwise returns an error.
     */
-  def deploy(d: Deploy): F[Either[Throwable, Unit]]
+  def addDeploy(d: Deploy): F[Either[Throwable, Unit]]
 }
 
 object DeployBuffer {
@@ -53,7 +53,7 @@ object DeployBuffer {
         } yield ()
       }
 
-      override def deploy(d: Deploy): F[Either[Throwable, Unit]] =
+      override def addDeploy(d: Deploy): F[Either[Throwable, Unit]] =
         (for {
           _ <- validateDeploy(d)
           _ <- DeployStorageWriter[F].addAsPending(List(d))
