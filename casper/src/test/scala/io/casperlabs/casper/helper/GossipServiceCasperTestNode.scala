@@ -27,6 +27,7 @@ import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.tail.Iterant
 import logstage.LogIO
+import io.casperlabs.shared.LogStub
 
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.FiniteDuration

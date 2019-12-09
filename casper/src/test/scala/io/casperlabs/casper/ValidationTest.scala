@@ -38,7 +38,8 @@ import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.ArbitraryConsensus
 import io.casperlabs.models.BlockImplicits.BlockOps
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform

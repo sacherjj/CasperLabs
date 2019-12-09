@@ -35,6 +35,7 @@ import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import io.casperlabs.casper.helper.DeployOps._
 import io.casperlabs.comm.ServiceError.OutOfRange
+import io.casperlabs.shared.LogStub
 
 import scala.concurrent.duration._
 

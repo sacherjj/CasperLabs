@@ -31,6 +31,7 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.LogIO
+import io.casperlabs.shared.LogStub
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._

@@ -20,7 +20,8 @@ import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
+import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import monix.eval.Task
@@ -1135,6 +1136,7 @@ abstract class HashSetCasperTest
                 validatorKeys.take(2),
                 genesis,
                 transforms,
+                faultToleranceThreshold = 0.0,
                 maybeMakeEE =
                   Some(HashSetCasperTestNode.simpleEEApi[Task](_, generateConflict = true))
               )

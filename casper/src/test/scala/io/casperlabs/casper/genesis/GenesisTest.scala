@@ -13,7 +13,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
 import io.casperlabs.models.Weight
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService

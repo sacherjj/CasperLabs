@@ -18,7 +18,7 @@ import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
