@@ -334,6 +334,7 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         31 => Err(Error::InvalidSystemContract),
         32 => Err(Error::PurseNotCreated),
         33 => Err(Error::Unhandled),
+        34 => Err(Error::BufferTooSmall),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
