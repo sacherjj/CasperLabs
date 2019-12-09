@@ -12,44 +12,54 @@ import scala.util.Try
 
 object Utils {
   def check[F[_]: MonadThrowable, A](
-      s: A,
+      str: A,
       desc: String,
-      b: A => Boolean
+      cond: A => Boolean
   ): F[A] =
-    MonadThrowable[F].raiseError[A](new IllegalArgumentException(s"$desc")).whenA(!b(s)) >> s
-      .pure[F]
+    MonadThrowable[F]
+      .raiseError[A](new IllegalArgumentException(s"$desc"))
+      .whenA(!cond(str))
+      .as(str)
+
+  // The API accepts base16 in case we want to use them in RESTful URLs but also raw bytes,
+  // to make it less cumbersome for clients. Use whihever is present.
+  private def fallback(hashBase16: String, hash: ByteString) =
+    if (hashBase16.isEmpty) Base16.encode(hash.toByteArray) else hashBase16
 
   def validateBlockHashPrefix[F[_]: MonadThrowable](
-      p: String,
+      prefixBase16: String,
+      prefix: ByteString,
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
       .check[F, String](
-        p,
+        fallback(prefixBase16, prefix),
         "BlockHash prefix must be >= 4 and <= 64 base16 characters (2 to 32 bytes) long",
         _.matches("[a-f0-9]{4,64}")
       )
       .adaptErr(adaptError)
 
   def validateDeployHash[F[_]: MonadThrowable](
-      p: String,
+      hashBase16: String,
+      hash: ByteString,
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
       .check[F, String](
-        p,
+        fallback(hashBase16, hash),
         "DeployHash must be 64 base16 characters (32 bytes) long",
         _.matches("[a-f0-9]{64}")
       )
       .adaptError(adaptError)
 
   def validateAccountPublicKey[F[_]: MonadThrowable](
-      p: String,
+      keyBase16: String,
+      key: ByteString,
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
       .check[F, String](
-        p,
+        fallback(keyBase16, key),
         "AccountPublicKey must be 64 base16 characters (32 bytes) long",
         _.matches("[a-f0-9]{64}")
       )

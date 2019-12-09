@@ -78,7 +78,7 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command in ("deploy", "send-deploy", "bond", "unbond"):
+        if command in ("deploy", "send-deploy", "bond", "unbond", "transfer"):
             return output.split()[2]
             # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
@@ -94,6 +94,10 @@ class CLI:
 
         if command in ("show-deploy", "show-block", "query-state"):
             return parse(output)
+
+        if command in ("balance",):
+            # 'Balance:\n9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414 : 1000000000'
+            return int(output.split(":")[-1])
 
         return output
 

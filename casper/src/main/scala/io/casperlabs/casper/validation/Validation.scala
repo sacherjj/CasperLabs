@@ -6,11 +6,11 @@ import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond}
+import io.casperlabs.casper.consensus.{state, Block, BlockSummary, Bond, Deploy}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
 import io.casperlabs.crypto.Keys.{PublicKey, Signature}
 import io.casperlabs.catscontrib.Fs2Compiler
@@ -21,6 +21,7 @@ import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.ipc.ChainSpec.{DeployConfig => IPCDeployConfig}
 import io.casperlabs.models.Message
 import io.casperlabs.shared._
 import io.casperlabs.models.BlockImplicits._
@@ -48,7 +49,6 @@ trait Validation[F[_]] {
     */
   def parents(
       b: Block,
-      lastFinalizedBlockHash: BlockHash,
       dag: DagRepresentation[F]
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 
@@ -71,14 +71,14 @@ trait Validation[F[_]] {
       maybeGenesis: Option[Block]
   )(
       implicit bs: BlockStorage[F],
-      versions: CasperLabsProtocolVersions[F],
+      versions: CasperLabsProtocol[F],
       compiler: Fs2Compiler[F]
   ): F[Unit]
 
   def blockSummary(
       summary: BlockSummary,
       chainName: String
-  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit]
+  )(implicit versions: CasperLabsProtocol[F]): F[Unit]
 }
 
 object Validation {
@@ -88,11 +88,6 @@ object Validation {
   type Data        = Array[Byte]
 
   val DRIFT = 15000 // 15 seconds
-
-  // TODO: put in chainspec https://casperlabs.atlassian.net/browse/NODE-911
-  val MAX_TTL: Int          = 24 * 60 * 60 * 1000 // 1 day
-  val MIN_TTL: Int          = 60 * 60 * 1000 // 1 hour
-  val MAX_DEPENDENCIES: Int = 10
 
   def ignore[F[_]: Log](blockHash: ByteString, reason: String): F[Unit] =
     Log[F].warn(
@@ -201,14 +196,7 @@ object Validation {
 
       case None =>
         for {
-          deployToBlocksMap <- deploys
-                                .traverse { deploy =>
-                                  bs.findBlockHashesWithDeployHash(deploy.deployHash).map {
-                                    blockHashes =>
-                                      deploy -> blockHashes.filterNot(_ == block.blockHash)
-                                  }
-                                }
-                                .map(_.toMap)
+          deployToBlocksMap <- bs.findBlockHashesWithDeployHashes(deploys.map(_.deployHash))
 
           blockHashes = deployToBlocksMap.values.flatten.toSet
 
@@ -419,45 +407,70 @@ object Validation {
       ).as(false)
     }
 
-  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log: Time](
       d: consensus.Deploy,
-      chainName: String
+      chainName: String,
+      deployConfig: IPCDeployConfig
   ): F[List[Errors.DeployHeaderError]] =
     d.header match {
       case Some(header) =>
-        Applicative[F].map3(
-          validateTimeToLive[F](ProtoUtil.getTimeToLive(header, MAX_TTL), d.deployHash),
-          validateDependencies[F](header.dependencies, d.deployHash),
-          validateChainName[F](chainName, header.chainName, d.deployHash)
+        Applicative[F].map4(
+          maxTtl[F](
+            ProtoUtil.getTimeToLive(header, deployConfig.maxTtlMillis),
+            d.deployHash,
+            deployConfig.maxTtlMillis
+          ),
+          validateDependencies[F](
+            header.dependencies,
+            d.deployHash,
+            deployConfig.maxDependencies
+          ),
+          validateChainName[F](d, chainName),
+          validateTimestamp[F](d)
         ) {
-          case (validTTL, validDependencies, validChainNames) =>
-            validTTL.toList ::: validDependencies ::: validChainNames.toList
+          case (validTTL, validDependencies, validChainNames, validTimestamp) =>
+            validTTL.toList ::: validDependencies ::: validChainNames.toList ::: validTimestamp.toList
         }
 
       case None =>
         Errors.DeployHeaderError.MissingHeader(d.deployHash).logged[F].map(List(_))
     }
 
-  private def validateTimeToLive[F[_]: MonadThrowable: RaiseValidationError: Log](
+  private def maxTtl[F[_]: MonadThrowable: RaiseValidationError: Log](
       ttl: Int,
-      deployHash: ByteString
+      deployHash: ByteString,
+      maxTTL: Int
   ): F[Option[Errors.DeployHeaderError]] =
-    if (ttl < MIN_TTL)
-      Errors.DeployHeaderError.timeToLiveTooShort(deployHash, ttl, MIN_TTL).logged[F].map(_.some)
-    else if (ttl > MAX_TTL)
-      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, MAX_TTL).logged[F].map(_.some)
+    if (ttl > maxTTL)
+      Errors.DeployHeaderError.timeToLiveTooLong(deployHash, ttl, maxTTL).logged[F].map(_.some)
+    else
+      none[Errors.DeployHeaderError].pure[F]
+
+  def minTtl[F[_]: Applicative: Log](
+      deploy: Deploy,
+      minTtl: FiniteDuration
+  ): F[Option[Errors.DeployHeaderError]] =
+    // If deploy's TTL is set to 0 it means user didn't want to set the TTL and is OK with how
+    // node handles its deploy. If it's anything different than 0 (must be positive though) then
+    // it also has to be correct as per node's min TTL configuration.
+    if (deploy.getHeader.ttlMillis != 0 && deploy.getHeader.ttlMillis < minTtl.toMillis)
+      Errors.DeployHeaderError
+        .timeToLiveTooShort(deploy.deployHash, deploy.getHeader.ttlMillis, minTtl)
+        .logged[F]
+        .map(_.some)
     else
       none[Errors.DeployHeaderError].pure[F]
 
   private def validateDependencies[F[_]: MonadThrowable: RaiseValidationError: Log](
       dependencies: Seq[ByteString],
-      deployHash: ByteString
+      deployHash: ByteString,
+      maxDependencies: Int
   ): F[List[Errors.DeployHeaderError]] = {
     val numDependencies = dependencies.length
     val tooMany =
-      if (numDependencies > MAX_DEPENDENCIES)
+      if (numDependencies > maxDependencies)
         Errors.DeployHeaderError
-          .tooManyDependencies(deployHash, numDependencies, MAX_DEPENDENCIES)
+          .tooManyDependencies(deployHash, numDependencies, maxDependencies)
           .logged[F]
           .map(_.some)
       else
@@ -470,18 +483,31 @@ object Validation {
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  private def validateChainName[F[_]: MonadThrowable: RaiseValidationError: Log](
-      chainName: String,
-      deployChainName: String,
-      deployHash: ByteString
+  def validateChainName[F[_]: MonadThrowable: RaiseValidationError: Log](
+      deploy: Deploy,
+      chainName: String
   ): F[Option[Errors.DeployHeaderError]] =
-    if (deployChainName.nonEmpty && deployChainName != chainName)
+    if (deploy.getHeader.chainName.nonEmpty && deploy.getHeader.chainName != chainName)
       Errors.DeployHeaderError
-        .invalidChainName(deployHash, deployChainName, chainName)
+        .invalidChainName(deploy.deployHash, deploy.getHeader.chainName, chainName)
         .logged[F]
         .map(_.some)
     else
       none[Errors.DeployHeaderError].pure[F]
+
+  private def validateTimestamp[F[_]: Monad: Log: Time](
+      deploy: consensus.Deploy
+  ): F[Option[Errors.DeployHeaderError]] =
+    Time[F].currentMillis flatMap { currentTime =>
+      if (currentTime + DRIFT < deploy.getHeader.timestamp) {
+        Errors.DeployHeaderError
+          .timestampInFuture(deploy.deployHash, deploy.getHeader.timestamp, DRIFT)
+          .logged[F]
+          .map(_.some)
+      } else {
+        none[Errors.DeployHeaderError].pure[F]
+      }
+    }
 
   def deployHash[F[_]: Monad: Log](d: consensus.Deploy): F[Boolean] = {
     val bodyHash   = ProtoUtil.protoHash(d.getBody)
@@ -702,7 +728,7 @@ object Validation {
       )
     }
 
-  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deployHeaders[F[_]: MonadThrowable: RaiseValidationError: Log: Time: CasperLabsProtocol](
       b: Block,
       dag: DagRepresentation[F],
       chainName: String
@@ -714,18 +740,23 @@ object Validation {
       b.header.toSet.flatMap((h: consensus.Block.Header) => h.parentHashes)
     val timestamp       = b.getHeader.timestamp
     val isFromPast      = DeployFilters.timestampBefore(timestamp)
-    val isNotExpired    = DeployFilters.notExpired(timestamp)
+    val isNotExpired    = (maxTTL: Int) => DeployFilters.notExpired(timestamp, maxTTL)
     val dependenciesMet = DeployFilters.dependenciesMet[F](dag, parents)
 
     def singleDeployValidation(d: consensus.Deploy): F[Unit] =
       for {
-        staticErrors           <- deployHeader[F](d, chainName)
+        config <- CasperLabsProtocol[F].configAt(b.getHeader.rank).map(_.deployConfig)
+        staticErrors <- deployHeader[F](
+                         d,
+                         chainName,
+                         config
+                       )
         _                      <- raiseHeaderErrors(staticErrors).whenA(staticErrors.nonEmpty)
         header                 = d.getHeader
         isFromFuture           = !isFromPast(header)
         _                      <- raiseFutureDeploy(d.deployHash, header).whenA(isFromFuture)
-        isExpired              = !isNotExpired(header)
-        _                      <- raiseExpiredDeploy(d.deployHash, header).whenA(isExpired)
+        isExpired              = !isNotExpired(config.maxTtlMillis)(header)
+        _                      <- raiseExpiredDeploy(d.deployHash, header, config.maxTtlMillis).whenA(isExpired)
         hasMissingDependencies <- dependenciesMet(d).map(!_)
         _                      <- raiseDeployDependencyNotMet(d).whenA(hasMissingDependencies)
       } yield ()
@@ -742,9 +773,13 @@ object Validation {
       )
     }
 
-    def raiseExpiredDeploy(deployHash: DeployHash, header: consensus.Deploy.Header): F[Unit] = {
+    def raiseExpiredDeploy(
+        deployHash: DeployHash,
+        header: consensus.Deploy.Header,
+        defaultMaxTTL: Int
+    ): F[Unit] = {
       val hash           = PrettyPrinter.buildString(deployHash)
-      val ttl            = ProtoUtil.getTimeToLive(header, MAX_TTL)
+      val ttl            = ProtoUtil.getTimeToLive(header, defaultMaxTTL)
       val expirationTime = header.timestamp + ttl
       reject[F](
         b,

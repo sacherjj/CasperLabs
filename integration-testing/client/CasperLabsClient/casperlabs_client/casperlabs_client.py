@@ -314,6 +314,10 @@ def signature(private_key, data: bytes):
     )
 
 
+def private_to_public_key(private_key) -> bytes:
+    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
+
+
 def _serialize(o) -> bytes:
     return o.SerializeToString()
 
@@ -389,6 +393,10 @@ class InsecureGRPCService:
 def extract_common_name(certificate_file: str) -> str:
     cert_dict = ssl._ssl._test_decode_cert(certificate_file)
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
+def abi_byte_array(a: bytes) -> bytes:
+    return struct.pack("<I", len(a)) + a
 
 
 class SecureGRPCService:
@@ -510,6 +518,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies: list = None,
+        chain_name: str = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -563,6 +572,7 @@ class CasperLabsClient:
             dependencies=dependencies
             and [bytes.fromhex(d) for d in dependencies]
             or [],
+            chain_name=chain_name or "",
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
@@ -601,6 +611,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
+        chain_name: str = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -632,6 +643,9 @@ class CasperLabsClient:
                               deploy will remain valid for.
         :dependencies:        List of deploy hashes (base16 encoded) which
                               must be executed before this deploy.
+        :chain_name:          Name of the chain to optionally restrict the
+                              deploy from being accidentally included
+                              anywhere else.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -652,11 +666,15 @@ class CasperLabsClient:
             session_uref=session_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
+            chain_name=chain_name,
         )
 
-        deploy = self.sign_deploy(
-            deploy, (public_key and read_pem_key(public_key)) or from_addr, private_key
+        pk = (
+            (public_key and read_pem_key(public_key))
+            or from_addr
+            or private_to_public_key(private_key)
         )
+        deploy = self.sign_deploy(deploy, pk, private_key)
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
@@ -742,7 +760,8 @@ class CasperLabsClient:
         block_infos = list(self.showBlocks(depth))
         dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
         if not out:
-            return dot_dag_description
+            yield dot_dag_description
+            return
 
         parts = out.split(".")
         file_format = parts[-1]
@@ -798,7 +817,6 @@ class CasperLabsClient:
         """
 
         def key_variant(keyType):
-
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
                 raise InternalError(
@@ -806,7 +824,16 @@ class CasperLabsClient:
                 )
             return variant
 
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        def encode_local_key(key: str) -> str:
+            seed, rest = key.split(":")
+            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            r = f"{seed}:{abi_encoded_rest}"
+            logging.info(f"encode_local_key => {r}")
+            return r
+
+        key_value = encode_local_key(key) if keyType.lower() == "local" else key
+
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -832,11 +859,8 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
-        def abi_byte_array(a: bytes) -> bytes:
-            return struct.pack("<I", len(a)) + a
-
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        purseAddrHex = account.purse_id.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -976,14 +1000,37 @@ def unbond_command(casperlabs_client, args):
             )
         )
 
-    logging.info(f" XXX unbond_command: args.session_args={args.session_args}")
+    return deploy_command(casperlabs_client, args)
+
+
+@guarded_command
+def transfer_command(casperlabs_client, args):
+    _set_session(args, "transfer_to_account.wasm")
+
+    if not args.session_args:
+        target_account_bytes = base64.b64decode(args.target_account)
+        if len(target_account_bytes) != 32:
+            raise Exception("--target_account must be 32 bytes base64 encoded")
+
+        args.session_args = ABI.args_to_json(
+            ABI.args(
+                [
+                    ABI.account("account", target_account_bytes),
+                    ABI.long_value("amount", args.amount),
+                ]
+            )
+        )
 
     return deploy_command(casperlabs_client, args)
 
 
 def _deploy_kwargs(args, private_key_accepted=True):
-    from_addr = bytes.fromhex(getattr(args, "from"))
-    if len(from_addr) != 32:
+    from_addr = (
+        getattr(args, "from")
+        and bytes.fromhex(getattr(args, "from"))
+        or private_to_public_key(args.private_key)
+    )
+    if from_addr and len(from_addr) != 32:
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
@@ -1016,8 +1063,9 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
-        ttl_millis=args.ttl,
+        ttl_millis=args.ttl_millis,
         dependencies=args.dependencies,
+        chain_name=args.chain_name,
     )
     if private_key_accepted:
         d["private_key"] = args.private_key or None
@@ -1102,8 +1150,9 @@ def vdag_command(casperlabs_client, args):
 
 @guarded_command
 def query_state_command(casperlabs_client, args):
+
     response = casperlabs_client.queryState(
-        args.block_hash, args.key, args.path, getattr(args, "type")
+        args.block_hash, args.key, args.path or "", getattr(args, "type")
     )
     print(hexify(response))
 
@@ -1155,7 +1204,8 @@ def natural(number):
 # fmt: off
 def deploy_options(keys_required=False, private_key_accepted=True):
     return ([
-        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
         [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
@@ -1169,10 +1219,10 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+        [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
         [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
-           and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
+           and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
            or []))
 # fmt:on
 
@@ -1278,6 +1328,11 @@ def main():
                       [[('-a', '--amount'),
                        dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
 
+    parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
+                      [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
+                       [('-t', '--target-account'), dict(required=True, type=str, help="base64 representation of target account's public key")],
+                       ] + deploy_options(keys_required=False, private_key_accepted=True))
+
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
     parser.addCommand('show-block', show_block_command, 'View properties of a block known by Casper on an existing running node. Output includes: parent hashes, storage contents of the tuplespace.',
@@ -1301,7 +1356,7 @@ def main():
     parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-p', '--path'), dict(required=False, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
                        [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',

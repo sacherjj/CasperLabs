@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.execengine
 
 import cats.Id
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -21,6 +22,7 @@ import io.casperlabs.p2p.EffectsTestInstances.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
+import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
@@ -32,25 +34,17 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      val genesisDeploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val genesisDeploys = Vector(ProtoUtil.deploy(System.currentTimeMillis))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b1Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b1Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b2Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b2Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b3Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b3Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       /*
@@ -143,19 +137,19 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit deployStorage =>
         // reference costs
         // deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.sourceDeploy(
-          ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis
+        val deploy1 = ProtoUtil.deploy(
+          System.currentTimeMillis,
+          ByteString.copyFromUtf8("deployA")
         )
         val deploy2 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis
+          ProtoUtil.deploy(
+            System.currentTimeMillis,
+            ByteString.copyFromUtf8("deployB")
           )
         val deploy3 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis
+          ProtoUtil.deploy(
+            System.currentTimeMillis,
+            ByteString.copyFromUtf8("deployC")
           )
         for {
           proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
@@ -522,15 +516,13 @@ object ExecEngineUtilTest {
         candidates: Vector[OpDagNode]
     )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) = {
       val merged = ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
-        candidates,
+        NonEmptyList.fromListUnsafe(candidates.toList),
         getParents,
         getEffect,
         identity
       )
 
       merged match {
-        case ExecEngineUtil.MergeResult.EmptyMerge =>
-          throw new RuntimeException("No candidates were given to merge!")
         case ExecEngineUtil.MergeResult.Result(head, effect, tail) => (effect, head +: tail)
       }
     }
@@ -538,13 +530,9 @@ object ExecEngineUtilTest {
   def opDagNodeOrder: Ordering[OpDagNode] =
     Ordering.by[OpDagNode, Int](_.height)
 
-  val registry: String = """ """.stripMargin
-
-  val other: String = """ """.stripMargin
-
   def prepareDeploys(contracts: Vector[ByteString], cost: Long): Vector[ProcessedDeploy] = {
     val deploys =
-      contracts.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      contracts.map(ProtoUtil.deploy(System.currentTimeMillis, _))
     deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(cost))
   }
 }

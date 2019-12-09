@@ -5,9 +5,9 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl.DefaultApplicativeAsk
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import eu.timepit.refined.auto._
-import io.casperlabs.{casper, shared}
+import io.casperlabs.casper
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
@@ -24,11 +24,14 @@ import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import monix.eval.Task
 import monix.tail.Iterant
 import logstage.LogIO
-import scala.collection.immutable.Queue
 
+import scala.collection.immutable.Queue
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
+
+@silent("is never used")
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
@@ -36,6 +39,7 @@ class GossipServiceCasperTestNode[F[_]](
     semaphoresMap: SemaphoreMap[F, ByteString],
     semaphore: Semaphore[F],
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
+    minTtl: FiniteDuration = 1.minute,
     chainName: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
@@ -80,6 +84,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
+      minTtl,
       upgrades = Nil
     )
 

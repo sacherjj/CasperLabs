@@ -27,6 +27,8 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 object ProtoUtil {
   import Weight._
@@ -432,7 +434,8 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -452,10 +455,58 @@ object ProtoUtil {
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
-      validatorPrevBlockHash = validatorPrevBlockHash
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
+  /* Creates a signed ballot */
+  def ballot(
+      justifications: Seq[Justification],
+      stateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      protocolVersion: ProtocolVersion,
+      parent: ByteString,
+      validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
+      chainName: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm
+  ): Block = {
+    val body = Block.Body()
+
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(stateHash)
+      .withPostStateHash(stateHash)
+      .withBonds(bondedValidators)
+
+    val header = blockHeader(
+      body,
+      parentHashes = List(parent),
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion,
+      timestamp = now,
+      chainName = chainName,
+      creator = publicKey,
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash
+    ).withMessageType(Block.MessageType.BALLOT)
+
+    val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
@@ -474,10 +525,12 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
-      chainName: String
+      chainName: String,
+      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
   ): Block.Header =
     Block
       .Header()
+      .withKeyBlockHash(keyBlockHash)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
@@ -529,18 +582,19 @@ object ProtoUtil {
     if (h.ttlMillis == 0) default
     else h.ttlMillis
 
-  def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
+  def basicDeploy[F[_]: Monad: Time](ttl: FiniteDuration = 1.minute): F[Deploy] =
     Time[F].currentMillis.map { now =>
       // The timestamp needs to be earlier than the time the node
       // thinks it is; in the tests we use "logical time", so 0
       // is the only safe value.
-      basicDeploy(0, ByteString.copyFromUtf8(now.toString))
+      deploy(0, ByteString.copyFromUtf8(now.toString), ttl)
     }
 
   // This is only used for tests.
-  def basicDeploy(
+  def deploy(
       timestamp: Long,
-      sessionCode: ByteString = ByteString.EMPTY
+      sessionCode: ByteString = ByteString.EMPTY,
+      ttl: FiniteDuration = 1.minute
   ): Deploy = {
     val (sk, pk) = Ed25519.newKeyPair
     val b = Deploy
@@ -552,6 +606,7 @@ object ProtoUtil {
       .withAccountPublicKey(ByteString.copyFrom(pk))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
+      .withTtlMillis(ttl.toMillis.toInt)
     Deploy()
       .withHeader(h)
       .withBody(b)
@@ -563,11 +618,8 @@ object ProtoUtil {
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
     basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy), cost = 1L))
 
-  def sourceDeploy(source: String, timestamp: Long): Deploy =
-    sourceDeploy(ByteString.copyFromUtf8(source), timestamp)
-
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long): Deploy =
-    basicDeploy(timestamp, sessionCode)
+  def sourceDeploy(source: String, timestamp: Long, ttl: FiniteDuration = 1.minute): Deploy =
+    deploy(timestamp, ByteString.copyFromUtf8(source), ttl)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1

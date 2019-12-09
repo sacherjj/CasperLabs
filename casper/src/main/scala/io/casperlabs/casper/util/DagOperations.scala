@@ -98,10 +98,41 @@ object DagOperations {
     StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[k.K])))
   }
 
-  val blockTopoOrderingAsc: Ordering[Message] =
-    Ordering.by[Message, Long](_.rank).reverse
+  val longByteStringOrdering: Ordering[(Long, ByteString)] =
+    Ordering.fromLessThan[(Long, ByteString)] {
+      case (a, b) =>
+        if (a._1 < b._1) true
+        else if (b._1 < a._1) false
+        else {
+          val aStr = a._2.toStringUtf8
+          val bStr = b._2.toStringUtf8
+          if (aStr < bStr) true
+          else if (bStr < aStr) false
+          else true
+        }
+    }
 
-  val blockTopoOrderingDesc: Ordering[Message] = Ordering.by(_.rank)
+  val bigIntByteStringOrdering: Ordering[(BigInt, ByteString)] =
+    Ordering.fromLessThan[(BigInt, ByteString)] {
+      case (a, b) =>
+        if (a._1 < b._1) true
+        else if (b._1 < a._1) false
+        else {
+          val aStr = a._2.toStringUtf8
+          val bStr = b._2.toStringUtf8
+          if (aStr < bStr) true
+          else if (bStr < aStr) false
+          else true
+        }
+    }
+
+  val blockTopoOrderingAsc: Ordering[Message] =
+    Ordering
+      .by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
+      .reverse
+
+  val blockTopoOrderingDesc: Ordering[Message] =
+    Ordering.by[Message, (Long, ByteString)](m => (m.rank, m.messageHash))(longByteStringOrdering)
 
   def bfToposortTraverseF[F[_]: Monad](
       start: List[Message]
@@ -345,7 +376,7 @@ object DagOperations {
       a.pure[F]
     } else {
       Ordering[A].compare(a, b) match {
-        case -1 =>
+        case x if x < 0 =>
           // Block `b` is "higher" in the chain
           next(b).flatMap(latestCommonAncestorF(a, _)(next))
         case 0 =>
@@ -355,7 +386,7 @@ object DagOperations {
             bb  <- next(b)
             lca <- latestCommonAncestorF(aa, bb)(next)
           } yield lca
-        case 1 =>
+        case x if x > 0 =>
           next(a).flatMap(latestCommonAncestorF(b, _)(next))
       }
     }

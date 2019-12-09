@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
@@ -7,7 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.Validator
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
@@ -22,6 +23,8 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.DeployStorage
 
+import scala.concurrent.duration.FiniteDuration
+
 trait MultiParentCasper[F[_]] {
   //// Brought from Casper trait
   def addBlock(block: Block): F[BlockStatus]
@@ -29,14 +32,13 @@ trait MultiParentCasper[F[_]] {
   def deploy(deployData: Deploy): F[Either[Throwable, Unit]]
   def estimator(
       dag: DagRepresentation[F],
+      lfbHash: ByteString,
       latestMessages: Map[ByteString, Set[ByteString]],
       equivocators: Set[Validator]
-  ): F[List[ByteString]]
-  def createBlock: F[CreateBlockStatus]
-  ////
-
+  ): F[NonEmptyList[ByteString]]
+  def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus]
+  def createBlock: F[CreateBlockStatus] = createMessage(false) // Left for the sake of unit tests.
   def dag: F[DagRepresentation[F]]
-
   def lastFinalizedBlock: F[Block]
 }
 
@@ -59,12 +61,13 @@ sealed abstract class MultiParentCasperInstances {
     } yield casperState
 
   /** Create a MultiParentCasper instance from the new RPC style gossiping. */
-  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocolVersions](
+  def fromGossipServices[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: DeploySelection: CasperLabsProtocol](
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       genesisPreState: StateHash,
       genesisEffects: ExecEngineUtil.TransformMap,
       chainName: String,
+      minTtl: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint]
   ): F[MultiParentCasper[F]] =
     for {
@@ -82,6 +85,7 @@ sealed abstract class MultiParentCasperInstances {
                  validatorId,
                  genesis,
                  chainName,
+                 minTtl,
                  upgrades
                )
     } yield casper

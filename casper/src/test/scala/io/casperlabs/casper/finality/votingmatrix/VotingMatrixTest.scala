@@ -100,7 +100,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
         val v2Bond = Bond(v2, 10)
         val bonds  = Seq(v1Bond, v2Bond)
         for {
-          genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+          genesis <- createAndStoreBlock[Task](Seq(), bonds = bonds)
           dag     <- dagStorage.getRepresentation
           implicit0(votingMatrix: VotingMatrix[Task]) <- VotingMatrix
                                                           .create[Task](
@@ -111,7 +111,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           _            <- checkFirstLevelZeroVote(Map(v1 -> None, v2 -> None))
           _            <- checkWeightMap(Map(v1 -> 10, v2 -> 10))
           updatedBonds = Seq(Bond(v1, 20), v2Bond) // let v1 dominate the chain after finalizing b1
-          b1 <- createAndUpdateVotingMatrix[Task](
+          b1 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(genesis.blockHash),
                  genesis.blockHash,
                  v1,
@@ -132,7 +132,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
               )
           committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
-          b2 <- createAndUpdateVotingMatrix[Task](
+          b2 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(genesis.blockHash),
                  genesis.blockHash,
                  v2,
@@ -152,7 +152,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
               )
           committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
-          b3 <- createAndUpdateVotingMatrix[Task](
+          b3 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(b1.blockHash),
                  genesis.blockHash,
                  v1,
@@ -173,7 +173,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
               )
           committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
-          b4 <- createAndUpdateVotingMatrix[Task](
+          b4 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(b3.blockHash),
                  genesis.blockHash,
                  v2,
@@ -196,7 +196,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
           committee <- checkForCommittee[Task](dag, 0.1)
           _         = committee shouldBe None
 
-          b5 <- createAndUpdateVotingMatrix[Task](
+          b5 <- createBlockAndUpdateVotingMatrix[Task](
                  Seq(b4.blockHash),
                  genesis.blockHash,
                  v1,
@@ -247,7 +247,7 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
         } yield result
   }
 
-  def createAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
+  def createBlockAndUpdateVotingMatrix[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: DeployStorage](
       parentsHashList: Seq[BlockHash],
       latestFinalizedBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
@@ -257,7 +257,13 @@ class VotingMatrixTest extends FlatSpec with Matchers with BlockGenerator with S
       implicit votingMatrix: VotingMatrix[F]
   ): F[Block] =
     for {
-      b           <- createAndStoreBlock[F](parentsHashList, creator, bonds, justifications)
+      b <- createAndStoreBlock[F](
+            parentsHashList,
+            creator,
+            bonds,
+            justifications,
+            keyBlockHash = latestFinalizedBlockHash
+          )
       dag         <- IndexedDagStorage[F].getRepresentation
       votedBranch <- ProtoUtil.votedBranch(dag, latestFinalizedBlockHash, b.blockHash)
       _ <- updateVoterPerspective(

@@ -4,18 +4,24 @@ import cats._
 import cats.implicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.util.ProtocolVersions.BlockThreshold
+import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import simulacrum.typeclass
-import scala.util.Try
 
-class ProtocolVersions private (l: List[BlockThreshold]) {
-  def versionAt(blockHeight: Long): state.ProtocolVersion =
+class ProtocolVersions private (l: List[Config]) {
+  private def configAtHeight(blockHeight: Long): Config =
     l.collectFirst {
-      case BlockThreshold(blockHeightMin, protocolVersion) if blockHeightMin <= blockHeight =>
-        protocolVersion
+      case c @ Config(blockHeightMin, _, _) if blockHeightMin <= blockHeight =>
+        c
     }.get // This cannot throw because we validate in `apply` that list is never empty.
+
+  def versionAt(blockHeight: Long): state.ProtocolVersion =
+    configAtHeight(blockHeight).version
+
+  def configAt(blockHeight: Long): Config =
+    configAtHeight(blockHeight)
 
   def fromBlock(
       b: Block
@@ -24,14 +30,20 @@ class ProtocolVersions private (l: List[BlockThreshold]) {
 }
 
 object ProtocolVersions {
+  final case class Config(
+      blockHeightMin: Long,
+      version: state.ProtocolVersion,
+      deployConfig: DeployConfig
+  )
 
-  final case class BlockThreshold(blockHeightMin: Long, version: state.ProtocolVersion)
+  implicit val protocolVersionOrdering: Ordering[state.ProtocolVersion] =
+    Ordering.by[state.ProtocolVersion, (Int, Int, Int)](pv => (pv.major, pv.minor, pv.patch))
 
   // Order thresholds from newest to oldest descending.
-  private implicit val blockThresholdOrdering: Ordering[BlockThreshold] =
-    Ordering.by[BlockThreshold, Long](_.blockHeightMin).reverse
+  private implicit val blockThresholdOrdering: Ordering[Config] =
+    Ordering.by[Config, Long](_.blockHeightMin).reverse
 
-  def apply(l: List[BlockThreshold]): ProtocolVersions = {
+  def apply(l: List[Config]): ProtocolVersions = {
     val descendingList = l.sorted(blockThresholdOrdering)
 
     require(descendingList.size >= 1, "List cannot be empty.")
@@ -89,46 +101,4 @@ object ProtocolVersions {
     } else {
       Some("Protocol major versions should not go backwards.")
     }
-}
-
-@typeclass
-trait CasperLabsProtocolVersions[F[_]] {
-  def versionAt(blockHeight: Long): F[state.ProtocolVersion]
-  def fromBlock(b: Block): F[state.ProtocolVersion]
-}
-
-object CasperLabsProtocolVersions {
-  import ProtocolVersions.BlockThreshold
-
-  // Specifies what protocol version to choose at the `blockThreshold` height.
-  val thresholdsVersionMap: ProtocolVersions = ProtocolVersions(
-    List(BlockThreshold(0, state.ProtocolVersion(1, 0, 0)))
-  )
-
-  def unsafe[F[_]: Applicative](
-      versions: (Long, state.ProtocolVersion)*
-  ): CasperLabsProtocolVersions[F] = {
-    val thresholds = versions.map {
-      case (rank, version) =>
-        BlockThreshold(rank, version)
-    }
-
-    val underlying = ProtocolVersions(thresholds.toList)
-
-    new CasperLabsProtocolVersions[F] {
-      def versionAt(blockHeight: Long) = underlying.versionAt(blockHeight).pure[F]
-      def fromBlock(b: Block)          = underlying.fromBlock(b).pure[F]
-    }
-  }
-
-  def apply[F[_]: MonadThrowable](
-      versions: (Long, state.ProtocolVersion)*
-  ): F[CasperLabsProtocolVersions[F]] =
-    MonadThrowable[F].fromTry(Try(unsafe(versions: _*)))
-
-  def fromChainSpec[F[_]: MonadThrowable](spec: ipc.ChainSpec): F[CasperLabsProtocolVersions[F]] = {
-    val versions = (0L, spec.getGenesis.getProtocolVersion) +:
-      spec.upgrades.map(up => (up.getActivationPoint.rank, up.getProtocolVersion))
-    apply(versions: _*)
-  }
 }

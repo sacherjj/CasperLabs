@@ -1,6 +1,7 @@
 package io.casperlabs.storage.block
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -10,12 +11,13 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
@@ -153,11 +155,29 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
       .option
       .transact(readXa)
 
-  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-    sql"""|SELECT block_hash
-          |FROM deploy_process_results
-          |WHERE deploy_hash=$deployHash
-          |ORDER BY create_time_millis""".stripMargin.query[BlockHash].to[Seq].transact(readXa)
+  override def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]] =
+    NonEmptyList
+      .fromList[ByteString](deployHashes)
+      .fold(Map.empty[DeployHash, Set[BlockHash]].pure[F]) { nfl =>
+        val sql = fr"""|SELECT deploy_hash, block_hash
+                       |FROM deploy_process_results
+                       |WHERE """.stripMargin ++ Fragments.in(fr"deploy_hash", nfl)
+
+        sql
+          .query[(DeployHash, BlockHash)]
+          .to[Seq]
+          .transact(readXa)
+          .map(_.groupBy(_._1))
+          .map { deployHashToBlockHashesMap: Map[DeployHash, Seq[(DeployHash, BlockHash)]] =>
+            deployHashes.map { d =>
+              val value =
+                deployHashToBlockHashesMap.get(d).fold(Set.empty[BlockHash])(_.map(_._2).toSet)
+              (d, value)
+            }.toMap
+          }
+      }
 
   override def checkpoint(): F[Unit] = ().pure[F]
 

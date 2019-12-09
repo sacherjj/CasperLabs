@@ -511,6 +511,7 @@ class FinalityDetectorByVotingMatrixTest
     for {
       block <- createBlock[F](
                 parentsHashList,
+                lastFinalizedBlockHash,
                 creator,
                 bonds,
                 justifications,
