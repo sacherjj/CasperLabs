@@ -961,7 +961,7 @@ def check_ttl_ok(cli):
         "--public-key", cli.public_key_path(account),
         "--payment-amount", 10000000,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
-        "--ttl", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
+        "--ttl-millis", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
     time.sleep(0.5)
     propose_check_no_errors(cli)
 
@@ -987,7 +987,7 @@ def check_ttl_late(cli, temp_dir):
         "--from", account.public_key_hex,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
         "--payment-amount", 100000000,
-        "--ttl", 3600000)
+        "--ttl-millis", 3600000)
 
     # Modify the deploy and change its timestamp to be more than one hour earlier.
     deploy = Deploy()

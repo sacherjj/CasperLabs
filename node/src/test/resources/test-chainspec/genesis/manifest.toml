@@ -9,7 +9,6 @@ name = "test-chain"
 # generator used in execution engine for computing genesis post-state.
 timestamp = 1568805354071
 
-# Later will be replaced by semver.
 protocol-version = "0.1"
 
 # Path (absolute, or relative to the manifest) to the file containing wasm bytecode for installing the mint system contract.
@@ -20,6 +19,11 @@ pos-code-path = "pos.wasm"
 
 # Path (absolute, or relative to the manifest) to the CSV file containing initial account balances and bonds.
 initial-accounts-path = "accounts.csv"
+
+[deploys]
+# 1 day
+max-ttl-millis = 86400000
+max-dependencies = 10
 
 [wasm-costs]
 # Default opcode cost

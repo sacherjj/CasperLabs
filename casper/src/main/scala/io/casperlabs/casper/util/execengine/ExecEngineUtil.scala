@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.state.{Key, Value}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
 import io.casperlabs.metrics.Metrics
@@ -188,7 +188,7 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocolVersions](
+  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocol](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
@@ -210,7 +210,7 @@ object ExecEngineUtil {
       }
     } else {
       for {
-        protocolVersion <- CasperLabsProtocolVersions[F].fromBlock(block)
+        protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         processedDeploys <- processDeploys[F](
                              prestate,
                              blocktime,

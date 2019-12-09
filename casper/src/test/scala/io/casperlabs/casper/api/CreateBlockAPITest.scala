@@ -33,6 +33,8 @@ import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import io.casperlabs.casper.helper.DeployOps._
+import io.casperlabs.comm.ServiceError.OutOfRange
 
 import scala.concurrent.duration._
 
@@ -67,7 +69,7 @@ class CreateBlockAPITest
     val node   = standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
     val deploys = List.fill(2)(
-      ProtoUtil.basicDeploy(
+      ProtoUtil.deploy(
         0,
         ByteString.copyFromUtf8(System.currentTimeMillis().toString)
       )
@@ -186,6 +188,7 @@ class CreateBlockAPITest
         _ <- BlockAPI.deploy[Task](d)
         _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         _ <- BlockAPI.deploy[Task](d)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
       } yield ()
 
     try {
@@ -193,11 +196,10 @@ class CreateBlockAPITest
         casperRef    <- MultiParentCasperRef.of[Task]
         _            <- casperRef.set(node.casperEff)
         blockApiLock <- Semaphore[Task](1)
-        result       <- testProgram(blockApiLock)(casperRef)
+        result       <- testProgram(blockApiLock)(casperRef).attempt
+        Left(ex)     = result
+        _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
-    } catch {
-      case ex: io.grpc.StatusRuntimeException =>
-        ex.getMessage should include("already contains")
     } finally {
       node.tearDown()
     }
@@ -212,7 +214,7 @@ class CreateBlockAPITest
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    val deploy = ProtoUtil.basicDeploy(0)
+    val deploy = ProtoUtil.deploy(0)
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -279,7 +281,8 @@ class CreateBlockAPITest
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code))
+    def mkDeploy(code: String) =
+      ProtoUtil.deploy(0, ByteString.copyFromUtf8(code))
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -319,14 +322,7 @@ class CreateBlockAPITest
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
 
-    val deploys = (1L to 10L)
-      .map(
-        t =>
-          ProtoUtil.basicDeploy(
-            t
-          )
-      )
-      .toList
+    val deploys = (1L to 10L).map(ProtoUtil.deploy(_)).toList
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]

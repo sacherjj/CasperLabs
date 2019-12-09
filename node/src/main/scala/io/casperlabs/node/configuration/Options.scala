@@ -461,6 +461,11 @@ private[configuration] final case class Options private (
     )
 
     @scallop
+    val casperMinTtl = gen[FiniteDuration](
+      "Minimum deploy TTL value."
+    )
+
+    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 

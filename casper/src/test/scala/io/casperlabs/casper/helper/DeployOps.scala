@@ -4,14 +4,21 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.Deploy
 import io.casperlabs.casper.util.ProtoUtil
-import io.casperlabs.casper.validation.Validation.{DRIFT, MAX_DEPENDENCIES, MAX_TTL, MIN_TTL}
+import io.casperlabs.casper.validation.Validation.DRIFT
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.models.{ArbitraryConsensus, DeployImplicits}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
-import io.casperlabs.casper.validation.ValidationImpl
+
+import scala.concurrent.duration.FiniteDuration
 
 object DeployOps extends ArbitraryConsensus {
+  val deployConfig = DeployConfig(
+    maxTtlMillis = 24 * 60 * 60 * 1000, // 1 day
+    maxDependencies = 10
+  )
+
   implicit class ChangeDeployOps(deploy: Deploy) {
     // Clears previous signatures and adds a new one.
     def signSingle: Deploy = {
@@ -55,16 +62,17 @@ object DeployOps extends ArbitraryConsensus {
 
   private def rehash(deploy: Deploy): Deploy = {
     val header = deploy.getHeader.withBodyHash(ProtoUtil.protoHash(deploy.getBody))
-    deploy.withDeployHash(ProtoUtil.protoHash(header)).withHeader(header)
+    val d      = deploy.withDeployHash(ProtoUtil.protoHash(header)).withHeader(header)
+    d.signSingle
   }
 
-  def randomTooShortTTL(): Deploy = {
+  def randomTooShortTTL(minTtl: FiniteDuration): Deploy = {
     implicit val c = ConsensusConfig()
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(1, MIN_TTL - 1)
-    } yield d.withTtl(ttl)
+      ttl <- Gen.choose(1, minTtl.toMillis - 1)
+    } yield d.withTtl(ttl.toInt)
 
     sample(genDeploy)
   }
@@ -74,7 +82,7 @@ object DeployOps extends ArbitraryConsensus {
 
     val genDeploy = for {
       d   <- arbitrary[Deploy]
-      ttl <- Gen.choose(MAX_TTL + 1, Int.MaxValue)
+      ttl <- Gen.choose(deployConfig.maxTtlMillis + 1, Int.MaxValue)
     } yield d.withTtl(ttl)
 
     sample(genDeploy)
@@ -96,9 +104,12 @@ object DeployOps extends ArbitraryConsensus {
     implicit val c = ConsensusConfig()
 
     val genDeploy = for {
-      d               <- arbitrary[Deploy]
-      numDependencies <- Gen.chooseNum(MAX_DEPENDENCIES + 1, 2 * MAX_DEPENDENCIES)
-      dependencies    <- Gen.listOfN(numDependencies, genHash)
+      d <- arbitrary[Deploy]
+      numDependencies <- Gen.chooseNum(
+                          deployConfig.maxDependencies + 1,
+                          2 * deployConfig.maxDependencies
+                        )
+      dependencies <- Gen.listOfN(numDependencies, genHash)
     } yield d.withDependencies(dependencies)
 
     sample(genDeploy)

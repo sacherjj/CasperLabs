@@ -7,6 +7,8 @@ import io.casperlabs.casper.InvalidBlock
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.shared.Log
 
+import scala.concurrent.duration.FiniteDuration
+
 object Errors {
   // Wrapper for the tests that were originally outside the `attemptAdd` method
   // and meant the block was not getting saved.
@@ -23,7 +25,11 @@ object Errors {
   object DeployHeaderError {
     def missingHeader(deployHash: ByteString): DeployHeaderError = MissingHeader(deployHash)
 
-    def timeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: Int): DeployHeaderError =
+    def timeToLiveTooShort(
+        deployHash: ByteString,
+        ttl: Int,
+        minTTL: FiniteDuration
+    ): DeployHeaderError =
       TimeToLiveTooShort(deployHash, ttl, minTTL)
 
     def timeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int): DeployHeaderError =
@@ -58,16 +64,16 @@ object Errors {
         s"Deploy ${PrettyPrinter.buildString(deployHash)} does not contain a header"
     }
 
-    final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: Int)
+    final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: FiniteDuration)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} shorter than minimum valid time to live $minTTL"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is shorter than minimum valid time to live ${minTTL.toMillis}"
     }
 
     final case class TimeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} longer than maximum valid time to live $maxTTL"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is longer than maximum valid time to live $maxTTL"
     }
 
     final case class TooManyDependencies(

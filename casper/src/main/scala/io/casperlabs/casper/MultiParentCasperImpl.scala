@@ -18,6 +18,7 @@ import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.util.ProtoUtil._
+import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
@@ -28,6 +29,7 @@ import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
@@ -40,7 +42,7 @@ import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployS
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
 
-import scala.reflect.internal.FatalError
+import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
 /**
@@ -54,12 +56,13 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocolVersions](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
     genesis: Block,
     chainName: String,
+    minTtl: FiniteDuration,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint]
 )(implicit state: Cell[F, CasperState])
     extends MultiParentCasper[F] {
@@ -261,10 +264,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           }
       _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
       _ <- check("Invalid deploy signature.")(Validation.deploySignature[F](deploy))
-      _ <- Validation.deployHeader[F](deploy, chainName) >>= { headerErrors =>
-            illegal(headerErrors.map(_.errorMessage).mkString("\n"))
-              .whenA(headerErrors.nonEmpty)
-          }
+      _ <- check("Invalid chain name.")(
+            Validation.validateChainName[F](deploy, chainName).map(_.isEmpty)
+          )
+      _ <- check(
+            s"Invalid deploy TTL. Deploy TTL: ${deploy.getHeader.ttlMillis} ms, minimum TTL: ${minTtl.toMillis}."
+          )(Validation.minTtl[F](deploy, minTtl).map(_.isEmpty))
     } yield ()
   }
 
@@ -337,11 +342,18 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           requeued <- requeueOrphanedDeploys(dag, merged)
           _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
 
-          timestamp       <- Time[F].currentMillis
-          remainingHashes <- remainingDeploysHashes(dag, parents.map(_.blockHash).toSet, timestamp)
+          timestamp <- Time[F].currentMillis
+          props     <- CreateMessageProps(publicKey, latestMessages, merged)
+          remainingHashes <- remainingDeploysHashes(
+                              dag,
+                              parents.map(_.blockHash).toSet,
+                              timestamp,
+                              props.configuration.deployConfig
+                            )
           proposal <- if (remainingHashes.nonEmpty) {
                        createProposal(
                          dag,
+                         props,
                          latestMessages,
                          merged,
                          remainingHashes,
@@ -382,7 +394,8 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
   private def remainingDeploysHashes(
       dag: DagRepresentation[F],
       parents: Set[BlockHash],
-      timestamp: Long
+      timestamp: Long,
+      deployConfig: DeployConfig
   ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
     // We have re-queued orphan deploys already, so we can just look at pending ones.
     val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
@@ -390,8 +403,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       .timer("timestampBeforeFilter")
     val unexpired = earlierPendingDeploys
       .through(
-        DeployFilters.Pipes.notExpired[F](timestamp)
+        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
       )
+      .through(DeployFilters.Pipes.validMaxTtl[F](deployConfig.maxTtlMillis))
       .timer("notExpiredFilter")
 
     for {
@@ -434,8 +448,10 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
   // Collection of props for creating blocks or ballots.
   private case class CreateMessageProps(
       justifications: Seq[Justification],
+      parents: Seq[BlockHash],
       rank: Long,
       protocolVersion: ProtocolVersion,
+      configuration: Config,
       validatorSeqNum: Int,
       validatorPrevBlockHash: ByteString
   )
@@ -469,11 +485,14 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
                    .map(_.toSet | bondedLatestMsgs.values.flatten.toSet)
                    .map(set => ProtoUtil.nextRank(set.toList))
                )
-        protocolVersion <- CasperLabsProtocolVersions[F].versionAt(rank)
+        config          <- CasperLabsProtocol[F].configAt(rank)
+        protocolVersion <- CasperLabsProtocol[F].versionAt(rank)
       } yield CreateMessageProps(
         justifications,
+        merged.parents.map(_.blockHash).toSeq,
         rank,
         protocolVersion,
+        config,
         validatorSeqNum,
         validatorPrevBlockHash
       )
@@ -484,6 +503,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
   /** Execute a set of deploys in the context of chosen parents. Compile them into a block if everything goes fine. */
   private def createProposal(
       dag: DagRepresentation[F],
+      props: CreateMessageProps,
       latestMessages: Map[ByteString, Set[Message]],
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       remainingHashes: Set[ByteString],
@@ -498,10 +518,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
         DeployStorageReader[F]
           .getByHashes(remainingHashes)
           .through(
-            DeployFilters.Pipes.dependenciesMet[F](dag, merged.parents.map(_.blockHash).toSet)
+            DeployFilters.Pipes.dependenciesMet[F](dag, props.parents.toSet)
           )
       (for {
-        props <- CreateMessageProps(validatorId, latestMessages, merged)
         checkpoint <- ExecEngineUtil
                        .computeDeploysCheckpoint[F](
                          merged,
@@ -615,7 +634,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocolVersions: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection](
@@ -624,6 +643,7 @@ object MultiParentCasperImpl {
       validatorId: Option[ValidatorIdentity],
       genesis: Block,
       chainName: String,
+      minTtl: FiniteDuration,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
       faultToleranceThreshold: Double = 0.1
   ): F[MultiParentCasper[F]] =
@@ -649,12 +669,13 @@ object MultiParentCasperImpl {
       validatorId,
       genesis,
       chainName,
+      minTtl,
       upgrades
     )
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -877,7 +898,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Fs2Compiler](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

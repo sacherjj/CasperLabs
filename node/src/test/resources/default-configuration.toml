@@ -78,6 +78,7 @@ auto-propose-ballot-interval = "1second"
 auto-propose-acc-interval = "1second"
 auto-propose-acc-count = 1
 max-block-size-bytes = 1
+min-ttl = "1hour"
 
 [blockstorage]
 cache-max-size-bytes = 1

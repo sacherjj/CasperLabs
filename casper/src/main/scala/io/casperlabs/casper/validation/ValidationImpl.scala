@@ -12,7 +12,7 @@ import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
@@ -62,13 +62,13 @@ object ValidationImpl {
           maybeGenesis: Option[Block]
       )(
           implicit bs: BlockStorage[F],
-          versions: CasperLabsProtocolVersions[F],
+          versions: CasperLabsProtocol[F],
           compiler: Fs2Compiler[F]
       ): F[Unit] =
         Metrics[F].timer("blockFull")(underlying.blockFull(block, dag, chainName, maybeGenesis))
 
       override def blockSummary(summary: BlockSummary, chainName: String)(
-          implicit versions: CasperLabsProtocolVersions[F]
+          implicit versions: CasperLabsProtocol[F]
       ): F[Unit] =
         Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
     }
@@ -90,7 +90,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
       maybeGenesis: Option[Block]
   )(
       implicit bs: BlockStorage[F],
-      versions: CasperLabsProtocolVersions[F],
+      versions: CasperLabsProtocol[F],
       compiler: Fs2Compiler[F]
   ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
@@ -250,14 +250,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
   override def blockSummary(
       summary: BlockSummary,
       chainName: String
-  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
+  )(implicit versions: CasperLabsProtocol[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable[F](
             formatOfFields[F](summary, treatAsGenesis),
             version(
               summary,
-              CasperLabsProtocolVersions[F].versionAt(_)
+              CasperLabsProtocol[F].versionAt(_)
             ),
             if (!treatAsGenesis) blockSignature[F](summary) else true.pure[F]
           )
