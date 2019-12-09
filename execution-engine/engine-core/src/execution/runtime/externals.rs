@@ -111,6 +111,14 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::GetArgSizeFuncIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to a argument size (output)
+                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
+                let ret = self.get_arg_size(index as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
             FunctionIndex::GetArgFuncIndex => {
                 // args(0) = index of host runtime arg to load
                 // args(1) = pointer to destination in Wasm memory
@@ -124,14 +132,6 @@ where
                     dest_size as usize,
                     bytes_written_ptr,
                 )?;
-                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
-            }
-
-            FunctionIndex::GetArgSizeFuncIndex => {
-                // args(0) = index of host runtime arg to load
-                // args(1) = pointer to a argument size (output)
-                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
-                let ret = self.get_arg_size(index as usize, size_ptr)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
