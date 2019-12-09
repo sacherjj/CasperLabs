@@ -67,7 +67,7 @@ fn should_run_purse_to_account_transfer() {
     // Obtain main purse's balance
     let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
-        cl_value.to_t::<U512>().expect("should be U512")
+        cl_value.clone().into_t::<U512>().expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -84,7 +84,10 @@ fn should_run_purse_to_account_transfer() {
         &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
-            cl_value.to_t::<String>().expect("should be String")
+            cl_value
+                .clone()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
@@ -135,7 +138,7 @@ fn should_run_purse_to_account_transfer() {
     let new_purse_transform = &transform[&new_account_purse_uref.normalize()];
     let purse_secondary_balance =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = new_purse_transform {
-            cl_value.to_t::<U512>().expect("should be U512")
+            cl_value.clone().into_t::<U512>().expect("should be U512")
         } else {
             panic!("actual purse uref should be a Write of UInt512 type");
         };
@@ -156,7 +159,7 @@ fn should_run_purse_to_account_transfer() {
     // Obtain main purse's balance
     let final_balance = &transform[&account_1.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
-        cl_value.to_t::<U512>().expect("should be U512")
+        cl_value.clone().into_t::<U512>().expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -170,7 +173,10 @@ fn should_run_purse_to_account_transfer() {
         &transform[&account_1.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
-            cl_value.to_t::<String>().expect("should be String")
+            cl_value
+                .clone()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };
@@ -196,7 +202,9 @@ fn should_run_purse_to_account_transfer() {
             (uref @ Key::URef(_), Transform::Write(StoredValue::CLValue(cl_value))) =>
             // 100_000_000 is the initial balance of genesis
             {
-                if cl_value.to_t::<U512>().unwrap_or_default() == U512::from(100_000_000_000i64) {
+                if cl_value.clone().into_t::<U512>().unwrap_or_default()
+                    == U512::from(100_000_000_000i64)
+                {
                     Some(*uref)
                 } else {
                     None
@@ -240,7 +248,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     // Obtain main purse's balance
     let final_balance = &transform[&default_account.named_keys()["final_balance"].normalize()];
     let final_balance = if let Transform::Write(StoredValue::CLValue(cl_value)) = final_balance {
-        cl_value.to_t::<U512>().expect("should be U512")
+        cl_value.clone().into_t::<U512>().expect("should be U512")
     } else {
         panic!(
             "Purse transfer result is expected to contain Write with Uint512 value, got {:?}",
@@ -259,7 +267,10 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
         &transform[&default_account.named_keys()["transfer_result"].normalize()];
     let transfer_result_string =
         if let Transform::Write(StoredValue::CLValue(cl_value)) = transfer_result_transform {
-            cl_value.to_t::<String>().expect("should be String")
+            cl_value
+                .clone()
+                .into_t::<String>()
+                .expect("should be String")
         } else {
             panic!("Purse transfer result is expected to contain Write with String value");
         };

@@ -44,7 +44,7 @@ pub extern "C" fn call() {
     let pos_pointer = system::get_proof_of_stake();
     let payment_purse: PurseId =
         runtime::call_contract(pos_pointer.clone(), (GET_PAYMENT_PURSE,), vec![])
-            .to_t()
+            .into_t()
             .unwrap_or_revert();
 
     runtime::call_contract(

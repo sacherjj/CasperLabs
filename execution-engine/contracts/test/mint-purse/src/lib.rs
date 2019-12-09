@@ -23,7 +23,7 @@ fn mint_purse(amount: U512) -> Result<PurseId, mint::Error> {
     let mint = system::get_mint();
 
     let result: Result<URef, mint::Error> = runtime::call_contract(mint, ("mint", amount), vec![])
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
 
     result.map(PurseId::new)
@@ -41,7 +41,7 @@ pub extern "C" fn call() {
         ("balance", new_purse),
         vec![Key::URef(new_purse.value())],
     )
-    .to_t()
+    .into_t()
     .unwrap_or_revert();
 
     match balance {

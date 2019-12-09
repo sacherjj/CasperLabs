@@ -31,21 +31,21 @@ pub extern "C" fn erc20_proxy() {
         Api::AssertBalance(address, expected_amount) => {
             let balance =
                 runtime::call_contract(token_ref.clone(), (api::BALANCE_OF, address), vec![]);
-            if expected_amount != balance.to_t().unwrap_or_revert() {
+            if expected_amount != balance.into_t().unwrap_or_revert() {
                 runtime::revert(Error::BalanceAssertionFailure)
             }
         }
         Api::AssertTotalSupply(expected_total_supply) => {
             let total_supply =
                 runtime::call_contract(token_ref.clone(), (api::TOTAL_SUPPLY,), vec![]);
-            if expected_total_supply != total_supply.to_t().unwrap_or_revert() {
+            if expected_total_supply != total_supply.into_t().unwrap_or_revert() {
                 runtime::revert(Error::TotalSupplyAssertionFailure)
             }
         }
         Api::AssertAllowance(owner, spender, expected_amount) => {
             let allowance =
                 runtime::call_contract(token_ref.clone(), (api::ALLOWANCE, owner, spender), vec![]);
-            if expected_amount != allowance.to_t().unwrap_or_revert() {
+            if expected_amount != allowance.into_t().unwrap_or_revert() {
                 runtime::revert(Error::AllowanceAssertionFailure)
             }
         }

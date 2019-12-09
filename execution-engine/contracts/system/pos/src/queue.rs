@@ -157,7 +157,7 @@ impl ToBytes for Queue {
     fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
         let mut bytes = (self.0.len() as u64).to_bytes()?; // TODO: Allocate correct capacity.
         for entry in &self.0 {
-            bytes.extend(entry.to_bytes()?);
+            bytes.append(&mut entry.to_bytes()?);
         }
         Ok(bytes)
     }

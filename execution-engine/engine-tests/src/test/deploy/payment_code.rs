@@ -119,7 +119,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_t() {
+            if let Ok(v) = cl_value.clone().into_t() {
                 modified_balance = Some(v);
             }
         }
@@ -210,7 +210,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_t() {
+            if let Ok(v) = cl_value.clone().into_t() {
                 modified_balance = Some(v);
             }
         }
@@ -711,13 +711,13 @@ fn should_charge_non_main_purse() {
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512");
 
         balance
@@ -775,13 +775,13 @@ fn should_charge_non_main_purse() {
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512");
 
         balance

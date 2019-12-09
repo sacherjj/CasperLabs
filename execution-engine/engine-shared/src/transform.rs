@@ -118,9 +118,7 @@ where
         + AsPrimitive<U256>
         + AsPrimitive<U512>,
 {
-    let cl_value = stored_value
-        .as_cl_value()
-        .ok_or_else(|| TypeMismatch::new("CLValue".to_string(), stored_value.type_name()))?;
+    let cl_value = CLValue::try_from(stored_value)?;
 
     match cl_value.cl_type() {
         CLType::I32 => do_wrapping_addition::<i32, _>(cl_value, to_add),
@@ -140,12 +138,12 @@ where
 }
 
 /// Attempts a wrapping addition of `to_add` to the value represented by `cl_value`.
-fn do_wrapping_addition<X, Y>(cl_value: &CLValue, to_add: Y) -> Result<StoredValue, Error>
+fn do_wrapping_addition<X, Y>(cl_value: CLValue, to_add: Y) -> Result<StoredValue, Error>
 where
     X: WrappingAdd + CLTyped + ToBytes + FromBytes + Copy + 'static,
     Y: AsPrimitive<X>,
 {
-    let x: X = cl_value.to_t()?;
+    let x: X = cl_value.into_t()?;
     let result = x.wrapping_add(&(to_add.as_()));
     Ok(StoredValue::CLValue(CLValue::from_t(result)?))
 }
@@ -535,7 +533,7 @@ fn wrapping_addition_should_succeed() {
         let result = wrapping_addition(current, to_add).expect("wrapping addition should succeed");
         CLValue::try_from(result)
             .expect("should be CLValue")
-            .to_t()
+            .into_t()
             .expect("should parse to X")
     }
 

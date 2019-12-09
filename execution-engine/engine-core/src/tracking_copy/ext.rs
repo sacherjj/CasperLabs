@@ -92,7 +92,7 @@ where
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
-                Ok(cl_value.to_t()?)
+                Ok(cl_value.into_t()?)
             }
             TrackingCopyQueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
         }
@@ -112,7 +112,7 @@ where
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
-                let balance: U512 = cl_value.to_t()?;
+                let balance: U512 = cl_value.into_t()?;
                 Ok(Motes::new(balance))
             }
             TrackingCopyQueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),

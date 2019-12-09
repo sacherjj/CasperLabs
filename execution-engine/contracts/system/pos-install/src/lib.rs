@@ -93,7 +93,7 @@ pub extern "C" fn call() {
 fn mint_purse(mint: &ContractRef, amount: U512) -> PurseId {
     let result: Result<URef, mint::Error> =
         runtime::call_contract(mint.clone(), ("mint", amount), vec![])
-            .to_t()
+            .into_t()
             .unwrap_or_revert();
 
     result.map(PurseId::new).unwrap_or_revert()

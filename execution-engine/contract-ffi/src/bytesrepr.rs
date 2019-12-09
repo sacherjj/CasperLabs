@@ -1,3 +1,6 @@
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
+use alloc::vec;
 use alloc::{
     collections::{BTreeMap, TryReserveError},
     string::String,
@@ -61,9 +64,9 @@ impl From<TryReserveError> for Error {
     }
 }
 
-pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
-    let (t, rem): (T, &[u8]) = FromBytes::from_bytes(bytes)?;
-    if rem.is_empty() {
+pub fn deserialize<T: FromBytes>(bytes: Vec<u8>) -> Result<T, Error> {
+    let (t, remainder) = T::from_vec(bytes)?;
+    if remainder.is_empty() {
         Ok(t)
     } else {
         Err(Error::LeftOverBytes)
@@ -71,7 +74,7 @@ pub fn deserialize<T: FromBytes>(bytes: &[u8]) -> Result<T, Error> {
 }
 
 pub fn serialize(t: impl ToBytes) -> Result<Vec<u8>, Error> {
-    t.to_bytes()
+    t.into_bytes()
 }
 
 pub fn safe_split_at(bytes: &[u8], n: usize) -> Result<(&[u8], &[u8]), Error> {
@@ -103,7 +106,7 @@ impl FromBytes for bool {
 
 impl ToBytes for u8 {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        Ok(self.to_le_bytes().to_vec())
+        Ok(vec![*self])
     }
 }
 
@@ -190,6 +193,27 @@ impl FromBytes for Vec<u8> {
         }
         len_and_data.truncate(len as usize);
         Ok((len_and_data, remainder))
+    }
+
+    fn from_vec(mut bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
+        if U32_SIZE > bytes.len() {
+            return Err(Error::EarlyEndOfStream);
+        }
+
+        let mut len_as_le_bytes: [u8; U32_SIZE] = [0u8; U32_SIZE];
+        len_as_le_bytes.copy_from_slice(&bytes[..U32_SIZE]);
+        let len = u32::from_le_bytes(len_as_le_bytes);
+
+        if U32_SIZE + len as usize > bytes.len() {
+            return Err(Error::EarlyEndOfStream);
+        }
+        let remainder = bytes.split_off(U32_SIZE + len as usize);
+
+        for i in (0..4).rev() {
+            bytes.swap(i, len as usize + i);
+        }
+        bytes.truncate(len as usize);
+        Ok((bytes, remainder))
     }
 }
 
@@ -294,28 +318,33 @@ impl FromBytes for Vec<Vec<u8>> {
         }
         Ok((result, stream))
     }
+
+    fn from_vec(mut bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
+        let (len, remainder) = u32::from_vec(bytes)?;
+        bytes = remainder;
+        let mut result = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            let (v, remainder) = Vec::<u8>::from_vec(bytes)?;
+            bytes = remainder;
+            result.push(v);
+        }
+        Ok((result, bytes))
+    }
 }
 
 impl ToBytes for Vec<Vec<u8>> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.len() >= u32::max_value() as usize - U32_SIZE {
-            // Fail fast for large enough vectors
+        let self_len = self.len();
+        let serialized_length =
+            self.iter().map(Vec::len).sum::<usize>() + (U32_SIZE as usize * (self_len + 1));
+        if serialized_length > u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
-        // Calculate total length of all vectors
-        let total_length: usize = self.iter().map(Vec::len).sum();
-        // It could be either length of vector which serialized would exceed
-        // the maximum size of vector (i.e. vector of vectors of size 1),
-        // or the total length of all vectors (i.e. vector of size 1 which holds
-        // vector of size 2^32-1)
-        if total_length >= u32::max_value() as usize - U32_SIZE {
-            return Err(Error::OutOfMemoryError);
-        }
-        let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize + total_length);
-        result.extend_from_slice(&size.to_bytes()?);
-        for n in 0..size {
-            result.extend_from_slice(&self[n as usize].to_bytes()?);
+
+        let mut result: Vec<u8> = Vec::with_capacity(serialized_length);
+        result.append(&mut (self_len as u32).into_bytes()?);
+        for vec in self.iter() {
+            result.append(&mut vec.to_bytes()?)
         }
         Ok(result)
     }
@@ -370,7 +399,7 @@ impl ToBytes for Vec<String> {
 macro_rules! impl_to_from_bytes_for_array {
     ($($N:literal)+) => {
         $(
-            impl<T: ToBytes + Copy> ToBytes for [T; $N] {
+            impl<T: ToBytes> ToBytes for [T; $N] {
                 fn to_bytes(&self) -> Result<Vec<u8>, Error> {
                     // Approximation, as `size_of::<T>()` is only roughly equal to the serialized
                     // size of `T`.
@@ -418,8 +447,30 @@ impl_to_from_bytes_for_array! {
      0  1  2  3  4  5  6  7  8  9
     10 11 12 13 14 15 16 17 18 19
     20 21 22 23 24 25 26 27 28 29
-    30 31 32
+    30 31 // 32
     64 128 256 512
+}
+
+impl ToBytes for [u8; 32] {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        // TODO(Fraser) - want to just do `Ok(self.to_vec())` here rather than packing the size in
+        //                too.
+        let mut result = Vec::with_capacity(36);
+        result.append(&mut 32_u32.to_bytes()?);
+        result.append(&mut self.to_vec());
+        Ok(result)
+    }
+}
+
+impl FromBytes for [u8; 32] {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        // TODO(Fraser) - once `to_bytes()` is fixed we can remove the following line.
+        let (_len_bytes, remainder) = safe_split_at(bytes, 4)?;
+        let (array_bytes, remainder) = safe_split_at(remainder, 32)?;
+        let mut result = [0_u8; 32];
+        result.copy_from_slice(array_bytes);
+        Ok((result, remainder))
+    }
 }
 
 impl ToBytes for String {
@@ -908,7 +959,7 @@ where
     T: ToBytes + FromBytes + PartialEq,
 {
     let serialized = ToBytes::to_bytes(t).expect("Unable to serialize data");
-    let deserialized = deserialize::<T>(&serialized).expect("Unable to deserialize data");
+    let deserialized = deserialize::<T>(serialized).expect("Unable to deserialize data");
     assert!(*t == deserialized)
 }
 
@@ -922,7 +973,7 @@ mod tests {
         let s = "🌀0";
         let ser_s = s.to_bytes().unwrap();
         println!("ser_s: {:?}", ser_s);
-        let t: String = deserialize(&ser_s).unwrap();
+        let t: String = deserialize(ser_s).unwrap();
         assert_eq!(s, t);
     }
 
@@ -970,7 +1021,7 @@ mod tests {
         // ===================
 
         let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<Vec<u8>>(&ser_v).unwrap();
+        let w = deserialize::<Vec<u8>>(ser_v).unwrap();
         assert_eq!(v, w);
     }
 }

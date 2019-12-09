@@ -20,12 +20,12 @@ pub extern "C" fn call() {
 
     let amount1 = U512::from(100);
     let purse1: Key = runtime::call_contract(mint.clone(), ("create", amount1), vec![])
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
 
     let amount2 = U512::from(300);
     let purse2: Key = runtime::call_contract(mint.clone(), ("create", amount2), vec![])
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
 
     let result: String = runtime::call_contract(
@@ -33,18 +33,18 @@ pub extern "C" fn call() {
         ("transfer", purse1, purse2, U512::from(70)),
         vec![purse1],
     )
-    .to_t()
+    .into_t()
     .unwrap_or_revert();
 
     assert!(&result == "Success!");
 
     let new_amount1: Option<U512> =
         runtime::call_contract(mint.clone(), ("balance", purse1), vec![purse1])
-            .to_t()
+            .into_t()
             .unwrap_or_revert();
     let new_amount2: Option<U512> =
         runtime::call_contract(mint.clone(), ("balance", purse2), vec![purse2])
-            .to_t()
+            .into_t()
             .unwrap_or_revert();
 
     assert!(new_amount1.unwrap() == U512::from(30));

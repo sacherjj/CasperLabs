@@ -596,7 +596,7 @@ impl InMemoryEnvironment {
         V: FromBytes,
     {
         let data = self.data(name)?.unwrap();
-        data.iter()
+        data.into_iter()
             .map(|(hash_bytes, trie_bytes)| {
                 let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes)?;
                 let trie: Trie<K, V> = bytesrepr::deserialize(trie_bytes)?;

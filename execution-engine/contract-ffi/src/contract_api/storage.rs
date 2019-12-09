@@ -44,8 +44,8 @@ fn get_read<T: CLTyped + FromBytes>(cl_value_size: usize) -> Result<Option<T>, b
         ext_ffi::get_read(cl_value_ptr);
         Vec::from_raw_parts(cl_value_ptr, cl_value_size, cl_value_size)
     };
-    let cl_value: CLValue = bytesrepr::deserialize(&cl_value_bytes)?;
-    let ret = cl_value.to_t().unwrap_or_revert();
+    let cl_value: CLValue = bytesrepr::deserialize(cl_value_bytes)?;
+    let ret = cl_value.into_t().unwrap_or_revert();
     Ok(Some(ret))
 }
 
@@ -122,7 +122,7 @@ pub fn new_turef<T: CLTyped + ToBytes>(init: T) -> TURef<T> {
         ext_ffi::new_uref(key_ptr, cl_value_ptr, cl_value_size); // URef has `READ_ADD_WRITE` access
         Vec::from_raw_parts(key_ptr, UREF_SIZE, UREF_SIZE)
     };
-    let key: Key = bytesrepr::deserialize(&bytes).unwrap_or_revert();
+    let key: Key = bytesrepr::deserialize(bytes).unwrap_or_revert();
     if let Key::URef(uref) = key {
         TURef::from_uref(uref).unwrap_or_revert()
     } else {

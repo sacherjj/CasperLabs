@@ -35,15 +35,15 @@ impl CLValue {
         })
     }
 
-    pub fn to_t<T: CLTyped + FromBytes>(&self) -> Result<T, CLValueError> {
+    pub fn into_t<T: CLTyped + FromBytes>(self) -> Result<T, CLValueError> {
         let expected = T::cl_type();
 
         if self.cl_type == expected {
-            bytesrepr::deserialize(&self.bytes).map_err(CLValueError::Serialization)
+            bytesrepr::deserialize(self.bytes).map_err(CLValueError::Serialization)
         } else {
             Err(CLValueError::Type(CLTypeMismatch {
                 expected,
-                found: self.cl_type.clone(),
+                found: self.cl_type,
             }))
         }
     }
@@ -78,7 +78,7 @@ impl ToBytes for CLValue {
 
     fn into_bytes(self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = self.bytes.into_bytes()?;
-        result.append(&mut self.cl_type.into_bytes()?);
+        self.cl_type.append_bytes(&mut result);
         Ok(result)
     }
 }
@@ -156,9 +156,9 @@ mod tests {
         map.insert(String::from("xyz"), 2);
         let v = CLValue::from_t(map.clone()).unwrap();
         let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<CLValue>(&ser_v).unwrap();
+        let w = deserialize::<CLValue>(ser_v).unwrap();
         assert_eq!(v, w);
-        let x = w.to_t().unwrap();
+        let x = w.into_t().unwrap();
         assert_eq!(map, x);
     }
 }

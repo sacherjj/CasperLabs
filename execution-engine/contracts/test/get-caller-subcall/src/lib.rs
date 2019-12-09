@@ -30,7 +30,7 @@ pub extern "C" fn call() {
 
     let pointer = storage::store_function_at_hash("check_caller_ext", BTreeMap::new());
     let subcall_public_key: PublicKey = runtime::call_contract(pointer, (), Vec::new())
-        .to_t()
+        .into_t()
         .unwrap_or_revert();
     assert_eq!(
         subcall_public_key, known_public_key,

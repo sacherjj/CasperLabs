@@ -1,8 +1,9 @@
-use alloc::{boxed::Box, collections::VecDeque, string::String, vec::Vec};
-// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
-#[rustfmt::skip]
-use alloc::vec;
-use alloc::collections::BTreeMap;
+use alloc::{
+    boxed::Box,
+    collections::{BTreeMap, VecDeque},
+    string::String,
+    vec::Vec,
+};
 use core::mem;
 
 use crate::{
@@ -136,79 +137,74 @@ enum CLTypeTag {
     Tuple10 = 27,
 }
 
-impl ToBytes for CLType {
-    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+impl CLType {
+    pub fn append_bytes(&self, stream: &mut Vec<u8>) {
         match self {
-            CLType::Bool => Ok(vec![CLTypeTag::Bool as u8]),
-            CLType::I32 => Ok(vec![CLTypeTag::I32 as u8]),
-            CLType::I64 => Ok(vec![CLTypeTag::I64 as u8]),
-            CLType::U8 => Ok(vec![CLTypeTag::U8 as u8]),
-            CLType::U32 => Ok(vec![CLTypeTag::U32 as u8]),
-            CLType::U64 => Ok(vec![CLTypeTag::U64 as u8]),
-            CLType::U128 => Ok(vec![CLTypeTag::U128 as u8]),
-            CLType::U256 => Ok(vec![CLTypeTag::U256 as u8]),
-            CLType::U512 => Ok(vec![CLTypeTag::U512 as u8]),
-            CLType::Unit => Ok(vec![CLTypeTag::Unit as u8]),
-            CLType::String => Ok(vec![CLTypeTag::String as u8]),
-            CLType::Key => Ok(vec![CLTypeTag::Key as u8]),
-            CLType::URef => Ok(vec![CLTypeTag::URef as u8]),
+            CLType::Bool => stream.push(CLTypeTag::Bool as u8),
+            CLType::I32 => stream.push(CLTypeTag::I32 as u8),
+            CLType::I64 => stream.push(CLTypeTag::I64 as u8),
+            CLType::U8 => stream.push(CLTypeTag::U8 as u8),
+            CLType::U32 => stream.push(CLTypeTag::U32 as u8),
+            CLType::U64 => stream.push(CLTypeTag::U64 as u8),
+            CLType::U128 => stream.push(CLTypeTag::U128 as u8),
+            CLType::U256 => stream.push(CLTypeTag::U256 as u8),
+            CLType::U512 => stream.push(CLTypeTag::U512 as u8),
+            CLType::Unit => stream.push(CLTypeTag::Unit as u8),
+            CLType::String => stream.push(CLTypeTag::String as u8),
+            CLType::Key => stream.push(CLTypeTag::Key as u8),
+            CLType::URef => stream.push(CLTypeTag::URef as u8),
             CLType::Option(cl_type) => {
-                let mut result = vec![CLTypeTag::Option as u8];
-                result.append(&mut cl_type.to_bytes()?);
-                Ok(result)
+                stream.push(CLTypeTag::Option as u8);
+                cl_type.append_bytes(stream);
             }
             CLType::List(cl_type) => {
-                let mut result = vec![CLTypeTag::List as u8];
-                result.append(&mut cl_type.to_bytes()?);
-                Ok(result)
+                stream.push(CLTypeTag::List as u8);
+                cl_type.append_bytes(stream);
             }
             CLType::FixedList(cl_type, len) => {
-                let mut result = vec![CLTypeTag::FixedList as u8];
-                result.append(&mut cl_type.to_bytes()?);
-                result.append(&mut len.to_bytes()?);
-                Ok(result)
+                stream.push(CLTypeTag::FixedList as u8);
+                cl_type.append_bytes(stream);
+                stream.append(&mut len.to_bytes().unwrap());
             }
             CLType::Result { ok, err } => {
-                let mut result = vec![CLTypeTag::Result as u8];
-                result.append(&mut ok.to_bytes()?);
-                result.append(&mut err.to_bytes()?);
-                Ok(result)
+                stream.push(CLTypeTag::Result as u8);
+                ok.append_bytes(stream);
+                err.append_bytes(stream);
             }
             CLType::Map { key, value } => {
-                let mut result = vec![CLTypeTag::Map as u8];
-                result.append(&mut key.to_bytes()?);
-                result.append(&mut value.to_bytes()?);
-                Ok(result)
+                stream.push(CLTypeTag::Map as u8);
+                key.append_bytes(stream);
+                value.append_bytes(stream);
             }
             CLType::Tuple1(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple1 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple1 as u8, cl_type_array, stream)
             }
             CLType::Tuple2(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple2 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple2 as u8, cl_type_array, stream)
             }
             CLType::Tuple3(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple3 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple3 as u8, cl_type_array, stream)
             }
             CLType::Tuple4(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple4 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple4 as u8, cl_type_array, stream)
             }
             CLType::Tuple5(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple5 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple5 as u8, cl_type_array, stream)
             }
             CLType::Tuple6(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple6 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple6 as u8, cl_type_array, stream)
             }
             CLType::Tuple7(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple7 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple7 as u8, cl_type_array, stream)
             }
             CLType::Tuple8(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple8 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple8 as u8, cl_type_array, stream)
             }
             CLType::Tuple9(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple9 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple9 as u8, cl_type_array, stream)
             }
             CLType::Tuple10(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple10 as u8, cl_type_array)
+                serialize_cl_tuple_type(CLTypeTag::Tuple10 as u8, cl_type_array, stream)
             }
         }
     }
@@ -386,12 +382,12 @@ impl FromBytes for CLType {
 fn serialize_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
     tag: u8,
     cl_type_array: T,
-) -> Result<Vec<u8>, bytesrepr::Error> {
-    let mut result = vec![tag];
+    stream: &mut Vec<u8>,
+) {
+    stream.push(tag);
     for cl_type in cl_type_array {
-        result.append(&mut cl_type.to_bytes()?);
+        cl_type.append_bytes(stream);
     }
-    Ok(result)
 }
 
 fn parse_cl_tuple_types(
@@ -765,10 +761,10 @@ mod tests {
 
         let serialized_cl_value = cl_value.to_bytes().unwrap();
         assert_eq!(serialized_cl_value.len(), cl_value.serialized_len());
-        let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
+        let parsed_cl_value: CLValue = bytesrepr::deserialize(serialized_cl_value).unwrap();
         assert_eq!(cl_value, parsed_cl_value);
 
-        let parsed_value = CLValue::to_t(&cl_value).unwrap();
+        let parsed_value = CLValue::into_t(cl_value).unwrap();
         assert_eq!(*value, parsed_value);
     }
 
@@ -870,11 +866,12 @@ mod tests {
             }
         }
 
+        // TODO(Fraser) - uncomment "32" once we decide how to handle [u64; 32]
         test_small_array! {
               0  1  2  3  4  5  6  7  8  9
              10 11 12 13 14 15 16 17 18 19
              20 21 22 23 24 25 26 27 28 29
-             30 31 32
+             30 31 // 32
         }
     }
 
@@ -894,10 +891,10 @@ mod tests {
                     let cl_value = CLValue::from_t(array.clone()).unwrap();
 
                     let serialized_cl_value = cl_value.to_bytes().unwrap();
-                    let parsed_cl_value: CLValue = bytesrepr::deserialize(&serialized_cl_value).unwrap();
+                    let parsed_cl_value: CLValue = bytesrepr::deserialize(serialized_cl_value).unwrap();
                     assert_eq!(cl_value, parsed_cl_value);
 
-                    let parsed_value: [u64; $N] = CLValue::to_t(&cl_value).unwrap();
+                    let parsed_value: [u64; $N] = CLValue::into_t(cl_value).unwrap();
                     for i in 0..$N {
                         assert_eq!(array[i], parsed_value[i]);
                     }

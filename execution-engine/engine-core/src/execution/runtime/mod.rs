@@ -285,7 +285,7 @@ where
     /// Reads key (defined as `key_ptr` and `key_size` tuple) from Wasm memory.
     fn key_from_mem(&mut self, key_ptr: u32, key_size: u32) -> Result<Key, Error> {
         let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-        bytesrepr::deserialize(&bytes).map_err(Into::into)
+        bytesrepr::deserialize(bytes).map_err(Into::into)
     }
 
     /// Reads `CLValue` (defined as `cl_value_ptr` and `cl_value_size` tuple) from Wasm memory.
@@ -295,12 +295,12 @@ where
         cl_value_size: u32,
     ) -> Result<CLValue, Error> {
         let bytes = self.bytes_from_mem(cl_value_ptr, cl_value_size as usize)?;
-        bytesrepr::deserialize(&bytes).map_err(Into::into)
+        bytesrepr::deserialize(bytes).map_err(Into::into)
     }
 
     fn string_from_mem(&self, ptr: u32, size: u32) -> Result<String, Trap> {
         let bytes = self.bytes_from_mem(ptr, size as usize)?;
-        bytesrepr::deserialize(&bytes).map_err(|e| Error::BytesRepr(e).into())
+        bytesrepr::deserialize(bytes).map_err(|e| Error::BytesRepr(e).into())
     }
 
     fn get_function_by_name(&mut self, name_ptr: u32, name_size: u32) -> Result<Vec<u8>, Trap> {
@@ -332,7 +332,7 @@ where
 
     pub fn is_valid_uref(&mut self, uref_ptr: u32, uref_size: u32) -> Result<bool, Trap> {
         let bytes = self.bytes_from_mem(uref_ptr, uref_size as usize)?;
-        let uref: URef = bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?;
+        let uref: URef = bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?;
         let key = Key::URef(uref);
         Ok(self.context.validate_key(&key).is_ok())
     }
@@ -462,14 +462,14 @@ where
             .map_err(Error::Interpreter)
             .and_then(|x| {
                 let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_urefs(&urefs_bytes)?;
+                let urefs = self.context.deserialize_urefs(urefs_bytes)?;
                 Ok((x, urefs))
             });
         match mem_get {
             Ok((buf, urefs)) => {
                 // Set the result field in the runtime and return the proper element of the `Error`
                 // enum indicating that the reason for exiting the module was a call to ret.
-                self.host_buf = bytesrepr::deserialize(&buf).ok();
+                self.host_buf = bytesrepr::deserialize(buf).ok();
                 Error::Ret(urefs).into()
             }
             Err(e) => e.into(),
@@ -506,7 +506,7 @@ where
             });
         }
 
-        let args: Vec<CLValue> = bytesrepr::deserialize(&args_bytes)?;
+        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
 
         let maybe_module = match key {
             Key::URef(uref) => self.system_contract_cache.get(&uref),
@@ -518,7 +518,7 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let extra_urefs = self.context.deserialize_keys(&urefs_bytes)?;
+        let extra_urefs = self.context.deserialize_keys(urefs_bytes)?;
 
         let mut refs = contract.take_named_keys();
 
@@ -687,7 +687,7 @@ where
                 self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
             // Public key deserialized
             let source: PublicKey =
-                bytesrepr::deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+                bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
@@ -711,7 +711,7 @@ where
                 self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
             // Public key deserialized
             let source: PublicKey =
-                bytesrepr::deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+                bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         match self.context.remove_associated_key(public_key) {
@@ -732,7 +732,7 @@ where
                 self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
             // Public key deserialized
             let source: PublicKey =
-                bytesrepr::deserialize(&source_serialized).map_err(Error::BytesRepr)?;
+                bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
@@ -796,7 +796,7 @@ where
         self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         // If `call_contract()` succeeded, `take_host_buf()` is guaranteed to be `Some`.
         let result = self.take_host_buf().unwrap();
-        let purse_uref = result.to_t()?;
+        let purse_uref = result.into_t()?;
 
         Ok(PurseId::new(purse_uref))
     }
@@ -828,7 +828,7 @@ where
         self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         // If `call_contract()` succeeded, `take_host_buf()` is guaranteed to be `Some`.
         let result = self.take_host_buf().unwrap();
-        let result: Result<(), mint::Error> = result.to_t()?;
+        let result: Result<(), mint::Error> = result.into_t()?;
 
         Ok(result.map_err(system_contracts::Error::from)?)
     }
@@ -963,17 +963,17 @@ where
     ) -> Result<Result<(), ApiError>, Error> {
         let source: PurseId = {
             let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
-            bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
         let target: PurseId = {
             let bytes = self.bytes_from_mem(target_ptr, target_size as usize)?;
-            bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
         let amount: U512 = {
             let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
-            bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
         let mint_contract_key = self.get_mint_contract_uref().into();
@@ -995,7 +995,7 @@ where
 
         let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
             Some(cl_value) => {
-                let key: Key = cl_value.to_t().expect("expected Key type");
+                let key: Key = cl_value.into_t().expect("expected Key type");
                 match key {
                     Key::URef(_) => (),
                     _ => panic!("expected Key::Uref(_)"),
@@ -1006,9 +1006,13 @@ where
         };
 
         let ret = match self.context.read_gs_direct(&uref_key)? {
-            Some(StoredValue::CLValue(ref cl_value)) if *cl_value.cl_type() == CLType::U512 => {
-                let balance: U512 = cl_value.to_t()?;
-                Some(balance)
+            Some(StoredValue::CLValue(cl_value)) => {
+                if *cl_value.cl_type() == CLType::U512 {
+                    let balance: U512 = cl_value.into_t()?;
+                    Some(balance)
+                } else {
+                    panic!("expected U512")
+                }
             }
             Some(_) => panic!("expected U512"),
             None => None,

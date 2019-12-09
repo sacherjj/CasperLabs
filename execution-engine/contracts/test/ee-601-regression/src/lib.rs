@@ -39,7 +39,7 @@ pub extern "C" fn call() {
 
         let payment_purse: PurseId =
             runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,), vec![])
-                .to_t()
+                .into_t()
                 .unwrap_or_revert();
 
         system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()

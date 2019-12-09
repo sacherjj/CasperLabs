@@ -417,7 +417,7 @@ fn should_maintain_local_state_across_upgrade() {
         .iter()
         .find_map(|(key, transform)| match transform {
             Transform::Write(StoredValue::CLValue(cl_value)) => {
-                let s = cl_value.to_t::<String>().unwrap_or_default();
+                let s = cl_value.clone().into_t::<String>().unwrap_or_default();
                 if s.contains(HELLO) {
                     Some((*key, s.clone()))
                 } else {
@@ -462,7 +462,9 @@ fn should_maintain_local_state_across_upgrade() {
 
     let write = {
         match transform {
-            Transform::Write(StoredValue::CLValue(cl_value)) => cl_value.to_t::<String>().ok(),
+            Transform::Write(StoredValue::CLValue(cl_value)) => {
+                cl_value.clone().into_t::<String>().ok()
+            }
             _ => None,
         }
     }

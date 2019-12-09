@@ -499,15 +499,15 @@ where
                 | CLType::Tuple9(_)
                 | CLType::Tuple10(_) => Ok(()),
                 CLType::Key => {
-                    let key: Key = cl_value.to_t()?;
+                    let key: Key = cl_value.clone().into_t()?;
                     self.validate_key(&key)
                 }
                 CLType::URef => {
-                    let uref: URef = cl_value.to_t()?;
+                    let uref: URef = cl_value.clone().into_t()?;
                     self.validate_uref(&uref)
                 }
                 tuple @ CLType::Tuple2(_) if *tuple == value::named_key_type() => {
-                    let (_name, key): (String, Key) = cl_value.to_t()?;
+                    let (_name, key): (String, Key) = cl_value.clone().into_t()?;
                     self.validate_key(&key)
                 }
                 CLType::Tuple2(_) => Ok(()),
@@ -574,13 +574,13 @@ where
         }
     }
 
-    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
+    pub fn deserialize_keys(&self, bytes: Vec<u8>) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 
-    pub fn deserialize_urefs(&self, bytes: &[u8]) -> Result<Vec<URef>, Error> {
+    pub fn deserialize_urefs(&self, bytes: Vec<u8>) -> Result<Vec<URef>, Error> {
         let keys: Vec<URef> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)
