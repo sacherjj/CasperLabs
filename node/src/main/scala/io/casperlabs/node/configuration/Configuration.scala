@@ -94,8 +94,7 @@ object Configuration extends ParserImplicits {
       cleanBlockStorage: Boolean,
       blockUploadRateMaxRequests: Int Refined NonNegative,
       blockUploadRatePeriod: FiniteDuration,
-      blockUploadRateMaxThrottled: Int Refined NonNegative,
-      minTtl: FiniteDuration
+      blockUploadRateMaxThrottled: Int Refined NonNegative
   ) extends SubConfig
 
   case class BlockStorage(

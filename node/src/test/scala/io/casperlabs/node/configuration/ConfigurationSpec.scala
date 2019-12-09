@@ -100,8 +100,7 @@ class ConfigurationSpec
       cleanBlockStorage = false,
       blockUploadRateMaxRequests = 0,
       blockUploadRatePeriod = Duration.Zero,
-      blockUploadRateMaxThrottled = 0,
-      minTtl = FiniteDuration(1, TimeUnit.SECONDS)
+      blockUploadRateMaxThrottled = 0
     )
     val grpcServer = Configuration.Grpc(
       socket = Paths.get("/tmp/test"),
@@ -124,7 +123,8 @@ class ConfigurationSpec
       autoProposeBallotInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccCount = 1,
-      maxBlockSizeBytes = 1
+      maxBlockSizeBytes = 1,
+      minTtl = FiniteDuration(1, TimeUnit.SECONDS)
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test.crt"),
