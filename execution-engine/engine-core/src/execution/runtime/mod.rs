@@ -369,7 +369,7 @@ where
             return Ok(Err(ApiError::BufferTooSmall));
         }
 
-        // Set serialized Key bytes into the outuput buffer
+        // Set serialized Key bytes into the output buffer
         if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
             return Err(Error::Interpreter(error).into());
         }
