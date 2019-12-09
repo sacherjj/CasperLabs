@@ -461,7 +461,7 @@ private[configuration] final case class Options private (
     )
 
     @scallop
-    val serverMinTtl = gen[FiniteDuration](
+    val casperMinTtl = gen[FiniteDuration](
       "Minimum deploy TTL value."
     )
 
