@@ -751,7 +751,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        bytesrepr::{FromBytes, IntoBytes, ToBytes},
+        bytesrepr::{FromBytes, ToBytes},
         uref::AccessRights,
         value::CLValue,
     };

@@ -13,7 +13,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{self, IntoBytes, ToBytes, U32_SIZE},
+    bytesrepr::{self, ToBytes, U32_SIZE},
     contract_api::{
         system::{TransferResult, TransferredTo},
         Error as ApiError,

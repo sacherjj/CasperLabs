@@ -35,10 +35,6 @@ pub trait ToBytes {
     }
 }
 
-pub trait IntoBytes {
-    fn into_bytes(self) -> Result<Vec<u8>, Error>;
-}
-
 pub trait FromBytes: Sized {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error>;
     fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {

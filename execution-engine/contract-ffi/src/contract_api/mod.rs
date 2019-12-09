@@ -11,10 +11,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::{
-    bytesrepr::{IntoBytes, ToBytes},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use crate::{bytesrepr::ToBytes, unwrap_or_revert::UnwrapOrRevert};
 pub use contract_ref::ContractRef;
 pub use error::{i32_from, result_from, Error};
 pub use turef::TURef;
@@ -44,13 +41,6 @@ fn str_ref_to_ptr(t: &str) -> (*const u8, usize, Vec<u8>) {
 }
 
 fn to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.into_bytes().unwrap_or_revert();
-    let ptr = bytes.as_ptr();
-    let size = bytes.len();
-    (ptr, size, bytes)
-}
-
-fn into_ptr<T: IntoBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
     let bytes = t.into_bytes().unwrap_or_revert();
     let ptr = bytes.as_ptr();
     let size = bytes.len();

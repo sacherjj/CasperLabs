@@ -45,7 +45,7 @@ pub fn call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A, extra_urefs: Ve
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
-        .map(contract_api::into_ptr)
+        .map(contract_api::to_ptr)
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
     let res_size = unsafe {
