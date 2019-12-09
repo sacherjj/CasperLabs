@@ -2,10 +2,10 @@ package io.casperlabs.client
 import java.io._
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.Show
-import cats.effect.{Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
@@ -18,6 +18,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
@@ -516,4 +517,55 @@ object DeployRuntime {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
+  def keygen[F[_]: Sync](
+      outputDirectory: File
+  ): F[Unit] = {
+    val path                     = outputDirectory.toPath
+    val validatorPrivPath: Path  = path.resolve("validator-private.pem")
+    val validatorPubPath: Path   = path.resolve("validator-public.pem")
+    val validatorIdPath: Path    = path.resolve("validator-id")
+    val validatorIdHexPath: Path = path.resolve("validator-id-hex")
+    val nodePrivPath: Path       = path.resolve("node.key.pem")
+    val nodeCertPath: Path       = path.resolve("node.certificate.pem")
+    val nodeIdPath: Path         = path.resolve("node-id")
+
+    val program = for {
+      (valPriv, valPub) <- Sync[F].delay(Ed25519.newKeyPair)
+      _                 <- writeToFile(validatorPrivPath, printValidatorPriv(valPriv))
+      _                 <- writeToFile(validatorPubPath, printValidatorPub(valPub))
+      _                 <- writeToFile(validatorIdPath, Base64.encode(valPub))
+      _                 <- writeToFile(validatorIdHexPath, Base16.encode(valPub))
+      nodeKeyPair       <- Sync[F].delay(CertificateHelper.generateKeyPair(false))
+      nodeCert          <- Sync[F].delay(CertificateHelper.generate(nodeKeyPair))
+      _                 <- writeToFile(nodePrivPath, CertificatePrinter.printPrivateKey(nodeKeyPair.getPrivate))
+      _                 <- writeToFile(nodeCertPath, CertificatePrinter.print(nodeCert))
+      nodeId <- Sync[F].fromOption(
+                 CertificateHelper.publicAddress(nodeKeyPair.getPublic),
+                 new IllegalArgumentException("Certificate's public key is corrupted.")
+               )
+      _ <- writeToFile(nodeIdPath, Base16.encode(nodeId))
+
+    } yield s"Keys successfully created in directory: ${path.toAbsolutePath.toString}"
+
+    gracefulExit(program.attempt)
+  }
+
+  private def writeToFile[F[_]: Sync](path: Path, text: String): F[Unit] =
+    Resource
+      .fromAutoCloseable {
+        Sync[F].delay { new BufferedWriter(new FileWriter(new File(path.toString))) }
+      }
+      .use(buff => Sync[F].delay(buff.write(text)))
+
+  private def printValidatorPriv(privateKey: PrivateKey): String =
+    s"""-----BEGIN PRIVATE KEY-----
+       |${Base64.encode(privateKey)}
+       |-----END PRIVATE KEY-----
+       |""".stripMargin
+
+  private def printValidatorPub(publicKey: PublicKey): String =
+    s"""-----BEGIN PUBLIC KEY-----
+       |${Base64.encode(publicKey)}
+       |-----END PUBLIC KEY-----
+       |""".stripMargin
 }

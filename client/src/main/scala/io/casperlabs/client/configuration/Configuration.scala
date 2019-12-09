@@ -222,6 +222,10 @@ final case class Query(
 ) extends Configuration
     with Formatting
 
+final case class Keygen(
+    outputDirectory: File
+) extends Configuration
+
 object Configuration {
 
   def parse(args: Array[String]): Option[(ConnectOptions, Configuration)] = {
@@ -330,6 +334,8 @@ object Configuration {
           options.balance.address(),
           options.balance.blockHash()
         )
+      case options.keygen =>
+        Keygen(options.keygen.outputDirectory())
     }
     conf map (connect -> _)
   }
