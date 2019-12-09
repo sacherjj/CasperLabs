@@ -178,7 +178,7 @@ where
                     u32,
                     u32,
                 ) = Args::parse(args)?;
-                let ret = self.get_key(
+                let ret = self.load_key(
                     name_ptr,
                     name_size,
                     output_ptr,

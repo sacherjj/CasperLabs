@@ -47,6 +47,7 @@ extern "C" {
         extra_urefs_size: usize,
     ) -> usize;
     pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
+    pub fn get_key_size(name_ptr: *const u8, name_size: usize, size_ptr: *mut usize) -> i32;
     pub fn get_key(
         name_ptr: *const u8,
         name_size: usize,
@@ -54,7 +55,6 @@ extern "C" {
         output_size: usize,
         bytes_written_ptr: *mut usize,
     ) -> i32;
-    pub fn get_key_size(name_ptr: *const u8, name_size: usize, size_ptr: *mut usize) -> i32;
     pub fn has_key(name_ptr: *const u8, name_size: usize) -> i32;
     pub fn put_key(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
     pub fn revert(status: u32) -> !;

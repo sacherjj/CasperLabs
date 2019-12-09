@@ -343,7 +343,7 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_key(
+    pub fn load_key(
         &mut self,
         name_ptr: u32,
         name_size: u32,
