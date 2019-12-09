@@ -1,4 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::mem::MaybeUninit;
 
 use super::{
     alloc_bytes,
@@ -60,12 +61,8 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
             key_ptr, key_size, args_ptr, args_size, urefs_ptr, urefs_size,
         )
     };
-    let res_ptr = alloc_bytes(res_size);
-    let res_bytes = unsafe {
-        ext_ffi::get_call_result(res_ptr);
-        Vec::from_raw_parts(res_ptr, res_size, res_size)
-    };
-    deserialize(&res_bytes).unwrap_or_revert()
+    let result = read_host_buffer_count(res_size).unwrap_or_revert();
+    deserialize(&result).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -97,14 +94,8 @@ fn load_arg(index: u32) -> Option<usize> {
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_size = load_arg(i)?;
-    let arg_bytes = {
-        let dest_ptr = alloc_bytes(arg_size);
-        unsafe {
-            ext_ffi::get_arg(dest_ptr);
-            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
-        }
-    };
-    Some(deserialize(&arg_bytes))
+    let arg_data = read_host_buffer_count(arg_size).unwrap_or_revert();
+    Some(deserialize(&arg_data))
 }
 
 /// Returns caller of current context.
@@ -141,15 +132,9 @@ pub fn get_phase() -> Phase {
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
     let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
-    };
+    let key_data = read_host_buffer_count(key_size).unwrap_or_revert();
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap_or_revert()
+    deserialize(&key_data).unwrap_or_revert()
 }
 
 /// Check if the given name corresponds to a known unforgable reference
@@ -174,11 +159,7 @@ pub fn remove_key(name: &str) {
 
 pub fn list_named_keys() -> BTreeMap<String, Key> {
     let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
-    let dest_ptr = alloc_bytes(bytes_size);
-    let bytes = unsafe {
-        ext_ffi::list_named_keys(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
-    };
+    let bytes = read_host_buffer_count(bytes_size).unwrap_or_revert();
     deserialize(&bytes).unwrap_or_revert()
 }
 
@@ -192,4 +173,28 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     let (value_ptr, value_size, _bytes) = to_ptr(&value);
     let result = unsafe { ext_ffi::is_valid(value_ptr, value_size) };
     result != 0
+}
+
+pub fn host_buffer_size() -> Result<usize, Error> {
+    let mut size = MaybeUninit::uninit();
+    let ret = unsafe { ext_ffi::host_buffer_size(size.as_mut_ptr()) };
+    result_from(ret).map(|_| unsafe { size.assume_init() })
+}
+
+pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
+    let mut bytes_written = MaybeUninit::uninit();
+    let ret = unsafe {
+        ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
+    };
+    result_from(ret).map(|_| unsafe { bytes_written.assume_init() })
+}
+
+pub fn read_host_buffer_count(size: usize) -> Result<Vec<u8>, Error> {
+    if size == 0 {
+        return Ok(Vec::new());
+    }
+    let bytes_ptr = alloc_bytes(size);
+    let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
+    read_host_buffer_into(&mut dest)?;
+    Ok(dest)
 }

@@ -1,7 +1,12 @@
 use alloc::vec::Vec;
-use core::{fmt::Debug, u8};
+use core::fmt::Debug;
 
-use super::{alloc_bytes, error::Error, runtime::revert, to_ptr, ContractRef, TURef};
+use super::{
+    alloc_bytes,
+    error::Error,
+    runtime::{read_host_buffer_count, revert},
+    to_ptr, ContractRef, TURef,
+};
 use crate::{
     bytesrepr::deserialize,
     contract_api::{error::result_from, runtime},
@@ -76,17 +81,17 @@ pub fn create_purse() -> PurseId {
 pub fn get_balance(purse_id: PurseId) -> Option<U512> {
     let (purse_id_ptr, purse_id_size, _bytes) = to_ptr(&purse_id);
 
-    let balance_bytes: Vec<u8> = unsafe {
-        let value_size = ext_ffi::get_balance(purse_id_ptr, purse_id_size) as usize;
-        if value_size == 0 {
-            return None;
-        }
-        let dest_ptr = alloc_bytes(value_size);
-        ext_ffi::get_read(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, value_size, value_size)
+    let balance = {
+        let value_size = {
+            let value_size = unsafe { ext_ffi::get_balance(purse_id_ptr, purse_id_size) } as usize;
+            if value_size == 0 {
+                return None;
+            }
+            value_size
+        };
+        let balance_data = read_host_buffer_count(value_size).unwrap_or_revert();
+        deserialize(&balance_data).unwrap_or_revert()
     };
-
-    let balance: U512 = deserialize(&balance_bytes).unwrap_or_revert();
 
     Some(balance)
 }

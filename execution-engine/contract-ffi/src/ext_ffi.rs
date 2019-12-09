@@ -1,7 +1,6 @@
 extern "C" {
     pub fn read_value(key_ptr: *const u8, key_size: usize) -> usize;
     pub fn read_value_local(key_ptr: *const u8, key_size: usize) -> usize;
-    pub fn get_read(value_ptr: *mut u8); //can only be called after `read_value` or `read_value_local`
     pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn write_local(
         key_ptr: *const u8,
@@ -26,10 +25,7 @@ extern "C" {
         hash_ptr: *const u8,
     );
     pub fn serialize_named_keys() -> usize;
-    // Can only be called after `serialize_named_keys`.
-    pub fn list_named_keys(dest_ptr: *mut u8);
     pub fn load_arg(i: u32) -> isize;
-    pub fn get_arg(dest: *mut u8); //can only be called after `load_arg`
     pub fn ret(
         value_ptr: *const u8,
         value_size: usize,
@@ -46,7 +42,6 @@ extern "C" {
         extra_urefs_ptr: *const u8,
         extra_urefs_size: usize,
     ) -> usize;
-    pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
     pub fn get_key(name_ptr: *const u8, name_size: usize) -> usize;
     pub fn has_key(name_ptr: *const u8, name_size: usize) -> i32;
     pub fn put_key(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);
@@ -96,4 +91,7 @@ extern "C" {
         dest_size: usize,
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
+    pub fn host_buffer_size(size: *mut usize) -> i32;
+    pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
+
 }

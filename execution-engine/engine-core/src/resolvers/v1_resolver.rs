@@ -60,14 +60,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::WriteLocalFuncIndex.into(),
             ),
-            "get_read" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetReadFuncIndex.into(),
-            ),
-            "get_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetFnFuncIndex.into(),
-            ),
             "add" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::AddFuncIndex.into(),
@@ -80,10 +72,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
                 FunctionIndex::LoadArgFuncIndex.into(),
             ),
-            "get_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetArgFuncIndex.into(),
-            ),
             "ret" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::RetFuncIndex.into(),
@@ -91,10 +79,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "call_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 FunctionIndex::CallContractFuncIndex.into(),
-            ),
-            "get_call_result" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
@@ -144,10 +128,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SetActionThresholdFuncIndex.into(),
             ),
-            "list_named_keys" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::ListNamedKeysFuncIndex.into(),
-            ),
             "remove_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RemoveKeyFuncIndex.into(),
@@ -195,6 +175,14 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_main_purse" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetMainPurseIndex.into(),
+            ),
+            "host_buffer_size" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
+                FunctionIndex::HostBufferSizeIndex.into(),
+            ),
+            "read_host_buffer" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
+                FunctionIndex::ReadHostBufferIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

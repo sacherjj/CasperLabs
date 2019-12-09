@@ -4,7 +4,9 @@ use core::{
     u8,
 };
 
-use super::{alloc_bytes, str_ref_to_ptr, to_ptr, ContractRef, TURef};
+use super::{
+    alloc_bytes, runtime::read_host_buffer_count, str_ref_to_ptr, to_ptr, ContractRef, TURef,
+};
 use crate::{
     bytesrepr::{self, deserialize, ToBytes},
     contract_api::{runtime, Error},
@@ -21,11 +23,7 @@ pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error>
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
     let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
-    };
+    let value_bytes = read_host_buffer_count(value_size).unwrap_or_revert();
     deserialize(&value_bytes)
 }
 
@@ -69,12 +67,8 @@ fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Erro
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
     let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
-    };
-    deserialize(&value_bytes)
+    let value_data = read_host_buffer_count(value_size).unwrap_or_revert();
+    deserialize(&value_data)
 }
 
 /// Write the value under the key in the global state

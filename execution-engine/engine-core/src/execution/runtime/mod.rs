@@ -2,6 +2,7 @@ mod args;
 mod externals;
 
 use std::{
+    cmp,
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     iter::IntoIterator,
@@ -42,7 +43,7 @@ pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
-    host_buf: Vec<u8>,
+    host_buf: Option<Vec<u8>>,
     context: RuntimeContext<'a, R>,
 }
 
@@ -163,7 +164,7 @@ where
         memory,
         module: parity_module,
         result: Vec::new(),
-        host_buf: Vec::new(),
+        host_buf: None,
         context: RuntimeContext::new(
             current_runtime.context.state(),
             named_keys,
@@ -236,7 +237,7 @@ where
             memory,
             module,
             result: Vec::new(),
-            host_buf: Vec::new(),
+            host_buf: None,
             context,
         }
     }
@@ -332,11 +333,12 @@ where
     pub fn load_arg(&mut self, i: usize) -> isize {
         match self.context.args().get(i) {
             Some(arg) => {
-                self.host_buf = arg.clone();
-                self.host_buf.len() as isize
+                // NOTE: This will be changed once #1426 (EE-801) will be merged in
+                self.host_buf = Some(arg.clone());
+                arg.len() as isize
             }
             None => {
-                self.host_buf.clear();
+                self.host_buf = None;
                 -1
             }
         }
@@ -351,8 +353,10 @@ where
         let uref = self.context.named_keys_get(&name).cloned();
         let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
-        self.host_buf = uref_bytes;
-        Ok(self.host_buf.len())
+        // NOTE: Once EE-800 gets in this will be changed
+        let uref_bytes_size = uref_bytes.len();
+        self.host_buf = Some(uref_bytes);
+        Ok(uref_bytes_size)
     }
 
     pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -374,14 +378,6 @@ where
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.put_key(name, key).map_err(Into::into)
-    }
-
-    /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
-    /// for the contract to read.
-    pub fn list_named_keys(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        self.memory
-            .set(dest_ptr, &self.host_buf)
-            .map_err(|e| Error::Interpreter(e).into())
     }
 
     fn remove_key(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
@@ -427,12 +423,6 @@ where
             .map_err(Error::BytesRepr)?;
         self.memory
             .set(dest_ptr, &blocktime)
-            .map_err(|e| Error::Interpreter(e).into())
-    }
-
-    pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        self.memory
-            .set(dest_ptr, &self.host_buf)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -521,8 +511,9 @@ where
             extra_urefs,
             contract_version,
         )?;
-        self.host_buf = result;
-        Ok(self.host_buf.len())
+        let result_size = result.len();
+        self.host_buf = Some(result);
+        Ok(result_size)
     }
 
     fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
@@ -532,7 +523,7 @@ where
             .to_bytes()
             .map_err(Error::BytesRepr)?;
         let length = bytes.len();
-        self.host_buf = bytes;
+        self.host_buf = Some(bytes);
         Ok(length)
     }
 
@@ -634,8 +625,9 @@ where
         let key = self.key_from_mem(key_ptr, key_size)?;
         let value: Option<Value> = self.context.read_gs(&key)?;
         let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        self.host_buf = value_bytes;
-        Ok(self.host_buf.len())
+        let value_bytes_size = value_bytes.len();
+        self.host_buf = Some(value_bytes);
+        Ok(value_bytes_size)
     }
 
     /// Similar to `read`, this function is for reading from the "local cluster"
@@ -644,8 +636,9 @@ where
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
         let value: Option<Value> = self.context.read_ls(&key_bytes)?;
         let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        self.host_buf = value_bytes;
-        Ok(self.host_buf.len())
+        let value_bytes_size = value_bytes.len();
+        self.host_buf = Some(value_bytes);
+        Ok(value_bytes_size)
     }
 
     /// Reverts contract execution with a status specified.
@@ -769,7 +762,7 @@ where
 
         self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
-        let result: URef = deserialize(&self.host_buf)?;
+        let result: URef = deserialize(&self.host_buf.as_ref().unwrap_or(&Vec::new()))?;
 
         Ok(PurseId::new(result))
     }
@@ -802,7 +795,8 @@ where
 
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
-        let result: Result<(), mint::Error> = deserialize(&self.host_buf)?;
+        let result: Result<(), mint::Error> =
+            deserialize(&self.host_buf.as_ref().unwrap_or(&Vec::new()))?;
         // Wraps mint error into a more general error type through an aggregate
         // system contracts Error.
         Ok(result.map_err(system_contracts::Error::from)?)
@@ -1029,5 +1023,74 @@ where
             Ok(_) => Ok(Ok(())),
             Err(error) => Err(Error::Interpreter(error).into()),
         }
+    }
+
+    /// Takes host buffer data from and returns it and then clears the buffer.
+    pub fn take_host_buf(&mut self) -> Result<Vec<u8>, ApiError> {
+        self.host_buf.take().ok_or(ApiError::HostBufferEmpty)
+    }
+
+    /// Overwrites data in host buffer only if its in empty state
+    fn write_host_buf(&mut self, data: Vec<u8>) -> Result<(), ApiError> {
+        match self.host_buf {
+            Some(_) => return Err(ApiError::HostBufferFull),
+            None => self.host_buf = Some(data),
+        }
+        Ok(())
+    }
+
+    fn host_buffer_size(&mut self, size_ptr: u32) -> Result<Result<(), ApiError>, Error> {
+        let size = match self.host_buf {
+            None => return Ok(Err(ApiError::HostBufferEmpty)),
+            Some(ref host_buf) if host_buf.len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemoryError))
+            }
+            Some(ref host_buf) => host_buf.len() as u32,
+        };
+
+        let size_bytes = size.to_le_bytes();
+
+        if let Err(error) = self.memory.set(size_ptr, &size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
+    fn read_host_buffer(
+        &mut self,
+        dest_ptr: u32,
+        dest_size: usize,
+        bytes_written_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        let host_buf = match self.host_buf {
+            None => return Ok(Err(ApiError::HostBufferEmpty)),
+            Some(ref host_buf) if host_buf.len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemoryError))
+            }
+            Some(ref host_buf) => host_buf,
+        };
+
+        if host_buf.len() > dest_size {
+            return Ok(Err(ApiError::BufferTooSmall));
+        }
+
+        // Slice data, so if `dest_size` is larger than hostbuf size, it will take host_buf as
+        // whole.
+        let sliced_buf = &host_buf[..cmp::min(dest_size, host_buf.len())];
+        if let Err(error) = self.memory.set(dest_ptr, sliced_buf) {
+            return Err(Error::Interpreter(error));
+        }
+
+        if bytes_written_ptr != 0 {
+            let bytes_written = sliced_buf.len() as u32;
+            let bytes_written_data = bytes_written.to_le_bytes();
+
+            if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
+                return Err(Error::Interpreter(error));
+            }
+        }
+
+        Ok(Ok(()))
     }
 }
