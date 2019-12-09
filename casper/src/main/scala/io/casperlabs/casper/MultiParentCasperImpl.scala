@@ -21,7 +21,6 @@ import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
@@ -41,6 +40,7 @@ import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -56,7 +56,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
+class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
