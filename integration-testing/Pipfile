@@ -24,5 +24,6 @@ importlib_resources = "*"
 requests = "*"
 selenium = ">=3.14.0"
 lz4 = ">=2.2.1"
+cryptography = "*"
 
 [dev-packages]
