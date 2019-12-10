@@ -422,13 +422,6 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::HostBufferSizeIndex => {
-                // args(0) = pointer to Wasm memory where to write size.
-                let dest_ptr = Args::parse(args)?;
-                let ret = self.host_buffer_size(dest_ptr)?;
-                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
-            }
-
             FunctionIndex::ReadHostBufferIndex => {
                 // args(0) = pointer to Wasm memory where to write size.
                 let (dest_ptr, dest_size, bytes_written_ptr): (_, u32, _) = Args::parse(args)?;

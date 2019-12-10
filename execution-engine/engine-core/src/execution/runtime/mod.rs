@@ -1196,24 +1196,6 @@ where
         Ok(())
     }
 
-    fn host_buffer_size(&mut self, size_ptr: u32) -> Result<Result<(), ApiError>, Error> {
-        let size = match self.host_buf {
-            None => return Ok(Err(ApiError::HostBufferEmpty)),
-            Some(ref host_buf) if host_buf.len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemoryError))
-            }
-            Some(ref host_buf) => host_buf.len() as u32,
-        };
-
-        let size_bytes = size.to_le_bytes();
-
-        if let Err(error) = self.memory.set(size_ptr, &size_bytes) {
-            return Err(Error::Interpreter(error));
-        }
-
-        Ok(Ok(()))
-    }
-
     fn read_host_buffer(
         &mut self,
         dest_ptr: u32,

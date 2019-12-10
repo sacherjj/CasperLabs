@@ -199,12 +199,6 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     result != 0
 }
 
-pub fn host_buffer_size() -> Result<usize, Error> {
-    let mut size = MaybeUninit::uninit();
-    let ret = unsafe { ext_ffi::host_buffer_size(size.as_mut_ptr()) };
-    result_from(ret).map(|_| unsafe { size.assume_init() })
-}
-
 pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     let mut bytes_written = MaybeUninit::uninit();
     let ret = unsafe {

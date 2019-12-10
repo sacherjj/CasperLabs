@@ -40,8 +40,7 @@ pub enum FunctionIndex {
     UpgradeContractAtURefIndex = 31,
     GetSystemContractIndex = 32,
     GetMainPurseIndex = 33,
-    HostBufferSizeIndex = 34,
-    ReadHostBufferIndex = 35,
+    ReadHostBufferIndex = 34,
 }
 
 impl Into<usize> for FunctionIndex {

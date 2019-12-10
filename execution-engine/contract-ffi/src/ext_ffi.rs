@@ -96,7 +96,6 @@ extern "C" {
         dest_size: usize,
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
-    pub fn host_buffer_size(size: *mut usize) -> i32;
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
 
 }

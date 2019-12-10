@@ -176,10 +176,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetMainPurseIndex.into(),
             ),
-            "host_buffer_size" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
-                FunctionIndex::HostBufferSizeIndex.into(),
-            ),
             "read_host_buffer" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadHostBufferIndex.into(),
