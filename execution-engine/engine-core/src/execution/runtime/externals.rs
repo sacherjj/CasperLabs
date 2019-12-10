@@ -6,10 +6,7 @@ use contract_ffi::{
     bytesrepr::{self, ToBytes},
     contract_api::{self, system::TransferredTo},
     key::Key,
-    value::{
-        account::{PublicKey, PurseId},
-        Value, U512,
-    },
+    value::{account::PublicKey, Value, U512},
 };
 
 use engine_shared::gas::Gas;
@@ -386,24 +383,10 @@ where
             FunctionIndex::GetBalanceIndex => {
                 // args(0) = pointer to purse_id input
                 // args(1) = length of purse_id
-                let (ptr, ptr_size): (u32, u32) = Args::parse(args)?;
-
-                let purse_id: PurseId = {
-                    let bytes = self.bytes_from_mem(ptr, ptr_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
-                };
-
-                let ret = match self.get_balance(purse_id)? {
-                    Some(balance) => {
-                        let balance_bytes = balance.to_bytes().map_err(Error::BytesRepr)?;
-                        let balance_bytes_size = balance_bytes.len() as i32;
-                        self.host_buf = Some(balance_bytes);
-                        balance_bytes_size
-                    }
-                    None => 0i32,
-                };
-
-                Ok(Some(RuntimeValue::I32(ret)))
+                // args(2) = pointer to output size (output)
+                let (ptr, ptr_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
+                let ret = self.get_balance_host_buf(ptr, ptr_size as usize, output_size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::GetPhaseIndex => {

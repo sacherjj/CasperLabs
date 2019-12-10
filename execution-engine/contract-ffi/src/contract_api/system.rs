@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::fmt::Debug;
+use core::{fmt::Debug, mem::MaybeUninit};
 
 use super::{
     alloc_bytes,
@@ -81,18 +81,18 @@ pub fn create_purse() -> PurseId {
 pub fn get_balance(purse_id: PurseId) -> Option<U512> {
     let (purse_id_ptr, purse_id_size, _bytes) = to_ptr(&purse_id);
 
-    let balance = {
-        let value_size = {
-            let value_size = unsafe { ext_ffi::get_balance(purse_id_ptr, purse_id_size) } as usize;
-            if value_size == 0 {
-                return None;
-            }
-            value_size
-        };
-        let balance_data = read_host_buffer_count(value_size).unwrap_or_revert();
-        deserialize(&balance_data).unwrap_or_revert()
+    let value_size = {
+        let mut output_size = MaybeUninit::uninit();
+        let ret =
+            unsafe { ext_ffi::get_balance(purse_id_ptr, purse_id_size, output_size.as_mut_ptr()) };
+        match result_from(ret) {
+            Ok(_) => unsafe { output_size.assume_init() },
+            Err(Error::InvalidPurse) => return None,
+            Err(error) => runtime::revert(error),
+        }
     };
-
+    let balance_data = read_host_buffer_count(value_size).unwrap_or_revert();
+    let balance: U512 = deserialize(&balance_data).unwrap_or_revert();
     Some(balance)
 }
 

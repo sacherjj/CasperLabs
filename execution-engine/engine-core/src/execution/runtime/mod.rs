@@ -521,7 +521,7 @@ where
         urefs_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        if self.host_buf.is_some() {
+        if !self.can_write_to_host_buf() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
@@ -547,9 +547,12 @@ where
         total_keys_ptr: u32,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        let named_keys = self.context.named_keys();
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
 
-        self.host_buf = None;
+        let named_keys = self.context.named_keys();
 
         let total_keys = named_keys.len() as u32;
         let total_keys_bytes = total_keys.to_le_bytes();
@@ -680,6 +683,11 @@ where
         key_size: u32,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
         let key = self.key_from_mem(key_ptr, key_size)?;
         let value = match self.context.read_gs(&key)? {
             Some(value) => value,
@@ -712,6 +720,11 @@ where
         key_size: u32,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
 
         let value = match self.context.read_ls(&key_bytes)? {
@@ -1072,6 +1085,48 @@ where
         Ok(ret)
     }
 
+    fn get_balance_host_buf(
+        &mut self,
+        purse_id_ptr: u32,
+        purse_id_size: usize,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let purse_id: PurseId = {
+            let bytes = self.bytes_from_mem(purse_id_ptr, purse_id_size)?;
+            match deserialize(&bytes) {
+                Ok(purse_id) => purse_id,
+                Err(error) => return Ok(Err(error.into())),
+            }
+        };
+
+        let balance = match self.get_balance(purse_id)? {
+            Some(balance) => balance,
+            None => return Ok(Err(ApiError::InvalidPurse)),
+        };
+
+        let balance_bytes = match balance.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let balance_size = balance_bytes.len() as i32;
+        if let Err(error) = self.write_host_buf(balance_bytes) {
+            return Ok(Err(error));
+        }
+
+        let balance_size_bytes = balance_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &balance_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
     /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
     /// and writes them at the provided uref, overwriting existing value if any
     pub fn upgrade_contract_at_uref(
@@ -1123,6 +1178,13 @@ where
     /// Takes host buffer data from and returns it and then clears the buffer.
     pub fn take_host_buf(&mut self) -> Option<Vec<u8>> {
         self.host_buf.take()
+    }
+
+    /// Checks if a write to host buffer can happen.
+    ///
+    /// This will check if the host buffer is empty.
+    fn can_write_to_host_buf(&self) -> bool {
+        self.host_buf.is_none()
     }
 
     /// Overwrites data in host buffer only if its in empty state

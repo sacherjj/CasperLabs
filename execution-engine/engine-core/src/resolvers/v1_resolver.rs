@@ -157,7 +157,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::TransferFromPurseToPurseIndex.into(),
             ),
             "get_balance" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::GetBalanceIndex.into(),
             ),
             "get_phase" => FuncInstance::alloc_host(
