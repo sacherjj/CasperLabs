@@ -10,6 +10,7 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
@@ -81,7 +82,7 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged <- ExecEngineUtil.merge[F](parents, dag)
+      merged <- ExecutionEngineServiceStub.merge[F](parents, dag)
       implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
         5 * 1024 * 1024
       )

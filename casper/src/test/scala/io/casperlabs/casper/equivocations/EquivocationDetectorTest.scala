@@ -10,7 +10,7 @@ import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Cell
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage

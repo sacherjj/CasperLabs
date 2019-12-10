@@ -158,5 +158,8 @@ object Main {
 
       case Balance(address, blockHash) =>
         DeployRuntime.balance[F](address, blockHash)
+
+      case Keygen(outputDirectory) =>
+        DeployRuntime.keygen[F](outputDirectory)
     }
 }

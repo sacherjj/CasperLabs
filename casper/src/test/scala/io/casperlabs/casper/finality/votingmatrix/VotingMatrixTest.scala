@@ -14,7 +14,7 @@ import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.Message
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
