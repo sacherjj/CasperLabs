@@ -12,7 +12,7 @@ import io.casperlabs.shared.Log
 import monix.eval.{Task, TaskLike}
 
 object GrpcControlService {
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: Broadcaster](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: Broadcaster: EventsStream](
       blockApiLock: Semaphore[F]
   ): F[ControlGrpcMonix.ControlService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {

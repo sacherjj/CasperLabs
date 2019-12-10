@@ -71,7 +71,7 @@ object BlockAPI {
     } yield ()
   }
 
-  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster: EventEmitterContainer](
       blockApiLock: Semaphore[F]
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
@@ -87,7 +87,9 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
-                           _      <- Broadcaster[F].networkEffects(block, status)
+                           _ <- EventEmitterContainer[F]
+                                 .publish(Event().withBlockAdded(Event.BlockAdded(block.blockHash)))
+                           _ <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]

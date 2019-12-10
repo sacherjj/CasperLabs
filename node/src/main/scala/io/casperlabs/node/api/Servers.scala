@@ -60,7 +60,8 @@ object Servers {
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
       multiParentCasperRef: MultiParentCasperRef[Task],
-      broadcaster: Broadcaster[Task]
+      broadcaster: Broadcaster[Task],
+      eventsStream: EventsStream[Task]
   ): Resource[Task, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer[Task](
