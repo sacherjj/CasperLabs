@@ -88,7 +88,7 @@ object BlockAPI {
                          for {
                            status <- casper.addBlock(block)
                            _ <- EventEmitterContainer[F]
-                                 .publish(Event().withBlockAdded(Event.BlockAdded(block.blockHash)))
+                                 .blockAdded(block.blockHash)
                            _ <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>

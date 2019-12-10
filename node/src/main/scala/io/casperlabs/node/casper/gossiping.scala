@@ -256,9 +256,7 @@ package object gossiping {
           casper
             .addBlock(block)
             .flatTap(
-              Broadcaster[F].networkEffects(block, _) *> EventsStream[F].publish(
-                Event().withBlockAdded(BlockAdded(block.blockHash))
-              )
+              Broadcaster[F].networkEffects(block, _) *> EventsStream[F].blockAdded(block.blockHash)
             )
 
         case None if block.getHeader.parentHashes.isEmpty =>

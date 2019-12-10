@@ -4,8 +4,10 @@ import cats.effect._
 import cats.implicits._
 import io.casperlabs.casper.consensus.info.Event
 import io.casperlabs.casper.EventEmitterContainer
+import io.casperlabs.casper.consensus.info.Event.BlockAdded
 import io.casperlabs.node.api.casper.StreamEventsRequest
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
+import io.casperlabs.storage.block.BlockStorage.BlockHash
 import monix.execution.Scheduler.Implicits.global
 import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
@@ -28,7 +30,8 @@ object EventsStream {
           }
         }
 
-      override def publish(event: Event): F[Unit] = {
+      override def blockAdded(blockHash: BlockHash): F[Unit] = {
+        val event = Event().withBlockAdded(BlockAdded(blockHash))
         source.onNext(event)
         ().pure[F]
       }
