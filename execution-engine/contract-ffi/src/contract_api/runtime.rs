@@ -56,12 +56,24 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
         .map(|args| to_ptr(&args))
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = to_ptr(extra_urefs);
-    let res_size = unsafe {
-        ext_ffi::call_contract(
-            key_ptr, key_size, args_ptr, args_size, urefs_ptr, urefs_size,
-        )
+
+    let bytes_written = {
+        let mut bytes_written = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::call_contract(
+                key_ptr,
+                key_size,
+                args_ptr,
+                args_size,
+                urefs_ptr,
+                urefs_size,
+                bytes_written.as_mut_ptr(),
+            )
+        };
+        result_from(ret).unwrap_or_revert();
+        unsafe { bytes_written.assume_init() }
     };
-    let result = read_host_buffer_count(res_size).unwrap_or_revert();
+    let result = read_host_buffer_count(bytes_written).unwrap_or_revert();
     deserialize(&result).unwrap_or_revert()
 }
 
@@ -190,9 +202,6 @@ pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
 }
 
 pub fn read_host_buffer_count(size: usize) -> Result<Vec<u8>, Error> {
-    if size == 0 {
-        return Ok(Vec::new());
-    }
     let bytes_ptr = alloc_bytes(size);
     let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
     read_host_buffer_into(&mut dest)?;

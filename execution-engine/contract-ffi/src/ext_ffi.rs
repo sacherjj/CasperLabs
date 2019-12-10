@@ -41,7 +41,8 @@ extern "C" {
         // extra urefs known by the caller to make available to the callee
         extra_urefs_ptr: *const u8,
         extra_urefs_size: usize,
-    ) -> usize;
+        result_size: *mut usize,
+    ) -> i32;
     pub fn get_key(name_ptr: *const u8, name_size: usize) -> usize;
     pub fn has_key(name_ptr: *const u8, name_size: usize) -> i32;
     pub fn put_key(name_ptr: *const u8, name_size: usize, key_ptr: *const u8, key_size: usize);

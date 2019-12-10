@@ -464,7 +464,7 @@ where
         key: Key,
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
-    ) -> Result<usize, Error> {
+    ) -> Result<Vec<u8>, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(Value::Contract(contract)) => contract,
             Some(_) => {
@@ -511,9 +511,35 @@ where
             extra_urefs,
             contract_version,
         )?;
-        let result_size = result.len();
-        self.host_buf = Some(result);
-        Ok(result_size)
+        Ok(result)
+    }
+
+    pub fn call_contract_host_buf(
+        &mut self,
+        key: Key,
+        args_bytes: Vec<u8>,
+        urefs_bytes: Vec<u8>,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if self.host_buf.is_some() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let result_bytes = self.call_contract(key, args_bytes, urefs_bytes)?;
+        let result_size = result_bytes.len() as u32; // considered to be safe
+
+        match self.write_host_buf(result_bytes) {
+            Ok(_) => {}
+            Err(error) => return Ok(Err(error)),
+        }
+
+        let result_size_bytes = result_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(result_size_ptr, &result_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
     }
 
     fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
@@ -760,9 +786,9 @@ where
 
         let urefs_bytes = Vec::<Key>::new().to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result_bytes = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
-        let result: URef = deserialize(&self.host_buf.as_ref().unwrap_or(&Vec::new()))?;
+        let result: URef = deserialize(&result_bytes)?;
 
         Ok(PurseId::new(result))
     }
@@ -791,12 +817,11 @@ where
 
         let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result_bytes = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
-        let result: Result<(), mint::Error> =
-            deserialize(&self.host_buf.as_ref().unwrap_or(&Vec::new()))?;
+        let result: Result<(), mint::Error> = deserialize(&result_bytes)?;
         // Wraps mint error into a more general error type through an aggregate
         // system contracts Error.
         Ok(result.map_err(system_contracts::Error::from)?)
@@ -1026,8 +1051,8 @@ where
     }
 
     /// Takes host buffer data from and returns it and then clears the buffer.
-    pub fn take_host_buf(&mut self) -> Result<Vec<u8>, ApiError> {
-        self.host_buf.take().ok_or(ApiError::HostBufferEmpty)
+    pub fn take_host_buf(&mut self) -> Option<Vec<u8>> {
+        self.host_buf.take()
     }
 
     /// Overwrites data in host buffer only if its in empty state
@@ -1063,14 +1088,13 @@ where
         dest_size: usize,
         bytes_written_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let host_buf = match self.host_buf {
+        let host_buf = match self.take_host_buf() {
             None => return Ok(Err(ApiError::HostBufferEmpty)),
-            Some(ref host_buf) if host_buf.len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemoryError))
-            }
-            Some(ref host_buf) => host_buf,
+            Some(host_buf) => host_buf,
         };
-
+        if host_buf.len() > u32::max_value() as usize {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
         if host_buf.len() > dest_size {
             return Ok(Err(ApiError::BufferTooSmall));
         }
@@ -1082,13 +1106,11 @@ where
             return Err(Error::Interpreter(error));
         }
 
-        if bytes_written_ptr != 0 {
-            let bytes_written = sliced_buf.len() as u32;
-            let bytes_written_data = bytes_written.to_le_bytes();
+        let bytes_written = sliced_buf.len() as u32;
+        let bytes_written_data = bytes_written.to_le_bytes();
 
-            if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
-                return Err(Error::Interpreter(error));
-            }
+        if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
+            return Err(Error::Interpreter(error));
         }
 
         Ok(Ok(()))

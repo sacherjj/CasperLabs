@@ -119,8 +119,16 @@ where
                 // args(3) = size of arguments
                 // args(4) = pointer to extra supplied urefs
                 // args(5) = size of extra urefs
-                let (key_ptr, key_size, args_ptr, args_size, extra_urefs_ptr, extra_urefs_size) =
-                    Args::parse(args)?;
+                // args(6) = pointer to result size (output)
+                let (
+                    key_ptr,
+                    key_size,
+                    args_ptr,
+                    args_size,
+                    extra_urefs_ptr,
+                    extra_urefs_size,
+                    result_size_ptr,
+                ) = Args::parse(args)?;
 
                 // We have to explicitly tell rustc what type we expect as it cannot infer it
                 // otherwise.
@@ -132,8 +140,13 @@ where
                 let urefs_bytes =
                     self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                let size = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                let ret = self.call_contract_host_buf(
+                    key_contract,
+                    args_bytes,
+                    urefs_bytes,
+                    result_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::GetKeyFuncIndex => {
