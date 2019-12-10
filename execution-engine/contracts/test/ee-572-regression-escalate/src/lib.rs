@@ -30,9 +30,7 @@ pub extern "C" fn call() {
         .to_c_ptr()
         .unwrap_or_revert_with(ApiError::User(Error::GetArgument as u16));
 
-    let reference: URef = runtime::call_contract(contract_pointer, (), Vec::new())
-        .into_t()
-        .unwrap_or_revert();
+    let reference: URef = runtime::call_contract(contract_pointer, (), Vec::new());
 
     let forged_reference: TURef<&str> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);

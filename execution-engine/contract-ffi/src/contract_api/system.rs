@@ -14,7 +14,7 @@ use crate::{
     uref::{URef, UREF_SIZE_SERIALIZED},
     value::{
         account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED},
-        CLValue, U512,
+        U512,
     },
 };
 
@@ -91,10 +91,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
         Vec::from_raw_parts(dest_ptr, value_size, value_size)
     };
 
-    let cl_value: CLValue = deserialize(balance_bytes).unwrap_or_revert();
-
-    let balance = cl_value.into_t().unwrap_or_revert();
-
+    let balance: U512 = deserialize(balance_bytes).unwrap_or_revert();
     Some(balance)
 }
 

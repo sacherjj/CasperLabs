@@ -19,11 +19,11 @@ const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
 
 fn bond(pos: ContractRef, amount: U512, source: PurseId) {
-    runtime::call_contract(pos, (POS_BOND, amount, source), vec![purse_to_key(source)]);
+    runtime::call_contract::<_, ()>(pos, (POS_BOND, amount, source), vec![purse_to_key(source)]);
 }
 
 fn unbond(pos: ContractRef, amount: Option<U512>) {
-    runtime::call_contract(pos, (POS_UNBOND, amount), vec![]);
+    runtime::call_contract::<_, ()>(pos, (POS_UNBOND, amount), vec![]);
 }
 
 #[no_mangle]

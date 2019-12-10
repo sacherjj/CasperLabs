@@ -48,9 +48,7 @@ pub extern "C" fn call() {
                 purse_holder_contract_pointer.clone(),
                 (method_name,),
                 vec![],
-            )
-            .into_t()
-            .unwrap_or_revert();
+            );
             let version_key = storage::new_turef(version).into();
             runtime::put_key(METHOD_VERSION, version_key);
         }
@@ -59,7 +57,7 @@ pub extern "C" fn call() {
                 .unwrap_or_revert_with(Error::User(CustomError::MissingPurseNameArg as u16))
                 .unwrap_or_revert_with(Error::User(CustomError::InvalidPurseNameArg as u16));
 
-            runtime::call_contract(
+            runtime::call_contract::<_, ()>(
                 purse_holder_contract_pointer.clone(),
                 (method_name, purse_name),
                 vec![],

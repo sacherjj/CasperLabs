@@ -38,7 +38,7 @@ fn deploy_token(name: &str, initial_balance: U512) {
         storage::store_function_at_hash(ERC20_CONTRACT_NAME, Default::default());
 
     // Initialize erc20 contract.
-    runtime::call_contract(
+    runtime::call_contract::<_, ()>(
         token_ref.clone(),
         (api::INIT_ERC20, initial_balance),
         vec![],

@@ -35,7 +35,7 @@ where
                 // args(1) = size of key in Wasm memory
                 let (key_ptr, key_size) = Args::parse(args)?;
                 let size = self.read(key_ptr, key_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                Ok(Some(RuntimeValue::I64(size)))
             }
 
             FunctionIndex::ReadLocalFuncIndex => {
@@ -43,7 +43,7 @@ where
                 // args(1) = size of key bytes in Wasm memory
                 let (key_bytes_ptr, key_bytes_size) = Args::parse(args)?;
                 let size = self.read_local(key_bytes_ptr, key_bytes_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                Ok(Some(RuntimeValue::I64(size)))
             }
 
             FunctionIndex::LoadNamedKeysFuncIndex => {
@@ -155,8 +155,9 @@ where
                 let urefs_bytes =
                     self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size as usize)?;
 
-                let serialized_len = self.call_contract(key_contract, args_bytes, urefs_bytes)?;
-                Ok(Some(RuntimeValue::I32(serialized_len as i32)))
+                let serialized_data_len =
+                    self.call_contract(key_contract, args_bytes, urefs_bytes)?;
+                Ok(Some(RuntimeValue::I32(serialized_data_len as i32)))
             }
 
             FunctionIndex::GetCallResultFuncIndex => {
@@ -415,9 +416,9 @@ where
                     Some(balance) => {
                         let balance_as_cl_value =
                             CLValue::from_t(balance).map_err(Error::CLValue)?;
-                        let serialized_len = balance_as_cl_value.serialized_len();
+                        let inner_bytes_len = balance_as_cl_value.inner_bytes_len();
                         self.host_buf = Some(balance_as_cl_value);
-                        serialized_len as i32
+                        inner_bytes_len as i32
                     }
                     None => 0_i32,
                 };

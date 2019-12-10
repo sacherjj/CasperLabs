@@ -35,27 +35,4 @@ impl DeployItem {
             deploy_hash,
         }
     }
-    pub fn address(&self) -> PublicKey {
-        self.address
-    }
-
-    pub fn session(&self) -> &ExecutableDeployItem {
-        &self.session
-    }
-
-    pub fn payment(&self) -> &ExecutableDeployItem {
-        &self.payment
-    }
-
-    pub fn gas_price(&self) -> GasPrice {
-        self.gas_price
-    }
-
-    pub fn authorization_keys(&self) -> &BTreeSet<PublicKey> {
-        &self.authorization_keys
-    }
-
-    pub fn deploy_hash(&self) -> DeployHash {
-        self.deploy_hash
-    }
 }

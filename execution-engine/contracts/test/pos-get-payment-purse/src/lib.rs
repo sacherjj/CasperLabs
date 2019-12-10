@@ -28,9 +28,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, ("get_payment_purse",), Vec::new())
-            .into_t()
-            .unwrap_or_revert();
+        runtime::call_contract(pos_pointer, ("get_payment_purse",), Vec::new());
 
     // can deposit
     system::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)

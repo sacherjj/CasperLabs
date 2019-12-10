@@ -17,8 +17,8 @@ pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesr
     // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is dropped then key_ptr
     // becomes invalid.
     let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
-    let cl_value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    get_read(cl_value_size)
+    let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
+    get_read(value_size)
 }
 
 /// Reads the value under `key` in the context-local partition of global state.
@@ -28,25 +28,27 @@ pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
     let key_bytes = key.to_bytes()?;
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let cl_value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    get_read(cl_value_size)
+    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
+    get_read(value_size)
 }
 
 /// Retrieves a value from the host buffer which has previously been populated via a call to
 /// `ext_ffi::read_value` or `ext_ffi::read_value_local`.
-fn get_read<T: CLTyped + FromBytes>(cl_value_size: usize) -> Result<Option<T>, bytesrepr::Error> {
-    if cl_value_size == 0 {
+fn get_read<T: CLTyped + FromBytes>(
+    reported_value_size: i64,
+) -> Result<Option<T>, bytesrepr::Error> {
+    if reported_value_size < 0 {
         return Ok(None);
     }
 
-    let cl_value_ptr = contract_api::alloc_bytes(cl_value_size);
-    let cl_value_bytes = unsafe {
-        ext_ffi::get_read(cl_value_ptr);
-        Vec::from_raw_parts(cl_value_ptr, cl_value_size, cl_value_size)
+    let value_size = reported_value_size as usize;
+
+    let value_ptr = contract_api::alloc_bytes(value_size);
+    let value_bytes = unsafe {
+        ext_ffi::get_read(value_ptr);
+        Vec::from_raw_parts(value_ptr, value_size, value_size)
     };
-    let cl_value: CLValue = bytesrepr::deserialize(cl_value_bytes)?;
-    let ret = cl_value.into_t().unwrap_or_revert();
-    Ok(Some(ret))
+    Ok(Some(bytesrepr::deserialize(value_bytes)?))
 }
 
 /// Writes `value` under `turef` in the global state.

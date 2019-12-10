@@ -26,6 +26,7 @@ pub struct CLValue {
 }
 
 impl CLValue {
+    /// Constructs a `CLValue` from `t`.
     pub fn from_t<T: CLTyped + ToBytes>(t: T) -> Result<CLValue, CLValueError> {
         let bytes = t.into_bytes().map_err(CLValueError::Serialization)?;
 
@@ -35,6 +36,7 @@ impl CLValue {
         })
     }
 
+    /// Consumes and converts `self` back into its underlying type.
     pub fn into_t<T: CLTyped + FromBytes>(self) -> Result<T, CLValueError> {
         let expected = T::cl_type();
 
@@ -66,8 +68,17 @@ impl CLValue {
         &self.cl_type
     }
 
+    /// Returns the length of the `Vec<u8>` yielded after calling `self.to_bytes().unwrap()`.
+    ///
+    /// Note, this method doesn't actually serialize `self`, and hence is relatively cheap.
     pub fn serialized_len(&self) -> usize {
         self.cl_type.serialized_len() + U32_SIZE + self.bytes.len()
+    }
+
+    /// Returns the length of `self.bytes`, i.e. the serialized form of the underlying type held by
+    /// the `CLValue`.
+    pub fn inner_bytes_len(&self) -> usize {
+        self.bytes.len()
     }
 }
 

@@ -21,5 +21,5 @@ pub extern "C" fn call() {
         _ => runtime::revert(Error::UnexpectedKeyVariant),
     };
 
-    runtime::call_contract(contract_ref, (), Vec::new());
+    runtime::call_contract::<_, ()>(contract_ref, (), Vec::new());
 }

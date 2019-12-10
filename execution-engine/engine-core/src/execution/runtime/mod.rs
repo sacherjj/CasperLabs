@@ -343,7 +343,7 @@ where
     pub fn load_arg(&mut self, i: usize) -> isize {
         self.host_buf = self.context.args().get(i).cloned();
         match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.serialized_len() as isize,
+            Some(cl_value) => cl_value.inner_bytes_len() as isize,
             None => -1,
         }
     }
@@ -359,10 +359,10 @@ where
         let maybe_uref = self.context.named_keys_get(&name).cloned();
         let maybe_uref_as_cl_value = CLValue::from_t(maybe_uref).map_err(Error::CLValue)?;
 
-        let serialized_len = maybe_uref_as_cl_value.serialized_len();
+        let inner_bytes_len = maybe_uref_as_cl_value.inner_bytes_len();
 
         self.host_buf = Some(maybe_uref_as_cl_value);
-        Ok(serialized_len)
+        Ok(inner_bytes_len)
     }
 
     pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -440,9 +440,9 @@ where
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let buf = self.host_buf.take().ok_or(Error::HostBufferEmpty)?;
-        let serialized_buf = buf.into_bytes().map_err(Error::BytesRepr)?;
+        let (_cl_type, serialized_data) = buf.into_components();
         self.memory
-            .set(dest_ptr, &serialized_buf)
+            .set(dest_ptr, &serialized_data)
             .map_err(|e| Error::Interpreter(e).into())
     }
 
@@ -532,18 +532,18 @@ where
             contract_version,
         )?;
 
-        let serialized_len = result.serialized_len();
+        let inner_bytes_len = result.inner_bytes_len();
         self.host_buf = Some(result);
-        Ok(serialized_len)
+        Ok(inner_bytes_len)
     }
 
     fn load_named_keys(&mut self) -> Result<usize, Trap> {
         self.host_buf = None;
         let named_keys =
             CLValue::from_t(self.context.named_keys().clone()).map_err(Error::CLValue)?;
-        let serialized_len = named_keys.serialized_len();
+        let inner_bytes_len = named_keys.inner_bytes_len();
         self.host_buf = Some(named_keys);
-        Ok(serialized_len)
+        Ok(inner_bytes_len)
     }
 
     pub fn store_function(
@@ -642,7 +642,7 @@ where
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<i64, Trap> {
         self.host_buf = None;
 
         let key = self.key_from_mem(key_ptr, key_size)?;
@@ -652,22 +652,22 @@ where
         }
 
         Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.serialized_len(),
-            None => 0,
+            Some(cl_value) => cl_value.inner_bytes_len() as i64,
+            None => -1,
         })
     }
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<i64, Trap> {
         self.host_buf = None;
 
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
         self.host_buf = self.context.read_ls(&key_bytes)?;
 
         Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.serialized_len(),
-            None => 0,
+            Some(cl_value) => cl_value.inner_bytes_len() as i64,
+            None => -1,
         })
     }
 

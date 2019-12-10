@@ -3,7 +3,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use crate::{
     args_parser::ArgsParser,
     block_time::{BlockTime, BLOCKTIME_SER_SIZE},
-    bytesrepr::{deserialize, FromBytes},
+    bytesrepr::{self, deserialize, FromBytes},
     contract_api::{
         self,
         error::{self, Error},
@@ -14,7 +14,7 @@ use crate::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::{account::PublicKey, CLTyped, CLValue, CLValueError},
+    value::{account::PublicKey, CLTyped, CLValue},
 };
 
 /// Returns `value` to the host, terminating the currently running module.
@@ -41,7 +41,11 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A, extra_urefs: Vec<Key>) -> CLValue {
+pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
+    c_ptr: ContractRef,
+    args: A,
+    extra_urefs: Vec<Key>,
+) -> T {
     let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
@@ -88,7 +92,7 @@ fn load_arg(index: u32) -> Option<usize> {
 /// Return the i-th argument passed to the host for the current module
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
-pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, CLValueError>> {
+pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_size = load_arg(i)?;
     let arg_bytes = {
         let dest_ptr = contract_api::alloc_bytes(arg_size);
@@ -97,11 +101,7 @@ pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, CLValueError>
             Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
         }
     };
-    Some(
-        deserialize::<CLValue>(arg_bytes)
-            .map_err(CLValueError::Serialization)
-            .and_then(|cl_value| cl_value.into_t()),
-    )
+    Some(deserialize(arg_bytes))
 }
 
 /// Returns caller of current context.
@@ -146,10 +146,7 @@ pub fn get_key(name: &str) -> Option<Key> {
         Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize::<CLValue>(key_bytes)
-        .unwrap_or_revert()
-        .into_t()
-        .unwrap_or_revert()
+    deserialize(key_bytes).unwrap_or_revert()
 }
 
 /// Check if the given name corresponds to a known unforgable reference
@@ -179,10 +176,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
-    deserialize::<CLValue>(bytes)
-        .unwrap_or_revert()
-        .into_t()
-        .unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 /// checks if a uref is valid

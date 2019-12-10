@@ -157,7 +157,7 @@ fn delegate() -> Result<(), Error> {
                     .map_err(|_| Error::InvalidArgument)?;
 
             let subcontract_args = (subcontract_method,);
-            runtime::call_contract(contract_ref, subcontract_args, Vec::new());
+            runtime::call_contract::<_, ()>(contract_ref, subcontract_args, Vec::new());
         }
         _ => return Err(ContractError::InvalidDelegateMethod.into()),
     }
