@@ -144,7 +144,7 @@ fn should_upgrade_system_contract() {
 
     assert_eq!(
         version_value,
-        StoredValue::CLValue(CLValue::from_t(&"1.1.0".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0".to_string()).unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -222,7 +222,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
 
     assert_eq!(
         version_value,
-        StoredValue::CLValue(CLValue::from_t(&"1.1.0").unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0").unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -300,7 +300,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
 
     assert_eq!(
         version_value,
-        StoredValue::CLValue(CLValue::from_t(&"1.1.0").unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0").unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -463,7 +463,7 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
 
     assert_eq!(
         version_value,
-        StoredValue::CLValue(CLValue::from_t(&"1.1.0".to_string()).unwrap()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0".to_string()).unwrap()),
         "expected new version endpoint output"
     );
 

@@ -14,8 +14,8 @@ fn malicious_revenue_stealing_contract() {
 
     runtime::call_contract(
         pos_pointer,
-        &(SET_REFUND_PURSE, purse),
-        &vec![purse.value().into()],
+        (SET_REFUND_PURSE, purse),
+        vec![purse.value().into()],
     );
 }
 

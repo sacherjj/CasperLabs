@@ -82,7 +82,7 @@ where
         let uref = outer_key
             .as_uref()
             .ok_or_else(|| execution::Error::URefNotFound("public purse balance".to_string()))?;
-        let local_key_bytes = uref.addr().to_bytes()?;
+        let local_key_bytes = uref.addr().into_bytes()?;
         let balance_mapping_key = Key::local(mint_contract_uref.addr(), &local_key_bytes);
         match self
             .query(correlation_id, balance_mapping_key, &[])
@@ -92,7 +92,7 @@ where
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
-                Ok(cl_value.to_t()?)
+                Ok(cl_value.into_t()?)
             }
             TrackingCopyQueryResult::ValueNotFound(msg) => Err(execution::Error::URefNotFound(msg)),
         }
@@ -112,7 +112,7 @@ where
                 let cl_value: CLValue = stored_value
                     .try_into()
                     .map_err(execution::Error::TypeMismatch)?;
-                let balance: U512 = cl_value.to_t()?;
+                let balance: U512 = cl_value.into_t()?;
                 Ok(Motes::new(balance))
             }
             TrackingCopyQueryResult::ValueNotFound(_) => Err(execution::Error::KeyNotFound(key)),

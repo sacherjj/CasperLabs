@@ -188,7 +188,7 @@ fn use_uref_valid() {
     let access_rights = extract_access_rights_from_keys(vec![uref]);
     // Use uref as the key to perform an action on the global state.
     // This should succeed because the uref is valid.
-    let value = StoredValue::CLValue(CLValue::from_t(&43_i32).unwrap());
+    let value = StoredValue::CLValue(CLValue::from_t(43_i32).unwrap());
     let query_result = test(access_rights, |mut rc| rc.write_gs(uref, value));
     query_result.expect("writing using valid uref should succeed");
 }
@@ -199,7 +199,7 @@ fn use_uref_forged() {
     let mut rng = AddressGenerator::new(DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = HashMap::new();
-    let value = StoredValue::CLValue(CLValue::from_t(&43_i32).unwrap());
+    let value = StoredValue::CLValue(CLValue::from_t(43_i32).unwrap());
     let query_result = test(access_rights, |mut rc| rc.write_gs(uref, value));
 
     assert_forged_reference(query_result);
@@ -321,7 +321,7 @@ fn account_key_not_writeable() {
     let query_result = test(HashMap::new(), |mut rc| {
         rc.write_gs(
             acc_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
     assert_invalid_access(query_result, AccessRights::WRITE);
@@ -367,7 +367,7 @@ fn account_key_addable_valid() {
     let query_result = test(access_rights, |mut rc| {
         let base_key = rc.base_key();
         let uref_name = "NewURef".to_owned();
-        let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
+        let named_key = StoredValue::CLValue(CLValue::from_t((uref_name.clone(), uref)).unwrap());
 
         rc.add_gs(base_key, named_key).expect("Adding should work.");
 
@@ -395,7 +395,7 @@ fn account_key_addable_invalid() {
     let query_result = test(HashMap::new(), |mut rc| {
         rc.add_gs(
             other_acc_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
 
@@ -422,7 +422,7 @@ fn contract_key_not_writeable() {
     let query_result = test(HashMap::new(), |mut rc| {
         rc.write_gs(
             contract_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
 
@@ -472,7 +472,7 @@ fn contract_key_addable_valid() {
     );
 
     let uref_name = "NewURef".to_owned();
-    let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
+    let named_key = StoredValue::CLValue(CLValue::from_t((uref_name.clone(), uref)).unwrap());
 
     runtime_context
         .add_gs(contract_key, named_key)
@@ -533,7 +533,7 @@ fn contract_key_addable_invalid() {
     );
 
     let uref_name = "NewURef".to_owned();
-    let named_key = StoredValue::CLValue(CLValue::from_t(&(uref_name.clone(), uref)).unwrap());
+    let named_key = StoredValue::CLValue(CLValue::from_t((uref_name.clone(), uref)).unwrap());
 
     let result = runtime_context.add_gs(contract_key, named_key);
 
@@ -566,7 +566,7 @@ fn uref_key_writeable_valid() {
     let query_result = test(access_rights, |mut rc| {
         rc.write_gs(
             uref_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
     assert!(query_result.is_ok());
@@ -580,7 +580,7 @@ fn uref_key_writeable_invalid() {
     let query_result = test(access_rights, |mut rc| {
         rc.write_gs(
             uref_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
     assert_invalid_access(query_result, AccessRights::WRITE);
@@ -594,12 +594,12 @@ fn uref_key_addable_valid() {
     let query_result = test(access_rights, |mut rc| {
         rc.write_gs(
             uref_key,
-            StoredValue::CLValue(CLValue::from_t(&10_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(10_i32).unwrap()),
         )
         .expect("Writing to the GlobalState should work.");
         rc.add_gs(
             uref_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
     assert!(query_result.is_ok());
@@ -613,7 +613,7 @@ fn uref_key_addable_invalid() {
     let query_result = test(access_rights, |mut rc| {
         rc.add_gs(
             uref_key,
-            StoredValue::CLValue(CLValue::from_t(&1_i32).unwrap()),
+            StoredValue::CLValue(CLValue::from_t(1_i32).unwrap()),
         )
     });
     assert_invalid_access(query_result, AccessRights::ADD);
@@ -882,7 +882,7 @@ fn can_roundtrip_key_value_pairs_into_local_state() {
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let test_key = b"test_key";
-        let test_value = CLValue::from_t(&"test_value".to_string()).unwrap();
+        let test_value = CLValue::from_t("test_value".to_string()).unwrap();
 
         runtime_context
             .write_ls(test_key, test_value.clone())

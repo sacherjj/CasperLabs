@@ -67,19 +67,19 @@ impl TryFrom<transforms::Transform> for Transform {
                 match cl_value.cl_type() {
                     CLType::U128 => {
                         let u128: U128 = cl_value
-                            .to_t()
+                            .into_t()
                             .map_err(|error| ParsingError(format!("{:?}", error)))?;
                         u128.into()
                     }
                     CLType::U256 => {
                         let u256: U256 = cl_value
-                            .to_t()
+                            .into_t()
                             .map_err(|error| ParsingError(format!("{:?}", error)))?;
                         u256.into()
                     }
                     CLType::U512 => {
                         let u512: U512 = cl_value
-                            .to_t()
+                            .into_t()
                             .map_err(|error| ParsingError(format!("{:?}", error)))?;
                         u512.into()
                     }

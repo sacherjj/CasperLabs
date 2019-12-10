@@ -25,7 +25,7 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
 
     fn save_balance(&mut self, address: &PublicKey, balance: U512) {
         let key = Key::local(SEED, &address.value());
-        storage::write_local(key, &balance);
+        storage::write_local(key, balance);
     }
 
     fn read_total_supply(&mut self) -> Option<U512> {
@@ -35,7 +35,7 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
 
     fn save_total_supply(&mut self, total_supply: U512) {
         let key = Key::local(SEED, &TOTAL_SUPPLY_KEY);
-        storage::write_local(key, &total_supply);
+        storage::write_local(key, total_supply);
     }
 
     fn read_allowance(&mut self, owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
@@ -45,7 +45,7 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
 
     fn save_allowance(&mut self, owner: &PublicKey, spender: &PublicKey, amount: U512) {
         let key = Key::local(owner.value(), &spender.value());
-        storage::write_local(key, &amount);
+        storage::write_local(key, amount);
     }
 }
 
@@ -83,15 +83,15 @@ fn entry_point() {
         }
         Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
         Api::BalanceOf(address) => runtime::ret(
-            CLValue::from_t(&token.balance_of(&address)).unwrap_or_revert(),
+            CLValue::from_t(token.balance_of(&address)).unwrap_or_revert(),
             vec![],
         ),
         Api::TotalSupply => runtime::ret(
-            CLValue::from_t(&token.total_supply()).unwrap_or_revert(),
+            CLValue::from_t(token.total_supply()).unwrap_or_revert(),
             vec![],
         ),
         Api::Allowance(owner, spender) => runtime::ret(
-            CLValue::from_t(&token.allowance(&owner, &spender)).unwrap_or_revert(),
+            CLValue::from_t(token.allowance(&owner, &spender)).unwrap_or_revert(),
             vec![],
         ),
         _ => runtime::revert(Error::UnknownErc20CallCommand),
@@ -104,7 +104,7 @@ fn is_not_initialized() -> bool {
 }
 
 fn mark_as_initialized() {
-    storage::write_local(INIT_FLAG_KEY, &1);
+    storage::write_local(INIT_FLAG_KEY, 1);
 }
 
 #[no_mangle]

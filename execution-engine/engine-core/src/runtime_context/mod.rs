@@ -291,7 +291,7 @@ where
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(36); //32 bytes for deploy hash + 4 bytes ID
         pre_hash_bytes.extend_from_slice(&self.deploy_hash);
-        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id().into_bytes()?);
 
         self.inc_fn_store_id();
 
@@ -317,7 +317,7 @@ where
     pub fn put_key(&mut self, name: String, key: Key) -> Result<(), Error> {
         // No need to perform actual validation on the base key because an account or contract (i.e.
         // the element stored under `base_key`) is allowed to add new named keys to itself.
-        let named_key_value = StoredValue::CLValue(CLValue::from_t(&(name.clone(), key))?);
+        let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
         self.validate_value(&named_key_value)?;
 
         self.add_gs_unsafe(self.base_key(), named_key_value)?;
@@ -499,15 +499,15 @@ where
                 | CLType::Tuple9(_)
                 | CLType::Tuple10(_) => Ok(()),
                 CLType::Key => {
-                    let key: Key = cl_value.to_t()?;
+                    let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)
                 }
                 CLType::URef => {
-                    let uref: URef = cl_value.to_t()?;
+                    let uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_uref(&uref)
                 }
                 tuple @ CLType::Tuple2(_) if *tuple == value::named_key_type() => {
-                    let (_name, key): (String, Key) = cl_value.to_t()?;
+                    let (_name, key): (String, Key) = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)
                 }
                 CLType::Tuple2(_) => Ok(()),
@@ -574,13 +574,13 @@ where
         }
     }
 
-    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
+    pub fn deserialize_keys(&self, bytes: Vec<u8>) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 
-    pub fn deserialize_urefs(&self, bytes: &[u8]) -> Result<Vec<URef>, Error> {
+    pub fn deserialize_urefs(&self, bytes: Vec<u8>) -> Result<Vec<URef>, Error> {
         let keys: Vec<URef> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)

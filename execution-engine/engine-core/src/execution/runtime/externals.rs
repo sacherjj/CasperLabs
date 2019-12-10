@@ -242,7 +242,7 @@ where
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
                     .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
@@ -263,7 +263,7 @@ where
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
                     .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
@@ -322,7 +322,7 @@ where
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
                 let purse_id = self.create_purse()?;
-                let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
+                let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
                 assert_eq!(dest_size, purse_id_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_id_bytes)
@@ -339,11 +339,11 @@ where
                     Args::parse(args)?;
                 let public_key: PublicKey = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let amount: U512 = {
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_to_account(public_key, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
@@ -367,15 +367,15 @@ where
 
                 let source_purse = {
                     let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let public_key: PublicKey = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let amount: U512 = {
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
@@ -408,13 +408,13 @@ where
 
                 let purse_id: PurseId = {
                     let bytes = self.bytes_from_mem(ptr, ptr_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
 
                 let ret = match self.get_balance(purse_id)? {
                     Some(balance) => {
                         let balance_as_cl_value =
-                            CLValue::from_t(&balance).map_err(Error::CLValue)?;
+                            CLValue::from_t(balance).map_err(Error::CLValue)?;
                         let serialized_len = balance_as_cl_value.serialized_len();
                         self.host_buf = Some(balance_as_cl_value);
                         serialized_len as i32

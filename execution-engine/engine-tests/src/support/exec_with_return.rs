@@ -145,7 +145,7 @@ where
                         let value: T = runtime
                             .take_host_buf()
                             .expect("should have return value in the host_buf")
-                            .to_t()
+                            .into_t()
                             .expect("should deserialize return value");
 
                         Some((value, urefs, effect))

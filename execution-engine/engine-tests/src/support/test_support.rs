@@ -204,7 +204,7 @@ impl DeployItemBuilder {
     fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
         args.parse()
             .expect("should convert to `Vec<CLValue>`")
-            .to_bytes()
+            .into_bytes()
             .expect("should serialize args")
     }
 }
@@ -967,12 +967,12 @@ where
         let balance_uref = self
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         self.query(None, balance_uref, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512")
     }
 

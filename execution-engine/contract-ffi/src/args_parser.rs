@@ -13,11 +13,11 @@ use crate::{
 /// It means that each type of the tuple has to implement `CLTyped + ToBytes`.  Implemented for
 /// tuples of various sizes.
 pub trait ArgsParser {
-    fn parse(&self) -> Result<Vec<CLValue>, CLValueError>;
+    fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
 }
 
 impl ArgsParser for () {
-    fn parse(&self) -> Result<Vec<CLValue>, CLValueError> {
+    fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
         Ok(Vec::new())
     }
 }
@@ -26,8 +26,8 @@ macro_rules! impl_argsparser_tuple {
     ( $($name:ident)+) => (
         impl<$($name: CLTyped + ToBytes),*> ArgsParser for ($($name,)*) {
             #[allow(non_snake_case)]
-            fn parse(&self) -> Result<Vec<CLValue>, CLValueError> {
-                let ($(ref $name,)+) = *self;
+            fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
+                let ($($name,)+) = self;
                 Ok(vec![$(CLValue::from_t($name)?,)+])
             }
         }

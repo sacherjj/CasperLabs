@@ -33,7 +33,7 @@ fn should_run_named_keys_contract() {
         .iter()
         .filter_map(|(k, v)| {
             if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
-                let s = cl_value.to_t::<String>().ok()?;
+                let s = cl_value.to_owned().into_t::<String>().ok()?;
                 if let Key::URef(_) = k {
                     return Some(s);
                 }
@@ -47,7 +47,7 @@ fn should_run_named_keys_contract() {
         .iter()
         .filter_map(|(k, v)| {
             if let Transform::Write(StoredValue::CLValue(cl_value)) = v {
-                let value = cl_value.to_t::<U512>().ok()?;
+                let value = cl_value.to_owned().into_t::<U512>().ok()?;
                 if let Key::URef(_) = k {
                     // Since payment code is enabled by default there are multiple writes of Uint512
                     // type, so we narrow it down to the expected value.

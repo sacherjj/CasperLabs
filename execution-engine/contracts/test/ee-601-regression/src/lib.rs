@@ -38,8 +38,8 @@ pub extern "C" fn call() {
         let pos_pointer = system::get_proof_of_stake();
 
         let payment_purse: PurseId =
-            runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![])
-                .to_t()
+            runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,), vec![])
+                .into_t()
                 .unwrap_or_revert();
 
         system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
@@ -53,9 +53,9 @@ pub extern "C" fn call() {
         }
     };
     let value = value.unwrap_or_revert_with(ApiError::User(Error::InvalidPhase as u16));
-    let result_key = storage::new_turef(&value.to_string()).into();
+    let result_key = storage::new_turef(value.to_string()).into();
     let mut uref_name: String = NEW_UREF_RESULT_UREF_NAME.to_string();
     uref_name.push_str("-");
     uref_name.push_str(value);
-    runtime::put_key(&uref_name, &result_key);
+    runtime::put_key(&uref_name, result_key);
 }

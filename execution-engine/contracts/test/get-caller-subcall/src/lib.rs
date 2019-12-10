@@ -13,7 +13,7 @@ use contract_ffi::{
 #[no_mangle]
 pub extern "C" fn check_caller_ext() {
     let caller_public_key: PublicKey = runtime::get_caller();
-    let return_value = CLValue::from_t(&caller_public_key).unwrap_or_revert();
+    let return_value = CLValue::from_t(caller_public_key).unwrap_or_revert();
     runtime::ret(return_value, Vec::new())
 }
 
@@ -29,8 +29,8 @@ pub extern "C" fn call() {
     );
 
     let pointer = storage::store_function_at_hash("check_caller_ext", BTreeMap::new());
-    let subcall_public_key: PublicKey = runtime::call_contract(pointer, &(), &Vec::new())
-        .to_t()
+    let subcall_public_key: PublicKey = runtime::call_contract(pointer, (), Vec::new())
+        .into_t()
         .unwrap_or_revert();
     assert_eq!(
         subcall_public_key, known_public_key,

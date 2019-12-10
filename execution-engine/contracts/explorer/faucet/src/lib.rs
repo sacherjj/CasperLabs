@@ -30,6 +30,6 @@ pub extern "C" fn call() {
     } else {
         system::transfer_to_account(public_key, amount).unwrap_or_revert();
         // Transfer successful; Store the fact of funding in the local state.
-        storage::write_local(public_key, &amount);
+        storage::write_local(public_key, amount);
     }
 }

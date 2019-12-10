@@ -22,8 +22,8 @@ use crate::{
 /// Note this function is only relevant to contracts stored on chain which return a value to their
 /// caller. The return value of a directly deployed contract is never looked at.
 pub fn ret(value: CLValue, extra_urefs: Vec<URef>) -> ! {
-    let (ptr, size, _bytes) = contract_api::to_ptr(&value);
-    let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(&extra_urefs);
+    let (ptr, size, _bytes) = contract_api::to_ptr(value);
+    let (urefs_ptr, urefs_size, _bytes2) = contract_api::to_ptr(extra_urefs);
     unsafe {
         ext_ffi::ret(ptr, size, urefs_ptr, urefs_size);
     }
@@ -41,15 +41,11 @@ pub fn revert<T: Into<Error>>(error: T) -> ! {
 /// execution. The value returned from the contract call (see `ret` above) is
 /// returned from this function.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser>(
-    c_ptr: ContractRef,
-    args: &A,
-    extra_urefs: &Vec<Key>,
-) -> CLValue {
+pub fn call_contract<A: ArgsParser>(c_ptr: ContractRef, args: A, extra_urefs: Vec<Key>) -> CLValue {
     let contract_key: Key = c_ptr.into();
-    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(&contract_key);
+    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
-        .map(|args| contract_api::to_ptr(&args))
+        .map(contract_api::to_ptr)
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
     let res_size = unsafe {
@@ -62,7 +58,7 @@ pub fn call_contract<A: ArgsParser>(
         ext_ffi::get_call_result(res_ptr);
         Vec::from_raw_parts(res_ptr, res_size, res_size)
     };
-    deserialize(&res_bytes).unwrap_or_revert()
+    deserialize(res_bytes).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -71,7 +67,7 @@ pub fn call_contract<A: ArgsParser>(
 pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
     let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
     let key: Key = uref.into();
-    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(&key);
+    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
     let result_value =
         unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
     match error::result_from(result_value) {
@@ -102,9 +98,9 @@ pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, CLValueError>
         }
     };
     Some(
-        deserialize::<CLValue>(&arg_bytes)
+        deserialize::<CLValue>(arg_bytes)
             .map_err(CLValueError::Serialization)
-            .and_then(|cl_value| cl_value.to_t()),
+            .and_then(|cl_value| cl_value.into_t()),
     )
 }
 
@@ -117,7 +113,7 @@ pub fn get_caller() -> PublicKey {
     let dest_ptr = contract_api::alloc_bytes(36);
     unsafe { ext_ffi::get_caller(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_blocktime() -> BlockTime {
@@ -126,14 +122,14 @@ pub fn get_blocktime() -> BlockTime {
         ext_ffi::get_blocktime(dest_ptr);
         Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
     };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_phase() -> Phase {
     let dest_ptr = contract_api::alloc_bytes(PHASE_SIZE);
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
-    deserialize(&bytes).unwrap_or_revert()
+    deserialize(bytes).unwrap_or_revert()
 }
 
 /// Return the unforgable reference known by the current module under the given
@@ -150,9 +146,9 @@ pub fn get_key(name: &str) -> Option<Key> {
         Vec::from_raw_parts(dest_ptr, key_size, key_size)
     };
     // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize::<CLValue>(&key_bytes)
+    deserialize::<CLValue>(key_bytes)
         .unwrap_or_revert()
-        .to_t()
+        .into_t()
         .unwrap_or_revert()
 }
 
@@ -164,7 +160,7 @@ pub fn has_key(name: &str) -> bool {
 }
 
 /// Put the given key to the named_keys map under the given name
-pub fn put_key(name: &str, key: &Key) {
+pub fn put_key(name: &str, key: Key) {
     let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
     let (key_ptr, key_size, _bytes2) = contract_api::to_ptr(key);
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
@@ -183,15 +179,15 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         ext_ffi::list_named_keys(dest_ptr);
         Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
     };
-    deserialize::<CLValue>(&bytes)
+    deserialize::<CLValue>(bytes)
         .unwrap_or_revert()
-        .to_t()
+        .into_t()
         .unwrap_or_revert()
 }
 
 /// checks if a uref is valid
 pub fn is_valid_uref(uref: URef) -> bool {
-    let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(&uref);
+    let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };
     result != 0
 }

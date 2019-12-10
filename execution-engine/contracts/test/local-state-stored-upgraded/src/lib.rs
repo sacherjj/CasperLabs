@@ -29,7 +29,7 @@ pub extern "C" fn delegate() {
 
     res.push_str(SNIPPET);
     // Write "Hello, "
-    storage::write_local(local_state::LOCAL_KEY, &res);
+    storage::write_local(local_state::LOCAL_KEY, res);
 
     // Read back
     let res: String = storage::read_local(&local_state::LOCAL_KEY)
@@ -53,5 +53,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, &key);
+    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, key);
 }

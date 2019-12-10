@@ -9,9 +9,9 @@ impl TryFrom<BigInt> for CLValue {
 
     fn try_from(pb_big_int: BigInt) -> Result<CLValue, Self::Error> {
         let cl_value_result = match pb_big_int.get_bit_width() {
-            128 => CLValue::from_t(&U128::try_from(pb_big_int)?),
-            256 => CLValue::from_t(&U256::try_from(pb_big_int)?),
-            512 => CLValue::from_t(&U512::try_from(pb_big_int)?),
+            128 => CLValue::from_t(U128::try_from(pb_big_int)?),
+            256 => CLValue::from_t(U256::try_from(pb_big_int)?),
+            512 => CLValue::from_t(U512::try_from(pb_big_int)?),
             other => return Err(invalid_bit_width(other)),
         };
         cl_value_result.map_err(|error| ParsingError(format!("{:?}", error)))

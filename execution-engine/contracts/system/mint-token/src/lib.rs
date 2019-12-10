@@ -42,15 +42,15 @@ impl Mint<RefWithAddRights<U512>, RefWithReadAddWriteRights<U512>> for CLMint {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
-        let balance_uref: Key = storage::new_turef(&initial_balance).into();
+        let balance_uref: Key = storage::new_turef(initial_balance).into();
 
-        let purse_key: URef = storage::new_turef(&()).into();
+        let purse_key: URef = storage::new_turef(()).into();
         let purse_uref_name = purse_key.remove_access_rights().as_string();
 
         let purse_id: WithdrawId = WithdrawId::from_uref(purse_key).unwrap();
 
         // store balance uref so that the runtime knows the mint has full access
-        runtime::put_key(&purse_uref_name, &balance_uref);
+        runtime::put_key(&purse_uref_name, balance_uref);
 
         // store association between purse id and balance uref
         //
@@ -61,7 +61,7 @@ impl Mint<RefWithAddRights<U512>, RefWithReadAddWriteRights<U512>> for CLMint {
         // performed in the "owner" context   so it aligns with other semantics
         // of write but I would prefer if were able to enforce   uniqueness
         // somehow.
-        storage::write_local(purse_id.raw_id(), &balance_uref);
+        storage::write_local(purse_id.raw_id(), balance_uref);
 
         Ok(purse_id)
     }
@@ -96,7 +96,7 @@ pub fn delegate() {
             let maybe_purse_key = mint
                 .mint(amount)
                 .map(|purse_id| URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE));
-            let return_value = CLValue::from_t(&maybe_purse_key).unwrap_or_revert();
+            let return_value = CLValue::from_t(maybe_purse_key).unwrap_or_revert();
 
             if let Ok(purse_key) = maybe_purse_key {
                 runtime::ret(return_value, vec![purse_key])
@@ -108,7 +108,7 @@ pub fn delegate() {
         "create" => {
             let purse_id = mint.create();
             let purse_key = URef::new(purse_id.raw_id(), AccessRights::READ_ADD_WRITE);
-            let return_value = CLValue::from_t(&purse_key).unwrap_or_revert();
+            let return_value = CLValue::from_t(purse_key).unwrap_or_revert();
             runtime::ret(return_value, vec![purse_key])
         }
 
@@ -120,7 +120,7 @@ pub fn delegate() {
             let balance_uref = mint.lookup(purse_id);
             let balance: Option<U512> =
                 balance_uref.and_then(|uref| storage::read(uref.into()).unwrap_or_default());
-            let return_value = CLValue::from_t(&balance).unwrap_or_revert();
+            let return_value = CLValue::from_t(balance).unwrap_or_revert();
             runtime::ret(return_value, vec![])
         }
 
@@ -137,7 +137,7 @@ pub fn delegate() {
 
             let return_error = |error: PurseIdError| -> ! {
                 let transfer_result: Result<(), Error> = Err(error.into());
-                let return_value = CLValue::from_t(&transfer_result).unwrap_or_revert();
+                let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
                 runtime::ret(return_value, vec![])
             };
 
@@ -152,7 +152,7 @@ pub fn delegate() {
             };
 
             let transfer_result = mint.transfer(source, target, amount);
-            let return_value = CLValue::from_t(&transfer_result).unwrap_or_revert();
+            let return_value = CLValue::from_t(transfer_result).unwrap_or_revert();
             runtime::ret(return_value, vec![]);
         }
         _ => panic!("Unknown method name!"),

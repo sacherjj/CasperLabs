@@ -21,8 +21,8 @@ pub extern "C" fn call() {
 
     let extra_urefs = [].to_vec();
 
-    let result: URef = runtime::call_contract(contract_pointer, &(), &extra_urefs)
-        .to_t()
+    let result: URef = runtime::call_contract(contract_pointer, (), extra_urefs)
+        .into_t()
         .unwrap_or_revert();
 
     let value = storage::read(TURef::from_uref(result).unwrap());

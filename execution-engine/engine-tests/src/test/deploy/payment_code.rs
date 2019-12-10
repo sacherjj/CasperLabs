@@ -119,7 +119,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_t() {
+            if let Ok(v) = cl_value.to_owned().into_t() {
                 modified_balance = Some(v);
             }
         }
@@ -210,7 +210,7 @@ fn should_raise_insufficient_payment_when_payment_code_fails() {
 
     for t in transform.values() {
         if let Transform::Write(StoredValue::CLValue(cl_value)) = t {
-            if let Ok(v) = cl_value.to_t() {
+            if let Ok(v) = cl_value.to_owned().into_t() {
                 modified_balance = Some(v);
             }
         }
@@ -557,8 +557,8 @@ fn should_finalize_to_rewards_purse() {
 #[test]
 fn independent_standard_payments_should_not_write_the_same_keys() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = 10_000_000;
-    let transfer_amount = 15_000_000;
+    let payment_purse_amount = 16_000_000;
+    let transfer_amount = 16_000_000;
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -643,7 +643,7 @@ fn should_charge_non_main_purse() {
     const TEST_PURSE_NAME: &str = "test-purse";
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = U512::from(10_000_000);
+    let payment_purse_amount = U512::from(16_000_000);
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
 
@@ -711,13 +711,13 @@ fn should_charge_non_main_purse() {
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512");
 
         balance
@@ -775,13 +775,13 @@ fn should_charge_non_main_purse() {
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         let balance: U512 = builder
             .query(None, balance_uref, &[])
             .and_then(|v| CLValue::try_from(v).ok())
-            .and_then(|cl_value| cl_value.to_t().ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512");
 
         balance

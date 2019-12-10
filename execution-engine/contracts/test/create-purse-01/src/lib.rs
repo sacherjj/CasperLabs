@@ -19,7 +19,7 @@ pub fn delegate() {
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
     let purse_id = system::create_purse();
-    runtime::put_key(&purse_name, &purse_id.value().into());
+    runtime::put_key(&purse_name, purse_id.value().into());
 }
 
 #[cfg(not(feature = "lib"))]

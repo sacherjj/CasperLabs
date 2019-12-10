@@ -20,5 +20,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, key);
 }

@@ -35,7 +35,7 @@ pub extern "C" fn call() {
 
     runtime::call_contract(
         pos_pointer,
-        &(BOND_METHOD_NAME, bond_amount, bonding_purse),
-        &vec![Key::URef(bonding_purse.value())],
+        (BOND_METHOD_NAME, bond_amount, bonding_purse),
+        vec![Key::URef(bonding_purse.value())],
     );
 }

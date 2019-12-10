@@ -203,54 +203,51 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
             Some(current_value) => current_value,
         };
 
+        let type_name = value.type_name();
+        let mismatch = || {
+            Ok(AddResult::TypeMismatch(TypeMismatch::new(
+                "I32, U64, U128, U256, U512 or (String, Key) tuple".to_string(),
+                type_name,
+            )))
+        };
+
         let transform = match value {
-            StoredValue::CLValue(ref cl_value) if *cl_value.cl_type() == CLType::I32 => {
-                match cl_value.to_t() {
+            StoredValue::CLValue(cl_value) => match *cl_value.cl_type() {
+                CLType::I32 => match cl_value.into_t() {
                     Ok(value) => Transform::AddInt32(value),
                     Err(error) => return Ok(AddResult::from(error)),
-                }
-            }
-            StoredValue::CLValue(ref cl_value) if *cl_value.cl_type() == CLType::U64 => {
-                match cl_value.to_t() {
+                },
+                CLType::U64 => match cl_value.into_t() {
                     Ok(value) => Transform::AddUInt64(value),
                     Err(error) => return Ok(AddResult::from(error)),
-                }
-            }
-            StoredValue::CLValue(ref cl_value) if *cl_value.cl_type() == CLType::U128 => {
-                match cl_value.to_t() {
+                },
+                CLType::U128 => match cl_value.into_t() {
                     Ok(value) => Transform::AddUInt128(value),
                     Err(error) => return Ok(AddResult::from(error)),
-                }
-            }
-            StoredValue::CLValue(ref cl_value) if *cl_value.cl_type() == CLType::U256 => {
-                match cl_value.to_t() {
+                },
+                CLType::U256 => match cl_value.into_t() {
                     Ok(value) => Transform::AddUInt256(value),
                     Err(error) => return Ok(AddResult::from(error)),
-                }
-            }
-            StoredValue::CLValue(ref cl_value) if *cl_value.cl_type() == CLType::U512 => {
-                match cl_value.to_t() {
+                },
+                CLType::U512 => match cl_value.into_t() {
                     Ok(value) => Transform::AddUInt512(value),
                     Err(error) => return Ok(AddResult::from(error)),
-                }
-            }
-            StoredValue::CLValue(ref cl_value)
-                if *cl_value.cl_type() == value::named_key_type() =>
-            {
-                match cl_value.to_t() {
-                    Ok(name_and_key) => {
-                        let map = iter::once(name_and_key).collect();
-                        Transform::AddKeys(map)
+                },
+                _ => {
+                    if *cl_value.cl_type() == value::named_key_type() {
+                        match cl_value.into_t() {
+                            Ok(name_and_key) => {
+                                let map = iter::once(name_and_key).collect();
+                                Transform::AddKeys(map)
+                            }
+                            Err(error) => return Ok(AddResult::from(error)),
+                        }
+                    } else {
+                        return mismatch();
                     }
-                    Err(error) => return Ok(AddResult::from(error)),
                 }
-            }
-            other => {
-                return Ok(AddResult::TypeMismatch(TypeMismatch::new(
-                    "I32, U64, U128, U256, U512 or (String, Key) tuple".to_string(),
-                    other.type_name(),
-                )))
-            }
+            },
+            _ => return mismatch(),
         };
 
         match transform.clone().apply(current_value) {
