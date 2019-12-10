@@ -150,7 +150,6 @@ fn should_run_purse_to_account_transfer() {
         };
     assert_eq!(purse_secondary_balance, *ACCOUNT_1_INITIAL_FUND);
 
-    //
     // Exec 2 - Transfer from new account back to genesis to verify
     // TransferToExisting
 
@@ -209,7 +208,7 @@ fn should_run_purse_to_account_transfer() {
         .iter()
         .find_map(|(k, t)| match (k, t) {
             (uref @ Key::URef(_), Transform::Write(StoredValue::CLValue(cl_value))) =>
-            // 100_000_000 is the initial balance of genesis
+            // 100_000_000_000i64 is the initial balance of genesis
             {
                 if cl_value.to_owned().into_t::<U512>().unwrap_or_default()
                     == U512::from(100_000_000_000i64)

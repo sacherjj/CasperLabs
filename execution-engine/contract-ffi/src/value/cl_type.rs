@@ -39,7 +39,7 @@ pub enum CLType {
     // list type
     List(Box<CLType>),
     // fixed-length list type (equivalent to rust's array type)
-    FixedList(Box<CLType>, u64),
+    FixedList(Box<CLType>, u32),
     // result type
     Result {
         ok: Box<CLType>,
@@ -251,7 +251,7 @@ impl FromBytes for CLType {
             Ok((cl_type, remainder))
         } else if tag == CLTypeTag::FixedList as u8 {
             let (inner_type, remainder) = CLType::from_bytes(remainder)?;
-            let (len, remainder) = u64::from_bytes(remainder)?;
+            let (len, remainder) = u32::from_bytes(remainder)?;
             let cl_type = CLType::FixedList(Box::new(inner_type), len);
             Ok((cl_type, remainder))
         } else if tag == CLTypeTag::Result as u8 {
@@ -416,83 +416,67 @@ fn serialized_len_of_cl_tuple_type<'a, T: IntoIterator<Item = &'a Box<CLType>>>(
 pub trait CLTyped {
     fn cl_type() -> CLType;
 }
-//
-//// boolean primitive
-//Bool,
+
 impl CLTyped for bool {
     fn cl_type() -> CLType {
         CLType::Bool
     }
 }
 
-//// signed numeric primitives
-//I32,
 impl CLTyped for i32 {
     fn cl_type() -> CLType {
         CLType::I32
     }
 }
 
-//I64,
 impl CLTyped for i64 {
     fn cl_type() -> CLType {
         CLType::I64
     }
 }
 
-//// unsigned numeric primitives
-//U8,
 impl CLTyped for u8 {
     fn cl_type() -> CLType {
         CLType::U8
     }
 }
 
-//U32,
 impl CLTyped for u32 {
     fn cl_type() -> CLType {
         CLType::U32
     }
 }
 
-//U64,
 impl CLTyped for u64 {
     fn cl_type() -> CLType {
         CLType::U64
     }
 }
 
-//U128,
 impl CLTyped for U128 {
     fn cl_type() -> CLType {
         CLType::U128
     }
 }
 
-//U256,
 impl CLTyped for U256 {
     fn cl_type() -> CLType {
         CLType::U256
     }
 }
 
-//U512,
 impl CLTyped for U512 {
     fn cl_type() -> CLType {
         CLType::U512
     }
 }
 
-//// unit primitive
-//Unit,
 impl CLTyped for () {
     fn cl_type() -> CLType {
         CLType::Unit
     }
 }
 
-//// string primitive
-//String,
 impl CLTyped for String {
     fn cl_type() -> CLType {
         CLType::String
@@ -505,45 +489,36 @@ impl CLTyped for &str {
     }
 }
 
-//// system primitives
-//Key,
 impl CLTyped for Key {
     fn cl_type() -> CLType {
         CLType::Key
     }
 }
 
-//URef,
 impl CLTyped for URef {
     fn cl_type() -> CLType {
         CLType::URef
     }
 }
 
-//// optional type
-//Option(Box<CLType>),
 impl<T: CLTyped> CLTyped for Option<T> {
     fn cl_type() -> CLType {
         CLType::Option(Box::new(T::cl_type()))
     }
 }
 
-//// list type
-//List(Box<CLType>),
 impl<T: CLTyped> CLTyped for Vec<T> {
     fn cl_type() -> CLType {
         CLType::List(Box::new(T::cl_type()))
     }
 }
 
-//// fixed-length list type (equivalent to rust's array type)
-//FixedList(Box<CLType>, u64),
 macro_rules! impl_cl_typed_for_array {
     ($($N:literal)+) => {
         $(
             impl<T: CLTyped> CLTyped for [T; $N] {
                 fn cl_type() -> CLType {
-                    CLType::FixedList(Box::new(T::cl_type()), $N as u64)
+                    CLType::FixedList(Box::new(T::cl_type()), $N as u32)
                 }
             }
         )+
@@ -558,11 +533,6 @@ impl_cl_typed_for_array! {
      64 128 256 512
 }
 
-//// result type
-//Result {
-//ok: Box<CLType>,
-//err: Box<CLType>,
-//},
 impl<T: CLTyped, E: CLTyped> CLTyped for Result<T, E> {
     fn cl_type() -> CLType {
         let ok = Box::new(T::cl_type());
@@ -571,11 +541,6 @@ impl<T: CLTyped, E: CLTyped> CLTyped for Result<T, E> {
     }
 }
 
-//// map type
-//Map {
-//key: Box<CLType>,
-//value: Box<CLType>,
-//},
 impl<K: CLTyped, V: CLTyped> CLTyped for BTreeMap<K, V> {
     fn cl_type() -> CLType {
         let key = Box::new(K::cl_type());
@@ -584,7 +549,6 @@ impl<K: CLTyped, V: CLTyped> CLTyped for BTreeMap<K, V> {
     }
 }
 
-//// tuple types
 impl<T1: CLTyped> CLTyped for (T1,) {
     fn cl_type() -> CLType {
         CLType::Tuple1([Box::new(T1::cl_type())])

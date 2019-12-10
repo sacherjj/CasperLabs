@@ -213,7 +213,7 @@ impl Debug for PublicKey {
 
 impl CLTyped for PublicKey {
     fn cl_type() -> CLType {
-        CLType::FixedList(Box::new(CLType::U8), KEY_SIZE as u64)
+        CLType::FixedList(Box::new(CLType::U8), KEY_SIZE as u32)
     }
 }
 

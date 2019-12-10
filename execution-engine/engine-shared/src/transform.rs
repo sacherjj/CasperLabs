@@ -395,7 +395,7 @@ mod tests {
     }
 
     #[test]
-    fn wrapping_addition_should_fail() {
+    fn addition_between_mismatched_types_should_fail() {
         fn assert_yields_type_mismatch_error(stored_value: StoredValue) {
             match wrapping_addition(stored_value, 0_i32) {
                 Err(Error::TypeMismatch(_)) => (),
