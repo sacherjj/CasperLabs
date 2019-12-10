@@ -282,7 +282,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                          merged,
                          publicKey,
                          privateKey,
-                         sigAlgorithm
+                         sigAlgorithm,
+                         lfbHash
                        )
                      } else {
                        CreateBlockStatus.noNewDeploys.pure[F]
@@ -436,7 +437,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       merged: ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block],
       validatorId: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): F[CreateBlockStatus] =
     for {
       now    <- Time[F].currentMillis
@@ -444,7 +446,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       parent = merged.parents.head
       block = ProtoUtil.ballot(
         props.justifications,
-        parent.getHeader.getState.preStateHash,
+        parent.getHeader.getState.postStateHash,
         parent.getHeader.getState.bonds,
         props.protocolVersion,
         parent.blockHash,
@@ -455,7 +457,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
         props.rank,
         validatorId,
         privateKey,
-        sigAlgorithm
+        sigAlgorithm,
+        keyBlockHash
       )
     } yield CreateBlockStatus.created(block)
 
