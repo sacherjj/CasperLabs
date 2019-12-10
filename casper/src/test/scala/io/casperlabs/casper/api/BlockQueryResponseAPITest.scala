@@ -18,7 +18,8 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import io.casperlabs.p2p.EffectsTestInstances.{LogicalTime}
+import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage

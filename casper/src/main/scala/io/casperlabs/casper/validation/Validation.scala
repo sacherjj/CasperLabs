@@ -348,7 +348,7 @@ object Validation {
       verify(d, Signature(sig.sig.toByteArray), key)
     }
 
-  def deploySignature[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def deploySignature[F[_]: MonadThrowable: Log](
       d: consensus.Deploy
   ): F[Boolean] =
     if (d.approvals.isEmpty) {
@@ -483,7 +483,7 @@ object Validation {
     Applicative[F].map2(tooMany, invalid)(_.toList ::: _)
   }
 
-  def validateChainName[F[_]: MonadThrowable: RaiseValidationError: Log](
+  def validateChainName[F[_]: MonadThrowable: Log](
       deploy: Deploy,
       chainName: String
   ): F[Option[Errors.DeployHeaderError]] =

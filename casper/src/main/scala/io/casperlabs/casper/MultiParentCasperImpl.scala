@@ -21,7 +21,6 @@ import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
-import io.casperlabs.casper.util.execengine.ExecEngineUtil.{MergeResult, TransformMap}
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
@@ -30,6 +29,7 @@ import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
@@ -41,6 +41,7 @@ import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -56,7 +57,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -159,7 +160,9 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       _ <- {
         Log[F]
           .debug(s"Removing finalized deploys after adding ${hashPrefix -> "block"}") *>
-          removeFinalizedDeploys(dag)
+          LastFinalizedBlockHashContainer[F].get >>= { lfb =>
+          DeployBuffer.removeFinalizedDeploys[F](lfb).forkAndLog
+        }
       }.whenA(updatedLFB)
       _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "block"}")
     } yield status
@@ -185,101 +188,11 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       } yield changed
     }
 
-  /** Remove deploys from the buffer which are included in block that are finalized. */
-  private def removeFinalizedDeploys(dag: DagRepresentation[F]): F[Unit] =
-    Metrics[F].timer("removeFinalizedDeploys") {
-      for {
-        deployHashes <- DeployStorageReader[F].readProcessedHashes
-
-        blockHashes <- BlockStorage[F]
-                        .findBlockHashesWithDeployHashes(deployHashes)
-                        .map(_.values.flatten.toList.distinct)
-
-        lastFinalizedBlock <- (LastFinalizedBlockHashContainer[F].get >>= dag.lookup).map(_.get)
-
-        finalizedBlockHashes <- blockHashes.filterA { blockHash =>
-                                 // NODE-930. To be replaced when we implement finality streams.
-                                 dag.lookup(blockHash) map {
-                                   // This is just a mock finality formula that still allows some
-                                   // chance for orhpans to be re-queued in blocks ahead of the
-                                   // last finalized blocks.
-                                   _.fold(false)(_.rank <= lastFinalizedBlock.rank)
-                                 }
-                               }
-
-        _ <- finalizedBlockHashes.traverse { blockHash =>
-              removeDeploysInBlock(blockHash) flatMap { removed =>
-                Log[F]
-                  .info(
-                    s"Removed $removed deploys from deploy history as we finalized block ${PrettyPrinter
-                      .buildString(blockHash)}"
-                  )
-                  .whenA(removed > 0L)
-              }
-            }
-      } yield ()
-    }
-
-  /** Remove deploys from the history which are included in a just finalised block. */
-  private def removeDeploysInBlock(blockHash: BlockHash): F[Long] =
-    for {
-      block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toList
-      initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
-      _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
-      deploysRemoved <- DeployStorageReader[F]
-                         .sizePendingOrProcessed()
-                         .map(after => initialHistorySize - after)
-    } yield deploysRemoved
-
   /** Check that either we have the block already scheduled but missing dependencies, or it's in the store */
   def contains(
       block: Block
   ): F[Boolean] =
     BlockStorage[F].contains(block.blockHash)
-
-  /** Add a deploy to the buffer, if the code passes basic validation. */
-  def deploy(deploy: Deploy): F[Either[Throwable, Unit]] = validatorId match {
-    case Some(_) =>
-      addDeploy(deploy)
-    case None =>
-      new IllegalStateException(s"Node is in read-only mode.").asLeft[Unit].pure[F].widen
-  }
-
-  private def validateDeploy(deploy: Deploy): F[Unit] = {
-    def illegal(msg: String): F[Unit] =
-      MonadThrowable[F].raiseError(new IllegalArgumentException(msg))
-
-    def check(msg: String)(f: F[Boolean]): F[Unit] =
-      f flatMap { ok =>
-        illegal(msg).whenA(!ok)
-      }
-
-    for {
-      _ <- (deploy.getBody.session, deploy.getBody.payment) match {
-            case (None, _) | (_, None) | (Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty)), _) |
-                (_, Some(Deploy.Code(_, _, Deploy.Code.Contract.Empty))) =>
-              illegal(s"Deploy was missing session and/or payment code.")
-            case _ => ().pure[F]
-          }
-      _ <- check("Invalid deploy hash.")(Validation.deployHash[F](deploy))
-      _ <- check("Invalid deploy signature.")(Validation.deploySignature[F](deploy))
-      _ <- check("Invalid chain name.")(
-            Validation.validateChainName[F](deploy, chainName).map(_.isEmpty)
-          )
-      _ <- check(
-            s"Invalid deploy TTL. Deploy TTL: ${deploy.getHeader.ttlMillis} ms, minimum TTL: ${minTtl.toMillis}."
-          )(Validation.minTtl[F](deploy, minTtl).map(_.isEmpty))
-    } yield ()
-  }
-
-  /** Add a deploy to the buffer, to be executed later. */
-  private def addDeploy(deploy: Deploy): F[Either[Throwable, Unit]] =
-    (for {
-      _ <- validateDeploy(deploy)
-      _ <- DeployStorageWriter[F].addAsPending(List(deploy))
-      _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy) -> "deploy" -> null}")
-    } yield ()).attempt
 
   /** Return the list of tips. */
   def estimator(
@@ -339,12 +252,12 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
           // is that the auto-proposer will not pick up the change in the pending set immediately.
-          requeued <- requeueOrphanedDeploys(dag, merged)
+          requeued <- DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet)
           _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
 
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
-          remainingHashes <- remainingDeploysHashes(
+          remainingHashes <- DeployBuffer.remainingDeploys[F](
                               dag,
                               parents.map(_.blockHash).toSet,
                               timestamp,
@@ -389,61 +302,6 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
       lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
       block                  <- ProtoUtil.unsafeGetBlock[F](lastFinalizedBlockHash)
     } yield block
-
-  /** Get the deploys that are not present in the past of the chosen parents. */
-  private def remainingDeploysHashes(
-      dag: DagRepresentation[F],
-      parents: Set[BlockHash],
-      timestamp: Long,
-      deployConfig: DeployConfig
-  ): F[Set[DeployHash]] = Metrics[F].timer("remainingDeploys") {
-    // We have re-queued orphan deploys already, so we can just look at pending ones.
-    val earlierPendingDeploys = DeployStorageReader[F].readPendingHashesAndHeaders
-      .through(DeployFilters.Pipes.timestampBefore[F](timestamp))
-      .timer("timestampBeforeFilter")
-    val unexpired = earlierPendingDeploys
-      .through(
-        DeployFilters.Pipes.notExpired[F](timestamp, deployConfig.maxTtlMillis)
-      )
-      .through(DeployFilters.Pipes.validMaxTtl[F](deployConfig.maxTtlMillis))
-      .timer("notExpiredFilter")
-
-    for {
-      unexpiredList <- unexpired.map(_._1).compile.toList
-      // Make sure pending deploys have never been processed in the past cone of the new parents.
-      validDeploys <- DeployFilters
-                       .filterDeploysNotInPast(dag, parents, unexpiredList)
-                       .map(_.toSet)
-                       .timer("remainingDeploys_filterDeploysNotInPast")
-      // anything with timestamp earlier than now and not included in the valid deploys
-      // can be discarded as a duplicate and/or expired deploy
-      deploysToDiscard <- earlierPendingDeploys.map(_._1).compile.to[Set].map(_ diff validDeploys)
-      _ <- DeployStorageWriter[F]
-            .markAsDiscardedByHashes(deploysToDiscard.toList.map((_, "Duplicate or expired")))
-            .whenA(deploysToDiscard.nonEmpty)
-    } yield validDeploys
-  }
-
-  /** If another node proposed a block which orphaned something proposed by this node,
-    * and we still have these deploys in the `processedDeploys` buffer then put them
-    * back into the `pendingDeploys` so that the `AutoProposer` can pick them up again.
-    */
-  private def requeueOrphanedDeploys(
-      dag: DagRepresentation[F],
-      merged: MergeResult[TransformMap, Block]
-  ): F[Int] = Metrics[F].timer("requeueOrphanedDeploys") {
-    for {
-      // Consider deploys which this node has processed but hasn't finalized yet.
-      processedDeploys <- DeployStorageReader[F].readProcessedHashes
-      orphanedDeploys <- filterDeploysNotInPast(
-                          dag,
-                          merged.parents.map(_.blockHash).toSet,
-                          processedDeploys
-                        ).timer("requeueOrphanedDeploys_filterDeploysNotInPast")
-      _ <- DeployStorageWriter[F]
-            .markAsPendingByHashes(orphanedDeploys) whenA orphanedDeploys.nonEmpty
-    } yield orphanedDeploys.size
-  }
 
   // Collection of props for creating blocks or ballots.
   private case class CreateMessageProps(
@@ -634,7 +492,7 @@ class MultiParentCasperImpl[F[_]: Sync: Log: Metrics: Time: BlockStorage: DagSto
 
 object MultiParentCasperImpl {
 
-  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
+  def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
   ]: DeploySelection](
