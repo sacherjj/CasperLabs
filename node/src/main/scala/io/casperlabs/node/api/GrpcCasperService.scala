@@ -24,9 +24,6 @@ import io.casperlabs.node.api.Utils.{
   validateDeployHash
 }
 import io.casperlabs.node.api.casper._
-import io.casperlabs.node.api.graphql.FinalizedBlocksStream
-import fs2.interop.reactivestreams._
-import io.casperlabs.node.{Fs2StreamOps}
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
@@ -188,7 +185,7 @@ object GrpcCasperService {
           }
 
         override def streamEvents(request: StreamEventsRequest): Observable[Event] =
-          EventsStream[F].subscribe.toMonixObservable
+          EventsStream[F].subscribe(request)
       }
     }
 

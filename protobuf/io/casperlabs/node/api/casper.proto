@@ -51,7 +51,7 @@ service CasperService {
 
     rpc StreamEvents(StreamEventsRequest) returns (stream io.casperlabs.casper.consensus.info.Event){
         option (google.api.http) = {
-            get: "/v2/event-stream"
+            get: "/v2/events"
         };
     }
 
@@ -164,4 +164,7 @@ message ListDeployInfosResponse {
 
 message GetLastFinalizedBlockInfoRequest {}
 
-message StreamEventsRequest{}
+message StreamEventsRequest {
+  bool add_block = 1;
+  bool finalize_block = 2;
+}

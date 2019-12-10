@@ -71,11 +71,11 @@ message DeployInfo {
 }
 
 message Event{
-    oneof event_instance {
-        EventAddBlock add_block = 1;
+    oneof value {
+        BlockAdded block_added = 1;
     }
-}
 
-message EventAddBlock{
-    bytes block_hash = 1;
+    message BlockAdded {
+        bytes block_hash = 1;
+    }
 }
