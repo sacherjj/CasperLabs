@@ -188,15 +188,6 @@ where
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
-            FunctionIndex::GetKeySizeFuncIndex => {
-                // args(0) = pointer to key name in Wasm memory
-                // args(1) = size of key name
-                // args(2) = pointer to size of serialized bytes (output)
-                let (name_ptr, name_size, size_ptr) = Args::parse(args)?;
-                let ret = self.get_key_size(name_ptr, name_size, size_ptr)?;
-                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
-            }
-
             FunctionIndex::HasKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name

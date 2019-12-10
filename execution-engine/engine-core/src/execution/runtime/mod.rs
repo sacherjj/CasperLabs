@@ -374,43 +374,10 @@ where
             return Err(Error::Interpreter(error).into());
         }
 
-        // Optionally set bytes written
-        if bytes_written_ptr != 0 {
-            // For all practical purposes following cast is assumed to be safe
-            let bytes_size = key_bytes.len() as u32;
-            let size_bytes = bytes_size.to_le_bytes(); // wasm is LE
-            if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
-                return Err(Error::Interpreter(error).into());
-            }
-        }
-
-        Ok(Ok(()))
-    }
-
-    pub fn get_key_size(
-        &mut self,
-        name_ptr: u32,
-        name_size: u32,
-        size_ptr: u32,
-    ) -> Result<Result<(), ApiError>, Trap> {
-        let name = self.string_from_mem(name_ptr, name_size)?;
-
-        // Obtain key by its name
-        let key = match self.context.named_keys_get(&name) {
-            Some(key) => key,
-            None => return Ok(Err(ApiError::MissingKey)),
-        };
-
-        // Get exact serialized size
-        let size = key.serialized_size();
-        if size > u32::max_value() as usize {
-            return Ok(Err(ApiError::OutOfMemoryError));
-        }
-
-        // Set serialized bytes size
-        let size = size as u32; // Assumed to be safe
-        let size_bytes = size.to_le_bytes(); // wasm is LE
-        if let Err(error) = self.memory.set(size_ptr, &size_bytes) {
+        // For all practical purposes following cast is assumed to be safe
+        let bytes_size = key_bytes.len() as u32;
+        let size_bytes = bytes_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
             return Err(Error::Interpreter(error).into());
         }
 

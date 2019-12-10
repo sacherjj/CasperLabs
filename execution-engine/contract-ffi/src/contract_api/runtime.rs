@@ -139,7 +139,7 @@ pub fn get_phase() -> Phase {
 /// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
     let mut key_bytes = [0u8; Key::serialized_size_hint()];
     let mut total_bytes: usize = 0;
     let ret = unsafe {

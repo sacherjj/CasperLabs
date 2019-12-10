@@ -100,10 +100,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::GetKeyFuncIndex.into(),
             ),
-            "get_key_size" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
-                FunctionIndex::GetKeySizeFuncIndex.into(),
-            ),
             "has_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::HasKeyFuncIndex.into(),
