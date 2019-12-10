@@ -2,8 +2,8 @@ import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import { BlockInfo, Event} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import { StreamEventsRequest } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
+import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { Subscription } from 'rxjs';
 
 export class DagStep {
   constructor(private container: DagContainer) {}
@@ -58,6 +58,7 @@ export class DagContainer {
   @observable maxRank = 0;
   @observable toggleValidatorsList: boolean = false;
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
+  @observable eventsSubscriber: Subscription | null = null;
 
   constructor(
     private errors: ErrorContainer,
@@ -78,6 +79,10 @@ export class DagContainer {
 
   step = new DagStep(this);
 
+  unsubscribe(){
+    this.eventsSubscriber && this.eventsSubscriber.unsubscribe();
+  }
+
   async refreshBlockDag() {
     await this.errors.capture(
       this.casperService
@@ -93,12 +98,21 @@ export class DagContainer {
       })
     );
 
-    let client = this.casperService.subscribeEvents();
-    client.onMessage((msg: Event) => console.log(msg.getAddBlock().getBlockHash_asB64()));
-    client.onEnd((_, code) => console.log(code));
-    client.start();
-    client.send(new StreamEventsRequest());
-    client.finishSend();
+    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
+      return;
+    } else {
+      let subscribeTopics = {
+        addBlock: true,
+        finalizeBlock: false
+      };
+      let obs = this.casperService.subscribeEvents(subscribeTopics);
+
+      this.eventsSubscriber = obs.subscribe({
+        next(event: Event) {
+          console.log(event.getBlockAdded()!.getBlockHash_asB64());
+        }
+      });
+    }
   }
 }
 

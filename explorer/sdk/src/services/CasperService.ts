@@ -11,13 +11,22 @@ import {
   ListDeployInfosResponse,
   StateQuery,
   StreamBlockDeploysRequest,
-  StreamBlockInfosRequest,
+  StreamBlockInfosRequest
 } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb';
 import { CasperService as GrpcCasperService } from 'casperlabs-grpc/io/casperlabs/node/api/casper_pb_service';
+import { Observable } from 'rxjs';
+import { Event } from '../../../grpc/io/casperlabs/casper/consensus/info_pb';
+import { StreamEventsRequest } from '../../../grpc/io/casperlabs/node/api/casper_pb';
 import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
 import { ByteArrayArg } from '../lib/Serialization';
 import { GrpcError } from './Errors';
+
+export interface SubscribeTopics {
+  addBlock: boolean;
+  finalizeBlock: boolean;
+}
+
 
 export default class CasperService {
   constructor(
@@ -271,10 +280,27 @@ export default class CasperService {
     });
   }
 
-  subscribeEvents(): grpc.Client<grpc.ProtobufMessage, grpc.ProtobufMessage> {
-    return grpc.client(GrpcCasperService.StreamEvents, {
-      host: this.url,
-      transport: grpc.WebsocketTransport()
+  subscribeEvents(subscribeTopics: SubscribeTopics): Observable<Event> {
+    return new Observable(obs => {
+      const client = grpc.client(GrpcCasperService.StreamEvents, {
+        host: this.url,
+        transport: grpc.WebsocketTransport()
+      });
+      client.onMessage((msg: Event) => {
+        obs.next(msg);
+      });
+      client.onEnd(() => obs.complete());
+      const req = new StreamEventsRequest();
+      req.setAddBlock(subscribeTopics.addBlock);
+      req.setFinalizeBlock(subscribeTopics.finalizeBlock);
+
+      client.start();
+      client.send(req);
+      client.finishSend();
+
+      return function unsubscribe() {
+        client.close();
+      }
     });
   }
 }
