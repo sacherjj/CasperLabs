@@ -28,9 +28,6 @@ pub extern "C" fn call() {
     // Verify if the uref is present
     assert!(runtime::has_key("hello-world"));
 
-    // Verify if the uref is present through `get_key_size`
-    assert!(runtime::get_key_size("hello-world").is_ok());
-
     let big_value_key: Key = storage::new_turef(U512::max_value()).into();
     runtime::put_key("big-value", &big_value_key);
 
@@ -48,12 +45,8 @@ pub extern "C" fn call() {
     .expect("Unable to find value");
     assert_eq!(hello_world, "Hello, world!");
 
-    // Measure key bytes size without deserializing it
-    let size = runtime::get_key_size("hello-world").unwrap_or_revert();
-
     // Read data through dedicated FFI function
     let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
-    assert_eq!(uref1.serialized_size(), size);
 
     let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
     let hello_world = storage::read(turef);
@@ -62,11 +55,9 @@ pub extern "C" fn call() {
     // Remove uref
     runtime::remove_key("hello-world");
     assert!(!runtime::has_key("hello-world"));
-    assert_eq!(runtime::get_key_size("hello-world"), Err(Error::MissingKey));
 
     // Confirm URef2 is still there
     assert!(runtime::has_key("big-value"));
-    runtime::get_key_size("big-value").unwrap_or_revert();
 
     // Get the big value back
     let big_value_key = runtime::get_key("big-value").unwrap_or_revert_with(Error::User(102));
@@ -93,9 +84,7 @@ pub extern "C" fn call() {
 
     // Cleaned up state
     assert!(!runtime::has_key("hello-world"));
-    assert_eq!(runtime::get_key_size("hello-world"), Err(Error::MissingKey));
     assert!(!runtime::has_key("big-value"));
-    assert_eq!(runtime::get_key_size("big-value"), Err(Error::MissingKey));
 
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num);
 }

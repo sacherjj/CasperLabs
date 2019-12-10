@@ -135,16 +135,6 @@ pub fn get_phase() -> Phase {
     deserialize(&bytes).unwrap_or_revert()
 }
 
-/// Returns serialized size of given [`key::Key`] referenced by name.
-///
-/// Returns [`error::Error`] if given key can not be found.
-pub fn get_key_size(name: &str) -> Result<usize, Error> {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let mut size: usize = 0;
-    let ret = unsafe { ext_ffi::get_key_size(name_ptr, name_size, &mut size as *mut usize) };
-    result_from(ret).map(|_| size)
-}
-
 /// Return the unforgable reference known by the current module under the given
 /// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
