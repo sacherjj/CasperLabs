@@ -181,7 +181,7 @@ class NodeRuntime private[node] (
                                                                         FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
-      implicit0(eventsStream: EventsStream[Task]) <- Resource.liftF(
+      implicit0(eventsStream: EventsStream[Task]) <- Resource.pure[Task, EventsStream[Task]](
                                                       EventsStream
                                                         .create[Task]
                                                     )

@@ -11,15 +11,14 @@ import io.casperlabs.storage.block.BlockStorage.BlockHash
 import monix.execution.Scheduler.Implicits.global
 import monix.reactive.{Observable, OverflowStrategy}
 import monix.reactive.subjects.ConcurrentSubject
+import simulacrum.typeclass
 
-trait EventsStream[F[_]] extends EventEmitterContainer[F] {
+@typeclass trait EventsStream[F[_]] extends EventEmitterContainer[F] {
   def subscribe(request: StreamEventsRequest): Observable[Event]
 }
 
 object EventsStream {
-  def apply[F[_]](implicit ev: EventsStream[F]): EventsStream[F] = ev
-
-  def create[F[_]: Concurrent: FinalizedBlocksStream]: F[EventsStream[F]] = {
+  def create[F[_]: Concurrent: FinalizedBlocksStream]: EventsStream[F] = {
     val source = ConcurrentSubject.publish[Event](OverflowStrategy.DropOld(bufferSize = 10))
     new EventsStream[F] {
       override def subscribe(request: StreamEventsRequest): Observable[Event] =
@@ -35,6 +34,6 @@ object EventsStream {
         source.onNext(event)
         ().pure[F]
       }
-    }.pure[F]
+    }
   }
 }
