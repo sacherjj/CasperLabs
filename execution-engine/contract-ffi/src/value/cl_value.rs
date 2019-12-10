@@ -60,7 +60,7 @@ impl CLValue {
     // This is only required in order to implement `From<CLValue> for state::CLValue` (i.e. the
     // conversion to the Protobuf `CLValue`) in a separate module to this one.
     #[doc(hidden)]
-    pub fn into_components(self) -> (CLType, Vec<u8>) {
+    pub fn destructure(self) -> (CLType, Vec<u8>) {
         (self.cl_type, self.bytes)
     }
 

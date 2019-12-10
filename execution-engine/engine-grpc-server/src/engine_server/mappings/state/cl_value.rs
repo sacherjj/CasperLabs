@@ -6,7 +6,7 @@ use crate::engine_server::{mappings::ParsingError, state};
 
 impl From<CLValue> for state::CLValue {
     fn from(cl_value: CLValue) -> Self {
-        let (cl_type, bytes) = cl_value.into_components();
+        let (cl_type, bytes) = cl_value.destructure();
 
         let mut pb_value = state::CLValue::new();
         pb_value.set_cl_type(cl_type.into());

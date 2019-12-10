@@ -440,7 +440,7 @@ where
 
     pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
         let buf = self.host_buf.take().ok_or(Error::HostBufferEmpty)?;
-        let (_cl_type, serialized_data) = buf.into_components();
+        let (_cl_type, serialized_data) = buf.destructure();
         self.memory
             .set(dest_ptr, &serialized_data)
             .map_err(|e| Error::Interpreter(e).into())
