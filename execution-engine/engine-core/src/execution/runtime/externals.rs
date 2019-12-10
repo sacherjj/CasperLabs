@@ -32,17 +32,19 @@ where
             FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
                 // args(1) = size of key in Wasm memory
-                let (key_ptr, key_size) = Args::parse(args)?;
-                let size = self.read(key_ptr, key_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                // args(2) = pointer to output size (output param)
+                let (key_ptr, key_size, output_size_ptr) = Args::parse(args)?;
+                let ret = self.read(key_ptr, key_size, output_size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::ReadLocalFuncIndex => {
-                // args(0) = pointer to key bytes in Wasm memory
-                // args(1) = size of key bytes in Wasm memory
-                let (key_bytes_ptr, key_bytes_size) = Args::parse(args)?;
-                let size = self.read_local(key_bytes_ptr, key_bytes_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                // args(0) = pointer to key in Wasm memory
+                // args(1) = size of key in Wasm memory
+                // args(2) = pointer to output size (output param)
+                let (key_ptr, key_size, output_size_ptr) = Args::parse(args)?;
+                let ret = self.read_local(key_ptr, key_size, output_size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::SerNamedKeysFuncIndex => {

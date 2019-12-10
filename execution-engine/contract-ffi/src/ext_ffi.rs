@@ -1,6 +1,6 @@
 extern "C" {
-    pub fn read_value(key_ptr: *const u8, key_size: usize) -> usize;
-    pub fn read_value_local(key_ptr: *const u8, key_size: usize) -> usize;
+    pub fn read_value(key_ptr: *const u8, key_size: usize, output_size: *mut usize) -> i32;
+    pub fn read_value_local(key_ptr: *const u8, key_size: usize, output_size: *mut usize) -> i32;
     pub fn write(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn write_local(
         key_ptr: *const u8,

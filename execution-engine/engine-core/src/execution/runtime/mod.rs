@@ -549,7 +549,6 @@ where
     ) -> Result<Result<(), ApiError>, Trap> {
         let named_keys = self.context.named_keys();
 
-
         self.host_buf = None;
 
         let total_keys = named_keys.len() as u32;
@@ -675,24 +674,67 @@ where
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let value: Option<Value> = self.context.read_gs(&key)?;
-        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        let value_bytes_size = value_bytes.len();
-        self.host_buf = Some(value_bytes);
-        Ok(value_bytes_size)
+        let value = match self.context.read_gs(&key)? {
+            Some(value) => value,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_bytes = match value.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let value_size = value_bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(value_bytes) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-        let value: Option<Value> = self.context.read_ls(&key_bytes)?;
-        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        let value_bytes_size = value_bytes.len();
-        self.host_buf = Some(value_bytes);
-        Ok(value_bytes_size)
+
+        let value = match self.context.read_ls(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_bytes = match value.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let value_size = value_bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(value_bytes) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Reverts contract execution with a status specified.

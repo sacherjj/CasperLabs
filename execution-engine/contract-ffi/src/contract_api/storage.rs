@@ -1,6 +1,7 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::{
     convert::{From, TryFrom, TryInto},
+    mem::MaybeUninit,
     u8,
 };
 
@@ -9,7 +10,7 @@ use super::{
 };
 use crate::{
     bytesrepr::{self, deserialize, ToBytes},
-    contract_api::{runtime, Error},
+    contract_api::{error, runtime, Error},
     ext_ffi,
     key::{Key, UREF_SIZE},
     unwrap_or_revert::UnwrapOrRevert,
@@ -22,9 +23,18 @@ pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error>
     //      dropped then key_ptr becomes invalid.
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    let value_bytes = read_host_buffer_count(value_size).unwrap_or_revert();
-    deserialize(&value_bytes)
+    let output_size = {
+        let mut output_size = MaybeUninit::uninit();
+        let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, output_size.as_mut_ptr()) };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { output_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
+    };
+    let value_bytes = read_host_buffer_count(output_size).unwrap_or_revert();
+    let value: Value = deserialize(&value_bytes)?;
+    Ok(Some(value))
 }
 
 fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
@@ -66,9 +76,20 @@ where
 fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    let value_data = read_host_buffer_count(value_size).unwrap_or_revert();
-    deserialize(&value_data)
+    let output_size = {
+        let mut output_size = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size, output_size.as_mut_ptr())
+        };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { output_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
+    };
+    let value_bytes = read_host_buffer_count(output_size).unwrap_or_revert();
+    let value: Value = deserialize(&value_bytes)?;
+    Ok(Some(value))
 }
 
 /// Write the value under the key in the global state
