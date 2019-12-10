@@ -12,6 +12,7 @@ import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.comm.discovery.{NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.grpc.{ErrorInterceptor, GrpcServer, MetricsInterceptor}
 import io.casperlabs.comm.rp.Connect.ConnectionsCell
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node._
 import io.casperlabs.node.api.casper.CasperGrpcMonix
@@ -88,11 +89,12 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: ConcurrentEffect: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: EventsStream](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: EventsStream](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,
-      maybeSslContext: Option[SslContext]
+      maybeSslContext: Option[SslContext],
+      isReadOnlyNode: Boolean
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer(
@@ -100,7 +102,7 @@ object Servers {
       maxMessageSize = Some(maxMessageSize),
       services = List(
         (_: Scheduler) =>
-          GrpcCasperService() map {
+          GrpcCasperService(isReadOnlyNode) map {
             CasperGrpcMonix.bindService(_, ingressScheduler)
           }
       ),

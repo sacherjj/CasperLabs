@@ -3,6 +3,7 @@ package io.casperlabs.casper.validation
 import cats.Applicative
 import cats.implicits._
 import cats.mtl.FunctorRaise
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper._
@@ -11,7 +12,7 @@ import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.util.ProtoUtil.bonds
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{StateHash, TransformMap}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.ipc
 import io.casperlabs.metrics.Metrics
@@ -42,10 +43,10 @@ object ValidationImpl {
           underlying.neglectedInvalidBlock(block, invalidBlockTracker)
         )
 
-      override def parents(b: Block, lastFinalizedBlockHash: BlockHash, dag: DagRepresentation[F])(
+      override def parents(b: Block, dag: DagRepresentation[F])(
           implicit bs: BlockStorage[F]
       ): F[ExecEngineUtil.MergeResult[TransformMap, Block]] =
-        Metrics[F].timer("parents")(underlying.parents(b, lastFinalizedBlockHash, dag))
+        Metrics[F].timer("parents")(underlying.parents(b, dag))
 
       override def transactions(
           block: Block,
@@ -61,13 +62,13 @@ object ValidationImpl {
           maybeGenesis: Option[Block]
       )(
           implicit bs: BlockStorage[F],
-          versions: CasperLabsProtocolVersions[F],
+          versions: CasperLabsProtocol[F],
           compiler: Fs2Compiler[F]
       ): F[Unit] =
         Metrics[F].timer("blockFull")(underlying.blockFull(block, dag, chainName, maybeGenesis))
 
       override def blockSummary(summary: BlockSummary, chainName: String)(
-          implicit versions: CasperLabsProtocolVersions[F]
+          implicit versions: CasperLabsProtocol[F]
       ): F[Unit] =
         Metrics[F].timer("blockSummary")(underlying.blockSummary(summary, chainName))
     }
@@ -89,7 +90,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
       maybeGenesis: Option[Block]
   )(
       implicit bs: BlockStorage[F],
-      versions: CasperLabsProtocolVersions[F],
+      versions: CasperLabsProtocol[F],
       compiler: Fs2Compiler[F]
   ): F[Unit] = {
     val summary = BlockSummary(block.blockHash, block.header, block.signature)
@@ -111,6 +112,7 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
       _ <- validatorPrevBlockHash[F](summary, dag)
       _ <- sequenceNumber[F](summary, dag)
       _ <- swimlane[F](summary, dag)
+      // TODO: Validate that blocks only have block parents and ballots have a single parent which is a block.
       // Checks that need the body.
       _ <- blockHash[F](block)
       _ <- deployCount[F](block)
@@ -133,13 +135,12 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
     */
   override def parents(
       b: Block,
-      genesisHash: BlockHash,
       dag: DagRepresentation[F]
   )(
       implicit bs: BlockStorage[F]
   ): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]] = {
-    def printHashes(hashes: Iterable[ByteString]) =
-      hashes.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
+    def printHashes(hashes: NonEmptyList[ByteString]) =
+      hashes.toList.map(PrettyPrinter.buildString).mkString("[", ", ", "]")
 
     val latestMessagesHashes = ProtoUtil
       .getJustificationMsgHashes(b.getHeader.justifications)
@@ -149,9 +150,10 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
                        dag,
                        latestMessagesHashes
                      )
-      tipHashes            <- Estimator.tips[F](dag, genesisHash, latestMessagesHashes, equivocators)
+      tipHashes <- Estimator
+                    .tips[F](dag, b.getHeader.keyBlockHash, latestMessagesHashes, equivocators)
       _                    <- Log[F].debug(s"Estimated tips are ${printHashes(tipHashes) -> "tips"}")
-      tips                 <- tipHashes.toVector.traverse(ProtoUtil.unsafeGetBlock[F])
+      tips                 <- tipHashes.traverse(ProtoUtil.unsafeGetBlock[F])
       merged               <- ExecEngineUtil.merge[F](tips, dag)
       computedParentHashes = merged.parents.map(_.blockHash)
       parentHashes         = ProtoUtil.parentHashes(b)
@@ -248,14 +250,14 @@ class ValidationImpl[F[_]: MonadThrowable: FunctorRaise[*[_], InvalidBlock]: Log
   override def blockSummary(
       summary: BlockSummary,
       chainName: String
-  )(implicit versions: CasperLabsProtocolVersions[F]): F[Unit] = {
+  )(implicit versions: CasperLabsProtocol[F]): F[Unit] = {
     val treatAsGenesis = summary.isGenesisLike
     for {
       _ <- checkDroppable[F](
             formatOfFields[F](summary, treatAsGenesis),
             version(
               summary,
-              CasperLabsProtocolVersions[F].versionAt(_)
+              CasperLabsProtocol[F].versionAt(_)
             ),
             if (!treatAsGenesis) blockSignature[F](summary) else true.pure[F]
           )

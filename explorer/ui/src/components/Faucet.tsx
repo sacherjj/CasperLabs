@@ -142,7 +142,7 @@ const StatusCell = observer((props: { request: FaucetRequest }) => {
   const info = props.request.deployInfo;
   const iconAndMessage: () => [any, string | undefined] = () => {
     if (info) {
-      const attempts = info.processingResultsList.slice().reverse();
+      const attempts = info.processingResultsList;
       const success = attempts.find(x => !x.isError);
       const failure = attempts.find(x => x.isError);
       const blockHash = (result: DeployInfo.ProcessingResult.AsObject) => {

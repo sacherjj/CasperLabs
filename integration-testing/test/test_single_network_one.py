@@ -961,7 +961,7 @@ def check_ttl_ok(cli):
         "--public-key", cli.public_key_path(account),
         "--payment-amount", 10000000,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
-        "--ttl", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
+        "--ttl-millis", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
     time.sleep(0.5)
     propose_check_no_errors(cli)
 
@@ -987,7 +987,7 @@ def check_ttl_late(cli, temp_dir):
         "--from", account.public_key_hex,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
         "--payment-amount", 100000000,
-        "--ttl", 3600000)
+        "--ttl-millis", 3600000)
 
     # Modify the deploy and change its timestamp to be more than one hour earlier.
     deploy = Deploy()
@@ -1013,3 +1013,71 @@ def check_ttl_late(cli, temp_dir):
 
     expected = "OUT_OF_RANGE: No new deploys"
     assert expected in str(excinfo.value) or expected in excinfo.value.output
+
+
+def test_cli_local_key_scala(scala_cli):
+    check_cli_local_key(scala_cli)
+
+
+def test_cli_local_key_python(cli):
+    check_cli_local_key(cli)
+
+
+def check_cli_local_key(cli):
+    account = cli.node.test_account
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+
+    local_key = account.public_key_hex + ":" + bytes([66] * 32).hex()
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local")
+    assert result.string_value == 'Hello, world!'
+
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local")
+    assert result.string_value == 'Hello, world! Hello, world!'
+
+
+def test_transfer_cli_python(cli):
+    check_transfer_cli(cli)
+
+
+def test_transfer_cli_scala(scala_cli):
+    check_transfer_cli(scala_cli)
+
+
+def check_transfer_cli(cli):
+    account = cli.node.test_account
+    genesis_account = cli.node.genesis_account
+
+    amount = 1000
+    block_hash = cli("show-blocks", "--depth", 1)[0].summary.block_hash
+    balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
+
+    for i in range(2):
+        cli("transfer",
+            "--private-key", cli.private_key_path(genesis_account),
+            "--payment-amount", 10000000,
+            "--target-account", account.public_key,
+            "--amount", amount)
+        block_hash = propose_check_no_errors(cli)
+        new_balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
+        assert new_balance == balance + amount
+        balance = new_balance

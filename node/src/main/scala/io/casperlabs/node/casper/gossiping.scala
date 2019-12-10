@@ -17,7 +17,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.Event
 import io.casperlabs.casper.consensus.info.Event.BlockAdded
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.comm.ServiceError.{InvalidArgument, NotFound, Unavailable}
@@ -39,6 +39,7 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.EventsStream
 import io.casperlabs.node.configuration.Configuration
@@ -64,7 +65,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: EventsStream](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: DeployBuffer: EventsStream](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
@@ -84,13 +85,13 @@ package object gossiping {
     implicit val oi = ObservableIterant.default(implicitly[Effect[F]], egressScheduler)
 
     for {
-      implicit0(protocolVersions: CasperLabsProtocolVersions[F]) <- Resource.liftF[
-                                                                     F,
-                                                                     CasperLabsProtocolVersions[F]
-                                                                   ](
-                                                                     CasperLabsProtocolVersions
-                                                                       .fromChainSpec[F](chainSpec)
-                                                                   )
+      implicit0(protocolVersions: CasperLabsProtocol[F]) <- Resource.liftF[
+                                                             F,
+                                                             CasperLabsProtocol[F]
+                                                           ](
+                                                             CasperLabsProtocol
+                                                               .fromChainSpec[F](chainSpec)
+                                                           )
 
       cachedConnections <- makeConnectionsCache(
                             conf,
@@ -172,6 +173,7 @@ package object gossiping {
                                        prestate,
                                        transforms,
                                        genesis.getHeader.chainName,
+                                       conf.casper.minTtl,
                                        chainSpec.upgrades
                                      )
                             _ <- MultiParentCasperRef[F].set(casper)
@@ -245,7 +247,7 @@ package object gossiping {
     } yield cont
 
   /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster: EventsStream](
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster: EventsStream](
       validatorId: Option[Keys.PublicKey],
       spec: ipc.ChainSpec,
       block: Block
@@ -371,7 +373,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster: EventsStream](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster: EventsStream](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -447,7 +449,7 @@ package object gossiping {
   // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
   // which could be based on the presence of other known validators, signaled by their approvals.
   // That just gives us the assurance that we are using the right chain spec because other are as well.
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocolVersions: Broadcaster: EventsStream](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster: EventsStream](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F],
@@ -560,7 +562,7 @@ package object gossiping {
                  )
     } yield approver
 
-  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocolVersions](
+  def makeSynchronizer[F[_]: Concurrent: Parallel: Log: Metrics: MultiParentCasperRef: DagStorage: Validation: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       chainName: String

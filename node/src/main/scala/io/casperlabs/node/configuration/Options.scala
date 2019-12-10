@@ -279,6 +279,9 @@ private[configuration] final case class Options private (
     @scallop
     val casperAutoProposeCheckInterval =
       gen[FiniteDuration]("Time between proposal checks.")
+    @scallop
+    val casperAutoProposeBallotInterval =
+      gen[FiniteDuration]("Maximum time to allow before trying to propose a ballot or block.")
 
     @scallop
     val casperAutoProposeAccInterval =
@@ -455,6 +458,11 @@ private[configuration] final case class Options private (
     val serverBlockUploadRateMaxThrottled = gen[Int](
       "Maximum number of in-flight throttled block download requests per peer, " +
         "if 0 then unlimited, if reached max size then peer will receive RESOURCE_EXHAUSTED response."
+    )
+
+    @scallop
+    val casperMinTtl = gen[FiniteDuration](
+      "Minimum deploy TTL value."
     )
 
     @scallop

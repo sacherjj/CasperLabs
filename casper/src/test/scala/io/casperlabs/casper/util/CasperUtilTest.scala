@@ -12,7 +12,7 @@ import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.models.Message
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.dag._
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers}

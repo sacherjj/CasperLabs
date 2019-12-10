@@ -2,7 +2,6 @@ package io.casperlabs.casper.helper
 
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
-import cats.mtl.FunctorRaise
 import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
@@ -10,17 +9,17 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -32,6 +31,10 @@ import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.LogIO
+import io.casperlabs.shared.LogStub
+
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -46,6 +49,7 @@ abstract class HashSetCasperTestNode[F[_]](
     val blockStorage: BlockStorage[F],
     val dagStorage: DagStorage[F],
     val deployStorage: DeployStorage[F],
+    val deployBuffer: DeployBuffer[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
@@ -313,7 +317,16 @@ object HashSetCasperTestNode {
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
 
-  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
-    0L -> consensus.state.ProtocolVersion(1)
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocol.unsafe[F](
+    (
+      0L,
+      consensus.state.ProtocolVersion(1),
+      Some(
+        DeployConfig(
+          24 * 60 * 60 * 1000, // 1 day
+          10
+        )
+      )
+    )
   )
 }

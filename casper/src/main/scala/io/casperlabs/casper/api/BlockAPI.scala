@@ -24,6 +24,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
 import cats.Applicative
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
+import io.casperlabs.mempool.DeployBuffer
 
 object BlockAPI {
 
@@ -52,12 +53,12 @@ object BlockAPI {
       _ <- Metrics[F].incrementCounter("create-blocks-success", 0)
     } yield ()
 
-  def deploy[F[_]: MonadThrowable: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
+  def deploy[F[_]: MonadThrowable: DeployBuffer: MultiParentCasperRef: BlockStorage: Validation: Log: Metrics](
       d: Deploy
-  ): F[Unit] = unsafeWithCasper[F, Unit]("Could not deploy.") { implicit casper =>
+  ): F[Unit] =
     for {
       _ <- Metrics[F].incrementCounter("deploys")
-      r <- MultiParentCasper[F].deploy(d)
+      r <- DeployBuffer[F].addDeploy(d)
       _ <- r match {
             case Right(_) =>
               Metrics[F].incrementCounter("deploys-success") *> ().pure[F]
@@ -69,10 +70,10 @@ object BlockAPI {
               MonadThrowable[F].raiseError[Unit](ex)
           }
     } yield ()
-  }
 
   def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster: EventEmitterContainer](
-      blockApiLock: Semaphore[F]
+      blockApiLock: Semaphore[F],
+      canCreateBallot: Boolean
   ): F[ByteString] = {
     def raise[A](ex: ServiceError.Exception): F[ByteString] =
       MonadThrowable[F].raiseError(ex)
@@ -82,7 +83,7 @@ object BlockAPI {
         case true =>
           for {
             _          <- Metrics[F].incrementCounter("create-blocks")
-            maybeBlock <- casper.createBlock
+            maybeBlock <- casper.createMessage(canCreateBallot)
             result <- maybeBlock match {
                        case Created(block) =>
                          for {
