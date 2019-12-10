@@ -542,15 +542,43 @@ where
         Ok(Ok(()))
     }
 
-    fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
-        let bytes: Vec<u8> = self
-            .context
-            .named_keys()
-            .to_bytes()
-            .map_err(Error::BytesRepr)?;
-        let length = bytes.len();
-        self.host_buf = Some(bytes);
-        Ok(length)
+    fn serialize_named_keys(
+        &mut self,
+        total_keys_ptr: u32,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let named_keys = self.context.named_keys();
+
+
+        self.host_buf = None;
+
+        let total_keys = named_keys.len() as u32;
+        let total_keys_bytes = total_keys.to_le_bytes();
+        if let Err(error) = self.memory.set(total_keys_ptr, &total_keys_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        if total_keys == 0 {
+            // No need to do anything else, we leave host buffer empty.
+            return Ok(Ok(()));
+        }
+
+        let bytes = match named_keys.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let length = bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(bytes) {
+            return Ok(Err(error));
+        }
+
+        let length_bytes = length.to_le_bytes();
+        if let Err(error) = self.memory.set(result_size_ptr, &length_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     pub fn store_function(

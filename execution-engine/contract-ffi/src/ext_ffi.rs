@@ -24,7 +24,7 @@ extern "C" {
         named_keys_size: usize,
         hash_ptr: *const u8,
     );
-    pub fn serialize_named_keys() -> usize;
+    pub fn serialize_named_keys(total_keys: *mut usize, result_size: *mut usize) -> i32;
     pub fn load_arg(i: u32) -> isize;
     pub fn ret(
         value_ptr: *const u8,

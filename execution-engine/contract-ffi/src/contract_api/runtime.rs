@@ -170,8 +170,20 @@ pub fn remove_key(name: &str) {
 }
 
 pub fn list_named_keys() -> BTreeMap<String, Key> {
-    let bytes_size = unsafe { ext_ffi::serialize_named_keys() };
-    let bytes = read_host_buffer_count(bytes_size).unwrap_or_revert();
+    let (total_keys, result_size) = {
+        let mut total_keys = MaybeUninit::uninit();
+        let mut result_size = 0;
+        let ret = unsafe {
+            ext_ffi::serialize_named_keys(total_keys.as_mut_ptr(), &mut result_size as *mut usize)
+        };
+        result_from(ret).unwrap_or_revert();
+        let total_keys = unsafe { total_keys.assume_init() };
+        (total_keys, result_size)
+    };
+    if total_keys == 0 {
+        return BTreeMap::new();
+    }
+    let bytes = read_host_buffer_count(result_size).unwrap_or_revert();
     deserialize(&bytes).unwrap_or_revert()
 }
 

@@ -49,7 +49,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::ReadLocalFuncIndex.into(),
             ),
             "serialize_named_keys" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 0][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SerNamedKeysFuncIndex.into(),
             ),
             "write" => FuncInstance::alloc_host(

@@ -46,9 +46,11 @@ where
             }
 
             FunctionIndex::SerNamedKeysFuncIndex => {
-                // No args, returns byte size of the known URefs.
-                let size = self.serialize_named_keys()?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                // args(0) = pointer to amount of keys (output)
+                // args(1) = pointer to amount of serialized bytes (output)
+                let (total_keys_ptr, result_size_ptr) = Args::parse(args)?;
+                let ret = self.serialize_named_keys(total_keys_ptr, result_size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::WriteFuncIndex => {
