@@ -557,8 +557,8 @@ fn should_finalize_to_rewards_purse() {
 #[test]
 fn independent_standard_payments_should_not_write_the_same_keys() {
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = 16_000_000;
-    let transfer_amount = 16_000_000;
+    let payment_purse_amount = 10_000_000;
+    let transfer_amount = 10_000_000;
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -643,7 +643,7 @@ fn should_charge_non_main_purse() {
     const TEST_PURSE_NAME: &str = "test-purse";
 
     let account_1_public_key = PublicKey::new(ACCOUNT_1_ADDR);
-    let payment_purse_amount = U512::from(16_000_000);
+    let payment_purse_amount = U512::from(10_000_000);
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
 
