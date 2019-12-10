@@ -481,7 +481,8 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body()
 
@@ -502,7 +503,8 @@ object ProtoUtil {
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
-      validatorPrevBlockHash = validatorPrevBlockHash
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
     ).withMessageType(Block.MessageType.BALLOT)
 
     val unsigned = unsignedBlockProto(body, header)

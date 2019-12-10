@@ -32,6 +32,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import logstage.LogIO
 import io.casperlabs.shared.LogStub
+import io.casperlabs.storage.BlockMsgWithTransform
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
@@ -76,6 +77,18 @@ abstract class HashSetCasperTestNode[F[_]](
       HashSetCasperTestNode.simpleEEApi[F](bonds)
 
   implicit val versions = HashSetCasperTestNode.protocolVersions[F]
+
+  def getEquivocators: F[Set[ByteString]] =
+    dagStorage.getRepresentation.flatMap(_.getEquivocators)
+
+  /** Clears block storage (except the Genesis) */
+  def clearStorage(): F[Unit] =
+    for {
+      _ <- blockStorage.clear()
+      _ <- dagStorage.clear()
+      _ <- deployStorage.writer.clear()
+      _ <- blockStorage.put(BlockMsgWithTransform(Some(genesis)))
+    } yield ()
 
   /** Handle one message. */
   def receive(): F[Unit]
