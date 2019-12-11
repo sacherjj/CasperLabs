@@ -23,7 +23,6 @@ from pyblake2 import blake2b
 import ed25519
 import base64
 import json
-import struct
 import logging
 import pkg_resources
 import tempfile
