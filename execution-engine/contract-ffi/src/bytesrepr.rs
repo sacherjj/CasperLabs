@@ -431,7 +431,15 @@ macro_rules! impl_to_from_bytes_for_array {
                     let result_ptr = result.as_mut_ptr() as *mut T;
                     unsafe {
                         for i in 0..$N {
-                            let (t, remainder) = T::from_bytes(bytes)?;
+                            let (t, remainder) = match T::from_bytes(bytes) {
+                                Ok(success) => success,
+                                Err(error) => {
+                                    for j in 0..i {
+                                        result_ptr.add(j).drop_in_place();
+                                    }
+                                    return Err(error);
+                                }
+                            };
                             result_ptr.add(i).write(t);
                             bytes = remainder;
                         }
@@ -965,64 +973,54 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
-    use alloc::vec;
 
     #[test]
-    fn ser_string() {
-        let s = "🌀0";
-        let ser_s = s.to_bytes().unwrap();
-        println!("ser_s: {:?}", ser_s);
-        let t: String = deserialize(ser_s).unwrap();
-        assert_eq!(s, t);
-    }
+    fn check_array_from_bytes_doesnt_leak() {
+        thread_local!(static INSTANCE_COUNT: RefCell<usize> = RefCell::new(0));
+        const MAX_INSTANCES: usize = 10;
 
-    #[test]
-    fn ser_vec_u8() {
-        let v = vec![90_u8, 91];
+        struct LeakChecker;
 
-        let len = v.len() as u32;
-        let mut w = v.clone();
-        w.extend(len.to_le_bytes().iter());
-        println!("w: {:?}", w);
-
-        for i in 0..4 {
-            w.swap(i, len as usize + i);
-            println!("{} w: {:?}", i, w);
+        impl FromBytes for LeakChecker {
+            fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                let instance_num = INSTANCE_COUNT.with(|count| *count.borrow());
+                if instance_num >= MAX_INSTANCES {
+                    Err(Error::FormattingError)
+                } else {
+                    INSTANCE_COUNT.with(|count| *count.borrow_mut() += 1);
+                    Ok((LeakChecker, bytes))
+                }
+            }
         }
-        println!("w: {:?}", w);
-        w.push(77);
-        let ser_v = v.clone().into_bytes().unwrap();
-        println!("ser_v: {:?}", ser_v);
 
-        // ===================
-
-        let bytes = w.as_slice();
-        let mut len_as_le_bytes: [u8; U32_SIZE] = [0u8; U32_SIZE];
-        let (len_bytes, _) = safe_split_at(bytes, U32_SIZE).unwrap();
-        len_as_le_bytes.copy_from_slice(len_bytes);
-        let len = u32::from_le_bytes(len_as_le_bytes);
-
-        println!("len: {}", len);
-
-        let (len_and_data, remainder) = safe_split_at(bytes, U32_SIZE + len as usize).unwrap();
-        let mut len_and_data = Vec::from(len_and_data);
-        println!("len_and_data: {:?}", len_and_data);
-        println!("remainder: {:?}", remainder);
-
-        for i in (0..4).rev() {
-            len_and_data.swap(i, len as usize + i);
-            println!("{} len_and_data: {:?}", i, len_and_data);
+        impl Drop for LeakChecker {
+            fn drop(&mut self) {
+                INSTANCE_COUNT.with(|count| *count.borrow_mut() -= 1);
+            }
         }
-        len_and_data.truncate(len as usize);
-        println!("len_and_data: {:?}", len_and_data);
-        //                Ok((len_and_data, remainder));
 
-        // ===================
+        // Check we can construct an array of `MAX_INSTANCES` of `LeakChecker`s.
+        {
+            let bytes = (MAX_INSTANCES as u32).to_bytes().unwrap();
+            let _array = <[LeakChecker; MAX_INSTANCES]>::from_bytes(&bytes).unwrap();
+            // Assert `INSTANCE_COUNT == MAX_INSTANCES`
+            INSTANCE_COUNT.with(|count| assert_eq!(MAX_INSTANCES, *count.borrow()));
+        }
 
-        let ser_v = v.clone().into_bytes().unwrap();
-        let w = deserialize::<Vec<u8>>(ser_v).unwrap();
-        assert_eq!(v, w);
+        // Assert the `INSTANCE_COUNT` has dropped to zero again.
+        INSTANCE_COUNT.with(|count| assert_eq!(0, *count.borrow()));
+
+        // Try to construct an array of `LeakChecker`s where the `MAX_INSTANCES + 1`th instance
+        // returns an error.
+        let bytes = (MAX_INSTANCES as u32 + 1).to_bytes().unwrap();
+        let result = <[LeakChecker; MAX_INSTANCES + 1]>::from_bytes(&bytes);
+        assert!(result.is_err());
+
+        // Assert the `INSTANCE_COUNT` has dropped to zero again.
+        INSTANCE_COUNT.with(|count| assert_eq!(0, *count.borrow()));
     }
 }
 

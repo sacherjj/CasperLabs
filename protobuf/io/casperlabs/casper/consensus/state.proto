@@ -29,7 +29,7 @@ message CLType {
 
     message FixedList {
         CLType inner = 1;
-        uint64 len = 2;
+        uint32 len = 2;
     }
 
     message Result {
