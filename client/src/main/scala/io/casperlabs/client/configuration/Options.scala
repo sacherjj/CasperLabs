@@ -2,6 +2,7 @@ package io.casperlabs.client.configuration
 
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
@@ -9,12 +10,16 @@ import io.casperlabs.client.BuildInfo
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
+import scala.concurrent.duration.FiniteDuration
+
 object Options {
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
   val hashCheck: String => Boolean = x => hexCheck(x) && x.length == 64
 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
+
+  val directoryCheck: File => Boolean = dir => dir.exists() && dir.canWrite && dir.isDirectory
 
   trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
@@ -106,7 +111,7 @@ object Options {
       required = false
     )
 
-    val ttl = opt[Int](
+    val ttlMillis = opt[Int](
       descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false,
@@ -200,7 +205,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val host =
     opt[String](
       descr = "Hostname or IP of node on which the gRPC service is running.",
-      required = true
+      required = false,
+      default = Option("localhost")
     )
 
   val nodeId =
@@ -599,6 +605,32 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(balance)
+
+  val keygen = new Subcommand("keygen") {
+    descr("Generates keys.")
+    banner(
+      """| Usage: casperlabs-client keygen <existingOutputDirectory>
+         | Command will override existing files!
+         | Generated files:
+         |   node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+         |                         # derived from node.key.pem
+         |   node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+         |                         # derived from node.key.pem
+         |   node.key.pem          # secp256r1 private key
+         |   validator-id          # validator ID in Base64 format; can be used in accounts.csv
+         |                         # derived from validator.public.pem
+         |   validator-id-hex      # validator ID in hex, derived from validator.public.pem
+         |   validator-private.pem # ed25519 private key
+         |   validator-public.pem  # ed25519 public key""".stripMargin
+    )
+
+    val outputDirectory = trailArg[File](
+      descr = "Output directory for keys. Should already exists.",
+      validate = directoryCheck,
+      required = true
+    )
+  }
+  addSubcommand(keygen)
 
   verify()
 }

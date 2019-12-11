@@ -14,8 +14,7 @@ import io.casperlabs.comm.discovery.NodeUtils.showNode
 import io.casperlabs.comm.gossiping.DownloadManagerImpl.RetriesConf
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
-import io.casperlabs.shared.Log
+import io.casperlabs.shared.{Log, LogStub}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.tail.Iterant
