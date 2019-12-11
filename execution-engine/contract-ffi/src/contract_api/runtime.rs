@@ -204,6 +204,9 @@ pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     let ret = unsafe {
         ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
     };
+    // NOTE: When rewriting below expression as `result_from(ret).map(|_| unsafe { ... })`, and the
+    // caller ignores the return value, execution of the contract becomes unstable and ultimately
+    // leads to `Unreachable` error.
     result_from(ret)?;
     Ok(unsafe { bytes_written.assume_init() })
 }
