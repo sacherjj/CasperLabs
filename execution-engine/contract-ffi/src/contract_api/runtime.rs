@@ -204,7 +204,8 @@ pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     let ret = unsafe {
         ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
     };
-    result_from(ret).map(|_| unsafe { bytes_written.assume_init() })
+    result_from(ret)?;
+    Ok(unsafe { bytes_written.assume_init() })
 }
 
 pub fn read_host_buffer_count(size: usize) -> Result<Vec<u8>, Error> {
