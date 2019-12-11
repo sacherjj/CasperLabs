@@ -8,6 +8,9 @@ use contract_ffi::{
 };
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
 
+use super::{HashedTrie, TestValue};
+use crate::trie::Trie;
+
 pub const BASIC_SIZE: usize = 4;
 pub const SIMILAR_SIZE: usize = 4;
 pub const FANCY_SIZE: usize = 5;
@@ -65,7 +68,7 @@ make_array_newtype_arb!(Similar, u8, SIMILAR_SIZE, similar_arb);
 make_array_newtype_arb!(Fancy, u8, FANCY_SIZE, fancy_arb);
 make_array_newtype_arb!(Long, u8, LONG_SIZE, long_arb);
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PublicKey {
     Basic(Basic),
     Similar(Similar),
@@ -133,7 +136,7 @@ fn public_key_arb() -> impl Strategy<Value = PublicKey> {
     ]
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestKey {
     Account(PublicKey),
     Hash([u8; KEY_HASH_SIZE]),
@@ -230,5 +233,88 @@ mod basics {
         fn key_should_roundtrip(key in key_arb()) {
             bytesrepr::test_serialization_roundtrip(&key)
         }
+    }
+}
+
+type TestTrie = Trie<TestKey, TestValue>;
+
+const TEST_LEAVES_LENGTH: usize = 6;
+
+/// Keys have been chosen deliberately and the `create_` functions below depend
+/// on these exact definitions.  Values are arbitrary.
+const TEST_LEAVES: [TestTrie; TEST_LEAVES_LENGTH] = [
+    Trie::Leaf {
+        key: TestKey::Account(PublicKey::Basic(Basic([0u8, 0, 0, 0]))),
+        value: TestValue(*b"value0"),
+    },
+    Trie::Leaf {
+        key: TestKey::Account(PublicKey::Basic(Basic([0u8, 0, 0, 1]))),
+        value: TestValue(*b"value1"),
+    },
+    Trie::Leaf {
+        key: TestKey::Account(PublicKey::Similar(Similar([0u8, 0, 0, 1]))),
+        value: TestValue(*b"value3"),
+    },
+    Trie::Leaf {
+        key: TestKey::Account(PublicKey::Fancy(Fancy([0u8, 0, 0, 1, 0]))),
+        value: TestValue(*b"value4"),
+    },
+    Trie::Leaf {
+        key: TestKey::Account(PublicKey::Long(Long([0u8, 0, 0, 1, 0, 0, 0, 0]))),
+        value: TestValue(*b"value5"),
+    },
+    Trie::Leaf {
+        key: TestKey::Hash([0u8; 32]),
+        value: TestValue(*b"value6"),
+    },
+];
+
+fn create_0_leaf_trie(
+) -> Result<(Blake2bHash, Vec<HashedTrie<TestKey, TestValue>>), bytesrepr::Error> {
+    let root = HashedTrie::new(Trie::node(&[]))?;
+
+    let root_hash: Blake2bHash = root.hash;
+
+    let parents: Vec<HashedTrie<TestKey, TestValue>> = vec![root];
+
+    let tries: Vec<HashedTrie<TestKey, TestValue>> = {
+        let mut ret = Vec::new();
+        ret.extend(parents);
+        ret
+    };
+
+    Ok((root_hash, tries))
+}
+
+mod empty_tries {
+    use engine_shared::newtypes::CorrelationId;
+
+    use super::*;
+    use crate::{
+        error::in_memory,
+        trie_store::operations::tests::{self, InMemoryTestContext},
+    };
+
+    #[test]
+    fn in_memory_writes_to_n_leaf_empty_trie_had_expected_results() {
+        let correlation_id = CorrelationId::new();
+        let (root_hash, tries) = create_0_leaf_trie().unwrap();
+        let context = InMemoryTestContext::new(&tries).unwrap();
+        let initial_states = vec![root_hash];
+
+        let _states = tests::writes_to_n_leaf_empty_trie_had_expected_results::<
+            _,
+            _,
+            _,
+            _,
+            in_memory::Error,
+        >(
+            correlation_id,
+            &context.environment,
+            &context.store,
+            &initial_states,
+            &TEST_LEAVES,
+        )
+        .unwrap();
     }
 }
