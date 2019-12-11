@@ -65,18 +65,15 @@ mod tests {
 
     #[test]
     fn primitive_to_enum() {
-        let element = FunctionIndex::try_from(19).expect("Unable to create enum from number");
-        assert_eq!(element, FunctionIndex::IsValidFnIndex);
+        FunctionIndex::try_from(19).expect("Unable to create enum from number");
     }
     #[test]
     fn enum_to_primitive() {
-        let element = FunctionIndex::IsValidFnIndex;
-        let primitive: usize = element.into();
-        assert_eq!(primitive, 19usize);
+        let element = FunctionIndex::UpdateAssociatedKeyFuncIndex;
+        let _primitive: usize = element.into();
     }
     #[test]
-    #[should_panic]
     fn invalid_index() {
-        FunctionIndex::try_from(123_456_789usize).unwrap();
+        assert!(FunctionIndex::try_from(123_456_789usize).is_err());
     }
 }
