@@ -3,7 +3,7 @@ package io.casperlabs.casper
 import cats.Monad
 import cats.syntax.functor._
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import monix.execution.Scheduler
 import monix.eval.Task
 import org.scalatest.{Assertion, Assertions, Matchers}

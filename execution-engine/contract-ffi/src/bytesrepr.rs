@@ -305,9 +305,7 @@ macro_rules! impl_byte_array {
     ($len:expr) => {
         impl ToBytes for [u8; $len] {
             fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-                let mut result: Vec<u8> = Vec::with_capacity($len);
-                result.extend_from_slice(self);
-                Ok(result)
+                Ok(self.to_vec())
             }
         }
 

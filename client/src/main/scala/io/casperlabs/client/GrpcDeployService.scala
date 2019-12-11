@@ -204,11 +204,11 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     casperServiceStub
       .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .toListL
-      .map { infos =>
-        type G[A] = StateT[Id, StringBuffer, A]
+      .flatMap { infos =>
+        type G[A] = StateT[Task, StringBuffer, A]
         implicit val ser = new graphz.StringSerializer[G]
         val state        = GraphzGenerator.dagAsCluster[G](infos, GraphConfig(showJustificationLines))
-        state.runS(new StringBuffer).toString
+        state.runS(new StringBuffer).map(_.toString)
       }
       .attempt
 
