@@ -29,6 +29,7 @@ import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.configuration.Configuration
@@ -162,6 +163,15 @@ class NodeRuntime private[node] (
 
       genesis <- makeGenesis[Task](chainSpec)
 
+      validatorId <- Resource.liftF(ValidatorIdentity.fromConfig[Task](conf.casper))
+
+      implicit0(deployBuffer: DeployBuffer[Task]) <- Resource.pure[Task, DeployBuffer[Task]](
+                                                      DeployBuffer.create[Task](
+                                                        chainSpec.getGenesis.name,
+                                                        conf.casper.minTtl
+                                                      )
+                                                    )
+
       implicit0(state: MonadState[Task, RPConf]) <- Resource
                                                      .liftF((for {
                                                        local      <- localPeerNode[Task]()
@@ -244,7 +254,8 @@ class NodeRuntime private[node] (
             conf.grpc.portExternal,
             conf.server.maxMessageSize,
             ingressScheduler,
-            maybeApiSslContext
+            maybeApiSslContext,
+            validatorId.isEmpty
           )
 
       _ <- api.Servers.httpServerR[Task](

@@ -212,12 +212,13 @@ object DeployRuntime {
           .visualizeDag(depth, showJustificationLines)
           .rethrow
 
-      val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
+      val useJdkRenderer = Sync[F].delay(Graphviz.useDefaultEngines())
 
       def writeToFile(out: String, format: Format, dag: String) =
         Sync[F].delay(
           Graphviz
             .fromString(dag)
+            .totalMemory(1000000000)
             .render(format)
             .toFile(new File(s"$out"))
         ) >> Sync[F].delay(println(s"Wrote $out"))

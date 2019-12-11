@@ -37,6 +37,7 @@ import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared.{Cell, FatalError, FilesAPI, Log, Time}
@@ -61,7 +62,7 @@ package object gossiping {
   private implicit val metricsSource: Metrics.Source =
     Metrics.Source(Metrics.Source(Metrics.BaseSource, "node"), "gossiping")
 
-  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation](
+  def apply[F[_]: Parallel: ConcurrentEffect: Log: Metrics: Time: Timer: BlockStorage: DagStorage: NodeDiscovery: NodeAsk: MultiParentCasperRef: ExecutionEngineService: LastFinalizedBlockHashContainer: FilesAPI: DeployStorage: Validation: DeployBuffer](
       port: Int,
       conf: Configuration,
       chainSpec: ChainSpec,
@@ -120,11 +121,6 @@ package object gossiping {
                        connectToGossip,
                        genesis.getHeader.chainName
                      )
-
-      implicit0(broadcaster: Broadcaster[F]) <- Resource.pure[F, Broadcaster[F]](
-                                                 MultiParentCasperImpl.Broadcaster
-                                                   .fromGossipServices(validatorId, relaying)
-                                               )
 
       downloadManager <- makeDownloadManager(
                           conf,
@@ -232,6 +228,12 @@ package object gossiping {
 
       // Start a loop to periodically print peer count, new and disconnected peers, based on NodeDiscovery.
       _ <- makePeerCountPrinter
+
+      // The BlockAPI does relaying of blocks its creating on its own and wants to have a broadcaster.
+      broadcaster <- Resource.pure[F, Broadcaster[F]](
+                      MultiParentCasperImpl.Broadcaster
+                        .fromGossipServices(validatorId, relaying)
+                    )
     } yield broadcaster
   }
 
@@ -242,8 +244,8 @@ package object gossiping {
       cont <- dag.contains(blockHash)
     } yield cont
 
-  /** Validate the genesis candidate or any new block via Casper. */
-  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster](
+  /** Validate the genesis candidate or any new block via Casper. Gossiping the block is done by the DownloadManager. */
+  private def validateAndAddBlock[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol](
       validatorId: Option[Keys.PublicKey],
       spec: ipc.ChainSpec,
       block: Block
@@ -251,7 +253,7 @@ package object gossiping {
     MultiParentCasperRef[F].get
       .flatMap {
         case Some(casper) =>
-          casper.addBlock(block).flatTap(Broadcaster[F].networkEffects(block, _))
+          casper.addBlock(block)
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
@@ -365,7 +367,7 @@ package object gossiping {
         )
       }
 
-  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster](
+  private def makeDownloadManager[F[_]: Concurrent: Log: Time: Timer: Metrics: BlockStorage: DagStorage: ExecutionEngineService: MultiParentCasperRef: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       relaying: Relaying[F],
@@ -441,7 +443,7 @@ package object gossiping {
   // Even though we create the Genesis from the chainspec, the approver gives the green light to use it,
   // which could be based on the presence of other known validators, signaled by their approvals.
   // That just gives us the assurance that we are using the right chain spec because other are as well.
-  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Broadcaster](
+  private def makeGenesisApprover[F[_]: Concurrent: Log: Time: Timer: NodeDiscovery: BlockStorage: DagStorage: MultiParentCasperRef: ExecutionEngineService: FilesAPI: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol](
       conf: Configuration,
       connectToGossip: GossipService.Connector[F],
       downloadManager: DownloadManager[F],
