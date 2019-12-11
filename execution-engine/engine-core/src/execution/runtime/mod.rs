@@ -562,6 +562,7 @@ where
 
         if total_keys == 0 {
             // No need to do anything else, we leave host buffer empty.
+            self.host_buf = None;
             return Ok(Ok(()));
         }
 
