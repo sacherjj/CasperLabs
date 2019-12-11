@@ -10,7 +10,7 @@ import io.casperlabs.comm.NodeAsk
 import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask

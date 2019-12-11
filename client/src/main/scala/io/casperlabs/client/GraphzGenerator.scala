@@ -17,27 +17,20 @@ final case class ValidatorBlock(
     justifications: List[String]
 )
 
-object ValidatorBlock {
-  implicit val validatorBlockMonoid: Monoid[ValidatorBlock] = new Monoid[ValidatorBlock] {
-    def empty: ValidatorBlock = ValidatorBlock("", List.empty[String], List.empty[String])
-    def combine(vb1: ValidatorBlock, vb2: ValidatorBlock): ValidatorBlock =
-      ValidatorBlock(
-        vb2.blockHash,
-        vb1.parentsHashes ++ vb2.parentsHashes,
-        vb1.justifications ++ vb2.justifications
-      )
-  }
-}
-
 final case class GraphConfig(showJustificationLines: Boolean = false)
 
 object GraphzGenerator {
   type BlockHash        = ByteString
-  type ValidatorsBlocks = Map[Long, ValidatorBlock]
+  type Rank             = Long
+  type ValidatorsBlocks = Map[Rank, List[ValidatorBlock]]
+
+  // For debugging it is usefull to change Invis to Dotted.
+  //
+  val Invisible = Invis
 
   final case class DagInfo[G[_]](
       validators: Map[String, ValidatorsBlocks] = Map.empty,
-      timeseries: List[Long] = List.empty
+      ranks: List[Rank] = List.empty
   )
 
   object DagInfo {
@@ -58,56 +51,73 @@ object GraphzGenerator {
   ): G[Graphz[G]] = {
     val acc = toDagInfo[G](blockInfos)
 
+    val allBlockHashes = blockInfos.map(b => hexShort(b.getSummary.blockHash)).toSet
+
+    // In the current model only genesis block has empty validatorPublicKey,
+    // and there must be only one genesis block. However, if that ever changes
+    // or there is a bug and there is more than one block like that,
+    // then we want to visualise all of them.
+    val genesisBlocks =
+      blockInfos
+        .map(_.getSummary)
+        .filter(_.validatorPublicKey.isEmpty)
+        .map(b => hexShort(b.blockHash))
+
+    val fakeGenesisBlocks = if (genesisBlocks.size > 0) List.empty else List("alignment_node")
+
     val lastFinalizedBlockHash =
       blockInfos
         .find(_.getStatus.faultTolerance > 0)
         .map(x => hexShort(x.getSummary.blockHash))
         .getOrElse("")
 
-    val timeseries     = acc.timeseries.reverse
-    val firstTs        = timeseries.head
+    val ranks          = acc.ranks.reverse
+    val firstRank      = ranks.head
     val validators     = acc.validators
     val validatorsList = validators.toList.sortBy(_._1)
 
     for {
       g <- initGraph[G]("dag")
-      // block hashes of parents of the very first rank
-      allAncestors = validatorsList
-        .flatMap {
-          case (_, blocks) =>
-            blocks.get(firstTs).map(_.parentsHashes).getOrElse(List.empty[String])
-        }
-        .distinct
-        .sorted
-      // draw ancesotrs first
-      _ <- allAncestors.traverse(
-            ancestor =>
-              g.node(
-                ancestor,
-                style = styleFor(ancestor, lastFinalizedBlockHash),
-                shape = Box
-              )
-          )
-      // create invisible edges from ancestors to first node in each cluster for proper alligment
-      _ <- validatorsList.traverse {
-            case (id, blocks) =>
-              allAncestors.traverse(ancestor => {
-                val node = nodeForTs(id, firstTs, blocks, lastFinalizedBlockHash)._2
-                g.edge(ancestor, node, style = Some(Invis))
-              })
-          }
+
+      // draw genesis block first, if there is any
+      _ <- genesisBlocks.traverse(b => g.node(b, style = Some(Bold), shape = Box))
+
+      // draw invisible fake genesis block if needed
+      _ <- fakeGenesisBlocks.traverse(b => g.node(b, style = Some(Invisible), shape = Box))
+
+      // draw invisible edges from genesis block or the fake genesis block
+      // to first node of each validator for alignment
+      _ <- (if (genesisBlocks.size > 0) genesisBlocks else fakeGenesisBlocks)
+            .flatMap(
+              genesisBlock =>
+                validatorsList.flatMap {
+                  case (id, blocks) =>
+                    nodesForRank(id, firstRank, blocks, lastFinalizedBlockHash).map(
+                      node => (genesisBlock, node)
+                    )
+                }
+            )
+            .traverse {
+              case (genesisBlock, node) =>
+                g.edge(
+                  genesisBlock,
+                  node._2,
+                  style = Some(Invisible)
+                )
+            }
+
       // draw clusters per validator
       _ <- validatorsList.traverse {
             case (id, blocks) =>
               g.subgraph(
-                validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
+                validatorCluster(id, blocks, ranks, lastFinalizedBlockHash)
               )
           }
       // draw parent dependencies
-      _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
+      _ <- drawParentDependencies[G](g, validatorsList.map(_._2), allBlockHashes)
       // draw justification dotted lines
       _ <- config.showJustificationLines.fold(
-            drawJustificationDottedLines[G](g, validators),
+            drawJustificationDottedLines[G](g, validators, allBlockHashes),
             ().pure[G]
           )
       _ <- g.close
@@ -117,26 +127,28 @@ object GraphzGenerator {
   private def toDagInfo[G[_]](
       blockInfos: List[BlockInfo]
   ): DagInfo[G] = {
-    val timeseries = blockInfos.map(_.getSummary.rank).distinct
+    val ranks = blockInfos.map(_.getSummary.rank).distinct
 
-    val validators = blockInfos.map(_.getSummary).foldMap { b =>
-      val timeEntry       = b.rank
-      val blockHash       = hexShort(b.blockHash)
-      val blockSenderHash = hexShort(b.validatorPublicKey)
-      val parents         = b.parentHashes.toList.map(hexShort)
-      val justifications = b.justifications
-        .map(_.latestBlockHash)
-        .map(hexShort)
-        .toSet
-        .toList
+    val validators = blockInfos
+      .map(_.getSummary)
+      .filterNot(_.validatorPublicKey.isEmpty)
+      .foldMap { b =>
+        val blockHash       = hexShort(b.blockHash)
+        val blockSenderHash = hexShort(b.validatorPublicKey)
+        val parents         = b.parentHashes.toList.map(hexShort)
+        val justifications = b.justifications
+          .map(_.latestBlockHash)
+          .map(hexShort)
+          .toSet
+          .toList
 
-      val validatorBlocks =
-        Map(timeEntry -> ValidatorBlock(blockHash, parents, justifications))
+        val validatorBlocks =
+          Map(b.rank -> List(ValidatorBlock(blockHash, parents, justifications)))
 
-      Map(blockSenderHash -> validatorBlocks)
-    }
+        Map(blockSenderHash -> validatorBlocks)
+      }
 
-    DagInfo[G](validators, timeseries)
+    DagInfo[G](validators, ranks)
   }
 
   private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
@@ -150,16 +162,20 @@ object GraphzGenerator {
 
   private def drawParentDependencies[G[_]: Applicative](
       g: Graphz[G],
-      validators: List[ValidatorsBlocks]
+      validators: List[ValidatorsBlocks],
+      allBlockHashes: Set[String]
   ): G[Unit] =
     validators
       .flatMap(_.values.toList)
+      .flatten
       .traverse {
         case ValidatorBlock(blockHash, parentsHashes, _) =>
-          parentsHashes.zipWithIndex
+          parentsHashes
+            .filter(allBlockHashes)
+            .zipWithIndex
             .traverse {
               case (p, index) =>
-                // Bolding the edge to main parent
+                // Bolding the edge to main parent.
                 val style = if (index == 0) {
                   Some(Bold)
                 } else {
@@ -172,13 +188,16 @@ object GraphzGenerator {
 
   private def drawJustificationDottedLines[G[_]: Applicative](
       g: Graphz[G],
-      validators: Map[String, ValidatorsBlocks]
+      validators: Map[String, ValidatorsBlocks],
+      allBlockHashes: Set[String]
   ): G[Unit] =
     validators.values.toList
       .flatMap(_.values.toList)
+      .flatten
       .traverse {
         case ValidatorBlock(blockHash, _, justifications) =>
           justifications
+            .filter(p => allBlockHashes.contains(p))
             .traverse(
               j =>
                 g.edge(
@@ -193,33 +212,45 @@ object GraphzGenerator {
       }
       .as(())
 
-  private def nodeForTs(
+  private def nodesForRank(
       validatorId: String,
-      ts: Long,
+      rank: Rank,
       blocks: ValidatorsBlocks,
       lastFinalizedBlockHash: String
-  ): (Option[GraphStyle], String) =
-    blocks.get(ts) match {
-      case Some(ValidatorBlock(blockHash, _, _)) =>
-        (styleFor(blockHash, lastFinalizedBlockHash), blockHash)
-      case None => (Some(Invis), s"${ts.show}_$validatorId")
+  ): List[(Option[GraphStyle], String)] =
+    blocks.get(rank) match {
+      case Some(blocks) =>
+        blocks.map(b => (styleFor(b.blockHash, lastFinalizedBlockHash), b.blockHash))
+      case None => List((Some(Invisible), s"${rank.show}_$validatorId"))
     }
 
   private def validatorCluster[G[_]: Monad: GraphSerializer](
       id: String,
       blocks: ValidatorsBlocks,
-      timeseries: List[Long],
+      ranks: List[Rank],
       lastFinalizedBlockHash: String
   ): G[Graphz[G]] =
     for {
       g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
-      nodes = timeseries.map(ts => nodeForTs(id, ts, blocks, lastFinalizedBlockHash))
+      nodes = ranks.map(rank => nodesForRank(id, rank, blocks, lastFinalizedBlockHash)).flatten
       _ <- nodes.traverse {
             case (style, name) => g.node(name, style = style, shape = Box)
           }
-      _ <- nodes.zip(nodes.drop(1)).traverse {
-            case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invis))
-          }
+
+      // Draw invisible edges from nodes rank i to nodes rank i+1 for alignment.
+      _ <- ranks.reverse.tail.reverse
+            .flatMap(
+              rank =>
+                nodesForRank(id, rank, blocks, lastFinalizedBlockHash).flatMap(n1 => {
+                  nodesForRank(id, rank + 1, blocks, lastFinalizedBlockHash).map(n2 => {
+                    (n1, n2)
+                  })
+                })
+            )
+            .traverse {
+              case ((_, n1), (_, n2)) => g.edge(n1, n2, style = Some(Invisible))
+            }
+
       _ <- g.close
     } yield g
 

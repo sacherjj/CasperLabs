@@ -459,27 +459,26 @@ impl_to_from_bytes_for_array! {
     64 128 256 512
 }
 
-impl ToBytes for [u8; 32] {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        // TODO(Fraser) - want to just do `Ok(self.to_vec())` here rather than packing the size in
-        //                too.
-        let mut result = Vec::with_capacity(36);
-        result.append(&mut 32_u32.to_bytes()?);
-        result.append(&mut self.to_vec());
-        Ok(result)
-    }
+macro_rules! impl_byte_array {
+    ($len:expr) => {
+        impl ToBytes for [u8; $len] {
+            fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                Ok(self.to_vec())
+            }
+        }
+
+        impl FromBytes for [u8; $len] {
+            fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                let (bytes, rem) = safe_split_at(bytes, $len)?;
+                let mut result = [0u8; $len];
+                result.copy_from_slice(bytes);
+                Ok((result, rem))
+            }
+        }
+    };
 }
 
-impl FromBytes for [u8; 32] {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        // TODO(Fraser) - once `to_bytes()` is fixed we can remove the following line.
-        let (_len_bytes, remainder) = safe_split_at(bytes, 4)?;
-        let (array_bytes, remainder) = safe_split_at(remainder, 32)?;
-        let mut result = [0_u8; 32];
-        result.copy_from_slice(array_bytes);
-        Ok((result, remainder))
-    }
-}
+impl_byte_array!(32);
 
 impl ToBytes for String {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -562,12 +561,18 @@ where
     }
 }
 
-impl ToBytes for &str {
+impl ToBytes for str {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         if self.len() >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);
         }
         self.as_bytes().to_vec().into_bytes()
+    }
+}
+
+impl ToBytes for &str {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        (*self).to_bytes()
     }
 }
 

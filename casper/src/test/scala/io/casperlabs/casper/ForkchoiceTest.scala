@@ -153,7 +153,7 @@ class ForkchoiceTest
                        equivocators
                      )
         _      = forkchoice.head should be(b6.blockHash)
-        result = forkchoice(1) should be(b8.blockHash)
+        result = forkchoice.tail.head should be(b8.blockHash)
       } yield result
   }
 
@@ -221,7 +221,7 @@ class ForkchoiceTest
                        equivocators
                      )
         _      = forkchoice.head should be(b8.blockHash)
-        result = forkchoice(1) should be(b7.blockHash)
+        result = forkchoice.tail.head should be(b7.blockHash)
       } yield result
   }
 
@@ -286,7 +286,7 @@ class ForkchoiceTest
         equivocators        <- dag.getEquivocators
         latestMessageHashes <- dag.latestMessageHashes
         tips                <- Estimator.tips(dag, genesis.blockHash, latestMessageHashes, equivocators)
-        _                   = tips shouldBe List(b.blockHash)
+        _                   = tips.toList shouldBe List(b.blockHash)
       } yield ()
   }
 
@@ -345,7 +345,7 @@ class ForkchoiceTest
                        latestBlocks,
                        equivocators
                      )
-        _ = forkchoice shouldBe List(b4.blockHash)
+        _ = forkchoice.toList shouldBe List(b4.blockHash)
       } yield ()
   }
 

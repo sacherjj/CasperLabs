@@ -130,7 +130,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
 
   def showBlock(hash: String): Task[Either[Throwable, BlockInfo]] =
     casperServiceStub
-      .getBlockInfo(GetBlockInfoRequest(hash, BlockInfo.View.FULL))
+      .getBlockInfo(GetBlockInfoRequest(hash, view = BlockInfo.View.FULL))
       .attempt
 
   def showDeploy(
@@ -139,7 +139,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       json: Boolean
   ): Task[Either[Throwable, String]] =
     casperServiceStub
-      .getDeployInfo(GetDeployInfoRequest(hash, DeployInfo.View.BASIC))
+      .getDeployInfo(GetDeployInfoRequest(hash, view = DeployInfo.View.BASIC))
       .map(Printer.print(_, bytesStandard, json))
       .attempt
 
@@ -149,7 +149,7 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
       json: Boolean
   ): Task[Either[Throwable, String]] =
     casperServiceStub
-      .streamBlockDeploys(StreamBlockDeploysRequest(hash, DeployInfo.View.BASIC))
+      .streamBlockDeploys(StreamBlockDeploysRequest(hash, view = DeployInfo.View.BASIC))
       .zipWithIndex
       .map {
         case (d, idx) =>
@@ -204,11 +204,11 @@ class GrpcDeployService(conn: ConnectOptions, scheduler: Scheduler)
     casperServiceStub
       .streamBlockInfos(StreamBlockInfosRequest(depth = depth, view = BlockInfo.View.BASIC))
       .toListL
-      .map { infos =>
-        type G[A] = StateT[Id, StringBuffer, A]
+      .flatMap { infos =>
+        type G[A] = StateT[Task, StringBuffer, A]
         implicit val ser = new graphz.StringSerializer[G]
         val state        = GraphzGenerator.dagAsCluster[G](infos, GraphConfig(showJustificationLines))
-        state.runS(new StringBuffer).toString
+        state.runS(new StringBuffer).map(_.toString)
       }
       .attempt
 

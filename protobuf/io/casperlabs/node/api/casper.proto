@@ -23,16 +23,16 @@ service CasperService {
 
     // Get the block summary with extra information about finality.
     rpc GetBlockInfo(GetBlockInfoRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
-    	option (google.api.http) = {
-    		get: "/v2/blocks/{block_hash_base16=*}"
-    	};
+        option (google.api.http) = {
+            get: "/v2/blocks/{block_hash_base16=*}"
+        };
     }
 
     // Get slices of the DAG, going backwards, rank by rank.
     rpc StreamBlockInfos(StreamBlockInfosRequest) returns (stream io.casperlabs.casper.consensus.info.BlockInfo) {
-    	option (google.api.http) = {
-    		get: "/v2/blocks"
-    	};
+        option (google.api.http) = {
+            get: "/v2/blocks"
+        };
     }
 
     // Retrieve information about a single deploy by hash.
@@ -74,8 +74,8 @@ service CasperService {
 
     rpc GetLastFinalizedBlockInfo (GetLastFinalizedBlockInfoRequest) returns (io.casperlabs.casper.consensus.info.BlockInfo) {
         option (google.api.http) = {
-    		get: "v2/last-finalized-block"
-    	};
+            get: "v2/last-finalized-block"
+        };
     }
 }
 
@@ -84,32 +84,38 @@ message DeployRequest {
 }
 
 message GetBlockInfoRequest {
-	// Either the full or just the first few characters of the block hash in base16 encoding,
-	// so that it works with the client's redacted displays.
-	string block_hash_base16 = 1;
-	io.casperlabs.casper.consensus.info.BlockInfo.View view = 2;
+    // Either the full or just the first few characters of the block hash in base16 encoding,
+    // so that it works with the client's redacted displays.
+    string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes block_hash = 3;
+    io.casperlabs.casper.consensus.info.BlockInfo.View view = 2;
 }
 
 message StreamBlockInfosRequest {
-	// How many of the top ranks of the DAG to show. 0 will not return anything.
-	uint32 depth = 1;
+    // How many of the top ranks of the DAG to show. 0 will not return anything.
+    uint32 depth = 1;
 
-	// Optionally specify the maximum rank to to go back from.
-	// 0 means go from the current tip of the DAG.
-	uint64 max_rank = 2;
+    // Optionally specify the maximum rank to to go back from.
+    // 0 means go from the current tip of the DAG.
+    uint64 max_rank = 2;
 
-	io.casperlabs.casper.consensus.info.BlockInfo.View view = 3;
+    io.casperlabs.casper.consensus.info.BlockInfo.View view = 3;
 }
 
 
 
 message GetDeployInfoRequest {
     string deploy_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes deploy_hash = 3;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
 }
 
 message StreamBlockDeploysRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes block_hash = 3;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
 }
 
@@ -130,11 +136,15 @@ message StateQuery {
 
 message GetBlockStateRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes block_hash = 3;
     StateQuery query = 2;
 }
 
 message BatchGetBlockStateRequest {
     string block_hash_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes block_hash = 3;
     repeated StateQuery queries = 2;
 }
 
@@ -144,6 +154,8 @@ message BatchGetBlockStateResponse {
 
 message ListDeployInfosRequest {
     string account_public_key_base16 = 1;
+    // Alternative to the base16 encoded value (which is intended for URL compatibility).
+    bytes account_public_key = 5;
     io.casperlabs.casper.consensus.info.DeployInfo.View view = 2;
     uint32 page_size = 3;
     string page_token = 4;

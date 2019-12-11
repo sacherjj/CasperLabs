@@ -4,12 +4,17 @@ import cats._
 import cats.data.EitherT
 import cats.effect.ExitCase.{Completed, Error}
 import cats.effect._
+import io.casperlabs.catscontrib.{FiberSyntax, MonadThrowable}
 import monix.eval.{Task, TaskLift}
 
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import io.casperlabs.shared.Log
 
 package object implicits {
+
+  implicit def fiberSyntax[A, F[_]: Concurrent: Log: MonadThrowable](fa: F[A]): FiberSyntax[F, A] =
+    new FiberSyntax(fa)
 
   implicit val syncId: Sync[Id] =
     new Sync[Id] {

@@ -14,7 +14,10 @@ use crate::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
-    value::{account::PublicKey, CLTyped, CLValue},
+    value::{
+        account::{PublicKey, PUBLIC_KEY_SIZE},
+        CLTyped, CLValue,
+    },
 };
 
 /// Returns `value` to the host, terminating the currently running module.
@@ -69,7 +72,7 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
 /// that URef with a new Contract instance containing the original contract's named_keys, the
 /// current protocol version, and the newly created bytes of the stored function.
 pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
-    let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let key: Key = uref.into();
     let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
     let result_value =
@@ -109,10 +112,9 @@ pub fn get_arg<T: CLTyped + FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Er
 /// When in the sub call - returns public key of the account that made the
 /// deploy.
 pub fn get_caller() -> PublicKey {
-    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
-    let dest_ptr = contract_api::alloc_bytes(36);
+    let dest_ptr = contract_api::alloc_bytes(PUBLIC_KEY_SIZE);
     unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PUBLIC_KEY_SIZE, PUBLIC_KEY_SIZE) };
     deserialize(bytes).unwrap_or_revert()
 }
 
@@ -136,7 +138,7 @@ pub fn get_phase() -> Phase {
 /// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
-    let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
     let dest_ptr = contract_api::alloc_bytes(key_size);
     let key_bytes = unsafe {
@@ -151,21 +153,21 @@ pub fn get_key(name: &str) -> Option<Key> {
 
 /// Check if the given name corresponds to a known unforgable reference
 pub fn has_key(name: &str) -> bool {
-    let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let result = unsafe { ext_ffi::has_key(name_ptr, name_size) };
     result == 0
 }
 
 /// Put the given key to the named_keys map under the given name
 pub fn put_key(name: &str, key: Key) {
-    let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     let (key_ptr, key_size, _bytes2) = contract_api::to_ptr(key);
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
 /// Removes Key persisted under [name] in the current context's map.
 pub fn remove_key(name: &str) {
-    let (name_ptr, name_size, _bytes) = contract_api::str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     unsafe { ext_ffi::remove_key(name_ptr, name_size) }
 }
 
