@@ -136,9 +136,9 @@ object DeployBuffer {
     *
     * Those deploys won't be requeued anymore.
     */
-  def removeFinalizedDeploys[F[_]: MonadThrowable: DagStorage: DeployStorage: BlockStorage: Log](
+  def removeFinalizedDeploys[F[_]: MonadThrowable: DagStorage: DeployStorage: BlockStorage: Log: Metrics](
       lfb: BlockHash
-  ): F[Unit] =
+  ): F[Unit] = Metrics[F].timer("removeFinalizedDeploys") {
     for {
       dag          <- DagStorage[F].getRepresentation
       deployHashes <- DeployStorageReader[F].readProcessedHashes
@@ -170,6 +170,7 @@ object DeployBuffer {
             }
           }
     } yield ()
+  }
 
   /** Remove deploys from the history which are included in a just finalised block. */
   private def removeDeploysInBlock[F[_]: MonadThrowable: DeployStorage: BlockStorage](
