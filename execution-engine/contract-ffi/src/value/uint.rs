@@ -271,6 +271,293 @@ impl AsPrimitive<U512> for U512 {
 mod tests {
     use super::*;
 
+    fn check_as_i32<T: AsPrimitive<i32>>(expected: i32, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_i64<T: AsPrimitive<i64>>(expected: i64, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u8<T: AsPrimitive<u8>>(expected: u8, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u32<T: AsPrimitive<u32>>(expected: u32, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u64<T: AsPrimitive<u64>>(expected: u64, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u128<T: AsPrimitive<U128>>(expected: U128, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u256<T: AsPrimitive<U256>>(expected: U256, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    fn check_as_u512<T: AsPrimitive<U512>>(expected: U512, input: T) {
+        assert_eq!(expected, input.as_());
+    }
+
+    #[test]
+    fn as_primitive_from_i32() {
+        let mut input = 0_i32;
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = i32::max_value() - 1;
+        check_as_i32(input, input);
+        check_as_i64(i64::from(input), input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input as u32, input);
+        check_as_u64(input as u64, input);
+        check_as_u128(U128::from(input), input);
+        check_as_u256(U256::from(input), input);
+        check_as_u512(U512::from(input), input);
+
+        input = i32::min_value() + 1;
+        check_as_i32(input, input);
+        check_as_i64(i64::from(input), input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input as u32, input);
+        check_as_u64(input as u64, input);
+        // i32::min_value() is -1 - i32::max_value()
+        check_as_u128(
+            U128::zero().wrapping_sub(&U128::from(i32::max_value())),
+            input,
+        );
+        check_as_u256(
+            U256::zero().wrapping_sub(&U256::from(i32::max_value())),
+            input,
+        );
+        check_as_u512(
+            U512::zero().wrapping_sub(&U512::from(i32::max_value())),
+            input,
+        );
+    }
+
+    #[test]
+    fn as_primitive_from_i64() {
+        let mut input = 0_i64;
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = i64::max_value() - 1;
+        check_as_i32(input as i32, input);
+        check_as_i64(input, input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input as u32, input);
+        check_as_u64(input as u64, input);
+        check_as_u128(U128::from(input), input);
+        check_as_u256(U256::from(input), input);
+        check_as_u512(U512::from(input), input);
+
+        input = i64::min_value() + 1;
+        check_as_i32(input as i32, input);
+        check_as_i64(input, input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input as u32, input);
+        check_as_u64(input as u64, input);
+        // i64::min_value() is (-1 - i64::max_value())
+        check_as_u128(
+            U128::zero().wrapping_sub(&U128::from(i64::max_value())),
+            input,
+        );
+        check_as_u256(
+            U256::zero().wrapping_sub(&U256::from(i64::max_value())),
+            input,
+        );
+        check_as_u512(
+            U512::zero().wrapping_sub(&U512::from(i64::max_value())),
+            input,
+        );
+    }
+
+    #[test]
+    fn as_primitive_from_u8() {
+        let mut input = 0_u8;
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = u8::max_value() - 1;
+        check_as_i32(i32::from(input), input);
+        check_as_i64(i64::from(input), input);
+        check_as_u8(input, input);
+        check_as_u32(u32::from(input), input);
+        check_as_u64(u64::from(input), input);
+        check_as_u128(U128::from(input), input);
+        check_as_u256(U256::from(input), input);
+        check_as_u512(U512::from(input), input);
+    }
+
+    #[test]
+    fn as_primitive_from_u32() {
+        let mut input = 0_u32;
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = u32::max_value() - 1;
+        check_as_i32(input as i32, input);
+        check_as_i64(i64::from(input), input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input, input);
+        check_as_u64(u64::from(input), input);
+        check_as_u128(U128::from(input), input);
+        check_as_u256(U256::from(input), input);
+        check_as_u512(U512::from(input), input);
+    }
+
+    #[test]
+    fn as_primitive_from_u64() {
+        let mut input = 0_u64;
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = u64::max_value() - 1;
+        check_as_i32(input as i32, input);
+        check_as_i64(input as i64, input);
+        check_as_u8(input as u8, input);
+        check_as_u32(input as u32, input);
+        check_as_u64(input, input);
+        check_as_u128(U128::from(input), input);
+        check_as_u256(U256::from(input), input);
+        check_as_u512(U512::from(input), input);
+    }
+
+    fn make_little_endian_arrays(little_endian_bytes: &[u8]) -> ([u8; 4], [u8; 8]) {
+        let le_32 = {
+            let mut le_32 = [0; 4];
+            le_32.copy_from_slice(&little_endian_bytes[..4]);
+            le_32
+        };
+
+        let le_64 = {
+            let mut le_64 = [0; 8];
+            le_64.copy_from_slice(&little_endian_bytes[..8]);
+            le_64
+        };
+
+        (le_32, le_64)
+    }
+
+    #[test]
+    fn as_primitive_from_u128() {
+        let mut input = U128::zero();
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = U128::max_value() - 1;
+
+        let mut little_endian_bytes = [0_u8; 64];
+        input.to_little_endian(&mut little_endian_bytes[..16]);
+        let (le_32, le_64) = make_little_endian_arrays(&little_endian_bytes);
+
+        check_as_i32(i32::from_le_bytes(le_32), input);
+        check_as_i64(i64::from_le_bytes(le_64), input);
+        check_as_u8(little_endian_bytes[0], input);
+        check_as_u32(u32::from_le_bytes(le_32), input);
+        check_as_u64(u64::from_le_bytes(le_64), input);
+        check_as_u128(U128::from_little_endian(&little_endian_bytes[..16]), input);
+        check_as_u256(U256::from_little_endian(&little_endian_bytes[..32]), input);
+        check_as_u512(U512::from_little_endian(&little_endian_bytes), input);
+    }
+
+    #[test]
+    fn as_primitive_from_u256() {
+        let mut input = U256::zero();
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = U256::max_value() - 1;
+
+        let mut little_endian_bytes = [0_u8; 64];
+        input.to_little_endian(&mut little_endian_bytes[..32]);
+        let (le_32, le_64) = make_little_endian_arrays(&little_endian_bytes);
+
+        check_as_i32(i32::from_le_bytes(le_32), input);
+        check_as_i64(i64::from_le_bytes(le_64), input);
+        check_as_u8(little_endian_bytes[0], input);
+        check_as_u32(u32::from_le_bytes(le_32), input);
+        check_as_u64(u64::from_le_bytes(le_64), input);
+        check_as_u128(U128::from_little_endian(&little_endian_bytes[..16]), input);
+        check_as_u256(U256::from_little_endian(&little_endian_bytes[..32]), input);
+        check_as_u512(U512::from_little_endian(&little_endian_bytes), input);
+    }
+
+    #[test]
+    fn as_primitive_from_u512() {
+        let mut input = U512::zero();
+        check_as_i32(0, input);
+        check_as_i64(0, input);
+        check_as_u8(0, input);
+        check_as_u32(0, input);
+        check_as_u64(0, input);
+        check_as_u128(U128::zero(), input);
+        check_as_u256(U256::zero(), input);
+        check_as_u512(U512::zero(), input);
+
+        input = U512::max_value() - 1;
+
+        let mut little_endian_bytes = [0_u8; 64];
+        input.to_little_endian(&mut little_endian_bytes);
+        let (le_32, le_64) = make_little_endian_arrays(&little_endian_bytes);
+
+        check_as_i32(i32::from_le_bytes(le_32), input);
+        check_as_i64(i64::from_le_bytes(le_64), input);
+        check_as_u8(little_endian_bytes[0], input);
+        check_as_u32(u32::from_le_bytes(le_32), input);
+        check_as_u64(u64::from_le_bytes(le_64), input);
+        check_as_u128(U128::from_little_endian(&little_endian_bytes[..16]), input);
+        check_as_u256(U256::from_little_endian(&little_endian_bytes[..32]), input);
+        check_as_u512(U512::from_little_endian(&little_endian_bytes), input);
+    }
+
     #[test]
     fn wrapping_test_u512() {
         let max = U512::max_value();
