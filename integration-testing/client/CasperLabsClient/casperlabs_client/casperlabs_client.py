@@ -396,7 +396,7 @@ def extract_common_name(certificate_file: str) -> str:
 
 
 def abi_byte_array(a: bytes) -> bytes:
-    return struct.pack("<I", len(a)) + a
+    return a
 
 
 class SecureGRPCService:

@@ -11,12 +11,11 @@ const Size: Serializer<number> = size => {
 };
 
 // `Array[Byte]` serializes as follows:
-// 1) length of the array as 4 bytes
-// 2) your array of bytes
+//   your array of bytes
 //
-// So for `[1,2,3,4,5,6]` it serializes to`[6, 0, 0, 0, 1, 2, 3, 4, 5, 6]`
+// So for `[1,2,3,4,5,6]` it serializes to`[1, 2, 3, 4, 5, 6]`
 export const ByteArrayArg: Serializer<ByteArray> = bytes => {
-  return Buffer.concat([Size(bytes.length), bytes].map(Buffer.from));
+  return Buffer.from(bytes);
 };
 
 // A public key is the same as array but its' expected to be 32 bytes long exactly.
