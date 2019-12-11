@@ -13,7 +13,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{deserialize, ToBytes, U32_SIZE},
+    bytesrepr::{deserialize, ToBytes},
     contract_api::{
         system::{TransferResult, TransferredTo},
         Error as ApiError,
@@ -660,8 +660,7 @@ where
     fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source
@@ -683,8 +682,7 @@ where
     fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source
@@ -703,8 +701,7 @@ where
     ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source

@@ -11,8 +11,7 @@ use crate::{
 
 pub const UREF_ADDR_SIZE: usize = 32;
 pub const ACCESS_RIGHTS_SIZE: usize = 1;
-pub const UREF_SIZE_SERIALIZED: usize =
-    U32_SIZE + UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
+pub const UREF_SIZE_SERIALIZED: usize = UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
 
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
