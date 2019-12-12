@@ -24,7 +24,7 @@ use contract_ffi::{
     args_parser::ArgsParser,
     bytesrepr::ToBytes,
     execution::Phase,
-    key::{Key, HASH_LENGTH},
+    key::{Key, KEY_HASH_LENGTH},
     system_contracts::mint,
     uref::{AccessRights, URef, UREF_ADDR_LENGTH},
     value::{
@@ -625,13 +625,13 @@ where
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
-                if hash_len != HASH_LENGTH {
+                if hash_len != KEY_HASH_LENGTH {
                     return Err(error::Error::InvalidHashLength {
-                        expected: HASH_LENGTH,
+                        expected: KEY_HASH_LENGTH,
                         actual: hash_len,
                     });
                 }
-                let mut arr = [0u8; HASH_LENGTH];
+                let mut arr = [0u8; KEY_HASH_LENGTH];
                 arr.copy_from_slice(&hash);
                 Key::Hash(arr)
             }

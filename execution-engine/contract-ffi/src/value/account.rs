@@ -17,7 +17,7 @@ use crate::{
         U8_SERIALIZED_LENGTH,
     },
     contract_api::{runtime, Error as ApiError},
-    key::{Key, UREF_KEY_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
 };
@@ -822,8 +822,8 @@ impl ToBytes for Account {
             * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
             + U32_SERIALIZED_LENGTH;
         let named_keys_size =
-            UREF_KEY_SERIALIZED_LENGTH * self.named_keys.len() + U32_SERIALIZED_LENGTH;
-        let purse_id_size = UREF_KEY_SERIALIZED_LENGTH;
+            KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len() + U32_SERIALIZED_LENGTH;
+        let purse_id_size = KEY_UREF_SERIALIZED_LENGTH;
         let serialized_account_size = PUBLIC_KEY_LENGTH // pub key
             + named_keys_size
             + purse_id_size

@@ -22,7 +22,7 @@ use crate::{
         Error, FromBytes, ToBytes, U128_SERIALIZED_LENGTH, U256_SERIALIZED_LENGTH,
         U32_SERIALIZED_LENGTH, U512_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH,
     },
-    key::{Key, UREF_KEY_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     uref::URef,
 };
 
@@ -137,7 +137,7 @@ impl ToBytes for Value {
             }
             Value::Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             Value::NamedKey(n, k) => {
-                if n.len() + UREF_KEY_SERIALIZED_LENGTH
+                if n.len() + KEY_UREF_SERIALIZED_LENGTH
                     >= u32::max_value() as usize - U32_SERIALIZED_LENGTH - U8_SERIALIZED_LENGTH
                 {
                     return Err(Error::OutOfMemoryError);
@@ -145,7 +145,7 @@ impl ToBytes for Value {
                 let size: usize = U8_SERIALIZED_LENGTH + //size for ID
                   U32_SERIALIZED_LENGTH +                 //size for length of String
                   n.len() +           //size of String
-                  UREF_KEY_SERIALIZED_LENGTH; //size of urefs
+                  KEY_UREF_SERIALIZED_LENGTH; //size of urefs
                 let mut result = Vec::with_capacity(size);
                 result.push(NAMEDKEY_ID);
                 result.append(&mut n.to_bytes()?);
@@ -153,7 +153,7 @@ impl ToBytes for Value {
                 Ok(result)
             }
             Value::Key(k) => {
-                let size: usize = U8_SERIALIZED_LENGTH + UREF_KEY_SERIALIZED_LENGTH;
+                let size: usize = U8_SERIALIZED_LENGTH + KEY_UREF_SERIALIZED_LENGTH;
                 let mut result = Vec::with_capacity(size);
                 result.push(KEY_ID);
                 result.append(&mut k.to_bytes()?);

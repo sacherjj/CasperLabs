@@ -9,7 +9,7 @@ use crate::{
     bytesrepr::{self, deserialize, ToBytes},
     contract_api::{runtime, Error},
     ext_ffi,
-    key::{Key, UREF_KEY_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
     uref::AccessRights,
     value::{Contract, Value},
@@ -157,15 +157,15 @@ pub fn store_function_at_hash(name: &str, named_keys: BTreeMap<String, Key>) -> 
 
 /// Returns a new unforgable pointer, where value is initialized to `init`
 pub fn new_turef<T: Into<Value>>(init: T) -> TURef<T> {
-    let key_ptr = alloc_bytes(UREF_KEY_SERIALIZED_LENGTH);
+    let key_ptr = alloc_bytes(KEY_UREF_SERIALIZED_LENGTH);
     let value: Value = init.into();
     let (value_ptr, value_size, _bytes2) = to_ptr(&value);
     let bytes = unsafe {
         ext_ffi::new_uref(key_ptr, value_ptr, value_size); // new_uref creates a URef with ReadWrite access writes
         Vec::from_raw_parts(
             key_ptr,
-            UREF_KEY_SERIALIZED_LENGTH,
-            UREF_KEY_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
         )
     };
     let key: Key = deserialize(&bytes).unwrap_or_revert();

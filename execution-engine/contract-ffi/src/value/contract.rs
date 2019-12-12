@@ -2,7 +2,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH},
-    key::{Key, UREF_KEY_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     value::ProtocolVersion,
 };
 
@@ -58,16 +58,16 @@ impl Contract {
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         if self.bytes.len()
-            + UREF_KEY_SERIALIZED_LENGTH * self.named_keys.len()
+            + KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len()
             + U64_SERIALIZED_LENGTH
             >= u32::max_value() as usize - U32_SERIALIZED_LENGTH * 2
         {
             return Err(Error::OutOfMemoryError);
         }
-        let size: usize = U32_SERIALIZED_LENGTH +                    //size for length of bytes
-                    self.bytes.len() +                  //size for elements of bytes
-                    U32_SERIALIZED_LENGTH +                          //size for length of named_keys
-                    UREF_KEY_SERIALIZED_LENGTH * self.named_keys.len() + //size for named_keys elements
+        let size: usize = U32_SERIALIZED_LENGTH +                        //size for length of bytes
+                    self.bytes.len() +                                   //size for elements of bytes
+                    U32_SERIALIZED_LENGTH +                              //size for length of named_keys
+                    KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len() + //size for named_keys elements
                     U64_SERIALIZED_LENGTH; //size for protocol_version
 
         let mut result = Vec::with_capacity(size);
