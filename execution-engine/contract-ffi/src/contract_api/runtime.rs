@@ -211,7 +211,7 @@ fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     Ok(unsafe { bytes_written.assume_init() })
 }
 
-pub fn read_host_buffer(size: usize) -> Result<Vec<u8>, Error> {
+pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, Error> {
     let bytes_ptr = alloc_bytes(size);
     let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
     read_host_buffer_into(&mut dest)?;
