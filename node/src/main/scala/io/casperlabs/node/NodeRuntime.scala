@@ -31,7 +31,7 @@ import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
-import io.casperlabs.node.api.EventsStream
+import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
@@ -191,10 +191,10 @@ class NodeRuntime private[node] (
                                                                         FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
-      implicit0(eventsStream: EventsStream[Task]) <- Resource.pure[Task, EventsStream[Task]](
-                                                      EventsStream
-                                                        .create[Task]
-                                                    )
+      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
+                                                     EventStream
+                                                       .create[Task](ingressScheduler)
+                                                   )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                         id,

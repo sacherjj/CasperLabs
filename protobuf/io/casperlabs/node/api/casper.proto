@@ -177,6 +177,6 @@ message ListDeployInfosResponse {
 message GetLastFinalizedBlockInfoRequest {}
 
 message StreamEventsRequest {
-  bool add_block = 1;
-  bool finalize_block = 2;
+  bool block_added = 1;
+  bool block_finalized = 2;
 }

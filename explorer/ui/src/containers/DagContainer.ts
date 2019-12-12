@@ -80,7 +80,11 @@ export class DagContainer {
   step = new DagStep(this);
 
   unsubscribe(){
-    this.eventsSubscriber && this.eventsSubscriber.unsubscribe();
+    console.log("will unsubscribe");
+    if(this.eventsSubscriber){
+      console.log("done");
+    }
+    // this.eventsSubscriber && this.eventsSubscriber.unsubscribe();
   }
 
   async refreshBlockDag() {
@@ -102,16 +106,18 @@ export class DagContainer {
       return;
     } else {
       let subscribeTopics = {
-        addBlock: true,
-        finalizeBlock: false
+        blockAdded: true,
+        blockFinalized: false
       };
       let obs = this.casperService.subscribeEvents(subscribeTopics);
 
       this.eventsSubscriber = obs.subscribe({
         next(event: Event) {
-          console.log(event.getBlockAdded()!.getBlockHash_asB64());
+          console.log(event.getBlockAdded()!.getBlock()!.getBlockHash_asB64());
         }
       });
+
+      // window.setTimeout(()=> this.unsubscribe(), 1000);
     }
   }
 }

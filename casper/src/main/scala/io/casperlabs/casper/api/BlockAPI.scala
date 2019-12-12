@@ -1,30 +1,28 @@
 package io.casperlabs.casper.api
 
+import cats.effect.{Concurrent, Resource}
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
-import cats.Monad
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.catscontrib.Fs2Compiler
-import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
+import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError
 import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.shared.{FatalError, FatalErrorShutdown, Log}
+import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.shared.{FatalError, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader}
-import cats.Applicative
-import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
-import io.casperlabs.mempool.DeployBuffer
 
 object BlockAPI {
 
@@ -71,7 +69,7 @@ object BlockAPI {
           }
     } yield ()
 
-  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster: EventEmitterContainer](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster: EventEmitter](
       blockApiLock: Semaphore[F],
       canCreateBallot: Boolean
   ): F[ByteString] = {
@@ -88,8 +86,8 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
-                           _ <- EventEmitterContainer[F]
-                                 .blockAdded(block.blockHash)
+                           _ <- EventEmitter[F]
+                                 .blockAdded(block.getSummary)
                            _ <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
