@@ -113,7 +113,8 @@ class NodeRuntime private[node] (
                                                                           Task
                                                                         ](
                                                                           conf.grpc.socket,
-                                                                          conf.server.maxMessageSize
+                                                                          conf.server.maxMessageSize,
+                                                                          conf.server.engineParallelism
                                                                         )
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(

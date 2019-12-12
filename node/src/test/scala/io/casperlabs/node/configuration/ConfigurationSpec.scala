@@ -73,6 +73,7 @@ class ConfigurationSpec
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
       maxMessageSize = 1,
+      engineParallelism = 1,
       chunkSize = 1,
       relayFactor = 1,
       relaySaturation = 1,
