@@ -16,7 +16,7 @@ import scala.util.control.NonFatal
 
 /** Propose a block automatically whenever a timespan has elapsed or
   * we have more than a certain number of new deploys in the buffer. */
-class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster: EventEmitter](
+class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
     checkInterval: FiniteDuration,
     ballotInterval: FiniteDuration,
     accInterval: FiniteDuration,
@@ -90,7 +90,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: D
 object AutoProposer {
 
   /** Start the proposal loop in the background. */
-  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster: EventEmitter](
+  def apply[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: DeployStorage: Broadcaster](
       checkInterval: FiniteDuration,
       ballotInterval: FiniteDuration,
       accInterval: FiniteDuration,

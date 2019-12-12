@@ -1,8 +1,8 @@
 package io.casperlabs.casper
 
 import cats.data.NonEmptyList
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.Applicative
@@ -13,28 +13,26 @@ import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.Block.Justification
-import io.casperlabs.casper.DeployFilters.filterDeploysNotInPast
-import io.casperlabs.casper.consensus.info.Event
-import io.casperlabs.casper.consensus.info.Event.BlockAdded
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
-import io.casperlabs.casper.util.ProtoUtil._
-import io.casperlabs.casper.util.ProtocolVersions.Config
 import io.casperlabs.casper.util._
+import io.casperlabs.casper.util.ProtocolVersions.Config
+import io.casperlabs.casper.util.ProtoUtil._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.casper.validation.Errors._
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
-import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, SmartContractEngineError}
+import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.BlockMsgWithTransform
@@ -42,8 +40,6 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.{DagRepresentation, DagStorage}
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageReader, DeployStorageWriter}
 import simulacrum.typeclass
-import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -59,7 +55,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -497,7 +493,7 @@ object MultiParentCasperImpl {
   def create[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: DeployStorage: Validation: CasperLabsProtocol: Cell[
     *[_],
     CasperState
-  ]: DeploySelection](
+  ]: DeploySelection: EventEmitter](
       semaphoreMap: SemaphoreMap[F, ByteString],
       statelessExecutor: StatelessExecutor[F],
       validatorId: Option[ValidatorIdentity],
@@ -535,7 +531,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -713,7 +709,9 @@ object MultiParentCasperImpl {
     ): F[Unit] =
       semaphore.withPermit {
         BlockStorage[F]
-          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects)) *>
+          EventEmitter[F]
+            .blockAdded(block.getSummary)
       }
 
     /** Check if the block has dependencies that we don't have in store.
@@ -759,7 +757,7 @@ object MultiParentCasperImpl {
       Metrics[F].incrementCounter("gas_spent", 0L)
     }
 
-    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler](
+    def create[F[_]: Concurrent: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorage: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
         validatorId: Option[Keys.PublicKey],
         chainName: String,
         upgrades: Seq[ipc.ChainSpec.UpgradePoint]

@@ -18,7 +18,6 @@ import io.casperlabs.comm.ServiceError._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.{FatalError, Log}
 import io.casperlabs.storage.StorageError
 import io.casperlabs.storage.block.BlockStorage
@@ -69,7 +68,7 @@ object BlockAPI {
           }
     } yield ()
 
-  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster: EventEmitter](
+  def propose[F[_]: Concurrent: MultiParentCasperRef: Log: Metrics: Broadcaster](
       blockApiLock: Semaphore[F],
       canCreateBallot: Boolean
   ): F[ByteString] = {
@@ -86,9 +85,7 @@ object BlockAPI {
                        case Created(block) =>
                          for {
                            status <- casper.addBlock(block)
-                           _ <- EventEmitter[F]
-                                 .blockAdded(block.getSummary)
-                           _ <- Broadcaster[F].networkEffects(block, status)
+                           _      <- Broadcaster[F].networkEffects(block, status)
                            res <- status match {
                                    case _: ValidBlock =>
                                      block.blockHash.pure[F]

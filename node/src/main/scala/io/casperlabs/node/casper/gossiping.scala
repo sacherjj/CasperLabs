@@ -258,9 +258,7 @@ package object gossiping {
         case Some(casper) =>
           casper
             .addBlock(block)
-            .flatTap(
-              Broadcaster[F].networkEffects(block, _) *> EventStream[F].blockAdded(block.getSummary)
-            )
+            .flatTap(Broadcaster[F].networkEffects(block, _))
 
         case None if block.getHeader.parentHashes.isEmpty =>
           for {
