@@ -1,3 +1,6 @@
+// Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
+#[rustfmt::skip]
+use alloc::vec;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{
@@ -139,16 +142,25 @@ pub fn get_phase() -> Phase {
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = contract_api::alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
+    let mut key_bytes = vec![0u8; Key::serialized_size_hint()];
+    let mut total_bytes: usize = 0;
+    let ret = unsafe {
+        ext_ffi::get_key(
+            name_ptr,
+            name_size,
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+            &mut total_bytes as *mut usize,
+        )
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(key_bytes).unwrap_or_revert()
+    match error::result_from(ret) {
+        Ok(_) => {}
+        Err(Error::MissingKey) => return None,
+        Err(e) => revert(e),
+    }
+    key_bytes.truncate(total_bytes);
+    let key: Key = deserialize(key_bytes).unwrap_or_revert();
+    Some(key)
 }
 
 /// Check if the given name corresponds to a known unforgable reference
