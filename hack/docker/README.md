@@ -256,4 +256,4 @@ make clean
 
 You can run the similar setup as we use at SRE team to test how nodes perform over time.
 
-[The script to run LRT](/hack/docker/lrt.sh).
+[The script to run LRT](/hack/docker/scripts/lrt.sh).
