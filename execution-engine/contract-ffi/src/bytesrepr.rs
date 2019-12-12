@@ -460,25 +460,27 @@ impl_to_from_bytes_for_array! {
 }
 
 macro_rules! impl_byte_array {
-    ($len:expr) => {
-        impl ToBytes for [u8; $len] {
-            fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-                Ok(self.to_vec())
+    ($($len:expr)+) => {
+        $(
+            impl ToBytes for [u8; $len] {
+                fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                    Ok(self.to_vec())
+                }
             }
-        }
 
-        impl FromBytes for [u8; $len] {
-            fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-                let (bytes, rem) = safe_split_at(bytes, $len)?;
-                let mut result = [0u8; $len];
-                result.copy_from_slice(bytes);
-                Ok((result, rem))
+            impl FromBytes for [u8; $len] {
+                fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                    let (bytes, rem) = safe_split_at(bytes, $len)?;
+                    let mut result = [0u8; $len];
+                    result.copy_from_slice(bytes);
+                    Ok((result, rem))
+                }
             }
-        }
-    };
+        )+
+    }
 }
 
-impl_byte_array!(32);
+impl_byte_array! { 4 5 8 32 }
 
 impl ToBytes for String {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
