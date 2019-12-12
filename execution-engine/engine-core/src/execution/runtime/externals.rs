@@ -123,15 +123,8 @@ where
                 // args(0) = index of host runtime arg to load
                 // args(1) = pointer to destination in Wasm memory
                 // args(2) = size of destination pointer memory
-                // args(3) = pointer to bytes written pointer (output)
-                let (index, dest_ptr, dest_size, bytes_written_ptr): (u32, _, u32, u32) =
-                    Args::parse(args)?;
-                let ret = self.get_arg(
-                    index as usize,
-                    dest_ptr,
-                    dest_size as usize,
-                    bytes_written_ptr,
-                )?;
+                let (index, dest_ptr, dest_size): (u32, _, u32) = Args::parse(args)?;
+                let ret = self.get_arg(index as usize, dest_ptr, dest_size as usize)?;
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 

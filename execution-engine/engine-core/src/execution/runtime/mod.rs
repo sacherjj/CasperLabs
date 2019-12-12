@@ -369,7 +369,6 @@ where
         index: usize,
         output_ptr: u32,
         output_size: usize,
-        bytes_written_ptr: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
         let arg = match self.context.args().get(index) {
             Some(arg) => arg,
@@ -382,15 +381,6 @@ where
 
         if let Err(e) = self.memory.set(output_ptr, &arg[..output_size]) {
             return Err(Error::Interpreter(e).into());
-        }
-
-        if bytes_written_ptr != 0 {
-            let bytes_written = arg.len() as u32;
-            let bytes_written_data = bytes_written.to_le_bytes(); // wasm is LE
-
-            if let Err(e) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
-                return Err(Error::Interpreter(e).into());
-            }
         }
 
         Ok(Ok(()))

@@ -1,5 +1,4 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::ptr;
 
 use super::{
     alloc_bytes,
@@ -103,7 +102,7 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_bytes = {
         let res = {
             let data_ptr = alloc_bytes(arg_size);
-            let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size, ptr::null_mut()) };
+            let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size) };
             let data = unsafe { Vec::from_raw_parts(data_ptr, arg_size, arg_size) };
             result_from(ret).map(|_| data)
         };
