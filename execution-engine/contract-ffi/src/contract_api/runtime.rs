@@ -3,7 +3,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use super::{
     alloc_bytes,
     error::{result_from, Error},
-    str_ref_to_ptr, to_ptr, ContractRef, TURef,
+    to_ptr, ContractRef, TURef,
 };
 use crate::{
     args_parser::ArgsParser,
@@ -14,7 +14,7 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
     value::{
-        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE},
+        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE, PUBLIC_KEY_SIZE},
         Contract, Value,
     },
 };
@@ -72,7 +72,7 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
 /// that URef with a new Contract instance containing the original contract's named_keys, the
 /// current protocol version, and the newly created bytes of the stored function.
 pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
     let key: Key = uref.into();
     let (key_ptr, key_size, _bytes) = to_ptr(&key);
     let result_value =
@@ -117,10 +117,9 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 /// When in the sub call - returns public key of the account that made the
 /// deploy.
 pub fn get_caller() -> PublicKey {
-    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
-    let dest_ptr = alloc_bytes(36);
+    let dest_ptr = alloc_bytes(PUBLIC_KEY_SIZE);
     unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PUBLIC_KEY_SIZE, PUBLIC_KEY_SIZE) };
     deserialize(&bytes).unwrap_or_revert()
 }
 
@@ -144,35 +143,44 @@ pub fn get_phase() -> Phase {
 /// name. This either comes from the named_keys of the account or contract,
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // NOTE: This will be fixed once #1422 is in (EE-800)
-        ext_ffi::get_call_result(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
+    let mut key_bytes = [0u8; Key::serialized_size_hint()];
+    let mut total_bytes: usize = 0;
+    let ret = unsafe {
+        ext_ffi::get_key(
+            name_ptr,
+            name_size,
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+            &mut total_bytes as *mut usize,
+        )
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap_or_revert()
+    match result_from(ret) {
+        Ok(_) => {}
+        Err(Error::MissingKey) => return None,
+        Err(e) => revert(e),
+    }
+    let key: Key = deserialize(&key_bytes[..total_bytes]).unwrap_or_revert();
+    Some(key)
 }
 
 /// Check if the given name corresponds to a known unforgable reference
 pub fn has_key(name: &str) -> bool {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
     let result = unsafe { ext_ffi::has_key(name_ptr, name_size) };
     result == 0
 }
 
 /// Put the given key to the named_keys map under the given name
 pub fn put_key(name: &str, key: &Key) {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
     let (key_ptr, key_size, _bytes2) = to_ptr(key);
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
 /// Removes Key persisted under [name] in the current context's map.
 pub fn remove_key(name: &str) {
-    let (name_ptr, name_size, _bytes) = str_ref_to_ptr(name);
+    let (name_ptr, name_size, _bytes) = to_ptr(name);
     unsafe { ext_ffi::remove_key(name_ptr, name_size) }
 }
 

@@ -13,7 +13,7 @@ RUST_SRC := $(shell find . -type f \( -name "Cargo.toml" -o -wholename "*/src/*.
 	| grep -v target \
 	| grep -v node_modules \
 	| grep -v -E '(ipc|transforms).*\.rs')
-SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" \))
+SCALA_SRC := $(shell find . -type f \( -wholename "*/src/*.scala" -o -name "*.sbt" -o -wholename "*/resources/*.toml" \))
 PROTO_SRC := $(shell find protobuf -type f \( -name "*.proto" \) | grep -v node_modules)
 TS_SRC := $(shell find explorer/ui/src explorer/server/src explorer/sdk/src -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.scss" -o -name "*.json" \))
 

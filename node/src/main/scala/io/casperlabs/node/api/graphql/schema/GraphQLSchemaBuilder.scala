@@ -62,7 +62,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             resolve = Projector { (context, projections) =>
               (for {
                 blockHashPrefix <- validateBlockHashPrefix[F](
-                                    context.arg(blocks.arguments.BlockHashPrefix)
+                                    context.arg(blocks.arguments.BlockHashPrefix),
+                                    ByteString.EMPTY
                                   )
                 res <- BlockAPI
                         .getBlockInfoWithDeploysOpt[F](
@@ -91,7 +92,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
-              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
+              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash), ByteString.EMPTY) >>= (
                   deployHash => BlockAPI.getDeployInfoOpt[F](deployHash, deployView)
               )).unsafeToFuture
             }
@@ -112,7 +113,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
                   after                  = c.arg(blocks.arguments.After)
                   accountPublicKeyBase16 <- validateAccountPublicKey[F](
-                                             accountPublicKeyBase16
+                                             accountPublicKeyBase16,
+                                             ByteString.EMPTY
                                            )
                   (pageSize, pageTokenParams) <- MonadThrowable[F]
                                                   .fromTry(
@@ -171,7 +173,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
 
               val program = for {
                 blockHashBase16Prefix <- validateBlockHashPrefix[F](
-                                          c.arg(blocks.arguments.BlockHashPrefix)
+                                          c.arg(blocks.arguments.BlockHashPrefix),
+                                          ByteString.EMPTY
                                         )
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoWithDeploysOpt[F](

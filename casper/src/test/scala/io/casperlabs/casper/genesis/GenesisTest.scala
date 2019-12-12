@@ -8,12 +8,12 @@ import cats.implicits._
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.casper.helper.{HashSetCasperTestNode, StorageFixture}
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
 import io.casperlabs.models.Weight
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.PathOps.RichPath
 import io.casperlabs.shared.{Log}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -57,12 +57,12 @@ class GenesisTest extends FlatSpec with Matchers with StorageFixture {
 
       for {
         genesisWithTransform <- Genesis.fromChainSpec[Task](spec)
-        implicit0(versions: CasperLabsProtocolVersions[Task]) <- CasperLabsProtocolVersions
-                                                                  .fromChainSpec[Task](
-                                                                    ipc
-                                                                      .ChainSpec()
-                                                                      .withGenesis(spec)
-                                                                  )
+        implicit0(versions: CasperLabsProtocol[Task]) <- CasperLabsProtocol
+                                                          .fromChainSpec[Task](
+                                                            ipc
+                                                              .ChainSpec()
+                                                              .withGenesis(spec)
+                                                          )
         BlockMsgWithTransform(Some(genesis), transforms) = genesisWithTransform
 
         _ = genesis.getHeader.chainName shouldBe "casperlabs"

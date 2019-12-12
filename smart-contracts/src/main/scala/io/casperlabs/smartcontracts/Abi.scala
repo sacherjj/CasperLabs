@@ -18,7 +18,7 @@ object Abi {
 
   /** Helper class to be used with `Abi.args(...)` */
   case class Serializable[T](value: T)(implicit ev: Abi[T]) {
-    def toBytes = ev.toBytes(value)
+    def toBytes: Try[Seq[Byte]] = ev.toBytes(value).map(_.toSeq)
   }
   object Serializable {
     implicit def fromValue[T: Abi](value: T) = Serializable(value)
@@ -50,8 +50,12 @@ object Abi {
     )
   }
 
-  implicit val `Bytes => ABI` = instance[Array[Byte]] { x =>
-    Abi.toBytes(x.length) ++ x
+  implicit val `Array[Byte] => ABI` = instance[Array[Byte]] { x =>
+    Success(x)
+  }
+
+  implicit val `Seq[Byte] => ABI` = instance[Seq[Byte]] { x =>
+    Abi.toBytes(x.length) ++ x.toArray
   }
 
   implicit val `String => ABI` = instance[String] { x =>
@@ -81,7 +85,7 @@ object Abi {
     val unsignedLittleEndian = bytes.dropWhile(_ == 0.toByte).reverse
     // For some reason the BigInt expects the length of bytes to be in a 1 sized array,
     // instead of the usual 4.
-    Abi.toBytes(unsignedLittleEndian).map(_.take(1) ++ unsignedLittleEndian)
+    Abi.toBytes(unsignedLittleEndian.length).map(_.take(1) ++ unsignedLittleEndian)
   }
 
   implicit def `Option => ABI`[T: Abi] = instance[Option[T]] { x =>

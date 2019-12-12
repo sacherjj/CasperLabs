@@ -8,7 +8,7 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
-    bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
+    bytesrepr::{Error, FromBytes, ToBytes},
     contract_api::{ContractRef, TURef},
     uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
 };
@@ -18,15 +18,16 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
+pub const ACCOUNT_SIZE: usize = 32;
 pub const HASH_SIZE: usize = 32;
 pub const LOCAL_KEY_SIZE: usize = 32;
 pub const LOCAL_SEED_SIZE: usize = 32;
 
 const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
-const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
-const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
+const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + ACCOUNT_SIZE;
+const HASH_KEY_SIZE: usize = KEY_ID_SIZE + HASH_SIZE;
 pub const UREF_SIZE: usize = KEY_ID_SIZE + UREF_SIZE_SERIALIZED;
-const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_KEY_SIZE;
+const LOCAL_SIZE: usize = KEY_ID_SIZE + LOCAL_KEY_SIZE;
 
 /// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
 fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
@@ -41,7 +42,7 @@ fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
-    Account([u8; 32]),
+    Account([u8; ACCOUNT_SIZE]),
     Hash([u8; HASH_SIZE]),
     URef(URef),
     Local([u8; LOCAL_KEY_SIZE]),
@@ -61,6 +62,21 @@ impl Key {
             Key::URef(_) => String::from("Key::URef"),
             Key::Local(_) => String::from("Key::Local"),
         }
+    }
+
+    /// Calculates serialized size without actually serializing data.
+    pub fn serialized_size(&self) -> usize {
+        match self {
+            Key::Account(_) => ACCOUNT_KEY_SIZE,
+            Key::Hash(_) => HASH_KEY_SIZE,
+            Key::URef(_) => UREF_SIZE,
+            Key::Local(_) => LOCAL_SIZE,
+        }
+    }
+
+    /// Returns max size a [`Key`] can be serialized into.
+    pub const fn serialized_size_hint() -> usize {
+        UREF_SIZE
     }
 }
 
@@ -307,8 +323,10 @@ mod tests {
     };
 
     use crate::{
-        bytesrepr::{Error, FromBytes},
-        key::{Key, HASH_SIZE, LOCAL_KEY_SIZE},
+        bytesrepr::{Error, FromBytes, ToBytes},
+        key::{
+            Key, ACCOUNT_KEY_SIZE, HASH_KEY_SIZE, HASH_SIZE, LOCAL_KEY_SIZE, LOCAL_SIZE, UREF_SIZE,
+        },
         uref::{AccessRights, URef},
     };
 
@@ -511,5 +529,34 @@ mod tests {
         assert!(key1.as_hash().is_none());
         assert!(key1.as_uref().is_none());
         assert_eq!(key1.as_local(), Some(local));
+    }
+
+    #[test]
+    fn serialized_size() {
+        let account = [42; 32];
+        let hash = [42; HASH_SIZE];
+        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+        let local = [42; LOCAL_KEY_SIZE];
+
+        let keys = [
+            (Key::Account(account), ACCOUNT_KEY_SIZE),
+            (Key::Hash(hash), HASH_KEY_SIZE),
+            (Key::URef(uref), UREF_SIZE),
+            (Key::Local(local), LOCAL_SIZE),
+        ];
+
+        for &(key, const_size) in keys.iter() {
+            // println!("{:?}={}", key, const_size);
+            let bytes = key.to_bytes().expect("should serialize");
+            assert_eq!(key.serialized_size(), const_size);
+            assert_eq!(bytes.len(), key.serialized_size());
+        }
+    }
+
+    #[test]
+    fn key_size_hint() {
+        let mut sizes = vec![ACCOUNT_KEY_SIZE, HASH_KEY_SIZE, UREF_SIZE, LOCAL_SIZE];
+        sizes.sort();
+        assert_eq!(sizes.last().cloned().unwrap(), Key::serialized_size_hint());
     }
 }

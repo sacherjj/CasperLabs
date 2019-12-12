@@ -178,9 +178,24 @@ where
             FunctionIndex::GetKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.get_key(name_ptr, name_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                // args(2) = pointer to output buffer for serialized key
+                // args(3) = size of output buffer
+                // args(4) = pointer to bytes written
+                let (name_ptr, name_size, output_ptr, output_size, bytes_written): (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                ) = Args::parse(args)?;
+                let ret = self.load_key(
+                    name_ptr,
+                    name_size,
+                    output_ptr,
+                    output_size as usize,
+                    bytes_written,
+                )?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::HasKeyFuncIndex => {

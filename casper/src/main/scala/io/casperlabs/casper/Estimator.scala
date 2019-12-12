@@ -1,5 +1,6 @@
 package io.casperlabs.casper
 
+import cats.data.NonEmptyList
 import cats.Monad
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -11,6 +12,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.shared.Log
 
 import scala.collection.immutable.Map
 
@@ -23,12 +25,12 @@ object Estimator {
   implicit val metricsSource   = CasperMetricsSource
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: MonadThrowable: Metrics](
+  def tips[F[_]: MonadThrowable: Metrics: Log](
       dag: DagRepresentation[F],
-      genesis: BlockHash,
+      lfbHash: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
       equivocators: Set[Validator]
-  ): F[List[BlockHash]] = {
+  ): F[NonEmptyList[BlockHash]] = {
 
     /** Eliminate any latest message which has a descendant which is a latest message
       * of another validator, because in that case those descendants should be the tips. */
@@ -36,7 +38,7 @@ object Estimator {
         latestMessages: List[BlockHash],
         stopHash: BlockHash
     ): F[List[Message]] =
-      if (latestMessages.isEmpty) dag.lookup(genesis).map(_.toList)
+      if (latestMessages.isEmpty) dag.lookup(lfbHash).map(_.toList)
       else {
         // Start from the highest latest messages and traverse backwards
         implicit val ord = DagOperations.blockTopoOrderingDesc
@@ -59,15 +61,17 @@ object Estimator {
 
     val latestMessagesFlattened = latestMessageHashes.values.flatten.toList
 
-    NonEmptyList.fromList(latestMessagesFlattened).fold(List(genesis).pure[F]) { lmh =>
+    NonEmptyList.fromList(latestMessagesFlattened).fold(NonEmptyList.one(lfbHash).pure[F]) { lmh =>
       for {
-        latestMessages <- lmh.toList.traverse(dag.lookup(_)).map(_.flatten)
-        lca            <- DagOperations.latestCommonAncestorsMainParent(dag, lmh).timer("calculateLCA")
-        _              <- Metrics[F].record("lcaDistance", latestMessages.maxBy(_.rank).rank - lca.rank)
-        scores <- lmdScoring(dag, lca.messageHash, latestMessageHashes, equivocators)
+        latestMessages <- lmh.toList.traverse(dag.lookupUnsafe(_))
+        lfb            <- dag.lookupUnsafe(lfbHash)
+        lfbDistance    = latestMessages.maxBy(_.rank).rank - lfb.rank
+        _              <- Log[F].info(s"${lfbDistance -> "lfbDistance"}")
+        _              <- Metrics[F].record("lfbDistance", lfbDistance)
+        scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
-        newMainParent <- forkChoiceTip(dag, lca.messageHash, scores).timer("forkChoiceTip")
-        parents <- tipsOfLatestMessages(latestMessagesFlattened, lca.messageHash)
+        newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
+        parents <- tipsOfLatestMessages(latestMessagesFlattened, lfb.messageHash)
                     .timer("tipsOfLatestMessages")
         secondaryParents = parents.filter(_.messageHash != newMainParent).filterNot { message =>
           // Filter out blocks created by equivocators from the secondary parents.
@@ -81,7 +85,7 @@ object Estimator {
         sortedSecParents = secondaryParents
           .sortBy(b => scores.getOrElse(b.messageHash, Zero) -> b.messageHash.toStringUtf8)
           .reverse
-      } yield newMainParent +: sortedSecParents.map(_.messageHash)
+      } yield NonEmptyList(newMainParent, sortedSecParents.map(_.messageHash))
     }
   }
 
@@ -109,7 +113,7 @@ object Estimator {
                              .map(_.flatten.sortBy(_.rank))
           lmdScore <- DagOperations
                        .bfToposortTraverseF[F](sortedMessages)(
-                         _.parents.take(1).toList.traverse(dag.lookup(_)).map(_.flatten)
+                         _.parents.take(1).toList.traverse(dag.lookupUnsafe(_))
                        )
                        .takeUntil(_.messageHash == stopHash)
                        .foldLeftF(acc) {
