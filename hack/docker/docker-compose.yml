@@ -65,7 +65,7 @@ services:
     command:
       - /grpcwebproxy
       - --backend_addr=node-0:40401
-      - --backend_tls=true
+      - --backend_tls=false
       - --backend_tls_noverify
       - --backend_max_call_recv_msg_size=16777216
       - --allow_all_origins
