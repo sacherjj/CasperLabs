@@ -1282,7 +1282,7 @@ def keygen_command(casperlabs_client, args):
     write_file(validator_private_path, pem(validator_private.to_bytes(), "PRIVATE KEY"))
     write_file(validator_pub_path, pem(validator_public.to_bytes(), "PUBLIC KEY"))
     write_file(validator_id_path, encode_base64(validator_public.to_bytes()))
-    write_file(validator_id_hex_path, encode_base64(validator_public.to_bytes()))
+    write_file(validator_id_hex_path, validator_public.to_bytes().hex())
 
     private_key, public_key = generate_key_pair()
     node_cert = generate_certificate(private_key, public_key)
