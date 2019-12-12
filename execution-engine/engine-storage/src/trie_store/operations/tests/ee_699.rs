@@ -1,4 +1,4 @@
-use proptest::{arbitrary, collection, prop_oneof, strategy::Strategy};
+use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 
 use contract_ffi::{
     bytesrepr::{self, FromBytes, ToBytes},
@@ -203,7 +203,7 @@ impl FromBytes for TestKey {
     }
 }
 
-fn key_arb() -> impl Strategy<Value = TestKey> {
+fn test_key_arb() -> impl Strategy<Value = TestKey> {
     prop_oneof![
         public_key_arb().prop_map(TestKey::Account),
         gens::u8_slice_32().prop_map(TestKey::Hash),
@@ -230,7 +230,7 @@ mod basics {
 
     proptest! {
         #[test]
-        fn key_should_roundtrip(key in key_arb()) {
+        fn key_should_roundtrip(key in test_key_arb()) {
             bytesrepr::test_serialization_roundtrip(&key)
         }
     }
@@ -316,5 +316,101 @@ mod empty_tries {
             &TEST_LEAVES,
         )
         .unwrap();
+    }
+}
+
+mod proptests {
+    use proptest::{collection::vec, proptest};
+
+    use engine_shared::newtypes::CorrelationId;
+
+    const DEFAULT_MIN_LENGTH: usize = 0;
+    const DEFAULT_MAX_LENGTH: usize = 100;
+
+    fn get_range() -> RangeInclusive<usize> {
+        let start = option_env!("CL_TRIE_TEST_VECTOR_MIN_LENGTH")
+            .and_then(|s| str::parse::<usize>(s).ok())
+            .unwrap_or(DEFAULT_MIN_LENGTH);
+        let end = option_env!("CL_TRIE_TEST_VECTOR_MAX_LENGTH")
+            .and_then(|s| str::parse::<usize>(s).ok())
+            .unwrap_or(DEFAULT_MAX_LENGTH);
+        RangeInclusive::new(start, end)
+    }
+
+    use super::*;
+    use crate::{
+        error::{self, in_memory},
+        trie_store::operations::tests::{self, InMemoryTestContext, LmdbTestContext},
+    };
+    use std::ops::RangeInclusive;
+
+    fn lmdb_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
+        let correlation_id = CorrelationId::new();
+        let (root_hash, tries) = create_0_leaf_trie().unwrap();
+        let context = LmdbTestContext::new(&tries).unwrap();
+        let mut states_to_check = vec![];
+
+        let root_hashes = tests::write_pairs::<_, _, _, _, error::Error>(
+            correlation_id,
+            &context.environment,
+            &context.store,
+            &root_hash,
+            pairs,
+        )
+        .unwrap();
+
+        states_to_check.extend(root_hashes);
+
+        tests::check_pairs::<_, _, _, _, error::Error>(
+            correlation_id,
+            &context.environment,
+            &context.store,
+            &states_to_check,
+            &pairs,
+        )
+        .unwrap()
+    }
+
+    fn in_memory_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
+        let correlation_id = CorrelationId::new();
+        let (root_hash, tries) = create_0_leaf_trie().unwrap();
+        let context = InMemoryTestContext::new(&tries).unwrap();
+        let mut states_to_check = vec![];
+
+        let root_hashes = tests::write_pairs::<_, _, _, _, in_memory::Error>(
+            correlation_id,
+            &context.environment,
+            &context.store,
+            &root_hash,
+            pairs,
+        )
+        .unwrap();
+
+        states_to_check.extend(root_hashes);
+
+        tests::check_pairs::<_, _, _, _, in_memory::Error>(
+            correlation_id,
+            &context.environment,
+            &context.store,
+            &states_to_check,
+            &pairs,
+        )
+        .unwrap()
+    }
+
+    fn test_value_arb() -> impl Strategy<Value = TestValue> {
+        array::uniform6(arbitrary::any::<u8>()).prop_map(TestValue)
+    }
+
+    proptest! {
+        #[test]
+        fn prop_in_memory_roundtrip_succeeds(inputs in vec((test_key_arb(), test_value_arb()), get_range())) {
+            assert!(in_memory_roundtrip_succeeds(&inputs));
+        }
+
+        #[test]
+        fn prop_lmdb_roundtrip_succeeds(inputs in vec((test_key_arb(), test_value_arb()), get_range())) {
+            assert!(lmdb_roundtrip_succeeds(&inputs));
+        }
     }
 }
