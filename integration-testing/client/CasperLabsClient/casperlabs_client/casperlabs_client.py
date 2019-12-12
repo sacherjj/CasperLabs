@@ -1251,7 +1251,7 @@ def generate_certificate(private_key, public_key):
     certificate = builder.sign(
         private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
     )
-    return certificate  # TODO: to_bytes() ?
+    return certificate
 
 
 def encode_base64(a: bytes):
@@ -1269,20 +1269,21 @@ def pem(o: bytes, label) -> str:
 @guarded_command
 def keygen_command(casperlabs_client, args):
     directory = Path(args.directory).resolve()
-    validatorPrivPath = directory / "validator-private.pem"
-    validatorPubPath = directory / "validator-public.pem"
-    validatorIdPath = directory / "validator-id"
-    validatorIdHexPath = directory / "validator-id-hex"
-    nodePrivPath = directory / "node.key.pem"
-    nodeCertPath = directory / "node.certificate.pem"
-    nodeIdPath = directory / "node-id"
+    validator_private_path = directory / "validator-private.pem"
+    validator_pub_path = directory / "validator-public.pem"
+    validator_id_path = directory / "validator-id"
+    validator_id_hex_path = directory / "validator-id-hex"
+    node_priv_path = directory / "node.key.pem"
+    node_cert_path = directory / "node.certificate.pem"
+    node_id_path = directory / "node-id"
 
-    valPriv, valPub = ed25519.create_keypair()
+    validator_private, validator_public = ed25519.create_keypair()
 
-    write_file(validatorPrivPath, pem(valPriv.to_bytes(), "PRIVATE KEY"))
-    write_file(validatorPubPath, pem(valPub.to_bytes(), "PUBLIC KEY"))
-    write_file(validatorIdPath, encode_base64(valPub.to_bytes()))
-    write_file(validatorIdHexPath, encode_base64(valPub.to_bytes()))
+    write_file(validator_private_path, pem(validator_private.to_bytes(), "PRIVATE KEY"))
+    write_file(validator_pub_path, pem(validator_public.to_bytes(), "PUBLIC KEY"))
+    write_file(validator_id_path, encode_base64(validator_public.to_bytes()))
+    write_file(validator_id_hex_path, encode_base64(validator_public.to_bytes()))
+
     private_key, public_key = generate_key_pair()
     node_cert = generate_certificate(private_key, public_key)
 
@@ -1290,13 +1291,11 @@ def keygen_command(casperlabs_client, args):
         Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
     )
 
-    write_file(nodePrivPath, pem(private_key_bytes, "PRIVATE KEY"))
-    # import pdb; pdb.set_trace()
+    write_file(node_priv_path, pem(private_key_bytes, "PRIVATE KEY"))
     node_cert_bytes = node_cert.tbs_certificate_bytes
-    write_file(nodeCertPath, pem(node_cert_bytes, "CERTIFICATE"))
+    write_file(node_cert_path, pem(node_cert_bytes, "CERTIFICATE"))
 
-    nodeId = public_address(public_key)
-    write_file(nodeIdPath, nodeId)
+    write_file(node_id_path, public_address(public_key))
     print(f"Keys successfully created in directory: {str(directory.absolute())}")
 
 
