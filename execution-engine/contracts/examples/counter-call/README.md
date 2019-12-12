@@ -2,7 +2,7 @@
 
 Implementation of smart contract, that increments previously deployed counter.
 
-## Compile
+## Build
 
 Build the `wasm` file using `make` in the `execution-engine` directory.
 ```

@@ -2,7 +2,13 @@
 
 Implementation of URef-based counter.
 
-## Compile
+The deployement of this session code, creates new named key `counter`, that points to the deployed smart contract. The `counter` smart contract will have one named key called `count`, that points to the actual integer value, that is the counter.
+
+The `counter` smart contract exposes two methods:
+- `inc`, that increments the `count` value by one;
+- `get`, that returns the value of `count`.
+
+## Build
 
 Build the `wasm` file using `make` in the `execution-engine` directory.
 ```
