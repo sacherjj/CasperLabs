@@ -400,7 +400,7 @@ macro_rules! impl_to_from_bytes_for_array {
     ($($N:literal)+) => {
         $(
             impl<T: ToBytes> ToBytes for [T; $N] {
-                fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+               default fn to_bytes(&self) -> Result<Vec<u8>, Error> {
                     // Approximation, as `size_of::<T>()` is only roughly equal to the serialized
                     // size of `T`.
                     let approx_size = self.len() * size_of::<T>();
@@ -420,7 +420,7 @@ macro_rules! impl_to_from_bytes_for_array {
             }
 
             impl<T: FromBytes> FromBytes for [T; $N] {
-                fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+               default fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
                     let (size, remainder) = u32::from_bytes(bytes)?;
                     bytes = remainder;
                     if size != $N as u32 {
@@ -455,7 +455,7 @@ impl_to_from_bytes_for_array! {
      0  1  2  3  4  5  6  7  8  9
     10 11 12 13 14 15 16 17 18 19
     20 21 22 23 24 25 26 27 28 29
-    30 31 // 32
+    30 31 32
     64 128 256 512
 }
 

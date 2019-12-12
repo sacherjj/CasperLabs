@@ -4,6 +4,7 @@
     core_intrinsics,
     lang_items,
     alloc_error_handler,
+    specialization,
     try_reserve
 )]
 
