@@ -342,6 +342,50 @@ where
         }
     }
 
+    pub fn get_arg_size(
+        &mut self,
+        index: usize,
+        size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg_size = match self.context.args().get(index) {
+            Some(arg) if arg.len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemoryError))
+            }
+            None => return Ok(Err(ApiError::MissingArgument)),
+            Some(arg) => arg.len() as u32,
+        };
+
+        let arg_size_bytes = arg_size.to_le_bytes(); // wasm is LE
+
+        if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
+    }
+
+    pub fn get_arg(
+        &mut self,
+        index: usize,
+        output_ptr: u32,
+        output_size: usize,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg = match self.context.args().get(index) {
+            Some(arg) => arg,
+            None => return Ok(Err(ApiError::MissingArgument)),
+        };
+
+        if arg.len() > output_size {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
+
+        if let Err(e) = self.memory.set(output_ptr, &arg[..output_size]) {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
+    }
+
     /// Load the uref known by the given name into the Wasm memory
     pub fn load_key(
         &mut self,
