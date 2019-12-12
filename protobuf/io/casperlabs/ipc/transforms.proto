@@ -42,7 +42,6 @@ message TransformWrite {
 message TransformFailure {
     oneof failure_instance {
         TypeMismatch type_mismatch = 1;
-        io.casperlabs.casper.consensus.state.BytesReprError serialization = 2;
     }
 }
 
