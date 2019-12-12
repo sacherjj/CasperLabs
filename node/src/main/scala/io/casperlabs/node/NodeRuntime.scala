@@ -122,15 +122,13 @@ class NodeRuntime private[node] (
                                             transactEC = dbIOScheduler,
                                             conf.server.dataDir
                                           )
-      deployStorageChunkSize = 20 //TODO: Move to config
-
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
         storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
-              deployStorageChunkSize = deployStorageChunkSize,
+              deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
               readXa = readTransactor,
               writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>

@@ -101,7 +101,8 @@ object Configuration extends ParserImplicits {
   case class BlockStorage(
       cacheMaxSizeBytes: Long,
       cacheNeighborhoodBefore: Int,
-      cacheNeighborhoodAfter: Int
+      cacheNeighborhoodAfter: Int,
+      deployStreamChunkSize: Int
   ) extends SubConfig
 
   case class Grpc(

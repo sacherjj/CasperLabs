@@ -148,6 +148,9 @@ cache-neighborhood-before = 5
 # How far to go to the future (by ranks) for caching neighborhood of looked up block
 cache-neighborhood-after = 6
 
+# How many records to pull from the DB in a chunk of a stream.
+deploy-stream-chunk-size = 20
+
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
 
