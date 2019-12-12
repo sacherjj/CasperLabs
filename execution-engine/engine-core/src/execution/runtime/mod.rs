@@ -542,7 +542,7 @@ where
         Ok(Ok(()))
     }
 
-    fn serialize_named_keys(
+    fn load_named_keys(
         &mut self,
         total_keys_ptr: u32,
         result_size_ptr: u32,

@@ -73,7 +73,7 @@ pub fn call_contract<A: ArgsParser, T: FromBytes>(
         result_from(ret).unwrap_or_revert();
         unsafe { bytes_written.assume_init() }
     };
-    let result = read_host_buffer_count(bytes_written).unwrap_or_revert();
+    let result = read_host_buffer(bytes_written).unwrap_or_revert();
     deserialize(&result).unwrap_or_revert()
 }
 
@@ -106,7 +106,7 @@ fn load_arg(index: u32) -> Option<usize> {
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     let arg_size = load_arg(i)?;
-    let arg_data = read_host_buffer_count(arg_size).unwrap_or_revert();
+    let arg_data = read_host_buffer(arg_size).unwrap_or_revert();
     Some(deserialize(&arg_data))
 }
 
@@ -144,7 +144,7 @@ pub fn get_phase() -> Phase {
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = to_ptr(name);
     let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let key_data = read_host_buffer_count(key_size).unwrap_or_revert();
+    let key_data = read_host_buffer(key_size).unwrap_or_revert();
     // TODO: better error handling (i.e. pass the `Result` on)
     deserialize(&key_data).unwrap_or_revert()
 }
@@ -174,7 +174,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         let mut total_keys = MaybeUninit::uninit();
         let mut result_size = 0;
         let ret = unsafe {
-            ext_ffi::serialize_named_keys(total_keys.as_mut_ptr(), &mut result_size as *mut usize)
+            ext_ffi::load_named_keys(total_keys.as_mut_ptr(), &mut result_size as *mut usize)
         };
         result_from(ret).unwrap_or_revert();
         let total_keys = unsafe { total_keys.assume_init() };
@@ -183,7 +183,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
     if total_keys == 0 {
         return BTreeMap::new();
     }
-    let bytes = read_host_buffer_count(result_size).unwrap_or_revert();
+    let bytes = read_host_buffer(result_size).unwrap_or_revert();
     deserialize(&bytes).unwrap_or_revert()
 }
 
@@ -199,7 +199,7 @@ pub fn is_valid<T: Into<Value>>(t: T) -> bool {
     result != 0
 }
 
-pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
+fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     let mut bytes_written = MaybeUninit::uninit();
     let ret = unsafe {
         ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
@@ -211,7 +211,7 @@ pub fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
     Ok(unsafe { bytes_written.assume_init() })
 }
 
-pub fn read_host_buffer_count(size: usize) -> Result<Vec<u8>, Error> {
+pub fn read_host_buffer(size: usize) -> Result<Vec<u8>, Error> {
     let bytes_ptr = alloc_bytes(size);
     let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
     read_host_buffer_into(&mut dest)?;

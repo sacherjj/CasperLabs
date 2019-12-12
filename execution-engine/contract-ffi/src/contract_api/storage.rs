@@ -30,7 +30,7 @@ pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error>
             Err(e) => runtime::revert(e),
         }
     };
-    let value_bytes = runtime::read_host_buffer_count(output_size).unwrap_or_revert();
+    let value_bytes = runtime::read_host_buffer(output_size).unwrap_or_revert();
     let value: Value = deserialize(&value_bytes)?;
     Ok(Some(value))
 }
@@ -85,7 +85,7 @@ fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Erro
             Err(e) => runtime::revert(e),
         }
     };
-    let value_bytes = runtime::read_host_buffer_count(output_size).unwrap_or_revert();
+    let value_bytes = runtime::read_host_buffer(output_size).unwrap_or_revert();
     let value: Value = deserialize(&value_bytes)?;
     Ok(Some(value))
 }

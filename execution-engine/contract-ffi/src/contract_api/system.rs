@@ -4,7 +4,7 @@ use core::{fmt::Debug, mem::MaybeUninit};
 use super::{
     alloc_bytes,
     error::Error,
-    runtime::{read_host_buffer_count, revert},
+    runtime::{read_host_buffer, revert},
     to_ptr, ContractRef, TURef,
 };
 use crate::{
@@ -91,7 +91,7 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
             Err(error) => runtime::revert(error),
         }
     };
-    let balance_data = read_host_buffer_count(value_size).unwrap_or_revert();
+    let balance_data = read_host_buffer(value_size).unwrap_or_revert();
     let balance: U512 = deserialize(&balance_data).unwrap_or_revert();
     Some(balance)
 }
