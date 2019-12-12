@@ -1,4 +1,6 @@
 //! Some newtypes.
+mod macros;
+
 use core::array::TryFromSliceError;
 use std::{convert::TryFrom, fmt};
 

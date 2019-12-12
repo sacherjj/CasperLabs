@@ -12,6 +12,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
+import io.casperlabs.shared.Log
 
 import scala.collection.immutable.Map
 
@@ -24,7 +25,7 @@ object Estimator {
   implicit val metricsSource   = CasperMetricsSource
   implicit val decreasingOrder = Ordering[Long].reverse
 
-  def tips[F[_]: MonadThrowable: Metrics](
+  def tips[F[_]: MonadThrowable: Metrics: Log](
       dag: DagRepresentation[F],
       lfbHash: BlockHash,
       latestMessageHashes: Map[Validator, Set[BlockHash]],
@@ -64,7 +65,9 @@ object Estimator {
       for {
         latestMessages <- lmh.toList.traverse(dag.lookupUnsafe(_))
         lfb            <- dag.lookupUnsafe(lfbHash)
-        _              <- Metrics[F].record("lfbDistance", latestMessages.maxBy(_.rank).rank - lfb.rank)
+        lfbDistance    = latestMessages.maxBy(_.rank).rank - lfb.rank
+        _              <- Log[F].info(s"${lfbDistance -> "lfbDistance"}")
+        _              <- Metrics[F].record("lfbDistance", lfbDistance)
         scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
         newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
