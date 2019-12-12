@@ -139,16 +139,24 @@ pub fn get_phase() -> Phase {
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
+    let mut key_bytes = [0u8; Key::serialized_size_hint()];
+    let mut total_bytes: usize = 0;
+    let ret = unsafe {
+        ext_ffi::get_key(
+            name_ptr,
+            name_size,
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+            &mut total_bytes as *mut usize,
+        )
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap_or_revert()
+    match result_from(ret) {
+        Ok(_) => {}
+        Err(Error::MissingKey) => return None,
+        Err(e) => revert(e),
+    }
+    let key: Key = deserialize(&key_bytes[..total_bytes]).unwrap_or_revert();
+    Some(key)
 }
 
 /// Check if the given name corresponds to a known unforgable reference

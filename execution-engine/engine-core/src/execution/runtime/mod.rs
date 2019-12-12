@@ -343,16 +343,45 @@ where
     }
 
     /// Load the uref known by the given name into the Wasm memory
-    pub fn get_key(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
+    pub fn load_key(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        output_ptr: u32,
+        output_size: usize,
+        bytes_written_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
-        // Take an optional uref, and pass its serialized value as is.
-        // This makes it easy to deserialize optional value on the other
-        // side without failing the execution when the value does not exist.
-        let uref = self.context.named_keys_get(&name).cloned();
-        let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
 
-        self.host_buf = uref_bytes;
-        Ok(self.host_buf.len())
+        // Get a key and serialize it
+        let key = match self.context.named_keys_get(&name) {
+            Some(key) => key,
+            None => return Ok(Err(ApiError::MissingKey)),
+        };
+
+        let key_bytes = match key.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        // `output_size` has to be greater or equal to the actual length of serialized Key bytes
+        if output_size < key_bytes.len() {
+            return Ok(Err(ApiError::BufferTooSmall));
+        }
+
+        // Set serialized Key bytes into the output buffer
+        if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        // For all practical purposes following cast is assumed to be safe
+        let bytes_size = key_bytes.len() as u32;
+        let size_bytes = bytes_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
