@@ -24,9 +24,9 @@ use contract_ffi::{
     args_parser::ArgsParser,
     bytesrepr::ToBytes,
     execution::Phase,
-    key::{Key, HASH_SIZE},
+    key::{Key, HASH_LENGTH},
     system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_SIZE},
+    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
     value::{
         account::{BlockTime, PublicKey, PurseId},
         Account, ProtocolVersion, Value, U512,
@@ -625,13 +625,13 @@ where
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
-                if hash_len != HASH_SIZE {
+                if hash_len != HASH_LENGTH {
                     return Err(error::Error::InvalidHashLength {
-                        expected: HASH_SIZE,
+                        expected: HASH_LENGTH,
                         actual: hash_len,
                     });
                 }
-                let mut arr = [0u8; HASH_SIZE];
+                let mut arr = [0u8; HASH_LENGTH];
                 arr.copy_from_slice(&hash);
                 Key::Hash(arr)
             }
@@ -650,14 +650,14 @@ where
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
                 let len = uref.len();
-                if len != UREF_ADDR_SIZE {
+                if len != UREF_ADDR_LENGTH {
                     return Err(error::Error::InvalidHashLength {
-                        expected: UREF_ADDR_SIZE,
+                        expected: UREF_ADDR_LENGTH,
                         actual: len,
                     });
                 }
                 let read_only_uref = {
-                    let mut arr = [0u8; UREF_ADDR_SIZE];
+                    let mut arr = [0u8; UREF_ADDR_LENGTH];
                     arr.copy_from_slice(&uref);
                     URef::new(arr, AccessRights::READ)
                 };

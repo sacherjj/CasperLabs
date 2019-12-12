@@ -12,14 +12,17 @@ use failure::Fail;
 use hex_fmt::HexFmt;
 
 use crate::{
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE, U8_SIZE},
+    bytesrepr::{
+        Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH,
+        U8_SERIALIZED_LENGTH,
+    },
     contract_api::{runtime, Error as ApiError},
-    key::{Key, UREF_SIZE},
+    key::{Key, UREF_KEY_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+    uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
 };
 
-pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
+pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
 
 #[derive(Debug)]
 pub struct TryFromIntError(());
@@ -259,7 +262,7 @@ impl Into<u64> for BlockTime {
     }
 }
 
-pub const KEY_SIZE: usize = 32;
+pub const PUBLIC_KEY_LENGTH: usize = 32;
 /// Maximum number of associated keys.
 /// Value chosen arbitrary, shouldn't be too large to prevent bloating
 /// `associated_keys` table.
@@ -278,10 +281,10 @@ impl Weight {
     }
 }
 
-pub const WEIGHT_SIZE: usize = U8_SIZE;
+pub const WEIGHT_SERIALIZED_LENGTH: usize = U8_SERIALIZED_LENGTH;
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct PublicKey([u8; KEY_SIZE]);
+pub struct PublicKey([u8; PUBLIC_KEY_LENGTH]);
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
@@ -295,14 +298,14 @@ impl Debug for PublicKey {
     }
 }
 
-pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE;
+pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
 
 impl PublicKey {
-    pub fn new(key: [u8; KEY_SIZE]) -> PublicKey {
+    pub fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
         PublicKey(key)
     }
 
-    pub fn value(self) -> [u8; KEY_SIZE] {
+    pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0
     }
 
@@ -312,8 +315,8 @@ impl PublicKey {
     }
 }
 
-impl From<[u8; KEY_SIZE]> for PublicKey {
-    fn from(key: [u8; KEY_SIZE]) -> Self {
+impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
+    fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
         PublicKey(key)
     }
 }
@@ -321,7 +324,7 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 impl TryFrom<&[u8]> for PublicKey {
     type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        if bytes.len() != KEY_SIZE {
+        if bytes.len() != PUBLIC_KEY_LENGTH {
             return Err(TryFromSliceForPublicKeyError(()));
         }
         let mut public_key = [0u8; 32];
@@ -338,7 +341,7 @@ impl ToBytes for PublicKey {
 
 impl FromBytes for PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (key_bytes, rem): ([u8; PUBLIC_KEY_LENGTH], &[u8]) = FromBytes::from_bytes(bytes)?;
         Ok((PublicKey::new(key_bytes), rem))
     }
 }
@@ -776,7 +779,7 @@ impl FromBytes for AssociatedKeys {
     }
 }
 
-pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SERIALIZED_LENGTH: usize = U64_SERIALIZED_LENGTH;
 
 impl ToBytes for BlockTime {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -793,7 +796,7 @@ impl FromBytes for BlockTime {
 
 impl ToBytes for ActionThresholds {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(2 * WEIGHT_SIZE);
+        let mut result = Vec::with_capacity(2 * WEIGHT_SERIALIZED_LENGTH);
         result.extend(&self.deployment.to_bytes()?);
         result.extend(&self.key_management.to_bytes()?);
         Ok(result)
@@ -814,12 +817,14 @@ impl FromBytes for ActionThresholds {
 
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let associated_keys_size =
-            self.associated_keys.0.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
-        let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
-        let purse_id_size = UREF_SIZE;
-        let serialized_account_size = KEY_SIZE // pub key
+        let action_thresholds_size = 2 * (WEIGHT_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH);
+        let associated_keys_size = self.associated_keys.0.len()
+            * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
+            + U32_SERIALIZED_LENGTH;
+        let named_keys_size =
+            UREF_KEY_SERIALIZED_LENGTH * self.named_keys.len() + U32_SERIALIZED_LENGTH;
+        let purse_id_size = UREF_KEY_SERIALIZED_LENGTH;
+        let serialized_account_size = PUBLIC_KEY_LENGTH // pub key
             + named_keys_size
             + purse_id_size
             + associated_keys_size
@@ -873,15 +878,15 @@ mod tests {
         uref::{AccessRights, URef},
         value::account::{
             Account, ActionThresholds, ActionType, AddKeyFailure, AssociatedKeys, PublicKey,
-            PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, KEY_SIZE,
-            MAX_KEYS,
+            PurseId, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure, Weight, MAX_KEYS,
+            PUBLIC_KEY_LENGTH,
         },
     };
 
     #[test]
     fn associated_keys_add() {
-        let mut keys = AssociatedKeys::new([0u8; KEY_SIZE].into(), Weight::new(1));
-        let new_pk = PublicKey([1u8; KEY_SIZE]);
+        let mut keys = AssociatedKeys::new([0u8; PUBLIC_KEY_LENGTH].into(), Weight::new(1));
+        let new_pk = PublicKey([1u8; PUBLIC_KEY_LENGTH]);
         let new_pk_weight = Weight::new(2);
         assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
@@ -889,7 +894,12 @@ mod tests {
 
     #[test]
     fn associated_keys_add_full() {
-        let map = (0..MAX_KEYS).map(|k| (PublicKey([k as u8; KEY_SIZE]), Weight::new(k as u8)));
+        let map = (0..MAX_KEYS).map(|k| {
+            (
+                PublicKey([k as u8; PUBLIC_KEY_LENGTH]),
+                Weight::new(k as u8),
+            )
+        });
         assert_eq!(map.len(), 10);
         let mut keys = {
             let mut tmp = AssociatedKeys::default();
@@ -897,14 +907,14 @@ mod tests {
             tmp
         };
         assert_eq!(
-            keys.add_key(PublicKey([100u8; KEY_SIZE]), Weight::new(100)),
+            keys.add_key(PublicKey([100u8; PUBLIC_KEY_LENGTH]), Weight::new(100)),
             Err(AddKeyFailure::MaxKeysLimit)
         )
     }
 
     #[test]
     fn associated_keys_add_duplicate() {
-        let pk = PublicKey([0u8; KEY_SIZE]);
+        let pk = PublicKey([0u8; PUBLIC_KEY_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
@@ -916,11 +926,13 @@ mod tests {
 
     #[test]
     fn associated_keys_remove() {
-        let pk = PublicKey([0u8; KEY_SIZE]);
+        let pk = PublicKey([0u8; PUBLIC_KEY_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
-        assert!(keys.remove_key(&PublicKey([1u8; KEY_SIZE])).is_err());
+        assert!(keys
+            .remove_key(&PublicKey([1u8; PUBLIC_KEY_LENGTH]))
+            .is_err());
     }
 
     #[test]
