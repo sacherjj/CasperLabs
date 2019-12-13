@@ -23,8 +23,8 @@ import { ByteArrayArg } from '../lib/Serialization';
 import { GrpcError } from './Errors';
 
 export interface SubscribeTopics {
-  blockAdded: boolean;
-  blockFinalized: boolean;
+  blockAdded?: boolean;
+  blockFinalized?: boolean;
 }
 
 
@@ -291,8 +291,8 @@ export default class CasperService {
       });
       client.onEnd(() => obs.complete());
       const req = new StreamEventsRequest();
-      req.setBlockAdded(subscribeTopics.blockAdded);
-      req.setBlockFinalized(subscribeTopics.blockFinalized);
+      req.setBlockAdded(!!subscribeTopics.blockAdded);
+      req.setBlockFinalized(!!subscribeTopics.blockFinalized);
 
       client.start();
       client.send(req);
