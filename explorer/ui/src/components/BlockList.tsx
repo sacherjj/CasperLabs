@@ -40,6 +40,7 @@ export default class BlockList extends RefreshableComponent<Props, {}> {
             : `Blocks from rank ${dag.minRank} to ${dag.maxRank}`
         }
         refresh={() => this.refresh()}
+        toggleStore={dag.subscribeToggleStore}
         headers={['Block hash', 'Rank', 'Timestamp', 'Validator']}
         rows={dag.blocks}
         renderRow={(block: BlockInfo) => {

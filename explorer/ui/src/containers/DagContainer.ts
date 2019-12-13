@@ -1,4 +1,4 @@
-import { autorun, observable } from 'mobx';
+import { action, autorun, observable, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
@@ -108,6 +108,7 @@ export class DagContainer {
     }
   }
 
+  @action
   setUpSubscriber(subscribeToggleEnabled: boolean) {
     if (this.isLatestDag && subscribeToggleEnabled) {
       // enable subscriber
@@ -132,7 +133,7 @@ export class DagContainer {
               );
 
               if (index === -1) {
-                this.blocks?.splice(0, 0, block);
+                runInAction(() => this.blocks?.splice(0, 0, block!));
               }
             }
           }
