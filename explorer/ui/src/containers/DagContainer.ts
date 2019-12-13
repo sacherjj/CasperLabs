@@ -122,13 +122,11 @@ export class DagContainer {
         let obs = this.casperService.subscribeEvents(subscribeTopics);
 
         this.eventsSubscriber = obs.subscribe({
-          next(event: Event) {
-            console.log(
-              event
-                .getBlockAdded()!
-                .getBlock()!
-                .getBlockHash_asB64()
-            );
+          next: (event: Event) => {
+            let block = event.getBlockAdded()?.getBlock();
+            if(block){
+              this.blocks?.splice(0, 0, block);
+            }
           }
         });
       }
