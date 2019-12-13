@@ -46,6 +46,9 @@ max-num-of-connections = 500
 # Maximum size of message that can be sent via transport layer.
 max-message-size = 4194304
 
+# Size of the buffer to store emitted block events
+event-stream-buffer-size = 10
+
 # Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
 

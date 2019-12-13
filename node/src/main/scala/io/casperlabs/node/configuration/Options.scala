@@ -165,6 +165,10 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum size of message that can be sent via transport layer.")
 
     @scallop
+    val eventStreamBufferSize =
+      gen[Int]("Size of the buffer to store emitted block events")
+
+    @scallop
     val serverChunkSize =
       gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
   }
