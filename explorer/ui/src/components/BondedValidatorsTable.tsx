@@ -27,9 +27,7 @@ export const BondedValidatorsTable = observer(
       <DataTable
         title={`Bonded Validators List (${bondsList.length})`}
         headers={['Validator', 'Stake', 'Finalized']}
-        rows={
-          bondsList
-        }
+        rows={bondsList}
         renderRow={(bond, i) => {
           return (
             <tr key={i}>
@@ -43,16 +41,15 @@ export const BondedValidatorsTable = observer(
                 {finalizedBondedValidators.has(
                   bond.getValidatorPublicKey_asB64()
                 ) ? (
-                  <Icon name="check-circle" color="green"/>
+                  <Icon name="check-circle" color="green" />
                 ) : (
-                  <Icon name="clock"/>
+                  <Icon name="clock" />
                 )}
               </td>
             </tr>
           );
         }}
       />
-    )
-      ;
+    );
   }
 );
