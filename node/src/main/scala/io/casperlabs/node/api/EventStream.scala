@@ -33,9 +33,9 @@ object EventStream {
         }
       }
 
-      override def blockAdded(blockSummary: BlockSummary): F[Unit] =
+      override def blockAdded(blockInfo: BlockInfo): F[Unit] =
         Sync[F].delay {
-          val event = Event().withBlockAdded(BlockAdded().withBlock(blockSummary))
+          val event = Event().withBlockAdded(BlockAdded().withBlock(blockInfo))
           source.onNext(event)
         }
     }

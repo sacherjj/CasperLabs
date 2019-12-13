@@ -711,7 +711,7 @@ object MultiParentCasperImpl {
         BlockStorage[F]
           .put(block.blockHash, BlockMsgWithTransform(Some(block), effects)) *>
           EventEmitter[F]
-            .blockAdded(block.getSummary)
+            .blockAdded(block.getBlockInfo)
       }
 
     /** Check if the block has dependencies that we don't have in store.

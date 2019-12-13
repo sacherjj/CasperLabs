@@ -1,8 +1,8 @@
 package io.casperlabs.casper
 
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper.consensus.info.BlockInfo
 import simulacrum.typeclass
 
 @typeclass trait EventEmitter[F[_]] {
-  def blockAdded(blockSummary: BlockSummary): F[Unit]
+  def blockAdded(blockInfo: BlockInfo): F[Unit]
 }
