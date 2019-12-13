@@ -44,7 +44,7 @@ extern "C" {
         extra_urefs_ptr: *const u8,
         extra_urefs_size: usize,
         result_size: *mut usize,
-    ) -> usize;
+    ) -> i32;
     pub fn get_call_result(res_ptr: *mut u8); //can only be called after `call_contract`
     pub fn get_key(
         name_ptr: *const u8,
