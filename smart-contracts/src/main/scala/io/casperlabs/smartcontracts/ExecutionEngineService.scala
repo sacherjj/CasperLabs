@@ -99,13 +99,10 @@ class GrpcExecutionEngineService[F[_]: Defer: Concurrent: Log: TaskLift: Metrics
   ): F[Either[Throwable, Seq[DeployResult]]] = Metrics[F].timer("eeExec") {
     val baseExecRequest =
       ExecuteRequest(prestate, blocktime, protocolVersion = Some(protocolVersion))
-    // Trying to build enough batches to be able to exercise `parallelism` number of threads.
-    val partitionSize = math.ceil(deploys.size.toDouble / parallelism).toInt
-    // Build batches limited by the size of message sent to EE,
-    val batches = deploys
-      .grouped(partitionSize)
-      .flatMap(ExecutionEngineService.batchDeploysBySize(baseExecRequest, messageSizeLimit))
-      .toList
+    // Build batches limited by the size of message sent to EE, targeting the level of
+    // parallelism the EE is supposed to be configured with.
+    val batches =
+      ExecutionEngineService.batchDeploys(baseExecRequest, messageSizeLimit, parallelism)(deploys)
 
     val stream = fs2.Stream.evalSeq(batches.pure[F]).mapAsync(parallelism) { request =>
       sendMessage(request, _.execute) {
@@ -243,7 +240,10 @@ object ExecutionEngineService {
             List(item) :: hd :: tail
       }
 
-  def batchDeploysBySize(base: ExecuteRequest, messageSizeLimit: Int)(
+  /** Batch deploys into a target level of parallelism,
+    * making sure no batch exceeds the size limit.
+    * The order of elements needs to be preserved. */
+  def batchDeploys(base: ExecuteRequest, messageSizeLimit: Int, parallelism: Int = 1)(
       deploys: Seq[DeployItem]
   ): List[ExecuteRequest] = {
     val canAdd: (List[DeployItem], DeployItem) => Boolean =
@@ -252,8 +252,15 @@ object ExecutionEngineService {
           .withDeploys(item :: batch)
           .serializedSize <= messageSizeLimit
 
-    batchElements(deploys, canAdd)
-      .map(batch => base.withDeploys(batch))
+    val partitionSize = math.ceil(deploys.size.toDouble / parallelism).toInt
+
+    deploys
+      .grouped(partitionSize)
+      .flatMap { partition =>
+        batchElements(partition, canAdd)
+          .map(batch => base.withDeploys(batch))
+      }
+      .toList
   }
 
 }
