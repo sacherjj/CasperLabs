@@ -1,4 +1,4 @@
-import { observable } from 'mobx';
+import { autorun, observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
@@ -55,6 +55,11 @@ export class DagStep {
   last = this.step(() => 0);
 }
 
+enum SubscribeState {
+  ON,
+  CLOSE
+}
+
 export class DagContainer {
   @observable blocks: BlockInfo[] | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
@@ -63,11 +68,17 @@ export class DagContainer {
   @observable validatorsListToggleStore: ToggleStore = new ToggleStore(false);
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
   @observable eventsSubscriber: Subscription | null = null;
+  @observable subscribeToggleStore: ToggleStore = new ToggleStore(true);
 
   constructor(
     private errors: ErrorContainer,
     private casperService: CasperService
-  ) {}
+  ) {
+    // so that change of subscribeToggleStore can trigger `setUpSubscriber`
+    autorun(() => this.setUpSubscriber(this.subscribeToggleStore.isPressed), {
+      delay: 100
+    });
+  }
 
   get minRank() {
     return Math.max(0, this.maxRank - this.depth + 1);
@@ -77,14 +88,54 @@ export class DagContainer {
     return this.blocks ? this.blocks.length > 0 : false;
   }
 
+  get isLatestDag() {
+    return this.maxRank === 0;
+  }
+
+  private get _subscriberState(): SubscribeState {
+    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
+      return SubscribeState.ON;
+    } else {
+      return SubscribeState.CLOSE;
+    }
+  }
+
   step = new DagStep(this);
 
-  unsubscribe(){
-    console.log("will unsubscribe");
-    if(this.eventsSubscriber){
-      console.log("done");
+  unsubscribe() {
+    if (this._subscriberState === SubscribeState.ON) {
+      this.eventsSubscriber!.unsubscribe();
     }
-    // this.eventsSubscriber && this.eventsSubscriber.unsubscribe();
+  }
+
+  setUpSubscriber(subscribeToggleEnabled: boolean) {
+    if (this.isLatestDag && subscribeToggleEnabled) {
+      // enable subscriber
+      if (this._subscriberState === SubscribeState.ON) {
+        // when clicking refresh button, we can reused the web socket.
+        return;
+      } else {
+        let subscribeTopics = {
+          blockAdded: true,
+          blockFinalized: false
+        };
+        let obs = this.casperService.subscribeEvents(subscribeTopics);
+
+        this.eventsSubscriber = obs.subscribe({
+          next(event: Event) {
+            console.log(
+              event
+                .getBlockAdded()!
+                .getBlock()!
+                .getBlockHash_asB64()
+            );
+          }
+        });
+      }
+    } else {
+      // disable subscriber
+      this.unsubscribe();
+    }
   }
 
   async refreshBlockDag() {
@@ -102,23 +153,7 @@ export class DagContainer {
       })
     );
 
-    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
-      return;
-    } else {
-      let subscribeTopics = {
-        blockAdded: true,
-        blockFinalized: false
-      };
-      let obs = this.casperService.subscribeEvents(subscribeTopics);
-
-      this.eventsSubscriber = obs.subscribe({
-        next(event: Event) {
-          console.log(event.getBlockAdded()!.getBlock()!.getBlockHash_asB64());
-        }
-      });
-
-      // window.setTimeout(()=> this.unsubscribe(), 1000);
-    }
+    this.setUpSubscriber(this.subscribeToggleStore.isPressed);
   }
 }
 

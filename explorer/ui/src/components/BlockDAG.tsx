@@ -5,6 +5,7 @@ import * as d3 from 'd3';
 import $ from 'jquery';
 import { shortHash } from './Utils';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { ToggleButton, ToggleStore } from './ToggleButton';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
 
@@ -14,6 +15,7 @@ const LineColor = '#AAA';
 export interface Props {
   title: string;
   refresh?: () => void;
+  toggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -54,6 +56,13 @@ export class BlockDAG extends React.Component<Props, {}> {
               )}
               {this.props.refresh && (
                 <RefreshButton refresh={() => this.props.refresh!()} />
+              )}
+              {this.props.toggleStore && (
+                <ToggleButton
+                  title="Subscribing to the latest added blocks"
+                  toggleStore={this.props.toggleStore}
+                  size="sm"
+                />
               )}
             </ListInline>
           </div>
@@ -389,7 +398,7 @@ const calculateCoordinates = (graph: Graph, width: number, height: number) => {
       // for each node i of nodes NS having the same (validator, rank), c is the size of NS
       // its distance from the baseline of swimlane is (i / (c - 1) - 0.5) * height of swimlane
       // the height of swimlane is (1 - marginPercent) * verticalStep
-      step = (index  / (count - 1) - 0.5) * (1 - marginPercent);
+      step = (index / (count - 1) - 0.5) * (1 - marginPercent);
       curIndexOfRanks.set(k, index + 1);
     }
 
