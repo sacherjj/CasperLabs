@@ -3,7 +3,6 @@
 
 mod account;
 mod big_int;
-mod bytesrepr_error;
 mod cl_type;
 mod cl_value;
 mod contract;
@@ -12,5 +11,6 @@ mod named_key;
 mod protocol_version;
 mod stored_value;
 mod uref;
+mod value;
 
 pub(crate) use named_key::NamedKeyMap;

@@ -310,7 +310,8 @@ where
                 Ok(CommitResult::Serialization(error)) => {
                     logging::log_warning("Serialization");
 
-                    ret.set_serialization(error.into());
+                    ret.mut_failed_transform()
+                        .set_message(format!("{:?}", error));
                 }
                 Err(error) => {
                     let log_message = format!("State error {:?} when applying transforms", error);
