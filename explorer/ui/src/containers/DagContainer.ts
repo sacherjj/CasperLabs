@@ -124,8 +124,16 @@ export class DagContainer {
         this.eventsSubscriber = obs.subscribe({
           next: (event: Event) => {
             let block = event.getBlockAdded()?.getBlock();
-            if(block){
-              this.blocks?.splice(0, 0, block);
+            if (block) {
+              let index: number | undefined = this.blocks?.findIndex(
+                b =>
+                  b.getSummary()?.getBlockHash_asB64() ===
+                  block!.getSummary()?.getBlockHash_asB64()
+              );
+
+              if (index === -1) {
+                this.blocks?.splice(0, 0, block);
+              }
             }
           }
         });
