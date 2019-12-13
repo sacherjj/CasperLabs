@@ -5,19 +5,18 @@ import {
   LinkButton,
   ListInline,
   RefreshableComponent,
-  shortHash,
-  ToggleButton
+  shortHash
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
-import {BlockInfo} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import $ from 'jquery';
 import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
-import Timestamp from './TimeStamp';
 import { BondedValidatorsTable } from './BondedValidatorsTable';
+import { ToggleButton } from './ToggleButton';
 
 interface Props {
   dag: DagContainer;
@@ -53,8 +52,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                   {dag.selectedBlock && (
                     <ToggleButton
                       title={'Show bonded validators'}
-                      onClick={() => dag.toggleShowValidators()}
-                      pressed={dag.toggleValidatorsList}
+                      toggleStore={dag.validatorsListToggleStore}
                       size="sm"
                     />
                   )}
@@ -97,7 +95,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
               />
             </div>
           )}
-          {dag.selectedBlock && dag.toggleValidatorsList && (
+          {dag.selectedBlock && dag.validatorsListToggleStore.isPressed && (
             <div className="col-sm-12">
               <BondedValidatorsTable
                 block={dag.selectedBlock}
