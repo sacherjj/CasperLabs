@@ -97,6 +97,23 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::GetArgSizeFuncIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to a argument size (output)
+                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
+                let ret = self.get_arg_size(index as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
+            FunctionIndex::GetArgFuncIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to destination in Wasm memory
+                // args(2) = size of destination pointer memory
+                let (index, dest_ptr, dest_size): (u32, _, u32) = Args::parse(args)?;
+                let ret = self.get_arg(index as usize, dest_ptr, dest_size as usize)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
             FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value
@@ -153,9 +170,24 @@ where
             FunctionIndex::GetKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                let (name_ptr, name_size) = Args::parse(args)?;
-                let size = self.get_key(name_ptr, name_size)?;
-                Ok(Some(RuntimeValue::I32(size as i32)))
+                // args(2) = pointer to output buffer for serialized key
+                // args(3) = size of output buffer
+                // args(4) = pointer to bytes written
+                let (name_ptr, name_size, output_ptr, output_size, bytes_written): (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                ) = Args::parse(args)?;
+                let ret = self.load_key(
+                    name_ptr,
+                    name_size,
+                    output_ptr,
+                    output_size as usize,
+                    bytes_written,
+                )?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::HasKeyFuncIndex => {

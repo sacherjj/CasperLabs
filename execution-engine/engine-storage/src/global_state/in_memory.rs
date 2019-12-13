@@ -193,8 +193,6 @@ impl StateProvider for InMemoryGlobalState {
 
 #[cfg(test)]
 mod tests {
-    use engine_shared::test_utils;
-
     use super::*;
 
     #[derive(Debug, Clone)]
@@ -337,11 +335,10 @@ mod tests {
     fn initial_state_has_the_expected_hash() {
         let correlation_id = CorrelationId::new();
         let expected_bytes = vec![
-            43, 174, 143, 127, 30, 3, 38, 59, 12, 141, 177, 76, 137, 106, 87, 159, 85, 97, 227, 65,
-            243, 187, 142, 102, 129, 28, 214, 173, 201, 154, 221, 251,
+            51, 7, 165, 76, 166, 213, 191, 186, 252, 14, 241, 176, 3, 243, 236, 73, 65, 192, 17,
+            238, 127, 121, 136, 158, 68, 65, 103, 84, 222, 47, 9, 29,
         ];
-        let init_state = test_utils::mocked_account([48u8; 32]);
-        let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &init_state).unwrap();
+        let (_, root_hash) = InMemoryGlobalState::from_pairs(correlation_id, &[]).unwrap();
         assert_eq!(expected_bytes, root_hash.to_vec())
     }
 }

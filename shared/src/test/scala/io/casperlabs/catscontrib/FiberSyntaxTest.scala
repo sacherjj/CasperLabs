@@ -24,10 +24,7 @@ class FiberSyntaxTest extends FlatSpec with Eventually {
 
     error.forkAndLog.attempt.unsafeRunSync
 
-    // To flush logs
-    Thread.sleep(1.second.toMillis)
-
-    assert(logger.errors.exists(_.contains(errorMessage)))
+    eventually(assert(logger.errors.exists(_.contains(errorMessage))))
   }
 
   implicit val patienceConfiguration: PatienceConfig = PatienceConfig(
@@ -51,8 +48,8 @@ class FiberSyntaxTest extends FlatSpec with Eventually {
       // Test that container holds 0; forked fiber hasn't changed it yet.
       _ <- assertContains(container, originalValue)
       _ <- container.set(fiberB).forkAndLog.start
-      _ <- assertContains(container, fiberB)
     } yield {
+      eventually(assertContains(container, fiberB).unsafeRunSync)
       eventually(assertContains(container, fiberA).unsafeRunSync)
     }
 
