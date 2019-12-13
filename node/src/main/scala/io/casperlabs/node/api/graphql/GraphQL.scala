@@ -17,6 +17,7 @@ import io.casperlabs.shared.{Log, LogSource}
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.dag.DagStorage
 import io.circe.parser.parse
 import io.circe.syntax._
 import io.circe.{Json, JsonObject}
@@ -42,7 +43,7 @@ object GraphQL {
     Headers.of(Header("Upgrade", "websocket"), Header("Sec-WebSocket-Protocol", "graphql-ws"))
 
   /* Entry point */
-  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: Fs2Compiler: Metrics](
+  def service[F[_]: ConcurrentEffect: ContextShift: Timer: Log: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler: Metrics](
       executionContext: ExecutionContext
   ): HttpRoutes[F] = {
     import io.casperlabs.node.api.graphql.RunToFuture.fromEffect
