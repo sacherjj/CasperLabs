@@ -289,11 +289,8 @@ abstract class HashSetCasperTest
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val dummyContract =
-      ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
-
-    val data0 = ProtoUtil.deploy(1, dummyContract)
-    val data1 = ProtoUtil.deploy(2, dummyContract)
+    val data0 = ProtoUtil.deploy(1, ByteString.EMPTY)
+    val data1 = ProtoUtil.deploy(2, ByteString.EMPTY)
 
     for {
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -314,9 +311,8 @@ abstract class HashSetCasperTest
                       .map { case Created(block) => block }
 
       // NOTE: It can include both data0 and data1 because they don't conflict.
-      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
+      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data1)
 
-      _ <- node0.casperEff.addBlock(signedBlock)
       _ <- node1.receive() //receives block1; should not ask for block0
 
       _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
@@ -1158,6 +1154,11 @@ abstract class HashSetCasperTest
       _               <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       // nodes(1) should have more weight than nodes(0) so it should take over
       // Need to propose a new block, it should again contain deployA
+      // Since requeuing of orphans happens in the background fiber, trigerred during `createBlock`,
+      // the very first `createBlock` most likely returns `NoNewDeploys` because background fiber
+      // hasn't yet finished.
+      _ <- nodes(0).casperEff.createBlock shouldBeF NoNewDeploys
+      // Do another call to `createBlock` since now it should have requeuened orphaned deployA.
       createC         <- nodes(0).casperEff.createBlock
       Created(blockC) = createC
       _               = blockC.getBody.deploys.map(_.getDeploy) should contain(deployA)
