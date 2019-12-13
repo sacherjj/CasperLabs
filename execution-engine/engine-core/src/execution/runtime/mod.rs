@@ -343,9 +343,56 @@ where
     pub fn load_arg(&mut self, i: usize) -> isize {
         self.host_buf = self.context.args().get(i).cloned();
         match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes_len() as isize,
+            Some(cl_value) => cl_value.inner_bytes().len() as isize,
             None => -1,
         }
+    }
+
+    pub fn get_arg_size(
+        &mut self,
+        index: usize,
+        size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg_size = match self.context.args().get(index) {
+            Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemoryError))
+            }
+            None => return Ok(Err(ApiError::MissingArgument)),
+            Some(arg) => arg.inner_bytes().len() as u32,
+        };
+
+        let arg_size_bytes = arg_size.to_le_bytes(); // wasm is LE
+
+        if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
+    }
+
+    pub fn get_arg(
+        &mut self,
+        index: usize,
+        output_ptr: u32,
+        output_size: usize,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg = match self.context.args().get(index) {
+            Some(arg) => arg,
+            None => return Ok(Err(ApiError::MissingArgument)),
+        };
+
+        if arg.inner_bytes().len() > output_size {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
+
+        if let Err(e) = self
+            .memory
+            .set(output_ptr, &arg.inner_bytes()[..output_size])
+        {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Load the uref known by the given name into the Wasm memory
@@ -557,7 +604,7 @@ where
             contract_version,
         )?;
 
-        let inner_bytes_len = result.inner_bytes_len();
+        let inner_bytes_len = result.inner_bytes().len();
         self.host_buf = Some(result);
         Ok(inner_bytes_len)
     }
@@ -566,7 +613,7 @@ where
         self.host_buf = None;
         let named_keys =
             CLValue::from_t(self.context.named_keys().clone()).map_err(Error::CLValue)?;
-        let inner_bytes_len = named_keys.inner_bytes_len();
+        let inner_bytes_len = named_keys.inner_bytes().len();
         self.host_buf = Some(named_keys);
         Ok(inner_bytes_len)
     }
@@ -677,7 +724,7 @@ where
         }
 
         Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes_len() as i64,
+            Some(cl_value) => cl_value.inner_bytes().len() as i64,
             None => -1,
         })
     }
@@ -691,7 +738,7 @@ where
         self.host_buf = self.context.read_ls(&key_bytes)?;
 
         Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes_len() as i64,
+            Some(cl_value) => cl_value.inner_bytes().len() as i64,
             None => -1,
         })
     }

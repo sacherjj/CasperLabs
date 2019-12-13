@@ -1,10 +1,7 @@
 #!/bin/bash
-BASE_PATH=../../../
-CLIENT=$BASE_PATH/client/target/universal/stage/bin/casperlabs-client
-PUBLIC_KEY=$(cat $BASE_PATH/hack/docker/keys/faucet-account/account-id-hex)
-HOST="localhost"
 
 set -e
+source $(dirname $0)/common.sh
 
 RESPONSE=$(casperlabs-client --host $HOST show-blocks)
 

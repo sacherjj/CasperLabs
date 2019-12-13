@@ -112,11 +112,21 @@ where
                 Ok(Some(RuntimeValue::I32(size as i32)))
             }
 
+            FunctionIndex::GetArgSizeFuncIndex => {
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to a argument size (output)
+                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
+                let ret = self.get_arg_size(index as usize, size_ptr)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
+            }
+
             FunctionIndex::GetArgFuncIndex => {
-                // args(0) = pointer to destination in Wasm memory
-                let dest_ptr = Args::parse(args)?;
-                self.set_mem_from_buf(dest_ptr)?;
-                Ok(None)
+                // args(0) = index of host runtime arg to load
+                // args(1) = pointer to destination in Wasm memory
+                // args(2) = size of destination pointer memory
+                let (index, dest_ptr, dest_size): (u32, _, u32) = Args::parse(args)?;
+                let ret = self.get_arg(index as usize, dest_ptr, dest_size as usize)?;
+                Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
             FunctionIndex::RetFuncIndex => {
@@ -431,7 +441,7 @@ where
                     Some(balance) => {
                         let balance_as_cl_value =
                             CLValue::from_t(balance).map_err(Error::CLValue)?;
-                        let inner_bytes_len = balance_as_cl_value.inner_bytes_len();
+                        let inner_bytes_len = balance_as_cl_value.inner_bytes().len();
                         self.host_buf = Some(balance_as_cl_value);
                         inner_bytes_len as i32
                     }
