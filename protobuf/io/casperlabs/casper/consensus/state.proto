@@ -162,124 +162,113 @@ message StoredValue {
     }
 }
 
-// DEPRECATED
 message Value {
-    oneof value {
-        int32 int_value = 1;
-        bytes bytes_value = 2;
-        IntList int_list = 3;
-        string string_value = 4;
-        Account account = 5;
-        Contract contract = 6;
-        StringList string_list = 7;
-        NamedKey named_key = 8;
-        BigInt big_int = 9;
-        Key key = 10;
-        Unit unit = 11;
-        uint64 long_value = 12;
-    }
+	oneof value {
+		int32 int_value = 1;
+		bytes bytes_value = 2;
+		IntList int_list = 3;
+		string string_value = 4;
+		Account account = 5;
+		Contract contract = 6;
+		StringList string_list = 7;
+		NamedKey named_key = 8;
+		BigInt big_int = 9;
+		Key key = 10;
+		Unit unit = 11;
+		uint64 long_value = 12;
+	}
 }
 
-// DEPRECATED
 message IntList {
-    repeated int32 values = 1;
+	repeated int32 values = 1;
 }
 
-// DEPRECATED
 message StringList {
-    repeated string values = 1;
+	repeated string values = 1;
 }
 
 message BigInt {
-    string value = 1;
-    // Number of bits: 128 | 256 | 512.
-    uint32 bit_width = 2;
+	string value = 1;
+	// Number of bits: 128 | 256 | 512.
+	uint32 bit_width = 2;
 }
 
 message Key {
-    oneof value {
-        Address address = 1;
-        Hash hash = 2;
-        URef uref = 3;
-        Local local = 4;
-    }
+	oneof value {
+		Address address = 1;
+		Hash hash = 2;
+		URef uref = 3;
+		Local local = 4;
+	}
 
-    message Address {
-        bytes account = 1;
-    }
+	message Address {
+		bytes account = 1;
+	}
 
-    message Hash {
-        bytes hash = 1;
-    }
+	message Hash {
+		bytes hash = 1;
+	}
 
-    message URef {
-        bytes uref = 1;
-        AccessRights access_rights = 2;
+	message URef {
+		bytes uref = 1;
+		AccessRights access_rights = 2;
 
         // NOTE: Numeric values correspond to values of the domain
         // AccessRights struct. DO NOT CHANGE.
-        enum AccessRights {
-            UNKNOWN        = 0;
-            READ           = 1;
-            WRITE          = 2;
-            ADD            = 4;
-            READ_ADD       = 5;
-            READ_WRITE     = 3;
-            ADD_WRITE      = 6;
-            READ_ADD_WRITE = 7;
-        }
-    }
+		enum AccessRights {
+			UNKNOWN        = 0;
+			READ           = 1;
+			WRITE          = 2;
+			ADD            = 4;
+			READ_ADD       = 5;
+			READ_WRITE     = 3;
+			ADD_WRITE      = 6;
+			READ_ADD_WRITE = 7;
+		}
+	}
 
-    message Local {
-        bytes hash = 1;
-    }
+	message Local {
+		bytes hash = 1;
+	}
 }
 
 message NamedKey {
-    string name = 1;
-    Key key = 2;
+	string name = 1;
+	Key key = 2;
 }
 
 message Contract {
-    bytes body = 1;
-    repeated NamedKey named_keys = 2;
+	bytes body = 1;
+	repeated NamedKey named_keys = 2;
     ProtocolVersion protocol_version = 3;
 }
 
 message Account {
-    // Removed: nonce.
-    reserved 2;
-    // Removed: account_activity
-    reserved 7;
+	// Removed: nonce.
+	reserved 2;
+	// Removed: account_activity
+	reserved 7;
 
-    bytes public_key = 1;
-    Key.URef purse_id = 3;
-    repeated NamedKey named_keys = 4;
-    repeated AssociatedKey associated_keys = 5;
-    ActionThresholds action_thresholds = 6;
+	bytes public_key = 1;
+	Key.URef purse_id = 3;
+	repeated NamedKey named_keys = 4;
+	repeated AssociatedKey associated_keys = 5;
+	ActionThresholds action_thresholds = 6;
 
-    message AssociatedKey {
-        bytes public_key = 1;
-        uint32 weight = 2;
-    }
-    message ActionThresholds {
-        uint32 deployment_threshold = 1;
-        uint32 key_management_threshold = 2;
-    }
+	message AssociatedKey {
+		bytes public_key = 1;
+		uint32 weight = 2;
+	}
+	message ActionThresholds {
+		uint32 deployment_threshold = 1;
+		uint32 key_management_threshold = 2;
+	}
 }
 
-// DEPRECATED
 message Unit {}
 
 message ProtocolVersion {
     uint32 major = 1;
     uint32 minor = 2;
     uint32 patch = 3;
-}
-
-enum BytesReprError {
-    EARLY_END_OF_STREAM = 0;
-    FORMATTING_ERROR = 1;
-    LEFT_OVER_BYTES = 2;
-    OUT_OF_MEMORY_ERROR = 3;
 }

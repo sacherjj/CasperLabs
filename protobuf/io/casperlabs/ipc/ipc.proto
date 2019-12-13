@@ -6,33 +6,33 @@ import "io/casperlabs/casper/consensus/state.proto";
 import "io/casperlabs/ipc/transforms.proto";
 
 message DeployCode {
-    bytes code = 1; // wasm byte code
-    bytes args = 2; // ABI-encoded arguments
+  bytes code = 1; // wasm byte code
+  bytes args = 2; // ABI-encoded arguments
 }
 
 message StoredContractHash{
-    bytes hash = 1; // public hash of a stored contract
-    bytes args = 2; // ABI-encoded arguments
+  bytes hash = 1; // public hash of a stored contract
+  bytes args = 2; // ABI-encoded arguments
 }
 
 message StoredContractName{
-    // name of a stored contract associated with the executing account (uref or hash)
-    string stored_contract_name = 1;
-    bytes args = 2;   // ABI-encoded arguments
+  // name of a stored contract associated with the executing account (uref or hash)
+  string stored_contract_name = 1;
+  bytes args = 2;   // ABI-encoded arguments
 }
 
 message StoredContractURef{
-    bytes uref = 1; // uref of a stored contract
-    bytes args = 2; // ABI-encoded arguments
+  bytes uref = 1; // uref of a stored contract
+  bytes args = 2; // ABI-encoded arguments
 }
 
 message DeployPayload {
-    oneof payload {
-        DeployCode deploy_code = 1;
-        StoredContractHash stored_contract_hash = 2;
-        StoredContractName stored_contract_name = 3;
-        StoredContractURef stored_contract_uref = 4;
-    }
+  oneof payload {
+    DeployCode deploy_code = 1;
+    StoredContractHash stored_contract_hash = 2;
+    StoredContractName stored_contract_name = 3;
+    StoredContractURef stored_contract_uref = 4;
+  }
 }
 
 message Bond {
@@ -94,7 +94,6 @@ message CommitResponse {
         io.casperlabs.casper.consensus.state.Key key_not_found = 3;
         TypeMismatch type_mismatch = 4;
         PostEffectsError failed_transform = 5;
-        io.casperlabs.casper.consensus.state.BytesReprError serialization = 6;
     }
 }
 
@@ -116,17 +115,27 @@ message NoOp {}
 //Errors which may occur while interacting with global state
 message StorageError {
     oneof error_instance {
-        io.casperlabs.casper.consensus.state.BytesReprError bytes_repr = 1;
+        BytesReprError bytes_repr = 1;
         RkvError rkv = 2;
     }
 }
 
+message BytesReprError {
+    oneof error_instance {
+        EarlyEndOfStream early_end = 1;
+        FormattingError formatting = 2;
+        LeftOverBytes left_over = 3;
+    }
+}
+message EarlyEndOfStream {}
+message FormattingError {}
+message LeftOverBytes {}
 message RkvError {
     string error_msg = 1;
 }
 
 // Models key value pair of (key, op) entry.
-// Required b/c protobuf doesn't support maps natively
+// Required b/c protobuff doesn't support maps natively
 message OpEntry {
     io.casperlabs.casper.consensus.state.Key key = 1;
     Op operation = 2;
@@ -191,7 +200,7 @@ message QueryRequest {
 
 message QueryResponse {
     oneof result {
-        io.casperlabs.casper.consensus.state.StoredValue success = 1;
+        io.casperlabs.casper.consensus.state.Value success = 1;
         //TODO: ADT for errors
         string failure = 2;
     }
