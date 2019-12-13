@@ -35,6 +35,7 @@ import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import io.casperlabs.casper.helper.DeployOps._
 import io.casperlabs.comm.ServiceError.OutOfRange
+import io.casperlabs.shared.LogStub
 
 import scala.concurrent.duration._
 
@@ -77,6 +78,7 @@ class CreateBlockAPITest
 
     implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
+    implicit val db           = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -119,6 +121,7 @@ class CreateBlockAPITest
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val bs = node.blockStorage
+    implicit val db = node.deployBuffer
 
     def deployAndPropose(
         blockApiLock: Semaphore[Task]
@@ -179,6 +182,7 @@ class CreateBlockAPITest
 
     implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
+    implicit val db           = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -213,6 +217,7 @@ class CreateBlockAPITest
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
     val deploy = ProtoUtil.deploy(0)
 
@@ -280,6 +285,7 @@ class CreateBlockAPITest
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
     def mkDeploy(code: String) =
       ProtoUtil.deploy(0, ByteString.copyFromUtf8(code))
@@ -321,6 +327,7 @@ class CreateBlockAPITest
     implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
     val deploys = (1L to 10L).map(ProtoUtil.deploy(_)).toList
 
@@ -360,9 +367,8 @@ class CreateBlockAPITest
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-  def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
-  def contains(b: Block): F[Boolean]                = underlying.contains(b)
-  def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def addBlock(b: Block): F[BlockStatus] = underlying.addBlock(b)
+  def contains(b: Block): F[Boolean]     = underlying.contains(b)
   def estimator(
       dag: DagRepresentation[F],
       lfbHash: ByteString,
