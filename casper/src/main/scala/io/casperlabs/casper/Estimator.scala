@@ -1,6 +1,5 @@
 package io.casperlabs.casper
 
-import cats.data.NonEmptyList
 import cats.Monad
 import cats.data.NonEmptyList
 import cats.implicits._
@@ -22,8 +21,8 @@ object Estimator {
 
   import Weight._
 
-  implicit val metricsSource   = CasperMetricsSource
-  implicit val decreasingOrder = Ordering[Long].reverse
+  implicit val metricsSource = CasperMetricsSource
+  val increasingOrder        = Ordering[Long]
 
   def tips[F[_]: MonadThrowable: Metrics: Log](
       dag: DagRepresentation[F],
@@ -65,9 +64,9 @@ object Estimator {
       for {
         latestMessages <- lmh.toList.traverse(dag.lookupUnsafe(_))
         lfb            <- dag.lookupUnsafe(lfbHash)
-        lfbDistance    = latestMessages.maxBy(_.rank).rank - lfb.rank
-        _              <- Log[F].info(s"${lfbDistance -> "lfbDistance"}")
-        _              <- Metrics[F].record("lfbDistance", lfbDistance)
+        lfbDistance = latestMessages.maxBy(_.rank)(increasingOrder).rank - lfb.rank
+        _           <- Log[F].info(s"$lfbDistance")
+        _           <- Metrics[F].record("lfbDistance", lfbDistance)
         scores <- lmdScoring(dag, lfb.messageHash, latestMessageHashes, equivocators)
                    .timer("lmdScoring")
         newMainParent <- forkChoiceTip(dag, lfb.messageHash, scores).timer("forkChoiceTip")
