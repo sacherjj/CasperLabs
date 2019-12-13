@@ -193,7 +193,7 @@ class NodeRuntime private[node] (
                                                                       )
       implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
                                                      EventStream
-                                                       .create[Task](ingressScheduler)
+                                                       .create[Task](ingressScheduler, 10)
                                                    )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
