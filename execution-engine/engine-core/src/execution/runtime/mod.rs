@@ -13,7 +13,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{deserialize, ToBytes, U32_SIZE},
+    bytesrepr::{deserialize, ToBytes},
     contract_api::{
         system::{TransferResult, TransferredTo},
         Error as ApiError,
@@ -342,17 +342,90 @@ where
         }
     }
 
-    /// Load the uref known by the given name into the Wasm memory
-    pub fn get_key(&mut self, name_ptr: u32, name_size: u32) -> Result<usize, Trap> {
-        let name = self.string_from_mem(name_ptr, name_size)?;
-        // Take an optional uref, and pass its serialized value as is.
-        // This makes it easy to deserialize optional value on the other
-        // side without failing the execution when the value does not exist.
-        let uref = self.context.named_keys_get(&name).cloned();
-        let uref_bytes = uref.to_bytes().map_err(Error::BytesRepr)?;
+    pub fn get_arg_size(
+        &mut self,
+        index: usize,
+        size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg_size = match self.context.args().get(index) {
+            Some(arg) if arg.len() > u32::max_value() as usize => {
+                return Ok(Err(ApiError::OutOfMemoryError))
+            }
+            None => return Ok(Err(ApiError::MissingArgument)),
+            Some(arg) => arg.len() as u32,
+        };
 
-        self.host_buf = uref_bytes;
-        Ok(self.host_buf.len())
+        let arg_size_bytes = arg_size.to_le_bytes(); // wasm is LE
+
+        if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
+    }
+
+    pub fn get_arg(
+        &mut self,
+        index: usize,
+        output_ptr: u32,
+        output_size: usize,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let arg = match self.context.args().get(index) {
+            Some(arg) => arg,
+            None => return Ok(Err(ApiError::MissingArgument)),
+        };
+
+        if arg.len() > output_size {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
+
+        if let Err(e) = self.memory.set(output_ptr, &arg[..output_size]) {
+            return Err(Error::Interpreter(e).into());
+        }
+
+        Ok(Ok(()))
+    }
+
+    /// Load the uref known by the given name into the Wasm memory
+    pub fn load_key(
+        &mut self,
+        name_ptr: u32,
+        name_size: u32,
+        output_ptr: u32,
+        output_size: usize,
+        bytes_written_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        let name = self.string_from_mem(name_ptr, name_size)?;
+
+        // Get a key and serialize it
+        let key = match self.context.named_keys_get(&name) {
+            Some(key) => key,
+            None => return Ok(Err(ApiError::MissingKey)),
+        };
+
+        let key_bytes = match key.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        // `output_size` has to be greater or equal to the actual length of serialized Key bytes
+        if output_size < key_bytes.len() {
+            return Ok(Err(ApiError::BufferTooSmall));
+        }
+
+        // Set serialized Key bytes into the output buffer
+        if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        // For all practical purposes following cast is assumed to be safe
+        let bytes_size = key_bytes.len() as u32;
+        let size_bytes = bytes_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     pub fn has_key(&mut self, name_ptr: u32, name_size: u32) -> Result<i32, Trap> {
@@ -660,8 +733,7 @@ where
     fn add_associated_key(&mut self, public_key_ptr: u32, weight_value: u8) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source
@@ -683,8 +755,7 @@ where
     fn remove_associated_key(&mut self, public_key_ptr: u32) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source
@@ -703,8 +774,7 @@ where
     ) -> Result<i32, Trap> {
         let public_key = {
             // Public key as serialized bytes
-            let source_serialized =
-                self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE + U32_SIZE)?;
+            let source_serialized = self.bytes_from_mem(public_key_ptr, PUBLIC_KEY_SIZE)?;
             // Public key deserialized
             let source: PublicKey = deserialize(&source_serialized).map_err(Error::BytesRepr)?;
             source

@@ -126,7 +126,7 @@ impl FromBytes for PointerBlock {
     }
 }
 
-impl ::std::ops::Index<usize> for PointerBlock {
+impl core::ops::Index<usize> for PointerBlock {
     type Output = Option<Pointer>;
 
     #[inline]
@@ -136,11 +136,51 @@ impl ::std::ops::Index<usize> for PointerBlock {
     }
 }
 
-impl ::std::ops::IndexMut<usize> for PointerBlock {
+impl core::ops::IndexMut<usize> for PointerBlock {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         let PointerBlock(dat) = self;
         &mut dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::Range<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::Range<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeTo<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeTo<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeFrom<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeFrom<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeFull> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeFull) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
     }
 }
 
@@ -189,6 +229,13 @@ impl<K, V> Trie<K, V> {
     /// Constructs a [`Trie::Extension`] from a given affix and pointer.
     pub fn extension(affix: Vec<u8>, pointer: Pointer) -> Self {
         Trie::Extension { affix, pointer }
+    }
+
+    pub fn key(&self) -> Option<&K> {
+        match self {
+            Trie::Leaf { key, .. } => Some(key),
+            _ => None,
+        }
     }
 }
 

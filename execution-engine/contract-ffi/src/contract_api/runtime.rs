@@ -14,7 +14,7 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
     value::{
-        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE},
+        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE, PUBLIC_KEY_SIZE},
         Contract, Value,
     },
 };
@@ -83,12 +83,13 @@ pub fn upgrade_contract_at_uref(name: &str, uref: TURef<Contract>) {
     }
 }
 
-fn load_arg(index: u32) -> Option<usize> {
-    let arg_size = unsafe { ext_ffi::load_arg(index) };
-    if arg_size >= 0 {
-        Some(arg_size as usize)
-    } else {
-        None
+fn get_arg_size(i: u32) -> Option<usize> {
+    let mut arg_size: usize = 0;
+    let ret = unsafe { ext_ffi::get_arg_size(i as usize, &mut arg_size as *mut usize) };
+    match result_from(ret) {
+        Ok(_) => Some(arg_size),
+        Err(Error::MissingArgument) => None,
+        Err(e) => revert(e),
     }
 }
 
@@ -96,13 +97,17 @@ fn load_arg(index: u32) -> Option<usize> {
 /// invocation. Note that this is only relevant to contracts stored on-chain
 /// since a contract deployed directly is not invoked with any arguments.
 pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
-    let arg_size = load_arg(i)?;
+    let arg_size = get_arg_size(i)?;
+
     let arg_bytes = {
-        let dest_ptr = alloc_bytes(arg_size);
-        unsafe {
-            ext_ffi::get_arg(dest_ptr);
-            Vec::from_raw_parts(dest_ptr, arg_size, arg_size)
-        }
+        let res = {
+            let data_ptr = alloc_bytes(arg_size);
+            let ret = unsafe { ext_ffi::get_arg(i as usize, data_ptr, arg_size) };
+            let data = unsafe { Vec::from_raw_parts(data_ptr, arg_size, arg_size) };
+            result_from(ret).map(|_| data)
+        };
+        // Assumed to be safe as `get_arg_size` checks the argument already
+        res.unwrap_or_revert()
     };
     Some(deserialize(&arg_bytes))
 }
@@ -112,10 +117,9 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 /// When in the sub call - returns public key of the account that made the
 /// deploy.
 pub fn get_caller() -> PublicKey {
-    //  TODO: Once `PUBLIC_KEY_SIZE` is fixed, replace 36 with it.
-    let dest_ptr = alloc_bytes(36);
+    let dest_ptr = alloc_bytes(PUBLIC_KEY_SIZE);
     unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, 36, 36) };
+    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PUBLIC_KEY_SIZE, PUBLIC_KEY_SIZE) };
     deserialize(&bytes).unwrap_or_revert()
 }
 
@@ -140,16 +144,24 @@ pub fn get_phase() -> Phase {
 /// depending on whether the current module is a sub-call or not.
 pub fn get_key(name: &str) -> Option<Key> {
     let (name_ptr, name_size, _bytes) = to_ptr(name);
-    let key_size = unsafe { ext_ffi::get_key(name_ptr, name_size) };
-    let dest_ptr = alloc_bytes(key_size);
-    let key_bytes = unsafe {
-        // TODO: unify FFIs that just copy from the host buffer
-        // https://casperlabs.atlassian.net/browse/EE-426
-        ext_ffi::get_arg(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, key_size, key_size)
+    let mut key_bytes = [0u8; Key::serialized_size_hint()];
+    let mut total_bytes: usize = 0;
+    let ret = unsafe {
+        ext_ffi::get_key(
+            name_ptr,
+            name_size,
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+            &mut total_bytes as *mut usize,
+        )
     };
-    // TODO: better error handling (i.e. pass the `Result` on)
-    deserialize(&key_bytes).unwrap_or_revert()
+    match result_from(ret) {
+        Ok(_) => {}
+        Err(Error::MissingKey) => return None,
+        Err(e) => revert(e),
+    }
+    let key: Key = deserialize(&key_bytes[..total_bytes]).unwrap_or_revert();
+    Some(key)
 }
 
 /// Check if the given name corresponds to a known unforgable reference

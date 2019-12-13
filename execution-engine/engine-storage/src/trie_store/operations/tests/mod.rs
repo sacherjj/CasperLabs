@@ -1,3 +1,5 @@
+mod ee_699;
+mod keys;
 mod proptests;
 mod read;
 mod scan;
@@ -31,7 +33,7 @@ use crate::{
 const TEST_KEY_LENGTH: usize = 7;
 
 /// A short key type for tests.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct TestKey([u8; TEST_KEY_LENGTH]);
 
 impl ToBytes for TestKey {

@@ -7,6 +7,7 @@ use proptest::{
 };
 
 use super::*;
+use crate::trie_store::operations;
 
 const DEFAULT_MIN_LENGTH: usize = 0;
 
@@ -76,6 +77,24 @@ where
             if ReadResult::Found(*value) != result {
                 return Ok(false);
             }
+        }
+        let expected = {
+            let mut tmp = pairs[..=index]
+                .iter()
+                .map(|(k, _)| k)
+                .cloned()
+                .collect::<Vec<TestKey>>();
+            tmp.sort();
+            tmp
+        };
+        let actual = {
+            let mut tmp =
+                operations::keys::<_, _, _, _, E>(correlation_id, &txn, store, root_hash)?;
+            tmp.sort();
+            tmp
+        };
+        if expected != actual {
+            return Ok(false);
         }
     }
     Ok(true)
