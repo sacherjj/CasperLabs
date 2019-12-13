@@ -98,10 +98,21 @@ where
 
         let response = match result {
             Ok(QueryResult::Success(value)) => {
-                let log_message = format!("query successful; correlation_id: {}", correlation_id);
-                log_info(&log_message);
                 let mut result = ipc::QueryResponse::new();
-                result.set_success(value.into());
+                match value.try_into() {
+                    Ok(pb_value) => {
+                        let log_message =
+                            format!("query successful; correlation_id: {}", correlation_id);
+                        log_info(&log_message);
+                        result.set_success(pb_value);
+                    }
+                    Err(ParsingError(error_msg)) => {
+                        let log_message =
+                            format!("Failed to convert StoredValue to Value: {}", error_msg);
+                        logging::log_error(&log_message);
+                        result.set_failure(log_message);
+                    }
+                }
                 result
             }
             Ok(QueryResult::ValueNotFound(full_path)) => {
