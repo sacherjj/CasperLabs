@@ -712,10 +712,8 @@ object MultiParentCasperImpl {
     ): F[Unit] =
       semaphore.withPermit {
         BlockStorage[F]
-          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects)) *>
-          EventEmitter[F]
-            .blockAdded(block.getBlockInfo)
-      }
+          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+      } *> EventEmitter[F].blockAdded(block.getBlockInfo)
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
