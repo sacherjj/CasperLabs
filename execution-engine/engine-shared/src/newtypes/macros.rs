@@ -30,6 +30,18 @@ macro_rules! make_array_newtype {
 
         impl Eq for $name {}
 
+        impl PartialOrd for $name {
+            fn partial_cmp(&self, other: &$name) -> Option<core::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl Ord for $name {
+            fn cmp(&self, other: &$name) -> core::cmp::Ordering {
+                self.0.cmp(&other.0)
+            }
+        }
+
         impl core::ops::Index<usize> for $name {
             type Output = $ty;
 
