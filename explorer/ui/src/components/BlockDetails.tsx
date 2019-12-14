@@ -46,7 +46,7 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
   }
 
   componentDidUpdate() {
-    // Container and component stays the same during naviagation.
+    // Container and component stays the same during navigation.
     if (this.blockHashBase16 !== this.container.blockHashBase16) {
       this.container.init(decodeBase16(this.blockHashBase16));
       this.refresh();
@@ -159,8 +159,8 @@ const DeploysTable = observer(
                 {deploy.getIsError() ? (
                   <Icon name="times-circle" color="red" />
                 ) : (
-                  <Icon name="check-circle" color="green" />
-                )}
+                    <Icon name="check-circle" color="green" />
+                  )}
               </td>
               <td>{deploy.getErrorMessage()}</td>
             </tr>
@@ -185,6 +185,16 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       'Parents',
       <ul>
         {header.getParentHashesList_asU8().map((x, idx) => (
+          <li key={idx}>
+            <BlockLink blockHash={x} />
+          </li>
+        ))}
+      </ul>
+    ],
+    [
+      'Children',
+      <ul>
+        {block.getStatus()!.getChildHashesList_asU8().map((x, idx) => (
           <li key={idx}>
             <BlockLink blockHash={x} />
           </li>
