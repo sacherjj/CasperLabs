@@ -125,7 +125,9 @@ object BlockAPI {
           } yield result
 
         case false =>
-          raise(Aborted("There is another propose in progress."))
+          raise(
+            Aborted("There is another propose in progress, or hasn't synced yet. Try again later.")
+          )
       }
     }
   }

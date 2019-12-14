@@ -219,15 +219,18 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
-      blockApiLock <- Resource.liftF(Semaphore[Task](1))
+      // Creating with 0 permits initially, enabled after the initial synchronization.
+      blockApiLock <- Resource.liftF(Semaphore[Task](0))
 
+      // Set up gossiping machinery and start synchronizing with the network.
       implicit0(broadcaster: Broadcaster[Task]) <- casper.gossiping.apply[Task](
                                                     port,
                                                     conf,
                                                     chainSpec,
                                                     genesis,
                                                     ingressScheduler,
-                                                    egressScheduler
+                                                    egressScheduler,
+                                                    onSynchronized = blockApiLock.releaseN(1)
                                                   )
 
       // For now just either starting the auto-proposer or not, but ostensibly we

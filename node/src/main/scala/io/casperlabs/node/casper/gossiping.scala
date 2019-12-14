@@ -68,7 +68,8 @@ package object gossiping {
       chainSpec: ChainSpec,
       genesis: Block,
       ingressScheduler: Scheduler,
-      egressScheduler: Scheduler
+      egressScheduler: Scheduler,
+      onSynchronized: F[Unit]
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Broadcaster[F]] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
@@ -188,6 +189,11 @@ package object gossiping {
                                  ),
                                  Resource.liftF(().pure[F].start)
                                )
+
+      // Signal to the outside world when we're done with the synchronization.
+      _ <- makeFiberResource {
+            awaitApproval.join >> awaitSynchronization.join >> onSynchronized
+          }
 
       // The stashing synchronizer waits for Genesis approval and the initial synchronization
       // to complete before actually syncing anything. We had to create the underlying
