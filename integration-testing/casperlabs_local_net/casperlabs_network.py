@@ -21,7 +21,7 @@ from casperlabs_local_net.common import (
     EMPTY_ETC_CASPERLABS,
     random_string,
 )
-from casperlabs_local_net.docker_base import DockerConfig
+from casperlabs_local_net.docker_config import DockerConfig, KeygenDockerConfig
 from casperlabs_local_net.docker_clarity import (
     DockerClarity,
     DockerGrpcWebProxy,
@@ -454,6 +454,27 @@ class TwoNodeNetwork(CasperLabsNetwork):
             network=self.create_docker_network(),
             node_account=kp,
             grpc_encryption=self.grpc_encryption,
+        )
+        self.add_bootstrap(config)
+        self.add_new_node_to_network()
+
+
+class TwoNodeNetworkWithGeneratedKeys(TwoNodeNetwork):
+    def __init__(self, docker_client, cli_class):
+        super().__init__(docker_client)
+        self.cli_class = cli_class
+
+    def create_cl_network(self):
+        kp = self.get_key()
+        config = KeygenDockerConfig(
+            self.docker_client,
+            node_private_key=kp.private_key,
+            node_public_key=kp.public_key,
+            network=self.create_docker_network(),
+            node_account=kp,
+            grpc_encryption=self.grpc_encryption,
+            keys_directory="keys",
+            cli_class=self.cli_class,
         )
         self.add_bootstrap(config)
         self.add_new_node_to_network()

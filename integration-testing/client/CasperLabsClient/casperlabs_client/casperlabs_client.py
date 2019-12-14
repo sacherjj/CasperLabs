@@ -35,13 +35,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import serialization
 from Crypto.Hash import keccak
-
-from cryptography.hazmat.primitives.serialization import (
-    PrivateFormat,
-    Encoding,
-    NoEncryption,
-)
+from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
 import datetime
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
@@ -1196,6 +1192,11 @@ def write_file(file_name, text):
         f.write(text)
 
 
+def write_file_binary(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+
 def generate_key_pair():
     curve = ec.SECP256R1()
     private_key = ec.generate_private_key(curve, default_backend())
@@ -1218,7 +1219,7 @@ def public_address(public_key):
     return r[12 * 2 :]
 
 
-def generate_certificate(private_key, public_key):
+def generate_certificates(private_key, public_key):
     today = datetime.datetime.today()
     one_day = datetime.timedelta(1, 0, 0)
     address = public_address(public_key)  # .map(Base16.encode).getOrElse("local")
@@ -1227,7 +1228,7 @@ def generate_certificate(private_key, public_key):
     builder = x509.CertificateBuilder()
     builder = builder.not_valid_before(today)
 
-    # TODO: Where's documentation of the decision to make keys valid 1 year only?
+    # TODO: Where's documentation of the decision to make keys valid for 1 year only?
     builder = builder.not_valid_after(today + 365 * one_day)
     builder = builder.subject_name(
         x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, owner)])
@@ -1251,19 +1252,18 @@ def generate_certificate(private_key, public_key):
     certificate = builder.sign(
         private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
     )
-    return certificate
+
+    cert_pem = certificate.public_bytes(encoding=serialization.Encoding.PEM)
+    key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return cert_pem, key_pem
 
 
 def encode_base64(a: bytes):
     return str(base64.b64encode(a), "utf-8")
-
-
-def pem(o: bytes, label) -> str:
-    s = encode_base64(o)
-    line_length = 64
-    lines = [s[i : i + line_length] for i in range(0, len(s), line_length)]
-    r = "\n".join([f"-----BEGIN {label}-----"] + lines + [f"-----END {label}-----"])
-    return r
 
 
 @guarded_command
@@ -1277,23 +1277,34 @@ def keygen_command(casperlabs_client, args):
     node_cert_path = directory / "node.certificate.pem"
     node_id_path = directory / "node-id"
 
-    validator_private, validator_public = ed25519.create_keypair()
+    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
+    validator_public = validator_private.public_key()
 
-    write_file(validator_private_path, pem(validator_private.to_bytes(), "PRIVATE KEY"))
-    write_file(validator_pub_path, pem(validator_public.to_bytes(), "PUBLIC KEY"))
-    write_file(validator_id_path, encode_base64(validator_public.to_bytes()))
-    write_file(validator_id_hex_path, validator_public.to_bytes().hex())
-
-    private_key, public_key = generate_key_pair()
-    node_cert = generate_certificate(private_key, public_key)
-
-    private_key_bytes = private_key.private_bytes(
-        Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
+    validator_private_pem = validator_private.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
     )
 
-    write_file(node_priv_path, pem(private_key_bytes, "PRIVATE KEY"))
-    node_cert_bytes = node_cert.tbs_certificate_bytes
-    write_file(node_cert_path, pem(node_cert_bytes, "CERTIFICATE"))
+    validator_public_pem = validator_public.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    validator_public_bytes = validator_public.public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+
+    write_file_binary(validator_private_path, validator_private_pem)
+    write_file_binary(validator_pub_path, validator_public_pem)
+    write_file(validator_id_path, encode_base64(validator_public_bytes))
+    write_file(validator_id_hex_path, validator_public_bytes.hex())
+
+    private_key, public_key = generate_key_pair()
+
+    node_cert, key_pem = generate_certificates(private_key, public_key)
+
+    write_file_binary(node_priv_path, key_pem)
+    write_file_binary(node_cert_path, node_cert)
 
     write_file(node_id_path, public_address(public_key))
     print(f"Keys successfully created in directory: {str(directory.absolute())}")
