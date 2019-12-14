@@ -756,7 +756,7 @@ class CasperLabsClient:
         :return:                          Yields generated DOT source or file name when out provided.
                                           Generates endless stream of file names if stream is not None.
         """
-        block_infos = list(self.showBlocks(depth))
+        block_infos = list(self.showBlocks(depth, full_view=False))
         dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
         if not out:
             yield dot_dag_description
@@ -780,7 +780,7 @@ class CasperLabsClient:
         previous_block_hashes = set(b.summary.block_hash for b in block_infos)
         while stream:
             time.sleep(delay_in_seconds)
-            block_infos = list(self.showBlocks(depth))
+            block_infos = list(self.showBlocks(depth, full_view=False))
             block_hashes = set(b.summary.block_hash for b in block_infos)
             if block_hashes != previous_block_hashes:
                 dot_dag_description = vdag.generate_dot(
@@ -1133,7 +1133,7 @@ def show_block_command(casperlabs_client, args):
 
 @guarded_command
 def show_blocks_command(casperlabs_client, args):
-    response = casperlabs_client.showBlocks(args.depth)
+    response = casperlabs_client.showBlocks(args.depth, full_view=False)
     _show_blocks(response)
 
 
