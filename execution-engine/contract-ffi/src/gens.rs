@@ -129,7 +129,8 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             | CLType::Tuple7(_)
             | CLType::Tuple8(_)
             | CLType::Tuple9(_)
-            | CLType::Tuple10(_) => (),
+            | CLType::Tuple10(_)
+            | CLType::Any => (),
         }
     };
 
