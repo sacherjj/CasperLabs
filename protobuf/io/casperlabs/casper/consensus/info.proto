@@ -24,7 +24,7 @@ message BlockInfo {
             uint32 block_size_bytes = 1;
             uint32 deploy_error_count = 2;
             uint64 deploy_cost_total = 3;
-            // Average gas price across all successful deploys in the block weighted by the gas cost of the deploys.
+            // Average gas price across all deploys in the block weighted by the gas cost of the deploys.
             uint64 deploy_gas_price_avg = 4;
         }
     }
