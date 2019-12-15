@@ -1,4 +1,4 @@
-def test_scala_keygen(two_node_network_with_scala_generated_keys):
+def disable_test_scala_keygen(two_node_network_with_scala_generated_keys):
     # Once the fixture has been successfully created we know that the keys are fine:
     # the nodes started, found their peer and a show-blocks was successfull
     # in retrieving a genesis block.
@@ -10,5 +10,5 @@ def test_scala_keygen(two_node_network_with_scala_generated_keys):
     pass
 
 
-def test_python_keygen(two_node_network_with_python_generated_keys):
+def disable_test_python_keygen(two_node_network_with_python_generated_keys):
     pass
