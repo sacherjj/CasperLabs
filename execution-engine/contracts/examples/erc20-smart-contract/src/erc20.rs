@@ -1,4 +1,4 @@
-use alloc::vec::{self, Vec};
+use alloc::vec::Vec;
 
 use contract_ffi::{
     contract_api::{account::PublicKey, runtime, storage},
@@ -79,9 +79,11 @@ fn entry_point() {
             };
         }
         Api::Approve(spender, amount) => token.approve(&runtime::get_caller(), &spender, amount),
-        Api::BalanceOf(address) => runtime::ret(token.balance_of(&address), vec![]),
-        Api::TotalSupply => runtime::ret(token.total_supply(), vec![]),
-        Api::Allowance(owner, spender) => runtime::ret(token.allowance(&owner, &spender), vec![]),
+        Api::BalanceOf(address) => runtime::ret(token.balance_of(&address), Vec::new()),
+        Api::TotalSupply => runtime::ret(token.total_supply(), Vec::new()),
+        Api::Allowance(owner, spender) => {
+            runtime::ret(token.allowance(&owner, &spender), Vec::new())
+        }
         _ => runtime::revert(Error::UnknownErc20CallCommand),
     }
 }
