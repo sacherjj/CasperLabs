@@ -263,12 +263,6 @@ class DockerNode(LoggingDockerBase):
             ports = self.docker_ports
         logging.info(f"{self.container_name} ports: {ports}")
 
-        volumes = self.volumes
-        if self.config.keys_directory:
-            os.mkdir(self.host_keys_dir)
-            cli = self.config.cli_class(self)
-            cli("keygen", self.host_keys_dir)
-
         container = self.config.docker_client.containers.run(
             self.image_name,
             name=self.container_name,
@@ -278,7 +272,7 @@ class DockerNode(LoggingDockerBase):
             mem_limit=self.config.mem_limit,
             ports=ports,  # Exposing grpc for Python Client
             network=self.config.network,
-            volumes=volumes,
+            volumes=self.volumes,
             command=commands,
             hostname=self.container_name,
             environment=self.config.node_env,
@@ -300,6 +294,12 @@ class DockerNode(LoggingDockerBase):
             accounts_file = f"{etc_casperlabs_chainspec}/genesis/accounts.csv"
             self.create_genesis_accounts_file(accounts_file)
             logging.info(f"======= CREATED accounts file in: {accounts_file}")
+
+        if self.config.keys_directory:
+            os.mkdir(self.host_keys_dir)
+            cli = self.config.cli_class(self)
+            output = cli("keygen", self.host_keys_dir)
+            logging.info(f"keygen => {output}")
 
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self, path: str = None) -> None:
