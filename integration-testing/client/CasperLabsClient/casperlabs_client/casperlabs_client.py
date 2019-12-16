@@ -1238,17 +1238,6 @@ def generate_certificates(private_key, public_key):
     )
     builder = builder.public_key(public_key)
     builder = builder.serial_number(x509.random_serial_number())
-    # builder = builder.signature_algorithm_oid()
-
-    # TODO: hash algos supported by the cryptography module currently:
-    # SHA1, SHA512_224, SHA512_256, SHA224, SHA256, SHA384, SHA512, SHA3_224, SHA3_256, SHA3_384, SHA3_512, SHAKE128, SHAKE256
-    #
-    # In Scala: SHA256withECDSA
-    # module 'cryptography.hazmat.primitives.hashes' has no attribute 'SHA256withECDSA'
-
-    # cryptography.hazmat.primitives.hashes:
-
-    # certificate = builder.sign(private_key=private_key, algorithm=hashes.SHA256withECDSA(), backend=default_backend())
     certificate = builder.sign(
         private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
     )
