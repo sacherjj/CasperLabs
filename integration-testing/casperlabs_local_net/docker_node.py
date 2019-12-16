@@ -11,8 +11,8 @@ import requests
 from casperlabs_local_net.common import MAX_PAYMENT_ABI, Contract, EMPTY_ETC_CASPERLABS
 from casperlabs_local_net.docker_base import LoggingDockerBase
 from casperlabs_local_net.docker_client import DockerClient
-from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
 from casperlabs_local_net.python_client import PythonClient
+from casperlabs_local_net.errors import CasperLabsNodeAddressNotFoundError
 from casperlabs_local_net.docker_base import DockerConfig
 from casperlabs_local_net.casperlabs_accounts import (
     is_valid_account,
@@ -40,6 +40,9 @@ class DockerNode(LoggingDockerBase):
     CL_SOCKETS_DIR = f"{CL_NODE_DIRECTORY}/sockets"
     CL_BOOTSTRAP_DIR = f"{CL_NODE_DIRECTORY}/bootstrap"
     CL_ACCOUNTS_DIR = f"{CL_NODE_DIRECTORY}/accounts"
+
+    # Used when node setup to use keys generated with client's keygen command
+    CL_KEYS_DIR = f"{CL_NODE_DIRECTORY}/keys"
     CL_CASPER_GENESIS_ACCOUNT_PUBLIC_KEY_PATH = f"{CL_ACCOUNTS_DIR}/account-id-genesis"
 
     NUMBER_OF_BONDS = 10
@@ -55,6 +58,9 @@ class DockerNode(LoggingDockerBase):
 
     def __init__(self, cl_network, config: DockerConfig):
         self.cl_network = cl_network
+        self.config = config
+        self.p_client = PythonClient(self)
+        self.d_client = DockerClient(self)
         super().__init__(config)
         self.graphql = GraphQL(self)
 
@@ -67,8 +73,6 @@ class DockerNode(LoggingDockerBase):
             self.set_proxy_server()
             self.set_kademlia_proxy()
         self._client = self.DOCKER_CLIENT
-        self.p_client = PythonClient(self)
-        self.d_client = DockerClient(self)
         self.join_client_network()
 
     def set_proxy_server(self, interceptor_class=GossipInterceptor):
@@ -235,6 +239,7 @@ class DockerNode(LoggingDockerBase):
                 "bind": self.CL_ETC_CASPERLABS_DIR,
                 "mode": "rw",
             },
+            self.host_keys_dir: {"bind": self.CL_KEYS_DIR, "mode": "rw"},
             self.host_chainspec_dir: {"bind": self.CL_CHAINSPEC_DIR, "mode": "rw"},
             self.host_bootstrap_dir: {"bind": self.CL_BOOTSTRAP_DIR, "mode": "rw"},
             self.host_accounts_dir: {"bind": self.CL_ACCOUNTS_DIR, "mode": "rw"},
@@ -289,6 +294,12 @@ class DockerNode(LoggingDockerBase):
             accounts_file = f"{etc_casperlabs_chainspec}/genesis/accounts.csv"
             self.create_genesis_accounts_file(accounts_file)
             logging.info(f"======= CREATED accounts file in: {accounts_file}")
+
+        if self.config.keys_directory:
+            os.mkdir(self.host_keys_dir)
+            cli = self.config.cli_class(self)
+            output = cli("keygen", self.host_keys_dir)
+            logging.info(f"keygen => {output}")
 
     # TODO: Should be changed to using validator-id from accounts
     def create_genesis_accounts_file(self, path: str = None) -> None:

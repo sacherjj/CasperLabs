@@ -6,6 +6,7 @@ from docker import DockerClient
 
 from casperlabs_local_net.casperlabs_accounts import Account
 from casperlabs_local_net.common import random_string, BOOTSTRAP_PATH, testing_root_path
+from casperlabs_local_net.cli import CLI
 
 
 DEFAULT_NODE_ENV = {
@@ -52,6 +53,9 @@ class DockerConfig:
     bond_amount: Callable = default_bond_amount
     custom_docker_tag: Optional[str] = None
     chainspec_directory: Optional[str] = None
+    keys_directory: Optional[str] = None
+    # CLI or DockerCLI, for running keygen
+    cli_class: Optional[CLI] = None
     etc_casperlabs_directory: str = "etc_casperlabs_empty"
 
     def __post_init__(self):
@@ -107,4 +111,30 @@ class DockerConfig:
             # In this case we have to provide full chainspec,
             # including manifest.toml and the system contracts.
             options["--casper-chain-spec-path"] = node.CL_CHAINSPEC_DIR
+        return options
+
+
+class KeygenDockerConfig(DockerConfig):
+    def content(self, file_name):
+        with open(os.path.join(self.keys_directory, file_name)) as f:
+            s = f.read()
+            if not file_name.endswith(".pem"):
+                return s
+            else:
+                data_lines = [l for l in s.splitlines() if not l.startswith("-----")]
+                return data_lines[0]
+
+    def path(self, file_name):
+        return os.path.join("/root/.casperlabs", self.keys_directory, file_name)
+
+    def node_command_options(self, node, server_host: str) -> dict:
+        options = super().node_command_options(node, server_host)
+        options["--casper-validator-private-key"] = self.content(
+            "validator-private.pem"
+        )
+        options["--casper-validator-public-key"] = self.content("validator-public.pem")
+        options["--tls-certificate"] = self.path("node.certificate.pem")
+        options["--tls-key"] = self.path("node.key.pem")
+        options["--tls-api-certificate"] = self.path("node.certificate.pem")
+        options["--tls-api-key"] = self.path("node.key.pem")
         return options
