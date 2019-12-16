@@ -311,7 +311,7 @@ abstract class HashSetCasperTest
                       .map { case Created(block) => block }
 
       // NOTE: Includes only data1 since data0 will be requeued in the background fiber.
-      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data1)
+      _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
       _ <- node0.casperEff.contains(signedBlock) shouldBeF true
