@@ -62,7 +62,7 @@ object Estimator {
       latestMessages <- latestMessageHashes.values.flatten.toList
                          .traverse(dag.lookupUnsafe(_))
                          .map(_.filterNot(_.rank < lfb.rank)) // Filter out messages that are older than LFB.
-                         .map(NonEmptyList.fromList(_).fold(NonEmptyList.one(lfb))(identity))
+                         .map(NonEmptyList.fromList(_).getOrElse(NonEmptyList.one(lfb)))
       latestMessagesByV = latestMessages.groupBy(_.validatorId)(cats.Order.fromOrdering[ByteString])
       lfbDistance       = latestMessages.toList.maxBy(_.rank)(increasingOrder).rank - lfb.rank
       _                 <- Metrics[F].record("lfbDistance", lfbDistance)
