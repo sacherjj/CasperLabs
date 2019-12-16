@@ -491,7 +491,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
   }
 
   /** The new gossiping first syncs the missing DAG, then downloads and adds the blocks in topological order.
-    * However the EquivocationDetector wants t  o know about dependencies so it can assign different statuses,
+    * However the EquivocationDetector wants to know about dependencies so it can assign different statuses,
     * so we'll make the synchronized DAG known via a partial block message, so any missing dependencies can
     * be tracked, i.e. Casper will know about the pending graph.  */
   def addMissingDependencies(block: Block): F[Unit] =
