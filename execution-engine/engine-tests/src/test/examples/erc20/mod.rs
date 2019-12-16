@@ -222,14 +222,3 @@ fn test_erc20_approval_and_transfer_from() {
         send_amount,
     );
 }
-
-use alloc::vec;
-use contract_ffi::bytesrepr::ToBytes;
-
-#[ignore]
-#[test]
-fn test_erc20_local_key() {
-    let key = vec![255u8, 0u8].to_bytes().unwrap();
-    assert_eq!(key, [1u8]);
-    // Init virtual machine.
-}

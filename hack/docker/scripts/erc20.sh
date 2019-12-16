@@ -12,9 +12,23 @@ TOKEN_NAME=${TOKEN_NAME:-"test-token"}
 ACCOUNT_PRIVATE_FILE="account-private.pem"
 ACCOUNT_ID_HEX_FILE="account-id-hex"
 PROXY_NAME="erc20_proxy"
+
+# At the beginning of a serialized version of Rust's Vec<u8>, first 4 bytes represent the size of the vector.
+#
+# Balances are 33 bytes arrays where: 
+#   - the first byte is "01";
+#   - the rest is 32 bytes of the account's public key.
+#
+# Allowances are 64 bytes arrays where: 
+#   - the first 32 bytes are token owner's public key; 
+#   - the second 32 bytes are token spender's public key.
+#
+# Decimal version of "21 00 00 00" is 33.
+# Decimal version of "40 00 00 00" is 64.
 BALANCE_KEY_SIZE_HEX="21000000"
-BALANCE_BYTE="01"
 ALLOWANCE_KEY_SIZE_HEX="40000000"
+BALANCE_BYTE="01"
+
 RED="\e[91m"
 YELLOW="\e[93m"
 GREEN="\e[32m"
