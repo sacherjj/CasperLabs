@@ -2,7 +2,7 @@ package io.casperlabs.casper
 
 import cats.data.NonEmptyList
 import cats.effect.concurrent.Semaphore
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import cats.Applicative
@@ -247,14 +247,17 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
-
           // Push any unfinalized deploys which are still in the buffer back to pending state if the
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
           // is that the auto-proposer will not pick up the change in the pending set immediately.
-          requeued <- DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet)
-          _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
-
+          // Requeueing operation is changing status of orphaned deploys in the DB.
+          // It's done as a transaction. If operation won't make it in time before
+          // immediate `createProposal`, those deploys will be considered for the next block.
+          _ <- (DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet) >>= {
+                requeued =>
+                  Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
+              }).forkAndLog
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
           remainingHashes <- DeployBuffer.remainingDeploys[F](
@@ -479,7 +482,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
     // Mark deploys we have observed in blocks as processed
     val processedDeploys =
-      addedBlocks.flatMap(block => block.getBody.deploys.map(_.getDeploy)).toList
+      attempts
+        .collect { case (block, status) if status.inDag => block }
+        .flatMap(block => block.getBody.deploys.map(_.getDeploy))
 
     DeployStorageWriter[F].markAsProcessed(processedDeploys) >>
       statelessExecutor.removeDependencies(addedBlockHashes)

@@ -8,8 +8,14 @@
 
 Note, the name of the package available on PyPi is `casperlabs-client` (with hyphen),
 but the name of the library as well as the CLI is written with underscore: `casperlabs_client`.
-The name of the CLI is written with underscore to make it different from the Scala client,
+
+The name of the CLI is written with underscore
+in order to distinguish it from the
+[Scala client](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/CONTRACTS.md#deploying-contracts),
 which is written with hyphen.
+Note, however, that the Python CLI `casperlabs_client`
+is compatible with
+Scala CLI `casperlabs-client`. It supports the same commands and options.
 
 ## Installation
 
@@ -75,8 +81,41 @@ typing the following on the command line:
 C:\Users\alice>pip install casperlabs-client
 ```
 
+## Command line interface
 
-## Getting started
+The package `casperlabs-client` includes command line interface (CLI)
+script called `casperlabs_client`,
+which has syntax compatible with 
+[Scala client](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/CONTRACTS.md#deploying-contracts).
+
+
+Type `casperlabs-client --help` to see short synopsis with a list of
+available commands
+
+
+```
+$ casperlabs_client --help
+usage: casperlabs_client [--help] [-h HOST] [-p PORT]
+                         [--port-internal PORT_INTERNAL] [--node-id NODE_ID]
+                         [--certificate-file CERTIFICATE_FILE]
+                         {deploy,make-deploy,sign-deploy,send-deploy,bond,unbond,transfer,propose,show-block,show-blocks,show-deploy,show-deploys,vdag,query-state,balance,keygen}
+                         ...
+
+```
+
+To get detailed documentation of a specific command type `casperlabs_client <command> --help`, for example:
+
+
+```
+$ casperlabs_client deploy --help
+```
+
+
+## Python API
+
+To see available API functions, their parameters and documentation,
+see [source](casperlabs_client/casperlabs_client.py).
+The API functions are marked with `@api` decorator.
 
 After installing `casperlabs-client` you can start interacting with
 [CasperLabs devnet](https://clarity.casperlabs.io).
@@ -126,7 +165,8 @@ casperlabs_client --host deploy.casperlabs.io vdag --depth 10 --out dag.png
 
 will produce an image file simillar to the one below:
 
-![DAG visualization example](example_vdag_output.png)
+
+![DAG visualization example](https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/integration-testing/client/CasperLabsClient/example_vdag_output.png)
 
 Small boxes represent blocks, labeled with short prefixes of their block hashes.
 Blocks are aligned in "lanes" representing validators that created them.
