@@ -174,7 +174,9 @@ message ListDeployInfosResponse {
 }
 
 
-message GetLastFinalizedBlockInfoRequest {}
+message GetLastFinalizedBlockInfoRequest {
+    io.casperlabs.casper.consensus.info.BlockInfo.View view = 1;
+}
 
 message StreamEventsRequest {
   bool block_added = 1;
