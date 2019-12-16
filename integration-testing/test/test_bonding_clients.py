@@ -10,9 +10,12 @@ from casperlabs_local_net.wait import wait_for_block_hash_propagated_to_all_node
 from casperlabs_client import InternalError
 from casperlabs_local_net.common import extract_block_hash_from_propose_output
 from casperlabs_local_net.casperlabs_accounts import GENESIS_ACCOUNT
+from casperlabs_local_net.cli import CLI, DockerCLI
 
+EXECUTION_PAYMENT_AMOUNT = 100 * 10 ** 6
 
-BONDING_ACCT = 295
+PYTHON_BONDING_ACCT = 294
+SCALA_BONDING_ACCT = 295
 
 
 def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
@@ -36,38 +39,44 @@ def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
     assert r.error_message == ""
 
 
-def bond_to_the_network(network: OneNodeNetwork, bond_amount: int, account_number: int):
-    # Using account that will not exist in bonds.txt from high number
+def bond_to_the_network(
+    network: OneNodeNetwork, bond_amount: int, account_number: int, cli_method
+):
     account = Account(account_number)
     node0, node1 = network.docker_nodes
-    response = node0.d_client.bond(
-        amount=bond_amount, private_key=account.private_key_docker_path
-    )
-    assert "Success!" in response
-    response = node0.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(response)
-    assert block_hash is not None
+    cli = cli_method(node0)
+    # fmt: off
+    cli("bond",
+        "--amount", bond_amount,
+        '--private-key', cli.private_key_path(account),
+        '--payment-amount', EXECUTION_PAYMENT_AMOUNT)
+    # fmt: on
+    block_hash = cli("propose")
     return block_hash, account
 
 
 def unbond_from_network(
-    network: OneNodeNetwork, bonding_amount: int, account_number: int
+    network: OneNodeNetwork, bonding_amount: int, account_number: int, cli_method
 ):
     node = network.docker_nodes[1]
     account = Account(account_number)
-    r = node.d_client.unbond(bonding_amount, account.private_key_docker_path)
-    assert "Success!" in r
-    r = node.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(r)
+    cli = cli_method(node)
+    # fmt: off
+    cli("unbond",
+        "--amount", bonding_amount,
+        "--private-key", cli.private_key_path(account),
+        "--payment-amount", EXECUTION_PAYMENT_AMOUNT)
+    # fmt: on
+    block_hash = cli("propose")
     assert block_hash is not None
     return block_hash, account
 
 
 def add_account_and_bond_to_network(
-    network: OneNodeNetwork, bond_amount: int, account_number: int
+    network: OneNodeNetwork, bond_amount: int, account_number: int, cli_client
 ):
     add_funded_account_to_network(network, account_number)
-    return bond_to_the_network(network, bond_amount, account_number)
+    return bond_to_the_network(network, bond_amount, account_number, cli_client)
 
 
 def assert_pre_state_of_network(network: OneNodeNetwork):
@@ -99,17 +108,20 @@ def bonds_by_account_and_stake(
     return bonds
 
 
-def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
+@pytest.mark.parametrize(
+    "acct_num,cli_method", ((PYTHON_BONDING_ACCT, CLI), (SCALA_BONDING_ACCT, DockerCLI))
+)
+def test_bonding_and_unbonding_with_deploys(one_node_network_fn, acct_num, cli_method):
     """
     Feature file: consensus.feature
     Scenario: Bonding a validator node to an existing network.
     """
     # Bond
-    logging.info(f"Funding Account {BONDING_ACCT} and bonding to network.")
+    logging.info(f"Funding Account {acct_num} and bonding to network.")
     bonding_amount = 1
     assert_pre_state_of_network(one_node_network_fn)
     block_hash, account = add_account_and_bond_to_network(
-        one_node_network_fn, bonding_amount, BONDING_ACCT
+        one_node_network_fn, bonding_amount, acct_num, cli_method
     )
 
     node0, node1 = one_node_network_fn.docker_nodes
@@ -138,9 +150,9 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     check_no_errors_in_deploys(node1, block_hash)
 
     # Unbond
-    logging.info(f"Unbonding Account {BONDING_ACCT} from network.")
+    logging.info(f"Unbonding Account {acct_num} from network.")
     block_hash, account = unbond_from_network(
-        one_node_network_fn, bonding_amount, BONDING_ACCT
+        one_node_network_fn, bonding_amount, acct_num, cli_method
     )
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network_fn.docker_nodes, block_hash
@@ -169,7 +181,10 @@ def test_bonding_and_unbonding_with_deploys(one_node_network_fn):
     assert "InvalidUnslashableBlock" in str(excinfo.value)
 
 
-def test_double_bonding(one_node_network_fn):
+@pytest.mark.parametrize(
+    "acct_num,cli_method", ((PYTHON_BONDING_ACCT, CLI), (SCALA_BONDING_ACCT, DockerCLI))
+)
+def test_double_bonding(one_node_network_fn, acct_num, cli_method):
     """
     Feature file: consensus.feature
     Scenario: Bonding a validator node twice to an existing network.
@@ -177,7 +192,7 @@ def test_double_bonding(one_node_network_fn):
 
     assert_pre_state_of_network(one_node_network_fn)
     block_hash, account = add_account_and_bond_to_network(
-        one_node_network_fn, 1, BONDING_ACCT
+        one_node_network_fn, 1, acct_num, cli_method
     )
     node0, node1 = one_node_network_fn.docker_nodes
     wait_for_block_hash_propagated_to_all_nodes(
@@ -185,7 +200,9 @@ def test_double_bonding(one_node_network_fn):
     )
     check_no_errors_in_deploys(node0, block_hash)
 
-    block_hash, account = bond_to_the_network(one_node_network_fn, 2, BONDING_ACCT)
+    block_hash, account = bond_to_the_network(
+        one_node_network_fn, 2, acct_num, cli_method
+    )
     wait_for_block_hash_propagated_to_all_nodes(
         one_node_network_fn.docker_nodes, block_hash
     )
@@ -195,7 +212,10 @@ def test_double_bonding(one_node_network_fn):
     assert len(bonds) == 1
 
 
-def test_partial_amount_unbonding(one_node_network_fn):
+@pytest.mark.parametrize(
+    "acct_num,cli_method", ((PYTHON_BONDING_ACCT, CLI), (SCALA_BONDING_ACCT, DockerCLI))
+)
+def test_partial_amount_unbonding(one_node_network_fn, acct_num, cli_method):
     """
     Feature file: consensus.feature
     Scenario: unbonding a bonded validator node with partial bonding amount from an existing network.
@@ -205,7 +225,7 @@ def test_partial_amount_unbonding(one_node_network_fn):
     remaining_amount = bonding_amount - unbond_amount
     assert_pre_state_of_network(one_node_network_fn)
     block_hash, account = add_account_and_bond_to_network(
-        one_node_network_fn, bonding_amount, BONDING_ACCT
+        one_node_network_fn, bonding_amount, acct_num, cli_method
     )
     node0, node1 = one_node_network_fn.docker_nodes
     check_no_errors_in_deploys(node0, block_hash)
@@ -216,7 +236,7 @@ def test_partial_amount_unbonding(one_node_network_fn):
     assert len(bonds) == 1
 
     block_hash, account = unbond_from_network(
-        one_node_network_fn, unbond_amount, BONDING_ACCT
+        one_node_network_fn, unbond_amount, acct_num, cli_method
     )
     check_no_errors_in_deploys(node1, block_hash)
 
@@ -226,7 +246,10 @@ def test_partial_amount_unbonding(one_node_network_fn):
     assert len(bonds) == 1
 
 
-def test_invalid_bonding_amount(one_node_network_fn):
+@pytest.mark.parametrize(
+    "acct_num,cli_method", ((PYTHON_BONDING_ACCT, CLI), (SCALA_BONDING_ACCT, DockerCLI))
+)
+def test_invalid_bonding_amount(one_node_network_fn, acct_num, cli_method):
     """
     Feature file: consensus.feature
     Scenario: Bonding a validator node to an existing network.
@@ -234,7 +257,7 @@ def test_invalid_bonding_amount(one_node_network_fn):
     # 190 is current total staked amount.
     bonding_amount = (190 * 1000) + 1
     block_hash, account = add_account_and_bond_to_network(
-        one_node_network_fn, bonding_amount, BONDING_ACCT
+        one_node_network_fn, bonding_amount, acct_num, cli_method
     )
     node1 = one_node_network_fn.docker_nodes[1]
     bonds = bonds_by_account_and_stake(
@@ -247,27 +270,33 @@ def test_invalid_bonding_amount(one_node_network_fn):
     assert r.error_message == "Exit code: 65286"
 
 
-def test_unbonding_without_bonding(one_node_network_fn):
+@pytest.mark.parametrize(
+    "acct_num,cli_method", ((PYTHON_BONDING_ACCT, CLI), (SCALA_BONDING_ACCT, DockerCLI))
+)
+def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
     """
     Feature file: consensus.feature
     Scenario: unbonding a validator node which was not bonded to an existing network.
     """
+    onn = one_node_network_fn
     bonding_amount = 1
-    account = Account(BONDING_ACCT)
-    assert_pre_state_of_network(one_node_network_fn)
-    add_funded_account_to_network(one_node_network_fn, BONDING_ACCT)
-    assert (
-        len(one_node_network_fn.docker_nodes) == 2
-    ), "Total number of nodes should be 2."
+    account = Account(acct_num)
+    assert_pre_state_of_network(onn)
+    add_funded_account_to_network(onn, acct_num)
+    assert len(onn.docker_nodes) == 2, "Total number of nodes should be 2."
 
-    node0, node1 = one_node_network_fn.docker_nodes
-    r = node0.d_client.unbond(bonding_amount, account.private_key_docker_path)
-    assert "Success!" in r
-    r = node0.d_client.propose()
-    block_hash = extract_block_hash_from_propose_output(r)
-    assert block_hash is not None
-    # block_hash, account = unbond_from_network(one_node_network_fn, bonding_amount, BONDING_ACCT)
-
+    node0, node1 = onn.docker_nodes
+    cli = cli_method(node0)
+    cli(
+        "unbond",
+        "--amount",
+        bonding_amount,
+        "--private-key",
+        cli.private_key_path(account),
+        "--payment-amount",
+        EXECUTION_PAYMENT_AMOUNT,
+    )
+    block_hash = cli("propose")
     r = node0.client.show_deploys(block_hash)[0]
     assert r.is_error is True
     assert r.error_message == "Exit code: 65280"
