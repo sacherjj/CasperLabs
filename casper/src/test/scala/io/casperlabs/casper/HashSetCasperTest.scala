@@ -310,7 +310,7 @@ abstract class HashSetCasperTest
       signedBlock <- (node0.deployBuffer.addDeploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
 
-      // NOTE: Includes only data1 since data0 will be requeued in the background fiber.
+      // NOTE: It can include both data0 and data1 because they don't conflict.
       _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
