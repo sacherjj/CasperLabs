@@ -53,6 +53,7 @@ node ./server/dist/transfer.js \
   --transfer-contract-path contracts/transfer_to_account.wasm \
   --payment-contract-path contracts/standard_payment.wasm \
   --payment-amount 100000 \
+  --gas-price 10 \
   --from-private-key-path ../hack/docker/keys/faucet-account/account-private.pem \
   --from-public-key-path ../hack/docker/keys/faucet-account/account-public.pem \
   --to-public-key-path ./server/test.public.key \
