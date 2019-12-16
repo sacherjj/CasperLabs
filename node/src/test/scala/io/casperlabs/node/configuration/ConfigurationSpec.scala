@@ -74,6 +74,7 @@ class ConfigurationSpec
       maxNumOfConnections = 1,
       maxMessageSize = 1,
       eventStreamBufferSize = 1,
+      engineParallelism = 1,
       chunkSize = 1,
       relayFactor = 1,
       relaySaturation = 1,
@@ -136,7 +137,8 @@ class ConfigurationSpec
     val blockStorage = Configuration.BlockStorage(
       cacheMaxSizeBytes = 1,
       cacheNeighborhoodBefore = 1,
-      cacheNeighborhoodAfter = 1
+      cacheNeighborhoodAfter = 1,
+      deployStreamChunkSize = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

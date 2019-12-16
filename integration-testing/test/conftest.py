@@ -5,11 +5,13 @@ import pytest
 import shutil
 
 from casperlabs_local_net.common import make_tempdir, random_string
+from casperlabs_local_net.cli import CLI, DockerCLI
 from casperlabs_local_net.casperlabs_network import (
     CustomConnectionNetwork,
     OneNodeNetwork,
     ThreeNodeNetwork,
     TwoNodeNetwork,
+    TwoNodeNetworkWithGeneratedKeys,
     PaymentNodeNetwork,
     PaymentNodeNetworkWithNoMinBalance,
     TrillionPaymentNodeNetwork,
@@ -102,6 +104,20 @@ def one_node_network_with_clarity(docker_client_fixture):
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def two_node_network_with_python_generated_keys(docker_client_fixture):
+    with TwoNodeNetworkWithGeneratedKeys(docker_client_fixture, CLI) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def two_node_network_with_scala_generated_keys(docker_client_fixture):
+    with TwoNodeNetworkWithGeneratedKeys(docker_client_fixture, DockerCLI) as tnn:
         tnn.create_cl_network()
         yield tnn
 

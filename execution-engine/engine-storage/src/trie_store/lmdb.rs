@@ -106,7 +106,6 @@
 
 use lmdb::{Database, DatabaseFlags};
 
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
 use engine_shared::newtypes::Blake2bHash;
 
 use crate::{
@@ -149,11 +148,7 @@ impl LmdbTrieStore {
     }
 }
 
-impl<K, V> Store<Blake2bHash, Trie<K, V>> for LmdbTrieStore
-where
-    K: ToBytes + FromBytes,
-    V: ToBytes + FromBytes,
-{
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for LmdbTrieStore {
     type Error = error::Error;
 
     type Handle = Database;
@@ -163,9 +158,4 @@ where
     }
 }
 
-impl<K, V> TrieStore<K, V> for LmdbTrieStore
-where
-    K: ToBytes + FromBytes,
-    V: ToBytes + FromBytes,
-{
-}
+impl<K, V> TrieStore<K, V> for LmdbTrieStore {}

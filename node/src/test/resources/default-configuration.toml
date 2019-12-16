@@ -21,6 +21,7 @@ data-dir = "/tmp"
 max-num-of-connections = 1
 max-message-size = 1
 event-stream-buffer-size = 1
+engine-parallelism = 1
 chunk-size = 1
 relay-factor = 1
 relay-saturation = 1
@@ -85,6 +86,7 @@ min-ttl = "1hour"
 cache-max-size-bytes = 1
 cache-neighborhood-before = 1
 cache-neighborhood-after = 1
+deploy-stream-chunk-size = 1
 
 [metrics]
 prometheus = false

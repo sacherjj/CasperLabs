@@ -1,92 +1,9 @@
 use super::*;
 
-fn write_leaves<'a, R, S, E>(
-    correlation_id: CorrelationId,
-    environment: &'a R,
-    store: &S,
-    root_hash: &Blake2bHash,
-    leaves: &[TestTrie],
-) -> Result<Vec<WriteResult>, E>
-where
-    R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
-    S::Error: From<R::Error>,
-    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
-{
-    let mut results = Vec::new();
-    if leaves.is_empty() {
-        return Ok(results);
-    }
-    let mut root_hash = root_hash.to_owned();
-    let mut txn = environment.create_read_write_txn()?;
-
-    for leaf in leaves.iter() {
-        if let Trie::Leaf { key, value } = leaf {
-            let write_result =
-                write::<_, _, _, _, E>(correlation_id, &mut txn, store, &root_hash, key, value)?;
-            match write_result {
-                WriteResult::Written(hash) => {
-                    root_hash = hash;
-                }
-                WriteResult::AlreadyExists => (),
-                WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
-            };
-            results.push(write_result);
-        } else {
-            panic!("leaves should contain only leaves");
-        }
-    }
-    txn.commit()?;
-    Ok(results)
-}
-
 mod empty_tries {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::trie_store;
-
-    fn writes_to_n_leaf_empty_trie_had_expected_results<'a, R, S, E>(
-        correlation_id: CorrelationId,
-        environment: &'a R,
-        store: &S,
-        states: &[Blake2bHash],
-        test_leaves: &[TestTrie],
-    ) -> Result<(), E>
-    where
-        R: TransactionSource<'a, Handle = S::Handle>,
-        S: TrieStore<TestKey, TestValue>,
-        S::Error: From<R::Error>,
-        E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
-    {
-        let mut states = states.to_vec();
-
-        // Write set of leaves to the trie
-        let hashes = write_leaves::<_, _, E>(
-            correlation_id,
-            environment,
-            store,
-            states.last().unwrap(),
-            &test_leaves,
-        )?
-        .iter()
-        .map(|result| match result {
-            WriteResult::Written(root_hash) => *root_hash,
-            _ => panic!("write_leaves resulted in non-write"),
-        })
-        .collect::<Vec<Blake2bHash>>();
-
-        states.extend(hashes);
-
-        // Check that the expected set of leaves is in the trie at every
-        // state, and that the set of other leaves is not.
-        for (num_leaves, state) in states.iter().enumerate() {
-            let (used, unused) = test_leaves.split_at(num_leaves);
-            check_leaves::<_, _, E>(correlation_id, environment, store, state, used, unused)?;
-        }
-
-        Ok(())
-    }
 
     #[test]
     fn lmdb_non_colliding_writes_to_n_leaf_empty_trie_had_expected_results() {
@@ -96,14 +13,14 @@ mod empty_tries {
             let context = LmdbTestContext::new(&tries).unwrap();
             let initial_states = vec![root_hash];
 
-            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, error::Error>(
+            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, _, _, error::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
                 &initial_states,
                 &TEST_LEAVES_NON_COLLIDING[..num_leaves],
             )
-            .unwrap()
+            .unwrap();
         }
     }
 
@@ -115,14 +32,14 @@ mod empty_tries {
             let context = InMemoryTestContext::new(&tries).unwrap();
             let initial_states = vec![root_hash];
 
-            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, in_memory::Error>(
+            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, _, _, in_memory::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
                 &initial_states,
                 &TEST_LEAVES_NON_COLLIDING[..num_leaves],
             )
-            .unwrap()
+            .unwrap();
         }
     }
 
@@ -134,14 +51,14 @@ mod empty_tries {
             let context = LmdbTestContext::new(&tries).unwrap();
             let initial_states = vec![root_hash];
 
-            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, error::Error>(
+            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, _, _, error::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
                 &initial_states,
                 &TEST_LEAVES[..num_leaves],
             )
-            .unwrap()
+            .unwrap();
         }
     }
 
@@ -153,14 +70,14 @@ mod empty_tries {
             let context = InMemoryTestContext::new(&tries).unwrap();
             let initial_states = vec![root_hash];
 
-            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, in_memory::Error>(
+            writes_to_n_leaf_empty_trie_had_expected_results::<_, _, _, _, in_memory::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
                 &initial_states,
                 &TEST_LEAVES[..num_leaves],
             )
-            .unwrap()
+            .unwrap();
         }
     }
 
@@ -182,7 +99,7 @@ mod empty_tries {
             let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
             let context = InMemoryTestContext::new(&tries).unwrap();
 
-            write_leaves::<_, _, in_memory::Error>(
+            write_leaves::<_, _, _, _, in_memory::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
@@ -191,7 +108,7 @@ mod empty_tries {
             )
             .unwrap();
 
-            context.environment.dump(Some(trie_store::NAME)).unwrap()
+            context.environment.dump(None).unwrap()
         };
 
         assert_eq!(expected_contents, actual_contents)
@@ -215,7 +132,7 @@ mod partial_tries {
         E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
     {
         // Check that the expected set of leaves is in the trie
-        check_leaves::<_, _, E>(
+        check_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -225,7 +142,7 @@ mod partial_tries {
         )?;
 
         // Rewrite that set of leaves
-        let write_results = write_leaves::<_, _, E>(
+        let write_results = write_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -238,7 +155,7 @@ mod partial_tries {
             .all(|result| *result == WriteResult::AlreadyExists));
 
         // Check that the expected set of leaves is in the trie
-        check_leaves::<_, _, E>(
+        check_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -302,7 +219,7 @@ mod partial_tries {
         let mut states = states.to_owned();
 
         // Check that the expected set of leaves is in the trie
-        check_leaves::<_, _, E>(
+        check_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -324,7 +241,7 @@ mod partial_tries {
 
             let root_hash = {
                 let current_root = states.last().unwrap();
-                let results = write_leaves::<_, _, E>(
+                let results = write_leaves::<_, _, _, _, E>(
                     correlation_id,
                     environment,
                     store,
@@ -341,7 +258,7 @@ mod partial_tries {
             states.push(root_hash);
 
             // Check that the expected set of leaves is in the trie
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -411,7 +328,7 @@ mod full_tries {
     {
         // Check that the expected set of leaves is in the trie at every state reference
         for (num_leaves, state) in states[..index].iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -422,7 +339,7 @@ mod full_tries {
         }
 
         // Rewrite that set of leaves
-        let write_results = write_leaves::<_, _, E>(
+        let write_results = write_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -436,7 +353,7 @@ mod full_tries {
 
         // Check that the expected set of leaves is in the trie at every state reference
         for (num_leaves, state) in states[..index].iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -452,7 +369,7 @@ mod full_tries {
     #[test]
     fn lmdb_noop_writes_to_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = LmdbTestContext::new(&[]).unwrap();
+        let context = LmdbTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -474,7 +391,7 @@ mod full_tries {
     #[test]
     fn in_memory_noop_writes_to_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = InMemoryTestContext::new(&[]).unwrap();
+        let context = InMemoryTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -510,7 +427,7 @@ mod full_tries {
 
         // Check that the expected set of leaves is in the trie at every state reference
         for (state_index, state) in states.iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -521,7 +438,7 @@ mod full_tries {
         }
 
         // Write set of leaves to the trie
-        let hashes = write_leaves::<_, _, E>(
+        let hashes = write_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -560,7 +477,7 @@ mod full_tries {
 
         // Check that the expected set of leaves is in the trie at every state reference
         for (state_index, state) in states.iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -576,7 +493,7 @@ mod full_tries {
     #[test]
     fn lmdb_update_writes_to_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = LmdbTestContext::new(&[]).unwrap();
+        let context = LmdbTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -598,7 +515,7 @@ mod full_tries {
     #[test]
     fn in_memory_update_writes_to_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = InMemoryTestContext::new(&[]).unwrap();
+        let context = InMemoryTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (num_leaves, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -634,7 +551,7 @@ mod full_tries {
 
         // Check that the expected set of leaves is in the trie at every state reference
         for (state_index, state) in states.iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -645,7 +562,7 @@ mod full_tries {
         }
 
         // Write set of leaves to the trie
-        let hashes = write_leaves::<_, _, E>(
+        let hashes = write_leaves::<_, _, _, _, E>(
             correlation_id,
             environment,
             store,
@@ -684,7 +601,7 @@ mod full_tries {
 
         // Check that the expected set of leaves is in the trie at every state reference
         for (state_index, state) in states.iter().enumerate() {
-            check_leaves::<_, _, E>(
+            check_leaves::<_, _, _, _, E>(
                 correlation_id,
                 environment,
                 store,
@@ -699,7 +616,7 @@ mod full_tries {
     #[test]
     fn lmdb_node_writes_to_5_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = LmdbTestContext::new(&[]).unwrap();
+        let context = LmdbTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for generator in &TEST_TRIE_GENERATORS {
@@ -720,7 +637,7 @@ mod full_tries {
     #[test]
     fn in_memory_node_writes_to_5_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = InMemoryTestContext::new(&[]).unwrap();
+        let context = InMemoryTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for generator in &TEST_TRIE_GENERATORS {

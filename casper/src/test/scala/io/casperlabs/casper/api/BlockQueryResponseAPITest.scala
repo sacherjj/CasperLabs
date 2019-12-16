@@ -63,9 +63,18 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
   val timestamp   = 1527191665L
   val ps          = Block.GlobalState()
   val deployCount = 10L
+  val deployCostAndPrice = (0L until deployCount).toList.map { i =>
+    (100 * i + i, i + i)
+  }
   val randomDeploys =
-    (0L until deployCount).toList
-      .traverse(_ => ProtoUtil.basicProcessedDeploy[Task]())
+    deployCostAndPrice
+      .traverse {
+        case (cost, price) =>
+          ProtoUtil.basicProcessedDeploy[Task]().map { pd =>
+            pd.withCost(cost)
+              .withDeploy(pd.getDeploy.withHeader(pd.getDeploy.getHeader.withGasPrice(price)))
+          }
+      }
       .unsafeRunSync(scheduler)
   val body              = Block.Body().withDeploys(randomDeploys)
   val parentsString     = List(genesisHashString)
@@ -117,7 +126,10 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         _ = blockInfo.getSummary.blockHash should be(blockHash)
         _ = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
         _ = blockInfo.getStatus.getStats.deployCostTotal should be(
-          secondBlock.getBody.deploys.map(_.cost).sum
+          deployCostAndPrice.map(_._1).sum
+        )
+        _ = blockInfo.getStatus.getStats.deployGasPriceAvg should be(
+          deployCostAndPrice.map(x => x._1 * x._2).sum / deployCostAndPrice.map(_._1).sum
         )
         _ = blockInfo.getSummary.getHeader.rank should be(blockNumber)
         _ = blockInfo.getSummary.getHeader.getProtocolVersion should be(version)

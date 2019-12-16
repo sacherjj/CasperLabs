@@ -49,6 +49,9 @@ max-message-size = 4194304
 # Size of the buffer to store emitted block events
 event-stream-buffer-size = 10
 
+# Target parallelism for execution engine requests.
+engine-parallelism = 1
+
 # Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
 
@@ -147,6 +150,9 @@ cache-neighborhood-before = 5
 
 # How far to go to the future (by ranks) for caching neighborhood of looked up block
 cache-neighborhood-after = 6
+
+# How many records to pull from the DB in a chunk of a stream.
+deploy-stream-chunk-size = 20
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]

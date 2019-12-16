@@ -107,7 +107,7 @@ mod full_tries {
     #[test]
     fn lmdb_scans_from_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = LmdbTestContext::new(&[]).unwrap();
+        let context = LmdbTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (state_index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -134,7 +134,7 @@ mod full_tries {
     #[test]
     fn in_memory_scans_from_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = InMemoryTestContext::new(&[]).unwrap();
+        let context = InMemoryTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (state_index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {

@@ -6,6 +6,7 @@ CasperLabs Client API library and command line tool.
 # Hack to fix the relative imports problems #
 import sys
 from pathlib import Path
+import textwrap
 
 file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
@@ -26,6 +27,17 @@ import json
 import logging
 import pkg_resources
 import tempfile
+from pathlib import Path
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import serialization
+from Crypto.Hash import keccak
+from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
+import datetime
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -61,7 +73,7 @@ from . import info_pb2 as info
 
 from . import vdag
 
-DEFAULT_HOST = "127.0.0.1"
+DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
@@ -1174,6 +1186,128 @@ def show_deploys_command(casperlabs_client, args):
     _show_blocks(response, element_name="deploy")
 
 
+def write_file(file_name, text):
+    with open(file_name, "w") as f:
+        f.write(text)
+
+
+def write_file_binary(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+
+def generate_key_pair():
+    curve = ec.SECP256R1()
+    private_key = ec.generate_private_key(curve, default_backend())
+    public_key = private_key.public_key()
+    return private_key, public_key
+
+
+def public_address(public_key):
+    numbers = public_key.public_numbers()
+    x, y = numbers.x, numbers.y
+
+    def int_to_32_bytes(x):
+        return x.to_bytes(x.bit_length(), byteorder="little")[0:32]
+
+    a = int_to_32_bytes(x) + int_to_32_bytes(y)
+
+    keccak_hash = keccak.new(digest_bits=256)
+    keccak_hash.update(a)
+    r = keccak_hash.hexdigest()
+    return r[12 * 2 :]
+
+
+def generate_certificates(private_key, public_key):
+    today = datetime.datetime.today()
+    one_day = datetime.timedelta(1, 0, 0)
+    address = public_address(public_key)  # .map(Base16.encode).getOrElse("local")
+    owner = f"CN={address}"
+
+    builder = x509.CertificateBuilder()
+    builder = builder.not_valid_before(today)
+
+    # TODO: Where's documentation of the decision to make keys valid for 1 year only?
+    builder = builder.not_valid_after(today + 365 * one_day)
+    builder = builder.subject_name(
+        x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, owner)])
+    )
+    builder = builder.issuer_name(
+        x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, owner)])
+    )
+    builder = builder.public_key(public_key)
+    builder = builder.serial_number(x509.random_serial_number())
+    certificate = builder.sign(
+        private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
+    )
+
+    cert_pem = certificate.public_bytes(encoding=serialization.Encoding.PEM)
+    key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return cert_pem, key_pem
+
+
+def encode_base64(a: bytes):
+    return str(base64.b64encode(a), "utf-8")
+
+
+@guarded_command
+def keygen_command(casperlabs_client, args):
+    directory = Path(args.directory).resolve()
+    validator_private_path = directory / "validator-private.pem"
+    validator_pub_path = directory / "validator-public.pem"
+    validator_id_path = directory / "validator-id"
+    validator_id_hex_path = directory / "validator-id-hex"
+    node_priv_path = directory / "node.key.pem"
+    node_cert_path = directory / "node.certificate.pem"
+    node_id_path = directory / "node-id"
+
+    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
+    validator_public = validator_private.public_key()
+
+    validator_private_pem = validator_private.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    validator_public_pem = validator_public.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    validator_public_bytes = validator_public.public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+
+    write_file_binary(validator_private_path, validator_private_pem)
+    write_file_binary(validator_pub_path, validator_public_pem)
+    write_file(validator_id_path, encode_base64(validator_public_bytes))
+    write_file(validator_id_hex_path, validator_public_bytes.hex())
+
+    private_key, public_key = generate_key_pair()
+
+    node_cert, key_pem = generate_certificates(private_key, public_key)
+
+    write_file_binary(node_priv_path, key_pem)
+    write_file_binary(node_cert_path, node_cert)
+
+    write_file(node_id_path, public_address(public_key))
+    print(f"Keys successfully created in directory: {str(directory.absolute())}")
+
+
+def check_directory(path):
+    if not os.path.exists(path):
+        raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
+    if not os.path.isdir(path):
+        raise argparse.ArgumentTypeError(f"'{path}' is not a directory")
+    if not os.access(path, os.W_OK):
+        raise argparse.ArgumentTypeError(f"'{path}' does not have writing permissions")
+    return Path(path)
+
+
 def dot_output(file_name):
     """
     Check file name has an extension of one of file formats supported by Graphviz.
@@ -1321,11 +1455,11 @@ def main():
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=True))
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=False))
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=False))
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
@@ -1361,6 +1495,24 @@ def main():
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+
+    parser.addCommand('keygen', keygen_command, textwrap.dedent("""\
+         Generate keys.
+
+         Usage: casperlabs-client keygen <existingOutputDirectory>
+         Command will override existing files!
+         Generated files:
+           node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+                                 # derived from node.key.pem
+           node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+                                 # derived from node.key.pem
+           node.key.pem          # secp256r1 private key
+           validator-id          # validator ID in Base64 format; can be used in accounts.csv
+                                 # derived from validator.public.pem
+           validator-id-hex      # validator ID in hex, derived from validator.public.pem
+           validator-private.pem # ed25519 private key
+           validator-public.pem  # ed25519 public key"""),
+                      [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
 
     # fmt:on
     sys.exit(parser.run())
