@@ -3,7 +3,7 @@ use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 use contract_ffi::{
     bytesrepr::{self, FromBytes, ToBytes},
     gens,
-    key::LOCAL_SEED_SIZE,
+    key::LOCAL_SEED_LENGTH,
     uref::URef,
 };
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
@@ -11,28 +11,28 @@ use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
 use super::{HashedTrie, TestValue};
 use crate::trie::Trie;
 
-pub const BASIC_SIZE: usize = 4;
-pub const SIMILAR_SIZE: usize = 4;
-pub const FANCY_SIZE: usize = 5;
-pub const LONG_SIZE: usize = 8;
+pub const BASIC_LENGTH: usize = 4;
+pub const SIMILAR_LENGTH: usize = 4;
+pub const FANCY_LENGTH: usize = 5;
+pub const LONG_LENGTH: usize = 8;
 
 const PUBLIC_KEY_BASIC_ID: u8 = 0;
 const PUBLIC_KEY_SIMILAR_ID: u8 = 1;
 const PUBLIC_KEY_FANCY_ID: u8 = 2;
 const PUBLIC_KEY_LONG_ID: u8 = 3;
 
-pub const KEY_HASH_SIZE: usize = 32;
-pub const KEY_LOCAL_SIZE: usize = 32;
+pub const KEY_HASH_LENGTH: usize = 32;
+pub const KEY_LOCAL_LENGTH: usize = 32;
 
 const KEY_ACCOUNT_ID: u8 = 0;
 const KEY_HASH_ID: u8 = 1;
 const KEY_UREF_ID: u8 = 2;
 const KEY_LOCAL_ID: u8 = 3;
 
-make_array_newtype!(Basic, u8, BASIC_SIZE);
-make_array_newtype!(Similar, u8, SIMILAR_SIZE);
-make_array_newtype!(Fancy, u8, FANCY_SIZE);
-make_array_newtype!(Long, u8, LONG_SIZE);
+make_array_newtype!(Basic, u8, BASIC_LENGTH);
+make_array_newtype!(Similar, u8, SIMILAR_LENGTH);
+make_array_newtype!(Fancy, u8, FANCY_LENGTH);
+make_array_newtype!(Long, u8, LONG_LENGTH);
 
 macro_rules! impl_distribution_for_array_newtype {
     ($name:ident, $ty:ty, $len:expr) => {
@@ -46,10 +46,10 @@ macro_rules! impl_distribution_for_array_newtype {
     };
 }
 
-impl_distribution_for_array_newtype!(Basic, u8, BASIC_SIZE);
-impl_distribution_for_array_newtype!(Similar, u8, SIMILAR_SIZE);
-impl_distribution_for_array_newtype!(Fancy, u8, FANCY_SIZE);
-impl_distribution_for_array_newtype!(Long, u8, LONG_SIZE);
+impl_distribution_for_array_newtype!(Basic, u8, BASIC_LENGTH);
+impl_distribution_for_array_newtype!(Similar, u8, SIMILAR_LENGTH);
+impl_distribution_for_array_newtype!(Fancy, u8, FANCY_LENGTH);
+impl_distribution_for_array_newtype!(Long, u8, LONG_LENGTH);
 
 macro_rules! make_array_newtype_arb {
     ($name:ident, $ty:ty, $len:expr, $fn_name:ident) => {
@@ -63,10 +63,10 @@ macro_rules! make_array_newtype_arb {
     };
 }
 
-make_array_newtype_arb!(Basic, u8, BASIC_SIZE, basic_arb);
-make_array_newtype_arb!(Similar, u8, SIMILAR_SIZE, similar_arb);
-make_array_newtype_arb!(Fancy, u8, FANCY_SIZE, fancy_arb);
-make_array_newtype_arb!(Long, u8, LONG_SIZE, long_arb);
+make_array_newtype_arb!(Basic, u8, BASIC_LENGTH, basic_arb);
+make_array_newtype_arb!(Similar, u8, SIMILAR_LENGTH, similar_arb);
+make_array_newtype_arb!(Fancy, u8, FANCY_LENGTH, fancy_arb);
+make_array_newtype_arb!(Long, u8, LONG_LENGTH, long_arb);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PublicKey {
@@ -139,15 +139,15 @@ fn public_key_arb() -> impl Strategy<Value = PublicKey> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestKey {
     Account(PublicKey),
-    Hash([u8; KEY_HASH_SIZE]),
+    Hash([u8; KEY_HASH_LENGTH]),
     URef(URef),
-    Local([u8; KEY_LOCAL_SIZE]),
+    Local([u8; KEY_LOCAL_LENGTH]),
 }
 
 impl TestKey {
-    pub fn local(seed: [u8; LOCAL_SEED_SIZE], key_bytes: &[u8]) -> Self {
+    pub fn local(seed: [u8; LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
         let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
-        let hash: [u8; KEY_LOCAL_SIZE] = Blake2bHash::new(&bytes_to_hash).into();
+        let hash: [u8; KEY_LOCAL_LENGTH] = Blake2bHash::new(&bytes_to_hash).into();
         TestKey::Local(hash)
     }
 }
@@ -187,7 +187,7 @@ impl FromBytes for TestKey {
                 Ok((TestKey::Account(public_key), rem))
             }
             KEY_HASH_ID => {
-                let (hash, rem): ([u8; KEY_HASH_SIZE], &[u8]) = FromBytes::from_bytes(rem)?;
+                let (hash, rem): ([u8; KEY_HASH_LENGTH], &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((TestKey::Hash(hash), rem))
             }
             KEY_UREF_ID => {
@@ -195,7 +195,7 @@ impl FromBytes for TestKey {
                 Ok((TestKey::URef(uref), rem))
             }
             KEY_LOCAL_ID => {
-                let (local, rem): ([u8; KEY_LOCAL_SIZE], &[u8]) = FromBytes::from_bytes(rem)?;
+                let (local, rem): ([u8; KEY_LOCAL_LENGTH], &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((TestKey::Local(local), rem))
             }
             _ => Err(bytesrepr::Error::FormattingError),

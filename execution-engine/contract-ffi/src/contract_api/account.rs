@@ -8,15 +8,19 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
     value::account::{
         ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, PURSE_ID_SIZE_SERIALIZED,
+        UpdateKeyFailure, Weight, PURSE_ID_SERIALIZED_LENGTH,
     },
 };
 
 pub fn get_main_purse() -> PurseId {
-    let dest_ptr = contract_api::alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let dest_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
     let bytes = unsafe {
         ext_ffi::get_main_purse(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, PURSE_ID_SIZE_SERIALIZED, PURSE_ID_SIZE_SERIALIZED)
+        Vec::from_raw_parts(
+            dest_ptr,
+            PURSE_ID_SERIALIZED_LENGTH,
+            PURSE_ID_SERIALIZED_LENGTH,
+        )
     };
     deserialize(bytes).unwrap_or_revert()
 }

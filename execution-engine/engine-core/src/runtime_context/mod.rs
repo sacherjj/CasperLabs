@@ -15,7 +15,7 @@ use contract_ffi::{
     block_time::BlockTime,
     bytesrepr::{deserialize, ToBytes},
     execution::Phase,
-    key::{Key, LOCAL_SEED_SIZE},
+    key::{Key, LOCAL_SEED_LENGTH},
     uref::{AccessRights, URef},
     value::{
         self,
@@ -261,7 +261,7 @@ where
         self.base_key
     }
 
-    pub fn seed(&self) -> [u8; LOCAL_SEED_SIZE] {
+    pub fn seed(&self) -> [u8; LOCAL_SEED_LENGTH] {
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
@@ -333,7 +333,7 @@ where
     /// DO NOT EXPOSE THIS VIA THE FFI
     pub fn read_ls_with_seed(
         &mut self,
-        seed: [u8; LOCAL_SEED_SIZE],
+        seed: [u8; LOCAL_SEED_LENGTH],
         key_bytes: &[u8],
     ) -> Result<Option<CLValue>, Error> {
         let key = Key::local(seed, key_bytes);

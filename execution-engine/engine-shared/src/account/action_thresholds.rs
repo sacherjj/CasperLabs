@@ -1,6 +1,6 @@
 use contract_ffi::{
     bytesrepr::{Error, FromBytes, ToBytes},
-    value::account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SIZE},
+    value::account::{ActionType, SetThresholdFailure, Weight, WEIGHT_SERIALIZED_LENGTH},
 };
 
 /// Thresholds that have to be met when executing an action of a certain type.
@@ -91,7 +91,7 @@ impl Default for ActionThresholds {
 
 impl ToBytes for ActionThresholds {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = Vec::with_capacity(2 * WEIGHT_SIZE);
+        let mut result = Vec::with_capacity(2 * WEIGHT_SERIALIZED_LENGTH);
         result.extend(&self.deployment.to_bytes()?);
         result.extend(&self.key_management.to_bytes()?);
         Ok(result)

@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 
-use crate::bytesrepr::{Error, FromBytes, ToBytes, U64_SIZE};
+use crate::bytesrepr::{Error, FromBytes, ToBytes, U64_SERIALIZED_LENGTH};
 
-pub const BLOCKTIME_SER_SIZE: usize = U64_SIZE;
+pub const BLOCKTIME_SERIALIZED_LENGTH: usize = U64_SERIALIZED_LENGTH;
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, PartialOrd)]
 pub struct BlockTime(u64);

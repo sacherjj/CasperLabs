@@ -21,14 +21,14 @@ use contract_ffi::{
     system_contracts::mint::{Error, PurseIdError},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
-    value::{account::KEY_SIZE, CLValue, U512},
+    value::{account::PUBLIC_KEY_LENGTH, CLValue, U512},
 };
 
 use capabilities::{RefWithAddRights, RefWithReadAddWriteRights};
 use internal_purse_id::{DepositId, WithdrawId};
 use mint::Mint;
 
-const SYSTEM_ACCOUNT: [u8; KEY_SIZE] = [0u8; KEY_SIZE];
+const SYSTEM_ACCOUNT: [u8; PUBLIC_KEY_LENGTH] = [0u8; PUBLIC_KEY_LENGTH];
 
 pub struct CLMint;
 

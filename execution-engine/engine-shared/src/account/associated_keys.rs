@@ -146,14 +146,16 @@ pub mod gens {
 mod tests {
     use std::{collections::BTreeSet, iter::FromIterator};
 
-    use contract_ffi::value::account::{AddKeyFailure, PublicKey, Weight, KEY_SIZE, MAX_KEYS};
+    use contract_ffi::value::account::{
+        AddKeyFailure, PublicKey, Weight, MAX_KEYS, PUBLIC_KEY_LENGTH,
+    };
 
     use super::AssociatedKeys;
 
     #[test]
     fn associated_keys_add() {
-        let mut keys = AssociatedKeys::new([0u8; KEY_SIZE].into(), Weight::new(1));
-        let new_pk = PublicKey::new([1u8; KEY_SIZE]);
+        let mut keys = AssociatedKeys::new([0u8; PUBLIC_KEY_LENGTH].into(), Weight::new(1));
+        let new_pk = PublicKey::new([1u8; PUBLIC_KEY_LENGTH]);
         let new_pk_weight = Weight::new(2);
         assert!(keys.add_key(new_pk, new_pk_weight).is_ok());
         assert_eq!(keys.get(&new_pk), Some(&new_pk_weight))
@@ -161,8 +163,12 @@ mod tests {
 
     #[test]
     fn associated_keys_add_full() {
-        let map =
-            (0..MAX_KEYS).map(|k| (PublicKey::new([k as u8; KEY_SIZE]), Weight::new(k as u8)));
+        let map = (0..MAX_KEYS).map(|k| {
+            (
+                PublicKey::new([k as u8; PUBLIC_KEY_LENGTH]),
+                Weight::new(k as u8),
+            )
+        });
         assert_eq!(map.len(), 10);
         let mut keys = {
             let mut tmp = AssociatedKeys::default();
@@ -170,14 +176,14 @@ mod tests {
             tmp
         };
         assert_eq!(
-            keys.add_key(PublicKey::new([100u8; KEY_SIZE]), Weight::new(100)),
+            keys.add_key(PublicKey::new([100u8; PUBLIC_KEY_LENGTH]), Weight::new(100)),
             Err(AddKeyFailure::MaxKeysLimit)
         )
     }
 
     #[test]
     fn associated_keys_add_duplicate() {
-        let pk = PublicKey::new([0u8; KEY_SIZE]);
+        let pk = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert_eq!(
@@ -189,11 +195,13 @@ mod tests {
 
     #[test]
     fn associated_keys_remove() {
-        let pk = PublicKey::new([0u8; KEY_SIZE]);
+        let pk = PublicKey::new([0u8; PUBLIC_KEY_LENGTH]);
         let weight = Weight::new(1);
         let mut keys = AssociatedKeys::new(pk, weight);
         assert!(keys.remove_key(&pk).is_ok());
-        assert!(keys.remove_key(&PublicKey::new([1u8; KEY_SIZE])).is_err());
+        assert!(keys
+            .remove_key(&PublicKey::new([1u8; PUBLIC_KEY_LENGTH]))
+            .is_err());
     }
 
     #[test]

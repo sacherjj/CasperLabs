@@ -11,9 +11,9 @@ use crate::{
     ext_ffi,
     system_contracts::SystemContract,
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{URef, UREF_SIZE_SERIALIZED},
+    uref::{URef, UREF_SERIALIZED_LENGTH},
     value::{
-        account::{PublicKey, PurseId, PURSE_ID_SIZE_SERIALIZED},
+        account::{PublicKey, PurseId, PURSE_ID_SERIALIZED_LENGTH},
         U512,
     },
 };
@@ -27,7 +27,7 @@ fn get_system_contract(system_contract: SystemContract) -> ContractRef {
     let system_contract_index = system_contract.into();
     let uref: URef = {
         let result = {
-            let mut uref_data_raw = [0u8; UREF_SIZE_SERIALIZED];
+            let mut uref_data_raw = [0u8; UREF_SERIALIZED_LENGTH];
             let value = unsafe {
                 ext_ffi::get_system_contract(
                     system_contract_index,
@@ -61,14 +61,14 @@ pub fn get_proof_of_stake() -> ContractRef {
 }
 
 pub fn create_purse() -> PurseId {
-    let purse_id_ptr = contract_api::alloc_bytes(PURSE_ID_SIZE_SERIALIZED);
+    let purse_id_ptr = contract_api::alloc_bytes(PURSE_ID_SERIALIZED_LENGTH);
     unsafe {
-        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SIZE_SERIALIZED);
+        let ret = ext_ffi::create_purse(purse_id_ptr, PURSE_ID_SERIALIZED_LENGTH);
         if ret == 0 {
             let bytes = Vec::from_raw_parts(
                 purse_id_ptr,
-                PURSE_ID_SIZE_SERIALIZED,
-                PURSE_ID_SIZE_SERIALIZED,
+                PURSE_ID_SERIALIZED_LENGTH,
+                PURSE_ID_SERIALIZED_LENGTH,
             );
             deserialize(bytes).unwrap_or_revert()
         } else {

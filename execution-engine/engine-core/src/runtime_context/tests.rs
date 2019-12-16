@@ -10,7 +10,7 @@ use rand::RngCore;
 use contract_ffi::{
     block_time::BlockTime,
     execution::Phase,
-    key::{Key, LOCAL_SEED_SIZE},
+    key::{Key, LOCAL_SEED_LENGTH},
     uref::{AccessRights, URef},
     value::{
         account::{
@@ -107,7 +107,7 @@ fn create_uref(address_generator: &mut AddressGenerator, rights: AccessRights) -
     Key::URef(URef::new(address, rights))
 }
 
-fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_SIZE]) -> Key {
+fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; LOCAL_SEED_LENGTH]) -> Key {
     let mut key = [0u8; 64];
     entropy_source.fill_bytes(&mut key);
     Key::local(seed, &key)
@@ -637,7 +637,7 @@ fn local_key_writeable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_SIZE];
+        let seed = [1u8; LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_writeable(&key)
     };
@@ -663,7 +663,7 @@ fn local_key_readable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_SIZE];
+        let seed = [1u8; LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_readable(&key)
     };
@@ -689,7 +689,7 @@ fn local_key_addable_invalid() {
     let access_rights = HashMap::new();
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; LOCAL_SEED_SIZE];
+        let seed = [1u8; LOCAL_SEED_LENGTH];
         let key = random_local_key(&mut rng, seed);
         runtime_context.validate_addable(&key)
     };

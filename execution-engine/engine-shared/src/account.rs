@@ -4,12 +4,12 @@ mod associated_keys;
 use std::collections::{BTreeMap, BTreeSet};
 
 use contract_ffi::{
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U8_SIZE},
-    key::{Key, UREF_SIZE},
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     uref::{AccessRights, URef},
     value::account::{
         ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
-        UpdateKeyFailure, Weight, KEY_SIZE, PUBLIC_KEY_SIZE, WEIGHT_SIZE,
+        UpdateKeyFailure, Weight, PUBLIC_KEY_SERIALIZED_LENGTH, WEIGHT_SERIALIZED_LENGTH,
     },
 };
 
@@ -208,12 +208,14 @@ impl Account {
 
 impl ToBytes for Account {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let action_thresholds_size = 2 * (WEIGHT_SIZE + U8_SIZE);
-        let associated_keys_size =
-            self.associated_keys.len() * (PUBLIC_KEY_SIZE + WEIGHT_SIZE) + U32_SIZE;
-        let named_keys_size = UREF_SIZE * self.named_keys.len() + U32_SIZE;
-        let purse_id_size = UREF_SIZE;
-        let serialized_account_size = KEY_SIZE // pub key
+        let action_thresholds_size = 2 * (WEIGHT_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH);
+        let associated_keys_size = self.associated_keys.len()
+            * (PUBLIC_KEY_SERIALIZED_LENGTH + WEIGHT_SERIALIZED_LENGTH)
+            + U32_SERIALIZED_LENGTH;
+        let named_keys_size =
+            KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len() + U32_SERIALIZED_LENGTH;
+        let purse_id_size = KEY_UREF_SERIALIZED_LENGTH;
+        let serialized_account_size = PUBLIC_KEY_SERIALIZED_LENGTH // pub key
             + named_keys_size
             + purse_id_size
             + associated_keys_size

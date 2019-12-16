@@ -8,7 +8,7 @@ use contract_ffi::{
     key::Key,
     uref::{AccessRights, URef},
     value::{
-        account::{PublicKey, PurseId, Weight, KEY_SIZE},
+        account::{PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
         CLValue, ProtocolVersion,
     },
 };
@@ -181,9 +181,10 @@ fn tracking_copy_add_i32() {
 fn tracking_copy_add_named_key() {
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
-    let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
+    let associated_keys =
+        AssociatedKeys::new(PublicKey::new([0u8; PUBLIC_KEY_LENGTH]), Weight::new(1));
     let account = Account::new(
-        [0u8; KEY_SIZE],
+        [0u8; PUBLIC_KEY_LENGTH],
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,

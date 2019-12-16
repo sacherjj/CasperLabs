@@ -11,7 +11,7 @@ use crate::{
     value::{CLType, CLTyped},
 };
 
-pub const PHASE_SIZE: usize = 1;
+pub const PHASE_SERIALIZED_LENGTH: usize = 1;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, ToPrimitive)]
 #[repr(u8)]

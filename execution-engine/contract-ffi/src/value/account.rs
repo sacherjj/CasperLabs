@@ -8,14 +8,14 @@ use failure::Fail;
 use hex_fmt::HexFmt;
 
 use crate::{
-    bytesrepr::{Error, FromBytes, ToBytes, U8_SIZE},
+    bytesrepr::{Error, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     contract_api::{runtime, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
-    uref::{URef, UREF_SIZE_SERIALIZED},
+    uref::{URef, UREF_SERIALIZED_LENGTH},
     value::cl_type::{CLType, CLTyped},
 };
 
-pub const PURSE_ID_SIZE_SERIALIZED: usize = UREF_SIZE_SERIALIZED;
+pub const PURSE_ID_SERIALIZED_LENGTH: usize = UREF_SERIALIZED_LENGTH;
 
 #[derive(Debug)]
 pub struct TryFromIntError(());
@@ -156,13 +156,13 @@ impl TryFrom<i32> for SetThresholdFailure {
     }
 }
 
-pub const KEY_SIZE: usize = 32;
+pub const PUBLIC_KEY_LENGTH: usize = 32;
 
 /// Maximum number of associated keys.
 /// Value chosen arbitrary, shouldn't be too large to prevent bloating `associated_keys` table.
 pub const MAX_KEYS: usize = 10;
 
-pub const WEIGHT_SIZE: usize = U8_SIZE;
+pub const WEIGHT_SERIALIZED_LENGTH: usize = U8_SERIALIZED_LENGTH;
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
@@ -197,7 +197,7 @@ impl CLTyped for Weight {
 }
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct PublicKey([u8; KEY_SIZE]);
+pub struct PublicKey([u8; PUBLIC_KEY_LENGTH]);
 
 impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
@@ -213,24 +213,24 @@ impl Debug for PublicKey {
 
 impl CLTyped for PublicKey {
     fn cl_type() -> CLType {
-        CLType::FixedList(Box::new(CLType::U8), KEY_SIZE as u32)
+        CLType::FixedList(Box::new(CLType::U8), PUBLIC_KEY_LENGTH as u32)
     }
 }
 
-// TODO: This needs to be updated, `PUBLIC_KEY_SIZE` is not 32 bytes as KEY_SIZE
+// TODO: This needs to be updated, `PUBLIC_KEY_SERIALIZED_LENGTH` is not 32 bytes as KEY_SIZE
 // * U8_SIZE. I am not changing that as I don't want to deal with ripple effect.
 
 // Public key is encoded as its underlying [u8; 32] array, which in turn
 // is serialized as u8 + [u8; 32], u8 represents the length and then 32 element
 // array.
-pub const PUBLIC_KEY_SIZE: usize = KEY_SIZE * U8_SIZE;
+pub const PUBLIC_KEY_SERIALIZED_LENGTH: usize = PUBLIC_KEY_LENGTH;
 
 impl PublicKey {
-    pub fn new(key: [u8; KEY_SIZE]) -> PublicKey {
+    pub fn new(key: [u8; PUBLIC_KEY_LENGTH]) -> PublicKey {
         PublicKey(key)
     }
 
-    pub fn value(self) -> [u8; KEY_SIZE] {
+    pub fn value(self) -> [u8; PUBLIC_KEY_LENGTH] {
         self.0
     }
 
@@ -240,8 +240,8 @@ impl PublicKey {
     }
 }
 
-impl From<[u8; KEY_SIZE]> for PublicKey {
-    fn from(key: [u8; KEY_SIZE]) -> Self {
+impl From<[u8; PUBLIC_KEY_LENGTH]> for PublicKey {
+    fn from(key: [u8; PUBLIC_KEY_LENGTH]) -> Self {
         PublicKey(key)
     }
 }
@@ -249,7 +249,7 @@ impl From<[u8; KEY_SIZE]> for PublicKey {
 impl TryFrom<&[u8]> for PublicKey {
     type Error = TryFromSliceForPublicKeyError;
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-        if bytes.len() != KEY_SIZE {
+        if bytes.len() != PUBLIC_KEY_LENGTH {
             return Err(TryFromSliceForPublicKeyError(()));
         }
         let mut public_key = [0u8; 32];
@@ -266,7 +266,7 @@ impl ToBytes for PublicKey {
 
 impl FromBytes for PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (key_bytes, rem): ([u8; KEY_SIZE], &[u8]) = FromBytes::from_bytes(bytes)?;
+        let (key_bytes, rem): ([u8; PUBLIC_KEY_LENGTH], &[u8]) = FromBytes::from_bytes(bytes)?;
         Ok((PublicKey::new(key_bytes), rem))
     }
 }
