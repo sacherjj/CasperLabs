@@ -59,7 +59,7 @@ impl ToBytes for QueueEntry {
 
 impl CLTyped for QueueEntry {
     fn cl_type() -> CLType {
-        CLType::List(Box::new(u8::cl_type()))
+        CLType::Any
     }
 }
 

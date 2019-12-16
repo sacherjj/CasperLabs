@@ -377,6 +377,8 @@ impl FromBytes for CLType {
                 inner_types.pop_front().unwrap(),
             ]);
             Ok((cl_type, remainder))
+        } else if tag == CLTypeTag::Any as u8 {
+            Ok((CLType::Any, remainder))
         } else {
             Err(bytesrepr::Error::FormattingError)
         }
@@ -1002,5 +1004,33 @@ mod tests {
         );
 
         round_trip(&x);
+    }
+
+    #[test]
+    fn any_should_work() {
+        #[derive(PartialEq, Debug, Clone)]
+        struct Any(String);
+
+        impl CLTyped for Any {
+            fn cl_type() -> CLType {
+                CLType::Any
+            }
+        }
+
+        impl ToBytes for Any {
+            fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+                self.0.to_bytes()
+            }
+        }
+
+        impl FromBytes for Any {
+            fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+                let (inner, remainder) = String::from_bytes(bytes)?;
+                Ok((Any(inner), remainder))
+            }
+        }
+
+        let any = Any("Any test".to_string());
+        round_trip(&any);
     }
 }
