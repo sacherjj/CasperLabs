@@ -10,6 +10,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.BondingUtil.Bond
@@ -116,12 +117,13 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         effects             <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
         (logEff, casperRef) = effects
 
-        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery)(
+        blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, BlockInfo.View.BASIC)(
                       Sync[Task],
                       logEff,
                       casperRef,
                       blockStorage,
-                      deployStorage
+                      deployStorage,
+                      dagStorage
                     )
         _ = blockInfo.getSummary.blockHash should be(blockHash)
         _ = blockInfo.getStatus.getStats.blockSizeBytes should be(secondBlock.serializedSize)
@@ -142,18 +144,46 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
       } yield ()
   }
 
+  it should "return children in FULL view" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      for {
+        effects             <- effectsForSimpleCasperSetup(blockStorage, dagStorage)
+        (logEff, casperRef) = effects
+
+        basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)(
+                      Sync[Task],
+                      logEff,
+                      casperRef,
+                      blockStorage,
+                      deployStorage,
+                      dagStorage
+                    )
+        fullInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.FULL)(
+                     Sync[Task],
+                     logEff,
+                     casperRef,
+                     blockStorage,
+                     deployStorage,
+                     dagStorage
+                   )
+        _ = basicInfo.getStatus.childHashes shouldBe empty
+        _ = fullInfo.getStatus.childHashes should not be empty
+      } yield ()
+  }
+
   it should "return error when no block exists" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
       for {
         effects             <- emptyEffects(blockStorage, dagStorage)
         (logEff, casperRef) = effects
         blockQueryResponse <- BlockAPI
-                               .getBlockInfo[Task](badTestHashQuery)(
+                               .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)(
                                  Sync[Task],
                                  logEff,
                                  casperRef,
                                  blockStorage,
-                                 deployStorage
+                                 deployStorage,
+                                 dagStorage
                                )
                                .attempt
       } yield {

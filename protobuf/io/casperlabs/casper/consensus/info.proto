@@ -10,14 +10,14 @@ message BlockInfo {
     enum View {
         // Only includes information which is based on the header.
         BASIC = 0;
-        // Includes extra information that requires the full block,
-        // for example the size, number of errors in deploys, etc.
+        // Includes extra information such as children which require extra lookups.
         FULL = 1;
     }
 
     message Status {
         float fault_tolerance = 1;
         Stats stats = 2;
+        repeated bytes child_hashes = 3;
 
         // Statistics derived from the full block.
         message Stats {

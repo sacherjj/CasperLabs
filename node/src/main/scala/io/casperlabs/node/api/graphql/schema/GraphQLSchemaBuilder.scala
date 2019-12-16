@@ -4,7 +4,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
@@ -25,9 +25,10 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.dag.DagStorage
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler] {
 
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
@@ -68,7 +69,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 res <- BlockAPI
                         .getBlockInfoWithDeploysOpt[F](
                           blockHashBase16 = blockHashPrefix,
-                          maybeDeployView = deployView(projections)
+                          maybeDeployView = deployView(projections),
+                          blockView = BlockInfo.View.BASIC
                         )
               } yield res).unsafeToFuture
             }
@@ -82,7 +84,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 .getBlockInfosWithDeploys[F](
                   depth = context.arg(blocks.arguments.Depth),
                   maxRank = context.arg(blocks.arguments.MaxRank),
-                  maybeDeployView = deployView(projections)
+                  maybeDeployView = deployView(projections),
+                  blockView = BlockInfo.View.BASIC
                 )
                 .unsafeToFuture
             }
@@ -179,7 +182,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoWithDeploysOpt[F](
                                       blockHashBase16Prefix,
-                                      maybeDeployView = None
+                                      maybeDeployView = None,
+                                      blockView = BlockInfo.View.BASIC
                                     )
                                     .map(_.map {
                                       case (info, _) =>
@@ -242,7 +246,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 BlockAPI
                   .getBlockInfoWithDeploys[F](
                     blockHash = blockHash,
-                    maybeDeployView = deployView(terms)
+                    maybeDeployView = deployView(terms),
+                    blockView = BlockInfo.View.BASIC
                   )
                   .map(Action(_))
               }
