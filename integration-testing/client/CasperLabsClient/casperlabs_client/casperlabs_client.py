@@ -1321,11 +1321,11 @@ def main():
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=True))
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=False))
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=False))
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
