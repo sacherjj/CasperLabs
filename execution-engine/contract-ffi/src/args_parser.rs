@@ -4,7 +4,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::{
-    bytesrepr::ToBytes,
+    bytesrepr::{Error, ToBytes},
     value::{CLTyped, CLValue, CLValueError},
 };
 
@@ -14,10 +14,20 @@ use crate::{
 /// tuples of various sizes.
 pub trait ArgsParser {
     fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
+
+    #[doc(hidden)]
+    /// This parses the args to a `Vec<Vec<u8>` so that we can continue to support this form being
+    /// received from Node in Deploy requests.  Once Node has been altered to support `CLValue`
+    /// fully, we can remove this method and receive args as serialized `Vec<CLValue>`.
+    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 impl ArgsParser for () {
     fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
+        Ok(Vec::new())
+    }
+
+    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
         Ok(Vec::new())
     }
 }
@@ -29,6 +39,12 @@ macro_rules! impl_argsparser_tuple {
             fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
                 let ($($name,)+) = self;
                 Ok(vec![$(CLValue::from_t($name)?,)+])
+            }
+
+            #[allow(non_snake_case)]
+            fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
+                let ($($name,)+) = self;
+                Ok(vec![$(ToBytes::into_bytes($name)?,)+])
             }
         }
     );

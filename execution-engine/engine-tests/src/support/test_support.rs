@@ -202,7 +202,7 @@ impl DeployItemBuilder {
     }
 
     fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
-        args.parse()
+        args.parse_to_vec_u8()
             .expect("should convert to `Vec<CLValue>`")
             .into_bytes()
             .expect("should serialize args")
