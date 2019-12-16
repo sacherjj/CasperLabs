@@ -229,7 +229,7 @@ object BlockAPI {
     }
   }
 
-  def getBlockInfo[F[_]: MonadThrowable: Log: MultiParentCasperRef: BlockStorage: DeployStorage: DagStorage](
+  def getBlockInfo[F[_]: MonadThrowable: Log: BlockStorage: DeployStorage: DagStorage](
       blockHashBase16: String,
       blockView: BlockInfo.View
   ): F[BlockInfo] =

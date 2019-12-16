@@ -2,33 +2,31 @@ package io.casperlabs.casper.api
 
 import cats.effect.Sync
 import cats.implicits._
-import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
+import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.BlockHash
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper._
-import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus._
-import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.helper.{NoOpsCasperEffect, StorageFixture}
-import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.util.BondingUtil.Bond
-import io.casperlabs.catscontrib.Fs2Compiler
+import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
-import io.casperlabs.p2p.EffectsTestInstances.{LogicalTime}
+import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.LogStub
 import io.casperlabs.storage.BlockMsgWithTransform
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagStorage
+import logstage.LogIO
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-import logstage.LogIO
+
 import scala.collection.immutable.HashMap
-import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixture {
   implicit val timeEff = new LogicalTime[Task]
@@ -120,7 +118,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         blockInfo <- BlockAPI.getBlockInfo[Task](secondBlockQuery, BlockInfo.View.BASIC)(
                       Sync[Task],
                       logEff,
-                      casperRef,
                       blockStorage,
                       deployStorage,
                       dagStorage
@@ -153,7 +150,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         basicInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.BASIC)(
                       Sync[Task],
                       logEff,
-                      casperRef,
                       blockStorage,
                       deployStorage,
                       dagStorage
@@ -161,7 +157,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
         fullInfo <- BlockAPI.getBlockInfo[Task](genesisHashString, BlockInfo.View.FULL)(
                      Sync[Task],
                      logEff,
-                     casperRef,
                      blockStorage,
                      deployStorage,
                      dagStorage
@@ -180,7 +175,6 @@ class BlockQueryResponseAPITest extends FlatSpec with Matchers with StorageFixtu
                                .getBlockInfo[Task](badTestHashQuery, BlockInfo.View.BASIC)(
                                  Sync[Task],
                                  logEff,
-                                 casperRef,
                                  blockStorage,
                                  deployStorage,
                                  dagStorage

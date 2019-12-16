@@ -10,9 +10,11 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
@@ -26,6 +28,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
@@ -539,7 +542,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -715,10 +718,17 @@ object MultiParentCasperImpl {
         block: Block,
         effects: Seq[ipc.TransformEntry]
     ): F[Unit] =
-      semaphore.withPermit {
-        BlockStorage[F]
-          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-      } *> EventEmitter[F].blockAdded(block.getBlockInfo)
+      for {
+        _ <- semaphore.withPermit {
+              BlockStorage[F]
+                .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+            }
+        blockInfo <- BlockAPI.getBlockInfo[F](
+                      Base16.encode(block.blockHash.toByteArray),
+                      BlockInfo.View.FULL
+                    )
+        _ <- EventEmitter[F].blockAdded(blockInfo)
+      } yield ()
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */
