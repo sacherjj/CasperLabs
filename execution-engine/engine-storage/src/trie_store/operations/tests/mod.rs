@@ -5,7 +5,7 @@ mod read;
 mod scan;
 mod write;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, convert};
 
 use failure;
 use lmdb::DatabaseFlags;
@@ -22,9 +22,10 @@ use crate::{
     },
     trie::{Pointer, Trie},
     trie_store::{
+        self,
         in_memory::InMemoryTrieStore,
         lmdb::LmdbTrieStore,
-        operations::{read, write, ReadResult, WriteResult},
+        operations::{self, read, write, ReadResult, WriteResult},
         TrieStore,
     },
     TEST_MAP_SIZE,
@@ -74,20 +75,24 @@ impl FromBytes for TestValue {
 
 type TestTrie = Trie<TestKey, TestValue>;
 
+type HashedTestTrie = HashedTrie<TestKey, TestValue>;
+
 /// A pairing of a trie element and its hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct HashedTestTrie {
+struct HashedTrie<K, V> {
     hash: Blake2bHash,
-    trie: TestTrie,
+    trie: Trie<K, V>,
 }
 
-impl HashedTestTrie {
-    pub fn new(trie: TestTrie) -> Result<Self, bytesrepr::Error> {
+impl<K: ToBytes, V: ToBytes> HashedTrie<K, V> {
+    pub fn new(trie: Trie<K, V>) -> Result<Self, bytesrepr::Error> {
         let trie_bytes = trie.to_bytes()?;
         let hash = Blake2bHash::new(&trie_bytes);
-        Ok(HashedTestTrie { hash, trie })
+        Ok(HashedTrie { hash, trie })
     }
 }
+
+const EMPTY_HASHED_TEST_TRIES: &[HashedTestTrie] = &[];
 
 const TEST_LEAVES_LENGTH: usize = 6;
 
@@ -201,11 +206,11 @@ const TEST_LEAVES_ADJACENTS: [TestTrie; TEST_LEAVES_LENGTH] = [
     },
 ];
 
-type TestTrieGenerator = fn() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error>;
+type TrieGenerator<K, V> = fn() -> Result<(Blake2bHash, Vec<HashedTrie<K, V>>), bytesrepr::Error>;
 
 const TEST_TRIE_GENERATORS_LENGTH: usize = 7;
 
-const TEST_TRIE_GENERATORS: [TestTrieGenerator; TEST_TRIE_GENERATORS_LENGTH] = [
+const TEST_TRIE_GENERATORS: [TrieGenerator<TestKey, TestValue>; TEST_TRIE_GENERATORS_LENGTH] = [
     create_0_leaf_trie,
     create_1_leaf_trie,
     create_2_leaf_trie,
@@ -223,7 +228,7 @@ fn hash_test_tries(tries: &[TestTrie]) -> Result<Vec<HashedTestTrie>, bytesrepr:
 }
 
 fn create_0_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
-    let root = HashedTestTrie::new(Trie::node(&[]))?;
+    let root = HashedTrie::new(Trie::node(&[]))?;
 
     let root_hash: Blake2bHash = root.hash;
 
@@ -241,7 +246,7 @@ fn create_0_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_1_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES[..1])?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::LeafPointer(leaves[0].hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::LeafPointer(leaves[0].hash))]))?;
 
     let root_hash: Blake2bHash = root.hash;
 
@@ -260,17 +265,17 @@ fn create_1_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_2_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES[..2])?;
 
-    let node = HashedTestTrie::new(Trie::node(&[
+    let node = HashedTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
         (1, Pointer::LeafPointer(leaves[1].hash)),
     ]))?;
 
-    let ext = HashedTestTrie::new(Trie::extension(
+    let ext = HashedTrie::new(Trie::extension(
         vec![0u8, 0, 0, 0, 0],
         Pointer::NodePointer(node.hash),
     ))?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext.hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext.hash))]))?;
 
     let root_hash = root.hash;
 
@@ -289,27 +294,27 @@ fn create_2_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_3_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES[..3])?;
 
-    let node_1 = HashedTestTrie::new(Trie::node(&[
+    let node_1 = HashedTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
         (1, Pointer::LeafPointer(leaves[1].hash)),
     ]))?;
 
-    let ext_1 = HashedTestTrie::new(Trie::extension(
+    let ext_1 = HashedTrie::new(Trie::extension(
         vec![0u8, 0],
         Pointer::NodePointer(node_1.hash),
     ))?;
 
-    let node_2 = HashedTestTrie::new(Trie::node(&[
+    let node_2 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_1.hash)),
         (2, Pointer::LeafPointer(leaves[2].hash)),
     ]))?;
 
-    let ext_2 = HashedTestTrie::new(Trie::extension(
+    let ext_2 = HashedTrie::new(Trie::extension(
         vec![0u8, 0],
         Pointer::NodePointer(node_2.hash),
     ))?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext_2.hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext_2.hash))]))?;
 
     let root_hash = root.hash;
 
@@ -328,32 +333,32 @@ fn create_3_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_4_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES[..4])?;
 
-    let node_1 = HashedTestTrie::new(Trie::node(&[
+    let node_1 = HashedTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
         (1, Pointer::LeafPointer(leaves[1].hash)),
     ]))?;
 
-    let node_2 = HashedTestTrie::new(Trie::node(&[
+    let node_2 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(node_1.hash)),
         (255, Pointer::LeafPointer(leaves[3].hash)),
     ]))?;
 
-    let ext_1 = HashedTestTrie::new(Trie::extension(
+    let ext_1 = HashedTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_2.hash),
     ))?;
 
-    let node_3 = HashedTestTrie::new(Trie::node(&[
+    let node_3 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_1.hash)),
         (2, Pointer::LeafPointer(leaves[2].hash)),
     ]))?;
 
-    let ext_2 = HashedTestTrie::new(Trie::extension(
+    let ext_2 = HashedTrie::new(Trie::extension(
         vec![0u8, 0],
         Pointer::NodePointer(node_3.hash),
     ))?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext_2.hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::NodePointer(ext_2.hash))]))?;
 
     let root_hash = root.hash;
 
@@ -372,37 +377,37 @@ fn create_4_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_5_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES[..5])?;
 
-    let node_1 = HashedTestTrie::new(Trie::node(&[
+    let node_1 = HashedTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
         (1, Pointer::LeafPointer(leaves[1].hash)),
     ]))?;
 
-    let node_2 = HashedTestTrie::new(Trie::node(&[
+    let node_2 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(node_1.hash)),
         (255, Pointer::LeafPointer(leaves[3].hash)),
     ]))?;
 
-    let ext_1 = HashedTestTrie::new(Trie::extension(
+    let ext_1 = HashedTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_2.hash),
     ))?;
 
-    let node_3 = HashedTestTrie::new(Trie::node(&[
+    let node_3 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_1.hash)),
         (2, Pointer::LeafPointer(leaves[2].hash)),
     ]))?;
 
-    let ext_2 = HashedTestTrie::new(Trie::extension(
+    let ext_2 = HashedTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_3.hash),
     ))?;
 
-    let node_4 = HashedTestTrie::new(Trie::node(&[
+    let node_4 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext_2.hash)),
         (1, Pointer::LeafPointer(leaves[4].hash)),
     ]))?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::NodePointer(node_4.hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::NodePointer(node_4.hash))]))?;
 
     let root_hash = root.hash;
 
@@ -421,37 +426,37 @@ fn create_5_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
 fn create_6_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr::Error> {
     let leaves = hash_test_tries(&TEST_LEAVES)?;
 
-    let node_1 = HashedTestTrie::new(Trie::node(&[
+    let node_1 = HashedTrie::new(Trie::node(&[
         (0, Pointer::LeafPointer(leaves[0].hash)),
         (1, Pointer::LeafPointer(leaves[1].hash)),
     ]))?;
 
-    let node_2 = HashedTestTrie::new(Trie::node(&[
+    let node_2 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(node_1.hash)),
         (255, Pointer::LeafPointer(leaves[3].hash)),
     ]))?;
 
-    let ext = HashedTestTrie::new(Trie::extension(
+    let ext = HashedTrie::new(Trie::extension(
         vec![0u8],
         Pointer::NodePointer(node_2.hash),
     ))?;
 
-    let node_3 = HashedTestTrie::new(Trie::node(&[
+    let node_3 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(ext.hash)),
         (2, Pointer::LeafPointer(leaves[2].hash)),
     ]))?;
 
-    let node_4 = HashedTestTrie::new(Trie::node(&[
+    let node_4 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(node_3.hash)),
         (2, Pointer::LeafPointer(leaves[5].hash)),
     ]))?;
 
-    let node_5 = HashedTestTrie::new(Trie::node(&[
+    let node_5 = HashedTrie::new(Trie::node(&[
         (0, Pointer::NodePointer(node_4.hash)),
         (1, Pointer::LeafPointer(leaves[4].hash)),
     ]))?;
 
-    let root = HashedTestTrie::new(Trie::node(&[(0, Pointer::NodePointer(node_5.hash))]))?;
+    let root = HashedTrie::new(Trie::node(&[(0, Pointer::NodePointer(node_5.hash))]))?;
 
     let root_hash = root.hash;
 
@@ -467,10 +472,16 @@ fn create_6_leaf_trie() -> Result<(Blake2bHash, Vec<HashedTestTrie>), bytesrepr:
     Ok((root_hash, tries))
 }
 
-fn put_tries<'a, R, S, E>(environment: &'a R, store: &S, tries: &[HashedTestTrie]) -> Result<(), E>
+fn put_tries<'a, K, V, R, S, E>(
+    environment: &'a R,
+    store: &S,
+    tries: &[HashedTrie<K, V>],
+) -> Result<(), E>
 where
+    K: ToBytes,
+    V: ToBytes,
     R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
+    S: TrieStore<K, V>,
     S::Error: From<R::Error>,
     E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
 {
@@ -478,7 +489,7 @@ where
         return Ok(());
     }
     let mut txn = environment.create_read_write_txn()?;
-    for HashedTestTrie { hash, trie } in tries.iter() {
+    for HashedTrie { hash, trie } in tries.iter() {
         store.put(&mut txn, hash, trie)?;
     }
     txn.commit()?;
@@ -493,11 +504,15 @@ struct LmdbTestContext {
 }
 
 impl LmdbTestContext {
-    fn new(tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
+    fn new<K, V>(tries: &[HashedTrie<K, V>]) -> Result<Self, failure::Error>
+    where
+        K: FromBytes + ToBytes,
+        V: FromBytes + ToBytes,
+    {
         let _temp_dir = tempdir()?;
         let environment = LmdbEnvironment::new(&_temp_dir.path().to_path_buf(), *TEST_MAP_SIZE)?;
         let store = LmdbTrieStore::new(&environment, None, DatabaseFlags::empty())?;
-        put_tries::<_, _, error::Error>(&environment, &store, tries)?;
+        put_tries::<_, _, _, _, error::Error>(&environment, &store, tries)?;
         Ok(LmdbTestContext {
             _temp_dir,
             environment,
@@ -505,8 +520,12 @@ impl LmdbTestContext {
         })
     }
 
-    fn update(&self, tries: &[HashedTestTrie]) -> Result<(), failure::Error> {
-        put_tries::<_, _, error::Error>(&self.environment, &self.store, tries)?;
+    fn update<K, V>(&self, tries: &[HashedTrie<K, V>]) -> Result<(), failure::Error>
+    where
+        K: ToBytes,
+        V: ToBytes,
+    {
+        put_tries::<_, _, _, _, error::Error>(&self.environment, &self.store, tries)?;
         Ok(())
     }
 }
@@ -518,29 +537,39 @@ struct InMemoryTestContext {
 }
 
 impl InMemoryTestContext {
-    fn new(tries: &[HashedTestTrie]) -> Result<Self, failure::Error> {
+    fn new<K, V>(tries: &[HashedTrie<K, V>]) -> Result<Self, failure::Error>
+    where
+        K: ToBytes,
+        V: ToBytes,
+    {
         let environment = InMemoryEnvironment::new();
         let store = InMemoryTrieStore::new(&environment, None);
-        put_tries::<_, _, in_memory::Error>(&environment, &store, tries)?;
+        put_tries::<_, _, _, _, in_memory::Error>(&environment, &store, tries)?;
         Ok(InMemoryTestContext { environment, store })
     }
 
-    fn update(&self, tries: &[HashedTestTrie]) -> Result<(), failure::Error> {
-        put_tries::<_, _, in_memory::Error>(&self.environment, &self.store, tries)?;
+    fn update<K, V>(&self, tries: &[HashedTrie<K, V>]) -> Result<(), failure::Error>
+    where
+        K: ToBytes,
+        V: ToBytes,
+    {
+        put_tries::<_, _, _, _, in_memory::Error>(&self.environment, &self.store, tries)?;
         Ok(())
     }
 }
 
-fn check_leaves_exist<T, S, E>(
+fn check_leaves_exist<K, V, T, S, E>(
     correlation_id: CorrelationId,
     txn: &T,
     store: &S,
     root: &Blake2bHash,
-    leaves: &[TestTrie],
+    leaves: &[Trie<K, V>],
 ) -> Result<Vec<bool>, E>
 where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Eq + Copy,
     T: Readable<Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
+    S: TrieStore<K, V>,
     S::Error: From<T::Error>,
     E: From<S::Error> + From<contract_ffi::bytesrepr::Error>,
 {
@@ -548,7 +577,7 @@ where
 
     for leaf in leaves {
         if let Trie::Leaf { key, value } = leaf {
-            let maybe_value: ReadResult<TestValue> =
+            let maybe_value: ReadResult<V> =
                 read::<_, _, _, _, E>(correlation_id, txn, store, root, key)?;
             ret.push(ReadResult::Found(*value) == maybe_value)
         } else {
@@ -558,46 +587,260 @@ where
     Ok(ret)
 }
 
-fn check_leaves<'a, R, S, E>(
+fn check_keys<K, V, T, S, E>(
+    correlation_id: CorrelationId,
+    txn: &T,
+    store: &S,
+    root: &Blake2bHash,
+    leaves: &[Trie<K, V>],
+) -> Result<bool, E>
+where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug + Clone + Ord,
+    V: ToBytes + FromBytes + Eq + std::fmt::Debug + Copy,
+    T: Readable<Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<T::Error>,
+    E: From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let expected = {
+        let mut tmp = leaves
+            .iter()
+            .filter_map(Trie::key)
+            .cloned()
+            .collect::<Vec<K>>();
+        tmp.sort();
+        tmp
+    };
+    let actual = {
+        let mut tmp = operations::keys::<_, _, _, _, E>(correlation_id, txn, store, root)?;
+        tmp.sort();
+        tmp
+    };
+    Ok(expected == actual)
+}
+
+fn check_leaves<'a, K, V, R, S, E>(
     correlation_id: CorrelationId,
     environment: &'a R,
     store: &S,
     root: &Blake2bHash,
-    present: &[TestTrie],
-    absent: &[TestTrie],
+    present: &[Trie<K, V>],
+    absent: &[Trie<K, V>],
 ) -> Result<(), E>
 where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug + Clone + Ord,
+    V: ToBytes + FromBytes + Eq + std::fmt::Debug + Copy,
     R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
+    S: TrieStore<K, V>,
     S::Error: From<R::Error>,
     E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
 {
     let txn: R::ReadTransaction = environment.create_read_txn()?;
 
     assert!(
-        check_leaves_exist::<_, _, E>(correlation_id, &txn, store, root, present)?
-            .iter()
-            .all(|b| *b)
+        check_leaves_exist::<_, _, _, _, E>(correlation_id, &txn, store, root, present)?
+            .into_iter()
+            .all(convert::identity)
     );
+
     assert!(
-        check_leaves_exist::<_, _, E>(correlation_id, &txn, store, root, absent)?
-            .iter()
-            .all(|b| !*b)
+        check_leaves_exist::<_, _, _, _, E>(correlation_id, &txn, store, root, absent)?
+            .into_iter()
+            .all(|b| !b)
     );
+
+    assert!(check_keys::<_, _, _, _, E>(
+        correlation_id,
+        &txn,
+        store,
+        root,
+        present
+    )?);
+
     txn.commit()?;
     Ok(())
+}
+
+fn write_leaves<'a, K, V, R, S, E>(
+    correlation_id: CorrelationId,
+    environment: &'a R,
+    store: &S,
+    root_hash: &Blake2bHash,
+    leaves: &[Trie<K, V>],
+) -> Result<Vec<WriteResult>, E>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq,
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let mut results = Vec::new();
+    if leaves.is_empty() {
+        return Ok(results);
+    }
+    let mut root_hash = root_hash.to_owned();
+    let mut txn = environment.create_read_write_txn()?;
+
+    for leaf in leaves.iter() {
+        if let Trie::Leaf { key, value } = leaf {
+            let write_result =
+                write::<_, _, _, _, E>(correlation_id, &mut txn, store, &root_hash, key, value)?;
+            match write_result {
+                WriteResult::Written(hash) => {
+                    root_hash = hash;
+                }
+                WriteResult::AlreadyExists => (),
+                WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
+            };
+            results.push(write_result);
+        } else {
+            panic!("leaves should contain only leaves");
+        }
+    }
+    txn.commit()?;
+    Ok(results)
+}
+
+fn check_pairs<'a, K, V, R, S, E>(
+    correlation_id: CorrelationId,
+    environment: &'a R,
+    store: &S,
+    root_hashes: &[Blake2bHash],
+    pairs: &[(K, V)],
+) -> Result<bool, E>
+where
+    K: ToBytes + FromBytes + Eq + std::fmt::Debug + Clone + Ord,
+    V: ToBytes + FromBytes + Eq + std::fmt::Debug + Copy,
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let txn = environment.create_read_txn()?;
+    for (index, root_hash) in root_hashes.iter().enumerate() {
+        for (key, value) in &pairs[..=index] {
+            let result = read::<_, _, _, _, E>(correlation_id, &txn, store, root_hash, key)?;
+            if ReadResult::Found(*value) != result {
+                return Ok(false);
+            }
+        }
+        let expected = {
+            let mut tmp = pairs[..=index]
+                .iter()
+                .map(|(k, _)| k)
+                .cloned()
+                .collect::<Vec<K>>();
+            tmp.sort();
+            tmp
+        };
+        let actual = {
+            let mut tmp =
+                operations::keys::<_, _, _, _, E>(correlation_id, &txn, store, root_hash)?;
+            tmp.sort();
+            tmp
+        };
+        if expected != actual {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn write_pairs<'a, K, V, R, S, E>(
+    correlation_id: CorrelationId,
+    environment: &'a R,
+    store: &S,
+    root_hash: &Blake2bHash,
+    pairs: &[(K, V)],
+) -> Result<Vec<Blake2bHash>, E>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug,
+    V: ToBytes + FromBytes + Clone + Eq,
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let mut results = Vec::new();
+    if pairs.is_empty() {
+        return Ok(results);
+    }
+    let mut root_hash = root_hash.to_owned();
+    let mut txn = environment.create_read_write_txn()?;
+
+    for (key, value) in pairs.iter() {
+        match write::<_, _, _, _, E>(correlation_id, &mut txn, store, &root_hash, key, value)? {
+            WriteResult::Written(hash) => {
+                root_hash = hash;
+            }
+            WriteResult::AlreadyExists => (),
+            WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
+        };
+        results.push(root_hash);
+    }
+    txn.commit()?;
+    Ok(results)
+}
+
+fn writes_to_n_leaf_empty_trie_had_expected_results<'a, K, V, R, S, E>(
+    correlation_id: CorrelationId,
+    environment: &'a R,
+    store: &S,
+    states: &[Blake2bHash],
+    test_leaves: &[Trie<K, V>],
+) -> Result<Vec<Blake2bHash>, E>
+where
+    K: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug + Ord,
+    V: ToBytes + FromBytes + Clone + Eq + std::fmt::Debug + Copy,
+    R: TransactionSource<'a, Handle = S::Handle>,
+    S: TrieStore<K, V>,
+    S::Error: From<R::Error>,
+    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
+{
+    let mut states = states.to_vec();
+
+    // Write set of leaves to the trie
+    let hashes = write_leaves::<_, _, _, _, E>(
+        correlation_id,
+        environment,
+        store,
+        states.last().unwrap(),
+        &test_leaves,
+    )?
+    .into_iter()
+    .map(|result| match result {
+        WriteResult::Written(root_hash) => root_hash,
+        _ => panic!("write_leaves resulted in non-write"),
+    })
+    .collect::<Vec<Blake2bHash>>();
+
+    states.extend(hashes);
+
+    // Check that the expected set of leaves is in the trie at every
+    // state, and that the set of other leaves is not.
+    for (num_leaves, state) in states.iter().enumerate() {
+        let (used, unused) = test_leaves.split_at(num_leaves);
+        check_leaves::<_, _, _, _, E>(correlation_id, environment, store, state, used, unused)?;
+    }
+
+    Ok(states)
 }
 
 impl InMemoryEnvironment {
     pub fn dump<K, V>(
         &self,
-        name: Option<&str>,
+        maybe_name: Option<&str>,
     ) -> Result<HashMap<Blake2bHash, Trie<K, V>>, in_memory::Error>
     where
         K: FromBytes,
         V: FromBytes,
     {
-        let data = self.data(name)?.unwrap();
+        let name = maybe_name
+            .map(|name| format!("{}-{}", trie_store::NAME, name))
+            .unwrap_or_else(|| trie_store::NAME.to_string());
+        let data = self.data(Some(&name))?.unwrap();
         data.into_iter()
             .map(|(hash_bytes, trie_bytes)| {
                 let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes.to_vec())?;
