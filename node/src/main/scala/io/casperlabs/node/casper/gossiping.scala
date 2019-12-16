@@ -69,7 +69,10 @@ package object gossiping {
       genesis: Block,
       ingressScheduler: Scheduler,
       egressScheduler: Scheduler
-  )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Broadcaster[F]] = {
+  )(
+      implicit logId: Log[Id],
+      metricsId: Metrics[Id]
+  ): Resource[F, (Broadcaster[F], WaitHandle[F])] = {
 
     val (cert, key) = conf.tls.readIntraNodeCertAndKey
 
@@ -234,7 +237,7 @@ package object gossiping {
                       MultiParentCasperImpl.Broadcaster
                         .fromGossipServices(validatorId, relaying)
                     )
-    } yield broadcaster
+    } yield (broadcaster, awaitSynchronization.join)
   }
 
   /** Check if we have a block yet. */

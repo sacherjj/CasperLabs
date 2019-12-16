@@ -159,8 +159,8 @@ const DeploysTable = observer(
                 {deploy.getIsError() ? (
                   <Icon name="times-circle" color="red" />
                 ) : (
-                  <Icon name="check-circle" color="green" />
-                )}
+                    <Icon name="check-circle" color="green" />
+                  )}
               </td>
               <td>{deploy.getErrorMessage()}</td>
             </tr>
@@ -177,6 +177,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
   const header = block.getSummary()!.getHeader()!;
   const validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+  const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
     ['Rank', header.getRank()],
@@ -212,21 +213,10 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       })()
     ],
     ['Deploy Count', header.getDeployCount()],
-    [
-      'Deploy Error Count',
-      block
-        .getStatus()!
-        .getStats()!
-        .getDeployErrorCount()
-    ],
-    [
-      'Block Size (bytes)',
-      block
-        .getStatus()!
-        .getStats()!
-        .getBlockSizeBytes()
-        .toLocaleString()
-    ],
+    ['Deploy Error Count', stats.getDeployErrorCount()],
+    ['Deploy Cost Total', stats.getDeployCostTotal().toLocaleString()],
+    ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
+    ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
       'Fault Tolerance',
       block

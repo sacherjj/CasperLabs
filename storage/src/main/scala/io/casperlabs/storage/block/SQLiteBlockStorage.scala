@@ -27,6 +27,8 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 ) extends BlockStorage[F]
     with DoobieCodecs {
 
+  import SQLiteBlockStorage.blockInfoCols
+
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     get(sql"""|SELECT block_hash, data
               |FROM block_metadata
@@ -93,10 +95,10 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
 
   override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
-      sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
-            |FROM block_metadata
-            |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
-            |LIMIT 1""".stripMargin
+      (fr"""SELECT """ ++ blockInfoCols() ++ fr"""
+            FROM block_metadata
+            WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
+            LIMIT 1""")
         .query[BlockInfo]
         .option
         .transact(readXa)
@@ -148,9 +150,9 @@ class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     getBlockInfo(blockHash).map(_.flatMap(_.summary))
 
   override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
-    sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
-          |FROM block_metadata
-          |WHERE block_hash=$blockHash""".stripMargin
+    (fr"""SELECT """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE block_hash=$blockHash""")
       .query[BlockInfo]
       .option
       .transact(readXa)
@@ -204,4 +206,11 @@ object SQLiteBlockStorage {
                        }
                      )
     } yield blockStorage: BlockStorage[F]
+
+  // Helper function to avoid having to duplicate the list of columns of `BlockInfo` to read it from the `block_metadata` table.
+  private[storage] def blockInfoCols(alias: String = "") = {
+    val cols =
+      Seq("data", "block_size", "deploy_error_count", "deploy_cost_total", "deploy_gas_price_avg")
+    Fragment.const(cols.map(col => if (alias.isEmpty) col else s"${alias}.${col}").mkString(", "))
+  }
 }

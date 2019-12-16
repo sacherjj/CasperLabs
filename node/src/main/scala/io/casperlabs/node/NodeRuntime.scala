@@ -218,16 +218,27 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
-      blockApiLock <- Resource.liftF(Semaphore[Task](1))
+      // Creating with 0 permits initially, enabled after the initial synchronization.
+      blockApiLock <- Resource.liftF(Semaphore[Task](0))
 
-      implicit0(broadcaster: Broadcaster[Task]) <- casper.gossiping.apply[Task](
-                                                    port,
-                                                    conf,
-                                                    chainSpec,
-                                                    genesis,
-                                                    ingressScheduler,
-                                                    egressScheduler
-                                                  )
+      // Set up gossiping machinery and start synchronizing with the network.
+      broadcastAndSync <- casper.gossiping
+                           .apply[
+                             Task
+                           ](
+                             port,
+                             conf,
+                             chainSpec,
+                             genesis,
+                             ingressScheduler,
+                             egressScheduler
+                           )
+
+      implicit0(broadcaster: Broadcaster[Task]) = broadcastAndSync._1
+      awaitSynchronization                      = broadcastAndSync._2
+
+      // Enable block production after sync.
+      _ <- Resource.liftF((awaitSynchronization >> blockApiLock.releaseN(1)).start)
 
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
