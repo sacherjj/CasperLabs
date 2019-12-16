@@ -84,7 +84,7 @@ C:\Users\alice>pip install casperlabs-client
 ## Command line interface
 
 The package `casperlabs-client` includes command line interface (CLI)
-script called `casperlabs-client`,
+script called `casperlabs_client`,
 which has syntax compatible with 
 [Scala client](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/CONTRACTS.md#deploying-contracts).
 
