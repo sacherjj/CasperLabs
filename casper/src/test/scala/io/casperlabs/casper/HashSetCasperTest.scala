@@ -305,7 +305,6 @@ abstract class HashSetCasperTest
                             )
                         }
       _ <- node0.casperEff.addBlock(unsignedBlock)
-      _ <- node1.clearMessages() //node1 misses this block
 
       signedBlock <- (node0.deployBuffer.addDeploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
@@ -313,9 +312,14 @@ abstract class HashSetCasperTest
       // NOTE: It can include both data0 and data1 because they don't conflict.
       _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data1)
 
+      _ <- node0.casperEff.addBlock(signedBlock)
+      _ <- node0.casperEff.contains(signedBlock) shouldBeF true
+      // Broadcast signedBlock to peers.
+      _ <- node0.broadcaster.networkEffects(signedBlock, Valid)
       _ <- node1.receive() //receives block1; should not ask for block0
 
       _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
+      _ <- node1.casperEff.contains(signedBlock) shouldBeF true
       _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
 
     } yield ()
