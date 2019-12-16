@@ -35,7 +35,7 @@ export class Contract {
     paymentAmount: bigint,
     accountPublicKey: ByteArray,
     signingKeyPair: nacl.SignKeyPair,
-    gasPrice?: number
+    gasPrice: number
   ): Deploy {
     const session = new Deploy.Code();
     session.setWasm(this.sessionWasm);
@@ -53,10 +53,6 @@ export class Contract {
     header.setAccountPublicKey(accountPublicKey);
     header.setTimestamp(new Date().getTime());
     header.setBodyHash(protoHash(body));
-    // fallback
-    if (gasPrice === undefined) {
-      gasPrice = 10;
-    }
     header.setGasPrice(gasPrice);
 
     const deploy = new Deploy();
@@ -87,7 +83,7 @@ export class BoundContract {
     private contractKeyPair: nacl.SignKeyPair
   ) {}
 
-  public deploy(args: Deploy.Arg[], paymentAmount: bigint, gasPrice?: number): Deploy {
+  public deploy(args: Deploy.Arg[], paymentAmount: bigint, gasPrice: number): Deploy {
     return this.contract.deploy(
       args,
       paymentAmount,
