@@ -67,7 +67,7 @@ object Configuration extends ParserImplicits {
       dataDir: Path,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
-      eventStreamBufferSize: Int Refined NonNegative,
+      eventStreamBufferSize: Int Refined Positive,
       chunkSize: Int,
       relayFactor: Int,
       relaySaturation: Int,
