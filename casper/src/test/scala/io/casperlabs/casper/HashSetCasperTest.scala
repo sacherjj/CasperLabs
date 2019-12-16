@@ -305,11 +305,12 @@ abstract class HashSetCasperTest
                             )
                         }
       _ <- node0.casperEff.addBlock(unsignedBlock)
+      _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
 
       signedBlock <- (node0.deployBuffer.addDeploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
 
-      // NOTE: It can include both data0 and data1 because they don't conflict.
+      // NOTE: Includes only data1 since data0 will be requeued in the background fiber.
       _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
@@ -1161,7 +1162,7 @@ abstract class HashSetCasperTest
       // Since requeuing of orphans happens in the background fiber, trigerred during `createBlock`,
       // the very first `createBlock` most likely returns `NoNewDeploys` because background fiber
       // hasn't yet finished.
-      _ <- nodes(0).casperEff.createBlock shouldBeF NoNewDeploys
+      _ <- (eventuallyIncludes(nodes(0), deployA)).timeout(500.millis)
       // Do another call to `createBlock` since now it should have requeuened orphaned deployA.
       createC         <- nodes(0).casperEff.createBlock
       Created(blockC) = createC
@@ -1169,6 +1170,15 @@ abstract class HashSetCasperTest
       _               <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
+
+  def eventuallyIncludes(node: TestNode[Task], deploy: Deploy): Task[Assertion] =
+    node.casperEff.createBlock flatMap {
+      case NoNewDeploys => eventuallyIncludes(node, deploy)
+      case Created(block) =>
+        if (block.getBody.deploys.map(_.getDeploy) contains deploy) {
+          Task.now(assert(true))
+        } else Task.now(assert(false, "Block did not include expected deploy"))
+    }
 
   it should "not execute deploys until dependencies are met" in effectTest {
     import io.casperlabs.models.DeployImplicits._
