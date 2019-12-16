@@ -21,16 +21,16 @@ pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error>
     //      dropped then key_ptr becomes invalid.
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let output_size = {
-        let mut output_size = MaybeUninit::uninit();
-        let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, output_size.as_mut_ptr()) };
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, value_size.as_mut_ptr()) };
         match error::result_from(ret) {
-            Ok(_) => unsafe { output_size.assume_init() },
+            Ok(_) => unsafe { value_size.assume_init() },
             Err(Error::ValueNotFound) => return Ok(None),
             Err(e) => runtime::revert(e),
         }
     };
-    let value_bytes = runtime::read_host_buffer(output_size).unwrap_or_revert();
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
     let value: Value = deserialize(&value_bytes)?;
     Ok(Some(value))
 }
@@ -74,18 +74,18 @@ where
 fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let output_size = {
-        let mut output_size = MaybeUninit::uninit();
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
         let ret = unsafe {
-            ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size, output_size.as_mut_ptr())
+            ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size, value_size.as_mut_ptr())
         };
         match error::result_from(ret) {
-            Ok(_) => unsafe { output_size.assume_init() },
+            Ok(_) => unsafe { value_size.assume_init() },
             Err(Error::ValueNotFound) => return Ok(None),
             Err(e) => runtime::revert(e),
         }
     };
-    let value_bytes = runtime::read_host_buffer(output_size).unwrap_or_revert();
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
     let value: Value = deserialize(&value_bytes)?;
     Ok(Some(value))
 }

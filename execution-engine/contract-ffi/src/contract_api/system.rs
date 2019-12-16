@@ -91,9 +91,9 @@ pub fn get_balance(purse_id: PurseId) -> Option<U512> {
             Err(error) => runtime::revert(error),
         }
     };
-    let balance_data = read_host_buffer(value_size).unwrap_or_revert();
-    let balance: U512 = deserialize(&balance_data).unwrap_or_revert();
-    Some(balance)
+    let value_bytes = read_host_buffer(value_size).unwrap_or_revert();
+    let value: U512 = deserialize(&value_bytes).unwrap_or_revert();
+    Some(value)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
