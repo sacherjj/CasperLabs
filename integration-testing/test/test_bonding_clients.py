@@ -315,7 +315,7 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
 
     node0, node1 = onn.docker_nodes
     cli = cli_method(node0)
-    if cli is DockerCLI:
+    if type(cli) is DockerCLI:
         args = []
     else:
         args = [
