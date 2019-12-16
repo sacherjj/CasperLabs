@@ -181,60 +181,30 @@ impl FromBytes for i64 {
 
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut len_as_le_bytes: [u8; U32_SIZE] = [0u8; U32_SIZE];
-        let (len_bytes, _) = safe_split_at(bytes, U32_SIZE)?;
-        len_as_le_bytes.copy_from_slice(len_bytes);
-        let len = u32::from_le_bytes(len_as_le_bytes);
-
-        let (len_and_data, remainder) = safe_split_at(bytes, U32_SIZE + len as usize)?;
-        let mut len_and_data = Vec::from(len_and_data);
-        for i in (0..4).rev() {
-            len_and_data.swap(i, len as usize + i);
+        let (size, mut stream): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
+        let mut result: Vec<u8> = Vec::new();
+        result.try_reserve_exact(size as usize)?;
+        for _ in 0..size {
+            let (t, rem): (u8, &[u8]) = FromBytes::from_bytes(stream)?;
+            result.push(t);
+            stream = rem;
         }
-        len_and_data.truncate(len as usize);
-        Ok((len_and_data, remainder))
-    }
-
-    fn from_vec(mut bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
-        if U32_SIZE > bytes.len() {
-            return Err(Error::EarlyEndOfStream);
-        }
-
-        let mut len_as_le_bytes: [u8; U32_SIZE] = [0u8; U32_SIZE];
-        len_as_le_bytes.copy_from_slice(&bytes[..U32_SIZE]);
-        let len = u32::from_le_bytes(len_as_le_bytes);
-
-        if U32_SIZE + len as usize > bytes.len() {
-            return Err(Error::EarlyEndOfStream);
-        }
-        let remainder = bytes.split_off(U32_SIZE + len as usize);
-
-        for i in (0..4).rev() {
-            bytes.swap(i, len as usize + i);
-        }
-        bytes.truncate(len as usize);
-        Ok((bytes, remainder))
+        Ok((result, stream))
     }
 }
 
 impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        self.clone().into_bytes()
-    }
-
-    fn into_bytes(mut self) -> Result<Vec<u8>, Error> {
-        if self.len() > u32::max_value() as usize - U32_SIZE {
+        // Return error if size of serialized vector would exceed limit for
+        // 32-bit architecture.
+        if self.len() >= u32::max_value() as usize - U32_SIZE {
             return Err(Error::OutOfMemoryError);
         }
-
-        let len = self.len() as u32;
-        self.extend(len.to_le_bytes().iter());
-
-        for i in 0..4 {
-            self.swap(i, len as usize + i);
-        }
-
-        Ok(self)
+        let size = self.len() as u32;
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
+        result.extend(size.to_bytes()?);
+        result.extend(self);
+        Ok(result)
     }
 }
 

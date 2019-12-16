@@ -127,6 +127,8 @@ message CLType {
         CLType type9 = 10;
     }
 
+    message Any {}
+
     oneof variants {
         Simple simple_type = 1;
         Option option_type = 2;
@@ -144,6 +146,7 @@ message CLType {
         Tuple8 tuple8_type = 14;
         Tuple9 tuple9_type = 15;
         Tuple10 tuple10_type = 16;
+        Any any_type = 17;
     }
 }
 

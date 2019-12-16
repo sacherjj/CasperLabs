@@ -11,7 +11,7 @@ use contract_ffi::{
     bytesrepr::{self, FromBytes},
     execution::Phase,
     key::Key,
-    value::{account::PublicKey, CLTyped, CLValue, ProtocolVersion},
+    value::{account::PublicKey, CLType, CLTyped, CLValue, ProtocolVersion},
 };
 use engine_shared::{
     account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
@@ -110,7 +110,7 @@ impl Executor {
         // only nonce update can be returned.
         let effects_snapshot = tc.borrow().effect();
 
-        let arguments: Vec<CLValue> = if args.is_empty() {
+        let arguments: Vec<Vec<u8>> = if args.is_empty() {
             Vec::new()
         } else {
             // TODO: figure out how this works with the cost model
@@ -118,6 +118,11 @@ impl Executor {
             let gas = Gas::new(args.len().into());
             on_fail_charge!(bytesrepr::deserialize(args), gas, effects_snapshot)
         };
+
+        let arguments = arguments
+            .into_iter()
+            .map(|bytes: Vec<u8>| CLValue::from_components(CLType::Any, bytes))
+            .collect();
 
         let context = RuntimeContext::new(
             tc,

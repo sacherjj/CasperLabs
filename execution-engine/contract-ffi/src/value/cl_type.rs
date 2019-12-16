@@ -61,6 +61,7 @@ pub enum CLType {
     Tuple8([Box<CLType>; 8]),
     Tuple9([Box<CLType>; 9]),
     Tuple10([Box<CLType>; 10]),
+    Any,
 }
 
 impl CLType {
@@ -80,7 +81,8 @@ impl CLType {
                 | CLType::Unit
                 | CLType::String
                 | CLType::Key
-                | CLType::URef => 0,
+                | CLType::URef
+                | CLType::Any => 0,
                 CLType::Option(cl_type) | CLType::List(cl_type) => cl_type.serialized_len(),
                 CLType::FixedList(cl_type, list_len) => {
                     cl_type.serialized_len() + list_len.to_le_bytes().len()
@@ -135,6 +137,7 @@ enum CLTypeTag {
     Tuple8 = 25,
     Tuple9 = 26,
     Tuple10 = 27,
+    Any = 28,
 }
 
 impl CLType {
@@ -206,6 +209,7 @@ impl CLType {
             CLType::Tuple10(cl_type_array) => {
                 serialize_cl_tuple_type(CLTypeTag::Tuple10 as u8, cl_type_array, stream)
             }
+            CLType::Any => stream.push(CLTypeTag::Any as u8),
         }
     }
 }

@@ -497,7 +497,8 @@ where
                 | CLType::Tuple7(_)
                 | CLType::Tuple8(_)
                 | CLType::Tuple9(_)
-                | CLType::Tuple10(_) => Ok(()),
+                | CLType::Tuple10(_)
+                | CLType::Any => Ok(()),
                 CLType::Key => {
                     let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
                     self.validate_key(&key)

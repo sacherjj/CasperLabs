@@ -131,6 +131,9 @@ impl From<CLType> for state::CLType {
                 pb_tuple10.set_type8((*types[8].clone()).into());
                 pb_tuple10.set_type9((*types[9].clone()).into());
             }
+            CLType::Any => {
+                let _pb_any = pb_type.mut_any_type();
+            }
         };
         pb_type
     }
@@ -327,6 +330,7 @@ impl TryFrom<state::CLType> for CLType {
                     Box::new(type9),
                 ])
             }
+            CLType_oneof_variants::any_type(_) => CLType::Any,
         };
         Ok(cl_type)
     }
