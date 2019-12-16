@@ -42,28 +42,14 @@ def add_funded_account_to_network(network: OneNodeNetwork, account_number: int):
 def bond_to_the_network(
     network: OneNodeNetwork, bond_amount: int, account_number: int, cli_method
 ):
-    # scala  bond --amount 1 --gas-price 10 --payment-amount 100000000 --private-key /data/accounts/account-private-295.pem
-    # Python bond --amount 1 --public-key /home/sacherjj/repos/CasperLabs/integration-testing/resources/accounts/account-public-294.pem --private-key /home/sacherjj/repos/CasperLabs/integration-testing/resources/accounts/account-private-294.pem --payment-amount 100000000 --from 685ff3d4bcac12667eca6f41856880b2c6501cafbbc435c3387174e8368c8f66
-    # Using account that will not exist in bonds.txt from high number
     account = Account(account_number)
     node0, node1 = network.docker_nodes
     cli = cli_method(node0)
     # fmt: off
-    if type(cli) is CLI:
-        logging.info("cli is CLI")
-        cli("bond",
-            "--amount", bond_amount,
-            "--public-key", cli.public_key_path(account),
-            '--private-key', cli.private_key_path(account),
-            '--payment-amount', EXECUTION_PAYMENT_AMOUNT,
-            "--from", account.public_key_hex)
-    else:
-        logging.info("cli is DockerCLI")
-        cli("bond",
-            "--amount", bond_amount,
-            "--gas-price", 10,
-            '--private-key', cli.private_key_path(account),
-            '--payment-amount', EXECUTION_PAYMENT_AMOUNT)
+    cli("bond",
+        "--amount", bond_amount,
+        '--private-key', cli.private_key_path(account),
+        '--payment-amount', EXECUTION_PAYMENT_AMOUNT)
     # fmt: on
     block_hash = cli("propose")
     return block_hash, account
@@ -75,25 +61,11 @@ def unbond_from_network(
     node = network.docker_nodes[1]
     account = Account(account_number)
     cli = cli_method(node)
-    # unbond --amount 1 --private-key /data/accounts/account-private-295.pem --payment-amount 100000000 --gas-price 10
-    # unbond --amount 1 --public-key /home/sacherjj/repos/CasperLabs/integration-testing/resources/accounts/account-public-294.pem --private-key /home/sacherjj/repos/CasperLabs/integration-testing/resources/accounts/account-private-294.pem --payment-amount 100000000 --from 685ff3d4bcac12667eca6f41856880b2c6501cafbbc435c3387174e8368c8f66
     # fmt: off
-
-    # unbond python needs public_key and from
-    if type(cli) is CLI:
-        logging.info("cli is CLI")
-        cli("unbond",
-            "--amount", bonding_amount,
-            "--public-key", cli.public_key_path(account),
-            "--private-key", cli.private_key_path(account),
-            "--payment-amount", EXECUTION_PAYMENT_AMOUNT,
-            "--from", account.public_key_hex)
-    else:
-        logging.info("cli is DockerCLI")
-        cli("unbond",
-            "--amount", bonding_amount,
-            "--private-key", cli.private_key_path(account),
-            "--payment-amount", EXECUTION_PAYMENT_AMOUNT)
+    cli("unbond",
+        "--amount", bonding_amount,
+        "--private-key", cli.private_key_path(account),
+        "--payment-amount", EXECUTION_PAYMENT_AMOUNT)
     # fmt: on
     block_hash = cli("propose")
     assert block_hash is not None
@@ -315,15 +287,6 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
 
     node0, node1 = onn.docker_nodes
     cli = cli_method(node0)
-    if type(cli) is DockerCLI:
-        args = []
-    else:
-        args = [
-            "--from",
-            account.public_key_hex,
-            "--public-key",
-            cli.public_key_path(account),
-        ]
     cli(
         "unbond",
         "--amount",
@@ -332,7 +295,6 @@ def test_unbonding_without_bonding(one_node_network_fn, acct_num, cli_method):
         cli.private_key_path(account),
         "--payment-amount",
         EXECUTION_PAYMENT_AMOUNT,
-        *args,
     )
     block_hash = cli("propose")
     r = node0.client.show_deploys(block_hash)[0]
