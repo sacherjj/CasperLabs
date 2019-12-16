@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use contract_ffi::{
-    bytesrepr::I32_SIZE,
+    bytesrepr::I32_SERIALIZED_LENGTH,
     key::Key,
     value::{Account, Contract, Value},
 };
@@ -58,7 +58,7 @@ impl ByteSize for Value {
                 | Value::UInt64(_) => 0,
                 Value::ByteArray(vec) => std::mem::size_of::<Vec<u8>>() + vec.capacity(),
                 Value::ListInt32(list) => {
-                    std::mem::size_of::<Vec<i32>>() + list.capacity() * I32_SIZE
+                    std::mem::size_of::<Vec<i32>>() + list.capacity() * I32_SERIALIZED_LENGTH
                 }
                 Value::String(s) => s.byte_size(),
                 Value::ListString(list) => list.iter().fold(0, |sum, el| sum + el.byte_size()),

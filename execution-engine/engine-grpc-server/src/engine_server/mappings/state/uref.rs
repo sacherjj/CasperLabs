@@ -63,7 +63,7 @@ impl TryFrom<Key_URef> for URef {
 mod tests {
     use rand;
 
-    use contract_ffi::uref::UREF_ADDR_SIZE;
+    use contract_ffi::uref::UREF_ADDR_LENGTH;
 
     use super::*;
     use crate::engine_server::mappings::test_utils;
@@ -94,11 +94,11 @@ mod tests {
         assert!(URef::try_from(empty_pb_uref).is_err());
 
         let mut pb_uref_invalid_addr = Key_URef::new();
-        pb_uref_invalid_addr.set_uref(vec![1; UREF_ADDR_SIZE - 1]);
+        pb_uref_invalid_addr.set_uref(vec![1; UREF_ADDR_LENGTH - 1]);
         assert!(URef::try_from(pb_uref_invalid_addr).is_err());
 
         // Check Protobuf URef with `AccessRights::UNKNOWN` parses to a URef with no access rights.
-        let addr: [u8; UREF_ADDR_SIZE] = rand::random();
+        let addr: [u8; UREF_ADDR_LENGTH] = rand::random();
         let mut pb_uref = Key_URef::new();
         pb_uref.set_uref(addr.to_vec());
         pb_uref.set_access_rights(Key_URef_AccessRights::UNKNOWN);
