@@ -10,7 +10,7 @@ Note, the name of the package available on PyPi is `casperlabs-client` (with hyp
 but the name of the library as well as the CLI is written with underscore: `casperlabs_client`.
 
 The name of the CLI is written with underscore
-in order to distinnguis it from the
+in order to distinguish it from the
 [Scala client](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/CONTRACTS.md#deploying-contracts),
 which is written with hyphen.
 Note, however, that the Python CLI `casperlabs_client`
@@ -85,7 +85,9 @@ C:\Users\alice>pip install casperlabs-client
 
 The package `casperlabs-client` includes command line interface (CLI)
 script called `casperlabs-client`,
-which has syntax compatible with [Scala client](TODO: url).
+which has syntax compatible with 
+[Scala client](https://github.com/CasperLabs/CasperLabs/blob/dev/docs/CONTRACTS.md#deploying-contracts).
+
 
 Type `casperlabs-client --help` to see short synopsis with a list of
 available commands
@@ -110,6 +112,10 @@ $ casperlabs_client deploy --help
 
 
 ## Python API
+
+To see available API functions, their parameters and documentation,
+see [source](casperlabs_client/casperlabs_client.py).
+The API functions are marked with `@api` decorator.
 
 After installing `casperlabs-client` you can start interacting with
 [CasperLabs devnet](https://clarity.casperlabs.io).
