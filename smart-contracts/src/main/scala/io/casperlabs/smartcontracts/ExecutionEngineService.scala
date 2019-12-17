@@ -245,8 +245,6 @@ object ExecutionEngineService {
       items: Seq[A],
       groupSizes: List[Int]
   ): List[Seq[A]] = {
-    require(groupSizes.forall(_ > 0))
-
     def loop(acc: List[Seq[A]], items: Seq[A], groupSizes: List[Int]): List[Seq[A]] =
       if (groupSizes.isEmpty || items.isEmpty) acc
       else {

@@ -92,4 +92,14 @@ class ExecutionEngineServiceTest
       List(9)
     )
   }
+
+  it should "handle 0 sized groups" in {
+    val items = List.range(0, 5)
+    val sizes = List(2, 0, 3)
+    ExecutionEngineService.groupElements(items, sizes) shouldBe List(
+      List(0, 1),
+      List(),
+      List(2, 3, 4)
+    )
+  }
 }
