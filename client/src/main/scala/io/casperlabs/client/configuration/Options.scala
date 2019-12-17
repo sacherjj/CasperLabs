@@ -255,7 +255,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val from = opt[PublicKey](
       descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
+        "The public key of the account which is the context of this deployment; base16 or base64 encoded.",
       required = false
     )
 
@@ -311,7 +311,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val from = opt[PublicKey](
       descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
+        "The public key of the account which is the context of this deployment; base16 or base64 encoded.",
       required = false
     )
 
@@ -518,7 +518,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val targetAccount =
       opt[PublicKey](
-        descr = "The target account's public key (base16 encoded)",
+        descr = "The target account's public key; base16 or base64 encoded.",
         required = true
       )
   }
