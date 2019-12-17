@@ -19,13 +19,12 @@ class ExecutionEngineServiceTest
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 10)
 
-  // Don't shrink the message size.
   // Default shrinker doesn't respect Gen's configuration and we may end up with message size smaller
   // than generated DeployItem.
-  implicit val messageSizeShrink: Shrink[Int] = Shrink(_ => Stream.empty)
+  implicit def noShrink[T]: Shrink[T] = Shrink(_ => Stream.empty)
 
-  "ExecutionEngineService.batchDeploys" should "create execute requests in batches, limited by size" in forAll(
-    sizeDeployItemList(1, 50),
+  "batchDeploys" should "create execute requests in batches, limited by size" in forAll(
+    sizeDeployItemList(0, 50),
     Gen.chooseNum(minMessageSize, maxMessageSize),
     Gen.choose(1, 4)
   ) {
@@ -45,7 +44,7 @@ class ExecutionEngineServiceTest
   }
 
   it should "create as many batches as the target parallelism if possible" in forAll(
-    sizeDeployItemList(1, 50),
+    sizeDeployItemList(0, 50),
     Gen.choose(1, 4)
   ) {
     case (deployItems, parallelism) =>
@@ -59,4 +58,29 @@ class ExecutionEngineServiceTest
         batches.size shouldBe parallelism
   }
 
+  "groupSizes" should "create balanced groups" in {
+    ExecutionEngineService.groupSizes(5, 4) shouldBe List(1, 1, 1, 2)
+    ExecutionEngineService.groupSizes(10, 4) shouldBe List(2, 2, 3, 3)
+    ExecutionEngineService.groupSizes(7, 3) shouldBe List(2, 2, 3)
+    ExecutionEngineService.groupSizes(3, 5) shouldBe List(1, 1, 1)
+  }
+
+  it should "preserve the overall size" in forAll(
+    Gen.choose(0, 100),
+    Gen.choose(1, 4)
+  ) {
+    case (size, parallelism) =>
+      ExecutionEngineService.groupSizes(size, parallelism).sum shouldBe size
+  }
+
+  "groupElements" should "create groups with the given sizes" in {
+    val items = List.range(0, 10)
+    val sizes = List(2, 4, 3, 1, 5)
+    ExecutionEngineService.groupElements(items, sizes) shouldBe List(
+      List(0, 1),
+      List(2, 3, 4, 5),
+      List(6, 7, 8),
+      List(9)
+    )
+  }
 }

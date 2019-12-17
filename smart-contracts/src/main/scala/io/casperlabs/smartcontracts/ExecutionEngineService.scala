@@ -227,18 +227,47 @@ object ExecutionEngineService {
   }
 
   def batchElements[A](
-      deploys: Seq[A],
+      items: Seq[A],
       canAdd: (List[A], A) => Boolean
   ): List[List[A]] =
-    deploys
+    items
       .foldRight(List.empty[List[A]]) {
         case (item, Nil) => List(item) :: Nil
-        case (item, hd :: tail) =>
+        case (item, hd :: tl) =>
           if (canAdd(hd, item))
-            (item :: hd) :: tail
+            (item :: hd) :: tl
           else
-            List(item) :: hd :: tail
+            List(item) :: hd :: tl
       }
+
+  /** Partition items into pre-determined sized groups. */
+  def groupElements[A](
+      items: Seq[A],
+      groupSizes: List[Int]
+  ): List[Seq[A]] = {
+    require(groupSizes.forall(_ > 0))
+
+    def loop(acc: List[Seq[A]], items: Seq[A], groupSizes: List[Int]): List[Seq[A]] =
+      if (groupSizes.isEmpty || items.isEmpty) acc
+      else {
+        val (hd, tl) = items.splitAt(groupSizes.head)
+        loop(hd :: acc, tl, groupSizes.tail)
+      }
+
+    loop(Nil, items, groupSizes).reverse
+  }
+
+  /** Calculate balanced sizes for partitioning a sequence of items of given length. */
+  def groupSizes(size: Int, parallelism: Int): List[Int] = {
+    val minSize = size / parallelism
+
+    def loop(acc: List[Int], size: Int, remainder: Int): List[Int] =
+      if (size == 0) acc
+      else if (remainder > 0) loop((minSize + 1) :: acc, size - minSize - 1, remainder - 1)
+      else loop(minSize :: acc, size - minSize, 0)
+
+    loop(Nil, size, size % parallelism)
+  }
 
   /** Batch deploys into a target level of parallelism,
     * making sure no batch exceeds the size limit.
@@ -252,14 +281,10 @@ object ExecutionEngineService {
           .withDeploys(item :: batch)
           .serializedSize <= messageSizeLimit
 
-    val partitionSize = math.ceil(deploys.size.toDouble / parallelism).toInt
+    val sizes = groupSizes(deploys.size, parallelism)
 
-    deploys
-      .grouped(partitionSize)
-      .flatMap { partition =>
-        batchElements(partition, canAdd)
-          .map(batch => base.withDeploys(batch))
-      }
+    groupElements(deploys, sizes)
+      .flatMap(batchElements(_, canAdd).map(base.withDeploys(_)))
       .toList
   }
 
