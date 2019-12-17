@@ -49,7 +49,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
               }
               blocks={dag.blocks}
               refresh={() => this.refresh()}
-              toggleStore={dag.subscribeToggleStore}
+              subscribeToggleStore={dag.subscribeToggleStore}
               footerMessage={
                 <ListInline>
                   <DagStepButtons step={dag.step} />

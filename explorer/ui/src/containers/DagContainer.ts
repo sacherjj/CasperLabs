@@ -55,11 +55,6 @@ export class DagStep {
   last = this.step(() => 0);
 }
 
-enum SubscribeState {
-  ON,
-  CLOSE
-}
-
 export class DagContainer {
   @observable blocks: BlockInfo[] | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
@@ -92,18 +87,18 @@ export class DagContainer {
     return this.maxRank === 0;
   }
 
-  private get _subscriberState(): SubscribeState {
-    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
-      return SubscribeState.ON;
-    } else {
-      return SubscribeState.CLOSE;
+  private get isSubscribed(): boolean{
+    if(this.eventsSubscriber && !this.eventsSubscriber.closed){
+      return true;
+    }else{
+      return false;
     }
   }
 
   step = new DagStep(this);
 
   unsubscribe() {
-    if (this._subscriberState === SubscribeState.ON) {
+    if (this.isSubscribed) {
       this.eventsSubscriber!.unsubscribe();
     }
   }
@@ -112,7 +107,7 @@ export class DagContainer {
   setUpSubscriber(subscribeToggleEnabled: boolean) {
     if (this.isLatestDag && subscribeToggleEnabled) {
       // enable subscriber
-      if (this._subscriberState === SubscribeState.ON) {
+      if (this.isSubscribed) {
         // when clicking refresh button, we can reused the web socket.
         return;
       } else {

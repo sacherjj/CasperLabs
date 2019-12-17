@@ -15,7 +15,7 @@ const LineColor = '#AAA';
 export interface Props {
   title: string;
   refresh?: () => void;
-  toggleStore?: ToggleStore;
+  subscribeToggleStore?: ToggleStore;
   blocks: BlockInfo[] | null;
   emptyMessage?: any;
   footerMessage?: any;
@@ -57,10 +57,10 @@ export class BlockDAG extends React.Component<Props, {}> {
               {this.props.refresh && (
                 <RefreshButton refresh={() => this.props.refresh!()} />
               )}
-              {this.props.toggleStore && (
+              {this.props.subscribeToggleStore && (
                 <ToggleButton
                   title="Subscribing to the latest added blocks"
-                  toggleStore={this.props.toggleStore}
+                  toggleStore={this.props.subscribeToggleStore}
                   size="sm"
                 />
               )}

@@ -7,7 +7,7 @@ import { observer } from 'mobx-react';
 export interface Props<T> {
   title: string;
   refresh?: () => void;
-  toggleStore?: ToggleStore;
+  subscribeToggleStore?: ToggleStore;
   headers: string[];
   rows: T[] | null;
   emptyMessage?: any;
@@ -23,11 +23,11 @@ export default class DataTable<T> extends React.Component<Props<T>> {
       <div className="card mb-3">
         <div className="card-header">
           <span>{this.props.title}</span>
-          {this.props.toggleStore && (
+          {this.props.subscribeToggleStore && (
             <div className="float-right">
               <ToggleButton
-                title="Subscribing to the latest added blocks"
-                toggleStore={this.props.toggleStore}
+                title="Subscribe to latest changes"
+                toggleStore={this.props.subscribeToggleStore}
                 size="sm"
               />
             </div>
