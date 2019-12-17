@@ -9,16 +9,16 @@ use failure::Fail;
 
 use crate::value::{ProtocolVersion, SemVer};
 
-pub const I32_SIZE: usize = size_of::<i32>();
-pub const U8_SIZE: usize = size_of::<u8>();
-pub const U16_SIZE: usize = size_of::<u16>();
-pub const U32_SIZE: usize = size_of::<u32>();
-pub const U64_SIZE: usize = size_of::<u64>();
-pub const U128_SIZE: usize = size_of::<u128>();
-pub const U256_SIZE: usize = U128_SIZE * 2;
-pub const U512_SIZE: usize = U256_SIZE * 2;
-pub const OPTION_SIZE: usize = 1;
-pub const SEM_VER_SIZE: usize = 12;
+pub const I32_SERIALIZED_LENGTH: usize = size_of::<i32>();
+pub const U8_SERIALIZED_LENGTH: usize = size_of::<u8>();
+pub const U16_SERIALIZED_LENGTH: usize = size_of::<u16>();
+pub const U32_SERIALIZED_LENGTH: usize = size_of::<u32>();
+pub const U64_SERIALIZED_LENGTH: usize = size_of::<u64>();
+pub const U128_SERIALIZED_LENGTH: usize = size_of::<u128>();
+pub const U256_SERIALIZED_LENGTH: usize = U128_SERIALIZED_LENGTH * 2;
+pub const U512_SERIALIZED_LENGTH: usize = U256_SERIALIZED_LENGTH * 2;
+pub const OPTION_TAG_SERIALIZED_LENGTH: usize = 1;
+pub const SEM_VER_SERIALIZED_LENGTH: usize = 12;
 
 const N256: usize = 256;
 
@@ -98,8 +98,8 @@ impl ToBytes for i32 {
 
 impl FromBytes for i32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut result: [u8; I32_SIZE] = [0u8; I32_SIZE];
-        let (bytes, rem) = safe_split_at(bytes, I32_SIZE)?;
+        let mut result: [u8; I32_SERIALIZED_LENGTH] = [0u8; I32_SERIALIZED_LENGTH];
+        let (bytes, rem) = safe_split_at(bytes, I32_SERIALIZED_LENGTH)?;
         result.copy_from_slice(bytes);
         Ok((i32::from_le_bytes(result), rem))
     }
@@ -113,8 +113,8 @@ impl ToBytes for u32 {
 
 impl FromBytes for u32 {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let mut result: [u8; U32_SIZE] = [0u8; U32_SIZE];
-        let (bytes, rem) = safe_split_at(bytes, U32_SIZE)?;
+        let mut result: [u8; U32_SERIALIZED_LENGTH] = [0u8; U32_SERIALIZED_LENGTH];
+        let (bytes, rem) = safe_split_at(bytes, U32_SERIALIZED_LENGTH)?;
         result.copy_from_slice(bytes);
         Ok((u32::from_le_bytes(result), rem))
     }
@@ -153,11 +153,11 @@ impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         // Return error if size of serialized vector would exceed limit for
         // 32-bit architecture.
-        if self.len() >= u32::max_value() as usize - U32_SIZE {
+        if self.len() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH + size as usize);
         result.extend(size.to_bytes()?);
         result.extend(self);
         Ok(result)
@@ -183,10 +183,10 @@ impl<T: ToBytes> ToBytes for Option<T> {
         match self {
             Some(v) => {
                 let mut value = v.to_bytes()?;
-                if value.len() >= u32::max_value() as usize - U8_SIZE {
+                if value.len() >= u32::max_value() as usize - U8_SERIALIZED_LENGTH {
                     return Err(Error::OutOfMemoryError);
                 }
-                let mut result: Vec<u8> = Vec::with_capacity(U8_SIZE + value.len());
+                let mut result: Vec<u8> = Vec::with_capacity(U8_SERIALIZED_LENGTH + value.len());
                 result.append(&mut 1u8.to_bytes()?);
                 result.append(&mut value);
                 Ok(result)
@@ -215,11 +215,12 @@ impl<T: FromBytes> FromBytes for Option<T> {
 impl ToBytes for Vec<i32> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         // Return error if size of vector would exceed length of serialized data
-        if self.len() * I32_SIZE >= u32::max_value() as usize - U32_SIZE {
+        if self.len() * I32_SERIALIZED_LENGTH >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (I32_SIZE * size as usize));
+        let mut result: Vec<u8> =
+            Vec::with_capacity(U32_SERIALIZED_LENGTH + (I32_SERIALIZED_LENGTH * size as usize));
         result.extend(size.to_bytes()?);
         result.extend(
             self.iter()
@@ -248,7 +249,7 @@ impl FromBytes for Vec<Vec<u8>> {
 
 impl ToBytes for Vec<Vec<u8>> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.len() >= u32::max_value() as usize - U32_SIZE {
+        if self.len() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             // Fail fast for large enough vectors
             return Err(Error::OutOfMemoryError);
         }
@@ -258,11 +259,12 @@ impl ToBytes for Vec<Vec<u8>> {
         // the maximum size of vector (i.e. vector of vectors of size 1),
         // or the total length of all vectors (i.e. vector of size 1 which holds
         // vector of size 2^32-1)
-        if total_length >= u32::max_value() as usize - U32_SIZE {
+        if total_length >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size as usize + total_length);
+        let mut result: Vec<u8> =
+            Vec::with_capacity(U32_SERIALIZED_LENGTH + size as usize + total_length);
         result.extend_from_slice(&size.to_bytes()?);
         for n in 0..size {
             result.extend_from_slice(&self[n as usize].to_bytes()?);
@@ -288,7 +290,7 @@ impl FromBytes for Vec<String> {
 impl ToBytes for Vec<String> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH);
         result.extend(size.to_bytes()?);
         result.extend(
             self.iter()
@@ -327,10 +329,11 @@ impl_byte_array!(32);
 
 impl<T: ToBytes> ToBytes for [T; N256] {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.len() * size_of::<T>() >= u32::max_value() as usize - U32_SIZE {
+        if self.len() * size_of::<T>() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + (self.len() * size_of::<T>()));
+        let mut result: Vec<u8> =
+            Vec::with_capacity(U32_SERIALIZED_LENGTH + (self.len() * size_of::<T>()));
         result.extend((N256 as u32).to_bytes()?);
         result.extend(
             self.iter()
@@ -415,10 +418,10 @@ where
             .flatten();
 
         let (lower_bound, _upper_bound) = bytes.size_hint();
-        if lower_bound >= u32::max_value() as usize - U32_SIZE {
+        if lower_bound >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + lower_bound);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH + lower_bound);
         result.append(&mut num_keys.to_bytes()?);
         result.extend(bytes);
         Ok(result)
@@ -445,12 +448,12 @@ where
 
 impl ToBytes for str {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.len() >= u32::max_value() as usize - U32_SIZE {
+        if self.len() >= u32::max_value() as usize - U32_SERIALIZED_LENGTH {
             return Err(Error::OutOfMemoryError);
         }
         let bytes = self.as_bytes();
         let size = self.len();
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE + size);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH + size);
         result.extend((size as u32).to_bytes()?);
         result.extend(bytes);
         Ok(result)
@@ -469,7 +472,7 @@ impl<T: ToBytes, E: ToBytes> ToBytes for Result<T, E> {
             Ok(result) => (1u8.to_bytes()?, result.to_bytes()?),
             Err(error) => (0u8.to_bytes()?, error.to_bytes()?),
         };
-        let mut result: Vec<u8> = Vec::with_capacity(U8_SIZE + value.len());
+        let mut result: Vec<u8> = Vec::with_capacity(U8_SERIALIZED_LENGTH + value.len());
         result.append(&mut variant);
         result.append(&mut value);
         Ok(result)
@@ -495,7 +498,7 @@ impl<T: FromBytes, E: FromBytes> FromBytes for Result<T, E> {
 
 impl ToBytes for SemVer {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut ret: Vec<u8> = Vec::with_capacity(SEM_VER_SIZE);
+        let mut ret: Vec<u8> = Vec::with_capacity(SEM_VER_SERIALIZED_LENGTH);
         ret.append(&mut self.major.to_bytes()?);
         ret.append(&mut self.minor.to_bytes()?);
         ret.append(&mut self.patch.to_bytes()?);

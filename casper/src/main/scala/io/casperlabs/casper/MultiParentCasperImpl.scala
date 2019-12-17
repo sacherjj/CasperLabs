@@ -10,9 +10,11 @@ import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.Block.Justification
+import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
@@ -26,6 +28,7 @@ import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 import io.casperlabs.comm.gossiping
 import io.casperlabs.crypto.Keys
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
@@ -245,14 +248,17 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
           _ <- Log[F].info(
                 s"${parents.size} parents out of ${tipHashes.size} latest blocks will be used."
               )
-
           // Push any unfinalized deploys which are still in the buffer back to pending state if the
           // blocks they were contained have become orphans since we last tried to propose a block.
           // Doing this here rather than after adding blocks because it's quite costly; the downside
           // is that the auto-proposer will not pick up the change in the pending set immediately.
-          requeued <- DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet)
-          _        <- Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
-
+          // Requeueing operation is changing status of orphaned deploys in the DB.
+          // It's done as a transaction. If operation won't make it in time before
+          // immediate `createProposal`, those deploys will be considered for the next block.
+          _ <- (DeployBuffer.requeueOrphanedDeploys[F](merged.parents.map(_.blockHash).toSet) >>= {
+                requeued =>
+                  Log[F].info(s"Re-queued $requeued orphaned deploys.").whenA(requeued > 0)
+              }).forkAndLog
           timestamp <- Time[F].currentMillis
           props     <- CreateMessageProps(publicKey, latestMessages, merged)
           remainingHashes <- DeployBuffer.remainingDeploys[F](
@@ -477,7 +483,9 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
 
     // Mark deploys we have observed in blocks as processed
     val processedDeploys =
-      addedBlocks.flatMap(block => block.getBody.deploys.map(_.getDeploy)).toList
+      attempts
+        .collect { case (block, status) if status.inDag => block }
+        .flatMap(block => block.getBody.deploys.map(_.getDeploy))
 
     DeployStorageWriter[F].markAsProcessed(processedDeploys) >>
       statelessExecutor.removeDependencies(addedBlockHashes)
@@ -534,7 +542,7 @@ object MultiParentCasperImpl {
 
   /** Component purely to validate, execute and store blocks.
     * Even the Genesis, to create it in the first place. */
-  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
+  class StatelessExecutor[F[_]: MonadThrowable: Time: Log: BlockStorage: DagStorage: DeployStorage: ExecutionEngineService: Metrics: DeployStorageWriter: Validation: LastFinalizedBlockHashContainer: CasperLabsProtocol: Fs2Compiler: EventEmitter](
       validatorId: Option[Keys.PublicKey],
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
@@ -710,10 +718,17 @@ object MultiParentCasperImpl {
         block: Block,
         effects: Seq[ipc.TransformEntry]
     ): F[Unit] =
-      semaphore.withPermit {
-        BlockStorage[F]
-          .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
-      } *> EventEmitter[F].blockAdded(block.getBlockInfo)
+      for {
+        _ <- semaphore.withPermit {
+              BlockStorage[F]
+                .put(block.blockHash, BlockMsgWithTransform(Some(block), effects))
+            }
+        blockInfo <- BlockAPI.getBlockInfo[F](
+                      Base16.encode(block.blockHash.toByteArray),
+                      BlockInfo.View.FULL
+                    )
+        _ <- EventEmitter[F].blockAdded(blockInfo)
+      } yield ()
 
     /** Check if the block has dependencies that we don't have in store.
       * Add those to the dependency DAG. */

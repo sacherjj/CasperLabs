@@ -98,8 +98,6 @@
 //! }
 //! ```
 
-use contract_ffi::bytesrepr::{FromBytes, ToBytes};
-
 use super::*;
 use crate::{
     error::in_memory::Error, transaction_source::in_memory::InMemoryEnvironment, trie_store,
@@ -121,11 +119,7 @@ impl InMemoryTrieStore {
     }
 }
 
-impl<K, V> Store<Blake2bHash, Trie<K, V>> for InMemoryTrieStore
-where
-    K: ToBytes + FromBytes,
-    V: ToBytes + FromBytes,
-{
+impl<K, V> Store<Blake2bHash, Trie<K, V>> for InMemoryTrieStore {
     type Error = Error;
 
     type Handle = Option<String>;
@@ -135,9 +129,4 @@ where
     }
 }
 
-impl<K, V> TrieStore<K, V> for InMemoryTrieStore
-where
-    K: ToBytes + FromBytes,
-    V: ToBytes + FromBytes,
-{
-}
+impl<K, V> TrieStore<K, V> for InMemoryTrieStore {}

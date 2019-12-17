@@ -8,13 +8,15 @@ use super::{
 use crate::{
     args_parser::ArgsParser,
     bytesrepr::{self, deserialize, FromBytes, ToBytes},
-    execution::{Phase, PHASE_SIZE},
+    execution::{Phase, PHASE_SERIALIZED_LENGTH},
     ext_ffi,
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
     value::{
-        account::{BlockTime, PublicKey, BLOCKTIME_SER_SIZE, PUBLIC_KEY_SIZE},
+        account::{
+            BlockTime, PublicKey, BLOCKTIME_SERIALIZED_LENGTH, PUBLIC_KEY_SERIALIZED_LENGTH,
+        },
         Contract, Value,
     },
 };
@@ -117,25 +119,36 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
 /// When in the sub call - returns public key of the account that made the
 /// deploy.
 pub fn get_caller() -> PublicKey {
-    let dest_ptr = alloc_bytes(PUBLIC_KEY_SIZE);
+    let dest_ptr = alloc_bytes(PUBLIC_KEY_SERIALIZED_LENGTH);
     unsafe { ext_ffi::get_caller(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PUBLIC_KEY_SIZE, PUBLIC_KEY_SIZE) };
+    let bytes = unsafe {
+        Vec::from_raw_parts(
+            dest_ptr,
+            PUBLIC_KEY_SERIALIZED_LENGTH,
+            PUBLIC_KEY_SERIALIZED_LENGTH,
+        )
+    };
     deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn get_blocktime() -> BlockTime {
-    let dest_ptr = alloc_bytes(BLOCKTIME_SER_SIZE);
+    let dest_ptr = alloc_bytes(BLOCKTIME_SERIALIZED_LENGTH);
     let bytes = unsafe {
         ext_ffi::get_blocktime(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, BLOCKTIME_SER_SIZE, BLOCKTIME_SER_SIZE)
+        Vec::from_raw_parts(
+            dest_ptr,
+            BLOCKTIME_SERIALIZED_LENGTH,
+            BLOCKTIME_SERIALIZED_LENGTH,
+        )
     };
     deserialize(&bytes).unwrap_or_revert()
 }
 
 pub fn get_phase() -> Phase {
-    let dest_ptr = alloc_bytes(PHASE_SIZE);
+    let dest_ptr = alloc_bytes(PHASE_SERIALIZED_LENGTH);
     unsafe { ext_ffi::get_phase(dest_ptr) };
-    let bytes = unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SIZE, PHASE_SIZE) };
+    let bytes =
+        unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH) };
     deserialize(&bytes).unwrap_or_revert()
 }
 

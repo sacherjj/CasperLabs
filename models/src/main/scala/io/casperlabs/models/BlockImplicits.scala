@@ -34,21 +34,6 @@ object BlockImplicits {
 
     def getSummary: BlockSummary =
       BlockSummary(block.blockHash, block.header, block.signature)
-
-    def getBlockInfo: BlockInfo =
-      BlockInfo()
-        .withSummary(block.getSummary)
-        .withStatus(
-          BlockInfo
-            .Status()
-            .withStats(
-              Stats(
-                block.serializedSize,
-                block.getBody.deploys.count(_.isError),
-                block.getBody.deploys.map(_.cost).sum
-              )
-            )
-        )
   }
 
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {

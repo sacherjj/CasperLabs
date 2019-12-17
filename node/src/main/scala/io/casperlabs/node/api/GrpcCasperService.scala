@@ -29,12 +29,13 @@ import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.dag.DagStorage
 import monix.eval.{Task, TaskLike}
 import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: EventStream](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
       isReadOnlyNode: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
@@ -61,7 +62,8 @@ object GrpcCasperService {
             ) >>= { blockHashPrefix =>
               BlockAPI
                 .getBlockInfo[F](
-                  blockHashPrefix
+                  blockHashPrefix,
+                  request.view
                 )
             }
           }
@@ -70,7 +72,8 @@ object GrpcCasperService {
           val infos = TaskLike[F].apply {
             BlockAPI.getBlockInfos[F](
               depth = request.depth,
-              maxRank = request.maxRank
+              maxRank = request.maxRank,
+              blockView = request.view
             )
           }
           Observable.fromTask(infos).flatMap(Observable.fromIterable)
@@ -123,7 +126,7 @@ object GrpcCasperService {
                                 request.blockHash,
                                 adaptToInvalidArgument
                               )
-            info            <- BlockAPI.getBlockInfo[F](blockHashPrefix)
+            info            <- BlockAPI.getBlockInfo[F](blockHashPrefix, BlockInfo.View.BASIC)
             stateHash       = info.getSummary.state.postStateHash
             protocolVersion = info.getSummary.getHeader.getProtocolVersion
             values          <- request.queries.toList.traverse(getState(stateHash, _, protocolVersion))
@@ -199,7 +202,13 @@ object GrpcCasperService {
           TaskLike[F].apply {
             MultiParentCasperRef
               .withCasper[F, BlockInfo](
-                _.lastFinalizedBlock.map(_.getBlockInfo),
+                _.lastFinalizedBlock.flatMap { block =>
+                  BlockAPI
+                    .getBlockInfo[F](
+                      Base16.encode(block.blockHash.toByteArray),
+                      request.view
+                    )
+                },
                 "Could not get last finalized block.",
                 MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
               )

@@ -289,11 +289,8 @@ abstract class HashSetCasperTest
   }
 
   it should "not request invalid blocks from peers" in effectTest {
-    val dummyContract =
-      ByteString.readFrom(getClass.getResourceAsStream("/helloname.wasm"))
-
-    val data0 = ProtoUtil.deploy(1, dummyContract)
-    val data1 = ProtoUtil.deploy(2, dummyContract)
+    val data0 = ProtoUtil.deploy(1, ByteString.EMPTY)
+    val data1 = ProtoUtil.deploy(2, ByteString.EMPTY)
 
     for {
       nodes              <- networkEff(validatorKeys.take(2), genesis, transforms)
@@ -308,7 +305,7 @@ abstract class HashSetCasperTest
                             )
                         }
       _ <- node0.casperEff.addBlock(unsignedBlock)
-      _ <- node1.clearMessages() //node1 misses this block
+      _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
 
       signedBlock <- (node0.deployBuffer.addDeploy(data1) *> node0.casperEff.createBlock)
                       .map { case Created(block) => block }
@@ -317,9 +314,13 @@ abstract class HashSetCasperTest
       _ = signedBlock.getBody.deploys.map(_.getDeploy) should contain only (data0, data1)
 
       _ <- node0.casperEff.addBlock(signedBlock)
+      _ <- node0.casperEff.contains(signedBlock) shouldBeF true
+      // Broadcast signedBlock to peers.
+      _ <- node0.broadcaster.networkEffects(signedBlock, Valid)
       _ <- node1.receive() //receives block1; should not ask for block0
 
       _ <- node0.casperEff.contains(unsignedBlock) shouldBeF false
+      _ <- node1.casperEff.contains(signedBlock) shouldBeF true
       _ <- node1.casperEff.contains(unsignedBlock) shouldBeF false
 
     } yield ()
@@ -1158,12 +1159,26 @@ abstract class HashSetCasperTest
       _               <- nodes(0).casperEff.addBlock(blockB) shouldBeF Valid
       // nodes(1) should have more weight than nodes(0) so it should take over
       // Need to propose a new block, it should again contain deployA
+      // Since requeuing of orphans happens in the background fiber, trigerred during `createBlock`,
+      // the very first `createBlock` most likely returns `NoNewDeploys` because background fiber
+      // hasn't yet finished.
+      _ <- (eventuallyIncludes(nodes(0), deployA)).timeout(500.millis)
+      // Do another call to `createBlock` since now it should have requeuened orphaned deployA.
       createC         <- nodes(0).casperEff.createBlock
       Created(blockC) = createC
       _               = blockC.getBody.deploys.map(_.getDeploy) should contain(deployA)
       _               <- nodes.map(_.tearDown()).toList.sequence
     } yield ()
   }
+
+  def eventuallyIncludes(node: TestNode[Task], deploy: Deploy): Task[Assertion] =
+    node.casperEff.createBlock flatMap {
+      case NoNewDeploys => eventuallyIncludes(node, deploy)
+      case Created(block) =>
+        if (block.getBody.deploys.map(_.getDeploy) contains deploy) {
+          Task.now(assert(true))
+        } else Task.now(assert(false, "Block did not include expected deploy"))
+    }
 
   it should "not execute deploys until dependencies are met" in effectTest {
     import io.casperlabs.models.DeployImplicits._

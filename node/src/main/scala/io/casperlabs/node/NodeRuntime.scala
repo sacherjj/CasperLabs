@@ -113,7 +113,8 @@ class NodeRuntime private[node] (
                                                                           Task
                                                                         ](
                                                                           conf.grpc.socket,
-                                                                          conf.server.maxMessageSize
+                                                                          conf.server.maxMessageSize,
+                                                                          conf.server.engineParallelism
                                                                         )
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(
@@ -121,15 +122,13 @@ class NodeRuntime private[node] (
                                             transactEC = dbIOScheduler,
                                             conf.server.dataDir
                                           )
-      deployStorageChunkSize = 20 //TODO: Move to config
-
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       implicit0(
         storage: BlockStorage[Task] with DagStorage[Task] with DeployStorage[Task]
       ) <- Resource.liftF(
             SQLiteStorage.create[Task](
-              deployStorageChunkSize = deployStorageChunkSize,
+              deployStorageChunkSize = conf.blockstorage.deployStreamChunkSize,
               readXa = readTransactor,
               writeXa = writeTransactor,
               wrapBlockStorage = (underlyingBlockStorage: BlockStorage[Task]) =>
@@ -226,16 +225,27 @@ class NodeRuntime private[node] (
                                                                         .of[Task]
                                                                     )
 
-      blockApiLock <- Resource.liftF(Semaphore[Task](1))
+      // Creating with 0 permits initially, enabled after the initial synchronization.
+      blockApiLock <- Resource.liftF(Semaphore[Task](0))
 
-      implicit0(broadcaster: Broadcaster[Task]) <- casper.gossiping.apply[Task](
-                                                    port,
-                                                    conf,
-                                                    chainSpec,
-                                                    genesis,
-                                                    ingressScheduler,
-                                                    egressScheduler
-                                                  )
+      // Set up gossiping machinery and start synchronizing with the network.
+      broadcastAndSync <- casper.gossiping
+                           .apply[
+                             Task
+                           ](
+                             port,
+                             conf,
+                             chainSpec,
+                             genesis,
+                             ingressScheduler,
+                             egressScheduler
+                           )
+
+      implicit0(broadcaster: Broadcaster[Task]) = broadcastAndSync._1
+      awaitSynchronization                      = broadcastAndSync._2
+
+      // Enable block production after sync.
+      _ <- Resource.liftF((awaitSynchronization >> blockApiLock.releaseN(1)).start)
 
       // For now just either starting the auto-proposer or not, but ostensibly we
       // could pass it the flag to run or not and also wire it into the ControlService
