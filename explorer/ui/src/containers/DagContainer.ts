@@ -2,7 +2,8 @@ import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { Subscription } from 'rxjs';
 
 export class DagStep {
   constructor(private container: DagContainer) {}
@@ -57,6 +58,7 @@ export class DagContainer {
   @observable maxRank = 0;
   @observable toggleValidatorsList: boolean = false;
   @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
+  @observable eventsSubscriber: Subscription | null = null;
 
   constructor(
     private errors: ErrorContainer,
@@ -91,6 +93,22 @@ export class DagContainer {
         this.lastFinalizedBlock = block;
       })
     );
+
+    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
+      return;
+    } else {
+      let subscribeTopics = {
+        blockAdded: true,
+        blockFinalized: false
+      };
+      let obs = this.casperService.subscribeEvents(subscribeTopics);
+
+      this.eventsSubscriber = obs.subscribe({
+        next(event: Event) {
+          console.log("received event");
+        }
+      });
+    }
   }
 }
 

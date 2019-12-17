@@ -2,6 +2,7 @@ mod args;
 mod externals;
 
 use std::{
+    cmp,
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     iter::IntoIterator,
@@ -243,11 +244,6 @@ where
         }
     }
 
-    /// If host_buf set, clears the host_buf and returns value, else None
-    pub fn take_host_buf(&mut self) -> Option<CLValue> {
-        self.host_buf.take()
-    }
-
     pub fn context(&self) -> &RuntimeContext<'a, R> {
         &self.context
     }
@@ -361,7 +357,7 @@ where
             Some(arg) => arg.inner_bytes().len() as u32,
         };
 
-        let arg_size_bytes = arg_size.to_le_bytes(); // wasm is LE
+        let arg_size_bytes = arg_size.to_le_bytes(); // Wasm is little-endian
 
         if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
             return Err(Error::Interpreter(e).into());
@@ -429,7 +425,7 @@ where
 
         // For all practical purposes following cast is assumed to be safe
         let bytes_size = key_bytes.len() as u32;
-        let size_bytes = bytes_size.to_le_bytes(); // wasm is LE
+        let size_bytes = bytes_size.to_le_bytes(); // Wasm is little-endian
         if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
             return Err(Error::Interpreter(error).into());
         }
@@ -456,12 +452,6 @@ where
         let name = self.string_from_mem(name_ptr, name_size)?;
         let key = self.key_from_mem(key_ptr, key_size)?;
         self.context.put_key(name, key).map_err(Into::into)
-    }
-
-    /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
-    /// for the contract to read.
-    pub fn list_named_keys(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        self.set_mem_from_buf(dest_ptr)
     }
 
     fn remove_key(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
@@ -510,14 +500,6 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        let buf = self.host_buf.take().ok_or(Error::HostBufferEmpty)?;
-        let (_cl_type, serialized_data) = buf.destructure();
-        self.memory
-            .set(dest_ptr, &serialized_data)
-            .map_err(|e| Error::Interpreter(e).into())
-    }
-
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
     pub fn ret(
@@ -548,15 +530,13 @@ where
         }
     }
 
-    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.  Stores the
-    /// return value of the contract's execution in `self.host_buf` and returns the serialized size
-    /// of `self.host_buf`.
+    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
     pub fn call_contract(
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
-    ) -> Result<usize, Error> {
+    ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -603,19 +583,71 @@ where
             extra_urefs,
             contract_version,
         )?;
-
-        let inner_bytes_len = result.inner_bytes().len();
-        self.host_buf = Some(result);
-        Ok(inner_bytes_len)
+        Ok(result)
     }
 
-    fn load_named_keys(&mut self) -> Result<usize, Trap> {
-        self.host_buf = None;
+    pub fn call_contract_host_buf(
+        &mut self,
+        key: Key,
+        args_bytes: Vec<u8>,
+        urefs_bytes: Vec<u8>,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let result = self.call_contract(key, args_bytes, urefs_bytes)?;
+        let result_size = result.inner_bytes().len() as u32; // considered to be safe
+
+        if let Err(error) = self.write_host_buf(result) {
+            return Ok(Err(error));
+        }
+
+        let result_size_bytes = result_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(result_size_ptr, &result_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
+    fn load_named_keys(
+        &mut self,
+        total_keys_ptr: u32,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let total_keys = self.context.named_keys().len() as u32;
+        let total_keys_bytes = total_keys.to_le_bytes();
+        if let Err(error) = self.memory.set(total_keys_ptr, &total_keys_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        if total_keys == 0 {
+            // No need to do anything else, we leave host buffer empty.
+            return Ok(Ok(()));
+        }
+
         let named_keys =
             CLValue::from_t(self.context.named_keys().clone()).map_err(Error::CLValue)?;
-        let inner_bytes_len = named_keys.inner_bytes().len();
-        self.host_buf = Some(named_keys);
-        Ok(inner_bytes_len)
+
+        let length = named_keys.inner_bytes().len() as u32;
+        if let Err(error) = self.write_host_buf(named_keys) {
+            return Ok(Err(error));
+        }
+
+        let length_bytes = length.to_le_bytes();
+        if let Err(error) = self.memory.set(result_size_ptr, &length_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     pub fn store_function(
@@ -714,33 +746,67 @@ where
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<i64, Trap> {
-        self.host_buf = None;
-
-        let key = self.key_from_mem(key_ptr, key_size)?;
-        if let Some(stored_value) = self.context.read_gs(&key)? {
-            let cl_value = CLValue::try_from(stored_value).map_err(Error::TypeMismatch)?;
-            self.host_buf = Some(cl_value);
+    pub fn read(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
         }
 
-        Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes().len() as i64,
-            None => -1,
-        })
+        let key = self.key_from_mem(key_ptr, key_size)?;
+        let cl_value = match self.context.read_gs(&key)? {
+            Some(stored_value) => CLValue::try_from(stored_value).map_err(Error::TypeMismatch)?,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_size = cl_value.inner_bytes().len() as u32;
+        if let Err(error) = self.write_host_buf(cl_value) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<i64, Trap> {
-        self.host_buf = None;
+    pub fn read_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
 
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-        self.host_buf = self.context.read_ls(&key_bytes)?;
 
-        Ok(match self.host_buf.as_ref() {
-            Some(cl_value) => cl_value.inner_bytes().len() as i64,
-            None => -1,
-        })
+        let cl_value = match self.context.read_ls(&key_bytes)? {
+            Some(cl_value) => cl_value,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_size = cl_value.inner_bytes().len() as u32;
+        if let Err(error) = self.write_host_buf(cl_value) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Reverts contract execution with a status specified.
@@ -865,9 +931,7 @@ where
 
         let urefs_bytes = Vec::<Key>::new().into_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
-        // If `call_contract()` succeeded, `take_host_buf()` is guaranteed to be `Some`.
-        let result = self.take_host_buf().unwrap();
+        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         let purse_uref = result.into_t()?;
 
         Ok(PurseId::new(purse_uref))
@@ -897,11 +961,8 @@ where
 
         let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].into_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
-        // If `call_contract()` succeeded, `take_host_buf()` is guaranteed to be `Some`.
-        let result = self.take_host_buf().unwrap();
+        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
         let result: Result<(), mint::Error> = result.into_t()?;
-
         Ok(result.map_err(system_contracts::Error::from)?)
     }
 
@@ -1093,6 +1154,48 @@ where
         Ok(ret)
     }
 
+    fn get_balance_host_buf(
+        &mut self,
+        purse_id_ptr: u32,
+        purse_id_size: usize,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let purse_id: PurseId = {
+            let bytes = self.bytes_from_mem(purse_id_ptr, purse_id_size)?;
+            match bytesrepr::deserialize(bytes) {
+                Ok(purse_id) => purse_id,
+                Err(error) => return Ok(Err(error.into())),
+            }
+        };
+
+        let balance = match self.get_balance(purse_id)? {
+            Some(balance) => balance,
+            None => return Ok(Err(ApiError::InvalidPurse)),
+        };
+
+        let balance_cl_value = match CLValue::from_t(balance) {
+            Ok(cl_value) => cl_value,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let balance_size = balance_cl_value.inner_bytes().len() as i32;
+        if let Err(error) = self.write_host_buf(balance_cl_value) {
+            return Ok(Err(error));
+        }
+
+        let balance_size_bytes = balance_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size_ptr, &balance_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
     /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
     /// and writes them at the provided uref, overwriting existing value if any
     pub fn upgrade_contract_at_uref(
@@ -1139,5 +1242,61 @@ where
             Ok(_) => Ok(Ok(())),
             Err(error) => Err(Error::Interpreter(error).into()),
         }
+    }
+
+    /// If host_buf set, clears the host_buf and returns value, else None
+    pub fn take_host_buf(&mut self) -> Option<CLValue> {
+        self.host_buf.take()
+    }
+
+    /// Checks if a write to host buffer can happen.
+    ///
+    /// This will check if the host buffer is empty.
+    fn can_write_to_host_buf(&self) -> bool {
+        self.host_buf.is_none()
+    }
+
+    /// Overwrites data in host buffer only if it's in empty state
+    fn write_host_buf(&mut self, data: CLValue) -> Result<(), ApiError> {
+        match self.host_buf {
+            Some(_) => return Err(ApiError::HostBufferFull),
+            None => self.host_buf = Some(data),
+        }
+        Ok(())
+    }
+
+    fn read_host_buffer(
+        &mut self,
+        dest_ptr: u32,
+        dest_size: usize,
+        bytes_written_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        let (_cl_type, serialized_value) = match self.take_host_buf() {
+            None => return Ok(Err(ApiError::HostBufferEmpty)),
+            Some(cl_value) => cl_value.destructure(),
+        };
+
+        if serialized_value.len() > u32::max_value() as usize {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
+        if serialized_value.len() > dest_size {
+            return Ok(Err(ApiError::BufferTooSmall));
+        }
+
+        // Slice data, so if `dest_size` is larger than hostbuf size, it will take host_buf as
+        // whole.
+        let sliced_buf = &serialized_value[..cmp::min(dest_size, serialized_value.len())];
+        if let Err(error) = self.memory.set(dest_ptr, sliced_buf) {
+            return Err(Error::Interpreter(error));
+        }
+
+        let bytes_written = sliced_buf.len() as u32;
+        let bytes_written_data = bytes_written.to_le_bytes();
+
+        if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
     }
 }

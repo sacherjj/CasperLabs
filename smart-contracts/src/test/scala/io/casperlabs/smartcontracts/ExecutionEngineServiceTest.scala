@@ -17,26 +17,46 @@ class ExecutionEngineServiceTest
   val maxMessageSize = 16 * 1024 * 1024 // 16MB
 
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
-    PropertyCheckConfiguration(minSuccessful = 50)
+    PropertyCheckConfiguration(minSuccessful = 10)
 
   // Don't shrink the message size.
   // Default shrinker doesn't respect Gen's configuration and we may end up with message size smaller
   // than generated DeployItem.
   implicit val messageSizeShrink: Shrink[Int] = Shrink(_ => Stream.empty)
 
-  "ExecutionEngineService.batchDeploysBySize" should "create execute requests in batches, limited by size" in forAll(
+  "ExecutionEngineService.batchDeploys" should "create execute requests in batches, limited by size" in forAll(
     sizeDeployItemList(1, 50),
-    Gen.chooseNum(minMessageSize, maxMessageSize)
+    Gen.chooseNum(minMessageSize, maxMessageSize),
+    Gen.choose(1, 4)
   ) {
-    case (deployItems, msgSize) =>
+    case (deployItems, msgSize, parallelism) =>
       val baseRequest =
         ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1)))
       val batches =
-        ExecutionEngineService.batchDeploysBySize(baseRequest, msgSize)(deployItems)
+        ExecutionEngineService.batchDeploys(baseRequest, msgSize, parallelism)(deployItems)
       batches.flatMap(_.deploys) should contain theSameElementsInOrderAs deployItems
       batches.foreach { request =>
-        assert(request.serializedSize <= msgSize)
+        request.serializedSize shouldBe <=(msgSize)
       }
+      if (deployItems.size <= parallelism)
+        batches.size shouldBe deployItems.size
+      else
+        batches.size shouldBe >=(parallelism)
+  }
+
+  it should "create as many batches as the target parallelism if possible" in forAll(
+    sizeDeployItemList(1, 50),
+    Gen.choose(1, 4)
+  ) {
+    case (deployItems, parallelism) =>
+      val baseRequest =
+        ExecuteRequest(ByteString.EMPTY, 0L, protocolVersion = Some(ProtocolVersion(1)))
+      val batches =
+        ExecutionEngineService.batchDeploys(baseRequest, Int.MaxValue, parallelism)(deployItems)
+      if (deployItems.size <= parallelism)
+        batches.size shouldBe deployItems.size
+      else
+        batches.size shouldBe parallelism
   }
 
 }

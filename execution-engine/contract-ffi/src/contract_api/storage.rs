@@ -1,9 +1,9 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::convert::From;
+use core::{convert::From, mem::MaybeUninit, u8};
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_api::{self, runtime, ContractRef, Error, TURef},
+    contract_api::{self, error, runtime, ContractRef, Error, TURef},
     ext_ffi,
     key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
@@ -14,11 +14,8 @@ use crate::{
 /// Reads value under `turef` in the global state.
 pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error> {
     let key: Key = turef.into();
-    // Note: _bytes is necessary to keep the Vec<u8> in scope. If _bytes is dropped then key_ptr
-    // becomes invalid.
-    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
-    let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    get_read(value_size)
+    let key_bytes = key.into_bytes()?;
+    do_read(ReadType::Global, key_bytes)
 }
 
 /// Reads the value under `key` in the context-local partition of global state.
@@ -26,28 +23,40 @@ pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
     key: &K,
 ) -> Result<Option<V>, bytesrepr::Error> {
     let key_bytes = key.to_bytes()?;
-    let key_bytes_ptr = key_bytes.as_ptr();
-    let key_bytes_size = key_bytes.len();
-    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    get_read(value_size)
+    do_read(ReadType::Local, key_bytes)
 }
 
-/// Retrieves a value from the host buffer which has previously been populated via a call to
-/// `ext_ffi::read_value` or `ext_ffi::read_value_local`.
-fn get_read<T: CLTyped + FromBytes>(
-    reported_value_size: i64,
+enum ReadType {
+    Global,
+    Local,
+}
+
+fn do_read<T: CLTyped + FromBytes>(
+    read_type: ReadType,
+    key_bytes: Vec<u8>,
 ) -> Result<Option<T>, bytesrepr::Error> {
-    if reported_value_size < 0 {
-        return Ok(None);
-    }
-
-    let value_size = reported_value_size as usize;
-
-    let value_ptr = contract_api::alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = match read_type {
+            ReadType::Global => unsafe {
+                ext_ffi::read_value(key_bytes.as_ptr(), key_bytes.len(), value_size.as_mut_ptr())
+            },
+            ReadType::Local => unsafe {
+                ext_ffi::read_value_local(
+                    key_bytes.as_ptr(),
+                    key_bytes.len(),
+                    value_size.as_mut_ptr(),
+                )
+            },
+        };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { value_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
     };
+
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
     Ok(Some(bytesrepr::deserialize(value_bytes)?))
 }
 

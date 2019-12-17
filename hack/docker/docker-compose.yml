@@ -67,6 +67,7 @@ services:
       - --backend_addr=node-0:40401
       - --backend_tls=false
       - --backend_tls_noverify
+      - --use_websockets
       - --backend_max_call_recv_msg_size=16777216
       - --allow_all_origins
       - --server_tls_cert_file=/etc/tls/certificate.pem

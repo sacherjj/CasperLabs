@@ -49,8 +49,9 @@ class CLI:
     def resource(self, file_name):
         return self.resources_directory / file_name
 
-    def expand_args(self, args):
-        connection_details = [
+    @property
+    def _local_connection_details(self):
+        return [
             "--host",
             f"{self.host}",
             "--port",
@@ -58,6 +59,9 @@ class CLI:
             "--port-internal",
             f"{self.port_internal}",
         ]
+
+    def expand_args(self, args):
+        connection_details = self._local_connection_details
         if self.tls_parameters:
             connection_details += reduce(
                 add,
@@ -159,6 +163,10 @@ class DockerCLI(CLI):
             command, decode_stdout=False, add_host=False
         )
         return self.parse_output(args[0], binary_output)
+
+    @property
+    def _local_connection_details(self):
+        return ["--host", f"{self.host}"]
 
     def public_key_path(self, account):
         return account.public_key_docker_path

@@ -15,6 +15,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
@@ -33,7 +34,7 @@ object ExecutionEngineServiceStub {
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
     casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
-  def merge[F[_]: MonadThrowable: BlockStorage](
+  def merge[F[_]: MonadThrowable: BlockStorage: Metrics](
       candidateParentBlocks: List[Block],
       dag: DagRepresentation[F]
   ): F[MergeResult[TransformMap, Block]] =

@@ -41,15 +41,15 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
     ) -> Result<FuncRef, InterpreterError> {
         let func_ref = match field_name {
             "read_value" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I64)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadFuncIndex.into(),
             ),
             "read_value_local" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I64)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadLocalFuncIndex.into(),
             ),
             "load_named_keys" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 0][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::LoadNamedKeysFuncIndex.into(),
             ),
             "write" => FuncInstance::alloc_host(
@@ -59,14 +59,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "write_local" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::WriteLocalFuncIndex.into(),
-            ),
-            "get_read" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetReadFuncIndex.into(),
-            ),
-            "get_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetFnFuncIndex.into(),
             ),
             "add" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
@@ -80,25 +72,21 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], Some(ValueType::I32)),
                 FunctionIndex::LoadArgFuncIndex.into(),
             ),
-            "get_arg" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
-                FunctionIndex::GetArgFuncIndex.into(),
-            ),
             "get_arg_size" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::GetArgSizeFuncIndex.into(),
+            ),
+            "get_arg" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
+                FunctionIndex::GetArgFuncIndex.into(),
             ),
             "ret" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::RetFuncIndex.into(),
             ),
             "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
                 FunctionIndex::CallContractFuncIndex.into(),
-            ),
-            "get_call_result" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::GetCallResultFuncIndex.into(),
             ),
             "get_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
@@ -148,10 +136,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::SetActionThresholdFuncIndex.into(),
             ),
-            "list_named_keys" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 1][..], None),
-                FunctionIndex::ListNamedKeysFuncIndex.into(),
-            ),
             "remove_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RemoveKeyFuncIndex.into(),
@@ -181,7 +165,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::TransferFromPurseToPurseIndex.into(),
             ),
             "get_balance" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::GetBalanceIndex.into(),
             ),
             "get_phase" => FuncInstance::alloc_host(
@@ -199,6 +183,10 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "get_main_purse" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GetMainPurseIndex.into(),
+            ),
+            "read_host_buffer" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
+                FunctionIndex::ReadHostBufferIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

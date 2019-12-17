@@ -2,6 +2,7 @@
 #[rustfmt::skip]
 use alloc::vec;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::mem::MaybeUninit;
 
 use crate::{
     args_parser::ArgsParser,
@@ -58,17 +59,25 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
         .map(contract_api::to_ptr)
         .unwrap_or_revert();
     let (urefs_ptr, urefs_size, _bytes3) = contract_api::to_ptr(extra_urefs);
-    let res_size = unsafe {
-        ext_ffi::call_contract(
-            key_ptr, key_size, args_ptr, args_size, urefs_ptr, urefs_size,
-        )
+
+    let bytes_written = {
+        let mut bytes_written = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::call_contract(
+                key_ptr,
+                key_size,
+                args_ptr,
+                args_size,
+                urefs_ptr,
+                urefs_size,
+                bytes_written.as_mut_ptr(),
+            )
+        };
+        error::result_from(ret).unwrap_or_revert();
+        unsafe { bytes_written.assume_init() }
     };
-    let res_ptr = contract_api::alloc_bytes(res_size);
-    let res_bytes = unsafe {
-        ext_ffi::get_call_result(res_ptr);
-        Vec::from_raw_parts(res_ptr, res_size, res_size)
-    };
-    deserialize(res_bytes).unwrap_or_revert()
+    let result = read_host_buffer(bytes_written).unwrap_or_revert();
+    deserialize(result).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -200,12 +209,20 @@ pub fn remove_key(name: &str) {
 }
 
 pub fn list_named_keys() -> BTreeMap<String, Key> {
-    let bytes_size = unsafe { ext_ffi::load_named_keys() };
-    let dest_ptr = contract_api::alloc_bytes(bytes_size);
-    let bytes = unsafe {
-        ext_ffi::list_named_keys(dest_ptr);
-        Vec::from_raw_parts(dest_ptr, bytes_size, bytes_size)
+    let (total_keys, result_size) = {
+        let mut total_keys = MaybeUninit::uninit();
+        let mut result_size = 0;
+        let ret = unsafe {
+            ext_ffi::load_named_keys(total_keys.as_mut_ptr(), &mut result_size as *mut usize)
+        };
+        error::result_from(ret).unwrap_or_revert();
+        let total_keys = unsafe { total_keys.assume_init() };
+        (total_keys, result_size)
     };
+    if total_keys == 0 {
+        return BTreeMap::new();
+    }
+    let bytes = read_host_buffer(result_size).unwrap_or_revert();
     deserialize(bytes).unwrap_or_revert()
 }
 
@@ -214,4 +231,23 @@ pub fn is_valid_uref(uref: URef) -> bool {
     let (uref_ptr, uref_size, _bytes) = contract_api::to_ptr(uref);
     let result = unsafe { ext_ffi::is_valid_uref(uref_ptr, uref_size) };
     result != 0
+}
+
+fn read_host_buffer_into(dest: &mut [u8]) -> Result<usize, Error> {
+    let mut bytes_written = MaybeUninit::uninit();
+    let ret = unsafe {
+        ext_ffi::read_host_buffer(dest.as_mut_ptr(), dest.len(), bytes_written.as_mut_ptr())
+    };
+    // NOTE: When rewriting below expression as `result_from(ret).map(|_| unsafe { ... })`, and the
+    // caller ignores the return value, execution of the contract becomes unstable and ultimately
+    // leads to `Unreachable` error.
+    error::result_from(ret)?;
+    Ok(unsafe { bytes_written.assume_init() })
+}
+
+pub(crate) fn read_host_buffer(size: usize) -> Result<Vec<u8>, Error> {
+    let bytes_ptr = contract_api::alloc_bytes(size);
+    let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, size, size) };
+    read_host_buffer_into(&mut dest)?;
+    Ok(dest)
 }
