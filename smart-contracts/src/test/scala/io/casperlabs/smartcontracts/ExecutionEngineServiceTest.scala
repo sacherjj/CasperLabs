@@ -73,6 +73,15 @@ class ExecutionEngineServiceTest
       ExecutionEngineService.groupSizes(size, parallelism).sum shouldBe size
   }
 
+  it should "allocate the remainder evenly" in forAll(
+    Gen.choose(1, 50),
+    Gen.choose(1, 8)
+  ) {
+    case (size, parallelism) =>
+      val sizes = ExecutionEngineService.groupSizes(size, parallelism)
+      sizes.max - sizes.min shouldBe <=(1)
+  }
+
   "groupElements" should "create groups with the given sizes" in {
     val items = List.range(0, 10)
     val sizes = List(2, 4, 3, 1, 5)
