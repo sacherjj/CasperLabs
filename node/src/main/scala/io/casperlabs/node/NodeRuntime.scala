@@ -11,27 +11,27 @@ import cats.syntax.apply._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.show._
-import cats.effect.implicits._
 import com.olegpy.meow.effects._
+import io.casperlabs.casper._
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
-import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.Block
 import io.casperlabs.casper.genesis.Genesis
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
+import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
 import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.comm._
-import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.discovery._
+import io.casperlabs.comm.discovery.NodeUtils._
 import io.casperlabs.comm.grpc.SslContexts
 import io.casperlabs.comm.rp._
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
+import io.casperlabs.node.api.EventStream
 import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
@@ -39,8 +39,8 @@ import io.casperlabs.storage.SQLiteStorage
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
-import io.casperlabs.storage.util.fileIO.IOError._
 import io.casperlabs.storage.util.fileIO._
+import io.casperlabs.storage.util.fileIO.IOError._
 import io.netty.handler.ssl.ClientAuth
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -190,6 +190,13 @@ class NodeRuntime private[node] (
                                                                         FinalizedBlocksStream
                                                                           .of[Task]
                                                                       )
+      implicit0(eventsStream: EventStream[Task]) <- Resource.pure[Task, EventStream[Task]](
+                                                     EventStream
+                                                       .create[Task](
+                                                         ingressScheduler,
+                                                         conf.server.eventStreamBufferSize.value
+                                                       )
+                                                   )
 
       implicit0(nodeDiscovery: NodeDiscovery[Task]) <- effects.nodeDiscovery(
                                                         id,

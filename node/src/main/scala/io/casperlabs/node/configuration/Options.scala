@@ -203,6 +203,10 @@ private[configuration] final case class Options private (
       gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
 
     @scallop
+    val serverEventStreamBufferSize =
+      gen[Int]("Size of the buffer to store emitted block events")
+
+    @scallop
     val grpcPortInternal =
       gen[Int]("Port used for internal gRPC API, e.g. diagnostics.")
 

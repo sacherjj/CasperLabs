@@ -61,7 +61,8 @@ object Servers {
       nodeMetrics: NodeMetrics[Task],
       connectionsCell: ConnectionsCell[Task],
       multiParentCasperRef: MultiParentCasperRef[Task],
-      broadcaster: Broadcaster[Task]
+      broadcaster: Broadcaster[Task],
+      eventsStream: EventStream[Task]
   ): Resource[Task, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer[Task](
@@ -88,7 +89,7 @@ object Servers {
   }
 
   /** Start a gRPC server with services meant for users and dApp developers. */
-  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage](
+  def externalServersR[F[_]: Concurrent: TaskLike: Log: MultiParentCasperRef: Metrics: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
       port: Int,
       maxMessageSize: Int,
       ingressScheduler: Scheduler,

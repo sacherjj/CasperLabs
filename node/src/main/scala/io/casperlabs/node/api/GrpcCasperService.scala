@@ -35,7 +35,7 @@ import monix.reactive.Observable
 
 object GrpcCasperService {
 
-  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage](
+  def apply[F[_]: Concurrent: TaskLike: Log: Metrics: MultiParentCasperRef: BlockStorage: ExecutionEngineService: DeployStorage: Validation: Fs2Compiler: DeployBuffer: DagStorage: EventStream](
       isReadOnlyNode: Boolean
   ): F[CasperGrpcMonix.CasperService] =
     BlockAPI.establishMetrics[F] *> Sync[F].delay {
@@ -213,6 +213,9 @@ object GrpcCasperService {
                 MonadThrowable[F].raiseError(Unavailable("Casper instance not available yet."))
               )
           }
+
+        override def streamEvents(request: StreamEventsRequest): Observable[Event] =
+          EventStream[F].subscribe(request)
       }
     }
 

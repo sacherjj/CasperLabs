@@ -72,3 +72,13 @@ message DeployInfo {
         string message = 2;
     }
 }
+
+message Event{
+    oneof value {
+        BlockAdded block_added = 1;
+    }
+
+    message BlockAdded {
+        BlockInfo block = 1;
+    }
+}
