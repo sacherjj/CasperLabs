@@ -1,6 +1,8 @@
 package io.casperlabs.casper.finality
 
 import cats.Monad
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
@@ -176,4 +178,28 @@ object FinalityDetectorUtil {
       .toArray[(Int, A)]
       .sortBy(_._1)
       .map(_._2)
+
+  /** Returns a set of blocks that were finalized indirectly when a block from the main chain is finalized. */
+  def finalizedIndirectly[F[_]: Sync](
+      block: BlockHash,
+      finalizedSoFar: Set[BlockHash],
+      dag: DagRepresentation[F]
+  ): F[Set[BlockHash]] =
+    for {
+      finalizedBlocksCache <- Ref[F].of(finalizedSoFar)
+      finalizedImplicitly <- DagOperations
+                              .bfTraverseF[F, BlockHash](List(block))(
+                                hash =>
+                                  for {
+                                    finalizedBlocks <- finalizedBlocksCache.get
+                                    notFinalized <- dag
+                                                     .lookupUnsafe(hash)
+                                                     .map(
+                                                       _.parents.filterNot(finalizedBlocks.contains)
+                                                     )
+                                    _ <- finalizedBlocksCache.update(_ ++ notFinalized)
+                                  } yield notFinalized.toList
+                              )
+                              .toList
+    } yield finalizedImplicitly.toSet - block // We don't want to include `block`.
 }
