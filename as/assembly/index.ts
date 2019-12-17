@@ -1,7 +1,7 @@
 // The entry file of your WebAssembly module.
 import * as externals from "./externals";
 
-function get_arg_size(i: u32): U32 | null {
+function getArgSize(i: u32): U32 | null {
   // TODO: Docs aren't clear on pointers, but perhaps `var size = <u32>0; changetype<usize>(size);` might take a pointer of a value we could pass
   var size = new Array<u32>(1);
   size[0] = 0;
@@ -13,8 +13,8 @@ function get_arg_size(i: u32): U32 | null {
   return <U32>size[0];
 }
 
-function get_arg(i: u32): Uint8Array | null {
-  var arg_size = get_arg_size(i);
+function getArg(i: u32): Uint8Array | null {
+  var arg_size = getArgSize(i);
   if (arg_size == null) {
     return null;
   }
@@ -78,28 +78,47 @@ export function decodeOptional(bytes: Uint8Array): Uint8Array | null {
   }
 }
 
-
-
-
-function get_main_purse(): URef | null {
+function getMainPurse(): URef | null {
   var data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
   data.fill(0);
   externals.get_main_purse(data.dataStart);
   return URef.fromBytes(data);
 }
 
+export const enum SystemContract {
+  Mint = 0,
+  ProofOfStake = 1,
+}
+
+function getSystemContract(system_contract: SystemContract): URef | null {
+  var data = new Uint8Array(UREF_SERIALIZED_LENGTH);
+  var ret = externals.get_system_contract(<u32>system_contract, data.dataStart, data.length);
+  if (ret > 0) {
+    // TODO: revert
+    return null;
+  }
+  return URef.fromBytes(data);
+}
+
 export function call(): void {
-  var amount_bytes = get_arg(0);
-  if (amount_bytes == null) {
+  // TODO: Keep `as/` as lib only, move this to separate directory (maybe `as/contracts`)
+
+  var amountBytes = getArg(0);
+  if (amountBytes == null) {
     externals.revert(1);
     return;
   }
 
-  var mainPurse = get_main_purse();
+  var mainPurse = getMainPurse();
   if (mainPurse == null) {
     externals.revert(2);
     return;
   }
 
-  externals.revert(3);
+  var proofOfStake = getSystemContract(SystemContract.ProofOfStake);
+  if (proofOfStake == null) {
+    externals.revert(3);
+  }
+
+  externals.revert(4);
 }
