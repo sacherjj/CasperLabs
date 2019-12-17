@@ -21,7 +21,7 @@ interface Props {
 @observer
 export default class BlockList extends RefreshableComponent<Props, {}> {
   async refresh() {
-    await this.props.dag.refreshBlockDag();
+    await this.props.dag.refreshBlockDagAndSetupSubscriber();
   }
 
   componentWillUnmount() {

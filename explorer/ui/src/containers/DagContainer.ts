@@ -2,19 +2,17 @@ import { action, autorun, observable, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import {
-  BlockInfo,
-  Event
-} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Subscription } from 'rxjs';
 import { ToggleStore } from '../components/ToggleButton';
 
 export class DagStep {
-  constructor(private container: DagContainer) {}
+  constructor(private container: DagContainer) {
+  }
 
   private step = (f: () => number) => () => {
     this.maxRank = f();
-    this.container.refreshBlockDag();
+    this.container.refreshBlockDagAndSetupSubscriber();
     this.container.selectedBlock = undefined;
   };
 
@@ -55,6 +53,12 @@ export class DagStep {
   last = this.step(() => 0);
 }
 
+enum SubscribeState {
+  UN_INIT,
+  ON,
+ OFF
+}
+
 export class DagContainer {
   @observable blocks: BlockInfo[] | null = null;
   @observable selectedBlock: BlockInfo | undefined = undefined;
@@ -87,18 +91,20 @@ export class DagContainer {
     return this.maxRank === 0;
   }
 
-  private get isSubscribed(): boolean{
-    if(this.eventsSubscriber && !this.eventsSubscriber.closed){
-      return true;
-    }else{
-      return false;
+  private get subscriberState(): SubscribeState {
+    if (!this.eventsSubscriber) {
+      return SubscribeState.UN_INIT;
+    } else if (!this.eventsSubscriber.closed) {
+      return SubscribeState.ON;
+    } else {
+      return SubscribeState.OFF;
     }
   }
 
   step = new DagStep(this);
 
   unsubscribe() {
-    if (this.isSubscribed) {
+    if (this.subscriberState == SubscribeState.ON) {
       this.eventsSubscriber!.unsubscribe();
     }
   }
@@ -107,10 +113,15 @@ export class DagContainer {
   setUpSubscriber(subscribeToggleEnabled: boolean) {
     if (this.isLatestDag && subscribeToggleEnabled) {
       // enable subscriber
-      if (this.isSubscribed) {
+      if (this.subscriberState === SubscribeState.ON) {
         // when clicking refresh button, we can reused the web socket.
         return;
       } else {
+        if (this.subscriberState === SubscribeState.OFF) {
+          // Refresh when switching from OFF to ON
+          this.refreshBlockDag();
+        }
+
         let subscribeTopics = {
           blockAdded: true,
           blockFinalized: false
@@ -128,7 +139,22 @@ export class DagContainer {
               );
 
               if (index === -1) {
-                runInAction(() => this.blocks?.splice(0, 0, block!));
+                // blocks with rank < N+1-depth will be culled
+                let culledThreshold = block!.getSummary()!.getHeader()!.getRank() + 1 - this.depth;
+                let remainingBlocks: BlockInfo[] = [];
+                if (this.blocks !== null) {
+                  remainingBlocks = this.blocks.filter(b => {
+                    let rank = b.getSummary()?.getHeader()?.getRank();
+                    if (rank !== undefined) {
+                      return rank >= culledThreshold;
+                    }
+                    return false;
+                  });
+                }
+                remainingBlocks.splice(0, 0, block!);
+                runInAction(() => {
+                  this.blocks = remainingBlocks;
+                });
               }
             }
           }
@@ -140,7 +166,12 @@ export class DagContainer {
     }
   }
 
-  async refreshBlockDag() {
+  async refreshBlockDagAndSetupSubscriber() {
+    await this.refreshBlockDag();
+    this.setUpSubscriber(this.subscribeToggleStore.isPressed);
+  }
+
+  private async refreshBlockDag() {
     await this.errors.capture(
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)
@@ -154,8 +185,6 @@ export class DagContainer {
         this.lastFinalizedBlock = block;
       })
     );
-
-    this.setUpSubscriber(this.subscribeToggleStore.isPressed);
   }
 }
 
