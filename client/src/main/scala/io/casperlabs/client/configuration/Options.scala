@@ -7,6 +7,8 @@ import java.util.concurrent.TimeUnit
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.{Base16, Base64}
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
 
@@ -191,6 +193,24 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     override val argType: ArgType.V = ArgType.SINGLE
   }
 
+  implicit val publicKeyConverter: ValueConverter[PublicKey] = new ValueConverter[PublicKey] {
+    override def parse(s: List[(String, List[String])]): Either[String, Option[PublicKey]] =
+      s match {
+        case (List((_, List(v)))) =>
+          if (hashCheck(v)) {
+            Right(Some(PublicKey(Base16.decode(v))))
+          } else {
+            Base64.tryDecode(v) match {
+              case None        => Left("Could not parse as either base16 or base64 value.")
+              case Some(bytes) => Right(Some(PublicKey(bytes)))
+            }
+          }
+        case Nil => Right(None)
+        case _   => Left("Provide a single base16 or base64 value.")
+      }
+    override val argType: ArgType.V = ArgType.SINGLE
+  }
+
   version(
     s"CasperLabs Client ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
   )
@@ -233,7 +253,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val makeDeploy = new Subcommand("make-deploy") with DeployOptions {
     descr("Constructs a deploy that can be signed and sent to a node.")
 
-    val from = opt[String](
+    val from = opt[PublicKey](
       descr =
         "The public key of the account which is the context of this deployment, base16 encoded.",
       required = false
@@ -289,7 +309,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val from = opt[String](
+    val from = opt[PublicKey](
       descr =
         "The public key of the account which is the context of this deployment, base16 encoded.",
       required = false
@@ -497,8 +517,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val targetAccount =
-      opt[String](
-        descr = "base64 representation of target account's public key",
+      opt[PublicKey](
+        descr = "The target account's public key (base16 encoded)",
         required = true
       )
   }
