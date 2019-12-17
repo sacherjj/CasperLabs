@@ -225,6 +225,11 @@ package object types {
         "deployCostTotal",
         OptionType(LongType),
         resolve = c => c.value._1.getStatus.stats.map(_.deployCostTotal)
+      ),
+      Field(
+        "deployGasPriceAvg",
+        OptionType(LongType),
+        resolve = c => c.value._1.getStatus.stats.map(_.deployGasPriceAvg)
       )
     )
   )
