@@ -2,6 +2,7 @@ mod args;
 mod externals;
 
 use std::{
+    cmp,
     collections::{BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     iter::IntoIterator,
@@ -42,7 +43,7 @@ pub struct Runtime<'a, R> {
     memory: MemoryRef,
     module: Module,
     result: Vec<u8>,
-    host_buf: Vec<u8>,
+    host_buf: Option<Vec<u8>>,
     context: RuntimeContext<'a, R>,
 }
 
@@ -163,7 +164,7 @@ where
         memory,
         module: parity_module,
         result: Vec::new(),
-        host_buf: Vec::new(),
+        host_buf: None,
         context: RuntimeContext::new(
             current_runtime.context.state(),
             named_keys,
@@ -236,7 +237,7 @@ where
             memory,
             module,
             result: Vec::new(),
-            host_buf: Vec::new(),
+            host_buf: None,
             context,
         }
     }
@@ -332,11 +333,12 @@ where
     pub fn load_arg(&mut self, i: usize) -> isize {
         match self.context.args().get(i) {
             Some(arg) => {
-                self.host_buf = arg.clone();
-                self.host_buf.len() as isize
+                // NOTE: This will be changed once #1426 (EE-801) will be merged in
+                self.host_buf = Some(arg.clone());
+                arg.len() as isize
             }
             None => {
-                self.host_buf.clear();
+                self.host_buf = None;
                 -1
             }
         }
@@ -449,14 +451,6 @@ where
         self.context.put_key(name, key).map_err(Into::into)
     }
 
-    /// Writes current [self.host_buf] into [dest_ptr] location in Wasm memory
-    /// for the contract to read.
-    pub fn list_named_keys(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        self.memory
-            .set(dest_ptr, &self.host_buf)
-            .map_err(|e| Error::Interpreter(e).into())
-    }
-
     fn remove_key(&mut self, name_ptr: u32, name_size: u32) -> Result<(), Trap> {
         let name = self.string_from_mem(name_ptr, name_size)?;
         self.context.remove_key(&name)?;
@@ -503,12 +497,6 @@ where
             .map_err(|e| Error::Interpreter(e).into())
     }
 
-    pub fn set_mem_from_buf(&mut self, dest_ptr: u32) -> Result<(), Trap> {
-        self.memory
-            .set(dest_ptr, &self.host_buf)
-            .map_err(|e| Error::Interpreter(e).into())
-    }
-
     /// Return a some bytes from the memory and terminate the current
     /// `sub_call`. Note that the return type is `Trap`, indicating that
     /// this function will always kill the current Wasm instance.
@@ -547,7 +535,7 @@ where
         key: Key,
         args_bytes: Vec<u8>,
         urefs_bytes: Vec<u8>,
-    ) -> Result<usize, Error> {
+    ) -> Result<Vec<u8>, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(Value::Contract(contract)) => contract,
             Some(_) => {
@@ -594,19 +582,77 @@ where
             extra_urefs,
             contract_version,
         )?;
-        self.host_buf = result;
-        Ok(self.host_buf.len())
+        Ok(result)
     }
 
-    fn serialize_named_keys(&mut self) -> Result<usize, Trap> {
-        let bytes: Vec<u8> = self
-            .context
-            .named_keys()
-            .to_bytes()
-            .map_err(Error::BytesRepr)?;
-        let length = bytes.len();
-        self.host_buf = bytes;
-        Ok(length)
+    pub fn call_contract_host_buf(
+        &mut self,
+        key: Key,
+        args_bytes: Vec<u8>,
+        urefs_bytes: Vec<u8>,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let result_bytes = self.call_contract(key, args_bytes, urefs_bytes)?;
+        let result_size = result_bytes.len() as u32; // considered to be safe
+
+        match self.write_host_buf(result_bytes) {
+            Ok(_) => {}
+            Err(error) => return Ok(Err(error)),
+        }
+
+        let result_size_bytes = result_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(result_size_ptr, &result_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
+    fn load_named_keys(
+        &mut self,
+        total_keys_ptr: u32,
+        result_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let named_keys = self.context.named_keys();
+
+        let total_keys = named_keys.len() as u32;
+        let total_keys_bytes = total_keys.to_le_bytes();
+        if let Err(error) = self.memory.set(total_keys_ptr, &total_keys_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        if total_keys == 0 {
+            // No need to do anything else, we leave host buffer empty.
+            self.host_buf = None;
+            return Ok(Ok(()));
+        }
+
+        let bytes = match named_keys.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let length = bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(bytes) {
+            return Ok(Err(error));
+        }
+
+        let length_bytes = length.to_le_bytes();
+        if let Err(error) = self.memory.set(result_size_ptr, &length_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     pub fn store_function(
@@ -703,22 +749,77 @@ where
     /// module exports. If contract wants to pass data to the host, it has
     /// to tell it [the host] where this data lives in the exported memory
     /// (pass its pointer and length).
-    pub fn read(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
         let key = self.key_from_mem(key_ptr, key_size)?;
-        let value: Option<Value> = self.context.read_gs(&key)?;
-        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        self.host_buf = value_bytes;
-        Ok(self.host_buf.len())
+        let value = match self.context.read_gs(&key)? {
+            Some(value) => value,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_bytes = match value.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let value_size = value_bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(value_bytes) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Similar to `read`, this function is for reading from the "local cluster"
     /// of global state
-    pub fn read_local(&mut self, key_ptr: u32, key_size: u32) -> Result<usize, Trap> {
+    pub fn read_local(
+        &mut self,
+        key_ptr: u32,
+        key_size: u32,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Trap> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
         let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-        let value: Option<Value> = self.context.read_ls(&key_bytes)?;
-        let value_bytes = value.to_bytes().map_err(Error::BytesRepr)?;
-        self.host_buf = value_bytes;
-        Ok(self.host_buf.len())
+
+        let value = match self.context.read_ls(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(Err(ApiError::ValueNotFound)),
+        };
+
+        let value_bytes = match value.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let value_size = value_bytes.len() as u32;
+        if let Err(error) = self.write_host_buf(value_bytes) {
+            return Ok(Err(error));
+        }
+
+        let value_bytes = value_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &value_bytes) {
+            return Err(Error::Interpreter(error).into());
+        }
+
+        Ok(Ok(()))
     }
 
     /// Reverts contract execution with a status specified.
@@ -840,9 +941,9 @@ where
 
         let urefs_bytes = Vec::<Key>::new().to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result_bytes = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
-        let result: URef = deserialize(&self.host_buf)?;
+        let result: URef = deserialize(&result_bytes)?;
 
         Ok(PurseId::new(result))
     }
@@ -871,11 +972,11 @@ where
 
         let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].to_bytes()?;
 
-        self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result_bytes = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
 
         // This will deserialize `host_buf` into the Result type which carries
         // mint contract error.
-        let result: Result<(), mint::Error> = deserialize(&self.host_buf)?;
+        let result: Result<(), mint::Error> = deserialize(&result_bytes)?;
         // Wraps mint error into a more general error type through an aggregate
         // system contracts Error.
         Ok(result.map_err(system_contracts::Error::from)?)
@@ -1056,6 +1157,48 @@ where
         Ok(ret)
     }
 
+    fn get_balance_host_buf(
+        &mut self,
+        purse_id_ptr: u32,
+        purse_id_size: usize,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        if !self.can_write_to_host_buf() {
+            // Exit early if the host buffer is already occupied
+            return Ok(Err(ApiError::HostBufferFull));
+        }
+
+        let purse_id: PurseId = {
+            let bytes = self.bytes_from_mem(purse_id_ptr, purse_id_size)?;
+            match deserialize(&bytes) {
+                Ok(purse_id) => purse_id,
+                Err(error) => return Ok(Err(error.into())),
+            }
+        };
+
+        let balance = match self.get_balance(purse_id)? {
+            Some(balance) => balance,
+            None => return Ok(Err(ApiError::InvalidPurse)),
+        };
+
+        let balance_bytes = match balance.to_bytes() {
+            Ok(bytes) => bytes,
+            Err(error) => return Ok(Err(error.into())),
+        };
+
+        let balance_size = balance_bytes.len() as i32;
+        if let Err(error) = self.write_host_buf(balance_bytes) {
+            return Ok(Err(error));
+        }
+
+        let balance_size_bytes = balance_size.to_le_bytes(); // wasm is LE
+        if let Err(error) = self.memory.set(output_size_ptr, &balance_size_bytes) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
+    }
+
     /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
     /// and writes them at the provided uref, overwriting existing value if any
     pub fn upgrade_contract_at_uref(
@@ -1102,5 +1245,60 @@ where
             Ok(_) => Ok(Ok(())),
             Err(error) => Err(Error::Interpreter(error).into()),
         }
+    }
+
+    /// Takes host buffer data from and returns it and then clears the buffer.
+    pub fn take_host_buf(&mut self) -> Option<Vec<u8>> {
+        self.host_buf.take()
+    }
+
+    /// Checks if a write to host buffer can happen.
+    ///
+    /// This will check if the host buffer is empty.
+    fn can_write_to_host_buf(&self) -> bool {
+        self.host_buf.is_none()
+    }
+
+    /// Overwrites data in host buffer only if its in empty state
+    fn write_host_buf(&mut self, data: Vec<u8>) -> Result<(), ApiError> {
+        match self.host_buf {
+            Some(_) => return Err(ApiError::HostBufferFull),
+            None => self.host_buf = Some(data),
+        }
+        Ok(())
+    }
+
+    fn read_host_buffer(
+        &mut self,
+        dest_ptr: u32,
+        dest_size: usize,
+        bytes_written_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        let host_buf = match self.take_host_buf() {
+            None => return Ok(Err(ApiError::HostBufferEmpty)),
+            Some(host_buf) => host_buf,
+        };
+        if host_buf.len() > u32::max_value() as usize {
+            return Ok(Err(ApiError::OutOfMemoryError));
+        }
+        if host_buf.len() > dest_size {
+            return Ok(Err(ApiError::BufferTooSmall));
+        }
+
+        // Slice data, so if `dest_size` is larger than hostbuf size, it will take host_buf as
+        // whole.
+        let sliced_buf = &host_buf[..cmp::min(dest_size, host_buf.len())];
+        if let Err(error) = self.memory.set(dest_ptr, sliced_buf) {
+            return Err(Error::Interpreter(error));
+        }
+
+        let bytes_written = sliced_buf.len() as u32;
+        let bytes_written_data = bytes_written.to_le_bytes();
+
+        if let Err(error) = self.memory.set(bytes_written_ptr, &bytes_written_data) {
+            return Err(Error::Interpreter(error));
+        }
+
+        Ok(Ok(()))
     }
 }

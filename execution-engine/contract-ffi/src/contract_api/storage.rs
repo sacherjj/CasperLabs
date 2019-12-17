@@ -1,13 +1,14 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::{
     convert::{From, TryFrom, TryInto},
+    mem::MaybeUninit,
     u8,
 };
 
-use super::{alloc_bytes, to_ptr, ContractRef, TURef};
+use super::{alloc_bytes, runtime, to_ptr, ContractRef, TURef};
 use crate::{
     bytesrepr::{self, deserialize, ToBytes},
-    contract_api::{runtime, Error},
+    contract_api::{error, Error},
     ext_ffi,
     key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     unwrap_or_revert::UnwrapOrRevert,
@@ -20,13 +21,18 @@ pub(crate) fn read_untyped(key: &Key) -> Result<Option<Value>, bytesrepr::Error>
     //      dropped then key_ptr becomes invalid.
 
     let (key_ptr, key_size, _bytes) = to_ptr(key);
-    let value_size = unsafe { ext_ffi::read_value(key_ptr, key_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, value_size.as_mut_ptr()) };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { value_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
     };
-    deserialize(&value_bytes)
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    let value: Value = deserialize(&value_bytes)?;
+    Ok(Some(value))
 }
 
 fn try_into<T>(maybe_value: Option<Value>) -> Result<Option<T>, bytesrepr::Error>
@@ -68,13 +74,20 @@ where
 fn read_untyped_local(key_bytes: &[u8]) -> Result<Option<Value>, bytesrepr::Error> {
     let key_bytes_ptr = key_bytes.as_ptr();
     let key_bytes_size = key_bytes.len();
-    let value_size = unsafe { ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size) };
-    let value_ptr = alloc_bytes(value_size);
-    let value_bytes = unsafe {
-        ext_ffi::get_read(value_ptr);
-        Vec::from_raw_parts(value_ptr, value_size, value_size)
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::read_value_local(key_bytes_ptr, key_bytes_size, value_size.as_mut_ptr())
+        };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { value_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
     };
-    deserialize(&value_bytes)
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    let value: Value = deserialize(&value_bytes)?;
+    Ok(Some(value))
 }
 
 /// Write the value under the key in the global state
