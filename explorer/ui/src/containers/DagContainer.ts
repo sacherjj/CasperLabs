@@ -79,14 +79,6 @@ export class DagContainer {
 
   step = new DagStep(this);
 
-  unsubscribe(){
-    console.log("will unsubscribe");
-    if(this.eventsSubscriber){
-      console.log("done");
-    }
-    // this.eventsSubscriber && this.eventsSubscriber.unsubscribe();
-  }
-
   async refreshBlockDag() {
     await this.errors.capture(
       this.casperService
@@ -113,11 +105,9 @@ export class DagContainer {
 
       this.eventsSubscriber = obs.subscribe({
         next(event: Event) {
-          console.log(event.getBlockAdded()!.getBlock()!.getBlockHash_asB64());
+          console.log("received event");
         }
       });
-
-      // window.setTimeout(()=> this.unsubscribe(), 1000);
     }
   }
 }
