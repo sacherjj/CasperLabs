@@ -257,6 +257,7 @@ object ExecutionEngineService {
 
   /** Calculate balanced sizes for partitioning a sequence of items of given length. */
   def groupSizes(size: Int, parallelism: Int): List[Int] = {
+    require(parallelism > 0)
     val minSize = size / parallelism
 
     def loop(acc: List[Int], size: Int, remainder: Int): List[Int] =
