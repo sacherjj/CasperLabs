@@ -78,5 +78,22 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
         MilliTicks.date(2019, 12, 19)
       )
     }
+
+    "collect just the single key tick for a normal era" in {
+      val conf = init.copy(
+        bookingTicks = MilliTicks.days(10),
+        entropyTicks = MilliTicks.hours(2),
+        eraDuration = EraDuration.FixedLength(MilliTicks.days(7))
+      )
+      val boundaries = conf.criticalBoundaries(
+        MilliTicks.date(2019, 12, 23),
+        MilliTicks.date(2019, 12, 30),
+        conf.keyTicks
+      )
+
+      boundaries should contain only (
+        MilliTicks.date(2019, 12, 27) + MilliTicks.hours(2)
+      )
+    }
   }
 }

@@ -11,7 +11,8 @@ trait TickUtils {
   }
 
   object MilliTicks {
-    def days(d: Long)                = Ticks(d * 24 * 60 * 60 * 1000)
+    def days(d: Long)                = hours(d * 24)
+    def hours(h: Long)               = Ticks(h * 60 * 60 * 1000)
     def date(y: Int, m: Int, d: Int) = Ticks(dateTimestamp(y, m, d))
   }
 }
