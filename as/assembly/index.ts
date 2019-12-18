@@ -208,7 +208,20 @@ function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
     return null;
   }
 
-  return new Uint8Array(resultSize[0]);
+  var hostBufSize = resultSize[0];
+
+  return readHostBuffer(hostBufSize);
+}
+
+function readHostBuffer(count: u32): Uint8Array | null {
+  var result = new Uint8Array(count);
+
+  var resultSize = new Uint32Array(1);
+  var ret = externals.read_host_buffer(result.dataStart, result.length, resultSize.dataStart);
+  if (ret > 0) {
+    return null;
+  }
+  return result;
 }
 
 export function call(): void {

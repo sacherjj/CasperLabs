@@ -23,3 +23,6 @@ export declare function get_system_contract(system_contract_index: u32, dest_ptr
 
 @external("env", "call_contract")
 export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: usize, args_size: u32, extra_urefs_ptr: usize, extra_urefs_size: usize, result_size: usize): i32;
+
+@external("env", "read_host_buffer")
+export declare function read_host_buffer(dest_ptr: usize, dest_size: u32, bytes_written: usize): i32;
