@@ -21,9 +21,25 @@ Scala CLI `casperlabs-client`. It supports the same commands and options.
 
 `casperlabs-client` is a Python 3.6+ module, it does not support Python 2.7.
 
+Note: we highly recommend using
+[pipenv](https://github.com/pypa/pipenv)
+or
+[virtualenv](https://virtualenv.pypa.io/en/latest/)
+to avoid installation issues like,
+for example:
+["pip install cryptography segmentation fault (SIGSEGV)"](https://github.com/pyca/cryptography/issues/3815)
+
 ### Linux
 
-You can install the `casperlabs_client` package with
+Due to the issue
+["pip install cryptography segmentation fault (SIGSEGV)"](https://github.com/pyca/cryptography/issues/3815),
+which affects popular Linux distributions like Ubuntu,
+we recommend installing `casperlabs-client` in an isolated Python 3 environment created with
+[pipenv](https://github.com/pypa/pipenv)
+or
+[virtualenv](https://virtualenv.pypa.io/en/latest/).
+
+After activating a pipenv or virtualenv environment you can install the `casperlabs_client` package with
 
 ```
 pip3 install casperlabs-client
