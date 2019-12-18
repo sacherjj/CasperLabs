@@ -12,9 +12,9 @@ final case class HighwayConf(
     /** Method for calculating the end of the era based on the start tick. */
     eraDuration: HighwayConf.EraDuration,
     /** Number of ticks to go back before the start of the era for picking the booking block. */
-    bookingBlockTicks: Tick,
+    bookingTicks: Tick,
     /** Number of ticks after the booking before we pick the key block, collecting the magic bits along the way. */
-    entropyTicks: Tick,
+    keyEntropyTicks: Tick,
     /** Stopping condition for producing ballots after the end of the era. */
     postEraVotingDuration: HighwayConf.VotingDuration
 )
@@ -70,13 +70,13 @@ object HighwayConf {
     def toTicks(t: Timestamp): Tick =
       Tick(conf.tickUnit.convert(t, TimeUnit.MILLISECONDS))
 
-    def eraEndTick(startTick: Tick): Long = {
+    private def eraEndTick(startTick: Tick, duration: EraDuration): Tick = {
       import EraDuration.CalendarUnit._
       val UTC = ZoneId.of("UTC")
 
-      conf.eraDuration match {
+      duration match {
         case EraDuration.Ticks(ticks) =>
-          startTick + ticks
+          Tick(startTick + ticks)
 
         case EraDuration.Calendar(length, unit) =>
           val s = LocalDateTime.ofInstant(Instant.ofEpochMilli(toTimestamp(startTick)), UTC)
@@ -94,6 +94,24 @@ object HighwayConf {
       }
     }
 
-    //def genesisEraLengthMultiplier
+    def eraEndTick(startTick: Tick): Tick =
+      eraEndTick(startTick, conf.eraDuration)
+
+    /** The booking block is picked from a previous era, e.g. with 7 day eras
+      * we look for the booking block 10 days before the era start, so there's
+      * an extra era before the one with the booking block and the one where
+      * that block becomes effective. This gives humans a week to correct any
+      * problems in case there's no unique key block and booking block to use.
+      *
+      * However the second era, the one following genesis, won't have one before
+      * genesis to look at, so the genesis era has to be longer to produce many
+      * booking blocks, one for era 2, and one for era 3.
+      */
+    def genesisEraEndTick: Tick = {
+      val endTick    = eraEndTick(conf.genesisEraStartTick)
+      val length     = endTick - conf.genesisEraStartTick
+      val multiplier = 1 + conf.bookingTicks / length
+      (1 until multiplier.toInt).foldLeft(endTick)((t, _) => eraEndTick(t))
+    }
   }
 }

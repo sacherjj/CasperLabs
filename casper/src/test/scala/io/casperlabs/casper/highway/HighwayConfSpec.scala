@@ -47,13 +47,24 @@ class HighwayConfSpec extends WordSpec with Matchers {
     "eraDuration is given as Calendar" should {
       "add a specified calendar unit" in {
         val conf = init.copy(
-          tickUnit = TimeUnit.MILLISECONDS,
           eraDuration = EraDuration.Calendar(3, EraDuration.CalendarUnit.MONTHS)
         )
         val startTick = conf.toTicks(dateMillis(2008, 12, 1))
         val endTick   = conf.eraEndTick(startTick)
         endTick shouldBe dateMillis(2009, 3, 1)
       }
+    }
+  }
+
+  "genesisEraEndtick" should {
+    "expand the genesis era to produce multiple booking blocks" in {
+      val conf = init.copy(
+        genesisEraStartTick = Tick(dateMillis(2019, 12, 16)),
+        bookingTicks = Tick(10 * 24 * 60 * 60 * 1000),
+        eraDuration = EraDuration.Ticks(Tick(7 * 24 * 60 * 60 * 1000))
+      )
+
+      conf.genesisEraEndTick shouldBe dateMillis(2019, 12, 30)
     }
   }
 }
