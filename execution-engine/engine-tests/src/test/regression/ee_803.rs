@@ -19,7 +19,11 @@ use crate::{
 
 use std::convert::TryInto;
 
+const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
+const CONTRACT_EE_803_REGRESSION: &str = "ee_803_regression.wasm";
+const COMMAND_BOND: &str = "bond";
+const COMMAND_UNBOND: &str = "unbond";
 const ACCOUNT_ADDR_1: [u8; 32] = [1u8; 32];
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 
@@ -47,7 +51,6 @@ fn get_cost(response: &ExecuteResponse) -> U512 {
     motes.value()
 }
 
-// TODO: should be unignored once the security hole is patched
 // TODO: should be made more granular when unignored - right now it is meant to demonstrate the
 // issue, but once the underlying problem is fixed, the procedure should probably fail at the
 // bonding step and we should be asserting that
@@ -74,7 +77,7 @@ fn should_not_be_able_to_unbond_reward() {
 
     // First request to put some funds in the reward purse
     let exec_request_0 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, "do_nothing.wasm", ()).build();
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_DO_NOTHING, ()).build();
 
     builder.exec(exec_request_0).expect_success().commit();
 
@@ -101,8 +104,8 @@ fn should_not_be_able_to_unbond_reward() {
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        "ee_803_regression.wasm",
-        ("bond", rewards_purse, amount_to_steal),
+        CONTRACT_EE_803_REGRESSION,
+        (COMMAND_BOND, rewards_purse, amount_to_steal),
     )
     .build();
 
@@ -119,8 +122,8 @@ fn should_not_be_able_to_unbond_reward() {
 
     let exec_request_3 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        "ee_803_regression.wasm",
-        ("unbond",),
+        CONTRACT_EE_803_REGRESSION,
+        (COMMAND_UNBOND,),
     )
     .build();
 
