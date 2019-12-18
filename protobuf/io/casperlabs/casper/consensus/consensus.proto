@@ -228,10 +228,10 @@ message Era {
     bytes key_block_hash = 1;
     // Identifier of the parent era.
     bytes parent_key_block_hash = 2;
-    // First round (basically the timestamp) of the era.
-    uint64 start_round_id = 3;
+    // Number of ticks since Unix epoch (in the protocol specific units) when the era starts.
+    uint64 start_tick = 3;
     // Last round of the era (non-inclusive), after which the first block is the switch block.
-    uint64 end_round_id = 4;
+    uint64 end_tick = 4;
     // The hash of the booking block which was reachable from the key block;
     // this is where the bonds are coming, included in the era for reference.
     bytes booking_block_hash = 5;
