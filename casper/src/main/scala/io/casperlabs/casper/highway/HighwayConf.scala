@@ -17,7 +17,81 @@ final case class HighwayConf(
     entropyTicks: Ticks,
     /** Stopping condition for producing ballots after the end of the era. */
     postEraVotingDuration: HighwayConf.VotingDuration
-)
+) {
+  import HighwayConf._
+
+  def toTimestamp(t: Ticks): Timestamp =
+    Timestamp(tickUnit.toMillis(t))
+
+  def toTicks(t: Timestamp): Ticks =
+    Ticks(tickUnit.convert(t, TimeUnit.MILLISECONDS))
+
+  private def eraEndTick(startTick: Ticks, duration: EraDuration): Ticks = {
+    import EraDuration.CalendarUnit._
+    val UTC = ZoneId.of("UTC")
+
+    duration match {
+      case EraDuration.FixedLength(ticks) =>
+        Ticks(startTick + ticks)
+
+      case EraDuration.Calendar(length, unit) =>
+        val s = LocalDateTime.ofInstant(Instant.ofEpochMilli(toTimestamp(startTick)), UTC)
+        val e = unit match {
+          case SECONDS => s.plusSeconds(length)
+          case MINUTES => s.plusMinutes(length)
+          case HOURS   => s.plusHours(length)
+          case DAYS    => s.plusDays(length)
+          case WEEKS   => s.plusWeeks(length)
+          case MONTHS  => s.plusMonths(length)
+          case YEARS   => s.plusYears(length)
+        }
+        val t = e.atZone(UTC).toInstant.toEpochMilli
+        toTicks(Timestamp(t))
+    }
+  }
+
+  /** Calculate the era end tick based on a start tick. */
+  def eraEndTick(startTick: Ticks): Ticks =
+    eraEndTick(startTick, eraDuration)
+
+  /** The booking block is picked from a previous era, e.g. with 7 day eras
+    * we look for the booking block 10 days before the era start, so there's
+    * an extra era before the one with the booking block and the one where
+    * that block becomes effective. This gives humans a week to correct any
+    * problems in case there's no unique key block and booking block to use.
+    *
+    * However the second era, the one following genesis, won't have one before
+    * genesis to look at, so the genesis era has to be longer to produce many
+    * booking blocks, one for era 2, and one for era 3.
+    */
+  def genesisEraEndTick: Ticks = {
+    val endTick    = eraEndTick(genesisEraStartTick)
+    val length     = endTick - genesisEraStartTick
+    val multiplier = 1 + bookingTicks / length
+    (1 until multiplier.toInt).foldLeft(endTick)((t, _) => eraEndTick(t))
+  }
+
+  /** Any time we create a block it may have to be a booking block,
+    * in which case we have to execute the auction. There will be
+    * exactly one booking boundary per era, except in the genesis
+    * which has more, so that multiple following eras can find
+    * booking blocks in it.
+    * For example era 2 will use 1a, and era 3 will use 1b:
+    *   1a     1b     2      3
+    * | .      .   |  .   |  .   |
+    * The function return the list of ticks that are a certain delay
+    * back from the start of a upcoming era.
+    */
+  def criticalBoundaries(startTick: Ticks, endTick: Ticks, delayTicks: Ticks): List[Ticks] = {
+    def loop(acc: List[Ticks], nextStartTick: Ticks): List[Ticks] = {
+      val boundary = Ticks(nextStartTick - delayTicks)
+      if (boundary < startTick) loop(acc, eraEndTick(nextStartTick))
+      else if (boundary < endTick) loop(boundary :: acc, eraEndTick(nextStartTick))
+      else acc
+    }
+    loop(Nil, endTick).reverse
+  }
+}
 
 object HighwayConf {
 
@@ -60,81 +134,5 @@ object HighwayConf {
 
     /** Produce ballots until a certain level of summits are achieved on top of the switch blocks. */
     case class SummitLevel(k: Int) extends VotingDuration
-  }
-
-  implicit class Ops(val conf: HighwayConf) extends AnyVal {
-
-    def toTimestamp(t: Ticks): Timestamp =
-      Timestamp(conf.tickUnit.toMillis(t))
-
-    def toTicks(t: Timestamp): Ticks =
-      Ticks(conf.tickUnit.convert(t, TimeUnit.MILLISECONDS))
-
-    private def eraEndTick(startTick: Ticks, duration: EraDuration): Ticks = {
-      import EraDuration.CalendarUnit._
-      val UTC = ZoneId.of("UTC")
-
-      duration match {
-        case EraDuration.FixedLength(ticks) =>
-          Ticks(startTick + ticks)
-
-        case EraDuration.Calendar(length, unit) =>
-          val s = LocalDateTime.ofInstant(Instant.ofEpochMilli(toTimestamp(startTick)), UTC)
-          val e = unit match {
-            case SECONDS => s.plusSeconds(length)
-            case MINUTES => s.plusMinutes(length)
-            case HOURS   => s.plusHours(length)
-            case DAYS    => s.plusDays(length)
-            case WEEKS   => s.plusWeeks(length)
-            case MONTHS  => s.plusMonths(length)
-            case YEARS   => s.plusYears(length)
-          }
-          val t = e.atZone(UTC).toInstant.toEpochMilli
-          toTicks(Timestamp(t))
-      }
-    }
-
-    /** Calculate the era end tick based on a start tick. */
-    def eraEndTick(startTick: Ticks): Ticks =
-      eraEndTick(startTick, conf.eraDuration)
-
-    /** The booking block is picked from a previous era, e.g. with 7 day eras
-      * we look for the booking block 10 days before the era start, so there's
-      * an extra era before the one with the booking block and the one where
-      * that block becomes effective. This gives humans a week to correct any
-      * problems in case there's no unique key block and booking block to use.
-      *
-      * However the second era, the one following genesis, won't have one before
-      * genesis to look at, so the genesis era has to be longer to produce many
-      * booking blocks, one for era 2, and one for era 3.
-      */
-    def genesisEraEndTick: Ticks = {
-      val endTick    = eraEndTick(conf.genesisEraStartTick)
-      val length     = endTick - conf.genesisEraStartTick
-      val multiplier = 1 + conf.bookingTicks / length
-      (1 until multiplier.toInt).foldLeft(endTick)((t, _) => eraEndTick(t))
-    }
-
-    /** Any time we create a block it may have to be a booking block,
-      * in which case we have to execute the auction. There will be
-      * exactly one booking boundary per era, except in the genesis
-      * which has more, so that multiple following eras can find
-      * booking blocks in it.
-      * For example era 2 will use 1a, and era 3 will use 1b:
-      *   1a     1b     2      3
-      * | .      .   |  .   |  .   |
-      * The function return the list of ticks that are a certain delay
-      * back from the start of a upcoming era.
-      */
-    def criticalBoundaries(startTick: Ticks, endTick: Ticks, delayTicks: Ticks): List[Ticks] = {
-      def loop(acc: List[Ticks], nextStartTick: Ticks): List[Ticks] = {
-        val boundary = Ticks(nextStartTick - delayTicks)
-        if (boundary < startTick) loop(acc, eraEndTick(nextStartTick))
-        else if (boundary < endTick) loop(boundary :: acc, eraEndTick(nextStartTick))
-        else acc
-      }
-      loop(Nil, endTick).reverse
-    }
-
   }
 }
