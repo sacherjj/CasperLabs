@@ -153,6 +153,12 @@ package object types {
             .map(j => Base16.encode(j.latestBlockHash.toByteArray))
       ),
       Field(
+        "childHashes",
+        ListType(StringType),
+        "Hashes of child blocks".some,
+        resolve = c => c.value._1.getStatus.childHashes.map(p => Base16.encode(p.toByteArray))
+      ),
+      Field(
         "timestamp",
         DateType,
         "Timestamp when the block was created".some,
