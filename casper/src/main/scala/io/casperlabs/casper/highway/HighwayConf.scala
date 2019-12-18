@@ -20,9 +20,15 @@ final case class HighwayConf(
 ) {
   import HighwayConf._
 
+  /** Number of ticks to go back before the start of the era for picking the key block. */
+  def keyTicks: Ticks =
+    Ticks(bookingTicks - entropyTicks)
+
+  /** Convert a tick based time to Unix timestamp. */
   def toTimestamp(t: Ticks): Timestamp =
     Timestamp(tickUnit.toMillis(t))
 
+  /** Convert a Unix timestamp to ticks. */
   def toTicks(t: Timestamp): Ticks =
     Ticks(tickUnit.convert(t, TimeUnit.MILLISECONDS))
 
@@ -79,7 +85,7 @@ final case class HighwayConf(
     * For example era 2 will use 1a, and era 3 will use 1b:
     *   1a     1b     2      3
     * | .      .   |  .   |  .   |
-    * The function return the list of ticks that are a certain delay
+    * The function returns the list of ticks that are a certain delay
     * back from the start of a upcoming era.
     */
   def criticalBoundaries(startTick: Ticks, endTick: Ticks, delayTicks: Ticks): List[Ticks] = {
