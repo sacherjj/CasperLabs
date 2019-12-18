@@ -14,7 +14,7 @@ final case class HighwayConf(
     /** Number of ticks to go back before the start of the era for picking the booking block. */
     bookingTicks: Ticks,
     /** Number of ticks after the booking before we pick the key block, collecting the magic bits along the way. */
-    keyEntropyTicks: Ticks,
+    entropyTicks: Ticks,
     /** Stopping condition for producing ballots after the end of the era. */
     postEraVotingDuration: HighwayConf.VotingDuration
 )
@@ -94,6 +94,7 @@ object HighwayConf {
       }
     }
 
+    /** Calculate the era end tick based on a start tick. */
     def eraEndTick(startTick: Ticks): Ticks =
       eraEndTick(startTick, conf.eraDuration)
 
@@ -113,5 +114,27 @@ object HighwayConf {
       val multiplier = 1 + conf.bookingTicks / length
       (1 until multiplier.toInt).foldLeft(endTick)((t, _) => eraEndTick(t))
     }
+
+    /** Any time we create a block it may have to be a booking block,
+      * in which case we have to execute the auction. There will be
+      * exactly one booking boundary per era, except in the genesis
+      * which has more, so that multiple following eras can find
+      * booking blocks in it.
+      * For example era 2 will use 1a, and era 3 will use 1b:
+      *   1a     1b     2      3
+      * | .      .   |  .   |  .   |
+      * The function return the list of ticks that are a certain delay
+      * back from the start of a upcoming era.
+      */
+    def criticalBoundaries(startTick: Ticks, endTick: Ticks, delayTicks: Ticks): List[Ticks] = {
+      def loop(acc: List[Ticks], nextStartTick: Ticks): List[Ticks] = {
+        val boundary = Ticks(nextStartTick - delayTicks)
+        if (boundary < startTick) loop(acc, eraEndTick(nextStartTick))
+        else if (boundary < endTick) loop(boundary :: acc, eraEndTick(nextStartTick))
+        else acc
+      }
+      loop(Nil, endTick).reverse
+    }
+
   }
 }

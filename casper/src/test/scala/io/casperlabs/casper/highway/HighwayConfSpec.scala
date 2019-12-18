@@ -56,7 +56,7 @@ class HighwayConfSpec extends WordSpec with Matchers {
     }
   }
 
-  "genesisEraEndtick" should {
+  "genesisEraEndTick" should {
     "expand the genesis era to produce multiple booking blocks" in {
       val conf = init.copy(
         genesisEraStartTick = Ticks(dateMillis(2019, 12, 16)),
@@ -64,6 +64,27 @@ class HighwayConfSpec extends WordSpec with Matchers {
         eraDuration = EraDuration.FixedLength(Ticks(7 * 24 * 60 * 60 * 1000))
       )
       conf.genesisEraEndTick shouldBe dateMillis(2019, 12, 30)
+    }
+  }
+
+  "criticalBoundaries" should {
+    "collect all booking block ticks for the genesis era" in {
+      val conf = init.copy(
+        genesisEraStartTick = Ticks(dateMillis(2019, 12, 2)),
+        bookingTicks = Ticks(18 * 24 * 60 * 60 * 1000),
+        eraDuration = EraDuration.FixedLength(Ticks(7 * 24 * 60 * 60 * 1000))
+      )
+      val boundaries = conf.criticalBoundaries(
+        conf.genesisEraStartTick,
+        conf.conf.genesisEraEndTick,
+        conf.bookingTicks
+      )
+
+      boundaries should contain theSameElementsInOrderAs List(
+        Ticks(dateMillis(2019, 12, 5)),
+        Ticks(dateMillis(2019, 12, 12)),
+        Ticks(dateMillis(2019, 12, 19))
+      )
     }
   }
 }
