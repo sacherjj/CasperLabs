@@ -25,7 +25,10 @@ object MultiParentFinalizer {
   final case class FinalizedBlocks(
       mainChain: BlockHash,
       secondaryParents: Set[BlockHash] = Set.empty
-  )
+  ) {
+    def finalizedBlocks: Set[BlockHash] = secondaryParents + mainChain
+  }
+
   // TODO: Populate `latestLFB` and `finalizedBlocks` from the DB on startup.
   def create[F[_]: Concurrent](
       dag: DagRepresentation[F],
