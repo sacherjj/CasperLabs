@@ -7,7 +7,7 @@ import io.casperlabs.casper.consensus.Block._
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.info._
-import io.casperlabs.crypto.codec.{Base16, Base64}
+import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.node.api.graphql.schema.utils.{DateType, ProtocolVersionType}
 import io.casperlabs.models.BlockImplicits._
 import sangria.schema._
@@ -45,8 +45,8 @@ package object types {
       Field(
         "approverPublicKey",
         StringType,
-        "Base-64 encoded public key of approver".some,
-        resolve = c => Base64.encode(c.value.approverPublicKey.toByteArray)
+        "Base-16 encoded public key of approver".some,
+        resolve = c => Base16.encode(c.value.approverPublicKey.toByteArray)
       ),
       Field(
         "signature",
@@ -70,8 +70,8 @@ package object types {
       Field(
         "accountId",
         StringType,
-        "Base-64 encoded account public key".some,
-        resolve = c => Base64.encode(c.value.getHeader.accountPublicKey.toByteArray)
+        "Base-16 encoded account public key".some,
+        resolve = c => Base16.encode(c.value.getHeader.accountPublicKey.toByteArray)
       ),
       Field(
         "timestamp",
@@ -179,8 +179,8 @@ package object types {
       Field(
         "validatorPublicKey",
         StringType,
-        "Base-64 encoded public key of a validator created the block".some,
-        resolve = c => Base64.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
+        "Base-16 encoded public key of a validator created the block".some,
+        resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
       ),
       Field(
         "validatorBlockSeqNum",
