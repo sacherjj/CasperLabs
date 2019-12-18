@@ -9,11 +9,11 @@ class HighwayConfSpec extends WordSpec with Matchers {
 
   val init = HighwayConf(
     TimeUnit.MILLISECONDS,
-    Tick(0),
-    EraDuration.Ticks(Tick(0)),
-    Tick(0),
-    Tick(0),
-    VotingDuration.Ticks(Tick(0))
+    Ticks(0),
+    EraDuration.FixedLength(Ticks(0)),
+    Ticks(0),
+    Ticks(0),
+    VotingDuration.FixedLength(Ticks(0))
   )
 
   def dateMillis(y: Int, m: Int, d: Int): Timestamp = {
@@ -30,7 +30,7 @@ class HighwayConfSpec extends WordSpec with Matchers {
       "add the specified number of ticks" in {
         val conf = init.copy(
           tickUnit = TimeUnit.SECONDS,
-          eraDuration = EraDuration.Ticks(Tick(7 * 24 * 60 * 60))
+          eraDuration = EraDuration.FixedLength(Ticks(7 * 24 * 60 * 60))
         )
 
         // Start from the previous Monday midnight.
@@ -59,11 +59,10 @@ class HighwayConfSpec extends WordSpec with Matchers {
   "genesisEraEndtick" should {
     "expand the genesis era to produce multiple booking blocks" in {
       val conf = init.copy(
-        genesisEraStartTick = Tick(dateMillis(2019, 12, 16)),
-        bookingTicks = Tick(10 * 24 * 60 * 60 * 1000),
-        eraDuration = EraDuration.Ticks(Tick(7 * 24 * 60 * 60 * 1000))
+        genesisEraStartTick = Ticks(dateMillis(2019, 12, 16)),
+        bookingTicks = Ticks(10 * 24 * 60 * 60 * 1000),
+        eraDuration = EraDuration.FixedLength(Ticks(7 * 24 * 60 * 60 * 1000))
       )
-
       conf.genesisEraEndTick shouldBe dateMillis(2019, 12, 30)
     }
   }

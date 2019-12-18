@@ -8,13 +8,13 @@ final case class HighwayConf(
     /** Real-world time unit for one tick. */
     tickUnit: TimeUnit,
     /** Starting tick for the genesis era, measured in ticks since the Unix epoch. */
-    genesisEraStartTick: Tick,
+    genesisEraStartTick: Ticks,
     /** Method for calculating the end of the era based on the start tick. */
     eraDuration: HighwayConf.EraDuration,
     /** Number of ticks to go back before the start of the era for picking the booking block. */
-    bookingTicks: Tick,
+    bookingTicks: Ticks,
     /** Number of ticks after the booking before we pick the key block, collecting the magic bits along the way. */
-    keyEntropyTicks: Tick,
+    keyEntropyTicks: Ticks,
     /** Stopping condition for producing ballots after the end of the era. */
     postEraVotingDuration: HighwayConf.VotingDuration
 )
@@ -32,7 +32,7 @@ object HighwayConf {
       * In practice this shouldn't be a problem with the Java time library because it spreads
       * leap seconds throughout the day so that they appear to be exactly 86400 seconds.
       */
-    case class Ticks(ticks: Tick) extends EraDuration
+    case class FixedLength(ticks: Ticks) extends EraDuration
 
     /** Fixed endings can be calculated with the calendar, to make eras take exactly one week (or a month),
       * but it means eras might have different lengths.
@@ -56,7 +56,7 @@ object HighwayConf {
   object VotingDuration {
 
     /** Produce ballots according to the leader schedule for up to a certain number of ticks, e.g. 2 days. */
-    case class Ticks(ticks: Tick) extends VotingDuration
+    case class FixedLength(ticks: Ticks) extends VotingDuration
 
     /** Produce ballots until a certain level of summits are achieved on top of the switch blocks. */
     case class SummitLevel(k: Int) extends VotingDuration
@@ -64,19 +64,19 @@ object HighwayConf {
 
   implicit class Ops(val conf: HighwayConf) extends AnyVal {
 
-    def toTimestamp(t: Tick): Timestamp =
+    def toTimestamp(t: Ticks): Timestamp =
       Timestamp(conf.tickUnit.toMillis(t))
 
-    def toTicks(t: Timestamp): Tick =
-      Tick(conf.tickUnit.convert(t, TimeUnit.MILLISECONDS))
+    def toTicks(t: Timestamp): Ticks =
+      Ticks(conf.tickUnit.convert(t, TimeUnit.MILLISECONDS))
 
-    private def eraEndTick(startTick: Tick, duration: EraDuration): Tick = {
+    private def eraEndTick(startTick: Ticks, duration: EraDuration): Ticks = {
       import EraDuration.CalendarUnit._
       val UTC = ZoneId.of("UTC")
 
       duration match {
-        case EraDuration.Ticks(ticks) =>
-          Tick(startTick + ticks)
+        case EraDuration.FixedLength(ticks) =>
+          Ticks(startTick + ticks)
 
         case EraDuration.Calendar(length, unit) =>
           val s = LocalDateTime.ofInstant(Instant.ofEpochMilli(toTimestamp(startTick)), UTC)
@@ -94,7 +94,7 @@ object HighwayConf {
       }
     }
 
-    def eraEndTick(startTick: Tick): Tick =
+    def eraEndTick(startTick: Ticks): Ticks =
       eraEndTick(startTick, conf.eraDuration)
 
     /** The booking block is picked from a previous era, e.g. with 7 day eras
@@ -107,7 +107,7 @@ object HighwayConf {
       * genesis to look at, so the genesis era has to be longer to produce many
       * booking blocks, one for era 2, and one for era 3.
       */
-    def genesisEraEndTick: Tick = {
+    def genesisEraEndTick: Ticks = {
       val endTick    = eraEndTick(conf.genesisEraStartTick)
       val length     = endTick - conf.genesisEraStartTick
       val multiplier = 1 + conf.bookingTicks / length

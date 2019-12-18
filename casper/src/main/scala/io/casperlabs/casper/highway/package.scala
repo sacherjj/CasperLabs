@@ -4,7 +4,7 @@ import shapeless.tag.@@
 
 package highway {
   sealed trait TimestampTag
-  sealed trait TickTag
+  sealed trait TicksTag
 }
 
 package object highway {
@@ -13,7 +13,7 @@ package object highway {
   type Timestamp = Long @@ TimestampTag
   def Timestamp(t: Long) = t.asInstanceOf[Timestamp]
 
-  /** Ticks or rounds in an arbitrary time unit. */
-  type Tick = Long @@ TickTag
-  def Tick(t: Long) = t.asInstanceOf[Tick]
+  /** Ticks (a point in time or a duration) in an arbitrary time unit. */
+  type Ticks = Long @@ TicksTag
+  def Ticks(t: Long) = t.asInstanceOf[Ticks]
 }
