@@ -24,10 +24,7 @@ Scala CLI `casperlabs-client`. It supports the same commands and options.
 Note: we highly recommend using
 [pipenv](https://github.com/pypa/pipenv)
 or
-[virtualenv](https://virtualenv.pypa.io/en/latest/)
-to avoid installation issues like,
-for example:
-["pip install cryptography segmentation fault (SIGSEGV)"](https://github.com/pyca/cryptography/issues/3815)
+[virtualenv](https://virtualenv.pypa.io/en/latest/).
 
 ### Linux
 
