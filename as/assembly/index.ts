@@ -224,6 +224,22 @@ function readHostBuffer(count: u32): Uint8Array | null {
   return result;
 }
 
+function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
+  var sourceBytes = source.toBytes();
+  var targetBytes = target.toBytes();
+  
+  var ret = externals.transfer_from_purse_to_purse(
+    sourceBytes.dataStart,
+    sourceBytes.length,
+    targetBytes.dataStart,
+    targetBytes.length,
+    // NOTE: amount has U512 type but is not deserialized throughout the execution, as there's no direct replacement for big ints
+    amount.dataStart,
+    amount.length,
+  );
+  return ret;
+}
+
 export function call(): void {
   // TODO: Keep `as/` as lib only, move this to separate directory (maybe `as/contracts`)
 
@@ -259,6 +275,13 @@ export function call(): void {
   if (paymentPurse == null) {
     externals.revert(5);
   }
-
-  externals.revert(6);
+  
+  var ret = transferFromPurseToPurse(
+    mainPurse,
+    <URef>(paymentPurse),
+    amountBytes,
+  );
+  if (ret > 0) {
+    externals.revert(6);
+  }
 }
