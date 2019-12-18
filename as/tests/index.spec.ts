@@ -1,5 +1,5 @@
 import "assemblyscript/std/portable";
-import {URef, decodeOptional} from "../assembly";
+import {URef, decodeOptional, toBytesU32, serializeArguments, Key, toBytesString } from "../assembly";
 
 import test from "ava";
 import {hex2bin} from "./utils";
@@ -45,4 +45,38 @@ test("decode uref from bytes without access rights", t => {
         42, 42,
     ]);
     t.is(uref.getAccessRights(), null);
+    var serialized = uref.toBytes();
+    t.deepEqual(Array.from(serialized), Array.from(truth));
+})
+
+test("serializes u32", t => {
+    var truth = [239, 190, 173, 222];
+    var res = toBytesU32(3735928559);
+    t.deepEqual(Array.from(res), truth);
+})
+
+test("serialize string", t => {
+    // Rust: let bytes = "hello_world".to_bytes().unwrap();
+    var truth = hex2bin("0b00000068656c6c6f5f776f726c64");
+    t.deepEqual(toBytesString("hello_world"), Array.from(truth));
+})
+
+test("key of uref variant serializes", t => {
+    // URef with access rights
+    var truth = hex2bin("022a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a0107");
+
+    var urefBytes = hex2bin("2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a");
+    var uref = new URef(urefBytes, 0x07);
+    var key = Key.fromURef(uref);
+    var serialized = key.toBytes();
+    t.deepEqual(Array.from(serialized), Array.from(truth));
+});
+
+test("serialize args", t => {
+    // let args = ("get_payment_purse",).parse().unwrap().to_bytes().unwrap();
+    var truth = hex2bin("0100000015000000110000006765745f7061796d656e745f7075727365");
+    var serialized = serializeArguments([
+        toBytesString("get_payment_purse"),
+    ]);
+    t.deepEqual(Array.from(serialized), Array.from(truth));
 })

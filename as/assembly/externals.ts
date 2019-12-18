@@ -20,3 +20,6 @@ export declare function get_main_purse(dest_ptr: usize): void;
 
 @external("env", "get_system_contract")
 export declare function get_system_contract(system_contract_index: u32, dest_ptr: usize, dest_size: u32): i32;
+
+@external("env", "call_contract")
+export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: usize, args_size: u32, extra_urefs_ptr: usize, extra_urefs_size: usize, result_size: usize): i32;

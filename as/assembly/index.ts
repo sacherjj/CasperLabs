@@ -44,6 +44,11 @@ export class URef {
   private bytes: Uint8Array;
   private accessRights: U8 | null = null; // NOTE: Optional access rights are currently marked as "null"
 
+  constructor(bytes: Uint8Array, accessRights: U8 | null) {
+    this.bytes = bytes;
+    this.accessRights = accessRights;
+  }
+
   public getBytes(): Uint8Array {
     return this.bytes;
   }
@@ -53,14 +58,33 @@ export class URef {
   }
 
   static fromBytes(bytes: Uint8Array): URef | null {
-    var uref = new URef();
-    uref.bytes = bytes.subarray(0, UREF_ADDR_LENGTH);
+    var urefBytes = bytes.subarray(0, UREF_ADDR_LENGTH);
 
     var accessRightsBytes = decodeOptional(bytes.subarray(UREF_ADDR_LENGTH));
     if (accessRightsBytes != null) {
-      uref.accessRights = <U8>(<Uint8Array>accessRightsBytes)[0];
+      var accessRights = <U8>(<Uint8Array>accessRightsBytes)[0];
+      var uref = new URef(urefBytes, accessRights);
+      return uref;
     }
-    return uref;
+    else {
+      return new URef(urefBytes, <U8>null);
+    }
+  }
+
+  toBytes(): Array<u8> {
+    var result = new Array<u8>(this.bytes.length);
+    for (var i = 0; i < this.bytes.length; i++) {
+      result[i] = this.bytes[i];
+    }
+    // var result = Object.assign([], this.toBytes); // NOTE: Clone?
+    if (this.accessRights == null) {
+      result.push(0);
+    }
+    else {
+      result.push(1);
+      result.push(<u8>this.accessRights);
+    }
+    return result;
   }
 }
 
@@ -100,6 +124,93 @@ function getSystemContract(system_contract: SystemContract): URef | null {
   return URef.fromBytes(data);
 }
 
+
+enum KeyVariant {
+  ACCOUNT_ID = 0,
+  HASH_ID = 1,
+  UREF_ID = 2,
+  LOCAL_ID = 3,
+}
+
+export class Key {
+  variant: KeyVariant;
+  value: URef; // NOTE: For simplicity I treat this as bytes of "union"
+
+  static fromURef(uref: URef): Key {
+    var key = new Key();
+    key.variant = KeyVariant.UREF_ID;
+    key.value = uref;
+    return key;
+  }
+  
+  toBytes(): Array<u8> {
+    var bytes = new Array<u8>();
+    bytes.push(<u8>this.variant)
+    bytes = bytes.concat(this.value.toBytes());
+    return bytes;
+  }
+}
+
+export function toBytesU32(num: u32): u8[] {
+  // Converts u32 to little endian
+  // NOTE: AS apparently has store<i32> which could work for us but looks like AS portable stdlib doesn't provide it
+  return [
+    <u8>(num & 0x000000ff),
+    <u8>((num & 0x0000ff00) >> 8) & 255,
+    <u8>((num & 0x00ff0000) >> 16) & 255,
+    <u8>((num & 0xff000000) >> 24) & 255,
+  ];
+}
+
+export function toBytesString(s: String): u8[] {
+  var prefix = toBytesU32(<u32>s.length);
+  for (var i = 0; i < s.length; i++) {
+    var charCode = s.charCodeAt(i);
+    // Assumes ascii encoding (i.e. charCode < 0x80)
+    prefix.push(<u8>charCode);
+  }
+  return prefix;
+}
+
+export function toBytesArrayU8(arr: Array<u8>): u8[] {
+  var prefix = toBytesU32(<u32>arr.length);
+  return prefix.concat(arr);
+}
+
+export function serializeArguments(values: Array<u8>[]): Array<u8> {
+  var prefix = toBytesU32(<u32>values.length);
+  for (var i = 0; i < values.length; i++) {
+    prefix = prefix.concat(toBytesArrayU8(values[i]));
+  }
+  return prefix;
+}
+
+
+function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
+  var keyBytes = key.toBytes();
+  var argBytes = serializeArguments(args);
+  var extraURefs = serializeArguments([]);
+
+  var resultSize = new Uint32Array(1);
+  resultSize.fill(0);
+
+  var ret = externals.call_contract(
+    <usize>keyBytes.dataStart,
+    keyBytes.length,
+    argBytes.dataStart,
+    argBytes.length,
+    extraURefs.dataStart,
+    extraURefs.length,
+    resultSize.dataStart,
+  );
+  
+  if (ret > 0) {
+    return null;
+  }
+
+  return new Uint8Array(resultSize[0]);
+}
+
 export function call(): void {
   // TODO: Keep `as/` as lib only, move this to separate directory (maybe `as/contracts`)
 
@@ -118,7 +229,23 @@ export function call(): void {
   var proofOfStake = getSystemContract(SystemContract.ProofOfStake);
   if (proofOfStake == null) {
     externals.revert(3);
+    return;
   }
 
-  externals.revert(4);
+  var key = Key.fromURef(<URef>proofOfStake);
+  var output = callContract(key, [
+    toBytesString("get_payment_purse"),
+  ]);
+
+  if (output == null) {
+    externals.revert(4);
+    return;
+  }
+
+  var paymentPurse = URef.fromBytes(output);
+  if (paymentPurse == null) {
+    externals.revert(5);
+  }
+
+  externals.revert(6);
 }
