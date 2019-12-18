@@ -135,6 +135,7 @@ message Block {
         GlobalState state = 3;
         // Hash of the body structure as a whole.
         bytes body_hash = 4;
+        // Unix timestamp from when the block was created.
         uint64 timestamp = 5;
         state.ProtocolVersion protocol_version = 13;
         uint32 deploy_count = 7;
@@ -151,7 +152,16 @@ message Block {
         uint64 rank = 11;
         MessageType message_type = 12;
         // A block from where the fork choice is calculated.
+        // Corresponds to the era the block belongs to.
         bytes key_block_hash = 15;
+        // The round ID (the idealistic protocol timestamp) to which the block belongs;
+        // this will be slightly different from the timestamp, which is the wall clock time
+        // of when the block was _actually_ created.
+        uint64 round_id = 16;
+        // A random bit set by the creator of the block which is goes towards the leader seed
+        // of the era. Only leader blocks (i.e. lambda messages) have to set it; should be
+        // empty for ballots.
+        bool magic_bit = 17;
     }
 
     enum MessageType {
@@ -210,4 +220,23 @@ message GenesisCandidate {
 
     // Approvals from bonded validators with signatures over the `block_hash`.
     repeated Approval approvals = 2;
+}
+
+
+message Era {
+    // Key block of the era, which is basically its identifier.
+    bytes key_block_hash = 1;
+    // Identifier of the parent era.
+    bytes parent_key_block_hash = 2;
+    // First round (basically the timestamp) of the era.
+    uint64 start_round_id = 3;
+    // Last round of the era (non-inclusive), after which the first block is the switch block.
+    uint64 end_round_id = 4;
+    // The hash of the booking block which was reachable from the key block;
+    // this is where the bonds are coming, included in the era for reference.
+    bytes booking_block_hash = 5;
+    // The random seed compiled from the magic bits between the booking block and the key block.
+    int64 leader_seed = 6;
+    // Bonded validator weights from the booking block.
+    repeated Bond bonds = 7;
 }
