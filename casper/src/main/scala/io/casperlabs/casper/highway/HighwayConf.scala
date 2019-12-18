@@ -115,7 +115,8 @@ object HighwayConf {
     case class FixedLength(ticks: Ticks) extends EraDuration
 
     /** Fixed endings can be calculated with the calendar, to make eras take exactly one week (or a month),
-      * but it means eras might have different lengths.
+      * but it means eras might have different lengths. Using this might mean that a different platform
+      * which handles leap seconds differently could assign different tick IDs.
       */
     case class Calendar(length: Long, unit: CalendarUnit) extends EraDuration
 
