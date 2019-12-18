@@ -95,14 +95,16 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
-      val prefix  = s"Failed to sync DAG, source: ${source.show}."
+      val prefix  = s"Failed to sync DAG, source: ${source.show -> "peer"}."
       val message = syncError.getMessage
       Log[F].warn(s"$prefix $message").as(syncError.asLeft)
     }
 
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].info(
-            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show}: ${newBlockHashes.map(Utils.hex).mkString(", ")}"
+            s"Received notification about ${newBlockHashes.size} new block(s) from ${source.show -> "peer"}: ${newBlockHashes
+              .map(Utils.hex)
+              .mkString(", ") -> "blocks"}"
           )
       errorOrDag <- synchronizer.syncDag(
                      source = source,
@@ -110,7 +112,9 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                    )
       errorOrWaiters <- errorOrDag.fold(
                          syncError => logSyncError(syncError), { dag =>
-                           Log[F].info(s"Syncing ${dag.size} blocks with ${source.show}...") *>
+                           Log[F].info(
+                             s"Syncing ${dag.size} blocks with ${source.show -> "peer"}"
+                           ) *>
                              dag.traverse { summary =>
                                downloadManager.scheduleDownload(
                                  summary,
@@ -126,7 +130,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 
     trySync.onError {
       case NonFatal(ex) =>
-        Log[F].error(s"Could not synchronize with ${source.show}: $ex")
+        Log[F].error(s"Could not synchronize with ${source.show -> "peer"}: $ex")
     }
   }
 
@@ -185,10 +189,10 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     }
   }
 
-  override def streamDagTipBlockSummaries(
-      request: StreamDagTipBlockSummariesRequest
-  ): Iterant[F, BlockSummary] =
-    Iterant.liftF(backend.listTips).flatMap(Iterant.fromSeq(_))
+  override def streamLatestMessages(
+      request: StreamLatestMessagesRequest
+  ): Iterant[F, Block.Justification] =
+    Iterant.liftF(backend.latestMessages).flatMap(set => Iterant.fromSeq(set.toSeq))
 
   override def streamBlockSummaries(
       request: StreamBlockSummariesRequest
@@ -279,8 +283,9 @@ object GossipServiceServer {
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString): F[Option[Block]]
 
-    /** Retrieve the current tips of the DAG, the ones we'd build a block on. */
-    def listTips: F[Seq[BlockSummary]]
+    /** Returns latest messages as seen currently by the node.
+      * NOTE: In the future we will remove redundant messages. */
+    def latestMessages: F[Set[Block.Justification]]
 
     /* Retrieve the DAG slice in topological order, inclusive */
     def dagTopoSort(startRank: Long, endRank: Long): Iterant[F, BlockSummary]

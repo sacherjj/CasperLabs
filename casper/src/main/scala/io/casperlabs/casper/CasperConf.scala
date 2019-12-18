@@ -27,14 +27,14 @@ final case class CasperConf(
     standalone: Boolean,
     autoProposeEnabled: Boolean,
     autoProposeCheckInterval: FiniteDuration,
+    autoProposeBallotInterval: FiniteDuration,
     autoProposeAccInterval: FiniteDuration,
     autoProposeAccCount: Int,
-    maxBlockSizeBytes: Int
+    maxBlockSizeBytes: Int,
+    minTtl: FiniteDuration
 ) extends SubConfig
 
 object CasperConf {
-  private implicit val logSource: LogSource = LogSource(this.getClass)
-
   def parseValidatorsFile[F[_]: Monad: Sync: Log](
       knownValidatorsFile: Option[Path]
   ): F[Set[PublicKeyBS]] =
@@ -58,7 +58,7 @@ object CasperConf {
 
             case Failure(ex) =>
               Log[F]
-                .error(s"Error while parsing known validators file; $ex: ${ex.getMessage}")
+                .error(s"Error while parsing known validators file: $ex")
                 .map[Set[PublicKeyBS]](_ => throw ex)
           }
     }

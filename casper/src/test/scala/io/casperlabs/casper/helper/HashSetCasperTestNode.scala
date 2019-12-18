@@ -1,28 +1,25 @@
 package io.casperlabs.casper.helper
 
-import cats.data.EitherT
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.implicits._
-import cats.mtl.FunctorRaise
-import cats.{~>, Applicative, ApplicativeError, Defer, Id, Monad, Parallel}
+import cats.{~>, Applicative, Defer, Parallel}
 import com.google.protobuf.ByteString
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper._
 import io.casperlabs.casper.consensus.state.{BigInt => _, Unit => _, _}
 import io.casperlabs.casper.consensus.{state, Block, Bond}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
-import io.casperlabs.casper.validation.{Validation, ValidationImpl}
-import io.casperlabs.casper.util.CasperLabsProtocolVersions
+import io.casperlabs.casper.util.CasperLabsProtocol
 import io.casperlabs.catscontrib.TaskContrib._
-import io.casperlabs.catscontrib._
-import io.casperlabs.catscontrib.effect.implicits._
-import io.casperlabs.comm._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
+import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -32,10 +29,13 @@ import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
 import monix.eval.Task
-import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler
+import logstage.LogIO
+import io.casperlabs.shared.LogStub
+import io.casperlabs.storage.BlockMsgWithTransform
 
-import scala.collection.mutable.{Map => MutMap}
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import scala.util.Random
 
 /** Base class for test nodes with fields used by tests exposed as public. */
@@ -50,15 +50,17 @@ abstract class HashSetCasperTestNode[F[_]](
     val blockStorage: BlockStorage[F],
     val dagStorage: DagStorage[F],
     val deployStorage: DeployStorage[F],
+    val deployBuffer: DeployBuffer[F],
     val metricEff: Metrics[F],
     val casperState: Cell[F, CasperState]
 ) {
-  implicit val logEff: LogStub[F]
+  implicit val logEff: LogStub with LogIO[F]
   implicit val timeEff: LogicalTime[F]
 
   implicit val casperEff: MultiParentCasperImpl[F]
   implicit val lastFinalizedBlockHashContainer: LastFinalizedBlockHashContainer[F] =
     NoOpsLastFinalizedBlockHashContainer.create[F](genesis.blockHash)
+  implicit val broadcaster: Broadcaster[F]
 
   val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
@@ -75,6 +77,18 @@ abstract class HashSetCasperTestNode[F[_]](
       HashSetCasperTestNode.simpleEEApi[F](bonds)
 
   implicit val versions = HashSetCasperTestNode.protocolVersions[F]
+
+  def getEquivocators: F[Set[ByteString]] =
+    dagStorage.getRepresentation.flatMap(_.getEquivocators)
+
+  /** Clears block storage (except the Genesis) */
+  def clearStorage(): F[Unit] =
+    for {
+      _ <- blockStorage.clear()
+      _ <- dagStorage.clear()
+      _ <- deployStorage.writer.clear()
+      _ <- blockStorage.put(BlockMsgWithTransform(Some(genesis)))
+    } yield ()
 
   /** Handle one message. */
   def receive(): F[Unit]
@@ -316,14 +330,16 @@ object HashSetCasperTestNode {
     if (x.length < length) Array.fill(length - x.length)(0.toByte) ++ x
     else x
 
-  def makeValidation[F[_]: MonadThrowable: FunctorRaise[?[_], InvalidBlock]: Log: Time]
-      : Validation[F] =
-    new ValidationImpl[F] {
-      // Tests are not signing the deploys.
-      override def deploySignature(d: consensus.Deploy): F[Boolean] = true.pure[F]
-    }
-
-  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocolVersions.unsafe[F](
-    0L -> consensus.state.ProtocolVersion(1)
+  implicit def protocolVersions[F[_]: Applicative] = CasperLabsProtocol.unsafe[F](
+    (
+      0L,
+      consensus.state.ProtocolVersion(1),
+      Some(
+        DeployConfig(
+          24 * 60 * 60 * 1000, // 1 day
+          10
+        )
+      )
+    )
   )
 }

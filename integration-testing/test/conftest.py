@@ -5,11 +5,13 @@ import pytest
 import shutil
 
 from casperlabs_local_net.common import make_tempdir, random_string
+from casperlabs_local_net.cli import CLI, DockerCLI
 from casperlabs_local_net.casperlabs_network import (
     CustomConnectionNetwork,
     OneNodeNetwork,
     ThreeNodeNetwork,
     TwoNodeNetwork,
+    TwoNodeNetworkWithGeneratedKeys,
     PaymentNodeNetwork,
     PaymentNodeNetworkWithNoMinBalance,
     TrillionPaymentNodeNetwork,
@@ -20,6 +22,7 @@ from casperlabs_local_net.casperlabs_network import (
     InterceptedTwoNodeNetwork,
     TwoNodeWithDifferentAccountsCSVNetwork,
     NetworkWithTaggedDev,
+    OneNodeNetworkWithChainspecUpgrades,
 )
 from docker.client import DockerClient
 
@@ -37,8 +40,9 @@ def docker_client_fixture() -> Generator[DockerClient, None, None]:
     try:
         yield docker_client
     finally:
-        docker_client.volumes.prune()
         docker_client.networks.prune()
+        docker_client.volumes.prune()
+        docker_client.containers.prune()
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +94,7 @@ def encrypted_one_node_network(docker_client_fixture):
         yield net
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def one_node_network_with_clarity(docker_client_fixture):
     with OneNodeWithClarity(docker_client_fixture) as net:
         net.create_cl_network()
@@ -100,6 +104,20 @@ def one_node_network_with_clarity(docker_client_fixture):
 @pytest.fixture()
 def two_node_network(docker_client_fixture):
     with TwoNodeNetwork(docker_client_fixture) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def two_node_network_with_python_generated_keys(docker_client_fixture):
+    with TwoNodeNetworkWithGeneratedKeys(docker_client_fixture, CLI) as tnn:
+        tnn.create_cl_network()
+        yield tnn
+
+
+@pytest.fixture()
+def two_node_network_with_scala_generated_keys(docker_client_fixture):
+    with TwoNodeNetworkWithGeneratedKeys(docker_client_fixture, DockerCLI) as tnn:
         tnn.create_cl_network()
         yield tnn
 
@@ -129,6 +147,33 @@ def intercepted_two_node_network(docker_client_fixture):
     with InterceptedTwoNodeNetwork(docker_client_fixture) as tnn:
         tnn.create_cl_network()
         yield tnn
+
+
+@pytest.fixture()
+def chainspec_upgrades_network_major(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, chainspec_directory="test-chainspec"
+    ) as net:
+        net.create_cl_network()
+        yield net
+
+
+@pytest.fixture()
+def chainspec_upgrades_network_minor(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, chainspec_directory="test-chainspec-minor"
+    ) as net:
+        net.create_cl_network()
+        yield net
+
+
+@pytest.fixture()
+def chainspec_upgrades_network_etc(docker_client_fixture):
+    with OneNodeNetworkWithChainspecUpgrades(
+        docker_client_fixture, etc_casperlabs_directory="etc_casperlabs"
+    ) as net:
+        net.create_cl_network()
+        yield net
 
 
 @pytest.fixture(scope="module")

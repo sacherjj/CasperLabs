@@ -30,17 +30,7 @@ fn alloc_bytes(n: usize) -> *mut u8 {
     }
 }
 
-// I don't know why I need a special version of to_ptr for
-// &str, but the compiler complains if I try to use the polymorphic
-// version with T = str.
-fn str_ref_to_ptr(t: &str) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.to_bytes().unwrap_or_revert();
-    let ptr = bytes.as_ptr();
-    let size = bytes.len();
-    (ptr, size, bytes)
-}
-
-fn to_ptr<T: ToBytes>(t: &T) -> (*const u8, usize, Vec<u8>) {
+fn to_ptr<T: ToBytes + ?Sized>(t: &T) -> (*const u8, usize, Vec<u8>) {
     let bytes = t.to_bytes().unwrap_or_revert();
     let ptr = bytes.as_ptr();
     let size = bytes.len();

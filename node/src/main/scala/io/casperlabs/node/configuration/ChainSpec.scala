@@ -50,17 +50,24 @@ object ChainSpec extends ParserImplicits {
       patch: Int
   )
 
+  final case class Deploy(
+      maxTtlMillis: Int Refined NonNegative,
+      maxDependencies: Int Refined NonNegative
+  ) extends SubConfig
+
   /** The first set of changes should define the Genesis section and the costs. */
   final case class GenesisConf(
       genesis: Genesis,
-      wasmCosts: WasmCosts
+      wasmCosts: WasmCosts,
+      deploys: Deploy
   )
   object GenesisConf extends ConfCompanion[GenesisConf](ConfParser.gen[GenesisConf])
 
   /** Subsequent changes describe upgrades. */
   final case class UpgradeConf(
       upgrade: Upgrade,
-      wasmCosts: Option[WasmCosts]
+      wasmCosts: Option[WasmCosts],
+      deploys: Option[Deploy]
   )
   object UpgradeConf extends ConfCompanion[UpgradeConf](ConfParser.gen[UpgradeConf])
 
@@ -253,7 +260,7 @@ object ChainSpecReader {
   implicit val `ChainSpecReader[GenesisConfig]` = new ChainSpecReader[ipc.ChainSpec.GenesisConfig] {
     override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[GenesisConf, ipc.ChainSpec.GenesisConfig](path, GenesisConf.parseManifest) {
-        case GenesisConf(genesis, wasmCosts) =>
+        case GenesisConf(genesis, wasmCosts, deployConfig) =>
           for {
             mintCodeBytes <- resolver.asBytes(resolvePath(path, genesis.mintCodePath))
             posCodeBytes  <- resolver.asBytes(resolvePath(path, genesis.posCodePath))
@@ -281,6 +288,7 @@ object ChainSpecReader {
                   )
               })
               .withCosts(toCostTable(wasmCosts))
+              .withDeployConfig(toDeployConfig(deployConfig))
           }
       }
   }
@@ -288,7 +296,7 @@ object ChainSpecReader {
   implicit val `ChainSpecReader[UpgradePoint]` = new ChainSpecReader[ipc.ChainSpec.UpgradePoint] {
     override def fromDirectory(path: Path)(implicit resolver: Resolver) =
       withManifest[UpgradeConf, ipc.ChainSpec.UpgradePoint](path, UpgradeConf.parseManifest) {
-        case UpgradeConf(upgrade, maybeWasmCosts) =>
+        case UpgradeConf(upgrade, maybeWasmCosts, maybeDeployConfig) =>
           upgrade.installerCodePath.fold(
             none[Array[Byte]].asRight[String]
           ) { file =>
@@ -301,7 +309,8 @@ object ChainSpecReader {
                     code = ByteString.copyFrom(bytes)
                   )
                 },
-                newCosts = maybeWasmCosts.map(toCostTable)
+                newCosts = maybeWasmCosts.map(toCostTable),
+                newDeployConfig = maybeDeployConfig.map(toDeployConfig)
               )
               .withActivationPoint(
                 ipc.ChainSpec.ActivationPoint(upgrade.activationPointRank)
@@ -356,6 +365,12 @@ object ChainSpecReader {
           .withOpcodesDiv(wasmCosts.opcodesDivisor.value)
       )
 
+  private def toDeployConfig(deployConfig: Deploy): ipc.ChainSpec.DeployConfig =
+    ipc.ChainSpec.DeployConfig(
+      deployConfig.maxTtlMillis.value,
+      deployConfig.maxDependencies.value
+    )
+
   private def withManifest[A, B](dir: Path, parseManifest: (=> Source) => ValidatedNel[String, A])(
       read: A => Either[String, B]
   )(implicit resolver: Resolver): ValidatedNel[String, B] = {
@@ -369,17 +384,25 @@ object ChainSpecReader {
     }
   }
 
-  /** If there's no explicit ChainSpec location defined we can use the default one
+  /** If the user installed the software under Unix then they'll have standard
+    * libraries created and the chainspec copied to /etc/casperlabs; if present,
+    * use it, unless an explicit setting is pointing the node somewhere else.
+    * If there's no explicit ChainSpec location defined we can use the default one
     * packaged with the node. Every file can be overridden by placing one with the
     * same path under the ~/.casperlabs data directory.
     */
   def fromConf(
       conf: Configuration
-  ): ValidatedNel[String, ipc.ChainSpec] =
-    conf.casper.chainSpecPath match {
-      case None =>
-        implicit val resolver = new ResourceResolver(conf.server.dataDir)
-        ChainSpecReader[ipc.ChainSpec].fromDirectory(Paths.get("chainspec"))
+  ): ValidatedNel[String, ipc.ChainSpec] = {
+    val maybeEtcPath =
+      Option(Paths.get("/", "etc", "casperlabs", "chainspec")).filter(_.toFile.exists)
+
+    // The node comes default settings for devnet packaged in the JAR. If it's installed,
+    // these get unpacked by the installer to /etc/casperlabs/chainspec.
+    // If the user sets the `--casper-chain-spec-path` to a directory, that means they
+    // are providing a full ChainSpec, for example to connect to testnet or mainnet,
+    // instead of devnet; in this case ignore everything else, this takes priority.
+    conf.casper.chainSpecPath orElse maybeEtcPath match {
       case Some(path) =>
         val dir = path.toFile
         if (!dir.exists)
@@ -390,6 +413,12 @@ object ChainSpecReader {
           implicit val resolver = FileResolver
           ChainSpecReader[ipc.ChainSpec].fromDirectory(path)
         }
-    }
 
+      case None =>
+        // No dedicated ChainSpec directory given, so use the `chainspec` directory
+        // as it exists under `resources`, packaged in the JAR.
+        implicit val resolver = new ResourceResolver(conf.server.dataDir)
+        ChainSpecReader[ipc.ChainSpec].fromDirectory(Paths.get("chainspec"))
+    }
+  }
 }

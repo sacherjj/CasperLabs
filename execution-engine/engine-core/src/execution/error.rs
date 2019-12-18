@@ -43,6 +43,11 @@ pub enum Error {
     DeploymentAuthorizationFailure,
     ExpectedReturnValue,
     UnexpectedReturnValue,
+    InvalidContext,
+    IncompatibleProtocolMajorVersion {
+        expected: u32,
+        actual: u32,
+    },
 }
 
 impl fmt::Display for Error {

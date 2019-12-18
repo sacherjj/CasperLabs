@@ -6,8 +6,8 @@ edition = "2018"
 
 [features]
 default = []
-std = ["contract-ffi/std"]
+std = ["base16/std", "contract-ffi/std"]
 
 [dependencies]
-binascii = "0.1.2"
+base16 = { version = "0.2", default-features = false }
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

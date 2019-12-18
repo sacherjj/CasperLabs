@@ -6,6 +6,7 @@ pub mod execution_effect;
 pub mod execution_result;
 pub mod genesis;
 pub mod op;
+pub mod query;
 pub mod system_contract_cache;
 pub mod upgrade;
 pub mod utils;
@@ -23,9 +24,9 @@ use contract_ffi::{
     args_parser::ArgsParser,
     bytesrepr::ToBytes,
     execution::Phase,
-    key::{Key, HASH_SIZE},
+    key::{Key, KEY_HASH_LENGTH},
     system_contracts::mint,
-    uref::{AccessRights, URef, UREF_ADDR_SIZE},
+    uref::{AccessRights, URef, UREF_ADDR_LENGTH},
     value::{
         account::{BlockTime, PublicKey, PurseId},
         Account, ProtocolVersion, Value, U512,
@@ -58,6 +59,7 @@ pub use self::{
 use crate::{
     engine_state::{
         error::Error::MissingSystemContractError,
+        query::{QueryRequest, QueryResult},
         upgrade::{UpgradeConfig, UpgradeResult},
     },
     execution::{self, AddressGenerator, Executor, MINT_NAME, POS_NAME},
@@ -340,7 +342,7 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, Key::URef(mint_reference))?;
                 let (bytes, _, _) = contract.destructure();
-                preprocessor.deserialize(&bytes)?
+                engine_wasm_prep::deserialize(&bytes)?
             };
 
             // For each account...
@@ -449,12 +451,16 @@ where
         };
 
         // 3.1.1.1.1.3 activation point is not currently used by EE; skipping
-        // 3.1.1.1.1.4 new protocol version must be exactly 1 version higher than current
+        // 3.1.1.1.1.4 upgrade point protocol version validation
         let new_protocol_version = upgrade_config.new_protocol_version();
-        // TODO: when ProtocolVersion switches to SemVer, replace with a more robust impl per spec
-        if new_protocol_version.value().major != current_protocol_version.value().major + 1 {
+
+        let upgrade_check_result =
+            current_protocol_version.check_next_version(&new_protocol_version);
+
+        if upgrade_check_result.is_invalid() {
             return Err(Error::InvalidProtocolVersion(new_protocol_version));
         }
+
         // 3.1.1.1.1.6 resolve wasm CostTable for new protocol version
         let new_wasm_costs = match upgrade_config.wasm_costs() {
             Some(new_wasm_costs) => new_wasm_costs,
@@ -472,82 +478,92 @@ where
             .put_protocol_data(new_protocol_version, &new_protocol_data)
             .map_err(Into::into)?;
 
-        // TODO: when ProtocolVersion moves to SemVer, add enforcement for major version requirement
         // 3.1.1.1.1.5 upgrade installer is optional except on major version upgrades
-        // 3.1.2.3 execute upgrade installer if one is provided
-        if let Some(bytes) = upgrade_config.upgrade_installer_bytes() {
-            // preprocess installer module
-            let upgrade_installer_module = {
-                let preprocessor = Preprocessor::new(new_wasm_costs);
-                preprocessor.preprocess(bytes)?
-            };
+        match upgrade_config.upgrade_installer_bytes() {
+            None if upgrade_check_result.is_code_required() => {
+                // 3.1.1.1.1.5 code is required for major version bump
+                return Err(Error::InvalidUpgradeConfig);
+            }
+            None => {
+                // optional for patch/minor bumps
+            }
+            Some(bytes) => {
+                // 3.1.2.3 execute upgrade installer if one is provided
 
-            // currently there are no expected args for an upgrade installer but args are supported
-            let args = match upgrade_config.upgrade_installer_args() {
-                Some(args) => args,
-                None => &[],
-            };
+                // preprocess installer module
+                let upgrade_installer_module = {
+                    let preprocessor = Preprocessor::new(new_wasm_costs);
+                    preprocessor.preprocess(bytes)?
+                };
 
-            // execute as system account
-            let system_account = {
-                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                match tracking_copy.borrow_mut().read(correlation_id, &key) {
-                    Ok(Some(Value::Account(account))) => account,
-                    Ok(_) => panic!("system account must exist"),
-                    Err(error) => return Err(Error::ExecError(error.into())),
-                }
-            };
+                // currently there are no expected args for an upgrade installer but args are
+                // supported
+                let args = match upgrade_config.upgrade_installer_args() {
+                    Some(args) => args,
+                    None => &[],
+                };
 
-            let mut keys = BTreeMap::new();
+                // execute as system account
+                let system_account = {
+                    let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                    match tracking_copy.borrow_mut().read(correlation_id, &key) {
+                        Ok(Some(Value::Account(account))) => account,
+                        Ok(_) => panic!("system account must exist"),
+                        Err(error) => return Err(Error::ExecError(error.into())),
+                    }
+                };
 
-            let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-            let authorization_keys = {
-                let mut ret = BTreeSet::new();
-                ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
-                ret
-            };
+                let mut keys = BTreeMap::new();
 
-            let blocktime = BlockTime::default();
+                let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                let authorization_keys = {
+                    let mut ret = BTreeSet::new();
+                    ret.insert(PublicKey::new(SYSTEM_ACCOUNT_ADDR));
+                    ret
+                };
 
-            let deploy_hash = {
-                // seeds address generator w/ protocol version
-                let bytes: Vec<u8> = upgrade_config
-                    .new_protocol_version()
-                    .value()
-                    .to_bytes()?
-                    .to_vec();
-                Blake2bHash::new(&bytes).into()
-            };
+                let blocktime = BlockTime::default();
 
-            // upgrade has no gas limit; approximating with MAX
-            let gas_limit = Gas::new(std::u64::MAX.into());
-            let phase = Phase::System;
-            let address_generator = {
-                let generator = AddressGenerator::new(pre_state_hash.into(), phase);
-                Rc::new(RefCell::new(generator))
-            };
-            let state = Rc::clone(&tracking_copy);
-            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+                let deploy_hash = {
+                    // seeds address generator w/ protocol version
+                    let bytes: Vec<u8> = upgrade_config
+                        .new_protocol_version()
+                        .value()
+                        .to_bytes()?
+                        .to_vec();
+                    Blake2bHash::new(&bytes).into()
+                };
 
-            Executor.better_exec(
-                upgrade_installer_module,
-                &args,
-                &mut keys,
-                initial_base_key,
-                &system_account,
-                authorization_keys,
-                blocktime,
-                deploy_hash,
-                gas_limit,
-                address_generator,
-                new_protocol_version,
-                correlation_id,
-                state,
-                phase,
-                new_protocol_data,
-                system_contract_cache,
-            )?
-        };
+                // upgrade has no gas limit; approximating with MAX
+                let gas_limit = Gas::new(std::u64::MAX.into());
+                let phase = Phase::System;
+                let address_generator = {
+                    let generator = AddressGenerator::new(pre_state_hash.into(), phase);
+                    Rc::new(RefCell::new(generator))
+                };
+                let state = Rc::clone(&tracking_copy);
+                let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+                Executor.better_exec(
+                    upgrade_installer_module,
+                    &args,
+                    &mut keys,
+                    initial_base_key,
+                    &system_account,
+                    authorization_keys,
+                    blocktime,
+                    deploy_hash,
+                    gas_limit,
+                    address_generator,
+                    new_protocol_version,
+                    correlation_id,
+                    state,
+                    phase,
+                    new_protocol_data,
+                    system_contract_cache,
+                )?
+            }
+        }
 
         let effects = tracking_copy.borrow().effect();
 
@@ -575,6 +591,24 @@ where
         }
     }
 
+    pub fn run_query(
+        &self,
+        correlation_id: CorrelationId,
+        query_request: QueryRequest,
+    ) -> Result<QueryResult, Error> {
+        let tracking_copy = match self.tracking_copy(query_request.state_hash())? {
+            Some(tracking_copy) => Rc::new(RefCell::new(tracking_copy)),
+            None => return Ok(QueryResult::RootNotFound),
+        };
+
+        let mut mut_tracking_copy = tracking_copy.borrow_mut();
+
+        Ok(mut_tracking_copy
+            .query(correlation_id, query_request.key(), query_request.path())
+            .map_err(|err| Error::ExecError(err.into()))?
+            .into())
+    }
+
     pub fn get_module(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
@@ -582,31 +616,24 @@ where
         account: &Account,
         correlation_id: CorrelationId,
         preprocessor: &Preprocessor,
+        protocol_version: &ProtocolVersion,
     ) -> Result<Module, error::Error> {
-        match deploy_item {
+        let stored_contract_key = match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                Ok(module)
+                return Ok(module);
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
-                let stored_contract_key = {
-                    let hash_len = hash.len();
-                    if hash_len != HASH_SIZE {
-                        return Err(error::Error::InvalidHashLength {
-                            expected: HASH_SIZE,
-                            actual: hash_len,
-                        });
-                    }
-                    let mut arr = [0u8; HASH_SIZE];
-                    arr.copy_from_slice(&hash);
-                    Key::Hash(arr)
-                };
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
-                Ok(module)
+                let hash_len = hash.len();
+                if hash_len != KEY_HASH_LENGTH {
+                    return Err(error::Error::InvalidHashLength {
+                        expected: KEY_HASH_LENGTH,
+                        actual: hash_len,
+                    });
+                }
+                let mut arr = [0u8; KEY_HASH_LENGTH];
+                arr.copy_from_slice(&hash);
+                Key::Hash(arr)
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
@@ -619,62 +646,67 @@ where
                         )));
                     }
                 }
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, *stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
-                Ok(module)
+                *stored_contract_key
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
-                let stored_contract_key = {
-                    let len = uref.len();
-                    if len != UREF_ADDR_SIZE {
-                        return Err(error::Error::InvalidHashLength {
-                            expected: UREF_ADDR_SIZE,
-                            actual: len,
-                        });
-                    }
-                    let read_only_uref = {
-                        let mut arr = [0u8; UREF_ADDR_SIZE];
-                        arr.copy_from_slice(&uref);
-                        URef::new(arr, AccessRights::READ)
-                    };
-                    let normalized_uref = Key::URef(read_only_uref).normalize();
-                    let maybe_named_key = account
-                        .named_keys()
-                        .values()
-                        .find(|&named_key| named_key.normalize() == normalized_uref);
-                    match maybe_named_key {
-                        Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
-                        Some(Key::URef(_)) => {
-                            return Err(error::Error::ExecError(
-                                execution::Error::ForgedReference(read_only_uref),
-                            ));
-                        }
-                        Some(key) => {
-                            return Err(error::Error::ExecError(execution::Error::TypeMismatch(
-                                engine_shared::transform::TypeMismatch::new(
-                                    "Key::URef".to_string(),
-                                    key.type_string(),
-                                ),
-                            )));
-                        }
-                        None => {
-                            return Err(error::Error::ExecError(execution::Error::KeyNotFound(
-                                Key::URef(read_only_uref),
-                            )));
-                        }
-                    }
+                let len = uref.len();
+                if len != UREF_ADDR_LENGTH {
+                    return Err(error::Error::InvalidHashLength {
+                        expected: UREF_ADDR_LENGTH,
+                        actual: len,
+                    });
+                }
+                let read_only_uref = {
+                    let mut arr = [0u8; UREF_ADDR_LENGTH];
+                    arr.copy_from_slice(&uref);
+                    URef::new(arr, AccessRights::READ)
                 };
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, stored_contract_key)?;
-                let (ret, _, _) = contract.destructure();
-                let module = preprocessor.deserialize(&ret)?;
-                Ok(module)
+                let normalized_uref = Key::URef(read_only_uref).normalize();
+                let maybe_named_key = account
+                    .named_keys()
+                    .values()
+                    .find(|&named_key| named_key.normalize() == normalized_uref);
+                match maybe_named_key {
+                    Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
+                    Some(Key::URef(_)) => {
+                        return Err(error::Error::ExecError(execution::Error::ForgedReference(
+                            read_only_uref,
+                        )));
+                    }
+                    Some(key) => {
+                        return Err(error::Error::ExecError(execution::Error::TypeMismatch(
+                            engine_shared::transform::TypeMismatch::new(
+                                "Key::URef".to_string(),
+                                key.type_string(),
+                            ),
+                        )));
+                    }
+                    None => {
+                        return Err(error::Error::ExecError(execution::Error::KeyNotFound(
+                            Key::URef(read_only_uref),
+                        )));
+                    }
+                }
             }
+        };
+        let contract = tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, stored_contract_key)?;
+
+        // A contract may only call a stored contract that has the same protocol major version
+        // number.
+        let contract_version = contract.protocol_version();
+        if !contract_version.is_compatible_with(&protocol_version) {
+            let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
+                expected: protocol_version.value().major,
+                actual: contract_version.value().major,
+            };
+            return Err(error::Error::ExecError(exec_error));
         }
+
+        let (ret, _, _) = contract.destructure();
+        let module = engine_wasm_prep::deserialize(&ret)?;
+        Ok(module)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -754,6 +786,7 @@ where
             &account,
             correlation_id,
             preprocessor,
+            &protocol_version,
         ) {
             Ok(module) => module,
             Err(error) => {
@@ -794,7 +827,7 @@ where
             };
 
             if !self.system_contract_cache.has(&mint_reference) {
-                let module = match preprocessor.deserialize(mint_contract.bytes()) {
+                let module = match engine_wasm_prep::deserialize(mint_contract.bytes()) {
                     Ok(module) => module,
                     Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
                 };
@@ -907,6 +940,7 @@ where
                 &account,
                 correlation_id,
                 preprocessor,
+                &protocol_version,
             ) {
                 Ok(module) => module,
                 Err(error) => {
@@ -1037,7 +1071,7 @@ where
                     Some(module) => module,
                     None => {
                         let module =
-                            match preprocessor.deserialize(&proof_of_stake_contract.bytes()) {
+                            match engine_wasm_prep::deserialize(&proof_of_stake_contract.bytes()) {
                                 Ok(module) => module,
                                 Err(error) => {
                                     return Ok(ExecutionResult::precondition_failure(error.into()))

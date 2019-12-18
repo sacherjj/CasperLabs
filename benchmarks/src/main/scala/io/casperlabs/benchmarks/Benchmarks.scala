@@ -55,7 +55,7 @@ object Benchmarks {
         )
 
     def send(
-        recipientPublicKeyBase64: String,
+        recipientPublicKey: PublicKey,
         senderPrivateKey: PrivateKey,
         senderPublicKey: PublicKey,
         amount: Long
@@ -63,7 +63,7 @@ object Benchmarks {
       deployConfig = DeployConfig.empty,
       senderPublicKey = senderPublicKey,
       senderPrivateKey = senderPrivateKey,
-      recipientPublicKeyBase64 = recipientPublicKeyBase64,
+      recipientPublicKey = recipientPublicKey,
       amount = amount,
       exit = false,
       ignoreOutput = true
@@ -76,7 +76,6 @@ object Benchmarks {
       List.fill(accountsNum)(createAccountKeyPair())
     val recipient @ (_, recipientPublicKey): (Keys.PrivateKey, Keys.PublicKey) =
       createAccountKeyPair()
-    val recipientBase64 = Base64.encode(recipientPublicKey)
 
     def initializeAccounts(
         initialFundsPrivateKey: PrivateKey,
@@ -88,7 +87,7 @@ object Benchmarks {
               case (_, pk) =>
                 for {
                   _ <- send(
-                        recipientPublicKeyBase64 = Base64.encode(pk),
+                        recipientPublicKey = pk,
                         senderPrivateKey = initialFundsPrivateKey,
                         senderPublicKey = initialFundsPublicKey,
                         amount = initialFundsPerAccount
@@ -105,7 +104,7 @@ object Benchmarks {
         _ <- senders.traverse {
               case (sk, pk) =>
                 send(
-                  recipientPublicKeyBase64 = recipientBase64,
+                  recipientPublicKey = recipientPublicKey,
                   senderPrivateKey = sk,
                   senderPublicKey = pk,
                   amount = 1
@@ -163,7 +162,7 @@ object Benchmarks {
         StandardCharsets.UTF_8,
         StandardOpenOption.WRITE ::
           StandardOpenOption.APPEND :: Nil
-      ) >> Log[F].info(s"Round: ${round - 1}: $message")
+      ) >> Log[F].info(s"${round - 1 -> "round"}: $message")
     }
 
     def round(round: Long): F[Unit] =

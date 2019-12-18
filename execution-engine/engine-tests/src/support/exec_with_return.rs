@@ -120,6 +120,7 @@ where
             &account,
             correlation_id,
             &preprocessor,
+            &protocol_version,
         )
         .expect("should get wasm module");
 

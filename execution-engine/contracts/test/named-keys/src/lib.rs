@@ -47,6 +47,7 @@ pub extern "C" fn call() {
 
     // Read data through dedicated FFI function
     let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
+
     let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
     let hello_world = storage::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
@@ -84,5 +85,6 @@ pub extern "C" fn call() {
     // Cleaned up state
     assert!(!runtime::has_key("hello-world"));
     assert!(!runtime::has_key("big-value"));
+
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num);
 }

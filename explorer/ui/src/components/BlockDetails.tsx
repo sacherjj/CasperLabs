@@ -46,7 +46,7 @@ class _BlockDetails extends RefreshableComponent<Props, {}> {
   }
 
   componentDidUpdate() {
-    // Container and component stays the same during naviagation.
+    // Container and component stays the same during navigation.
     if (this.blockHashBase16 !== this.container.blockHashBase16) {
       this.container.init(decodeBase16(this.blockHashBase16));
       this.refresh();
@@ -177,6 +177,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
   const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
   const header = block.getSummary()!.getHeader()!;
   const validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+  const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
     ['Rank', header.getRank()],
@@ -185,6 +186,16 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
       'Parents',
       <ul>
         {header.getParentHashesList_asU8().map((x, idx) => (
+          <li key={idx}>
+            <BlockLink blockHash={x} />
+          </li>
+        ))}
+      </ul>
+    ],
+    [
+      'Children',
+      <ul>
+        {block.getStatus()!.getChildHashesList_asU8().map((x, idx) => (
           <li key={idx}>
             <BlockLink blockHash={x} />
           </li>
@@ -204,27 +215,18 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
           );
         // Genesis doesn't have a validator.
         return (
-          (validatorBond && validatorBond.getStake() && Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
+          (validatorBond &&
+            validatorBond.getStake() &&
+            Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
           null
         );
       })()
     ],
     ['Deploy Count', header.getDeployCount()],
-    [
-      'Deploy Error Count',
-      block
-        .getStatus()!
-        .getStats()!
-        .getDeployErrorCount()
-    ],
-    [
-      'Block Size (bytes)',
-      block
-        .getStatus()!
-        .getStats()!
-        .getBlockSizeBytes()
-        .toLocaleString()
-    ],
+    ['Deploy Error Count', stats.getDeployErrorCount()],
+    ['Deploy Cost Total', stats.getDeployCostTotal().toLocaleString()],
+    ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
+    ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
     [
       'Fault Tolerance',
       block

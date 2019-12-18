@@ -8,14 +8,16 @@ use contract_ffi::{
     key::Key,
     uref::{AccessRights, URef},
     value::{
-        account::{AssociatedKeys, PublicKey, PurseId, Weight, KEY_SIZE},
+        account::{AssociatedKeys, PublicKey, PurseId, Weight, PUBLIC_KEY_LENGTH},
         Account, Contract, ProtocolVersion, Value,
     },
 };
 use engine_shared::{newtypes::CorrelationId, transform::Transform};
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 
-use super::{meter::count_meter::Count, AddResult, QueryResult, TrackingCopy, TrackingCopyCache};
+use super::{
+    meter::count_meter::Count, AddResult, TrackingCopy, TrackingCopyCache, TrackingCopyQueryResult,
+};
 use crate::engine_state::op::Op;
 
 struct CountingDb {
@@ -62,7 +64,6 @@ fn tracking_copy_new() {
     let db = CountingDb::new(counter);
     let tc = TrackingCopy::new(db);
 
-    assert_eq!(tc.cache.is_empty(), true);
     assert_eq!(tc.ops.is_empty(), true);
     assert_eq!(tc.fns.is_empty(), true);
 }
@@ -174,9 +175,10 @@ fn tracking_copy_add_i32() {
 fn tracking_copy_add_named_key() {
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
-    let associated_keys = AssociatedKeys::new(PublicKey::new([0u8; KEY_SIZE]), Weight::new(1));
+    let associated_keys =
+        AssociatedKeys::new(PublicKey::new([0u8; PUBLIC_KEY_LENGTH]), Weight::new(1));
     let account = contract_ffi::value::Account::new(
-        [0u8; KEY_SIZE],
+        [0u8; PUBLIC_KEY_LENGTH],
         BTreeMap::new(),
         PurseId::new(URef::new([0u8; 32], AccessRights::READ_ADD_WRITE)),
         associated_keys,
@@ -289,7 +291,7 @@ proptest! {
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
         let empty_path = Vec::new();
-        if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, k, &empty_path) {
+        if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, k, &empty_path) {
             assert_eq!(v, result);
         } else {
             panic!("Query failed when it should not have!");
@@ -297,7 +299,7 @@ proptest! {
 
         if missing_key != k {
             let result = tc.query(correlation_id, missing_key, &empty_path);
-            assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
+            assert_matches!(result, Ok(TrackingCopyQueryResult::ValueNotFound(_)));
         }
     }
 
@@ -323,7 +325,7 @@ proptest! {
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
-        if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, contract_key, &path) {
+        if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, contract_key, &path) {
             assert_eq!(v, result);
         } else {
             panic!("Query failed when it should not have!");
@@ -331,7 +333,7 @@ proptest! {
 
         if missing_name != name {
             let result = tc.query(correlation_id, contract_key, &[missing_name]);
-            assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
+            assert_matches!(result, Ok(TrackingCopyQueryResult::ValueNotFound(_)));
         }
     }
 
@@ -365,7 +367,7 @@ proptest! {
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
         let path = vec!(name.clone());
-        if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
+        if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);
         } else {
             panic!("Query failed when it should not have!");
@@ -373,7 +375,7 @@ proptest! {
 
         if missing_name != name {
             let result = tc.query(correlation_id, account_key, &[missing_name]);
-            assert_matches!(result, Ok(QueryResult::ValueNotFound(_)));
+            assert_matches!(result, Ok(TrackingCopyQueryResult::ValueNotFound(_)));
         }
     }
 
@@ -417,7 +419,7 @@ proptest! {
         let view = gs.checkout(root_hash).unwrap().unwrap();
         let mut tc = TrackingCopy::new(view);
         let path = vec!(contract_name, state_name);
-        if let Ok(QueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
+        if let Ok(TrackingCopyQueryResult::Success(result)) = tc.query(correlation_id, account_key, &path) {
             assert_eq!(v, result);
         } else {
             panic!("Query failed when it should not have!");

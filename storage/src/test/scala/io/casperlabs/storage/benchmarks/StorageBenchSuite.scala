@@ -27,7 +27,7 @@ object StorageBenchSuite {
     ByteString.copyFromUtf8(str)
 
   implicit val metricsNop: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-  implicit val logNop: Log[Task]         = new shared.Log.NOPLog[Task]
+  implicit val logNop: Log[Task]         = shared.Log.NOPLog[Task]
 
   private val props = {
     val p  = new Properties()

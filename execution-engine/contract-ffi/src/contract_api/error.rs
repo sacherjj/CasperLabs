@@ -117,6 +117,12 @@ pub enum Error {
     PurseNotCreated,
     /// An unhandled value, likely representing a bug in the code.
     Unhandled,
+    /// Passing a buffer of a size that is too small to complete an operation
+    BufferTooSmall,
+    /// No data available in the host buffer.
+    HostBufferEmpty,
+    /// Data in the host buffer is full and should be consumed first by read operation
+    HostBufferFull,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -234,6 +240,9 @@ impl From<Error> for u32 {
             Error::InvalidSystemContract => 31,
             Error::PurseNotCreated => 32,
             Error::Unhandled => 33,
+            Error::BufferTooSmall => 34,
+            Error::HostBufferEmpty => 35,
+            Error::HostBufferFull => 36,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -279,6 +288,9 @@ impl Debug for Error {
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::PurseNotCreated => write!(f, "Error::PurseNotCreated")?,
             Error::Unhandled => write!(f, "Error::Unhandled")?,
+            Error::BufferTooSmall => write!(f, "Error::BufferTooSmall")?,
+            Error::HostBufferEmpty => write!(f, "Error::HostBufferEmpty")?,
+            Error::HostBufferFull => write!(f, "Error::HostBufferFull")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -330,6 +342,9 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         31 => Err(Error::InvalidSystemContract),
         32 => Err(Error::PurseNotCreated),
         33 => Err(Error::Unhandled),
+        34 => Err(Error::BufferTooSmall),
+        35 => Err(Error::HostBufferEmpty),
+        36 => Err(Error::HostBufferFull),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))

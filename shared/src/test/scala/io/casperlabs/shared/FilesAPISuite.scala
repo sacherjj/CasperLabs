@@ -137,7 +137,7 @@ class FilesAPISuite extends WordSpec with Matchers with BeforeAndAfterEach {
 }
 
 object FilesAPISuite {
-  private implicit val NOPLog: NOPLog[SyncIO] = new NOPLog[SyncIO]
+  private implicit val NOPLog: Log[SyncIO] = Log.NOPLog[SyncIO]
 
   object TestFixture {
     def apply(test: FilesAPI[SyncIO] => SyncIO[Unit]): Unit =

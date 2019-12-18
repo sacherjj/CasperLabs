@@ -11,9 +11,8 @@ import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
-import TimeAgo from 'javascript-time-ago';
-import en from 'javascript-time-ago/locale/en';
 import { encodeBase16 } from 'casperlabs-sdk';
+import Timestamp from './TimeStamp';
 
 interface Props {
   dag: DagContainer;
@@ -58,17 +57,6 @@ export default class BlockList extends RefreshableComponent<Props, {}> {
     );
   }
 }
-
-TimeAgo.addLocale(en);
-const timeAgo = new TimeAgo();
-
-const Timestamp = (props: { timestamp: number }) => {
-  // Genesis has 0 timestamp which would print 50 years ago.
-  const d = new Date(props.timestamp);
-  return props.timestamp ? (
-    <span title={d.toISOString()}>{timeAgo.format(d)}</span>
-  ) : null;
-};
 
 export const DagStepButtons = (props: { step: DagStep }) => {
   return (

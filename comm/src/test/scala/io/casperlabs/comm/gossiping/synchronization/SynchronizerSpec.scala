@@ -12,7 +12,7 @@ import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import monix.execution.atomic.AtomicInt
@@ -362,8 +362,8 @@ class SynchronizerSpec
 }
 
 object SynchronizerSpec {
-  implicit var log: LogStub[Task] = new LogStub[Task]
-  implicit val metrics            = new Metrics.MetricsNOP[Task]
+  implicit var log     = LogStub[Task]()
+  implicit val metrics = new Metrics.MetricsNOP[Task]
 
   object MockBackend {
     def apply(
@@ -408,7 +408,7 @@ object SynchronizerSpec {
                 }
               }
           }
-          def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+          def streamLatestMessages(request: StreamLatestMessagesRequest)                 = ???
           def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
           def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
           def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???

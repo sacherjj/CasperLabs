@@ -38,10 +38,11 @@ class DockerClarity(LoggingDockerBase):
         return {
             "FAUCET_ACCOUNT_PUBLIC_KEY_PATH": "/app/keys/public.key",
             "FAUCET_ACCOUNT_PRIVATE_KEY_PATH": "/app/keys/private.key",
-            "CASPER_SERVICE_URL": f"http://{self.grpc_proxy_name}:8080",
+            "CASPER_SERVICE_URL": f"http://{self.grpc_proxy_name}:8401",
             "SERVER_PORT": "8080",
             "SERVER_USE_TLS": "false",
-            "UI_GRPC_URL": "http://localhost:8401",
+            "UI_GRPC_URL": f"http://{self.grpc_proxy_name}:8401",
+            "AUTH_MOCK_ENABLED": "true",  # Enable Auth0 mock service
         }
 
     def _get_container(self):
@@ -119,4 +120,35 @@ class DockerGrpcWebProxy(LoggingDockerBase):
             ports={"8401/tcp": 8401},
         )
 
+        return container
+
+
+class DockerSelenium(LoggingDockerBase):
+    """
+    see https://github.com/SeleniumHQ/docker-selenium
+    """
+
+    @property
+    def container_type(self) -> str:
+        return "selenium"
+
+    @property
+    def image_name(self) -> str:
+        return "selenium/standalone-chrome:3.141.59-xenon"
+
+    @property
+    def volumes(self) -> dict:
+        return {"/dev/shm": {"bind": "/dev/shm", "mode": "rw"}}
+
+    def _get_container(self):
+        container = self.config.docker_client.containers.run(
+            self.image_name,
+            name=self.container_name,
+            user="root",
+            detach=True,
+            network=self.config.network,
+            volumes=self.volumes,
+            hostname=self.container_name,
+            ports={"4444/tcp": 4444},
+        )
         return container

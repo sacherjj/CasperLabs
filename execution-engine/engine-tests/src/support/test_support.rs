@@ -30,10 +30,10 @@ use engine_grpc_server::engine_server::{
         CommitRequest, CommitResponse, DeployCode, DeployItem, DeployPayload, DeployResult,
         DeployResult_ExecutionResult, DeployResult_PreconditionFailure, ExecuteRequest,
         ExecuteResponse, GenesisResponse, QueryRequest, StoredContractHash, StoredContractName,
-        StoredContractURef, UpgradeRequest, UpgradeResponse, ValidateRequest, ValidateResponse,
+        StoredContractURef, UpgradeRequest, UpgradeResponse,
     },
     ipc_grpc::ExecutionEngineService,
-    mappings::{CommitTransforms, MappingError},
+    mappings::{MappingError, TransformMap},
     state::{self, ProtocolVersion},
     transforms,
 };
@@ -290,6 +290,25 @@ impl ExecuteRequestBuilder {
             .with_session_code(session_file, session_args)
             .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[PublicKey::new(addr)])
+            .with_deploy_hash(deploy_hash)
+            .build();
+
+        ExecuteRequestBuilder::new().push_deploy(deploy)
+    }
+
+    pub fn contract_call_by_hash(
+        sender: [u8; 32],
+        contract_hash: [u8; 32],
+        args: impl ArgsParser,
+    ) -> Self {
+        let mut rng = rand::thread_rng();
+        let deploy_hash: [u8; 32] = rng.gen();
+
+        let deploy = DeployItemBuilder::new()
+            .with_address(sender)
+            .with_stored_session_hash(contract_hash.to_vec(), args)
+            .with_payment_code(CONTRACT_STANDARD_PAYMENT, (*DEFAULT_PAYMENT,))
+            .with_authorization_keys(&[PublicKey::new(sender)])
             .with_deploy_hash(deploy_hash)
             .build();
 
@@ -714,14 +733,14 @@ where
 
         let query_request = create_query_request(post_state, base_key, path_vec);
 
-        let query_response = self
+        let mut query_response = self
             .engine_state
             .query(RequestOptions::new(), query_request)
             .wait_drop_metadata()
-            .expect("should query");
+            .expect("should get query response");
 
         if query_response.has_success() {
-            query_response.get_success().try_into().ok()
+            query_response.take_success().try_into().ok()
         } else {
             None
         }
@@ -749,13 +768,14 @@ where
             .get_deploy_results()
             .get(0) // We only allow for issuing single deploy (one wasm file).
             .expect("Unable to get first deploy result");
-        let commit_transforms: CommitTransforms = deploy_result
+        let commit_transforms: TransformMap = deploy_result
             .get_execution_result()
             .get_effects()
             .get_transform_map()
+            .to_vec()
             .try_into()
             .expect("should convert");
-        let transforms = commit_transforms.value();
+        let transforms = commit_transforms.into_inner();
         // Cache transformations
         self.transforms.push(transforms);
         self
@@ -789,15 +809,6 @@ where
             .expect("Should have commit response")
     }
 
-    pub fn validate(&self, wasm_bytes: Vec<u8>) -> ValidateResponse {
-        let validate_request = create_validate_request(wasm_bytes);
-
-        self.engine_state
-            .validate(RequestOptions::new(), validate_request)
-            .wait_drop_metadata()
-            .expect("Should have validate response")
-    }
-
     /// Runs a commit request, expects a successful response, and
     /// overwrites existing cached post state hash with a new one.
     pub fn commit_effects(
@@ -805,18 +816,18 @@ where
         prestate_hash: Vec<u8>,
         effects: AdditiveMap<Key, Transform>,
     ) -> &mut Self {
-        let commit_response = self.commit_transforms(prestate_hash, effects);
+        let mut commit_response = self.commit_transforms(prestate_hash, effects);
         if !commit_response.has_success() {
             panic!(
                 "Expected commit success but received a failure instead: {:?}",
                 commit_response
             );
         }
-        let commit_success = commit_response.get_success();
-        self.post_state_hash = Some(commit_success.get_poststate_hash().to_vec());
+        let mut commit_success = commit_response.take_success();
+        self.post_state_hash = Some(commit_success.take_poststate_hash().to_vec());
         let bonded_validators = commit_success
-            .get_bonded_validators()
-            .iter()
+            .take_bonded_validators()
+            .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<HashMap<PublicKey, U512>, MappingError>>()
             .unwrap();
@@ -1036,12 +1047,6 @@ pub fn read_wasm_file_bytes(contract_file: &str) -> Vec<u8> {
         .unwrap_or_else(|_| panic!("should read bytes from disk: {:?}", path))
 }
 
-fn create_validate_request(wasm_bytes: Vec<u8>) -> ValidateRequest {
-    let mut validate_request = ValidateRequest::new();
-    validate_request.set_wasm_code(wasm_bytes);
-    validate_request
-}
-
 pub fn create_genesis_config(accounts: Vec<GenesisAccount>) -> GenesisConfig {
     let name = DEFAULT_CHAIN_NAME.to_string();
     let timestamp = DEFAULT_GENESIS_TIMESTAMP;
@@ -1088,13 +1093,14 @@ pub fn create_commit_request(
 
 #[allow(clippy::implicit_hasher)]
 pub fn get_genesis_transforms(genesis_response: &GenesisResponse) -> AdditiveMap<Key, Transform> {
-    let commit_transforms: CommitTransforms = genesis_response
+    let commit_transforms: TransformMap = genesis_response
         .get_success()
         .get_effect()
         .get_transform_map()
+        .to_vec()
         .try_into()
         .expect("should convert");
-    commit_transforms.value()
+    commit_transforms.into_inner()
 }
 
 pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
@@ -1106,6 +1112,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
             let execution_result = deploy_result.get_execution_result();
             let cost = execution_result
                 .get_cost()
+                .clone()
                 .try_into()
                 .expect("cost should map to U512");
             Gas::new(cost)

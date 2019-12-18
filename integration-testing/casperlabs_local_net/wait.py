@@ -53,33 +53,27 @@ class LogsContainOneOf:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
-        super().__init__(node, "Listening for traffic on casperlabs://", times)
+        super().__init__(node, "Listening for traffic on peer=casperlabs://", times)
 
 
-class ApprovedBlockReceivedHandlerStateEntered(LogsContainOneOf):
+class ApprovedBlockReceivedHandlerStateEntered(LogsContainMessage):
     def __init__(self, node: DockerNode) -> None:
-        super().__init__(
-            node,
-            [
-                "Making a transition to ApprovedBlockRecievedHandler state.",
-                "Making the transition to block processing.",
-            ],
-        )
+        super().__init__(node, "Making the transition to block processing.")
 
 
 class NewForkChoiceTipBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Fork-choice tip is block {block[:10]}....")
+        super().__init__(node, f"Fork-choice is block={block[:10]}....")
 
 
 class FinishedAddingBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Finished adding {block[:10]}...")
+        super().__init__(node, f"Finished adding block={block[:10]}...")
 
 
 class AddedBlock(LogsContainMessage):
     def __init__(self, node: DockerNode, block: str) -> None:
-        super().__init__(node, f"Added {block[:10]}...")
+        super().__init__(node, f"Added block={block[:10]}...")
 
 
 class RegexBlockRequest:
@@ -107,7 +101,9 @@ class SendingApprovedBlockRequest(RegexBlockRequest):
 
 
 class ConnectedToOtherNode(RegexBlockRequest):
-    regex = r"(Connected to casperlabs:)|(Listening for traffic on casperlabs:)"
+    regex = (
+        r"(Connected to peer=casperlabs:)|(Listening for traffic on peer=casperlabs:)"
+    )
 
     def __init__(self, node: DockerNode, node_name: str, times: int) -> None:
         self.times = times
@@ -132,8 +128,10 @@ class ClarityServerStarted(LogsContainMessage):
     def __init__(self, node: DockerNode, times: int) -> None:
         super().__init__(node, "server started at", times)
 
-    def is_satisfied(self) -> bool:
-        return self.node.logs().count(self.message) >= self.times
+
+class SeleniumServerStarted(LogsContainMessage):
+    def __init__(self, node: DockerNode, times: int) -> None:
+        super().__init__(node, "Selenium Server is up and running on port", times)
 
 
 class WaitForGoodBye(LogsContainMessage):
@@ -141,18 +139,18 @@ class WaitForGoodBye(LogsContainMessage):
         super().__init__(node, "Goodbye.")
 
 
-class MetricsAvailable:
+class SQLiteBlockTotalFromMetrics:
     def __init__(self, node: DockerNode, number_of_blocks: int) -> None:
         self.node = node
         self.number_of_blocks = number_of_blocks
+        self.received_blocks_pattern = re.compile(
+            r"^casperlabs_block_storage_sqlite_get_total ([1-9][0-9]*).0\s*$",
+            re.MULTILINE | re.DOTALL,
+        )
 
     def is_satisfied(self) -> bool:
         _, data = self.node.get_metrics()
-        received_blocks_pattern = re.compile(
-            r"^casperlabs_casper_packet_handler_blocks_received_total ([1-9][0-9]*).0\s*$",
-            re.MULTILINE | re.DOTALL,
-        )
-        blocks = received_blocks_pattern.search(data)
+        blocks = self.received_blocks_pattern.search(data)
         if blocks is None:
             return False
         return int(blocks.group(1)) == self.number_of_blocks
@@ -295,7 +293,7 @@ class BlockContainsString:
 
 class LastFinalisedHash(LogsContainMessage):
     def __init__(self, node: DockerNode, hash_string: str) -> None:
-        super().__init__(node, f"New last finalized block hash is {hash_string}")
+        super().__init__(node, f"Added block={hash_string[:10]}...")
 
 
 class BlocksCountAtLeast:
@@ -487,10 +485,10 @@ def wait_for_peers_count_exactly(
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
-def wait_for_metrics_and_assert_blocks_avaialable(
+def wait_for_metrics_and_assert_block_count(
     node: DockerNode, timeout_seconds: int, number_of_blocks: int
 ) -> None:
-    predicate = MetricsAvailable(node, number_of_blocks)
+    predicate = SQLiteBlockTotalFromMetrics(node, number_of_blocks)
     wait_using_wall_clock_time_or_fail(predicate, timeout_seconds)
 
 
@@ -556,4 +554,9 @@ def wait_for_connected_to_node(
 
 def wait_for_clarity_started(node: DockerNode, startup_timeout: int, times: int = 1):
     predicate = ClarityServerStarted(node, times)
+    wait_on_using_wall_clock_time(predicate, startup_timeout)
+
+
+def wait_for_selenium_started(node: DockerNode, startup_timeout: int, times: int = 1):
+    predicate = SeleniumServerStarted(node, times)
     wait_on_using_wall_clock_time(predicate, startup_timeout)

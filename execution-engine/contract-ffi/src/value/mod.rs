@@ -19,9 +19,10 @@ pub use self::{
 };
 use crate::{
     bytesrepr::{
-        Error, FromBytes, ToBytes, U128_SIZE, U256_SIZE, U32_SIZE, U512_SIZE, U64_SIZE, U8_SIZE,
+        Error, FromBytes, ToBytes, U128_SERIALIZED_LENGTH, U256_SERIALIZED_LENGTH,
+        U32_SERIALIZED_LENGTH, U512_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH,
     },
-    key::{Key, UREF_SIZE},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     uref::URef,
 };
 
@@ -62,52 +63,63 @@ impl ToBytes for Value {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Value::Int32(i) => {
-                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE);
+                let mut result = Vec::with_capacity(U8_SERIALIZED_LENGTH + U32_SERIALIZED_LENGTH);
                 result.push(INT32_ID);
                 result.append(&mut i.to_bytes()?);
                 Ok(result)
             }
             Value::UInt128(u) => {
-                let mut result = Vec::with_capacity(U8_SIZE + U128_SIZE);
+                let mut result = Vec::with_capacity(U8_SERIALIZED_LENGTH + U128_SERIALIZED_LENGTH);
                 result.push(U128_ID);
                 result.append(&mut u.to_bytes()?);
                 Ok(result)
             }
             Value::UInt256(u) => {
-                let mut result = Vec::with_capacity(U8_SIZE + U256_SIZE);
+                let mut result = Vec::with_capacity(U8_SERIALIZED_LENGTH + U256_SERIALIZED_LENGTH);
                 result.push(U256_ID);
                 result.append(&mut u.to_bytes()?);
                 Ok(result)
             }
             Value::UInt512(u) => {
-                let mut result = Vec::with_capacity(U8_SIZE + U512_SIZE);
+                let mut result = Vec::with_capacity(U8_SERIALIZED_LENGTH + U512_SERIALIZED_LENGTH);
                 result.push(U512_ID);
                 result.append(&mut u.to_bytes()?);
                 Ok(result)
             }
             Value::ByteArray(arr) => {
-                if arr.len() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                if arr.len()
+                    >= u32::max_value() as usize - U8_SERIALIZED_LENGTH - U32_SERIALIZED_LENGTH
+                {
                     return Err(Error::OutOfMemoryError);
                 }
-                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE + arr.len());
+                let mut result =
+                    Vec::with_capacity(U8_SERIALIZED_LENGTH + U32_SERIALIZED_LENGTH + arr.len());
                 result.push(BYTEARRAY_ID);
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
             Value::ListInt32(arr) => {
-                if arr.len() * size_of::<i32>() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                if arr.len() * size_of::<i32>()
+                    >= u32::max_value() as usize - U8_SERIALIZED_LENGTH - U32_SERIALIZED_LENGTH
+                {
                     return Err(Error::OutOfMemoryError);
                 }
-                let mut result = Vec::with_capacity(U8_SIZE + U32_SIZE + U32_SIZE * arr.len());
+                let mut result = Vec::with_capacity(
+                    U8_SERIALIZED_LENGTH
+                        + U32_SERIALIZED_LENGTH
+                        + U32_SERIALIZED_LENGTH * arr.len(),
+                );
                 result.push(LISTINT32_ID);
                 result.append(&mut arr.to_bytes()?);
                 Ok(result)
             }
             Value::String(s) => {
-                if s.len() >= u32::max_value() as usize - U8_SIZE - U32_SIZE {
+                if s.len()
+                    >= u32::max_value() as usize - U8_SERIALIZED_LENGTH - U32_SERIALIZED_LENGTH
+                {
                     return Err(Error::OutOfMemoryError);
                 }
-                let size = U8_SIZE + U32_SIZE + s.len();
+                let size = U8_SERIALIZED_LENGTH + U32_SERIALIZED_LENGTH + s.len();
                 let mut result = Vec::with_capacity(size);
                 result.push(STRING_ID);
                 result.append(&mut s.to_bytes()?);
@@ -125,13 +137,15 @@ impl ToBytes for Value {
             }
             Value::Contract(c) => Ok(iter::once(CONTRACT_ID).chain(c.to_bytes()?).collect()),
             Value::NamedKey(n, k) => {
-                if n.len() + UREF_SIZE >= u32::max_value() as usize - U32_SIZE - U8_SIZE {
+                if n.len() + KEY_UREF_SERIALIZED_LENGTH
+                    >= u32::max_value() as usize - U32_SERIALIZED_LENGTH - U8_SERIALIZED_LENGTH
+                {
                     return Err(Error::OutOfMemoryError);
                 }
-                let size: usize = U8_SIZE + //size for ID
-                  U32_SIZE +                 //size for length of String
+                let size: usize = U8_SERIALIZED_LENGTH + //size for ID
+                  U32_SERIALIZED_LENGTH +                 //size for length of String
                   n.len() +           //size of String
-                  UREF_SIZE; //size of urefs
+                  KEY_UREF_SERIALIZED_LENGTH; //size of urefs
                 let mut result = Vec::with_capacity(size);
                 result.push(NAMEDKEY_ID);
                 result.append(&mut n.to_bytes()?);
@@ -139,14 +153,14 @@ impl ToBytes for Value {
                 Ok(result)
             }
             Value::Key(k) => {
-                let size: usize = U8_SIZE + UREF_SIZE;
+                let size: usize = U8_SERIALIZED_LENGTH + KEY_UREF_SERIALIZED_LENGTH;
                 let mut result = Vec::with_capacity(size);
                 result.push(KEY_ID);
                 result.append(&mut k.to_bytes()?);
                 Ok(result)
             }
             Value::ListString(arr) => {
-                let size: usize = U8_SIZE + U32_SIZE + arr.len();
+                let size: usize = U8_SERIALIZED_LENGTH + U32_SERIALIZED_LENGTH + arr.len();
                 let mut result = Vec::with_capacity(size);
                 result.push(LISTSTRING_ID);
                 let bytes = arr.to_bytes()?;
@@ -158,7 +172,7 @@ impl ToBytes for Value {
             }
             Value::Unit => Ok(vec![UNIT_ID]),
             Value::UInt64(num) => {
-                let mut result = Vec::with_capacity(U8_SIZE + U64_SIZE);
+                let mut result = Vec::with_capacity(U8_SERIALIZED_LENGTH + U64_SERIALIZED_LENGTH);
                 result.push(U64_ID);
                 result.append(&mut num.to_bytes()?);
                 Ok(result)
@@ -246,6 +260,20 @@ impl Value {
             Value::ListString(_) => String::from("Value::List[String]"),
             Value::Unit => String::from("Value::Unit"),
             Value::UInt64(_) => String::from("Value::UInt64"),
+        }
+    }
+
+    pub fn as_account(&self) -> Option<&Account> {
+        match self {
+            Value::Account(account) => Some(account),
+            _ => None,
+        }
+    }
+
+    pub fn as_key(&self) -> Option<&Key> {
+        match self {
+            Value::Key(key) => Some(key),
+            _ => None,
         }
     }
 }

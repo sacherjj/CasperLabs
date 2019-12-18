@@ -3,6 +3,7 @@ package io.casperlabs.casper.util.execengine
 import cats.effect._
 import cats.implicits._
 import cats.kernel.Monoid
+import cats.data.NonEmptyList
 import cats.{Foldable, Monad, MonadError}
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -11,9 +12,10 @@ import io.casperlabs.casper.consensus.state.{Key, Value}
 import io.casperlabs.casper.consensus.{state, Block, Deploy}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.execengine.Op.{OpMap, OpMapAddComm}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, DagOperations, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, DagOperations, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.models.{DeployResult => _}
 import io.casperlabs.shared.Log
@@ -22,6 +24,7 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.storage.deploy.{DeployStorage, DeployStorageWriter}
 import io.casperlabs.models.BlockImplicits._
+import io.casperlabs.metrics.implicits._
 
 case class DeploysCheckpoint(
     preStateHash: StateHash,
@@ -38,16 +41,18 @@ object ExecEngineUtil {
       preconditionFailures: List[PreconditionFailure]
   )
 
-  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection](
+  import io.casperlabs.smartcontracts.GrpcExecutionEngineService.EngineMetricsSource
+
+  def computeDeploysCheckpoint[F[_]: Sync: DeployStorage: Log: ExecutionEngineService: DeploySelection: Metrics](
       merged: MergeResult[TransformMap, Block],
       deployStream: fs2.Stream[F, Deploy],
       blocktime: Long,
       protocolVersion: state.ProtocolVersion,
       rank: Long,
       upgrades: Seq[ChainSpec.UpgradePoint]
-  ): F[DeploysCheckpoint] =
+  ): F[DeploysCheckpoint] = Metrics[F].timer("computeDeploysCheckpoint") {
     for {
-      preStateHash <- computePrestate[F](merged, rank, upgrades)
+      preStateHash <- computePrestate[F](merged, rank, upgrades).timer("computePrestate")
       pdr <- DeploySelection[F].select(
               (preStateHash, blocktime, protocolVersion, deployStream)
             )
@@ -74,6 +79,7 @@ object ExecEngineUtil {
       deploysForBlock,
       protocolVersion
     )
+  }
 
   // Discard deploys that will never be included because they failed some precondition.
   // If we traveled back on the DAG (due to orphaned block) and picked a deploy to be included
@@ -81,15 +87,15 @@ object ExecEngineUtil {
   // Then if a block gets finalized and we remove the deploys it contains, and _then_ one of them
   // turns up again for some reason, we'll treat it again as a pending deploy and try to include it.
   // At that point the EE will discard it as the nonce is in the past and we'll drop it here.
-  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log](
+  def handleInvalidDeploys[F[_]: MonadThrowable: DeployStorage: Log: Metrics](
       invalidDeploys: List[NoEffectsFailure]
-  ): F[Unit] =
+  ): F[Unit] = Metrics[F].timer("handleInvalidDeploys") {
     for {
       invalidDeploys <- invalidDeploys.foldM[F, InvalidDeploys](InvalidDeploys(Nil)) {
                          case (acc, d: PreconditionFailure) =>
                            // Log precondition failures as we will be getting rid of them.
                            Log[F].warn(
-                             s"Deploy ${PrettyPrinter.buildString(d.deploy.deployHash)} failed precondition error: ${d.errorMessage}"
+                             s"${PrettyPrinter.buildString(d.deploy.deployHash) -> "deploy"} failed precondition error: ${d.errorMessage}"
                            ) as {
                              acc.copy(preconditionFailures = d :: acc.preconditionFailures)
                            }
@@ -103,6 +109,7 @@ object ExecEngineUtil {
               invalidDeploys.preconditionFailures.map(pf => (pf.deploy, pf.errorMessage))
             ) whenA invalidDeploys.preconditionFailures.nonEmpty
     } yield ()
+  }
 
   def processDeploys[F[_]: MonadThrowable: ExecutionEngineService](
       prestate: StateHash,
@@ -181,7 +188,7 @@ object ExecEngineUtil {
     * @param prestate prestate hash of the GlobalState on top of which to run deploys.
     * @return Effects of running deploys from the block
     */
-  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocolVersions](
+  def effectsForBlock[F[_]: MonadThrowable: ExecutionEngineService: BlockStorage: CasperLabsProtocol](
       block: Block,
       prestate: StateHash
   ): F[Seq[TransformEntry]] = {
@@ -203,7 +210,7 @@ object ExecEngineUtil {
       }
     } else {
       for {
-        protocolVersion <- CasperLabsProtocolVersions[F].fromBlock(block)
+        protocolVersion <- CasperLabsProtocol[F].protocolFromBlock(block)
         processedDeploys <- processDeploys[F](
                              prestate,
                              blocktime,
@@ -223,7 +230,7 @@ object ExecEngineUtil {
     * the secondary parents they made on top of the main parent. Then apply any
     * upgrades which were activated at the point we are building the next block on.
     */
-  def computePrestate[F[_]: MonadError[?[_], Throwable]: ExecutionEngineService](
+  def computePrestate[F[_]: MonadError[*[_], Throwable]: ExecutionEngineService: Log](
       merged: MergeResult[TransformMap, Block],
       rank: Long, // Rank of the block we are creating on top of the parents; can be way ahead because of justifications.
       upgrades: Seq[ChainSpec.UpgradePoint]
@@ -248,15 +255,17 @@ object ExecEngineUtil {
       if (merged.parents.nonEmpty) {
         val protocolVersion = merged.parents.head.getHeader.getProtocolVersion
         val maxRank         = merged.parents.map(_.getHeader.rank).max
+
         val activatedUpgrades = upgrades.filter { u =>
           maxRank < u.getActivationPoint.rank && u.getActivationPoint.rank <= rank
         }
         activatedUpgrades.toList.foldLeftM(postStateHash) {
           case (postStateHash, upgrade) =>
-            ExecutionEngineService[F]
-              .upgrade(postStateHash, upgrade, protocolVersion)
-              .rethrow
-              .map(_.postStateHash)
+            Log[F].info(s"Applying upgrade ${upgrade.getProtocolVersion}") *>
+              ExecutionEngineService[F]
+                .upgrade(postStateHash, upgrade, protocolVersion)
+                .rethrow
+                .map(_.postStateHash)
           // NOTE: We are dropping the effects here, so they won't be part of the block.
         }
       } else {
@@ -322,25 +331,25 @@ object ExecEngineUtil {
     *         and the list of the additional chosen parents apart from the first.
     */
   def abstractMerge[F[_]: Monad, T: Monoid, A: Ordering, K](
-      candidates: IndexedSeq[A],
+      candidates: NonEmptyList[A],
       parents: A => F[List[A]],
       effect: A => F[Option[T]],
       toOps: T => OpMap[K]
-  ): F[MergeResult[T, A]] = {
-    val n = candidates.length
+  ): F[MergeResult.Result[T, A]] = {
+    val n               = candidates.length
+    val candidateVector = candidates.toList.toVector
 
     def netEffect(blocks: Vector[A]): F[T] =
       blocks
         .traverse(block => effect(block))
         .map(va => Foldable[Vector].fold(va.flatten))
 
-    if (n == 0) {
-      MergeResult.empty[T, A].pure[F]
-    } else if (n == 1) {
-      MergeResult.result[T, A](candidates.head, Monoid[T].empty, Vector.empty).pure[F]
+    if (n == 1) {
+      MergeResult.Result[T, A](candidates.head, Monoid[T].empty, Vector.empty).pure[F]
     } else
       for {
-        uncommonAncestors <- DagOperations.abstractUncommonAncestors[F, A](candidates, parents)
+        uncommonAncestors <- DagOperations
+                              .abstractUncommonAncestors[F, A](candidateVector, parents)
 
         // collect uncommon ancestors based on which candidate they are an ancestor of
         groups = uncommonAncestors
@@ -399,20 +408,50 @@ object ExecEngineUtil {
         // The effect we return is the one which would be applied onto the first parent's
         // post-state, so we do not include the first parent in the effect.
         (chosenParents, _, nonFirstEffect) = chosen
-        blocks                             = chosenParents.map(i => candidates(i))
-      } yield MergeResult.result[T, A](blocks.head, nonFirstEffect, blocks.tail)
+        candidateVector                    = candidates.toList.toVector
+        blocks                             = chosenParents.map(i => candidateVector(i))
+        // We only keep secondary parents which are not related in any way to other candidates.
+        // Note: a block is not found in `uncommonAncestors` if it is common to all
+        // candidates, so we cannot assume it is present.
+        nonFirstParents = blocks.tail
+          .filter(block => uncommonAncestors.get(block).fold(false)(_.size == 1))
+      } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, nonFirstParents)
   }
 
-  def merge[F[_]: MonadThrowable: BlockStorage](
-      candidateParentBlocks: Seq[Block],
+  def merge[F[_]: MonadThrowable: BlockStorage: Metrics](
+      candidateParentBlocks: NonEmptyList[Block],
       dag: DagRepresentation[F]
-  ): F[MergeResult[TransformMap, Block]] = {
+  ): F[MergeResult.Result[TransformMap, Block]] = {
 
-    def parents(b: Message.Block): F[List[Message.Block]] =
-      b.parents.toList
-        .flatTraverse(b => dag.lookup(b).map(_.collect { case b: Message.Block => b }.toList))
+    // TODO: These things should be part of the validation.
+    def getParent(child: ByteString, parent: ByteString): F[Message.Block] =
+      dag.lookup(parent) flatMap {
+        case Some(block: Message.Block) =>
+          block.pure[F]
+        case Some(_: Message.Ballot) =>
+          MonadThrowable[F].raiseError(
+            new IllegalStateException(
+              s"${PrettyPrinter.buildString(child)} has a ballot as a parent: ${PrettyPrinter.buildString(parent)}"
+            )
+          )
+        case None =>
+          MonadThrowable[F].raiseError(
+            new IllegalStateException(
+              s"${PrettyPrinter.buildString(child)} has missing parent: ${PrettyPrinter.buildString(parent)}"
+            )
+          )
+      }
 
-    def effect(blockMeta: Message.Block): F[Option[TransformMap]] =
+    def getParents(msg: Message): F[List[Message.Block]] =
+      msg match {
+        case block: Message.Block =>
+          block.parents.toList.traverse(getParent(msg.messageHash, _))
+
+        case ballot: Message.Ballot =>
+          getParent(msg.messageHash, ballot.parentBlock).map(List(_))
+      }
+
+    def getEffects(blockMeta: Message.Block): F[Option[TransformMap]] =
       BlockStorage[F]
         .get(blockMeta.messageHash)
         .map(_.map { blockWithTransforms =>
@@ -439,23 +478,27 @@ object ExecEngineUtil {
 
     import io.casperlabs.shared.Sorting.messageSummaryOrdering
     for {
-      candidateParents <- MonadThrowable[F]
-                           .fromTry(
-                             candidateParentBlocks.toList.traverse(Message.fromBlock(_))
-                           )
-                           .map(_.collect {
-                             case b: Message.Block => b
-                           }.toVector)
+      candidateMessages <- MonadThrowable[F]
+                            .fromTry(
+                              candidateParentBlocks.toList.traverse(Message.fromBlock(_))
+                            )
+      candidateParents <- candidateMessages
+                           .traverse {
+                             case block: Message.Block =>
+                               block.pure[F]
+                             case ballot: Message.Ballot =>
+                               getParent(ballot.messageHash, ballot.parentBlock)
+                           }
+                           .map(ps => NonEmptyList.fromListUnsafe(ps.distinct))
       merged <- abstractMerge[F, TransformMap, Message.Block, state.Key](
                  candidateParents,
-                 parents,
-                 effect,
+                 getParents,
+                 getEffects,
                  toOps
                )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
-    } yield merged.transform.fold(MergeResult.empty[TransformMap, Block])(
-      MergeResult.result(blocks.head, _, blocks.tail)
-    )
+      _      <- Metrics[F].record("mergedBlocks", blocks.size.toLong)
+    } yield MergeResult.Result(blocks.head, merged.nonFirstParentsCombinedEffect, blocks.tail)
   }
 }

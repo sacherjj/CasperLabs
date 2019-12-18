@@ -5,12 +5,27 @@ import cats.data._
 import cats.effect.Sync
 import cats.implicits._
 import io.casperlabs.catscontrib._
+import io.casperlabs.catscontrib.effect.implicits._
 import Catscontrib._
-
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
-import io.casperlabs.catscontrib.effect.implicits._
+import logstage.{ConsoleSink, IzLogger, LogIO}
+import java.nio.file.Path
+import izumi.logstage.api.Log._
+import izumi.logstage.api.{Log => IzLog}
+import izumi.logstage.api.AbstractLogger
+import izumi.fundamentals.platform.language.CodePositionMaterializer
+import izumi.logstage.api.routing.StaticLogRouter
+import izumi.logstage.sink.file.FileSink
+import izumi.logstage.sink.file.FileServiceImpl.RealFile
+import izumi.logstage.sink.file.FileServiceImpl
+import izumi.logstage.sink.file.models.FileRotation
+import izumi.logstage.sink.file.models.FileSinkConfig
+import izumi.logstage.api.rendering.json.LogstageCirceRenderingPolicy
+import izumi.logstage.api.logger.LogSink
+import izumi.logstage.api.logger.LogRouter
 
+// Keeping this for now so that maybe we can utilise it with IzLogger as well.
 trait LogSource {
   val clazz: Class[_]
 }
@@ -37,65 +52,101 @@ class LogSourceMacros(val c: blackbox.Context) {
   }
 }
 
-trait Log[F[_]] {
-  def isTraceEnabled(implicit ev: LogSource): F[Boolean]
-  def trace(msg: String)(implicit ev: LogSource): F[Unit]
-  def debug(msg: String)(implicit ev: LogSource): F[Unit]
-  def info(msg: String)(implicit ev: LogSource): F[Unit]
-  def warn(msg: String)(implicit ev: LogSource): F[Unit]
-  def error(msg: String)(implicit ev: LogSource): F[Unit]
-  def error(msg: String, cause: Throwable)(implicit ev: LogSource): F[Unit]
+// Mixed into the `shared` package so the existing `Log` aliases keep working.
+trait LogPackage {
+  type Log[F[_]] = LogIO[F]
 }
 
-object Log extends LogInstances {
+object Log {
   def apply[F[_]](implicit L: Log[F]): Log[F] = L
 
-  def forTrans[F[_]: Monad, T[_[_], _]: MonadTrans](implicit L: Log[F]): Log[T[F, ?]] =
-    new Log[T[F, ?]] {
-      def isTraceEnabled(implicit ev: LogSource): T[F, Boolean]  = L.isTraceEnabled.liftM[T]
-      def trace(msg: String)(implicit ev: LogSource): T[F, Unit] = L.trace(msg)(ev).liftM[T]
-      def debug(msg: String)(implicit ev: LogSource): T[F, Unit] = L.debug(msg)(ev).liftM[T]
-      def info(msg: String)(implicit ev: LogSource): T[F, Unit]  = L.info(msg)(ev).liftM[T]
-      def warn(msg: String)(implicit ev: LogSource): T[F, Unit]  = L.warn(msg)(ev).liftM[T]
-      def error(msg: String)(implicit ev: LogSource): T[F, Unit] = L.error(msg)(ev).liftM[T]
-      def error(msg: String, cause: Throwable)(implicit ev: LogSource): T[F, Unit] =
-        L.error(msg, cause)(ev).liftM[T]
+  // This should only be used in testing, it disables all logging even SLF4j
+  // Otherwise we see output from http4s during tests, something that used
+  // to be disabled by having a test version of logback.xml
+  // In the future, we could use TypeSafeConfig to set up logstage,
+  // but the `logstage-config` module that feature requires doesn't seem
+  // to be implemented yet.
+  // https://github.com/7mind/izumi/blob/baea35e54dd482e54cd2d075e774cfd26806897a/doc/microsite/src/main/tut/logstage/config.md
+
+  def NOPLog[F[_]: Sync] =
+    useLogger[F](IzLogger.NullLogger)
+
+  def log[F[_]: Sync](logger: AbstractLogger): Log[F] =
+    LogIO.fromLogger(logger)
+
+  // Originally we used ScalaLogger which uses SLF4J that dynamically
+  // gets injected with sinks from the classpath. Some parts of the
+  // program get this value as a singleton. We can set it once during
+  // startup.
+  private var _logId: Log[Id] = log(mkLogger())
+
+  // Mix this into what needs access to the singleton.
+  // Normally it should be passed as a constructor argument instead.
+  trait LogId {
+    implicit def logId: Log[Id] = _logId
+  }
+
+  // Set every global routing to this logger.
+  def useLogger[F[_]: Sync](logger: IzLogger): Log[F] = {
+    // https://izumi.7mind.io/latest/release/doc/logstage/index.html#slf4j-router
+    // configure SLF4j to use the same router that `myLogger` uses
+    StaticLogRouter.instance.setup(logger.router)
+    // Use by anything that accesses the singleton logId
+    _logId = log[Id](logger)
+    // Create the wrapper that we can pass around.
+    log[F](logger)
+  }
+
+  /** Configure a logger that writes text to the console and optionally JSON to a file. */
+  def mkLogger(
+      level: IzLog.Level = defaultLevel,
+      levels: Map[String, IzLog.Level] = defaultLevels,
+      jsonPath: Option[Path] = None // Empty so we don't start multiple loggers to the same file accidentally.
+  ): IzLogger = {
+    var sinks: Vector[LogSink] = Vector(defaultSink)
+    jsonPath.foreach { path =>
+      sinks = sinks :+ new FileSink[RealFile](
+        renderingPolicy = new LogstageCirceRenderingPolicy(),
+        fileService = new FileServiceImpl(path.toString),
+        // NOTE: What SRE wants is to have log rotation happen at the end of the day with timestamped files. For now they'll deal with this in the OS.
+        rotation = FileRotation.DisabledRotation,
+        config = FileSinkConfig.soft(Int.MaxValue)
+      ) {
+        override def recoverOnFail(e: String): Unit = println(e)
+      }
     }
-
-  class NOPLog[F[_]: Applicative] extends Log[F] {
-    def isTraceEnabled(implicit ev: LogSource): F[Boolean]                    = false.pure[F]
-    def trace(msg: String)(implicit ev: LogSource): F[Unit]                   = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit]                   = ().pure[F]
-    def info(msg: String)(implicit ev: LogSource): F[Unit]                    = ().pure[F]
-    def warn(msg: String)(implicit ev: LogSource): F[Unit]                    = ().pure[F]
-    def error(msg: String)(implicit ev: LogSource): F[Unit]                   = ().pure[F]
-    def error(msg: String, cause: Throwable)(implicit ev: LogSource): F[Unit] = ().pure[F]
+    IzLogger(level, sinks, levels)
   }
 
-}
+  private def defaultLevel: IzLog.Level =
+    IzLog.Level.parse(sys.env.getOrElse("CL_LOG_LEVEL", "INFO"))
 
-sealed abstract class LogInstances {
-  implicit def eitherTLog[E, F[_]: Monad: Log[?[_]]]: Log[EitherT[F, E, ?]] =
-    Log.forTrans[F, EitherT[?[_], E, ?]]
+  private def defaultSink = ConsoleSink.text(colored = false)
 
-  def log[F[_]: Sync]: Log[F] = new Log[F] {
-    import com.typesafe.scalalogging.Logger
+  private def defaultLevels: Map[String, IzLog.Level] = Map(
+    "org.http4s"                                          -> IzLog.Level.Warn,
+    "io.netty"                                            -> IzLog.Level.Warn,
+    "io.grpc"                                             -> IzLog.Level.Error,
+    "org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" -> IzLog.Level.Crit
+  )
 
-    def isTraceEnabled(implicit ev: LogSource): F[Boolean] =
-      Sync[F].delay(Logger(ev.clazz).underlying.isTraceEnabled())
-    def trace(msg: String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).trace(msg))
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).debug(msg))
-    def info(msg: String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).info(msg))
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).warn(msg))
-    def error(msg: String)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).error(msg))
-    def error(msg: String, cause: Throwable)(implicit ev: LogSource): F[Unit] =
-      Sync[F].delay(Logger(ev.clazz).error(msg, cause))
+  implicit class LogOps[F[_]: Log, A](fa: F[A]) {
+
+    /** Materializes an error from `F` context (if any), logs it and returns as Left.
+      * Otherwise returns Right(result)
+      *
+      * @param msg Error message. Defaults to empty.
+      * @param logSource
+      * @param M
+      * @tparam E
+      * @return Result. Either an error (wrapped in Left) or result (wrapper in Right).
+      */
+    def attemptAndLog[E <: Throwable](
+        msg: String = ""
+    )(implicit M: MonadError[F, E]): F[Either[E, A]] =
+      M.attempt(fa).flatMap {
+        case Left(ex)         => Log[F].error(s"${msg -> "msg" -> null}: $ex").as(Left(ex))
+        case right @ Right(_) => M.pure(right)
+      }
   }
-
-  val logId: Log[Id] = log
 }

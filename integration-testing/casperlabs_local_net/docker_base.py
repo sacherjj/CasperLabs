@@ -78,7 +78,7 @@ class DockerBase:
         elif self.config.custom_docker_tag is not None:
             return self.config.custom_docker_tag
         else:
-            return "test"
+            return "latest"
 
     @property
     def is_in_docker(self) -> bool:
@@ -107,9 +107,17 @@ class DockerBase:
         return f"/tmp/resources_{self.docker_tag}_{self.config.number}_{self.config.rand_str}"
 
     @property
+    def host_keys_dir(self) -> str:
+        return f"{self.host_mount_dir}/{self.config.keys_directory}"
+
+    @property
     def host_chainspec_dir(self) -> str:
         # Mirror the default chainspec packaged in the node so we can apply partial overrides.
-        return f"{self.host_mount_dir}/chainspec"
+        return f"{self.host_mount_dir}/{self.config.chainspec_directory}"
+
+    @property
+    def host_etc_casperlabs_dir(self) -> str:
+        return f"{self.host_mount_dir}/{self.config.etc_casperlabs_directory}"
 
     @property
     def host_bootstrap_dir(self) -> str:

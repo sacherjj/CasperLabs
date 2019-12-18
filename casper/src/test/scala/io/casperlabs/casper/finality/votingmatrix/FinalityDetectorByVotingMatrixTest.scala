@@ -14,7 +14,7 @@ import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.{validation, CasperState, InvalidBlock}
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.{Cell, Log, Time}
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
@@ -32,7 +32,7 @@ class FinalityDetectorByVotingMatrixTest
 
   behavior of "Finality Detector of Voting Matrix"
 
-  implicit val logEff = new LogStub[Task]
+  implicit val logEff = LogStub[Task]()
   implicit val raiseValidateErr: FunctorRaise[Task, InvalidBlock] =
     validation.raiseValidateErrorThroughApplicativeError[Task]
 
@@ -496,7 +496,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   def createBlockAndUpdateFinalityDetector[F[_]: Sync: Time: Log: BlockStorage: IndexedDagStorage: FinalityDetectorVotingMatrix: FunctorRaise[
-    ?[_],
+    *[_],
     InvalidBlock
   ]](
       parentsHashList: Seq[BlockHash],
@@ -511,6 +511,7 @@ class FinalityDetectorByVotingMatrixTest
     for {
       block <- createBlock[F](
                 parentsHashList,
+                lastFinalizedBlockHash,
                 creator,
                 bonds,
                 justifications,

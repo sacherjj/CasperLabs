@@ -10,11 +10,13 @@ import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.util.{DagOperations, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.{computeDeploysCheckpoint, StateHash}
 import io.casperlabs.casper.util.execengine.{DeploysCheckpoint, ExecEngineUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
+import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances.LogicalTime
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -29,7 +31,7 @@ import scala.language.higherKinds
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]()
 
-  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log](
+  def updateChainWithBlockStateUpdate[F[_]: Sync: BlockStorage: IndexedDagStorage: DeployStorage: ExecutionEngineService: Log: Metrics](
       id: Int,
       genesis: Block
   ): F[Block] =
@@ -66,7 +68,7 @@ object BlockGenerator {
       IndexedDagStorage[F].inject(id, updatedBlock)
   }
 
-  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService](
+  private[casper] def computeBlockCheckpointFromDeploys[F[_]: Sync: BlockStorage: DeployStorage: Log: ExecutionEngineService: Metrics](
       b: Block,
       genesis: Block,
       dag: DagRepresentation[F]
@@ -80,7 +82,7 @@ object BlockGenerator {
         parents.nonEmpty || (parents.isEmpty && b == genesis),
         "Received a different genesis block."
       )
-      merged <- ExecEngineUtil.merge[F](parents, dag)
+      merged <- ExecutionEngineServiceStub.merge[F](parents, dag)
       implicit0(deploySelection: DeploySelection[F]) = DeploySelection.create[F](
         5 * 1024 * 1024
       )
@@ -100,6 +102,7 @@ object BlockGenerator {
 trait BlockGenerator {
   def createBlock[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: ByteString = ByteString.EMPTY,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty,
@@ -111,6 +114,7 @@ trait BlockGenerator {
   ): F[Block] =
     createBlockNew[F](
       parentsHashList,
+      keyBlockHash,
       creator,
       bonds,
       justifications.mapValues(Set(_)),
@@ -123,6 +127,7 @@ trait BlockGenerator {
 
   def createBlockNew[F[_]: MonadThrowable: Time: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: BlockHash,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, Set[BlockHash]] = HashMap.empty,
@@ -202,7 +207,8 @@ trait BlockGenerator {
           validatorPrevBlockHash,
           protocolVersion = ProtocolVersion(1),
           timestamp = now,
-          chainName = chainName
+          chainName = chainName,
+          keyBlockHash = keyBlockHash
         )
         .withMessageType(messageType)
       block = ProtoUtil.unsignedBlockProto(body, header)
@@ -219,9 +225,11 @@ trait BlockGenerator {
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
-      maybeValidatorBlockSeqNum: Option[Int] = None
+      maybeValidatorBlockSeqNum: Option[Int] = None,
+      keyBlockHash: BlockHash = ByteString.EMPTY
   ): F[Block] = createAndStoreBlockNew[F](
     parentsHashList,
+    keyBlockHash,
     creator,
     bonds,
     justifications.mapValues(Set(_)),
@@ -235,6 +243,7 @@ trait BlockGenerator {
 
   def createAndStoreBlockNew[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       parentsHashList: Seq[BlockHash],
+      keyBlockHash: ByteString,
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, Set[BlockHash]],
@@ -256,7 +265,8 @@ trait BlockGenerator {
                 chainName = chainName,
                 preStateHash = preStateHash,
                 maybeValidatorPrevBlockHash = maybeValidatorPrevBlockHash,
-                maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum
+                maybeValidatorBlockSeqNum = maybeValidatorBlockSeqNum,
+                keyBlockHash = keyBlockHash
               )
       _ <- BlockStorage[F].put(block.blockHash, block, Seq.empty)
     } yield block

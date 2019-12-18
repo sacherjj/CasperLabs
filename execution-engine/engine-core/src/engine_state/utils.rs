@@ -13,9 +13,8 @@ pub fn pos_validator_key_name_to_tuple(pos_key_name: &str) -> Option<(PublicKey,
             return None;
         }
         let mut key_bytes = [0u8; 32];
-        for i in 0..32 {
-            key_bytes[i] = u8::from_str_radix(&hex_key[2 * i..2 * (i + 1)], 16).ok()?;
-        }
+        let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes).ok()?;
+        debug_assert!(_bytes_written == key_bytes.len());
         let pub_key = PublicKey::new(key_bytes);
         let balance = split_bond.next().and_then(|b| {
             if b.is_empty() {

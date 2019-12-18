@@ -13,7 +13,7 @@ mod tests;
 
 pub const RADIX: usize = 256;
 
-const U32_SIZE: usize = size_of::<u32>();
+const U32_SERIALIZED_LENGTH: usize = size_of::<u32>();
 
 /// A parent is represented as a pair of a child index and a node or extension.
 pub type Parents<K, V> = Vec<(u8, Trie<K, V>)>;
@@ -51,7 +51,7 @@ impl Pointer {
 impl ToBytes for Pointer {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut hash_bytes = self.hash().to_bytes()?;
-        let mut ret = Vec::with_capacity(U32_SIZE + hash_bytes.len());
+        let mut ret = Vec::with_capacity(U32_SERIALIZED_LENGTH + hash_bytes.len());
         ret.append(&mut self.tag().to_bytes()?);
         ret.append(&mut hash_bytes);
         Ok(ret)
@@ -126,7 +126,7 @@ impl FromBytes for PointerBlock {
     }
 }
 
-impl ::std::ops::Index<usize> for PointerBlock {
+impl core::ops::Index<usize> for PointerBlock {
     type Output = Option<Pointer>;
 
     #[inline]
@@ -136,11 +136,51 @@ impl ::std::ops::Index<usize> for PointerBlock {
     }
 }
 
-impl ::std::ops::IndexMut<usize> for PointerBlock {
+impl core::ops::IndexMut<usize> for PointerBlock {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         let PointerBlock(dat) = self;
         &mut dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::Range<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::Range<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeTo<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeTo<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeFrom<usize>> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeFrom<usize>) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
+    }
+}
+
+impl core::ops::Index<core::ops::RangeFull> for PointerBlock {
+    type Output = [Option<Pointer>];
+
+    #[inline]
+    fn index(&self, index: core::ops::RangeFull) -> &[Option<Pointer>] {
+        let &PointerBlock(ref dat) = self;
+        &dat[index]
     }
 }
 
@@ -190,6 +230,13 @@ impl<K, V> Trie<K, V> {
     pub fn extension(affix: Vec<u8>, pointer: Pointer) -> Self {
         Trie::Extension { affix, pointer }
     }
+
+    pub fn key(&self) -> Option<&K> {
+        match self {
+            Trie::Leaf { key, .. } => Some(key),
+            _ => None,
+        }
+    }
 }
 
 impl<K, V> ToBytes for Trie<K, V>
@@ -202,11 +249,13 @@ where
             Trie::Leaf { key, value } => {
                 let mut key_bytes = ToBytes::to_bytes(key)?;
                 let mut value_bytes = ToBytes::to_bytes(value)?;
-                if key_bytes.len() + value_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                if key_bytes.len() + value_bytes.len()
+                    > u32::max_value() as usize - U32_SERIALIZED_LENGTH
+                {
                     return Err(bytesrepr::Error::OutOfMemoryError);
                 }
                 let mut ret: Vec<u8> =
-                    Vec::with_capacity(U32_SIZE + key_bytes.len() + value_bytes.len());
+                    Vec::with_capacity(U32_SERIALIZED_LENGTH + key_bytes.len() + value_bytes.len());
                 ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut key_bytes);
                 ret.append(&mut value_bytes);
@@ -214,7 +263,8 @@ where
             }
             Trie::Node { pointer_block } => {
                 let mut pointer_block_bytes = ToBytes::to_bytes(pointer_block.deref())?;
-                let mut ret: Vec<u8> = Vec::with_capacity(U32_SIZE + pointer_block_bytes.len());
+                let mut ret: Vec<u8> =
+                    Vec::with_capacity(U32_SERIALIZED_LENGTH + pointer_block_bytes.len());
                 ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut pointer_block_bytes);
                 Ok(ret)
@@ -222,11 +272,14 @@ where
             Trie::Extension { affix, pointer } => {
                 let mut affix_bytes = ToBytes::to_bytes(affix)?;
                 let mut pointer_bytes = ToBytes::to_bytes(pointer)?;
-                if affix_bytes.len() + pointer_bytes.len() > u32::max_value() as usize - U32_SIZE {
+                if affix_bytes.len() + pointer_bytes.len()
+                    > u32::max_value() as usize - U32_SERIALIZED_LENGTH
+                {
                     return Err(bytesrepr::Error::OutOfMemoryError);
                 }
-                let mut ret: Vec<u8> =
-                    Vec::with_capacity(U32_SIZE + affix_bytes.len() + pointer_bytes.len());
+                let mut ret: Vec<u8> = Vec::with_capacity(
+                    U32_SERIALIZED_LENGTH + affix_bytes.len() + pointer_bytes.len(),
+                );
                 ret.append(&mut self.tag().to_bytes()?);
                 ret.append(&mut affix_bytes);
                 ret.append(&mut pointer_bytes);

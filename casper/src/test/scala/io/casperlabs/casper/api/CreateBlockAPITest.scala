@@ -1,6 +1,7 @@
 package io.casperlabs.casper.api
 
 import cats.Monad
+import cats.data.{EitherT, NonEmptyList}
 import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.github.ghik.silencer.silent
@@ -8,6 +9,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper
 import io.casperlabs.casper._
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
+import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
@@ -31,6 +33,9 @@ import io.casperlabs.casper.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
+import io.casperlabs.casper.helper.DeployOps._
+import io.casperlabs.comm.ServiceError.OutOfRange
+import io.casperlabs.shared.LogStub
 
 import scala.concurrent.duration._
 
@@ -41,14 +46,14 @@ class CreateBlockAPITest
     with Inspectors
     with GossipServiceCasperTestNodeFactory {
   import HashSetCasperTest._
+  import DeriveValidation._
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool("create-block-api-test", 4)
   implicit val metrics              = new Metrics.MetricsNOP[Task]
   implicit val raiseValidateErr =
     casper.validation.raiseValidateErrorThroughApplicativeError[Task]
-  implicit val logEff = new LogStub[Task]
-
-  implicit val validation: Validation[Task] = HashSetCasperTestNode.makeValidation[Task]
+  implicit val logEff      = LogStub[Task]()
+  implicit val broadcaster = Broadcaster.noop[Task]
 
   private val (validatorKeys, validators)                      = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
   private val bonds                                            = createBonds(validators)
@@ -64,30 +69,26 @@ class CreateBlockAPITest
     }
     val node   = standaloneEff(genesis, transforms, validatorKeys.head)
     val casper = new SleepingMultiParentCasperImpl[Task](node.casperEff)
-    val deploys = List(
-      "@0!(0) | for(_ <- @0){ @1!(1) }",
-      "for(_ <- @1){ @2!(2) }"
-    ).map { deploy =>
-      ProtoUtil
-        .basicDeploy(
-          0,
-          ByteString.copyFromUtf8(System.currentTimeMillis().toString),
-          ByteString.copyFromUtf8(deploy)
-        )
-    }
+    val deploys = List.fill(2)(
+      ProtoUtil.deploy(
+        0,
+        ByteString.copyFromUtf8(System.currentTimeMillis().toString)
+      )
+    )
 
-    implicit val logEff       = new LogStub[Task]
+    implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
+    implicit val db           = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[(Either[Throwable, ByteString], Either[Throwable, ByteString])] =
       for {
         t1 <- (BlockAPI.deploy[Task](deploys.head) *> BlockAPI
-               .propose[Task](blockApiLock)).start
+               .propose[Task](blockApiLock, canCreateBallot = false)).start
         _ <- Time[Task].sleep(2.second)
         t2 <- (BlockAPI.deploy[Task](deploys.last) *> BlockAPI
-               .propose[Task](blockApiLock)).start //should fail because other not done
+               .propose[Task](blockApiLock, canCreateBallot = false)).start //should fail because other not done
         r1 <- t1.join.attempt
         r2 <- t2.join.attempt
       } yield (r1, r2)
@@ -120,6 +121,7 @@ class CreateBlockAPITest
     val node = standaloneEff(genesis, transforms, validatorKeys.head)
 
     implicit val bs = node.blockStorage
+    implicit val db = node.deployBuffer
 
     def deployAndPropose(
         blockApiLock: Semaphore[Task]
@@ -127,7 +129,7 @@ class CreateBlockAPITest
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
       } yield ()
 
     val test: Task[Unit] = for {
@@ -178,8 +180,9 @@ class CreateBlockAPITest
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)
 
-    implicit val logEff       = new LogStub[Task]
+    implicit val logEff       = LogStub[Task]()
     implicit val blockStorage = node.blockStorage
+    implicit val db           = node.deployBuffer
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -187,8 +190,9 @@ class CreateBlockAPITest
       for {
         d <- ProtoUtil.basicDeploy[Task]()
         _ <- BlockAPI.deploy[Task](d)
-        _ <- BlockAPI.propose[Task](blockApiLock)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         _ <- BlockAPI.deploy[Task](d)
+        _ <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
       } yield ()
 
     try {
@@ -196,11 +200,10 @@ class CreateBlockAPITest
         casperRef    <- MultiParentCasperRef.of[Task]
         _            <- casperRef.set(node.casperEff)
         blockApiLock <- Semaphore[Task](1)
-        result       <- testProgram(blockApiLock)(casperRef)
+        result       <- testProgram(blockApiLock)(casperRef).attempt
+        Left(ex)     = result
+        _            = ex.getMessage should include("No new deploys")
       } yield result).unsafeRunSync
-    } catch {
-      case ex: io.grpc.StatusRuntimeException =>
-        ex.getMessage should include("already contains")
     } finally {
       node.tearDown()
     }
@@ -210,24 +213,20 @@ class CreateBlockAPITest
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)
-    val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
-    val deploy = ProtoUtil.basicDeploy(
-      0,
-      ByteString.EMPTY,
-      v1
-    )
+    val deploy = ProtoUtil.deploy(0)
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[Unit] =
       for {
         _         <- BlockAPI.deploy[Task](deploy)
-        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        blockHash <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         deployInfo <- BlockAPI.getDeployInfo[Task](
                        Base16.encode(deploy.deployHash.toByteArray),
                        DeployInfo.View.FULL
@@ -282,13 +281,14 @@ class CreateBlockAPITest
   "getBlockDeploys" should "return return all ProcessedDeploys in a block" in {
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)
-    val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
-    def mkDeploy(code: String) = ProtoUtil.basicDeploy(0, ByteString.copyFromUtf8(code), v1)
+    def mkDeploy(code: String) =
+      ProtoUtil.deploy(0, ByteString.copyFromUtf8(code))
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
@@ -296,7 +296,7 @@ class CreateBlockAPITest
       for {
         _         <- BlockAPI.deploy[Task](mkDeploy("a"))
         _         <- BlockAPI.deploy[Task](mkDeploy("b"))
-        blockHash <- BlockAPI.propose[Task](blockApiLock)
+        blockHash <- BlockAPI.propose[Task](blockApiLock, canCreateBallot = false)
         deploys <- BlockAPI.getBlockDeploys[Task](
                     Base16.encode(blockHash.toByteArray),
                     DeployInfo.View.FULL
@@ -323,29 +323,21 @@ class CreateBlockAPITest
     // Create the node with low fault tolerance threshold so it finalizes the blocks as soon as they are made.
     val node =
       standaloneEff(genesis, transforms, validatorKeys.head)
-    val v1 = generateValidator("V1")
 
-    implicit val logEff        = new LogStub[Task]
+    implicit val logEff        = LogStub[Task]()
     implicit val blockStorage  = node.blockStorage
     implicit val deployStorage = node.deployStorage
+    implicit val db            = node.deployBuffer
 
-    val deploys = (1L to 10L)
-      .map(
-        t =>
-          ProtoUtil.basicDeploy(
-            t,
-            ByteString.EMPTY,
-            v1
-          )
-      )
-      .toList
+    val deploys = (1L to 10L).map(ProtoUtil.deploy(_)).toList
 
     def testProgram(blockApiLock: Semaphore[Task])(
         implicit casperRef: MultiParentCasperRef[Task]
     ): Task[Unit] =
       for {
-        _ <- deploys.toList.traverse(d => {
-              BlockAPI.deploy[Task](d) *> BlockAPI.propose[Task](blockApiLock)
+        _ <- deploys.traverse(d => {
+              BlockAPI.deploy[Task](d) *> BlockAPI
+                .propose[Task](blockApiLock, canCreateBallot = false)
             })
         deployInfos <- DeployStorageReader[Task].getDeployInfos(deploys)
         _ <- deployInfos.traverse(
@@ -375,21 +367,21 @@ class CreateBlockAPITest
 
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
-  def addBlock(b: Block): F[BlockStatus]            = underlying.addBlock(b)
-  def contains(b: Block): F[Boolean]                = underlying.contains(b)
-  def deploy(d: Deploy): F[Either[Throwable, Unit]] = underlying.deploy(d)
+  def addBlock(b: Block): F[BlockStatus] = underlying.addBlock(b)
+  def contains(b: Block): F[Boolean]     = underlying.contains(b)
   def estimator(
       dag: DagRepresentation[F],
+      lfbHash: ByteString,
       latestMessagesHashes: Map[Validator, Set[ByteString]],
       equivocators: Set[Validator]
-  ): F[List[BlockHash]] =
-    underlying.estimator(dag, latestMessagesHashes, equivocators)
+  ): F[NonEmptyList[BlockHash]] =
+    underlying.estimator(dag, lfbHash, latestMessagesHashes, equivocators)
   def dag: F[DagRepresentation[F]] = underlying.dag
   def lastFinalizedBlock: F[Block] = underlying.lastFinalizedBlock
 
-  override def createBlock: F[CreateBlockStatus] =
+  override def createMessage(canCreateBallot: Boolean): F[CreateBlockStatus] =
     for {
-      result <- underlying.createBlock
+      result <- underlying.createMessage(canCreateBallot)
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
 

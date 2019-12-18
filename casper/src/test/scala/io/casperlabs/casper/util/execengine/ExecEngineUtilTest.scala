@@ -1,6 +1,7 @@
 package io.casperlabs.casper.util.execengine
 
 import cats.Id
+import cats.data.NonEmptyList
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.DeploySelection.DeploySelection
@@ -17,40 +18,33 @@ import io.casperlabs.casper.{consensus, DeploySelection}
 import io.casperlabs.ipc
 import io.casperlabs.ipc._
 import io.casperlabs.models.SmartContractEngineError
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.deploy._
 import monix.eval.Task
+import scala.concurrent.duration._
 import org.scalatest.{FlatSpec, Matchers}
 
 class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with StorageFixture {
 
-  implicit val logEff: LogStub[Task] = new LogStub[Task]()
+  implicit val logEff = LogStub[Task]()
 
   implicit val executionEngineService: ExecutionEngineService[Task] =
     HashSetCasperTestNode.simpleEEApi[Task](Map.empty)
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
-      val genesisDeploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val genesisDeploys = Vector(ProtoUtil.deploy(System.currentTimeMillis))
       val genesisDeploysCost =
         genesisDeploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b1Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b1Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b1DeploysCost = b1Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b2Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b2Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b2DeploysCost = b2Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
-      val b3Deploys = Vector(
-        ByteString.EMPTY
-      ).map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      val b3Deploys     = Vector(ProtoUtil.deploy(System.currentTimeMillis()))
       val b3DeploysCost = b3Deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(1))
 
       /*
@@ -143,19 +137,19 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
       implicit deployStorage =>
         // reference costs
         // deploy each Rholang program separately and record its cost
-        val deploy1 = ProtoUtil.sourceDeploy(
-          ByteString.copyFromUtf8("@1!(Nil)"),
-          System.currentTimeMillis
+        val deploy1 = ProtoUtil.deploy(
+          System.currentTimeMillis,
+          ByteString.copyFromUtf8("deployA")
         )
         val deploy2 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("@3!([1,2,3,4])"),
-            System.currentTimeMillis
+          ProtoUtil.deploy(
+            System.currentTimeMillis,
+            ByteString.copyFromUtf8("deployB")
           )
         val deploy3 =
-          ProtoUtil.sourceDeploy(
-            ByteString.copyFromUtf8("for(@x <- @0) { @4!(x.toByteArray()) }"),
-            System.currentTimeMillis
+          ProtoUtil.deploy(
+            System.currentTimeMillis,
+            ByteString.copyFromUtf8("deployC")
           )
         for {
           proc1         <- computeSingleProcessedDeploy(Seq(deploy1))
@@ -436,6 +430,72 @@ class ExecEngineUtilTest extends FlatSpec with Matchers with BlockGenerator with
     result3 shouldBe ((nonFirstEffect3, Vector(k, j)))
     result4 shouldBe result3
   }
+
+  it should "filter redundant secondary parents from the output list" in {
+    /*
+     * The DAG looks like:
+     *       i     j
+     *     /  \    |
+     *     f   g   h
+     *    /\    \ /
+     *    c d    e
+     *     \/    |
+     *     a     b
+     *      \    /
+     *      genesis
+     */
+
+    val genesis = OpDagNode.genesis(Map(1 -> Op.Read))
+    val ops: Map[Char, OpMap[Int]] = ('a' to 'j').zipWithIndex
+      .map {
+        case (char, index) => char -> Map(index -> Op.Write)
+      }
+      .toMap
+      .updated('a', Map(100 -> Op.Write)) // a, d, f all update the same key, but are sequential
+      .updated('d', Map(100 -> Op.Write))
+      .updated('f', Map(100 -> Op.Write))
+
+    val a = OpDagNode.withParents(ops('a'), List(genesis))
+    val b = OpDagNode.withParents(ops('b'), List(genesis))
+    val c = OpDagNode.withParents(ops('c'), List(a))
+    val d = OpDagNode.withParents(ops('d'), List(a))
+    val e = OpDagNode.withParents(ops('e'), List(b))
+    val f = OpDagNode.withParents(ops('f'), List(c, d))
+    val g = OpDagNode.withParents(ops('g'), List(e))
+    val h = OpDagNode.withParents(ops('h'), List(e))
+    val i = OpDagNode.withParents(ops('i'), List(f, g))
+    val j = OpDagNode.withParents(ops('j'), List(h))
+
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val allBlocks                           = Vector(j, i, h, g, f, e, d, c, b, a)
+    val result1                             = OpDagNode.merge(allBlocks) // includes many redundant parents in input
+    val result2                             = OpDagNode.merge(Vector(j, i)) // includes only DAG tips
+
+    val nonFirstEffect = Vector('a', 'c', 'd', 'f', 'g', 'i').map(ops.apply).reduce(_ + _)
+
+    // output does not include any redundant parents
+    result1 shouldBe ((nonFirstEffect, Vector(j, i)))
+    // output is the same as if the input had only included the DAG tips
+    result2 shouldBe result1
+  }
+
+  it should "filter redundant secondary parents, but not main parent" in {
+    // Dag looks like:
+    // genesis <- a <- b
+    val ops     = Map(1 -> Op.Read)
+    val genesis = OpDagNode.genesis(ops)
+    val a       = OpDagNode.withParents(ops, List(genesis))
+    val b       = OpDagNode.withParents(ops, List(a))
+
+    implicit val order: Ordering[OpDagNode] = ExecEngineUtilTest.opDagNodeOrder
+    val redundantMainParentResult           = OpDagNode.merge(Vector(a, b))
+    val redundantSecondaryParentResult      = OpDagNode.merge(Vector(b, a))
+
+    // main parent is not filtered out even though it is redundant with b
+    redundantMainParentResult shouldBe (ops -> Vector(a, b))
+    // secondary parent is filtered out because it is redundant with the main
+    redundantSecondaryParentResult shouldBe (Map.empty -> Vector(b))
+  }
 }
 
 object ExecEngineUtilTest {
@@ -456,15 +516,13 @@ object ExecEngineUtilTest {
         candidates: Vector[OpDagNode]
     )(implicit order: Ordering[OpDagNode]): (OpMap[Int], Vector[OpDagNode]) = {
       val merged = ExecEngineUtil.abstractMerge[Id, OpMap[Int], OpDagNode, Int](
-        candidates,
+        NonEmptyList.fromListUnsafe(candidates.toList),
         getParents,
         getEffect,
         identity
       )
 
       merged match {
-        case ExecEngineUtil.MergeResult.EmptyMerge =>
-          throw new RuntimeException("No candidates were given to merge!")
         case ExecEngineUtil.MergeResult.Result(head, effect, tail) => (effect, head +: tail)
       }
     }
@@ -472,13 +530,9 @@ object ExecEngineUtilTest {
   def opDagNodeOrder: Ordering[OpDagNode] =
     Ordering.by[OpDagNode, Int](_.height)
 
-  val registry: String = """ """.stripMargin
-
-  val other: String = """ """.stripMargin
-
   def prepareDeploys(contracts: Vector[ByteString], cost: Long): Vector[ProcessedDeploy] = {
     val deploys =
-      contracts.map(ProtoUtil.sourceDeploy(_, System.currentTimeMillis))
+      contracts.map(ProtoUtil.deploy(System.currentTimeMillis, _))
     deploys.map(d => ProcessedDeploy().withDeploy(d).withCost(cost))
   }
 }

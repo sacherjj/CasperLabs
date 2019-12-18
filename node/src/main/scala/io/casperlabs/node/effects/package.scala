@@ -17,14 +17,11 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
-
-  def log: Log[Task] = Log.log
 
   def nodeDiscovery(
       id: NodeIdentifier,
@@ -93,7 +90,7 @@ package object effects {
       transactEC: ExecutionContext,
       serverDataDir: Path
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
-    def mkConfig(poolSize: Int) = {
+    def mkConfig(poolSize: Int, foreignKeys: Boolean) = {
       val config = new HikariConfig()
       config.setDriverClassName("org.sqlite.JDBC")
       config.setJdbcUrl(s"jdbc:sqlite:${serverDataDir.resolve("sqlite.db")}")
@@ -105,18 +102,25 @@ package object effects {
       // * - the transaction will `commit` on success and `rollback` on failure;
       // Setting it to false to avoid seeing resets in the log every time.
       config.setAutoCommit(false)
+      // Foreign keys support must be enabled explicitly in SQLite; it doesn't affect read logic though.
+      // https://www.sqlite.org/foreignkeys.html#fk_enable
+      config.addDataSourceProperty("foreign_keys", foreignKeys.toString)
+      // NOTE: We still saw at least one SQLITE_BUSY error in testing, despite the 1 sized pool.
+      // NODE-1019 will add logging, maybe we'll learn more.
+      config.addDataSourceProperty("busy_timeout", "5000")
+      config.addDataSourceProperty("journal_mode", "WAL")
       config
     }
 
     // Using a connection pool with maximum size of 1 for writers because with the default settings we got SQLITE_BUSY errors.
     // The SQLite docs say the driver is thread safe, but only one connection should be made per process
     // (the file locking mechanism depends on process IDs, closing one connection would invalidate the locks for all of them).
-    val writeXaconfig = mkConfig(poolSize = 1)
+    val writeXaconfig = mkConfig(poolSize = 1, foreignKeys = true)
 
     // Using a separate Transactor for read operations because
     // we use fs2.Stream as a return type in some places which hold an opened connection
     // preventing acquiring a connection in other places if we use a connection pool with size of 1.
-    val readXaconfig = mkConfig(poolSize = 10)
+    val readXaconfig = mkConfig(poolSize = 10, foreignKeys = false)
 
     // Hint: Use config.setLeakDetectionThreshold(10000) to detect connection leaking
     for {
@@ -126,16 +130,6 @@ package object effects {
                     connectEC,
                     Blocker.liftExecutionContext(transactEC)
                   )
-                  .map { xa =>
-                    // Foreign keys support must be enabled explicitly in SQLite
-                    // https://www.sqlite.org/foreignkeys.html#fk_enable
-                    Transactor.before
-                      .set(
-                        xa,
-                        sql"PRAGMA foreign_keys = ON;".update.run.void >> Transactor.before.get(xa)
-                      )
-                  }
-      // Ignoring foreign keys pragma during reads, because it doesn't affect the logic.
       readXa <- HikariTransactor
                  .fromHikariConfig[Task](
                    readXaconfig,

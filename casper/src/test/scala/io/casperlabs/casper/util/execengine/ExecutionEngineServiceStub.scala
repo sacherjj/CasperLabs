@@ -1,17 +1,22 @@
 package io.casperlabs.casper.util.execengine
 
+import cats.data.NonEmptyList
 import cats.Applicative
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.casper
+import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.consensus.state.{Unit => _, _}
 import io.casperlabs.casper.consensus.{Block, Bond}
-import io.casperlabs.casper.util.{CasperLabsProtocolVersions, ProtoUtil}
+import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.validation.{Validation, ValidationImpl}
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.ipc._
+import io.casperlabs.metrics.Metrics
+import io.casperlabs.metrics.Metrics.MetricsNOP
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.shared.{Log, Time}
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -24,10 +29,22 @@ import scala.util.Either
 object ExecutionEngineServiceStub {
   type Bonds = Map[PublicKey, Long]
 
+  import ExecEngineUtil.{MergeResult, TransformMap}
+
   implicit def functorRaiseInvalidBlock[F[_]: Sync] =
     casper.validation.raiseValidateErrorThroughApplicativeError[F]
 
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService: CasperLabsProtocolVersions](
+  def merge[F[_]: MonadThrowable: BlockStorage: Metrics](
+      candidateParentBlocks: List[Block],
+      dag: DagRepresentation[F]
+  ): F[MergeResult[TransformMap, Block]] =
+    NonEmptyList.fromList(candidateParentBlocks) map { blocks =>
+      ExecEngineUtil.merge[F](blocks, dag).map(x => x: MergeResult[TransformMap, Block])
+    } getOrElse {
+      MergeResult.empty[TransformMap, Block].pure[F]
+    }
+
+  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStorage: ExecutionEngineService: CasperLabsProtocol](
       b: Block,
       dag: DagRepresentation[F]
   ): F[Either[Throwable, StateHash]] = {
@@ -36,10 +53,11 @@ object ExecutionEngineServiceStub {
       override def nanoTime: F[Long]                        = 0L.pure[F]
       override def sleep(duration: FiniteDuration): F[Unit] = Sync[F].unit
     }
+    implicit val metrics    = new MetricsNOP[F]
     implicit val validation = new ValidationImpl[F]
     (for {
       parents <- ProtoUtil.unsafeGetParents[F](b)
-      merged  <- ExecEngineUtil.merge[F](parents, dag)
+      merged  <- ExecutionEngineServiceStub.merge[F](parents, dag)
       preStateHash <- ExecEngineUtil
                        .computePrestate[F](merged, rank = b.getHeader.rank, upgrades = Nil)
       effects <- ExecEngineUtil.effectsForBlock[F](b, preStateHash)

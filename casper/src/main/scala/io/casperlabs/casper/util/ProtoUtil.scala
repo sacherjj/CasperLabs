@@ -11,11 +11,13 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.{Message, Weight}
@@ -25,6 +27,8 @@ import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.DagRepresentation
 
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 
 object ProtoUtil {
   import Weight._
@@ -182,6 +186,7 @@ object ProtoUtil {
       1.pure[F]
     } else {
 
+      // TODO: Replace with lookupUnsafe
       dag.lookup(validatorPrevBlockHash).flatMap {
         case Some(meta) =>
           (1 + meta.validatorMsgSeqNum).pure[F]
@@ -330,6 +335,27 @@ object ProtoUtil {
   def blockNumber(b: Block): Long =
     b.getHeader.rank
 
+  /** Removes redundant messages that are available in the immediate justifications of another message in the set */
+  def removeRedundantMessages(
+      messages: Iterable[Message]
+  ): Set[Message] = {
+    // Builds a dependencies map.
+    // ancestor -> {descendant}
+    // Allows for quick test whether a block is in justifications of another one.
+    val dependantsOf = messages
+      .foldLeft(Map.empty[ByteString, Set[Message]]) {
+        case (acc, m) =>
+          m.justifications
+            .map(_.latestBlockHash)
+            .map(_ -> Set(m))
+            .toMap |+| acc
+      }
+    val ancestors   = dependantsOf.keySet
+    val descendants = dependantsOf.values.flatten.toSet
+    // Filter out messages that are in justifications of another one.
+    descendants.filterNot(m => ancestors.contains(m.messageHash))
+  }
+
   def toJustification(
       latestMessages: Seq[Message]
   ): Seq[Justification] =
@@ -364,14 +390,8 @@ object ProtoUtil {
         }
     }
 
-  def protoHash[A <: scalapb.GeneratedMessage](protoSeq: A*): ByteString =
-    protoSeqHash(protoSeq)
-
-  def protoSeqHash[A <: scalapb.GeneratedMessage](protoSeq: Seq[A]): ByteString =
-    hashByteArrays(protoSeq.map(_.toByteArray): _*)
-
-  def hashByteArrays(items: Array[Byte]*): ByteString =
-    ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
+  def protoHash[A <: scalapb.GeneratedMessage](data: A): ByteString =
+    ByteString.copyFrom(Blake2b256.hash(data.toByteArray))
 
   /* Creates a Genesis block. Genesis is not signed */
   def genesis(
@@ -414,7 +434,8 @@ object ProtoUtil {
       rank: Long,
       publicKey: Keys.PublicKey,
       privateKey: Keys.PrivateKey,
-      sigAlgorithm: SignatureAlgorithm
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
   ): Block = {
     val body = Block.Body().withDeploys(deploys)
     val postState = Block
@@ -434,10 +455,60 @@ object ProtoUtil {
       chainName = chainName,
       creator = publicKey,
       validatorSeqNum = validatorSeqNum,
-      validatorPrevBlockHash = validatorPrevBlockHash
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
     )
 
     val unsigned = unsignedBlockProto(body, header)
+    signBlock(
+      unsigned,
+      privateKey,
+      sigAlgorithm
+    )
+  }
+
+  /* Creates a signed ballot */
+  def ballot(
+      justifications: Seq[Justification],
+      stateHash: ByteString,
+      bondedValidators: Seq[Bond],
+      protocolVersion: ProtocolVersion,
+      parent: ByteString,
+      validatorSeqNum: Int,
+      validatorPrevBlockHash: ByteString,
+      chainName: String,
+      now: Long,
+      rank: Long,
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      sigAlgorithm: SignatureAlgorithm,
+      keyBlockHash: ByteString
+  ): Block = {
+    val body = Block.Body()
+
+    val postState = Block
+      .GlobalState()
+      .withPreStateHash(stateHash)
+      .withPostStateHash(stateHash)
+      .withBonds(bondedValidators)
+
+    val header = blockHeader(
+      body,
+      parentHashes = List(parent),
+      justifications = justifications,
+      state = postState,
+      rank = rank,
+      protocolVersion = protocolVersion,
+      timestamp = now,
+      chainName = chainName,
+      creator = publicKey,
+      validatorSeqNum = validatorSeqNum,
+      validatorPrevBlockHash = validatorPrevBlockHash,
+      keyBlockHash = keyBlockHash
+    ).withMessageType(Block.MessageType.BALLOT)
+
+    val unsigned = unsignedBlockProto(body, header)
+
     signBlock(
       unsigned,
       privateKey,
@@ -456,10 +527,12 @@ object ProtoUtil {
       validatorPrevBlockHash: ByteString,
       protocolVersion: ProtocolVersion,
       timestamp: Long,
-      chainName: String
+      chainName: String,
+      keyBlockHash: ByteString = ByteString.EMPTY // For Genesis it will be empty.
   ): Block.Header =
     Block
       .Header()
+      .withKeyBlockHash(keyBlockHash)
       .withParentHashes(parentHashes)
       .withJustifications(justifications)
       .withDeployCount(body.deploys.size)
@@ -511,43 +584,44 @@ object ProtoUtil {
     if (h.ttlMillis == 0) default
     else h.ttlMillis
 
-  def basicDeploy[F[_]: Monad: Time](): F[Deploy] =
+  def basicDeploy[F[_]: Monad: Time](ttl: FiniteDuration = 1.minute): F[Deploy] =
     Time[F].currentMillis.map { now =>
       // The timestamp needs to be earlier than the time the node
       // thinks it is; in the tests we use "logical time", so 0
       // is the only safe value.
-      basicDeploy(0, ByteString.copyFromUtf8(now.toString))
+      deploy(0, ByteString.copyFromUtf8(now.toString), ttl)
     }
 
   // This is only used for tests.
-  def basicDeploy(
+  def deploy(
       timestamp: Long,
       sessionCode: ByteString = ByteString.EMPTY,
-      accountPublicKey: ByteString = ByteString.EMPTY
+      ttl: FiniteDuration = 1.minute
   ): Deploy = {
+    val (sk, pk) = Ed25519.newKeyPair
     val b = Deploy
       .Body()
       .withSession(Deploy.Code().withWasm(sessionCode))
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountPublicKey(accountPublicKey)
+      .withAccountPublicKey(ByteString.copyFrom(pk))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
+      .withTtlMillis(ttl.toMillis.toInt)
     Deploy()
-      .withDeployHash(protoHash(h))
       .withHeader(h)
       .withBody(b)
+      .withHashes
+      .sign(sk, pk)
+
   }
 
   def basicProcessedDeploy[F[_]: Monad: Time](): F[Block.ProcessedDeploy] =
     basicDeploy[F]().map(deploy => Block.ProcessedDeploy(deploy = Some(deploy), cost = 1L))
 
-  def sourceDeploy(source: String, timestamp: Long): Deploy =
-    sourceDeploy(ByteString.copyFromUtf8(source), timestamp)
-
-  def sourceDeploy(sessionCode: ByteString, timestamp: Long): Deploy =
-    basicDeploy(timestamp, sessionCode)
+  def sourceDeploy(source: String, timestamp: Long, ttl: FiniteDuration = 1.minute): Deploy =
+    deploy(timestamp, ByteString.copyFromUtf8(source), ttl)
 
   // https://casperlabs.atlassian.net/browse/EE-283
   // We are hardcoding exchange rate for DEV NET at 10:1

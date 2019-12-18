@@ -36,7 +36,7 @@ object Printer {
 
     def print(m: GeneratedMessage, bytesStandard: Boolean): String = {
       val json = if (bytesStandard) base64Printer.toJson(m) else base16Printer.toJson(m)
-      json.pretty(io.circe.Printer.indented(indent))
+      json.printWith(io.circe.Printer.indented(indent))
     }
   }
 

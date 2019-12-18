@@ -1,3 +1,4 @@
+import os
 import logging
 import pytest
 import time
@@ -7,6 +8,7 @@ from casperlabs_local_net.contract_address import contract_address
 from casperlabs_local_net.casperlabs_accounts import Account, GENESIS_ACCOUNT
 from casperlabs_local_net.common import (
     resources_path,
+    extract_deploy_hash_from_deploy_output,
     extract_block_hash_from_propose_output,
     Contract,
     MAX_PAYMENT_ABI,
@@ -14,10 +16,14 @@ from casperlabs_local_net.common import (
 )
 from casperlabs_local_net.docker_node import DockerNode
 from casperlabs_local_net.errors import NonZeroExitCodeError
-from casperlabs_local_net.wait import wait_for_genesis_block
+from casperlabs_local_net.wait import (
+    wait_for_genesis_block,
+    wait_for_block_hash_propagated_to_all_nodes,
+)
 from casperlabs_client import ABI, blake2b_hash
 from casperlabs_client.consensus_pb2 import Deploy
 from casperlabs_local_net.cli import CLI, DockerCLI, CLIErrorExit
+
 
 """
 Test account state retrieval with query-state.
@@ -75,14 +81,40 @@ def test_account_state(node):
     assert "counter" in names
 
 
+def test_graph_ql(one_node_network):
+    node = one_node_network.docker_nodes[0]
+    deploy_output = node.d_client.deploy(
+        session_contract=Contract.HELLO_NAME_DEFINE,
+        from_address=GENESIS_ACCOUNT.public_key_hex,
+        public_key=GENESIS_ACCOUNT.public_key_path,
+        private_key=GENESIS_ACCOUNT.private_key_path,
+    )
+    deploy_hash = extract_deploy_hash_from_deploy_output(deploy_output)
+    propose_output = node.client.propose()
+    block_hash = extract_block_hash_from_propose_output(propose_output)
+
+    wait_for_block_hash_propagated_to_all_nodes(
+        one_node_network.docker_nodes, block_hash
+    )
+
+    block_dict = node.graphql.query_block(block_hash)
+    block = block_dict["data"]["block"]
+    assert block["blockHash"] == block_hash
+    assert block["deployCount"] == 1
+    assert block["deployErrorCount"] == 0
+
+    deploy_dict = node.graphql.query_deploy(deploy_hash)
+    deploy = deploy_dict["data"]["deploy"]["deploy"]
+    processing_results = deploy_dict["data"]["deploy"]["processingResults"]
+    assert deploy["deployHash"] == deploy_hash
+    assert processing_results[0]["block"]["blockHash"] == block_hash
+
+
 def test_logging_enabled_for_node_and_execution_engine(one_node_network):
     """
     Verify both Node and EE are outputting logs.
     """
-    assert (
-        "Listening for traffic on casperlabs://"
-        in one_node_network.docker_nodes[0].logs()
-    )
+    assert "Listening for traffic on " in one_node_network.docker_nodes[0].logs()
     assert (
         '"host_name":"execution-engine-' in one_node_network.execution_engines[0].logs()
     )
@@ -485,6 +517,26 @@ def test_deploy_with_args(one_node_network, genesis_public_signing_key):
 
     for blockInfo in client.showBlocks(10):
         assert blockInfo.status.stats.block_size_bytes > 0
+
+
+def test_python_api_payment_amount(one_node_network):
+    """
+    Test Python Client API deploy handles payment_amount parameter.
+    """
+    node = one_node_network.docker_nodes[0]
+    client = node.p_client.client
+    account = node.test_account
+    client.deploy(
+        from_addr=account.public_key_hex,
+        public_key=account.public_key_path,
+        private_key=account.private_key_path,
+        session=os.path.join("resources", Contract.HELLO_NAME_DEFINE),
+        payment_amount=10000000,
+    )
+    block_hash = client.propose().block_hash.hex()
+    for deployInfo in client.showDeploys(block_hash):
+        if deployInfo.is_error:
+            raise Exception(f"Deploy failed: {deployInfo.error_message}")
 
 
 # Python CLI #
@@ -909,7 +961,7 @@ def check_ttl_ok(cli):
         "--public-key", cli.public_key_path(account),
         "--payment-amount", 10000000,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
-        "--ttl", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
+        "--ttl-millis", 3600000)  # 1 hour, this is a minimum ttl you can set currently.
     time.sleep(0.5)
     propose_check_no_errors(cli)
 
@@ -935,7 +987,7 @@ def check_ttl_late(cli, temp_dir):
         "--from", account.public_key_hex,
         "--session", cli.resource(Contract.COUNTER_DEFINE),
         "--payment-amount", 100000000,
-        "--ttl", 3600000)
+        "--ttl-millis", 3600000)
 
     # Modify the deploy and change its timestamp to be more than one hour earlier.
     deploy = Deploy()
@@ -961,3 +1013,71 @@ def check_ttl_late(cli, temp_dir):
 
     expected = "OUT_OF_RANGE: No new deploys"
     assert expected in str(excinfo.value) or expected in excinfo.value.output
+
+
+def test_cli_local_key_scala(scala_cli):
+    check_cli_local_key(scala_cli)
+
+
+def test_cli_local_key_python(cli):
+    check_cli_local_key(cli)
+
+
+def check_cli_local_key(cli):
+    account = cli.node.test_account
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+
+    local_key = account.public_key_hex + ":" + bytes([66] * 32).hex()
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local")
+    assert result.string_value == 'Hello, world!'
+
+    cli("deploy",
+        "--from", account.public_key_hex,
+        "--private-key", cli.private_key_path(account),
+        "--public-key", cli.public_key_path(account),
+        "--payment-amount", 10000000,
+        "--session", cli.resource("local_state.wasm"))
+    block_hash = propose_check_no_errors(cli)
+
+    result = cli("query-state",
+                 "--block-hash", block_hash,
+                 "--key", local_key,
+                 "--type", "local")
+    assert result.string_value == 'Hello, world! Hello, world!'
+
+
+def test_transfer_cli_python(cli):
+    check_transfer_cli(cli)
+
+
+def test_transfer_cli_scala(scala_cli):
+    check_transfer_cli(scala_cli)
+
+
+def check_transfer_cli(cli):
+    account = cli.node.test_account
+    genesis_account = cli.node.genesis_account
+
+    amount = 1000
+    block_hash = cli("show-blocks", "--depth", 1)[0].summary.block_hash
+    balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
+
+    for i in range(2):
+        cli("transfer",
+            "--private-key", cli.private_key_path(genesis_account),
+            "--payment-amount", 10000000,
+            "--target-account", account.public_key,
+            "--amount", amount)
+        block_hash = propose_check_no_errors(cli)
+        new_balance = cli("balance", "--block-hash", block_hash, "--address", account.public_key_hex)
+        assert new_balance == balance + amount
+        balance = new_balance

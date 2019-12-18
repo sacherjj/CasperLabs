@@ -49,8 +49,9 @@ class CLI:
     def resource(self, file_name):
         return self.resources_directory / file_name
 
-    def expand_args(self, args):
-        connection_details = [
+    @property
+    def _local_connection_details(self):
+        return [
             "--host",
             f"{self.host}",
             "--port",
@@ -58,6 +59,9 @@ class CLI:
             "--port-internal",
             f"{self.port_internal}",
         ]
+
+    def expand_args(self, args):
+        connection_details = self._local_connection_details
         if self.tls_parameters:
             connection_details += reduce(
                 add,
@@ -78,7 +82,7 @@ class CLI:
 
         output = binary_output.decode("utf-8")
 
-        if command in ("deploy", "send-deploy", "bond", "unbond"):
+        if command in ("deploy", "send-deploy", "bond", "unbond", "transfer"):
             return output.split()[2]
             # "Success! Deploy 0d4036bebb95de793b28de452d594531a29f8dc3c5394526094d30723fa5ff65 deployed."
 
@@ -94,6 +98,10 @@ class CLI:
 
         if command in ("show-deploy", "show-block", "query-state"):
             return parse(output)
+
+        if command in ("balance",):
+            # 'Balance:\n9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414 : 1000000000'
+            return int(output.split(":")[-1])
 
         return output
 
@@ -155,6 +163,10 @@ class DockerCLI(CLI):
             command, decode_stdout=False, add_host=False
         )
         return self.parse_output(args[0], binary_output)
+
+    @property
+    def _local_connection_details(self):
+        return ["--host", f"{self.host}"]
 
     def public_key_path(self, account):
         return account.public_key_docker_path

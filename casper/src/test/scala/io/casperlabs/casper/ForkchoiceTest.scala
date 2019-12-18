@@ -91,6 +91,48 @@ class ForkchoiceTest
       } yield forkchoice.head should be(genesis.blockHash)
   }
 
+  "Estimator" should "not consider messages older than LFB" in withStorage {
+    implicit blockStorage => implicit dagStorage => implicit deployStorage =>
+      val v1     = generateValidator("V1")
+      val v2     = generateValidator("V2")
+      val v3     = generateValidator("V3")
+      val v1Bond = Bond(v1, 2)
+      val v2Bond = Bond(v2, 3)
+      val v3Bond = Bond(v2, 4)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY, bonds)
+        b1 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v3,
+               bonds,
+               keyBlockHash = genesis.blockHash
+             )
+        b2 <- createAndStoreBlock[Task](
+               Seq(genesis.blockHash),
+               v2,
+               bonds,
+               keyBlockHash = genesis.blockHash
+             )
+        b3 <- createAndStoreBlock[Task](
+               Seq(b2.blockHash),
+               v1,
+               bonds,
+               keyBlockHash = genesis.blockHash
+             )
+        dag          <- dagStorage.getRepresentation
+        latestBlocks <- dag.latestMessageHashes
+        equivocators <- dag.getEquivocators
+        forkchoice <- Estimator.tips[Task](
+                       dag,
+                       b3.blockHash,
+                       latestBlocks,
+                       equivocators
+                     )
+        _ = forkchoice should be(NonEmptyList.one(b3.blockHash))
+      } yield ()
+  }
+
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
   "Estimator on Simple DAG" should "return the appropriate score map and forkchoice" in withStorage {
     implicit blockStorage => implicit dagStorage => implicit deployStorage =>
@@ -153,7 +195,7 @@ class ForkchoiceTest
                        equivocators
                      )
         _      = forkchoice.head should be(b6.blockHash)
-        result = forkchoice(1) should be(b8.blockHash)
+        result = forkchoice.tail.head should be(b8.blockHash)
       } yield result
   }
 
@@ -221,7 +263,7 @@ class ForkchoiceTest
                        equivocators
                      )
         _      = forkchoice.head should be(b8.blockHash)
-        result = forkchoice(1) should be(b7.blockHash)
+        result = forkchoice.tail.head should be(b7.blockHash)
       } yield result
   }
 
@@ -286,7 +328,7 @@ class ForkchoiceTest
         equivocators        <- dag.getEquivocators
         latestMessageHashes <- dag.latestMessageHashes
         tips                <- Estimator.tips(dag, genesis.blockHash, latestMessageHashes, equivocators)
-        _                   = tips shouldBe List(b.blockHash)
+        _                   = tips.toList shouldBe List(b.blockHash)
       } yield ()
   }
 
@@ -345,7 +387,7 @@ class ForkchoiceTest
                        latestBlocks,
                        equivocators
                      )
-        _ = forkchoice shouldBe List(b4.blockHash)
+        _ = forkchoice.toList shouldBe List(b4.blockHash)
       } yield ()
   }
 
@@ -392,7 +434,7 @@ class ForkchoiceTest
       }.toMap
       val expectScores = supporterForBlocks.mapValues(_.map(weightMap).sum)
       val scores = Estimator
-        .lmdScoring(dag, lca, latestMessageHashes, equivocators)
+        .lmdScoring(dag, lca.messageHash, latestMessageHashes, equivocators)
         .runSyncUnsafe(5.seconds)
 
       scores shouldBe expectScores

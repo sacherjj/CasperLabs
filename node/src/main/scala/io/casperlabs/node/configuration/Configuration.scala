@@ -14,7 +14,7 @@ import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.comm.transport.Tls
 import io.casperlabs.configuration.{relativeToDataDir, SubConfig}
 import io.casperlabs.node.configuration.Utils._
-
+import izumi.logstage.api.{Log => IzLog}
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 
@@ -23,6 +23,7 @@ import scala.io.Source
   * It's needed for proper hierarchy traversing by Magnolia typeclasses.
   */
 final case class Configuration(
+    log: Configuration.Log,
     server: Configuration.Server,
     grpc: Configuration.Grpc,
     tls: Tls,
@@ -33,6 +34,11 @@ final case class Configuration(
 )
 
 object Configuration extends ParserImplicits {
+  case class Log(
+      level: IzLog.Level,
+      jsonPath: Option[Path]
+  ) extends SubConfig
+
   case class Kamon(
       prometheus: Boolean,
       zipkin: Boolean,
@@ -61,7 +67,9 @@ object Configuration extends ParserImplicits {
       dataDir: Path,
       maxNumOfConnections: Int,
       maxMessageSize: Int,
-      chunkSize: Int,
+      eventStreamBufferSize: Int Refined Positive,
+      engineParallelism: Int Refined Positive,
+      chunkSize: Int Refined Positive,
       relayFactor: Int,
       relaySaturation: Int,
       approvalRelayFactor: Int,
@@ -94,7 +102,8 @@ object Configuration extends ParserImplicits {
   case class BlockStorage(
       cacheMaxSizeBytes: Long,
       cacheNeighborhoodBefore: Int,
-      cacheNeighborhoodAfter: Int
+      cacheNeighborhoodAfter: Int,
+      deployStreamChunkSize: Int
   ) extends SubConfig
 
   case class Grpc(

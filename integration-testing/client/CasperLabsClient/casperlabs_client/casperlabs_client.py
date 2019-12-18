@@ -6,6 +6,7 @@ CasperLabs Client API library and command line tool.
 # Hack to fix the relative imports problems #
 import sys
 from pathlib import Path
+import textwrap
 
 file = Path(__file__).resolve()
 parent, root = file.parent, file.parents[1]
@@ -23,9 +24,20 @@ from pyblake2 import blake2b
 import ed25519
 import base64
 import json
-import struct
 import logging
 import pkg_resources
+import tempfile
+from pathlib import Path
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import serialization
+from Crypto.Hash import keccak
+from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
+import datetime
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -59,10 +71,14 @@ from . import consensus_pb2 as consensus, state_pb2 as state
 # ~/CasperLabs/protobuf/io/casperlabs/casper/consensus/info.proto
 from . import info_pb2 as info
 
-DEFAULT_HOST = "127.0.0.1"
+from . import vdag
+
+DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 40401
 DEFAULT_INTERNAL_PORT = 40402
 
+
+DOT_FORMATS = "canon,cmap,cmapx,cmapx_np,dot,dot_json,eps,fig,gd,gd2,gif,gv,imap,imap_np,ismap,jpe,jpeg,jpg,json,json0,mp,pdf,pic,plain,plain-ext,png,pov,ps,ps2,svg,svgz,tk,vml,vmlz,vrml,wbmp,x11,xdot,xdot1.2,xdot1.4,xdot_json,xlib"
 
 from google.protobuf import json_format
 
@@ -94,22 +110,47 @@ class ABI:
         raise Exception("account must be 32 bytes or 64 characters long string")
 
     @staticmethod
-    def int_value(name, a: int):
-        return Arg(name=name, value=Value(int_value=a))
+    def int_value(name, i: int):
+        return Arg(name=name, value=Value(int_value=i))
 
     @staticmethod
-    def long_value(name, a: int):
-        return Arg(name=name, value=Value(long_value=a))
+    def long_value(name, n: int):
+        return Arg(name=name, value=Value(long_value=n))
 
     @staticmethod
-    def big_int(name, a):
+    def big_int(name, n):
         return Arg(
-            name=name, value=Value(big_int=state.BigInt(value=str(a), bit_width=512))
+            name=name, value=Value(big_int=state.BigInt(value=str(n), bit_width=512))
         )
 
     @staticmethod
-    def string_value(name, a):
-        return Arg(name=name, value=Value(string_value=a))
+    def string_value(name, s):
+        return Arg(name=name, value=Value(string_value=s))
+
+    @staticmethod
+    def key_hash(name, h):
+        return Arg(name=name, value=Value(key=state.Key(hash=state.Key.Hash(hash=h))))
+
+    @staticmethod
+    def key_address(name, a):
+        return Arg(
+            name=name, value=Value(key=state.Key(address=state.Key.Address(account=a)))
+        )
+
+    @staticmethod
+    def key_uref(name, uref, access_rights):
+        return Arg(
+            name=name,
+            value=Value(
+                key=state.Key(
+                    uref=state.Key.URef(uref=uref, access_rights=access_rights)
+                )
+            ),
+        )
+
+    @staticmethod
+    def key_local(name, h):
+        return Arg(name=name, value=Value(key=state.Key(local=state.Key.Local(hash=h))))
 
     @staticmethod
     def args(l: list):
@@ -118,42 +159,18 @@ class ABI:
 
     @staticmethod
     def args_from_json(s):
-        base64_b64decode = base64.b64decode
-        try:
-            # Change JSON protobuf format of binary data from base64 to base16
-            base64.b64decode = lambda s: bytes.fromhex(s)
-            parsed_json = json.loads(s)
-            args = [
-                json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json
-            ]
-            c = consensus.Deploy.Code(args=args)
-            return c.args
-        finally:
-            base64.b64decode = base64_b64decode
+        parsed_json = ABI.hex2base64(json.loads(s))
+        args = [json_format.ParseDict(d, consensus.Deploy.Arg()) for d in parsed_json]
+        c = consensus.Deploy.Code(args=args)
+        return c.args
 
     @staticmethod
-    def args_to_json(args):
-        base64_b64encode = base64.b64encode
-        try:
-            # We can't just call MessageToDict or MessageToJson on the args object,
-            # which is a 'repeated Arg', because we get:
-            # AttributeError: 'google.protobuf.pyext._message.RepeatedCompositeCo' object has no attribute 'DESCRIPTOR'
-            class Mock:
-                def __init__(self, v):
-                    self.value = v
-
-                def decode(self, s):
-                    return self.value
-
-            base64.b64encode = lambda b: Mock(b.hex())
-            return json.dumps(
-                [
-                    json_format.MessageToDict(arg, preserving_proto_field_name=True)
-                    for arg in args
-                ]
-            )
-        finally:
-            base64.b64encode = base64_b64encode
+    def args_to_json(args, **kwargs):
+        lst = [
+            json_format.MessageToDict(arg, preserving_proto_field_name=True)
+            for arg in args
+        ]
+        return json.dumps(ABI.base64_2hex(lst), **kwargs)
 
     # Below methods for backwards compatibility
 
@@ -172,6 +189,58 @@ class ABI:
     @staticmethod
     def byte_array(name, a):
         return Arg(name=name, value=Value(bytes_value=a))
+
+    # These are kinds of Arg that are of type bytes.
+    # We want to represent them in JSON in hex format, rather than base64.
+    HEX_FIELDS = ("account", "bytes_value", "hash", "uref")
+
+    # Standard protobuf JSON representation encodes fields of type bytes
+    # in base64. We like base16 (hex) more. Below helper functions
+    # help in converting output of protobuf JSON args serialization (base64 -> base16)
+    # and in preparing user suplied JSON for parsing with protobuf (base16 -> base64).
+
+    @staticmethod
+    def h2b64(name, x):
+        """
+        Convert value of a field of a given name from hex to base64,
+        if the field is known to be of the bytes type.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64encode(bytes.fromhex(x)).decode("utf-8")
+        return ABI.hex2base64(x)
+
+    @staticmethod
+    def hex2base64(d):
+        """
+        Convert decoded JSON list of args so fields of type bytes
+        are in base64, in order to make it compatible with the format
+        required by protobuf JSON parser.
+        """
+        if type(d) == list:
+            return [ABI.hex2base64(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.h2b64(k, d[k]) for k in d}
+        return d
+
+    @staticmethod
+    def b64_2h(name, x):
+        """
+        Helper function of base64_2hex.
+        """
+        if type(x) == str and name in ABI.HEX_FIELDS:
+            return base64.b64decode(x).hex()
+        return ABI.base64_2hex(x)
+
+    @staticmethod
+    def base64_2hex(d):
+        """
+        Convert JSON serialized args so fields of type bytes are shown in base16 (hex).
+        """
+        if type(d) == list:
+            return [ABI.base64_2hex(x) for x in d]
+        if type(d) == dict:
+            return {k: ABI.b64_2h(k, d[k]) for k in d}
+        return d
 
 
 def read_pem_key(file_name: str):
@@ -256,6 +325,10 @@ def signature(private_key, data: bytes):
     )
 
 
+def private_to_public_key(private_key) -> bytes:
+    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
+
+
 def _serialize(o) -> bytes:
     return o.SerializeToString()
 
@@ -331,6 +404,10 @@ class InsecureGRPCService:
 def extract_common_name(certificate_file: str) -> str:
     cert_dict = ssl._ssl._test_decode_cert(certificate_file)
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
+
+
+def abi_byte_array(a: bytes) -> bytes:
+    return a
 
 
 class SecureGRPCService:
@@ -443,6 +520,7 @@ class CasperLabsClient:
         public_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
         payment_uref: bytes = None,
@@ -451,6 +529,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies: list = None,
+        chain_name: str = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -461,6 +540,13 @@ class CasperLabsClient:
 
         if from_addr and len(from_addr) != 32:
             raise Exception(f"from_addr must be 32 bytes")
+
+        if payment_amount:
+            payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
+
+        # Unless one of payment* options supplied use bundled standard-payment
+        if not any((payment, payment_name, payment_hash, payment_uref)):
+            payment = bundled_contract("standard_payment.wasm")
 
         session_options = (session, session_hash, session_name, session_uref)
         payment_options = (payment, payment_hash, payment_name, payment_uref)
@@ -497,6 +583,7 @@ class CasperLabsClient:
             dependencies=dependencies
             and [bytes.fromhex(d) for d in dependencies]
             or [],
+            chain_name=chain_name or "",
         )
 
         deploy_hash = blake2b_hash(_serialize(header))
@@ -526,6 +613,7 @@ class CasperLabsClient:
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
+        payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
         payment_uref: bytes = None,
@@ -534,6 +622,7 @@ class CasperLabsClient:
         session_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
+        chain_name: str = None,
     ):
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -565,6 +654,9 @@ class CasperLabsClient:
                               deploy will remain valid for.
         :dependencies:        List of deploy hashes (base16 encoded) which
                               must be executed before this deploy.
+        :chain_name:          Name of the chain to optionally restrict the
+                              deploy from being accidentally included
+                              anywhere else.
         :return:              Tuple: (deserialized DeployServiceResponse object, deploy_hash)
         """
 
@@ -576,6 +668,7 @@ class CasperLabsClient:
             public_key=public_key,
             session_args=session_args,
             payment_args=payment_args,
+            payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
             payment_uref=payment_uref,
@@ -584,18 +677,22 @@ class CasperLabsClient:
             session_uref=session_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
+            chain_name=chain_name,
         )
 
-        deploy = self.sign_deploy(
-            deploy, (public_key and read_pem_key(public_key)) or from_addr, private_key
+        pk = (
+            (public_key and read_pem_key(public_key))
+            or from_addr
+            or private_to_public_key(private_key)
         )
+        deploy = self.sign_deploy(deploy, pk, private_key)
 
         # TODO: Return only deploy_hash
         return self.send_deploy(deploy), deploy.deploy_hash
 
     @api
     def send_deploy(self, deploy):
-        # TODO: Deploy returns Empty, error handing via exceptions, apparently,
+        # TODO: Deploy returns Empty, error handling via exceptions, apparently,
         # so no point in returning it.
         return self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
@@ -654,9 +751,10 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
+        delay_in_seconds=5,
     ):
         """
-        Retrieve DAG in DOT format.
+        Generate DAG in DOT format.
 
         :param depth:                     depth in terms of block height
         :param out:                       output image filename, outputs to stdout if
@@ -666,9 +764,53 @@ class CasperLabsClient:
         :param show_justification_lines:  if justification lines should be shown
         :param stream:                    subscribe to changes, 'out' has to specified,
                                           valid values are 'single-output', 'multiple-outputs'
-        :return:                          VisualizeBlocksResponse object
+        :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
+        :return:                          Yields generated DOT source or file name when out provided.
+                                          Generates endless stream of file names if stream is not None.
         """
-        raise Exception("Not implemented yet")
+        block_infos = list(self.showBlocks(depth, full_view=False))
+        dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
+        if not out:
+            yield dot_dag_description
+            return
+
+        parts = out.split(".")
+        file_format = parts[-1]
+        file_name_base = ".".join(parts[:-1])
+
+        iteration = -1
+
+        def file_name():
+            nonlocal iteration, file_format
+            if not stream or stream == "single-output":
+                return out
+            else:
+                iteration += 1
+                return f"{file_name_base}_{iteration}.{file_format}"
+
+        yield self._call_dot(dot_dag_description, file_name(), file_format)
+        previous_block_hashes = set(b.summary.block_hash for b in block_infos)
+        while stream:
+            time.sleep(delay_in_seconds)
+            block_infos = list(self.showBlocks(depth, full_view=False))
+            block_hashes = set(b.summary.block_hash for b in block_infos)
+            if block_hashes != previous_block_hashes:
+                dot_dag_description = vdag.generate_dot(
+                    block_infos, show_justification_lines
+                )
+                yield self._call_dot(dot_dag_description, file_name(), file_format)
+                previous_block_hashes = block_hashes
+
+    def _call_dot(self, dot_dag_description, file_name, file_format):
+        with tempfile.NamedTemporaryFile(mode="w") as f:
+            f.write(dot_dag_description)
+            f.flush()
+            cmd = f"dot -T{file_format} -o {file_name} {f.name}"
+            rc = os.system(cmd)
+            if rc:
+                raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
+        print(f"Wrote {file_name}")
+        return file_name
 
     @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
@@ -686,7 +828,6 @@ class CasperLabsClient:
         """
 
         def key_variant(keyType):
-
             variant = self.STATE_QUERY_KEY_VARIANT.get(keyType.lower(), None)
             if variant is None:
                 raise InternalError(
@@ -694,7 +835,16 @@ class CasperLabsClient:
                 )
             return variant
 
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
+        def encode_local_key(key: str) -> str:
+            seed, rest = key.split(":")
+            abi_encoded_rest = abi_byte_array(bytes.fromhex(rest)).hex()
+            r = f"{seed}:{abi_encoded_rest}"
+            logging.info(f"encode_local_key => {r}")
+            return r
+
+        key_value = encode_local_key(key) if keyType.lower() == "local" else key
+
+        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key_value)
         q.path_segments.extend([name for name in path.split("/") if name])
         return self.casperService.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
@@ -720,11 +870,8 @@ class CasperLabsClient:
 
         mintPublic = urefs[0]
 
-        def abi_byte_array(a: bytes) -> bytes:
-            return struct.pack("<I", len(a)) + a
-
         mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = abi_byte_array(account.purse_id.uref).hex()
+        purseAddrHex = account.purse_id.uref.hex()
         localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
 
         balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
@@ -864,14 +1011,37 @@ def unbond_command(casperlabs_client, args):
             )
         )
 
-    logging.info(f" XXX unbond_command: args.session_args={args.session_args}")
+    return deploy_command(casperlabs_client, args)
+
+
+@guarded_command
+def transfer_command(casperlabs_client, args):
+    _set_session(args, "transfer_to_account.wasm")
+
+    if not args.session_args:
+        target_account_bytes = base64.b64decode(args.target_account)
+        if len(target_account_bytes) != 32:
+            raise Exception("--target_account must be 32 bytes base64 encoded")
+
+        args.session_args = ABI.args_to_json(
+            ABI.args(
+                [
+                    ABI.account("account", target_account_bytes),
+                    ABI.long_value("amount", args.amount),
+                ]
+            )
+        )
 
     return deploy_command(casperlabs_client, args)
 
 
 def _deploy_kwargs(args, private_key_accepted=True):
-    from_addr = bytes.fromhex(getattr(args, "from"))
-    if len(from_addr) != 32:
+    from_addr = (
+        getattr(args, "from")
+        and bytes.fromhex(getattr(args, "from"))
+        or private_to_public_key(args.private_key)
+    )
+    if from_addr and len(from_addr) != 32:
         raise Exception(
             "--from must be 32 bytes encoded as 64 characters long hexadecimal"
         )
@@ -904,8 +1074,9 @@ def _deploy_kwargs(args, private_key_accepted=True):
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
         session_uref=args.session_uref and bytes.fromhex(args.session_uref),
-        ttl_millis=args.ttl,
+        ttl_millis=args.ttl_millis,
         dependencies=args.dependencies,
+        chain_name=args.chain_name,
     )
     if private_key_accepted:
         d["private_key"] = args.private_key or None
@@ -974,21 +1145,25 @@ def show_block_command(casperlabs_client, args):
 
 @guarded_command
 def show_blocks_command(casperlabs_client, args):
-    response = casperlabs_client.showBlocks(args.depth)
+    response = casperlabs_client.showBlocks(args.depth, full_view=False)
     _show_blocks(response)
 
 
 @guarded_command
 def vdag_command(casperlabs_client, args):
-    response = casperlabs_client.visualizeDag(args.depth)
-    # TODO: call Graphviz
-    print(hexify(response))
+    for o in casperlabs_client.visualizeDag(
+        args.depth, args.out, args.show_justification_lines, args.stream
+    ):
+        if not args.out:
+            print(o)
+            break
 
 
 @guarded_command
 def query_state_command(casperlabs_client, args):
+
     response = casperlabs_client.queryState(
-        args.block_hash, args.key, args.path, getattr(args, "type")
+        args.block_hash, args.key, args.path or "", getattr(args, "type")
     )
     print(hexify(response))
 
@@ -1011,10 +1186,159 @@ def show_deploys_command(casperlabs_client, args):
     _show_blocks(response, element_name="deploy")
 
 
+def write_file(file_name, text):
+    with open(file_name, "w") as f:
+        f.write(text)
+
+
+def write_file_binary(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+
+def generate_key_pair():
+    curve = ec.SECP256R1()
+    private_key = ec.generate_private_key(curve, default_backend())
+    public_key = private_key.public_key()
+    return private_key, public_key
+
+
+def public_address(public_key):
+    numbers = public_key.public_numbers()
+    x, y = numbers.x, numbers.y
+
+    def int_to_32_bytes(x):
+        return x.to_bytes(x.bit_length(), byteorder="little")[0:32]
+
+    a = int_to_32_bytes(x) + int_to_32_bytes(y)
+
+    keccak_hash = keccak.new(digest_bits=256)
+    keccak_hash.update(a)
+    r = keccak_hash.hexdigest()
+    return r[12 * 2 :]
+
+
+def generate_certificates(private_key, public_key):
+    today = datetime.datetime.today()
+    one_day = datetime.timedelta(1, 0, 0)
+    address = public_address(public_key)  # .map(Base16.encode).getOrElse("local")
+    owner = f"CN={address}"
+
+    builder = x509.CertificateBuilder()
+    builder = builder.not_valid_before(today)
+
+    # TODO: Where's documentation of the decision to make keys valid for 1 year only?
+    builder = builder.not_valid_after(today + 365 * one_day)
+    builder = builder.subject_name(
+        x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, owner)])
+    )
+    builder = builder.issuer_name(
+        x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, owner)])
+    )
+    builder = builder.public_key(public_key)
+    builder = builder.serial_number(x509.random_serial_number())
+    certificate = builder.sign(
+        private_key=private_key, algorithm=hashes.SHA256(), backend=default_backend()
+    )
+
+    cert_pem = certificate.public_bytes(encoding=serialization.Encoding.PEM)
+    key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return cert_pem, key_pem
+
+
+def encode_base64(a: bytes):
+    return str(base64.b64encode(a), "utf-8")
+
+
+@guarded_command
+def keygen_command(casperlabs_client, args):
+    directory = Path(args.directory).resolve()
+    validator_private_path = directory / "validator-private.pem"
+    validator_pub_path = directory / "validator-public.pem"
+    validator_id_path = directory / "validator-id"
+    validator_id_hex_path = directory / "validator-id-hex"
+    node_priv_path = directory / "node.key.pem"
+    node_cert_path = directory / "node.certificate.pem"
+    node_id_path = directory / "node-id"
+
+    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
+    validator_public = validator_private.public_key()
+
+    validator_private_pem = validator_private.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    validator_public_pem = validator_public.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    validator_public_bytes = validator_public.public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
+    )
+
+    write_file_binary(validator_private_path, validator_private_pem)
+    write_file_binary(validator_pub_path, validator_public_pem)
+    write_file(validator_id_path, encode_base64(validator_public_bytes))
+    write_file(validator_id_hex_path, validator_public_bytes.hex())
+
+    private_key, public_key = generate_key_pair()
+
+    node_cert, key_pem = generate_certificates(private_key, public_key)
+
+    write_file_binary(node_priv_path, key_pem)
+    write_file_binary(node_cert_path, node_cert)
+
+    write_file(node_id_path, public_address(public_key))
+    print(f"Keys successfully created in directory: {str(directory.absolute())}")
+
+
+def check_directory(path):
+    if not os.path.exists(path):
+        raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
+    if not os.path.isdir(path):
+        raise argparse.ArgumentTypeError(f"'{path}' is not a directory")
+    if not os.access(path, os.W_OK):
+        raise argparse.ArgumentTypeError(f"'{path}' does not have writing permissions")
+    return Path(path)
+
+
+def dot_output(file_name):
+    """
+    Check file name has an extension of one of file formats supported by Graphviz.
+    """
+    parts = file_name.split(".")
+    if len(parts) == 1:
+        raise argparse.ArgumentTypeError(
+            f"'{file_name}' has no extension indicating file format"
+        )
+    else:
+        file_format = parts[-1]
+        if file_format not in DOT_FORMATS.split(","):
+            raise argparse.ArgumentTypeError(
+                f"File extension {file_format} not_recognized, must be one of {DOT_FORMATS}"
+            )
+    return file_name
+
+
+def natural(number):
+    """Check number is an integer greater than 0"""
+    n = int(number)
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{number} is not a positive int value")
+    return n
+
+
 # fmt: off
 def deploy_options(keys_required=False, private_key_accepted=True):
     return ([
-        [('-f', '--from'), dict(required=True, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+        [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
         [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
         [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used.")],
         [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
@@ -1028,10 +1352,10 @@ def deploy_options(keys_required=False, private_key_accepted=True):
         [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
         [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
         [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--ttl',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+        [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
         [('--public-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
         + (private_key_accepted
-           and [[('--private-key',), dict(required=keys_required, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
+           and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
            or []))
 # fmt:on
 
@@ -1131,11 +1455,16 @@ def main():
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=True))
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options(keys_required=False))
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=True))
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options(keys_required=False))
+
+    parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
+                      [[('-a', '--amount'), dict(required=False, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
+                       [('-t', '--target-account'), dict(required=True, type=str, help="base64 representation of target account's public key")],
+                       ] + deploy_options(keys_required=False, private_key_accepted=True))
 
     parser.addCommand('propose', propose_command, 'Force a node to propose a block based on its accumulated deploys.', [])
 
@@ -1151,22 +1480,40 @@ def main():
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
 
-    parser.addCommand('vdag', vdag_command, 'DAG in DOT format',
-                      [[('-d', '--depth'), dict(required=True, type=int, help='depth in terms of block height')],
-                       [('-o', '--out'), dict(required=False, type=str, help='output image filename, outputs to stdout if not specified, must end with one of the png, svg, svg_standalone, xdot, plain, plain_ext, ps, ps2, json, json0')],
+    parser.addCommand('vdag', vdag_command, 'DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it.',
+                      [[('-d', '--depth'), dict(required=True, type=natural, help='depth in terms of block height')],
+                       [('-o', '--out'), dict(required=False, type=dot_output, help=f'output image filename, outputs to stdout if not specified, must end with one of {DOT_FORMATS}')],
                        [('-s', '--show-justification-lines'), dict(action='store_true', help='if justification lines should be shown')],
                        [('--stream',), dict(required=False, choices=('single-output', 'multiple-outputs'), help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'")]])
 
     parser.addCommand('query-state', query_state_command, 'Query a value in the global state.',
                       [[('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')],
                        [('-k', '--key'), dict(required=True, type=str, help='Base16 encoding of the base key')],
-                       [('-p', '--path'), dict(required=True, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
-                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'),
-                                               help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
+                       [('-p', '--path'), dict(required=False, type=str, help="Path to the value to query. Must be of the form 'key1/key2/.../keyn'")],
+                       [('-t', '--type'), dict(required=True, choices=('hash', 'uref', 'address', 'local'), help="Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.")]])
 
     parser.addCommand('balance', balance_command, 'Returns the balance of the account at the specified block.',
                       [[('-a', '--address'), dict(required=True, type=str, help="Account's public key in hex.")],
                        [('-b', '--block-hash'), dict(required=True, type=str, help='Hash of the block to query the state of')]])
+
+    parser.addCommand('keygen', keygen_command, textwrap.dedent("""\
+         Generate keys.
+
+         Usage: casperlabs-client keygen <existingOutputDirectory>
+         Command will override existing files!
+         Generated files:
+           node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+                                 # derived from node.key.pem
+           node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+                                 # derived from node.key.pem
+           node.key.pem          # secp256r1 private key
+           validator-id          # validator ID in Base64 format; can be used in accounts.csv
+                                 # derived from validator.public.pem
+           validator-id-hex      # validator ID in hex, derived from validator.public.pem
+           validator-private.pem # ed25519 private key
+           validator-public.pem  # ed25519 public key"""),
+                      [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
+
     # fmt:on
     sys.exit(parser.run())
 

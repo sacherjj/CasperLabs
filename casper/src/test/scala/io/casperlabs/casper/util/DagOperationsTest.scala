@@ -138,7 +138,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 2) DAG looks like this:
        *         b2
@@ -158,7 +158,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 3) DAG looks like this:
        * v1  v2  v3
@@ -187,7 +187,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 4) DAG looks like this:
        * v1  v2  v3
@@ -216,7 +216,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == genesis.blockHash)
+      } yield assert(lca.messageHash == genesis.blockHash)
 
       /* 5) DAG looks like this:
        *  b6     b7
@@ -244,7 +244,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestMessages.values.flatten.toList)
               )
-      } yield assert(lca == b4.blockHash)
+      } yield assert(lca.messageHash == b4.blockHash)
 
       /* 6) DAG looks like:
        *
@@ -285,7 +285,7 @@ class DagOperationsTest extends FlatSpec with Matchers with BlockGenerator with 
                 dag,
                 NonEmptyList.fromListUnsafe(latestBlocks.values.flatten.toList)
               )
-      } yield assert(lca == f.blockHash)
+      } yield assert(lca.messageHash == f.blockHash)
   }
 
   "uncommon ancestors" should "be computed properly" in withStorage {

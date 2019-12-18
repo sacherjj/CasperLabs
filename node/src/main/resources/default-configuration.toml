@@ -2,6 +2,13 @@
 #   * Nested tables
 #   * Arrays
 
+[log]
+# Log level, e.g. DEBUG, INFO, WARN, ERROR.
+level = "INFO"
+
+# Optionally print logs to a file in JSON format.
+# json-path =
+
 # io.casperlabs.node.configuration.Configuration.Server
 [server]
 
@@ -38,6 +45,12 @@ max-num-of-connections = 500
 
 # Maximum size of message that can be sent via transport layer.
 max-message-size = 4194304
+
+# Size of the buffer to store emitted block events
+event-stream-buffer-size = 10
+
+# Target parallelism for execution engine requests.
+engine-parallelism = 1
 
 # Size of chunks to split larger payloads into when streamed via transport layer.
 chunk-size = 1048576
@@ -138,6 +151,9 @@ cache-neighborhood-before = 5
 # How far to go to the future (by ranks) for caching neighborhood of looked up block
 cache-neighborhood-after = 6
 
+# How many records to pull from the DB in a chunk of a stream.
+deploy-stream-chunk-size = 20
+
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
 
@@ -218,6 +234,9 @@ auto-propose-enabled = false
 # Time between proposal checks.
 auto-propose-check-interval = "1second"
 
+# Maximum time to allow before proposing a ballot or block.
+auto-propose-ballot-interval = "36500days"
+
 # Time to accumulate deploys before proposing.
 auto-propose-acc-interval = "5seconds"
 
@@ -226,6 +245,9 @@ auto-propose-acc-count = 10
 
 # Maximum block size in bytes
 max-block-size-bytes = 10485760
+
+# Minimum TTL value of a deploy
+min-ttl = "1hour"
 
 # io.casperlabs.node.configuration.Configuration.Kamon
 [metrics]

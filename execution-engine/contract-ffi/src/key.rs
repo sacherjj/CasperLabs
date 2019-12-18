@@ -1,5 +1,6 @@
 use alloc::{format, vec::Vec};
 
+use base16;
 use blake2::{
     digest::{Input, VariableOutput},
     VarBlake2b,
@@ -7,10 +8,9 @@ use blake2::{
 use hex_fmt::HexFmt;
 
 use crate::{
-    base16,
-    bytesrepr::{Error, FromBytes, ToBytes, N32, U32_SIZE},
+    bytesrepr::{Error, FromBytes, ToBytes},
     contract_api::{ContractRef, TURef},
-    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+    uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
 };
 
 const ACCOUNT_ID: u8 = 0;
@@ -18,21 +18,22 @@ const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
 const LOCAL_ID: u8 = 3;
 
-pub const HASH_SIZE: usize = 32;
-pub const LOCAL_KEY_SIZE: usize = 32;
-pub const LOCAL_SEED_SIZE: usize = 32;
+pub const KEY_ACCOUNT_LENGTH: usize = 32;
+pub const KEY_HASH_LENGTH: usize = 32;
+pub const KEY_LOCAL_LENGTH: usize = 32;
+pub const LOCAL_SEED_LENGTH: usize = 32;
 
-const KEY_ID_SIZE: usize = 1; // u8 used to determine the ID
-const ACCOUNT_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
-const HASH_KEY_SIZE: usize = KEY_ID_SIZE + U32_SIZE + N32;
-pub const UREF_SIZE: usize = KEY_ID_SIZE + UREF_SIZE_SERIALIZED;
-const LOCAL_SIZE: usize = KEY_ID_SIZE + U32_SIZE + LOCAL_KEY_SIZE;
+const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
+const KEY_ACCOUNT_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_ACCOUNT_LENGTH;
+const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
+pub const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
+const KEY_LOCAL_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_LOCAL_LENGTH;
 
 /// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
-fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
-    let mut ret = [0u8; LOCAL_KEY_SIZE];
+fn hash(bytes: &[u8]) -> [u8; KEY_LOCAL_LENGTH] {
+    let mut ret = [0u8; KEY_LOCAL_LENGTH];
     // Safe to unwrap here because our digest length is constant and valid
-    let mut hasher = VarBlake2b::new(LOCAL_KEY_SIZE).unwrap();
+    let mut hasher = VarBlake2b::new(KEY_LOCAL_LENGTH).unwrap();
     hasher.input(bytes);
     hasher.variable_result(|hash| ret.clone_from_slice(hash));
     ret
@@ -41,16 +42,16 @@ fn hash(bytes: &[u8]) -> [u8; LOCAL_KEY_SIZE] {
 #[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum Key {
-    Account([u8; 32]),
-    Hash([u8; HASH_SIZE]),
+    Account([u8; KEY_ACCOUNT_LENGTH]),
+    Hash([u8; KEY_HASH_LENGTH]),
     URef(URef),
-    Local([u8; LOCAL_KEY_SIZE]),
+    Local([u8; KEY_LOCAL_LENGTH]),
 }
 
 impl Key {
-    pub fn local(seed: [u8; LOCAL_SEED_SIZE], key_bytes: &[u8]) -> Self {
-        let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).cloned().collect();
-        let hash: [u8; LOCAL_KEY_SIZE] = hash(&bytes_to_hash);
+    pub fn local(seed: [u8; LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
+        let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
+        let hash: [u8; KEY_LOCAL_LENGTH] = hash(&bytes_to_hash);
         Key::Local(hash)
     }
 
@@ -61,6 +62,21 @@ impl Key {
             Key::URef(_) => String::from("Key::URef"),
             Key::Local(_) => String::from("Key::Local"),
         }
+    }
+
+    /// Calculates serialized size without actually serializing data.
+    pub fn serialized_size(&self) -> usize {
+        match self {
+            Key::Account(_) => KEY_ACCOUNT_SERIALIZED_LENGTH,
+            Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
+            Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
+            Key::Local(_) => KEY_LOCAL_SERIALIZED_LENGTH,
+        }
+    }
+
+    /// Returns max size a [`Key`] can be serialized into.
+    pub const fn serialized_size_hint() -> usize {
+        KEY_UREF_SERIALIZED_LENGTH
     }
 }
 
@@ -91,6 +107,23 @@ fn drop_hex_prefix(s: &str) -> &str {
     } else {
         &s
     }
+}
+
+/// Tries to decode `input` as a 32-byte array.  `input` may be prefixed with "0x".  Returns `None`
+/// if `input` cannot be parsed as hex, or if it does not parse to exactly 32 bytes.
+fn decode_from_hex(input: &str) -> Option<[u8; KEY_HASH_LENGTH]> {
+    const UNDECORATED_INPUT_LEN: usize = 2 * KEY_HASH_LENGTH;
+
+    let undecorated_input = drop_hex_prefix(input);
+
+    if undecorated_input.len() != UNDECORATED_INPUT_LEN {
+        return None;
+    }
+
+    let mut output = [0u8; KEY_HASH_LENGTH];
+    let _bytes_written = base16::decode_slice(undecorated_input, &mut output).ok()?;
+    debug_assert!(_bytes_written == KEY_HASH_LENGTH);
+    Some(output)
 }
 
 impl Key {
@@ -125,38 +158,25 @@ impl Key {
         }
     }
 
-    /// Creates an instance of [Key::Hash] variant from the base16 encoded
-    /// String. Returns `None` if [addr] is not valid Blake2b hash.
-    pub fn parse_hash(addr: &str) -> Option<Key> {
-        let mut buff = [0u8; 32];
-        let parsed_addr = drop_hex_prefix(addr);
-        match binascii::hex2bin(parsed_addr.as_bytes(), &mut buff) {
-            Ok(_) => Some(Key::Hash(buff)),
-            _ => None,
-        }
+    /// Creates an instance of `Key::Hash` from the hex-encoded string.  Returns `None` if
+    /// `hex_encodede_hash` does not decode to a 32-byte array.
+    pub fn parse_hash(hex_encodede_hash: &str) -> Option<Key> {
+        decode_from_hex(hex_encodede_hash).map(Key::Hash)
     }
 
-    /// Creates an instance of [Key::URef] variant from the base16 encoded
-    /// String. Returns `None` if [addr] is not valid Blake2b hash.
-    pub fn parse_uref(addr: &str, access_rights: AccessRights) -> Option<Key> {
-        let mut buff = [0u8; 32];
-        let parsed_addr = drop_hex_prefix(&addr);
-        match binascii::hex2bin(parsed_addr.as_bytes(), &mut buff) {
-            Ok(_) => Some(Key::URef(URef::new(buff, access_rights))),
-            _ => None,
-        }
+    /// Creates an instance of `Key::URef` from the hex-encoded string.  Returns `None` if
+    /// `hex_encoded_uref` does not decode to a 32-byte array.
+    pub fn parse_uref(hex_encoded_uref: &str, access_rights: AccessRights) -> Option<Key> {
+        decode_from_hex(hex_encoded_uref).map(|uref| Key::URef(URef::new(uref, access_rights)))
     }
 
-    /// Creates an instance of [Key::Local] variant from the base16 encoded
-    /// String. Returns `None` if either [seed] or [key_hash] is not valid
-    /// Blake2b hash.
-    pub fn parse_local(seed: &str, key_hash: &str) -> Option<Key> {
-        let mut seed_buff = [0u8; 32];
-        let parsed_seed = drop_hex_prefix(seed);
-        let parsed_key = drop_hex_prefix(key_hash);
-        let _ = binascii::hex2bin(parsed_seed.as_bytes(), &mut seed_buff).ok()?;
-        let key_buff = base16::decode_lower(parsed_key).ok()?;
-        Some(Key::local(seed_buff, &key_buff))
+    /// Creates an instance of `Key::Local` from the hex-encoded strings.  Returns `None` if
+    /// `hex_encoded_seed` does not decode to a 32-byte array, or if `hex_encoded_key_bytes` does
+    /// does not decode from hex.
+    pub fn parse_local(hex_encoded_seed: &str, hex_encoded_key_bytes: &str) -> Option<Key> {
+        let decoded_seed = decode_from_hex(hex_encoded_seed)?;
+        let decoded_key_bytes = base16::decode(drop_hex_prefix(hex_encoded_key_bytes)).ok()?;
+        Some(Key::local(decoded_seed, &decoded_key_bytes))
     }
 
     pub fn as_string(&self) -> String {
@@ -171,6 +191,20 @@ impl Key {
     pub fn as_uref(&self) -> Option<&URef> {
         match self {
             Key::URef(uref) => Some(uref),
+            _ => None,
+        }
+    }
+
+    pub fn as_hash(&self) -> Option<[u8; KEY_HASH_LENGTH]> {
+        match self {
+            Key::Hash(hash) => Some(*hash),
+            _ => None,
+        }
+    }
+
+    pub fn as_local(&self) -> Option<[u8; KEY_LOCAL_LENGTH]> {
+        match self {
+            Key::Local(local) => Some(*local),
             _ => None,
         }
     }
@@ -193,25 +227,25 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         match self {
             Key::Account(addr) => {
-                let mut result = Vec::with_capacity(ACCOUNT_KEY_SIZE);
+                let mut result = Vec::with_capacity(KEY_ACCOUNT_SERIALIZED_LENGTH);
                 result.push(ACCOUNT_ID);
                 result.append(&mut addr.to_bytes()?);
                 Ok(result)
             }
             Key::Hash(hash) => {
-                let mut result = Vec::with_capacity(HASH_KEY_SIZE);
+                let mut result = Vec::with_capacity(KEY_HASH_SERIALIZED_LENGTH);
                 result.push(HASH_ID);
                 result.append(&mut hash.to_bytes()?);
                 Ok(result)
             }
             Key::URef(uref) => {
-                let mut result = Vec::with_capacity(UREF_SIZE);
+                let mut result = Vec::with_capacity(KEY_UREF_SERIALIZED_LENGTH);
                 result.push(UREF_ID);
                 result.append(&mut uref.to_bytes()?);
                 Ok(result)
             }
             Key::Local(hash) => {
-                let mut result = Vec::with_capacity(LOCAL_SIZE);
+                let mut result = Vec::with_capacity(KEY_LOCAL_SERIALIZED_LENGTH);
                 result.push(LOCAL_ID);
                 result.append(&mut hash.to_bytes()?);
                 Ok(result)
@@ -263,7 +297,8 @@ impl FromBytes for Vec<Key> {
 impl ToBytes for Vec<Key> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(4 + (size as usize) * UREF_SIZE);
+        let mut result: Vec<u8> =
+            Vec::with_capacity(4 + (size as usize) * KEY_UREF_SERIALIZED_LENGTH);
         result.extend(size.to_bytes()?);
         result.extend(
             self.iter()
@@ -276,7 +311,6 @@ impl ToBytes for Vec<Key> {
     }
 }
 
-#[allow(clippy::unnecessary_operation)]
 #[cfg(test)]
 mod tests {
     // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
@@ -290,8 +324,11 @@ mod tests {
     };
 
     use crate::{
-        bytesrepr::{Error, FromBytes},
-        key::Key,
+        bytesrepr::{Error, FromBytes, ToBytes},
+        key::{
+            Key, KEY_ACCOUNT_SERIALIZED_LENGTH, KEY_HASH_LENGTH, KEY_HASH_SERIALIZED_LENGTH,
+            KEY_LOCAL_LENGTH, KEY_LOCAL_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH,
+        },
         uref::{AccessRights, URef},
     };
 
@@ -368,19 +405,9 @@ mod tests {
 
     #[test]
     fn parse_local_with_arbitrary_length() {
-        let short_key = {
-            let mut output = [0; 64];
-            binascii::bin2hex(&[42u8; 32], &mut output).ok().unwrap();
-            String::from_utf8(output.to_vec()).unwrap()
-        };
-
-        let long_key = {
-            let mut output = [0; 255 * 2];
-            binascii::bin2hex(&[42u8; 255], &mut output).ok().unwrap();
-            String::from_utf8(output.to_vec()).unwrap()
-        };
-
-        let seed = "01020102010201020102010201020102";
+        let short_key = base16::encode_lower(&[42u8; 32]);
+        let long_key = base16::encode_lower(&vec![42u8; 255]);
+        let seed = "0102010201020102010201020102010201020102010201020102010201020102";
 
         let local1 = Key::parse_local(seed, &short_key).expect("should parse local with short key");
         let local2 = Key::parse_local(seed, &long_key).expect("should parse local with long key");
@@ -389,7 +416,7 @@ mod tests {
         assert_ne!(local1, local2);
     }
 
-    /// Create a base16 string of [[length]] size.
+    /// Create a base16 string of `length` size.
     fn base16_str_arb(length: usize) -> RegexGeneratorStrategy<String> {
         string_regex(&format!("[0-9a-f]{{{}}}", length)).unwrap()
     }
@@ -397,10 +424,10 @@ mod tests {
     proptest! {
 
         #[test]
-        fn should_parse_32_base16_to_key(base16_addr in base16_str_arb(32)) {
-            assert!(Key::parse_hash(&base16_addr).is_some());
-            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_some());
-            assert!(Key::parse_local(&base16_addr, &base16_addr).is_some());
+        fn should_fail_parse_small_base16_to_key(base16_addr in base16_str_arb(32)) {
+            assert!(Key::parse_hash(&base16_addr).is_none());
+            assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_none());
+            assert!(Key::parse_local(&base16_addr, &base16_addr).is_none());
         }
 
         #[test]
@@ -411,7 +438,7 @@ mod tests {
         }
 
         #[test]
-        fn should_fail_parse_invalid_length_base16_to_key(base16_addr in base16_str_arb(70)) {
+        fn should_fail_parse_long_base16_to_key(base16_addr in base16_str_arb(70)) {
             assert!(Key::parse_hash(&base16_addr).is_none());
             assert!(Key::parse_uref(&base16_addr, AccessRights::READ).is_none());
             assert!(Key::parse_local(&base16_addr, &base16_addr).is_none());
@@ -442,5 +469,101 @@ mod tests {
         assert_eq!(res.expect_err("should fail"), Error::OutOfMemoryError);
         #[cfg(target_os = "macos")]
         assert_eq!(res.expect_err("should fail"), Error::EarlyEndOfStream);
+    }
+
+    #[test]
+    fn decode_from_hex() {
+        let input = [255; 32]; // `255` decimal is `ff` hex
+        let hex_input = "f".repeat(64);
+        assert_eq!(Some(input), super::decode_from_hex(&hex_input));
+
+        let prefixed_hex_input = format!("0x{}", hex_input);
+        assert_eq!(Some(input), super::decode_from_hex(&prefixed_hex_input));
+
+        let bad_prefix = format!("0X{}", hex_input);
+        assert!(super::decode_from_hex(&bad_prefix).is_none());
+
+        let too_short = "f".repeat(63);
+        assert!(super::decode_from_hex(&too_short).is_none());
+
+        let too_long = "f".repeat(65);
+        assert!(super::decode_from_hex(&too_long).is_none());
+
+        let invalid_hex = "g".repeat(64);
+        assert!(super::decode_from_hex(&invalid_hex).is_none());
+    }
+
+    #[test]
+    fn check_key_account_getters() {
+        let account = [42; 32];
+        let key1 = Key::Account(account);
+        assert_eq!(key1.as_account(), Some(account));
+        assert!(key1.as_hash().is_none());
+        assert!(key1.as_uref().is_none());
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_hash_getters() {
+        let hash = [42; KEY_HASH_LENGTH];
+        let key1 = Key::Hash(hash);
+        assert!(key1.as_account().is_none());
+        assert_eq!(key1.as_hash(), Some(hash));
+        assert!(key1.as_uref().is_none());
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_uref_getters() {
+        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+        let key1 = Key::URef(uref);
+        assert!(key1.as_account().is_none());
+        assert!(key1.as_hash().is_none());
+        assert_eq!(key1.as_uref(), Some(&uref));
+        assert!(key1.as_local().is_none());
+    }
+
+    #[test]
+    fn check_key_local_getters() {
+        let local = [42; KEY_LOCAL_LENGTH];
+        let key1 = Key::Local(local);
+        assert!(key1.as_account().is_none());
+        assert!(key1.as_hash().is_none());
+        assert!(key1.as_uref().is_none());
+        assert_eq!(key1.as_local(), Some(local));
+    }
+
+    #[test]
+    fn serialized_size() {
+        let account = [42; 32];
+        let hash = [42; KEY_HASH_LENGTH];
+        let uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
+        let local = [42; KEY_LOCAL_LENGTH];
+
+        let keys = [
+            (Key::Account(account), KEY_ACCOUNT_SERIALIZED_LENGTH),
+            (Key::Hash(hash), KEY_HASH_SERIALIZED_LENGTH),
+            (Key::URef(uref), KEY_UREF_SERIALIZED_LENGTH),
+            (Key::Local(local), KEY_LOCAL_SERIALIZED_LENGTH),
+        ];
+
+        for &(key, const_size) in keys.iter() {
+            // println!("{:?}={}", key, const_size);
+            let bytes = key.to_bytes().expect("should serialize");
+            assert_eq!(key.serialized_size(), const_size);
+            assert_eq!(bytes.len(), key.serialized_size());
+        }
+    }
+
+    #[test]
+    fn key_size_hint() {
+        let mut sizes = vec![
+            KEY_ACCOUNT_SERIALIZED_LENGTH,
+            KEY_HASH_SERIALIZED_LENGTH,
+            KEY_UREF_SERIALIZED_LENGTH,
+            KEY_LOCAL_SERIALIZED_LENGTH,
+        ];
+        sizes.sort();
+        assert_eq!(sizes.last().cloned().unwrap(), Key::serialized_size_hint());
     }
 }

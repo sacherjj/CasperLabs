@@ -26,8 +26,8 @@ object Time extends TimeInstances {
 }
 
 sealed abstract class TimeInstances {
-  implicit def stateTTime[S, F[_]: Monad: Time[?[_]]]: Time[StateT[F, S, ?]] =
-    Time.forTrans[F, StateT[?[_], S, ?]]
+  implicit def stateTTime[S, F[_]: Monad: Time[*[_]]]: Time[StateT[F, S, ?]] =
+    Time.forTrans[F, StateT[*[_], S, ?]]
 
   implicit def mkTime[F[_]](implicit timer: Timer[F]): Time[F] =
     new Time[F] {

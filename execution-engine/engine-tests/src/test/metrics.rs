@@ -1,6 +1,5 @@
 use lazy_static::lazy_static;
 
-use contract_ffi::key::Key;
 use engine_core::engine_state::EngineConfig;
 use engine_shared::{
     logging::{
@@ -32,54 +31,6 @@ lazy_static! {
 }
 
 #[test]
-fn should_query_with_metrics() {
-    setup();
-    let correlation_id = CorrelationId::new();
-    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
-    let (global_state, root_hash) =
-        InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_config = EngineConfig::new();
-    let result =
-        InMemoryWasmTestBuilder::new(global_state, engine_config, root_hash.to_vec()).finish();
-
-    let _result = result
-        .builder()
-        .query(
-            None,
-            Key::Account(test_support::MOCKED_ACCOUNT_ADDRESS),
-            &[],
-        )
-        .expect("should query");
-
-    let log_items = BUFFERED_LOGGER
-        .extract_correlated(&correlation_id.to_string())
-        .expect("log items expected");
-
-    assert!(!log_items.is_empty());
-    for log_item in log_items {
-        assert!(
-            log_item
-                .properties
-                .contains_key(&"correlation_id".to_string()),
-            "should have correlation_id"
-        );
-
-        let matched_correlation_id = log_item
-            .properties
-            .get(&"correlation_id".to_string())
-            .expect("should have correlation id value");
-
-        assert_eq!(
-            matched_correlation_id,
-            &correlation_id.to_string(),
-            "correlation_id should match"
-        );
-
-        assert_eq!(log_item.log_level, "Metric", "expected Metric");
-    }
-}
-
-#[test]
 fn should_commit_with_metrics() {
     setup();
     let correlation_id = CorrelationId::new();
@@ -100,49 +51,6 @@ fn should_commit_with_metrics() {
         .extract_correlated(&correlation_id.to_string())
         .expect("log items expected");
 
-    assert!(!log_items.is_empty());
-    for log_item in log_items {
-        assert!(
-            log_item
-                .properties
-                .contains_key(&"correlation_id".to_string()),
-            "should have correlation_id"
-        );
-
-        let matched_correlation_id = log_item
-            .properties
-            .get(&"correlation_id".to_string())
-            .expect("should have correlation id value");
-
-        assert_eq!(
-            matched_correlation_id,
-            &correlation_id.to_string(),
-            "correlation_id should match"
-        );
-
-        assert_eq!(log_item.log_level, "Metric", "expected Metric");
-    }
-}
-
-#[test]
-fn should_validate_with_metrics() {
-    setup();
-    let correlation_id = CorrelationId::new();
-    let mocked_account = test_utils::mocked_account(test_support::MOCKED_ACCOUNT_ADDRESS);
-    let (global_state, root_hash) =
-        InMemoryGlobalState::from_pairs(correlation_id, &mocked_account).unwrap();
-    let engine_config = EngineConfig::new();
-
-    let wasm_bytes = test_utils::create_empty_wasm_module_bytes();
-
-    let result =
-        InMemoryWasmTestBuilder::new(global_state, engine_config, root_hash.to_vec()).finish();
-
-    let _validate_response = result.builder().validate(wasm_bytes);
-
-    let log_items = BUFFERED_LOGGER
-        .extract_correlated(&correlation_id.to_string())
-        .expect("log items expected");
     assert!(!log_items.is_empty());
     for log_item in log_items {
         assert!(

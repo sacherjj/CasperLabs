@@ -10,8 +10,8 @@ import io.casperlabs.comm.discovery.NodeUtils.NodeWithoutChainId
 import io.casperlabs.configuration.cli.scallop
 import io.casperlabs.node.BuildInfo
 import io.casperlabs.node.configuration.Utils._
+import izumi.logstage.api.{Log => IzLog}
 import org.rogach.scallop._
-
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
@@ -52,6 +52,9 @@ private[configuration] object Converter extends ParserImplicits {
 
       override val argType: ArgType.V = ArgType.SINGLE
     }
+
+  implicit val logLevelConverter: ValueConverter[IzLog.Level] =
+    singleArgConverter(lvl => IzLog.Level.parse(lvl))
 }
 
 private[configuration] object Options {
@@ -172,6 +175,14 @@ private[configuration] final case class Options private (
     helpWidth(120)
 
     @scallop
+    val logLevel =
+      gen[IzLog.Level]("Log level, e.g. DEBUG, INFO, WARN, ERROR.")
+
+    @scallop
+    val logJsonPath =
+      gen[Path]("Optionally print logs to a file in JSON format.")
+
+    @scallop
     val grpcPortExternal =
       gen[Int]("Port used for external gRPC API, e.g. deployments.")
 
@@ -184,8 +195,16 @@ private[configuration] final case class Options private (
       gen[Int]("Maximum size of message that can be sent via transport layer.")
 
     @scallop
+    val serverEngineParallelism =
+      gen[Int]("Target parallelism for execution engine requests.")
+
+    @scallop
     val serverChunkSize =
       gen[Int]("Size of chunks to split larger payloads into when streamed via transport layer.")
+
+    @scallop
+    val serverEventStreamBufferSize =
+      gen[Int]("Size of the buffer to store emitted block events")
 
     @scallop
     val grpcPortInternal =
@@ -268,6 +287,9 @@ private[configuration] final case class Options private (
     @scallop
     val casperAutoProposeCheckInterval =
       gen[FiniteDuration]("Time between proposal checks.")
+    @scallop
+    val casperAutoProposeBallotInterval =
+      gen[FiniteDuration]("Maximum time to allow before trying to propose a ballot or block.")
 
     @scallop
     val casperAutoProposeAccInterval =
@@ -447,6 +469,11 @@ private[configuration] final case class Options private (
     )
 
     @scallop
+    val casperMinTtl = gen[FiniteDuration](
+      "Minimum deploy TTL value."
+    )
+
+    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 
@@ -457,6 +484,11 @@ private[configuration] final case class Options private (
     @scallop
     val blockstorageCacheNeighborhoodAfter = gen[Int](
       "How far to go to the future (by ranks) for caching neighborhood of looked up block"
+    )
+
+    @scallop
+    val blockstorageDeployStreamChunkSize = gen[Int](
+      "How many records to pull from the DB in a chunk of a stream."
     )
 
     @scallop

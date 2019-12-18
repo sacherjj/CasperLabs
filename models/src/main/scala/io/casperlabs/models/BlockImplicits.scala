@@ -3,6 +3,8 @@ package io.casperlabs.models
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
+import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Stats
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 
 object BlockImplicits {
@@ -12,18 +14,19 @@ object BlockImplicits {
         block.getHeader.validatorPublicKey.isEmpty &&
         block.getSignature.sig.isEmpty
 
-    def parentHashes: Seq[ByteString]      = block.getHeader.parentHashes
-    def parents: Seq[ByteString]           = block.getHeader.parentHashes
-    def justifications: Seq[Justification] = block.getHeader.justifications
-    def state: GlobalState                 = block.getHeader.getState
-    def bodyHash: ByteString               = block.getHeader.bodyHash
-    def timestamp: Long                    = block.getHeader.timestamp
-    def protocolVersion: ProtocolVersion   = block.getHeader.getProtocolVersion
-    def deployCount: Int                   = block.getHeader.deployCount
-    def chainName: String                  = block.getHeader.chainName
-    def validatorBlockSeqNum: Int          = block.getHeader.validatorBlockSeqNum
-    def validatorPublicKey: ByteString     = block.getHeader.validatorPublicKey
-    def rank: Long                         = block.getHeader.rank
+    def parentHashes: Seq[ByteString]        = block.getHeader.parentHashes
+    def parents: Seq[ByteString]             = block.getHeader.parentHashes
+    def justifications: Seq[Justification]   = block.getHeader.justifications
+    def justificationHashes: Seq[ByteString] = block.getHeader.justifications.map(_.latestBlockHash)
+    def state: GlobalState                   = block.getHeader.getState
+    def bodyHash: ByteString                 = block.getHeader.bodyHash
+    def timestamp: Long                      = block.getHeader.timestamp
+    def protocolVersion: ProtocolVersion     = block.getHeader.getProtocolVersion
+    def deployCount: Int                     = block.getHeader.deployCount
+    def chainName: String                    = block.getHeader.chainName
+    def validatorBlockSeqNum: Int            = block.getHeader.validatorBlockSeqNum
+    def validatorPublicKey: ByteString       = block.getHeader.validatorPublicKey
+    def rank: Long                           = block.getHeader.rank
     def weightMap: Map[ByteString, Weight] =
       block.getHeader.getState.bonds
         .map(b => (b.validatorPublicKey, Weight(b.stake)))

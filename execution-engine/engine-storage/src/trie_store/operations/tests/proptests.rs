@@ -22,72 +22,13 @@ fn get_range() -> RangeInclusive<usize> {
     RangeInclusive::new(start, end)
 }
 
-fn write_pairs<'a, R, S, E>(
-    correlation_id: CorrelationId,
-    environment: &'a R,
-    store: &S,
-    root_hash: &Blake2bHash,
-    pairs: &[(TestKey, TestValue)],
-) -> Result<Vec<Blake2bHash>, E>
-where
-    R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
-    S::Error: From<R::Error>,
-    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
-{
-    let mut results = Vec::new();
-    if pairs.is_empty() {
-        return Ok(results);
-    }
-    let mut root_hash = root_hash.to_owned();
-    let mut txn = environment.create_read_write_txn()?;
-
-    for (key, value) in pairs.iter() {
-        match write::<_, _, _, _, E>(correlation_id, &mut txn, store, &root_hash, key, value)? {
-            WriteResult::Written(hash) => {
-                root_hash = hash;
-            }
-            WriteResult::AlreadyExists => (),
-            WriteResult::RootNotFound => panic!("write_leaves given an invalid root"),
-        };
-        results.push(root_hash);
-    }
-    txn.commit()?;
-    Ok(results)
-}
-
-fn check_pairs<'a, R, S, E>(
-    correlation_id: CorrelationId,
-    environment: &'a R,
-    store: &S,
-    root_hashes: &[Blake2bHash],
-    pairs: &[(TestKey, TestValue)],
-) -> Result<bool, E>
-where
-    R: TransactionSource<'a, Handle = S::Handle>,
-    S: TrieStore<TestKey, TestValue>,
-    S::Error: From<R::Error>,
-    E: From<R::Error> + From<S::Error> + From<contract_ffi::bytesrepr::Error>,
-{
-    let txn = environment.create_read_txn()?;
-    for (index, root_hash) in root_hashes.iter().enumerate() {
-        for (key, value) in &pairs[..=index] {
-            let result = read::<_, _, _, _, E>(correlation_id, &txn, store, root_hash, key)?;
-            if ReadResult::Found(*value) != result {
-                return Ok(false);
-            }
-        }
-    }
-    Ok(true)
-}
-
 fn lmdb_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
     let correlation_id = CorrelationId::new();
     let (root_hash, tries) = TEST_TRIE_GENERATORS[0]().unwrap();
     let context = LmdbTestContext::new(&tries).unwrap();
     let mut states_to_check = vec![];
 
-    let root_hashes = write_pairs::<_, _, error::Error>(
+    let root_hashes = write_pairs::<_, _, _, _, error::Error>(
         correlation_id,
         &context.environment,
         &context.store,
@@ -98,7 +39,7 @@ fn lmdb_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
 
     states_to_check.extend(root_hashes);
 
-    check_pairs::<_, _, error::Error>(
+    check_pairs::<_, _, _, _, error::Error>(
         correlation_id,
         &context.environment,
         &context.store,
@@ -114,7 +55,7 @@ fn in_memory_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
     let context = InMemoryTestContext::new(&tries).unwrap();
     let mut states_to_check = vec![];
 
-    let root_hashes = write_pairs::<_, _, in_memory::Error>(
+    let root_hashes = write_pairs::<_, _, _, _, in_memory::Error>(
         correlation_id,
         &context.environment,
         &context.store,
@@ -125,7 +66,7 @@ fn in_memory_roundtrip_succeeds(pairs: &[(TestKey, TestValue)]) -> bool {
 
     states_to_check.extend(root_hashes);
 
-    check_pairs::<_, _, in_memory::Error>(
+    check_pairs::<_, _, _, _, in_memory::Error>(
         correlation_id,
         &context.environment,
         &context.store,

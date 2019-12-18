@@ -25,7 +25,7 @@ import org.scalatest.Suite
 trait StorageFixture { self: Suite =>
   val scheduler: SchedulerService     = Scheduler.fixedPool("storage-fixture-scheduler", 4)
   implicit val metrics: Metrics[Task] = new MetricsNOP[Task]()
-  implicit val log: Log[Task]         = new Log.NOPLog[Task]()
+  implicit val log: Log[Task]         = Log.NOPLog[Task]
 
   def withStorage[R](
       f: BlockStorage[Task] => IndexedDagStorage[Task] => DeployStorage[Task] => Task[R]

@@ -34,13 +34,16 @@ INTEGRATION_CONTRACTS += \
 	endless-loop \
 	hello-name-call \
 	hello-name-define \
+	local-state \
 	mailing-list-call \
 	mailing-list-define \
+	modified-system-upgrader \
 	pos-bonding \
 	remove-associated-key \
 	standard-payment \
 	transfer-to-account \
 	unbonding-call
+
 
 INTEGRATION_CONTRACTS := $(patsubst %, build-integration-contract/%, $(INTEGRATION_CONTRACTS))
 

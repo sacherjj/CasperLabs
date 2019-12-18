@@ -10,12 +10,19 @@ import io.casperlabs.comm._
 import io.casperlabs.comm.transport._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.shared._
+import logstage.{IzLogger, LogIO}
+import logstage.UnsafeLogIO.UnsafeLogIOSyncSafeInstance
+import izumi.logstage.api.logger.LogSink
+import izumi.logstage.api.rendering.logunits.LogFormat
+import izumi.logstage.api.{Log => IzLog}
+import izumi.fundamentals.platform.language.CodePositionMaterializer
+import izumi.functional.mono.SyncSafe
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
 object EffectsTestInstances {
 
-  class LogicalTime[F[_]: Sync] extends Time[F] {
-    var clock: Long = 0
+  class LogicalTime[F[_]: Sync](init: => Long = 0) extends Time[F] {
+    var clock: Long = init
 
     def currentMillis: F[Long] = Sync[F].delay {
       this.clock = clock + 1
@@ -29,7 +36,7 @@ object EffectsTestInstances {
 
     def sleep(duration: FiniteDuration): F[Unit] = Sync[F].delay(())
 
-    def reset(): Unit = this.clock = 0
+    def reset(): Unit = this.clock = init
   }
 
   class NodeDiscoveryStub[F[_]: Sync]() extends NodeDiscovery[F] {
@@ -53,56 +60,4 @@ object EffectsTestInstances {
     new ConstApplicativeAsk[F, RPConf](
       RPConf(local, List(local), defaultTimeout, clearConnections)
     )
-
-  class LogStub[F[_]: Sync](prefix: String = "", printEnabled: Boolean = false) extends Log[F] {
-
-    @volatile var debugs: Vector[String]    = Vector.empty[String]
-    @volatile var infos: Vector[String]     = Vector.empty[String]
-    @volatile var warns: Vector[String]     = Vector.empty[String]
-    @volatile var errors: Vector[String]    = Vector.empty[String]
-    @volatile var causes: Vector[Throwable] = Vector.empty[Throwable]
-
-    // To be able to reconstruct the timeline.
-    var all: Vector[String] = Vector.empty[String]
-
-    def reset(): Unit = synchronized {
-      debugs = Vector.empty[String]
-      infos = Vector.empty[String]
-      warns = Vector.empty[String]
-      errors = Vector.empty[String]
-      causes = Vector.empty[Throwable]
-      all = Vector.empty[String]
-    }
-    def isTraceEnabled(implicit ev: LogSource): F[Boolean]  = false.pure[F]
-    def trace(msg: String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"DEBUG $prefix $msg")
-      debugs = debugs :+ msg
-      all = all :+ msg
-    }
-    def info(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"INFO  $prefix $msg")
-      infos = infos :+ msg
-      all = all :+ msg
-    }
-    def warn(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"WARN  $prefix $msg")
-      warns = warns :+ msg
-      all = all :+ msg
-    }
-    def error(msg: String)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"ERROR $prefix $msg")
-      errors = errors :+ msg
-      all = all :+ msg
-    }
-    def error(msg: String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = sync {
-      if (printEnabled) println(s"ERROR $prefix $msg: $cause")
-      causes = causes :+ cause
-      errors = errors :+ msg
-      all = all :+ msg
-    }
-
-    private def sync(thunk: => Unit): F[Unit] = Sync[F].delay(synchronized(thunk))
-  }
-
 }

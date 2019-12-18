@@ -40,20 +40,6 @@ message Bond {
     io.casperlabs.casper.consensus.state.BigInt stake = 2;
 }
 
-message Deploy {
-    reserved 5; // motes in payment
-    reserved 7; // motes in payment
-    // Public key of the account which is the context of the execution.
-    bytes address = 1; // length 32 bytes
-    DeployCode session = 3;
-    DeployCode payment = 4;
-    uint64 gas_price = 6; // in units of Mote / Gas
-    // Public keys used to sign this deploy, to be checked against the keys
-    // associated with the account.
-    repeated bytes authorization_keys = 8;
-    bytes deploy_hash = 9;
-}
-
 message DeployItem {
     reserved 5; // motes in payment
     reserved 7; // nonce
@@ -221,19 +207,6 @@ message QueryResponse {
 }
 
 
-message ValidateResponse {
-    message ValidateSuccess {};
-    oneof result {
-        ValidateSuccess success = 1;
-        string failure = 2;
-    }
-}
-
-message ValidateRequest {
-    bytes wasm_code = 1;
-    io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 2;
-}
-
 message GenesisResult {
     bytes poststate_hash = 1;
     ExecutionEffect effect = 2;
@@ -271,12 +244,18 @@ message ChainSpec {
         repeated GenesisAccount accounts = 6;
         // costs at genesis
         CostTable costs = 7;
+        DeployConfig deploy_config = 8;
     }
 
     message GenesisAccount {
         bytes public_key = 1;
         io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
         io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
+    }
+
+    message DeployConfig {
+        uint32 max_ttl_millis = 2;
+        uint32 max_dependencies = 3;
     }
 
     message CostTable {
@@ -316,6 +295,7 @@ message ChainSpec {
         DeployCode upgrade_installer = 3;
         // Note: this is optional; only needed when costs are changing
         CostTable new_costs = 4;
+        DeployConfig new_deploy_config = 5;
     }
 
     message ActivationPoint {
@@ -324,9 +304,9 @@ message ChainSpec {
     }
 }
 
-message UpgradeRequest{
+message UpgradeRequest {
     bytes parent_state_hash = 1;
-    ChainSpec.UpgradePoint upgrade_point =2;
+    ChainSpec.UpgradePoint upgrade_point = 2;
     io.casperlabs.casper.consensus.state.ProtocolVersion protocol_version = 3;
 }
 
@@ -351,7 +331,6 @@ message UpgradeResponse {
 service ExecutionEngineService {
     rpc commit (CommitRequest) returns (CommitResponse) {}
     rpc query (QueryRequest) returns (QueryResponse) {}
-    rpc validate (ValidateRequest) returns (ValidateResponse) {}
     rpc execute (ExecuteRequest) returns (ExecuteResponse) {}
     rpc run_genesis (ChainSpec.GenesisConfig) returns (GenesisResponse) {}
     rpc upgrade (UpgradeRequest) returns (UpgradeResponse) {}

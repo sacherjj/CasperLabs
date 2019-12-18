@@ -1,4 +1,3 @@
-#![feature(result_map_or_else)]
 #![feature(never_type)]
 
 use contract_ffi::key::Key;
@@ -8,7 +7,7 @@ pub mod engine_state;
 pub mod execution;
 pub mod resolvers;
 pub mod runtime_context;
-pub mod tracking_copy;
+pub(crate) mod tracking_copy;
 
 pub const ADDRESS_LENGTH: usize = 32;
 pub const DEPLOY_HASH_LENGTH: usize = 32;

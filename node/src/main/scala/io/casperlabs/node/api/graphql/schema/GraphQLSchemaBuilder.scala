@@ -4,7 +4,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.MultiParentCasperRef.MultiParentCasperRef
 import io.casperlabs.casper.api.BlockAPI
-import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.casper.consensus.state
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.crypto.Keys.PublicKey
@@ -20,13 +20,15 @@ import io.casperlabs.node.api.casper.ListDeployInfosRequest
 import io.casperlabs.node.api.graphql._
 import io.casperlabs.node.api.graphql.RunToFuture.ops._
 import io.casperlabs.node.api.graphql.schema.blocks.{DeployInfosWithPageInfo, PageInfo}
+import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.shared.Log
 import io.casperlabs.smartcontracts.ExecutionEngineService
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.deploy.DeployStorage
+import io.casperlabs.storage.dag.DagStorage
 import sangria.schema._
 
-private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: Fs2Compiler] {
+private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: RunToFuture: MultiParentCasperRef: BlockStorage: FinalizedBlocksStream: MonadThrowable: ExecutionEngineService: DeployStorage: DagStorage: Fs2Compiler] {
 
   // GraphQL projections don't expose the body.
   val deployView = DeployInfo.View.BASIC
@@ -42,6 +44,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
 
     flatToSet(projections, Set.empty)
   }
+
+  private def blockView(projections: Vector[ProjectedName]): BlockInfo.View =
+    blockView(projectionTerms(projections))
+
+  private def blockView(terms: Set[String]): BlockInfo.View =
+    if (terms contains "childHashes")
+      BlockInfo.View.FULL
+    else
+      BlockInfo.View.BASIC
 
   private def deployView(projections: Vector[ProjectedName]): Option[DeployInfo.View] =
     deployView(projectionTerms(projections))
@@ -61,12 +72,14 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             resolve = Projector { (context, projections) =>
               (for {
                 blockHashPrefix <- validateBlockHashPrefix[F](
-                                    context.arg(blocks.arguments.BlockHashPrefix)
+                                    context.arg(blocks.arguments.BlockHashPrefix),
+                                    ByteString.EMPTY
                                   )
                 res <- BlockAPI
                         .getBlockInfoWithDeploysOpt[F](
                           blockHashBase16 = blockHashPrefix,
-                          maybeDeployView = deployView(projections)
+                          maybeDeployView = deployView(projections),
+                          blockView = blockView(projections)
                         )
               } yield res).unsafeToFuture
             }
@@ -80,7 +93,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 .getBlockInfosWithDeploys[F](
                   depth = context.arg(blocks.arguments.Depth),
                   maxRank = context.arg(blocks.arguments.MaxRank),
-                  maybeDeployView = deployView(projections)
+                  maybeDeployView = deployView(projections),
+                  blockView = blockView(projections)
                 )
                 .unsafeToFuture
             }
@@ -90,7 +104,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
             OptionType(blocks.types.DeployInfoType),
             arguments = blocks.arguments.DeployHash :: Nil,
             resolve = { c =>
-              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash)) >>= (
+              (validateDeployHash[F](c.arg(blocks.arguments.DeployHash), ByteString.EMPTY) >>= (
                   deployHash => BlockAPI.getDeployInfoOpt[F](deployHash, deployView)
               )).unsafeToFuture
             }
@@ -111,18 +125,19 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
                   after                  = c.arg(blocks.arguments.After)
                   accountPublicKeyBase16 <- validateAccountPublicKey[F](
-                                             accountPublicKeyBase16
+                                             accountPublicKeyBase16,
+                                             ByteString.EMPTY
                                            )
-                  (pageSize, (lastTimeStamp, lastDeployHash)) <- MonadThrowable[F]
-                                                                  .fromTry(
-                                                                    DeployInfoPagination
-                                                                      .parsePageToken(
-                                                                        ListDeployInfosRequest(
-                                                                          pageSize = first,
-                                                                          pageToken = after
-                                                                        )
-                                                                      )
-                                                                  )
+                  (pageSize, pageTokenParams) <- MonadThrowable[F]
+                                                  .fromTry(
+                                                    DeployInfoPagination
+                                                      .parsePageToken(
+                                                        ListDeployInfosRequest(
+                                                          pageSize = first,
+                                                          pageToken = after
+                                                        )
+                                                      )
+                                                  )
                   accountPublicKeyBs = PublicKey(
                     ByteString.copyFrom(
                       Base16.decode(accountPublicKeyBase16)
@@ -133,8 +148,9 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                                              .getDeploysByAccount(
                                                accountPublicKeyBs,
                                                pageSize + 1,
-                                               lastTimeStamp,
-                                               lastDeployHash
+                                               pageTokenParams.lastTimeStamp,
+                                               pageTokenParams.lastDeployHash,
+                                               true
                                              )
                   (deploys, hasNextPage) = if (deploysWithOneMoreElem.length == pageSize + 1) {
                     (deploysWithOneMoreElem.take(pageSize), true)
@@ -144,8 +160,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   deployInfos <- DeployStorage[F]
                                   .reader(deployView)
                                   .getDeployInfos(deploys)
-                  endCursor = DeployInfoPagination.createNextPageToken(
-                    deploys.lastOption.map(d => (d.getHeader.timestamp, d.deployHash))
+                  endCursor = DeployInfoPagination.createPageToken(
+                    deploys.lastOption.map(
+                      d =>
+                        DeployInfoPageTokenParams(
+                          d.getHeader.timestamp,
+                          d.deployHash,
+                          isNext = true
+                        )
+                    )
                   )
                   pageInfo = PageInfo(endCursor, hasNextPage)
                   result   = DeployInfosWithPageInfo(deployInfos, pageInfo)
@@ -162,12 +185,14 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
 
               val program = for {
                 blockHashBase16Prefix <- validateBlockHashPrefix[F](
-                                          c.arg(blocks.arguments.BlockHashPrefix)
+                                          c.arg(blocks.arguments.BlockHashPrefix),
+                                          ByteString.EMPTY
                                         )
                 maybeBlockProps <- BlockAPI
                                     .getBlockInfoWithDeploysOpt[F](
                                       blockHashBase16Prefix,
-                                      maybeDeployView = None
+                                      maybeDeployView = None,
+                                      blockView = BlockInfo.View.BASIC
                                     )
                                     .map(_.map {
                                       case (info, _) =>
@@ -230,7 +255,8 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                 BlockAPI
                   .getBlockInfoWithDeploys[F](
                     blockHash = blockHash,
-                    maybeDeployView = deployView(terms)
+                    maybeDeployView = deployView(terms),
+                    blockView = blockView(terms)
                   )
                   .map(Action(_))
               }

@@ -7,6 +7,8 @@ import io.casperlabs.casper.InvalidBlock
 import io.casperlabs.casper.PrettyPrinter
 import io.casperlabs.shared.Log
 
+import scala.concurrent.duration.FiniteDuration
+
 object Errors {
   // Wrapper for the tests that were originally outside the `attemptAdd` method
   // and meant the block was not getting saved.
@@ -18,12 +20,16 @@ object Errors {
     def errorMessage: String
 
     def logged[F[_]: Log: Functor]: F[DeployHeaderError] =
-      Log[F].warn(self.errorMessage).as(self)
+      Log[F].warn(s"${self.errorMessage -> "error" -> null}").as(self)
   }
   object DeployHeaderError {
     def missingHeader(deployHash: ByteString): DeployHeaderError = MissingHeader(deployHash)
 
-    def timeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: Int): DeployHeaderError =
+    def timeToLiveTooShort(
+        deployHash: ByteString,
+        ttl: Int,
+        minTTL: FiniteDuration
+    ): DeployHeaderError =
       TimeToLiveTooShort(deployHash, ttl, minTTL)
 
     def timeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int): DeployHeaderError =
@@ -46,21 +52,28 @@ object Errors {
     ): DeployHeaderError =
       InvalidChainName(deployHash, deployChainName, expectedChainName)
 
+    def timestampInFuture(
+        deployHash: ByteString,
+        timestamp: Long,
+        drift: Int
+    ): DeployHeaderError =
+      TimestampInFuture(deployHash, timestamp, drift)
+
     final case class MissingHeader(deployHash: ByteString) extends DeployHeaderError {
       def errorMessage: String =
         s"Deploy ${PrettyPrinter.buildString(deployHash)} does not contain a header"
     }
 
-    final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: Int)
+    final case class TimeToLiveTooShort(deployHash: ByteString, ttl: Int, minTTL: FiniteDuration)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} shorter than minimum valid time to live $minTTL"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is shorter than minimum valid time to live ${minTTL.toMillis}"
     }
 
     final case class TimeToLiveTooLong(deployHash: ByteString, ttl: Int, maxTTL: Int)
         extends DeployHeaderError {
       def errorMessage: String =
-        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} longer than maximum valid time to live $maxTTL"
+        s"Time to live $ttl in deploy ${PrettyPrinter.buildString(deployHash)} is longer than maximum valid time to live $maxTTL"
     }
 
     final case class TooManyDependencies(
@@ -89,6 +102,15 @@ object Errors {
     ) extends DeployHeaderError {
       def errorMessage: String =
         s"Deploy ${PrettyPrinter.buildString(deployHash)} with chain name '$deployChainName' is invalid. Expected empty chain or '$expectedChainName'."
+    }
+
+    final case class TimestampInFuture(
+        deployHash: ByteString,
+        timestamp: Long,
+        drift: Int
+    ) extends DeployHeaderError {
+      def errorMessage: String =
+        s"Deploy ${PrettyPrinter.buildString(deployHash)} has timestamp $timestamp which is more than ${drift}ms in the future."
     }
   }
 }
