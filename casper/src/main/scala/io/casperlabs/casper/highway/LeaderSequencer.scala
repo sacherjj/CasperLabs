@@ -32,15 +32,15 @@ object LeaderSequencer {
     * with a relative frequency based on their weight. */
   def makeSequencer(leaderSeed: Array[Byte], bonds: Seq[Bond]): Ticks => PublicKeyBS = {
     val validators = bonds.map { x =>
-      PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value).doubleValue
+      PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value)
     }.toVector
-    val total = validators.map(_._2).sum
+    val total = validators.map(_._2).sum.doubleValue
 
     require(validators.nonEmpty, "Bonds cannot be empty.")
     require(validators.forall(_._2 > 0), "Bonds must be positive.")
 
-    // Given an `r` in [0, 1), seek the validator with a total cumulative weight in that range.
-    def seek(target: Double, i: Int = 0, acc: Double = 0): PublicKeyBS = {
+    // Given a target sum of bonds, seek the validator with a total cumulative weight in that range.
+    def seek(target: BigInt, i: Int = 0, acc: BigInt = 0): PublicKeyBS = {
       val b = validators(i)._2
       // Using > instead of >= so a validator has the lower, but not the upper extremum.
       if (acc + b > target || i == validators.size - 1)
@@ -49,17 +49,20 @@ object LeaderSequencer {
         seek(target, i + 1, acc + b)
     }
 
-    (t: Ticks) => {
+    (tick: Ticks) => {
       // On Linux SecureRandom uses NativePRNG, and ignores the seed.
       // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
       // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
       val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
       // Ticks need to be deterministic, so each time we have to reset the seed.
-      val tickSeed = leaderSeed ++ longToBytesLittleEndian(t)
+      val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
       random.setSeed(tickSeed)
       // Pick a number between [0, 1) and use it to find a validator.
       val r = random.nextDouble()
-      seek(total * r)
+      // Integer arithmetic is supposed to be safer than double.
+      val t = BigDecimal.valueOf(total * r).toBigInt
+      // Find the first validator over the target.
+      seek(t)
     }
   }
 
