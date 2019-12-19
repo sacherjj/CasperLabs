@@ -23,6 +23,7 @@ impl From<transform::Error> for TransformFailure {
             transform::Error::TypeMismatch(type_mismatch) => {
                 pb_transform_failure.set_type_mismatch(type_mismatch.into())
             }
+            transform::Error::Serialization(_error) => panic!("don't break the API"),
         }
         pb_transform_failure
     }

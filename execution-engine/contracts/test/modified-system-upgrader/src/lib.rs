@@ -24,11 +24,11 @@ pub extern "C" fn pos_ext() {
 }
 
 fn upgrade_turef(name: &str, contract_ref: ContractRef) {
-    let turef = contract_ref
-        .into_turef()
+    let uref = contract_ref
+        .into_uref()
         .ok_or(Error::User(CustomError::ContractPointerHash as u16))
         .unwrap_or_revert();
-    runtime::upgrade_contract_at_uref(name, turef);
+    runtime::upgrade_contract_at_uref(name, uref);
 }
 
 fn upgrade_mint() {

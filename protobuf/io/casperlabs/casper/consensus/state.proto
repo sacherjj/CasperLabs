@@ -1,7 +1,93 @@
 syntax = "proto3";
 package io.casperlabs.casper.consensus.state;
 
+// Fundamental type of a user-facing value stored under a key in global state.
+message CLType {
+    enum Simple {
+        BOOL = 0;
+        I32 = 1;
+        I64 = 2;
+        U8 = 3;
+        U32 = 4;
+        U64 = 5;
+        U128 = 6;
+        U256 = 7;
+        U512 = 8;
+        UNIT = 9;
+        STRING = 10;
+        KEY = 11;
+        UREF = 12;
+    }
+
+    message Option {
+        CLType inner = 1;
+    }
+
+    message List {
+        CLType inner = 1;
+    }
+
+    message FixedList {
+        CLType inner = 1;
+        uint32 len = 2;
+    }
+
+    message Result {
+        CLType ok = 1;
+        CLType err = 2;
+    }
+
+    message Map {
+        CLType key = 1;
+        CLType value = 2;
+    }
+
+    message Tuple1 {
+        CLType type0 = 1;
+    }
+
+    message Tuple2 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+    }
+
+    message Tuple3 {
+        CLType type0 = 1;
+        CLType type1 = 2;
+        CLType type2 = 3;
+    }
+
+    message Any {}
+
+    oneof variants {
+        Simple simple_type = 1;
+        Option option_type = 2;
+        List list_type = 3;
+        FixedList fixed_list_type = 4;
+        Result result_type = 5;
+        Map map_type = 6;
+        Tuple1 tuple1_type = 7;
+        Tuple2 tuple2_type = 8;
+        Tuple3 tuple3_type = 9;
+        Any any_type = 10;
+    }
+}
+
+// User-facing value stored under a key in global state.
+message CLValue {
+    CLType cl_type = 1;
+    bytes serialized_value = 2;
+}
+
 // Value stored under a key in global state.
+message StoredValue {
+    oneof variants {
+        CLValue cl_value = 1;
+        Account account = 2;
+        Contract contract = 3;
+    }
+}
+
 message Value {
 	oneof value {
 		int32 int_value = 1;

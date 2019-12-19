@@ -6,17 +6,18 @@ use contract_ffi::{
     bytesrepr::{self, ToBytes},
     contract_api::{self, system::TransferredTo},
     key::Key,
-    value::{account::PublicKey, Value, U512},
+    value::{account::PublicKey, U512},
 };
 
-use engine_shared::gas::Gas;
+use engine_shared::{gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 
 use super::{args::Args, Error, Runtime};
 use crate::resolvers::v1_function_index::FunctionIndex;
 
-impl<'a, R: StateReader<Key, Value>> Externals for Runtime<'a, R>
+impl<'a, R> Externals for Runtime<'a, R>
 where
+    R: StateReader<Key, StoredValue>,
     R::Error: Into<Error>,
 {
     fn invoke_index(
@@ -44,7 +45,7 @@ where
                 Ok(Some(RuntimeValue::I32(contract_api::i32_from(ret))))
             }
 
-            FunctionIndex::SerNamedKeysFuncIndex => {
+            FunctionIndex::LoadNamedKeysFuncIndex => {
                 // args(0) = pointer to amount of keys (output)
                 // args(1) = pointer to amount of serialized bytes (output)
                 let (total_keys_ptr, result_size_ptr) = Args::parse(args)?;
@@ -201,7 +202,8 @@ where
             FunctionIndex::PutKeyFuncIndex => {
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
-                // args(2) = pointer to destination in Wasm memory
+                // args(2) = pointer to key in Wasm memory
+                // args(3) = size of key
                 let (name_ptr, name_size, key_ptr, key_size) = Args::parse(args)?;
                 self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
@@ -250,7 +252,7 @@ where
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
                     .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
@@ -271,22 +273,20 @@ where
                     .memory
                     .get(urefs_ptr, urefs_size as usize)
                     .map_err(Error::Interpreter)?;
-                let urefs = bytesrepr::deserialize(&uref_bytes).map_err(Error::BytesRepr)?;
+                let urefs = bytesrepr::deserialize(uref_bytes).map_err(Error::BytesRepr)?;
                 let contract_hash = self.store_function_at_hash(fn_bytes, urefs)?;
                 self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
             }
 
-            FunctionIndex::IsValidFnIndex => {
+            FunctionIndex::IsValidURefFnIndex => {
                 // args(0) = pointer to value to validate
                 // args(1) = size of value
-                let (value_ptr, value_size) = Args::parse(args)?;
+                let (uref_ptr, uref_size) = Args::parse(args)?;
 
-                if self.value_is_valid(value_ptr, value_size)? {
-                    Ok(Some(RuntimeValue::I32(1)))
-                } else {
-                    Ok(Some(RuntimeValue::I32(0)))
-                }
+                Ok(Some(RuntimeValue::I32(i32::from(
+                    self.is_valid_uref(uref_ptr, uref_size)?,
+                ))))
             }
 
             FunctionIndex::RevertFuncIndex => {
@@ -306,7 +306,6 @@ where
 
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
-                // args(1) = size of serialized bytes of public key
                 let public_key_ptr: u32 = Args::parse(args)?;
                 let value = self.remove_associated_key(public_key_ptr)?;
                 Ok(Some(RuntimeValue::I32(value)))
@@ -333,7 +332,7 @@ where
                 // args(1) = length of array for return value
                 let (dest_ptr, dest_size): (u32, u32) = Args::parse(args)?;
                 let purse_id = self.create_purse()?;
-                let purse_id_bytes = purse_id.to_bytes().map_err(Error::BytesRepr)?;
+                let purse_id_bytes = purse_id.into_bytes().map_err(Error::BytesRepr)?;
                 assert_eq!(dest_size, purse_id_bytes.len() as u32);
                 self.memory
                     .set(dest_ptr, &purse_id_bytes)
@@ -350,11 +349,11 @@ where
                     Args::parse(args)?;
                 let public_key: PublicKey = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let amount: U512 = {
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_to_account(public_key, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
@@ -378,15 +377,15 @@ where
 
                 let source_purse = {
                     let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let public_key: PublicKey = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let amount: U512 = {
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
-                    bytesrepr::deserialize(&bytes).map_err(Error::BytesRepr)?
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
                 let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))

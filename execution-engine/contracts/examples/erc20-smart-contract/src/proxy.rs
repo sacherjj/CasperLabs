@@ -14,51 +14,48 @@ pub extern "C" fn erc20_proxy() {
         Api::Transfer(recipient, amount) => {
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::TRANSFER, recipient, amount),
-                &vec![],
+                (api::TRANSFER, recipient, amount),
+                vec![],
             );
         }
         Api::TransferFrom(owner, recipient, amount) => {
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::TRANSFER_FROM, owner, recipient, amount),
-                &vec![],
+                (api::TRANSFER_FROM, owner, recipient, amount),
+                vec![],
             );
         }
         Api::Approve(spender, amount) => {
             runtime::call_contract::<_, ()>(
                 token_ref.clone(),
-                &(api::APPROVE, spender, amount),
-                &vec![],
+                (api::APPROVE, spender, amount),
+                vec![],
             );
         }
         Api::AssertBalance(address, expected_amount) => {
             let balance = runtime::call_contract::<_, U512>(
                 token_ref.clone(),
-                &(api::BALANCE_OF, address),
-                &vec![],
+                (api::BALANCE_OF, address),
+                vec![],
             );
-            if balance != expected_amount {
+            if expected_amount != balance {
                 runtime::revert(Error::BalanceAssertionFailure)
             }
         }
         Api::AssertTotalSupply(expected_total_supply) => {
-            let total_supply = runtime::call_contract::<_, U512>(
-                token_ref.clone(),
-                &(api::TOTAL_SUPPLY,),
-                &vec![],
-            );
-            if total_supply != expected_total_supply {
+            let total_supply =
+                runtime::call_contract::<_, U512>(token_ref.clone(), (api::TOTAL_SUPPLY,), vec![]);
+            if expected_total_supply != total_supply {
                 runtime::revert(Error::TotalSupplyAssertionFailure)
             }
         }
         Api::AssertAllowance(owner, spender, expected_amount) => {
             let allowance = runtime::call_contract::<_, U512>(
                 token_ref.clone(),
-                &(api::ALLOWANCE, owner, spender),
-                &vec![],
+                (api::ALLOWANCE, owner, spender),
+                vec![],
             );
-            if allowance != expected_amount {
+            if expected_amount != allowance {
                 runtime::revert(Error::AllowanceAssertionFailure)
             }
         }

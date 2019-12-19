@@ -28,7 +28,8 @@ impl TryFrom<Vec<TransformEntry>> for TransformMap {
 
 #[cfg(test)]
 mod tests {
-    use contract_ffi::value::Value;
+    use contract_ffi::value::CLValue;
+    use engine_shared::stored_value::StoredValue;
 
     use super::*;
 
@@ -40,7 +41,9 @@ mod tests {
             let transform_entry_first = {
                 let mut tmp = TransformEntry::new();
                 tmp.set_key(key.into());
-                tmp.set_transform(Transform::Write(Value::Int32(12)).into());
+                tmp.set_transform(
+                    Transform::Write(StoredValue::CLValue(CLValue::from_t(12_i32).unwrap())).into(),
+                );
                 tmp
             };
             let transform_entry_second = {
@@ -54,7 +57,8 @@ mod tests {
         let commit: TransformMap = setup
             .try_into()
             .expect("Transforming `Vec<TransformEntry>` into `TransformMap` should work.");
-        let expected_transform = Transform::Write(contract_ffi::value::Value::Int32(22));
+        let expected_transform =
+            Transform::Write(StoredValue::CLValue(CLValue::from_t(22_i32).unwrap()));
         let commit_transform = commit.0.get(&key);
         assert!(commit_transform.is_some());
         assert_eq!(expected_transform, *commit_transform.unwrap())
