@@ -491,13 +491,6 @@ where
                 | CLType::Map { .. }
                 | CLType::Tuple1(_)
                 | CLType::Tuple3(_)
-                | CLType::Tuple4(_)
-                | CLType::Tuple5(_)
-                | CLType::Tuple6(_)
-                | CLType::Tuple7(_)
-                | CLType::Tuple8(_)
-                | CLType::Tuple9(_)
-                | CLType::Tuple10(_)
                 | CLType::Any => Ok(()),
                 CLType::Key => {
                     let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?

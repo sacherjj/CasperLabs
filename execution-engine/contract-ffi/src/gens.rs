@@ -123,13 +123,6 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
             | CLType::Tuple1(_)
             | CLType::Tuple2(_)
             | CLType::Tuple3(_)
-            | CLType::Tuple4(_)
-            | CLType::Tuple5(_)
-            | CLType::Tuple6(_)
-            | CLType::Tuple7(_)
-            | CLType::Tuple8(_)
-            | CLType::Tuple9(_)
-            | CLType::Tuple10(_)
             | CLType::Any => (),
         }
     };
@@ -159,71 +152,6 @@ pub fn cl_value_arb() -> impl Strategy<Value = CLValue> {
         (any::<bool>(), any::<i32>())
             .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
         (any::<bool>(), any::<i32>(), any::<i64>())
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (any::<bool>(), any::<i32>(), any::<i64>(), any::<u8>())
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>()
-        )
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>(),
-            any::<u64>()
-        )
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>(),
-            any::<u64>(),
-            u128_arb()
-        )
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>(),
-            any::<u64>(),
-            u128_arb(),
-            u256_arb()
-        )
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>(),
-            any::<u64>(),
-            u128_arb(),
-            u256_arb(),
-            u512_arb()
-        )
-            .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
-        (
-            any::<bool>(),
-            any::<i32>(),
-            any::<i64>(),
-            any::<u8>(),
-            any::<u32>(),
-            any::<u64>(),
-            u128_arb(),
-            u256_arb(),
-            u512_arb(),
-            key_arb()
-        )
             .prop_map(|x| CLValue::from_t(x).expect("should create CLValue")),
     ]
 }

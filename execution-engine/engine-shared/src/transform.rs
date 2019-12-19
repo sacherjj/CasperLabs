@@ -516,56 +516,6 @@ mod tests {
             CLValue::from_t((ZERO_U8, ZERO_U8, ZERO_U8)).expect("should create CLValue"),
         );
         assert_yields_type_mismatch_error(cl_tuple3);
-
-        let cl_tuple4 = StoredValue::CLValue(
-            CLValue::from_t((ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8)).expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple4);
-
-        let cl_tuple5 = StoredValue::CLValue(
-            CLValue::from_t((ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8))
-                .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple5);
-
-        let cl_tuple6 = StoredValue::CLValue(
-            CLValue::from_t((ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8))
-                .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple6);
-
-        let cl_tuple7 = StoredValue::CLValue(
-            CLValue::from_t((
-                ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8,
-            ))
-            .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple7);
-
-        let cl_tuple8 = StoredValue::CLValue(
-            CLValue::from_t((
-                ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8,
-            ))
-            .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple8);
-
-        let cl_tuple9 = StoredValue::CLValue(
-            CLValue::from_t((
-                ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8,
-            ))
-            .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple9);
-
-        let cl_tuple10 = StoredValue::CLValue(
-            CLValue::from_t((
-                ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8, ZERO_U8,
-                ZERO_U8,
-            ))
-            .expect("should create CLValue"),
-        );
-        assert_yields_type_mismatch_error(cl_tuple10);
     }
 
     #[test]

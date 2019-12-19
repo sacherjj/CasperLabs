@@ -57,76 +57,6 @@ message CLType {
         CLType type2 = 3;
     }
 
-    message Tuple4 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-    }
-
-    message Tuple5 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-    }
-
-    message Tuple6 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-        CLType type5 = 6;
-    }
-
-    message Tuple7 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-        CLType type5 = 6;
-        CLType type6 = 7;
-    }
-
-    message Tuple8 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-        CLType type5 = 6;
-        CLType type6 = 7;
-        CLType type7 = 8;
-    }
-
-    message Tuple9 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-        CLType type5 = 6;
-        CLType type6 = 7;
-        CLType type7 = 8;
-        CLType type8 = 9;
-    }
-
-    message Tuple10 {
-        CLType type0 = 1;
-        CLType type1 = 2;
-        CLType type2 = 3;
-        CLType type3 = 4;
-        CLType type4 = 5;
-        CLType type5 = 6;
-        CLType type6 = 7;
-        CLType type7 = 8;
-        CLType type8 = 9;
-        CLType type9 = 10;
-    }
-
     message Any {}
 
     oneof variants {
@@ -139,14 +69,7 @@ message CLType {
         Tuple1 tuple1_type = 7;
         Tuple2 tuple2_type = 8;
         Tuple3 tuple3_type = 9;
-        Tuple4 tuple4_type = 10;
-        Tuple5 tuple5_type = 11;
-        Tuple6 tuple6_type = 12;
-        Tuple7 tuple7_type = 13;
-        Tuple8 tuple8_type = 14;
-        Tuple9 tuple9_type = 15;
-        Tuple10 tuple10_type = 16;
-        Any any_type = 17;
+        Any any_type = 10;
     }
 }
 

@@ -34,14 +34,7 @@ const CL_TYPE_TAG_MAP: u8 = 17;
 const CL_TYPE_TAG_TUPLE1: u8 = 18;
 const CL_TYPE_TAG_TUPLE2: u8 = 19;
 const CL_TYPE_TAG_TUPLE3: u8 = 20;
-const CL_TYPE_TAG_TUPLE4: u8 = 21;
-const CL_TYPE_TAG_TUPLE5: u8 = 22;
-const CL_TYPE_TAG_TUPLE6: u8 = 23;
-const CL_TYPE_TAG_TUPLE7: u8 = 24;
-const CL_TYPE_TAG_TUPLE8: u8 = 25;
-const CL_TYPE_TAG_TUPLE9: u8 = 26;
-const CL_TYPE_TAG_TUPLE10: u8 = 27;
-const CL_TYPE_TAG_ANY: u8 = 28;
+const CL_TYPE_TAG_ANY: u8 = 21;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLType {
@@ -84,13 +77,6 @@ pub enum CLType {
     Tuple1([Box<CLType>; 1]),
     Tuple2([Box<CLType>; 2]),
     Tuple3([Box<CLType>; 3]),
-    Tuple4([Box<CLType>; 4]),
-    Tuple5([Box<CLType>; 5]),
-    Tuple6([Box<CLType>; 6]),
-    Tuple7([Box<CLType>; 7]),
-    Tuple8([Box<CLType>; 8]),
-    Tuple9([Box<CLType>; 9]),
-    Tuple10([Box<CLType>; 10]),
     Any,
 }
 
@@ -122,13 +108,6 @@ impl CLType {
                 CLType::Tuple1(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
                 CLType::Tuple2(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
                 CLType::Tuple3(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple4(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple5(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple6(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple7(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple8(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple9(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
-                CLType::Tuple10(cl_type_array) => serialized_len_of_cl_tuple_type(cl_type_array),
             }
     }
 }
@@ -184,27 +163,6 @@ impl CLType {
             }
             CLType::Tuple3(cl_type_array) => {
                 serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE3, cl_type_array, stream)
-            }
-            CLType::Tuple4(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE4, cl_type_array, stream)
-            }
-            CLType::Tuple5(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE5, cl_type_array, stream)
-            }
-            CLType::Tuple6(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE6, cl_type_array, stream)
-            }
-            CLType::Tuple7(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE7, cl_type_array, stream)
-            }
-            CLType::Tuple8(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE8, cl_type_array, stream)
-            }
-            CLType::Tuple9(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE9, cl_type_array, stream)
-            }
-            CLType::Tuple10(cl_type_array) => {
-                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE10, cl_type_array, stream)
             }
             CLType::Any => stream.push(CL_TYPE_TAG_ANY),
         }
@@ -279,97 +237,6 @@ impl FromBytes for CLType {
             CL_TYPE_TAG_TUPLE3 => {
                 let (mut inner_types, remainder) = parse_cl_tuple_types(3, remainder)?;
                 let cl_type = CLType::Tuple3([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE4 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(4, remainder)?;
-                let cl_type = CLType::Tuple4([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE5 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(5, remainder)?;
-                let cl_type = CLType::Tuple5([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE6 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(6, remainder)?;
-                let cl_type = CLType::Tuple6([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE7 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(7, remainder)?;
-                let cl_type = CLType::Tuple7([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE8 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(8, remainder)?;
-                let cl_type = CLType::Tuple8([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE9 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(9, remainder)?;
-                let cl_type = CLType::Tuple9([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                ]);
-                Ok((cl_type, remainder))
-            }
-            CL_TYPE_TAG_TUPLE10 => {
-                let (mut inner_types, remainder) = parse_cl_tuple_types(10, remainder)?;
-                let cl_type = CLType::Tuple10([
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
-                    inner_types.pop_front().unwrap(),
                     inner_types.pop_front().unwrap(),
                     inner_types.pop_front().unwrap(),
                     inner_types.pop_front().unwrap(),
@@ -574,143 +441,6 @@ impl<T1: CLTyped, T2: CLTyped, T3: CLTyped> CLTyped for (T1, T2, T3) {
     }
 }
 
-impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped> CLTyped for (T1, T2, T3, T4) {
-    fn cl_type() -> CLType {
-        CLType::Tuple4([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-        ])
-    }
-}
-
-impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped> CLTyped
-    for (T1, T2, T3, T4, T5)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple5([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-        ])
-    }
-}
-
-impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped, T6: CLTyped> CLTyped
-    for (T1, T2, T3, T4, T5, T6)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple6([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-            Box::new(T6::cl_type()),
-        ])
-    }
-}
-
-impl<T1: CLTyped, T2: CLTyped, T3: CLTyped, T4: CLTyped, T5: CLTyped, T6: CLTyped, T7: CLTyped>
-    CLTyped for (T1, T2, T3, T4, T5, T6, T7)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple7([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-            Box::new(T6::cl_type()),
-            Box::new(T7::cl_type()),
-        ])
-    }
-}
-
-impl<
-        T1: CLTyped,
-        T2: CLTyped,
-        T3: CLTyped,
-        T4: CLTyped,
-        T5: CLTyped,
-        T6: CLTyped,
-        T7: CLTyped,
-        T8: CLTyped,
-    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple8([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-            Box::new(T6::cl_type()),
-            Box::new(T7::cl_type()),
-            Box::new(T8::cl_type()),
-        ])
-    }
-}
-
-impl<
-        T1: CLTyped,
-        T2: CLTyped,
-        T3: CLTyped,
-        T4: CLTyped,
-        T5: CLTyped,
-        T6: CLTyped,
-        T7: CLTyped,
-        T8: CLTyped,
-        T9: CLTyped,
-    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8, T9)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple9([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-            Box::new(T6::cl_type()),
-            Box::new(T7::cl_type()),
-            Box::new(T8::cl_type()),
-            Box::new(T9::cl_type()),
-        ])
-    }
-}
-
-impl<
-        T1: CLTyped,
-        T2: CLTyped,
-        T3: CLTyped,
-        T4: CLTyped,
-        T5: CLTyped,
-        T6: CLTyped,
-        T7: CLTyped,
-        T8: CLTyped,
-        T9: CLTyped,
-        T10: CLTyped,
-    > CLTyped for (T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)
-{
-    fn cl_type() -> CLType {
-        CLType::Tuple10([
-            Box::new(T1::cl_type()),
-            Box::new(T2::cl_type()),
-            Box::new(T3::cl_type()),
-            Box::new(T4::cl_type()),
-            Box::new(T5::cl_type()),
-            Box::new(T6::cl_type()),
-            Box::new(T7::cl_type()),
-            Box::new(T8::cl_type()),
-            Box::new(T9::cl_type()),
-            Box::new(T10::cl_type()),
-        ])
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use alloc::string::String;
@@ -906,99 +636,6 @@ mod tests {
     #[test]
     fn tuple_3_should_work() {
         let x = (-1i32, 1u32, String::from("a"));
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_4_should_work() {
-        let x = (-1i32, 1u32, -1i64, String::from("a"));
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_5_should_work() {
-        let x = (-1i32, 1u32, -1i64, 1u64, String::from("a"));
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_6_should_work() {
-        let x = (-1i32, 1u32, -1i64, 1u64, vec![1, 2], String::from("a"));
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_7_should_work() {
-        let x = (
-            -1i32,
-            1u32,
-            -1i64,
-            1u64,
-            (1,),
-            vec![1, 2],
-            String::from("a"),
-        );
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_8_should_work() {
-        let x = (
-            -1i32,
-            1u32,
-            -1i64,
-            1u64,
-            URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
-            (1,),
-            vec![1, 2],
-            String::from("a"),
-        );
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_9_should_work() {
-        let uref = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
-        let uref_key = Key::URef(uref);
-
-        let x = (
-            -1i32,
-            1u32,
-            -1i64,
-            1u64,
-            uref,
-            uref_key,
-            (1,),
-            vec![1, 2],
-            String::from("a"),
-        );
-
-        round_trip(&x);
-    }
-
-    #[test]
-    fn tuple_10_should_work() {
-        let uref = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
-        let uref_key = Key::URef(uref);
-
-        let x = (
-            -1i32,
-            1u32,
-            -1i64,
-            1u64,
-            uref,
-            uref_key,
-            (1,),
-            vec![1, 2],
-            String::from("a"),
-            U512::zero(),
-        );
 
         round_trip(&x);
     }
