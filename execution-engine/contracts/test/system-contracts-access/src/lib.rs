@@ -1,8 +1,8 @@
 #![no_std]
 
 use contract_ffi::{
-    contract_api::{runtime, system, ContractRef, Error as ApiError},
-    uref::{AccessRights, URef},
+    contract_api::{runtime, system, Error as ApiError},
+    uref::AccessRights,
     value::account::PublicKey,
 };
 
@@ -26,14 +26,6 @@ impl Into<ApiError> for Error {
 const SYSTEM_ADDR: [u8; 32] = [0; 32];
 const DEFAULT_UREFS_COUNT: usize = 2;
 
-/// Extracts URef from ContractRef for the purpose of further validation
-fn extract_uref_from_contract_pointer(contract_pointer: ContractRef) -> Option<URef> {
-    match contract_pointer.into_turef() {
-        Some(turef) => Some(URef::new(turef.addr(), turef.access_rights())),
-        None => None,
-    }
-}
-
 fn delegate() {
     // Regardless of the context none of pos/mint contracts should be present
 
@@ -56,7 +48,8 @@ fn delegate() {
 
     let pos_contract = system::get_proof_of_stake();
 
-    let mint_uref = extract_uref_from_contract_pointer(mint_contract)
+    let mint_uref = mint_contract
+        .into_uref()
         .unwrap_or_else(|| runtime::revert(Error::MintContractIsNotURef));
     match mint_uref.access_rights() {
         Some(access_rights) if access_rights != expected_access_rights => {
@@ -66,7 +59,8 @@ fn delegate() {
         None => runtime::revert(Error::MintHasNoAccessRights),
     }
 
-    let pos_uref = extract_uref_from_contract_pointer(pos_contract)
+    let pos_uref = pos_contract
+        .into_uref()
         .unwrap_or_else(|| runtime::revert(Error::PosContractIsNotURef));
     match pos_uref.access_rights() {
         Some(access_rights) if access_rights != expected_access_rights => {

@@ -40,15 +40,15 @@ fn deploy_token(name: &str, initial_balance: U512) {
     // Initialize erc20 contract.
     runtime::call_contract::<_, ()>(
         token_ref.clone(),
-        &(api::INIT_ERC20, initial_balance),
-        &vec![],
+        (api::INIT_ERC20, initial_balance),
+        vec![],
     );
 
     // Save it under a new TURef.
     let token_turef: TURef<Key> = storage::new_turef(token_ref.into());
 
-    // Save TURef under readalbe name.
-    runtime::put_key(&name, &token_turef.into());
+    // Save TURef under readable name.
+    runtime::put_key(&name, token_turef.into());
 }
 
 fn deploy_proxy() {
@@ -59,6 +59,6 @@ fn deploy_proxy() {
     // Save it under a new TURef.
     let proxy_turef: TURef<Key> = storage::new_turef(proxy_ref.into());
 
-    // Save TURef under readalbe name.
-    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, &proxy_turef.into());
+    // Save TURef under readable name.
+    runtime::put_key(ERC20_PROXY_CONTRACT_NAME, proxy_turef.into());
 }

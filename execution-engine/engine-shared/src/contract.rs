@@ -1,6 +1,6 @@
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::collections::BTreeMap;
 
-use crate::{
+use contract_ffi::{
     bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH},
     key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     value::ProtocolVersion,
@@ -91,5 +91,22 @@ impl FromBytes for Contract {
             },
             rem3,
         ))
+    }
+}
+
+pub mod gens {
+    use proptest::{collection::vec, prelude::*};
+
+    use contract_ffi::gens::{named_keys_arb, protocol_version_arb};
+
+    use super::Contract;
+
+    pub fn contract_arb() -> impl Strategy<Value = Contract> {
+        protocol_version_arb().prop_flat_map(move |protocol_version_arb| {
+            named_keys_arb(20).prop_flat_map(move |urefs| {
+                vec(any::<u8>(), 1..1000)
+                    .prop_map(move |body| Contract::new(body, urefs.clone(), protocol_version_arb))
+            })
+        })
     }
 }

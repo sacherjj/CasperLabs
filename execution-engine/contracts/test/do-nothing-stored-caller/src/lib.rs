@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::{string::String, vec};
 
 use contract_ffi::{
-    contract_api::{runtime, ContractRef, Error, TURef},
+    contract_api::{runtime, ContractRef, Error},
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
 };
@@ -31,7 +31,7 @@ pub extern "C" fn call() {
     let arg: URef = runtime::get_arg(Args::DoNothingURef as u32)
         .unwrap_or_revert_with(Error::User(CustomError::MissingDoNothingURefArg as u16))
         .unwrap_or_revert_with(Error::InvalidArgument);
-    let do_nothing = ContractRef::TURef(TURef::new(arg.addr(), AccessRights::READ));
+    let do_nothing = ContractRef::URef(URef::new(arg.addr(), AccessRights::READ));
 
-    runtime::call_contract::<_, ()>(do_nothing.clone(), &(new_purse_name.clone(),), &vec![]);
+    runtime::call_contract::<_, ()>(do_nothing, (new_purse_name,), vec![]);
 }

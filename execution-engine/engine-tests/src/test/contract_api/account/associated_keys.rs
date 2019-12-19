@@ -4,9 +4,11 @@ use contract_ffi::{
     key::Key,
     value::{
         account::{PublicKey, Weight},
-        Account, U512,
+        U512,
     },
 };
+
+use engine_shared::account::Account;
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},

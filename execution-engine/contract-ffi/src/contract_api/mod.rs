@@ -30,8 +30,8 @@ fn alloc_bytes(n: usize) -> *mut u8 {
     }
 }
 
-fn to_ptr<T: ToBytes + ?Sized>(t: &T) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.to_bytes().unwrap_or_revert();
+fn to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
+    let bytes = t.into_bytes().unwrap_or_revert();
     let ptr = bytes.as_ptr();
     let size = bytes.len();
     (ptr, size, bytes)

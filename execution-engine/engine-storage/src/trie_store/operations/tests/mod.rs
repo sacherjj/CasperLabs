@@ -841,10 +841,10 @@ impl InMemoryEnvironment {
             .map(|name| format!("{}-{}", trie_store::NAME, name))
             .unwrap_or_else(|| trie_store::NAME.to_string());
         let data = self.data(Some(&name))?.unwrap();
-        data.iter()
+        data.into_iter()
             .map(|(hash_bytes, trie_bytes)| {
-                let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes)?;
-                let trie: Trie<K, V> = bytesrepr::deserialize(trie_bytes)?;
+                let hash: Blake2bHash = bytesrepr::deserialize(hash_bytes.to_vec())?;
+                let trie: Trie<K, V> = bytesrepr::deserialize(trie_bytes.to_vec())?;
                 Ok((hash, trie))
             })
             .collect::<Result<HashMap<Blake2bHash, Trie<K, V>>, bytesrepr::Error>>()

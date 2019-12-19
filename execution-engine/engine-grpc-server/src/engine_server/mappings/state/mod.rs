@@ -3,10 +3,13 @@
 
 mod account;
 mod big_int;
+mod cl_type;
+mod cl_value;
 mod contract;
 mod key;
 mod named_key;
 mod protocol_version;
+mod stored_value;
 mod uref;
 mod value;
 

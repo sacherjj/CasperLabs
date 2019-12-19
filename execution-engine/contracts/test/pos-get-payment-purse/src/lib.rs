@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use contract_ffi::{
     contract_api::{account, runtime, system, Error as ApiError},
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, uint::U512},
+    value::{account::PurseId, U512},
 };
 
 #[repr(u16)]
@@ -28,7 +28,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, &("get_payment_purse",), &Vec::new());
+        runtime::call_contract(pos_pointer, ("get_payment_purse",), Vec::new());
 
     // can deposit
     system::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)

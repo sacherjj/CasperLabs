@@ -2,10 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::vec::Vec;
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
@@ -30,15 +27,15 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let contract_pointer = arg
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(ApiError::User(Error::GetArgument as u16));
 
-    let reference: URef = runtime::call_contract(contract_pointer, &(), &Vec::new());
+    let reference: URef = runtime::call_contract(contract_pointer, (), Vec::new());
 
-    let forged_reference: TURef<String> = {
+    let forged_reference: TURef<&str> = {
         let ret = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
         TURef::from_uref(ret).unwrap_or_revert()
     };
 
-    storage::write(forged_reference, REPLACEMENT_DATA.to_string())
+    storage::write(forged_reference, &REPLACEMENT_DATA)
 }
