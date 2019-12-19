@@ -439,15 +439,14 @@ impl Default for UpgradeRequestBuilder {
 
 /// Builder for simple WASM test
 pub struct WasmTestBuilder<S> {
-    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
-    /// EngineState`
+    /// [`EngineState`] is wrapped in [`Rc`] to work around a missing [`Clone`] implementation
     engine_state: Rc<EngineState<S>>,
     exec_responses: Vec<ExecuteResponse>,
     upgrade_responses: Vec<UpgradeResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
-    /// Cached transform maps after subsequent successful runs
-    /// i.e. transforms[0] is for first run() call etc.
+    /// Cached transform maps after subsequent successful runs i.e. `transforms[0]` is for first
+    /// exec call etc.
     transforms: Vec<AdditiveMap<Key, Transform>>,
     bonded_validators: Vec<HashMap<PublicKey, U512>>,
     /// Cached genesis transforms
