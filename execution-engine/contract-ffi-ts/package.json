@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "Library for developing CasperLabs smart contracts.",
   "main": "index.js",
+  "ascMain": "assembly/index.ts",
   "dependencies": {},
   "devDependencies": {
     "assemblyscript": "^0.8.1",

@@ -1,0 +1,6 @@
+{
+  "extends": "../../../contract-ffi-ts/node_modules/assemblyscript/std/assembly.json",
+  "include": [
+    "./**/*.ts"
+  ]
+}

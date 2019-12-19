@@ -1,7 +1,11 @@
 // The entry file of your WebAssembly module.
 import * as externals from "./externals";
 
-function getArgSize(i: u32): U32 | null {
+export function revert(code: i32): void {
+  externals.revert(code);
+}
+
+export function getArgSize(i: u32): U32 | null {
   // TODO: Docs aren't clear on pointers, but perhaps `var size = <u32>0; changetype<usize>(size);` might take a pointer of a value we could pass
   var size = new Array<u32>(1);
   size[0] = 0;
@@ -13,7 +17,7 @@ function getArgSize(i: u32): U32 | null {
   return <U32>size[0];
 }
 
-function getArg(i: u32): Uint8Array | null {
+export function getArg(i: u32): Uint8Array | null {
   var arg_size = getArgSize(i);
   if (arg_size == null) {
     return null;
@@ -33,7 +37,6 @@ const ACCESS_RIGHTS_SERIALIZED_LENGTH = 1;
 const UREF_ADDR_LENGTH = 32;
 const UREF_SERIALIZED_LENGTH = UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 const PURSE_ID_SERIALIZED_LENGTH = UREF_SERIALIZED_LENGTH;
-
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -102,7 +105,7 @@ export function decodeOptional(bytes: Uint8Array): Uint8Array | null {
   }
 }
 
-function getMainPurse(): URef | null {
+export function getMainPurse(): URef | null {
   var data = new Uint8Array(PURSE_ID_SERIALIZED_LENGTH);
   data.fill(0);
   externals.get_main_purse(data.dataStart);
@@ -114,7 +117,7 @@ export const enum SystemContract {
   ProofOfStake = 1,
 }
 
-function getSystemContract(system_contract: SystemContract): URef | null {
+export function getSystemContract(system_contract: SystemContract): URef | null {
   var data = new Uint8Array(UREF_SERIALIZED_LENGTH);
   var ret = externals.get_system_contract(<u32>system_contract, data.dataStart, data.length);
   if (ret > 0) {
@@ -186,7 +189,7 @@ export function serializeArguments(values: Array<u8>[]): Array<u8> {
 }
 
 
-function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
+export function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
   var keyBytes = key.toBytes();
   var argBytes = serializeArguments(args);
   var extraURefs = serializeArguments([]);
@@ -213,7 +216,7 @@ function callContract(key: Key, args: Array<u8>[]): Uint8Array | null {
   return readHostBuffer(hostBufSize);
 }
 
-function readHostBuffer(count: u32): Uint8Array | null {
+export function readHostBuffer(count: u32): Uint8Array | null {
   var result = new Uint8Array(count);
 
   var resultSize = new Uint32Array(1);
@@ -224,7 +227,7 @@ function readHostBuffer(count: u32): Uint8Array | null {
   return result;
 }
 
-function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
+export function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array): i32 {
   var sourceBytes = source.toBytes();
   var targetBytes = target.toBytes();
   
@@ -238,50 +241,4 @@ function transferFromPurseToPurse(source: URef, target: URef, amount: Uint8Array
     amount.length,
   );
   return ret;
-}
-
-export function call(): void {
-  // TODO: Keep `as/` as lib only, move this to separate directory (maybe `as/contracts`)
-
-  var amountBytes = getArg(0);
-  if (amountBytes == null) {
-    externals.revert(1);
-    return;
-  }
-
-  var mainPurse = getMainPurse();
-  if (mainPurse == null) {
-    externals.revert(2);
-    return;
-  }
-
-  var proofOfStake = getSystemContract(SystemContract.ProofOfStake);
-  if (proofOfStake == null) {
-    externals.revert(3);
-    return;
-  }
-
-  var key = Key.fromURef(<URef>proofOfStake);
-  var output = callContract(key, [
-    toBytesString("get_payment_purse"),
-  ]);
-
-  if (output == null) {
-    externals.revert(4);
-    return;
-  }
-
-  var paymentPurse = URef.fromBytes(output);
-  if (paymentPurse == null) {
-    externals.revert(5);
-  }
-  
-  var ret = transferFromPurseToPurse(
-    mainPurse,
-    <URef>(paymentPurse),
-    amountBytes,
-  );
-  if (ret > 0) {
-    externals.revert(6);
-  }
 }

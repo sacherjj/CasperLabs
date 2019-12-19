@@ -18,15 +18,18 @@ PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdep
 SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+CONTRACTS_TS          = $(shell find ./contracts-ts          -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 
-BENCH_CONTRACTS     := $(patsubst %, build-contract/%, $(BENCH_CONTRACTS))
-CLIENT_CONTRACTS    := $(patsubst %, build-contract/%, $(CLIENT_CONTRACTS))
-EXAMPLE_CONTRACTS   := $(patsubst %, build-contract/%, $(EXAMPLE_CONTRACTS))
-EXPLORER_CONTRACTS  := $(patsubst %, build-contract/%, $(EXPLORER_CONTRACTS))
-PROFILING_CONTRACTS := $(patsubst %, build-contract/%, $(PROFILING_CONTRACTS))
-SRE_CONTRACTS       := $(patsubst %, build-contract/%, $(SRE_CONTRACTS))
-SYSTEM_CONTRACTS    := $(patsubst %, build-contract/%, $(SYSTEM_CONTRACTS))
-TEST_CONTRACTS      := $(patsubst %, build-contract/%, $(TEST_CONTRACTS))
+BENCH_CONTRACTS     := $(patsubst %, build-contract-rs/%, $(BENCH_CONTRACTS))
+CLIENT_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(CLIENT_CONTRACTS))
+EXAMPLE_CONTRACTS   := $(patsubst %, build-contract-rs/%, $(EXAMPLE_CONTRACTS))
+EXPLORER_CONTRACTS  := $(patsubst %, build-contract-rs/%, $(EXPLORER_CONTRACTS))
+PROFILING_CONTRACTS := $(patsubst %, build-contract-rs/%, $(PROFILING_CONTRACTS))
+SRE_CONTRACTS       := $(patsubst %, build-contract-rs/%, $(SRE_CONTRACTS))
+SYSTEM_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(SYSTEM_CONTRACTS))
+TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
+
+CONTRACTS_TS        := $(patsubst %, build-contract-ts/%, $(CONTRACTS_TS))
 
 INTEGRATION_CONTRACTS += \
 	bonding-call \
@@ -58,7 +61,7 @@ all: build build-contracts
 build:
 	$(CARGO) build $(CARGO_FLAGS)
 
-build-contract/%:
+build-contract-rs/%:
 	$(CARGO) build \
 		--release $(filter-out --release, $(CARGO_FLAGS)) \
 		--package $* \
@@ -73,7 +76,10 @@ build-integration-contract/%:
 		--out-dir $(IT_RES_DIR)
 
 .PHONY: build-contracts
-build-contracts: \
+build-contracts: build-contracts-rs build-contracts-ts
+
+.PHONY: build-contracts-rs
+build-contracts-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXAMPLE_CONTRACTS) \
@@ -84,18 +90,25 @@ build-contracts: \
 	$(SYSTEM_CONTRACTS) \
 	$(TEST_CONTRACTS)
 
+build-contract-ts/%:
+	cd contracts-ts/$* && $(NPM) run asbuild
+
 .PHONY: build-integration-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: build-example-contracts
 build-example-contracts: $(EXAMPLE_CONTRACTS)
 
+.PHONY: build-contracts-ts
+build-contracts-ts: \
+	$(CONTRACTS_TS)
+
 .PHONY: test
 test:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-contracts
-test-contracts: build-contracts
+test-contracts: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
 .PHONY: check-format
@@ -153,7 +166,7 @@ check-publish:
 	cd contract-ffi && $(CARGO) publish --dry-run
 
 .PHONY: bench
-bench: build-contracts
+bench: build-contracts-rs
 	$(CARGO) bench
 
 .PHONY: setup-cargo-packagers
