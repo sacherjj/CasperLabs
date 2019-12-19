@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "asbuild:optimized": "asc --lib ../../.. assembly/index.ts -b ../../../target/wasm32-unknown-unknown/release/standard_payment_ts.wasm  --validate --optimize --use abort="
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.8.1"
+  }
+}

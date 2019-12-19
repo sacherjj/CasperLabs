@@ -56,7 +56,7 @@ use crate::test::{
     DEFAULT_GENESIS_TIMESTAMP, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
 };
 
-pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
+pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment_ts.wasm";
 
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
