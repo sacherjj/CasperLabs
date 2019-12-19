@@ -1,5 +1,7 @@
 package io.casperlabs.casper.highway
 
+import io.casperlabs.crypto.hash.Blake2b256
+
 object LeaderSequencer {
 
   /** Concatentate all the magic bits into a byte array,
@@ -19,4 +21,7 @@ object LeaderSequencer {
     }
     arr.map(_.toByte)
   }
+
+  def seed(parentSeed: Array[Byte], magicBits: Seq[Boolean]) =
+    Blake2b256.hash(parentSeed ++ toByteArray(magicBits))
 }

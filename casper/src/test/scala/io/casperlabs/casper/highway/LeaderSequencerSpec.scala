@@ -1,6 +1,7 @@
 package io.casperlabs.casper.highway
 
 import org.scalatest._
+import io.casperlabs.crypto.hash.Blake2b256
 
 class LeaderSequencerSpec extends WordSpec with Matchers {
   "toByteArray" should {
@@ -22,4 +23,16 @@ class LeaderSequencerSpec extends WordSpec with Matchers {
       check(1, "01101000")
     }
   }
+
+  "seed" should {
+    "concatenate the parent seed with the child magic bits" in {
+      val parentSeed = "parent-seed".getBytes
+      val magicBits  = List(false, true, false, false, true)
+      val magicBytes = LeaderSequencer.toByteArray(magicBits)
+      val seed       = LeaderSequencer.seed(parentSeed, magicBits)
+
+      seed shouldBe Blake2b256.hash(parentSeed ++ magicBytes)
+    }
+  }
+
 }

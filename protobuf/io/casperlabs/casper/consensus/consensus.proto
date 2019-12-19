@@ -236,7 +236,11 @@ message Era {
     // this is where the bonds are coming, included in the era for reference.
     bytes booking_block_hash = 5;
     // The random seed compiled from the magic bits between the booking block and the key block.
-    int64 leader_seed = 6;
+    // 1. Concatenate all the magic bits into an array of bytes, padding on the right with 0s to make it divisble by 8.
+    // 2. Concatenate the byte array to the parent leader seed.
+    // 3. Take the blake2b256 hash of the resulting array.
+    // 4. Use it as a seed for a PRNG to randomize the validators in `bonds`.
+    bytes leader_seed = 6;
     // Bonded validator weights from the booking block.
     repeated Bond bonds = 7;
 }
