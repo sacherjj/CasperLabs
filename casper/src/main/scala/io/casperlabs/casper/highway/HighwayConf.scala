@@ -90,7 +90,7 @@ final case class HighwayConf(
     */
   def criticalBoundaries(startTick: Ticks, endTick: Ticks, delayTicks: Ticks): List[Ticks] = {
     def loop(acc: List[Ticks], nextStartTick: Ticks): List[Ticks] = {
-      val boundary = Ticks(nextStartTick - delayTicks)
+      val boundary = nextStartTick minus delayTicks
       if (boundary < startTick) loop(acc, eraEndTick(nextStartTick))
       else if (boundary < endTick) loop(boundary :: acc, eraEndTick(nextStartTick))
       else acc
