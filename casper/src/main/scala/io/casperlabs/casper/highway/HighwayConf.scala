@@ -22,7 +22,7 @@ final case class HighwayConf(
 
   /** Number of ticks to go back before the start of the era for picking the key block. */
   def keyTicks: Ticks =
-    Ticks(bookingTicks - entropyTicks)
+    bookingTicks minus entropyTicks
 
   /** Convert a tick based time to Unix timestamp. */
   def toTimestamp(t: Ticks): Timestamp =
@@ -38,7 +38,7 @@ final case class HighwayConf(
 
     duration match {
       case EraDuration.FixedLength(ticks) =>
-        Ticks(startTick + ticks)
+        startTick plus ticks
 
       case EraDuration.Calendar(length, unit) =>
         val s = LocalDateTime.ofInstant(Instant.ofEpochMilli(toTimestamp(startTick)), UTC)
