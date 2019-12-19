@@ -123,16 +123,15 @@ object MultiParentFinalizerTest extends BlockGenerator {
     *
     * Returns last block hash in chain.
     */
-  def createChainOfBlocks[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage: MultiParentFinalizer](
+  def createChainOfBlocks[F[_]: MonadThrowable: Time: BlockStorage: IndexedDagStorage](
       start: BlockHash,
       bonds: NonEmptyList[Bond]
-  ): F[BlockHash] =
-    bonds.map(_.validatorPublicKey).toList.foldLeftM(start) {
-      case (prevHash, validatorId) =>
+  ): F[List[BlockHash]] =
+    bonds.map(_.validatorPublicKey).toList.foldLeftM(start :: Nil) {
+      case (chain, validatorId) =>
         for {
-          block <- createAndStoreBlock[F](Seq(prevHash), validatorId, bonds.toList)
-          _     <- MultiParentFinalizer[F].onNewBlockAdded(block) // Update finalizer
-        } yield block.blockHash
+          block <- createAndStoreBlock[F](Seq(chain.head), validatorId, bonds.toList)
+        } yield block.blockHash :: chain
     }
 
   /** Finalizes a `start` block.
@@ -147,8 +146,15 @@ object MultiParentFinalizerTest extends BlockGenerator {
       bonds: NonEmptyList[Bond]
   ): F[BlockHash] =
     for {
-      a <- createChainOfBlocks[F](start, bonds)                          // Create level-0 summit
-      b <- createAndStoreBlock[F](Seq(a), bonds.head.validatorPublicKey) // Create level-1 summit
+      chain <- createChainOfBlocks[F](start, bonds) // Create level-0 summit
+      // Update Finalizer to know about how DAG advanced.
+      _ <- chain.traverse_(
+            hash =>
+              ProtoUtil.unsafeGetBlock[F](hash) >>= { block =>
+                MultiParentFinalizer[F].onNewBlockAdded(block)
+              }
+          )
+      b <- createAndStoreBlock[F](Seq(chain.head), bonds.head.validatorPublicKey) // Create level-1 summit
     } yield b.blockHash
 
   // Finalizes block it receives as argument.
