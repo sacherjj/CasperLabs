@@ -10,7 +10,6 @@ import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
 import monix.eval.Task
 import org.scalatest.FlatSpec
-import io.casperlabs.casper.helper.ByteStringPrettifier._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
