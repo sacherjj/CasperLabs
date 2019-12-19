@@ -53,6 +53,7 @@ object LeaderSequencer {
       // On Linux SecureRandom uses NativePRNG, and ignores the seed.
       // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
       // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
+      // NODE-1095: Find a more secure, cross platform algorithm.
       val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
       // Ticks need to be deterministic, so each time we have to reset the seed.
       val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
