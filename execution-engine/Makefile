@@ -1,6 +1,7 @@
 # This supports environments where $HOME/.cargo/env has not been sourced (CI, CLion Makefile runner)
 CARGO  = $(or $(shell which cargo),  $(HOME)/.cargo/bin/cargo)
 RUSTUP = $(or $(shell which rustup), $(HOME)/.cargo/bin/rustup)
+NPM    = $(or $(shell which npm),    /usr/bin/npm)
 
 RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 
@@ -160,9 +161,16 @@ setup-cargo-packagers:
 	$(CARGO) install cargo-rpm || exit 0
 	$(CARGO) install cargo-deb || exit 0
 
-.PHONY: setup
-setup: rust-toolchain
+.PHONY: setup-rs
+setup-rs: rust-toolchain
 	$(RUSTUP) update
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 	$(RUSTUP) component add --toolchain $(RUST_TOOLCHAIN) rustfmt clippy
+
+.PHONY: setup-ts
+setup-ts: contract-ffi-ts/package.json
+	cd contract-ffi-ts && $(NPM) install
+
+.PHONY: setup
+setup: setup-rs setup-ts
