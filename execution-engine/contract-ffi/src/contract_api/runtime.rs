@@ -207,7 +207,7 @@ pub fn put_key(name: &str, key: Key) {
     unsafe { ext_ffi::put_key(name_ptr, name_size, key_ptr, key_size) };
 }
 
-/// Removes Key persisted under [name] in the current context's map.
+/// Removes key persisted under `name` in the current context's map.
 pub fn remove_key(name: &str) {
     let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
     unsafe { ext_ffi::remove_key(name_ptr, name_size) }
