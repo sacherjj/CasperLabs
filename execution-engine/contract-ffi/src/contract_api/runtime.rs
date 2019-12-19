@@ -76,8 +76,13 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
         error::result_from(ret).unwrap_or_revert();
         unsafe { bytes_written.assume_init() }
     };
-    let result = read_host_buffer(bytes_written).unwrap_or_revert();
-    deserialize(result).unwrap_or_revert()
+
+    // NOTE: this is a copy of the contents of `read_host_buffer()`.  Calling that directly from
+    // here causes several contracts to fail with a Wasmi `Unreachable` error.
+    let bytes_ptr = contract_api::alloc_bytes(bytes_written);
+    let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, bytes_written, bytes_written) };
+    read_host_buffer_into(&mut dest).unwrap_or_revert();
+    deserialize(dest).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
