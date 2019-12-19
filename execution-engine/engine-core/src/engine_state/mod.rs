@@ -244,7 +244,7 @@ where
                 ArgsParser::parse(args)
                     .expect("args should convert to `Vec<CLValue>`")
                     .into_bytes()
-                    .expect("args should parse")
+                    .expect("args should serialize")
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
@@ -358,7 +358,7 @@ where
                     ArgsParser::parse(args)
                         .expect("args should convert to `Vec<CLValue>`")
                         .into_bytes()
-                        .expect("args should parse")
+                        .expect("args should serialize")
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
@@ -1095,7 +1095,7 @@ where
                 ArgsParser::parse(args)
                     .expect("args should convert to `Vec<CLValue>`")
                     .into_bytes()
-                    .expect("args should parse")
+                    .expect("args should serialize")
             };
 
             // The PoS keys may have changed because of effects during payment and/or

@@ -23,8 +23,6 @@ pub const U512_SERIALIZED_LENGTH: usize = U256_SERIALIZED_LENGTH * 2;
 pub const OPTION_TAG_SERIALIZED_LENGTH: usize = 1;
 pub const SEM_VER_SERIALIZED_LENGTH: usize = 12;
 
-pub const N32: usize = 32;
-
 pub trait ToBytes {
     fn to_bytes(&self) -> Result<Vec<u8>, Error>;
     fn into_bytes(self) -> Result<Vec<u8>, Error>
@@ -293,7 +291,8 @@ impl FromBytes for Vec<Vec<u8>> {
     fn from_vec(mut bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
         let (len, remainder) = u32::from_vec(bytes)?;
         bytes = remainder;
-        let mut result = Vec::with_capacity(len as usize);
+        let mut result = Vec::new();
+        result.try_reserve_exact(len as usize)?;
         for _ in 0..len {
             let (v, remainder) = Vec::<u8>::from_vec(bytes)?;
             bytes = remainder;
@@ -306,13 +305,13 @@ impl FromBytes for Vec<Vec<u8>> {
 impl ToBytes for Vec<Vec<u8>> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let self_len = self.len();
-        let serialized_length = self.iter().map(Vec::len).sum::<usize>()
+        let serialized_len = self.iter().map(Vec::len).sum::<usize>()
             + (U32_SERIALIZED_LENGTH as usize * (self_len + 1));
-        if serialized_length > u32::max_value() as usize {
+        if serialized_len > u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
 
-        let mut result: Vec<u8> = Vec::with_capacity(serialized_length);
+        let mut result: Vec<u8> = Vec::with_capacity(serialized_len);
         result.append(&mut (self_len as u32).into_bytes()?);
         for vec in self.iter() {
             result.append(&mut vec.to_bytes()?)
@@ -322,13 +321,13 @@ impl ToBytes for Vec<Vec<u8>> {
 
     fn into_bytes(self) -> Result<Vec<u8>, Error> {
         let self_len = self.len();
-        let serialized_length = self.iter().map(Vec::len).sum::<usize>()
+        let serialized_len = self.iter().map(Vec::len).sum::<usize>()
             + (U32_SERIALIZED_LENGTH as usize * (self_len + 1));
-        if serialized_length > u32::max_value() as usize {
+        if serialized_len > u32::max_value() as usize {
             return Err(Error::OutOfMemoryError);
         }
 
-        let mut result: Vec<u8> = Vec::with_capacity(serialized_length);
+        let mut result: Vec<u8> = Vec::with_capacity(serialized_len);
         result.append(&mut (self_len as u32).into_bytes()?);
         for vec in self.into_iter() {
             result.append(&mut vec.into_bytes()?)

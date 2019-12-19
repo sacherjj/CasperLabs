@@ -16,6 +16,13 @@ use casperlabs_contract_ffi::{
 static KB: usize = 1024;
 static BATCH: usize = 4 * KB;
 
+const TEST_I32: i32 = 123_456_789;
+const TEST_U128: U128 = U128([123_456_789, 0]);
+const TEST_U256: U256 = U256([123_456_789, 0, 0, 0]);
+const TEST_U512: U512 = U512([123_456_789, 0, 0, 0, 0, 0, 0, 0]);
+const TEST_STR_1: &str = "String One";
+const TEST_STR_2: &str = "String Two";
+
 fn prepare_vector(size: usize) -> Vec<i32> {
     (0..size as i32).collect()
 }
@@ -328,7 +335,10 @@ fn deserialize_access_rights_add_write(b: &mut Bencher) {
 }
 
 fn serialize_cl_value<T: CLTyped + ToBytes>(raw_value: T) -> Vec<u8> {
-    CLValue::from_t(raw_value).unwrap().to_bytes().unwrap()
+    CLValue::from_t(raw_value)
+        .expect("should create CLValue")
+        .to_bytes()
+        .expect("should serialize CLValue")
 }
 
 fn benchmark_deserialization<T: CLTyped + ToBytes + FromBytes>(b: &mut Bencher, raw_value: T) {
@@ -341,42 +351,42 @@ fn benchmark_deserialization<T: CLTyped + ToBytes + FromBytes>(b: &mut Bencher, 
 
 #[bench]
 fn serialize_cl_value_int32(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(123_456_789i32));
+    b.iter(|| serialize_cl_value(TEST_I32));
 }
 
 #[bench]
 fn deserialize_cl_value_int32(b: &mut Bencher) {
-    benchmark_deserialization(b, 123_456_789i32);
+    benchmark_deserialization(b, TEST_I32);
 }
 
 #[bench]
 fn serialize_cl_value_uint128(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(U128::from(123_456_789u128)));
+    b.iter(|| serialize_cl_value(TEST_U128));
 }
 
 #[bench]
 fn deserialize_cl_value_uint128(b: &mut Bencher) {
-    benchmark_deserialization(b, U128::from(123_456_789u128));
+    benchmark_deserialization(b, TEST_U128);
 }
 
 #[bench]
 fn serialize_cl_value_uint256(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(U256::from(123_456_789u64)));
+    b.iter(|| serialize_cl_value(TEST_U256));
 }
 
 #[bench]
 fn deserialize_cl_value_uint256(b: &mut Bencher) {
-    benchmark_deserialization(b, U256::from(123_456_789u64));
+    benchmark_deserialization(b, TEST_U256);
 }
 
 #[bench]
 fn serialize_cl_value_uint512(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(U512::from(12_345_679u64)));
+    b.iter(|| serialize_cl_value(TEST_U512));
 }
 
 #[bench]
 fn deserialize_cl_value_uint512(b: &mut Bencher) {
-    benchmark_deserialization(b, U512::from(12_345_679u64));
+    benchmark_deserialization(b, TEST_U512);
 }
 
 #[bench]
@@ -401,32 +411,32 @@ fn deserialize_cl_value_listint32(b: &mut Bencher) {
 
 #[bench]
 fn serialize_cl_value_string(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value("Hello, world!".to_string()));
+    b.iter(|| serialize_cl_value(TEST_STR_1.to_string()));
 }
 
 #[bench]
 fn deserialize_cl_value_string(b: &mut Bencher) {
-    benchmark_deserialization(b, "Hello, world!".to_string());
+    benchmark_deserialization(b, TEST_STR_1.to_string());
 }
 
 #[bench]
 fn serialize_cl_value_liststring(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(vec!["Hello".to_string(), "World".to_string()]));
+    b.iter(|| serialize_cl_value(vec![TEST_STR_1.to_string(), TEST_STR_2.to_string()]));
 }
 
 #[bench]
 fn deserialize_cl_value_liststring(b: &mut Bencher) {
-    benchmark_deserialization(b, vec!["Hello".to_string(), "World".to_string()]);
+    benchmark_deserialization(b, vec![TEST_STR_1.to_string(), TEST_STR_2.to_string()]);
 }
 
 #[bench]
 fn serialize_cl_value_namedkey(b: &mut Bencher) {
-    b.iter(|| serialize_cl_value(("Key".to_string(), Key::Account([0xffu8; 32]))));
+    b.iter(|| serialize_cl_value((TEST_STR_1.to_string(), Key::Account([0xffu8; 32]))));
 }
 
 #[bench]
 fn deserialize_cl_value_namedkey(b: &mut Bencher) {
-    benchmark_deserialization(b, ("Key".to_string(), Key::Account([0xffu8; 32])));
+    benchmark_deserialization(b, (TEST_STR_1.to_string(), Key::Account([0xffu8; 32])));
 }
 
 #[bench]

@@ -17,7 +17,7 @@ const INC_METHOD: &str = "inc";
 pub extern "C" fn call() {
     let counter_uref = runtime::get_key(COUNTER_KEY).unwrap_or_revert_with(Error::GetKey);
     let contract_ref = counter_uref
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(Error::UnexpectedKeyVariant);
 
     {

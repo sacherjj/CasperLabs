@@ -136,7 +136,7 @@ impl Key {
         }
     }
 
-    pub fn to_c_ptr(self) -> Option<ContractRef> {
+    pub fn to_contract_ref(self) -> Option<ContractRef> {
         match self {
             Key::URef(uref) => Some(ContractRef::URef(uref)),
             Key::Hash(id) => Some(ContractRef::Hash(id)),

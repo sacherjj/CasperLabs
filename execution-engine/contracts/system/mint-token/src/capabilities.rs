@@ -31,7 +31,7 @@ pub trait Addable<T> {
 
 /// Add-only URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct RefWithAddRights<T>(pub [u8; 32], PhantomData<T>);
+pub struct RefWithAddRights<T>([u8; 32], PhantomData<T>);
 
 impl<T> RefWithAddRights<T> {
     const fn access_rights() -> AccessRights {
@@ -61,7 +61,7 @@ impl<T: CLTyped + ToBytes> Addable<T> for RefWithAddRights<T> {
 
 /// Read, Add, Write URef
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub struct RefWithReadAddWriteRights<T>(pub [u8; 32], PhantomData<T>);
+pub struct RefWithReadAddWriteRights<T>([u8; 32], PhantomData<T>);
 
 impl<T> RefWithReadAddWriteRights<T> {
     const fn access_rights() -> AccessRights {

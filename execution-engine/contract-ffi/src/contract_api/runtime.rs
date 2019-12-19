@@ -7,7 +7,7 @@ use core::mem::MaybeUninit;
 use crate::{
     args_parser::ArgsParser,
     block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH},
-    bytesrepr::{self, deserialize, FromBytes},
+    bytesrepr::{self, FromBytes},
     contract_api::{
         self,
         error::{self, Error},
@@ -82,7 +82,7 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
     let bytes_ptr = contract_api::alloc_bytes(bytes_written);
     let mut dest: Vec<u8> = unsafe { Vec::from_raw_parts(bytes_ptr, bytes_written, bytes_written) };
     read_host_buffer_into(&mut dest).unwrap_or_revert();
-    deserialize(dest).unwrap_or_revert()
+    bytesrepr::deserialize(dest).unwrap_or_revert()
 }
 
 /// Takes the name of a function to store and a contract URef, and overwrites the value under
@@ -126,7 +126,7 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
         // Assumed to be safe as `get_arg_size` checks the argument already
         res.unwrap_or_revert()
     };
-    Some(deserialize(arg_bytes))
+    Some(bytesrepr::deserialize(arg_bytes))
 }
 
 /// Returns caller of current context.
@@ -143,7 +143,7 @@ pub fn get_caller() -> PublicKey {
             PUBLIC_KEY_SERIALIZED_LENGTH,
         )
     };
-    deserialize(bytes).unwrap_or_revert()
+    bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_blocktime() -> BlockTime {
@@ -156,7 +156,7 @@ pub fn get_blocktime() -> BlockTime {
             BLOCKTIME_SERIALIZED_LENGTH,
         )
     };
-    deserialize(bytes).unwrap_or_revert()
+    bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
 pub fn get_phase() -> Phase {
@@ -164,7 +164,7 @@ pub fn get_phase() -> Phase {
     unsafe { ext_ffi::get_phase(dest_ptr) };
     let bytes =
         unsafe { Vec::from_raw_parts(dest_ptr, PHASE_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH) };
-    deserialize(bytes).unwrap_or_revert()
+    bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
 /// Return the unforgable reference known by the current module under the given
@@ -189,7 +189,7 @@ pub fn get_key(name: &str) -> Option<Key> {
         Err(e) => revert(e),
     }
     key_bytes.truncate(total_bytes);
-    let key: Key = deserialize(key_bytes).unwrap_or_revert();
+    let key: Key = bytesrepr::deserialize(key_bytes).unwrap_or_revert();
     Some(key)
 }
 
@@ -228,7 +228,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         return BTreeMap::new();
     }
     let bytes = read_host_buffer(result_size).unwrap_or_revert();
-    deserialize(bytes).unwrap_or_revert()
+    bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
 /// checks if a uref is valid

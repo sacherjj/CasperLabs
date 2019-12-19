@@ -12,7 +12,6 @@ pub struct CLTypeMismatch {
     pub found: CLType,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLValueError {
     Serialization(bytesrepr::Error),

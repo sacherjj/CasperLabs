@@ -16,8 +16,8 @@ impl ContractRef {
 }
 
 impl From<ContractRef> for Key {
-    fn from(contract_ptr: ContractRef) -> Self {
-        match contract_ptr {
+    fn from(contract_ref: ContractRef) -> Self {
+        match contract_ref {
             ContractRef::Hash(h) => Key::Hash(h),
             ContractRef::URef(uref) => uref.into(),
         }

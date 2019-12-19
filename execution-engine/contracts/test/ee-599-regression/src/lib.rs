@@ -149,7 +149,9 @@ fn delegate() -> Result<(), Error> {
             let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
                 .ok_or(Error::MissingArgument)?
                 .map_err(|_| Error::InvalidArgument)?;
-            let contract_ref = contract_key.to_c_ptr().ok_or(Error::UnexpectedKeyVariant)?;
+            let contract_ref = contract_key
+                .to_contract_ref()
+                .ok_or(Error::UnexpectedKeyVariant)?;
             // This is a method that's gets forwarded into the sub contract
             let subcontract_method: String =
                 runtime::get_arg(DelegateArg::SubContractMethodFwd as u32)

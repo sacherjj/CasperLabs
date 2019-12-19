@@ -27,7 +27,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let contract_pointer = arg
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(ApiError::User(Error::GetArgument as u16));
 
     let reference: URef = runtime::call_contract(contract_pointer, (), Vec::new());

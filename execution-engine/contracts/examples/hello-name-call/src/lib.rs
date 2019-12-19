@@ -16,7 +16,7 @@ const HELLOWORLD_KEY: &str = "helloworld";
 pub extern "C" fn call() {
     let contract_key = runtime::get_key(HELLO_NAME_KEY).unwrap_or_revert_with(Error::GetKey);
     let contract_ref = contract_key
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(Error::UnexpectedKeyVariant);
 
     let args = ("World",);

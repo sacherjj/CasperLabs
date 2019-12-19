@@ -36,7 +36,7 @@ impl From<Error> for ApiError {
 pub extern "C" fn call() {
     let contract_key = runtime::get_key(MAILING_KEY).unwrap_or_revert_with(ApiError::GetKey);
     let contract_ref = contract_key
-        .to_c_ptr()
+        .to_contract_ref()
         .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
 
     let name = "CasperLabs";

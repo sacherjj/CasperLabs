@@ -13,6 +13,36 @@ use crate::{
     value::{U128, U256, U512},
 };
 
+const CL_TYPE_TAG_BOOL: u8 = 0;
+const CL_TYPE_TAG_I32: u8 = 1;
+const CL_TYPE_TAG_I64: u8 = 2;
+const CL_TYPE_TAG_U8: u8 = 3;
+const CL_TYPE_TAG_U32: u8 = 4;
+const CL_TYPE_TAG_U64: u8 = 5;
+const CL_TYPE_TAG_U128: u8 = 6;
+const CL_TYPE_TAG_U256: u8 = 7;
+const CL_TYPE_TAG_U512: u8 = 8;
+const CL_TYPE_TAG_UNIT: u8 = 9;
+const CL_TYPE_TAG_STRING: u8 = 10;
+const CL_TYPE_TAG_KEY: u8 = 11;
+const CL_TYPE_TAG_UREF: u8 = 12;
+const CL_TYPE_TAG_OPTION: u8 = 13;
+const CL_TYPE_TAG_LIST: u8 = 14;
+const CL_TYPE_TAG_FIXED_LIST: u8 = 15;
+const CL_TYPE_TAG_RESULT: u8 = 16;
+const CL_TYPE_TAG_MAP: u8 = 17;
+const CL_TYPE_TAG_TUPLE1: u8 = 18;
+const CL_TYPE_TAG_TUPLE2: u8 = 19;
+const CL_TYPE_TAG_TUPLE3: u8 = 20;
+const CL_TYPE_TAG_TUPLE4: u8 = 21;
+const CL_TYPE_TAG_TUPLE5: u8 = 22;
+const CL_TYPE_TAG_TUPLE6: u8 = 23;
+const CL_TYPE_TAG_TUPLE7: u8 = 24;
+const CL_TYPE_TAG_TUPLE8: u8 = 25;
+const CL_TYPE_TAG_TUPLE9: u8 = 26;
+const CL_TYPE_TAG_TUPLE10: u8 = 27;
+const CL_TYPE_TAG_ANY: u8 = 28;
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum CLType {
     // boolean primitive
@@ -67,7 +97,7 @@ pub enum CLType {
 impl CLType {
     /// The `len()` of the `Vec<u8>` resulting from `self.to_bytes()?`.
     pub fn serialized_len(&self) -> usize {
-        mem::size_of::<CLTypeTag>()
+        mem::size_of::<u8>()
             + match self {
                 CLType::Bool
                 | CLType::I32
@@ -107,109 +137,76 @@ pub fn named_key_type() -> CLType {
     CLType::Tuple2([Box::new(CLType::String), Box::new(CLType::Key)])
 }
 
-#[repr(u8)]
-enum CLTypeTag {
-    Bool = 0,
-    I32 = 1,
-    I64 = 2,
-    U8 = 3,
-    U32 = 4,
-    U64 = 5,
-    U128 = 6,
-    U256 = 7,
-    U512 = 8,
-    Unit = 9,
-    String = 10,
-    Key = 11,
-    URef = 12,
-    Option = 13,
-    List = 14,
-    FixedList = 15,
-    Result = 16,
-    Map = 17,
-    Tuple1 = 18,
-    Tuple2 = 19,
-    Tuple3 = 20,
-    Tuple4 = 21,
-    Tuple5 = 22,
-    Tuple6 = 23,
-    Tuple7 = 24,
-    Tuple8 = 25,
-    Tuple9 = 26,
-    Tuple10 = 27,
-    Any = 28,
-}
-
 impl CLType {
     pub fn append_bytes(&self, stream: &mut Vec<u8>) {
         match self {
-            CLType::Bool => stream.push(CLTypeTag::Bool as u8),
-            CLType::I32 => stream.push(CLTypeTag::I32 as u8),
-            CLType::I64 => stream.push(CLTypeTag::I64 as u8),
-            CLType::U8 => stream.push(CLTypeTag::U8 as u8),
-            CLType::U32 => stream.push(CLTypeTag::U32 as u8),
-            CLType::U64 => stream.push(CLTypeTag::U64 as u8),
-            CLType::U128 => stream.push(CLTypeTag::U128 as u8),
-            CLType::U256 => stream.push(CLTypeTag::U256 as u8),
-            CLType::U512 => stream.push(CLTypeTag::U512 as u8),
-            CLType::Unit => stream.push(CLTypeTag::Unit as u8),
-            CLType::String => stream.push(CLTypeTag::String as u8),
-            CLType::Key => stream.push(CLTypeTag::Key as u8),
-            CLType::URef => stream.push(CLTypeTag::URef as u8),
+            CLType::Bool => stream.push(CL_TYPE_TAG_BOOL),
+            CLType::I32 => stream.push(CL_TYPE_TAG_I32),
+            CLType::I64 => stream.push(CL_TYPE_TAG_I64),
+            CLType::U8 => stream.push(CL_TYPE_TAG_U8),
+            CLType::U32 => stream.push(CL_TYPE_TAG_U32),
+            CLType::U64 => stream.push(CL_TYPE_TAG_U64),
+            CLType::U128 => stream.push(CL_TYPE_TAG_U128),
+            CLType::U256 => stream.push(CL_TYPE_TAG_U256),
+            CLType::U512 => stream.push(CL_TYPE_TAG_U512),
+            CLType::Unit => stream.push(CL_TYPE_TAG_UNIT),
+            CLType::String => stream.push(CL_TYPE_TAG_STRING),
+            CLType::Key => stream.push(CL_TYPE_TAG_KEY),
+            CLType::URef => stream.push(CL_TYPE_TAG_UREF),
             CLType::Option(cl_type) => {
-                stream.push(CLTypeTag::Option as u8);
+                stream.push(CL_TYPE_TAG_OPTION);
                 cl_type.append_bytes(stream);
             }
             CLType::List(cl_type) => {
-                stream.push(CLTypeTag::List as u8);
+                stream.push(CL_TYPE_TAG_LIST);
                 cl_type.append_bytes(stream);
             }
             CLType::FixedList(cl_type, len) => {
-                stream.push(CLTypeTag::FixedList as u8);
+                stream.push(CL_TYPE_TAG_FIXED_LIST);
                 cl_type.append_bytes(stream);
                 stream.append(&mut len.to_bytes().unwrap());
             }
             CLType::Result { ok, err } => {
-                stream.push(CLTypeTag::Result as u8);
+                stream.push(CL_TYPE_TAG_RESULT);
                 ok.append_bytes(stream);
                 err.append_bytes(stream);
             }
             CLType::Map { key, value } => {
-                stream.push(CLTypeTag::Map as u8);
+                stream.push(CL_TYPE_TAG_MAP);
                 key.append_bytes(stream);
                 value.append_bytes(stream);
             }
             CLType::Tuple1(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple1 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE1, cl_type_array, stream)
             }
             CLType::Tuple2(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple2 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE2, cl_type_array, stream)
             }
             CLType::Tuple3(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple3 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE3, cl_type_array, stream)
             }
             CLType::Tuple4(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple4 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE4, cl_type_array, stream)
             }
             CLType::Tuple5(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple5 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE5, cl_type_array, stream)
             }
             CLType::Tuple6(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple6 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE6, cl_type_array, stream)
             }
             CLType::Tuple7(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple7 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE7, cl_type_array, stream)
             }
             CLType::Tuple8(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple8 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE8, cl_type_array, stream)
             }
             CLType::Tuple9(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple9 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE9, cl_type_array, stream)
             }
             CLType::Tuple10(cl_type_array) => {
-                serialize_cl_tuple_type(CLTypeTag::Tuple10 as u8, cl_type_array, stream)
+                serialize_cl_tuple_type(CL_TYPE_TAG_TUPLE10, cl_type_array, stream)
             }
-            CLType::Any => stream.push(CLTypeTag::Any as u8),
+            CLType::Any => stream.push(CL_TYPE_TAG_ANY),
         }
     }
 }
@@ -218,169 +215,169 @@ impl CLType {
 impl FromBytes for CLType {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (tag, remainder) = u8::from_bytes(bytes)?;
-
-        if tag == CLTypeTag::Bool as u8 {
-            Ok((CLType::Bool, remainder))
-        } else if tag == CLTypeTag::I32 as u8 {
-            Ok((CLType::I32, remainder))
-        } else if tag == CLTypeTag::I64 as u8 {
-            Ok((CLType::I64, remainder))
-        } else if tag == CLTypeTag::U8 as u8 {
-            Ok((CLType::U8, remainder))
-        } else if tag == CLTypeTag::U32 as u8 {
-            Ok((CLType::U32, remainder))
-        } else if tag == CLTypeTag::U64 as u8 {
-            Ok((CLType::U64, remainder))
-        } else if tag == CLTypeTag::U128 as u8 {
-            Ok((CLType::U128, remainder))
-        } else if tag == CLTypeTag::U256 as u8 {
-            Ok((CLType::U256, remainder))
-        } else if tag == CLTypeTag::U512 as u8 {
-            Ok((CLType::U512, remainder))
-        } else if tag == CLTypeTag::Unit as u8 {
-            Ok((CLType::Unit, remainder))
-        } else if tag == CLTypeTag::String as u8 {
-            Ok((CLType::String, remainder))
-        } else if tag == CLTypeTag::Key as u8 {
-            Ok((CLType::Key, remainder))
-        } else if tag == CLTypeTag::URef as u8 {
-            Ok((CLType::URef, remainder))
-        } else if tag == CLTypeTag::Option as u8 {
-            let (inner_type, remainder) = CLType::from_bytes(remainder)?;
-            let cl_type = CLType::Option(Box::new(inner_type));
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::List as u8 {
-            let (inner_type, remainder) = CLType::from_bytes(remainder)?;
-            let cl_type = CLType::List(Box::new(inner_type));
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::FixedList as u8 {
-            let (inner_type, remainder) = CLType::from_bytes(remainder)?;
-            let (len, remainder) = u32::from_bytes(remainder)?;
-            let cl_type = CLType::FixedList(Box::new(inner_type), len);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Result as u8 {
-            let (ok_type, remainder) = CLType::from_bytes(remainder)?;
-            let (err_type, remainder) = CLType::from_bytes(remainder)?;
-            let cl_type = CLType::Result {
-                ok: Box::new(ok_type),
-                err: Box::new(err_type),
-            };
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Map as u8 {
-            let (key_type, remainder) = CLType::from_bytes(remainder)?;
-            let (value_type, remainder) = CLType::from_bytes(remainder)?;
-            let cl_type = CLType::Map {
-                key: Box::new(key_type),
-                value: Box::new(value_type),
-            };
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple1 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(1, remainder)?;
-            let cl_type = CLType::Tuple1([inner_types.pop_front().unwrap()]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple2 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(2, remainder)?;
-            let cl_type = CLType::Tuple2([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple3 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(3, remainder)?;
-            let cl_type = CLType::Tuple3([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple4 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(4, remainder)?;
-            let cl_type = CLType::Tuple4([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple5 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(5, remainder)?;
-            let cl_type = CLType::Tuple5([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple6 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(6, remainder)?;
-            let cl_type = CLType::Tuple6([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple7 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(7, remainder)?;
-            let cl_type = CLType::Tuple7([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple8 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(8, remainder)?;
-            let cl_type = CLType::Tuple8([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple9 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(9, remainder)?;
-            let cl_type = CLType::Tuple9([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Tuple10 as u8 {
-            let (mut inner_types, remainder) = parse_cl_tuple_types(10, remainder)?;
-            let cl_type = CLType::Tuple10([
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-                inner_types.pop_front().unwrap(),
-            ]);
-            Ok((cl_type, remainder))
-        } else if tag == CLTypeTag::Any as u8 {
-            Ok((CLType::Any, remainder))
-        } else {
-            Err(bytesrepr::Error::FormattingError)
+        match tag {
+            CL_TYPE_TAG_BOOL => Ok((CLType::Bool, remainder)),
+            CL_TYPE_TAG_I32 => Ok((CLType::I32, remainder)),
+            CL_TYPE_TAG_I64 => Ok((CLType::I64, remainder)),
+            CL_TYPE_TAG_U8 => Ok((CLType::U8, remainder)),
+            CL_TYPE_TAG_U32 => Ok((CLType::U32, remainder)),
+            CL_TYPE_TAG_U64 => Ok((CLType::U64, remainder)),
+            CL_TYPE_TAG_U128 => Ok((CLType::U128, remainder)),
+            CL_TYPE_TAG_U256 => Ok((CLType::U256, remainder)),
+            CL_TYPE_TAG_U512 => Ok((CLType::U512, remainder)),
+            CL_TYPE_TAG_UNIT => Ok((CLType::Unit, remainder)),
+            CL_TYPE_TAG_STRING => Ok((CLType::String, remainder)),
+            CL_TYPE_TAG_KEY => Ok((CLType::Key, remainder)),
+            CL_TYPE_TAG_UREF => Ok((CLType::URef, remainder)),
+            CL_TYPE_TAG_OPTION => {
+                let (inner_type, remainder) = CLType::from_bytes(remainder)?;
+                let cl_type = CLType::Option(Box::new(inner_type));
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_LIST => {
+                let (inner_type, remainder) = CLType::from_bytes(remainder)?;
+                let cl_type = CLType::List(Box::new(inner_type));
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_FIXED_LIST => {
+                let (inner_type, remainder) = CLType::from_bytes(remainder)?;
+                let (len, remainder) = u32::from_bytes(remainder)?;
+                let cl_type = CLType::FixedList(Box::new(inner_type), len);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_RESULT => {
+                let (ok_type, remainder) = CLType::from_bytes(remainder)?;
+                let (err_type, remainder) = CLType::from_bytes(remainder)?;
+                let cl_type = CLType::Result {
+                    ok: Box::new(ok_type),
+                    err: Box::new(err_type),
+                };
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_MAP => {
+                let (key_type, remainder) = CLType::from_bytes(remainder)?;
+                let (value_type, remainder) = CLType::from_bytes(remainder)?;
+                let cl_type = CLType::Map {
+                    key: Box::new(key_type),
+                    value: Box::new(value_type),
+                };
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE1 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(1, remainder)?;
+                let cl_type = CLType::Tuple1([inner_types.pop_front().unwrap()]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE2 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(2, remainder)?;
+                let cl_type = CLType::Tuple2([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE3 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(3, remainder)?;
+                let cl_type = CLType::Tuple3([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE4 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(4, remainder)?;
+                let cl_type = CLType::Tuple4([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE5 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(5, remainder)?;
+                let cl_type = CLType::Tuple5([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE6 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(6, remainder)?;
+                let cl_type = CLType::Tuple6([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE7 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(7, remainder)?;
+                let cl_type = CLType::Tuple7([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE8 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(8, remainder)?;
+                let cl_type = CLType::Tuple8([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE9 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(9, remainder)?;
+                let cl_type = CLType::Tuple9([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_TUPLE10 => {
+                let (mut inner_types, remainder) = parse_cl_tuple_types(10, remainder)?;
+                let cl_type = CLType::Tuple10([
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                    inner_types.pop_front().unwrap(),
+                ]);
+                Ok((cl_type, remainder))
+            }
+            CL_TYPE_TAG_ANY => Ok((CLType::Any, remainder)),
+            _ => Err(bytesrepr::Error::FormattingError),
         }
     }
 }
