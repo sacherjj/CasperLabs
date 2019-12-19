@@ -1,6 +1,6 @@
 {
   "name": "casperlabs-sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "SDK to interact with the CasperLabs blockchain using gRPC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -54,6 +54,7 @@
     "blakejs": "^1.1.0",
     "casperlabs-grpc": "latest",
     "google-protobuf": "^3.8.0-rc.1",
+    "rxjs": "^6.5.3",
     "tweetnacl-ts": "^1.0.3",
     "tweetnacl-util": "^0.15.0"
   }

@@ -16,6 +16,7 @@ import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.BlockHash
+import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.dag.DagRepresentation.Validator
 import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDagStorage}
 import io.casperlabs.storage.util.DoobieCodecs
@@ -33,13 +34,20 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
 
   override def insert(block: Block): F[DagRepresentation[F]] = {
     val blockSummary     = BlockSummary.fromBlock(block)
-    val deployErrorCount = block.getBody.deploys.count(_.isError)
-    val deployCostTotal  = block.getBody.deploys.map(_.cost).sum
+    val deploys          = block.getBody.deploys
+    val deployErrorCount = deploys.count(_.isError)
+    val deployCostTotal  = deploys.map(_.cost).sum
+    val deployGasPriceAvg =
+      if (deployCostTotal == 0L) 0L
+      else
+        deploys
+          .map(d => d.cost * d.getDeploy.getHeader.gasPrice)
+          .sum / deployCostTotal
     val blockMetadataQuery =
-      sql"""|INSERT OR IGNORE INTO block_metadata
-            |(block_hash, validator, rank, data, block_size, deploy_error_count, deploy_cost_total)
-            |VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal)
-            |""".stripMargin.update.run
+      (fr"""INSERT OR IGNORE INTO block_metadata
+            (block_hash, validator, rank, """ ++ blockInfoCols() ++ fr""")
+            VALUES (${block.blockHash}, ${block.validatorPublicKey}, ${block.rank}, ${blockSummary.toByteString}, ${block.serializedSize}, $deployErrorCount, $deployCostTotal, $deployGasPriceAvg)
+            """).update.run
 
     val justificationsQuery =
       Update[(BlockHash, BlockHash)](
@@ -152,35 +160,35 @@ class SQLiteDagStorage[F[_]: Bracket[*[_], Throwable]](
       startBlockNumber: Long,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
-          |FROM block_metadata
-          |WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
-          |ORDER BY rank
-          |""".stripMargin
+    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE rank>=$startBlockNumber AND rank<=$endBlockNumber
+          ORDER BY rank
+          """)
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT rank, data, block_size, deploy_error_count, deploy_cost_total
-          |FROM block_metadata
-          |WHERE rank>=$startBlockNumber
-          |ORDER BY rank""".stripMargin
+    (fr"""SELECT rank, """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE rank>=$startBlockNumber
+          ORDER BY rank""")
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)
       .groupByRank
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-    sql"""|SELECT a.rank, a.data, a.block_size, a.deploy_error_count, deploy_cost_total
-          |FROM block_metadata a
-          |INNER JOIN (
-          | SELECT max(rank) max_rank FROM block_metadata
-          |) b
-          |ON a.rank>b.max_rank-$tailLength
-          |ORDER BY a.rank
-          |""".stripMargin
+    (fr"""SELECT a.rank, """ ++ blockInfoCols("a") ++ fr"""
+          FROM block_metadata a
+          INNER JOIN (
+           SELECT max(rank) max_rank FROM block_metadata
+          ) b
+          ON a.rank>b.max_rank-$tailLength
+          ORDER BY a.rank
+          """)
       .query[(Long, BlockInfo)]
       .stream
       .transact(readXa)

@@ -49,6 +49,12 @@ service CasperService {
         };
     }
 
+    rpc StreamEvents(StreamEventsRequest) returns (stream io.casperlabs.casper.consensus.info.Event){
+        option (google.api.http) = {
+            get: "/v2/events"
+        };
+    }
+
     // Query the value of global state as it was after the execution of a block.
     rpc GetBlockState(GetBlockStateRequest) returns (io.casperlabs.casper.consensus.state.Value) {
         option (google.api.http) = {
@@ -168,4 +174,11 @@ message ListDeployInfosResponse {
 }
 
 
-message GetLastFinalizedBlockInfoRequest {}
+message GetLastFinalizedBlockInfoRequest {
+    io.casperlabs.casper.consensus.info.BlockInfo.View view = 1;
+}
+
+message StreamEventsRequest {
+  bool block_added = 1;
+  bool block_finalized = 2;
+}

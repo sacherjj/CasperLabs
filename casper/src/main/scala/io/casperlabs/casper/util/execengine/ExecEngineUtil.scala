@@ -418,7 +418,7 @@ object ExecEngineUtil {
       } yield MergeResult.Result[T, A](blocks.head, nonFirstEffect, nonFirstParents)
   }
 
-  def merge[F[_]: MonadThrowable: BlockStorage](
+  def merge[F[_]: MonadThrowable: BlockStorage: Metrics](
       candidateParentBlocks: NonEmptyList[Block],
       dag: DagRepresentation[F]
   ): F[MergeResult.Result[TransformMap, Block]] = {
@@ -498,6 +498,7 @@ object ExecEngineUtil {
                )
       // TODO: Aren't these parents already in `candidateParentBlocks`?
       blocks <- merged.parents.traverse(block => ProtoUtil.unsafeGetBlock[F](block.messageHash))
+      _      <- Metrics[F].record("mergedBlocks", blocks.size.toLong)
     } yield MergeResult.Result(blocks.head, merged.nonFirstParentsCombinedEffect, blocks.tail)
   }
 }

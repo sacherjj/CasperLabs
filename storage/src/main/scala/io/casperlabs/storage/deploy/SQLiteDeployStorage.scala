@@ -17,6 +17,7 @@ import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
 import io.casperlabs.storage.DeployStorageMetricsSource
 import io.casperlabs.storage.block.BlockStorage.DeployHash
+import io.casperlabs.storage.block.SQLiteBlockStorage.blockInfoCols
 import io.casperlabs.storage.util.DoobieCodecs
 
 import scala.collection.concurrent.TrieMap
@@ -470,7 +471,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
           .fromList[ByteString](deployHashes)
           .fold(Map.empty[DeployHash, List[ProcessingResult]].pure[F])(nel => {
             val q = fr"""SELECT dpr.deploy_hash, dpr.cost, dpr.execution_error_message,
-                                bm.data, bm.block_size, bm.deploy_error_count, bm.deploy_cost_total
+                                """ ++ blockInfoCols("bm") ++ fr"""
                         FROM deploy_process_results dpr
                         JOIN block_metadata bm ON dpr.block_hash = bm.block_hash
                         WHERE """ ++ Fragments.in(fr"dpr.deploy_hash", nel)

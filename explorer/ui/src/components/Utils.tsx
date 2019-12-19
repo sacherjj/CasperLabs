@@ -54,24 +54,6 @@ export const Button = (props: {
   </button>
 );
 
-export const ToggleButton = (props: {
-  title?: string;
-  onClick: () => void;
-  pressed: boolean;
-  size: 'lg' | 'sm' | 'xs';
-}) => (
-  <button
-    type="button"
-    className={`btn btn-${props.size} btn-toggle`}
-    data-toggle="button"
-    aria-pressed={props.pressed}
-    onClick={_ => props.onClick()}
-    title={props.title}
-  >
-    <div className="handle" />
-  </button>
-);
-
 export const LinkButton = (props: { onClick: () => void; title: string }) => (
   <button className="link" onClick={() => props.onClick()}>
     {props.title}
