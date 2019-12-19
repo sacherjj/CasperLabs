@@ -62,6 +62,7 @@ object LeaderSequencer {
       val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
       random.setSeed(tickSeed)
       // Pick a number between [0, 1) and use it to find a validator.
+      // NODE-1096: If possible generate a random BigInt directly, without involving a Double.
       val r = BigDecimal.valueOf(random.nextDouble())
       // Integer arithmetic is supposed to be safer than Double.
       val t = (total * r).toBigInt
