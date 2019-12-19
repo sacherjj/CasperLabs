@@ -67,10 +67,7 @@ def test_one_network_repeated_deploy(one_node_network_fn):
         assert not deploy_info.processing_results[0].is_error
         with pytest.raises(Exception) as excinfo:
             cli("propose")
-        assert (
-            "No new deploys" in str(excinfo.value)
-            or "No new deploys" in excinfo.value.output
-        )
+        assert "No new deploys" in str(excinfo.value)
 
 
 def test_two_network_repeated_deploy(two_node_network):
@@ -97,7 +94,4 @@ def test_two_network_repeated_deploy(two_node_network):
         assert not deploy_info.processing_results[0].is_error
         with pytest.raises(Exception) as excinfo:
             clis[1]("propose")
-        assert (
-            "No new deploys" in str(excinfo.value)
-            or "No new deploys" in excinfo.value.output
-        )
+        assert "No new deploys" in str(excinfo.value)
