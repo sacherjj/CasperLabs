@@ -21,11 +21,11 @@ const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
 
 fn bond(pos: &ContractRef, amount: &U512, source: PurseId) {
-    runtime::call_contract::<_, ()>(pos.clone(), &(POS_BOND, *amount, source), &vec![]);
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source), vec![]);
 }
 
 fn unbond(pos: &ContractRef, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(pos.clone(), &(POS_UNBOND, amount), &Vec::<Key>::new());
+    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount), Vec::<Key>::new());
 }
 
 #[no_mangle]
