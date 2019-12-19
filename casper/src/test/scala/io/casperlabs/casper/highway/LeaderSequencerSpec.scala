@@ -70,5 +70,10 @@ class LeaderSequencerSpec extends WordSpec with Matchers {
         counts(bond.validatorPublicKey).toDouble / rounds shouldBe (w +- 0.05)
       }
     }
+
+    "work with an empty seed" in {
+      val genesisLeader = LeaderSequencer.makeSequencer(Array.empty[Byte], bonds)
+      genesisLeader(Ticks(System.currentTimeMillis))
+    }
   }
 }
