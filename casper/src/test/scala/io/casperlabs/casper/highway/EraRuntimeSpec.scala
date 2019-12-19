@@ -11,10 +11,10 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
 
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
-    genesisEraStartTick = date(2019, 12, 9),
+    genesisEraStart = date(2019, 12, 9),
     eraDuration = EraDuration.FixedLength(days(7)),
-    bookingTicks = days(10),
-    entropyTicks = hours(3),
+    bookingDuration = days(10),
+    entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(days(2))
   )
 
@@ -25,8 +25,8 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
       val runtime = EraRuntime.fromGenesis[Id](conf, genesis)
 
       "use the genesis ticks for the era" in {
-        conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStartTick
-        conf.toInstant(Ticks(runtime.era.endTick)) shouldBe conf.genesisEraEndTick
+        conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStart
+        conf.toInstant(Ticks(runtime.era.endTick)) shouldBe conf.genesisEraEnd
       }
 
       "use the genesis block as key and booking block" in {
@@ -76,7 +76,7 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
       }
 
       "recognize the switch block boundary" in {
-        val end  = conf.genesisEraEndTick
+        val end  = conf.genesisEraEnd
         val `1h` = hours(1)
         runtime.isSwitchBoundary(end minus `1h`, end plus `1h`) shouldBe true
         runtime.isSwitchBoundary(end minus `1h`, end) shouldBe true

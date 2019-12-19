@@ -10,17 +10,17 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
   val Zero = hours(0)
 
   val init = HighwayConf(
-    genesisEraStartTick = date(2000, 1, 3),
+    genesisEraStart = date(2000, 1, 3),
     tickUnit = TimeUnit.MILLISECONDS,
     eraDuration = EraDuration.FixedLength(Zero),
-    bookingTicks = Zero,
-    entropyTicks = Zero,
+    bookingDuration = Zero,
+    entropyDuration = Zero,
     postEraVotingDuration = VotingDuration.FixedLength(Zero)
   )
 
   "toTicks" should {
     "convert to the number of ticks since epoch" in {
-      init.toTicks(init.genesisEraStartTick) shouldBe Ticks(dateTimestamp(2000, 1, 3))
+      init.toTicks(init.genesisEraStart) shouldBe Ticks(dateTimestamp(2000, 1, 3))
     }
   }
 
@@ -33,7 +33,7 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
     }
   }
 
-  "eraEndTick" when {
+  "eraEnd" when {
     // There was a leap second announced for 2008 Dec 31; that's surely included in JDK8.
 
     "eraDuration is given as Ticks" should {
@@ -45,7 +45,7 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
 
         // Start from the previous Monday midnight.
         val startTick = date(2008, 12, 29)
-        val endTick   = conf.eraEndTick(startTick)
+        val endTick   = conf.eraEnd(startTick)
 
         // The GregorianCalendar doesn't deal with leap seconds,
         // while the LocalDateTime spreads it around; we should
@@ -62,34 +62,34 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
           eraDuration = EraDuration.Calendar(3, EraDuration.CalendarUnit.MONTHS)
         )
         val startTick = date(2008, 12, 1)
-        val endTick   = conf.eraEndTick(startTick)
+        val endTick   = conf.eraEnd(startTick)
         endTick shouldBe date(2009, 3, 1)
       }
     }
   }
 
-  "genesisEraEndTick" should {
+  "genesisEraEnd" should {
     "expand the genesis era to produce multiple booking blocks" in {
       val conf = init.copy(
-        genesisEraStartTick = date(2019, 12, 16),
-        bookingTicks = days(10),
+        genesisEraStart = date(2019, 12, 16),
+        bookingDuration = days(10),
         eraDuration = EraDuration.FixedLength(days(7))
       )
-      conf.genesisEraEndTick shouldBe date(2019, 12, 30)
+      conf.genesisEraEnd shouldBe date(2019, 12, 30)
     }
   }
 
   "criticalBoundaries" should {
     "collect all booking block ticks for the genesis era" in {
       val conf = init.copy(
-        genesisEraStartTick = date(2019, 12, 2),
-        bookingTicks = days(18),
+        genesisEraStart = date(2019, 12, 2),
+        bookingDuration = days(18),
         eraDuration = EraDuration.FixedLength(days(7))
       )
       val boundaries = conf.criticalBoundaries(
-        conf.genesisEraStartTick,
-        conf.genesisEraEndTick,
-        conf.bookingTicks
+        conf.genesisEraStart,
+        conf.genesisEraEnd,
+        conf.bookingDuration
       )
 
       boundaries should contain theSameElementsInOrderAs List(
@@ -101,14 +101,14 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
 
     "collect just the single key tick for a normal era" in {
       val conf = init.copy(
-        bookingTicks = days(10),
-        entropyTicks = hours(2),
+        bookingDuration = days(10),
+        entropyDuration = hours(2),
         eraDuration = EraDuration.FixedLength(days(7))
       )
       val boundaries = conf.criticalBoundaries(
         date(2019, 12, 23),
         date(2019, 12, 30),
-        conf.keyTicks
+        conf.keyDuration
       )
 
       boundaries should contain only (

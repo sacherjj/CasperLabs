@@ -5,14 +5,14 @@ import io.casperlabs.casper.consensus.{BlockSummary, Era}
 
 class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 
-  val startTick = conf.toInstant(Ticks(era.startTick))
-  val endTick   = conf.toInstant(Ticks(era.endTick))
+  val start = conf.toInstant(Ticks(era.startTick))
+  val end   = conf.toInstant(Ticks(era.endTick))
 
   val bookingBoundaries =
-    conf.criticalBoundaries(startTick, endTick, delayTicks = conf.bookingTicks)
+    conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
 
   val keyBoundaries =
-    conf.criticalBoundaries(startTick, endTick, delayTicks = conf.keyTicks)
+    conf.criticalBoundaries(start, end, delayDuration = conf.keyDuration)
 
   /** When we handle an incoming block or create a new one we may have to do additional work:
     * - if the block is a booking block, we have to execute the auction to pick the validators for the upcoming era
@@ -36,8 +36,7 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
     * ones that can finalize it by building ballots on top of it. The cannot
     * build more blocks on them though.
     */
-  val isSwitchBoundary = (mpbr: Instant, br: Instant) =>
-    mpbr.isBefore(endTick) && !br.isBefore(endTick)
+  val isSwitchBoundary = (mpbr: Instant, br: Instant) => mpbr.isBefore(end) && !br.isBefore(end)
 
 }
 
@@ -48,8 +47,8 @@ object EraRuntime {
       Era(
         keyBlockHash = genesis.blockHash,
         bookingBlockHash = genesis.blockHash,
-        startTick = conf.toTicks(conf.genesisEraStartTick),
-        endTick = conf.toTicks(conf.genesisEraEndTick),
+        startTick = conf.toTicks(conf.genesisEraStart),
+        endTick = conf.toTicks(conf.genesisEraEnd),
         bonds = genesis.getHeader.getState.bonds
       )
     )
