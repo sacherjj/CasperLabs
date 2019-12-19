@@ -1,5 +1,5 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::{convert::From, mem::MaybeUninit, u8};
+use core::{convert::From, mem::MaybeUninit};
 
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
@@ -14,8 +14,20 @@ use crate::{
 /// Reads value under `turef` in the global state.
 pub fn read<T: CLTyped + FromBytes>(turef: TURef<T>) -> Result<Option<T>, bytesrepr::Error> {
     let key: Key = turef.into();
-    let key_bytes = key.into_bytes()?;
-    do_read(ReadType::Global, key_bytes)
+    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
+
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe { ext_ffi::read_value(key_ptr, key_size, value_size.as_mut_ptr()) };
+        match error::result_from(ret) {
+            Ok(_) => unsafe { value_size.assume_init() },
+            Err(Error::ValueNotFound) => return Ok(None),
+            Err(e) => runtime::revert(e),
+        }
+    };
+
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    Ok(Some(bytesrepr::deserialize(value_bytes)?))
 }
 
 /// Reads the value under `key` in the context-local partition of global state.
@@ -23,31 +35,11 @@ pub fn read_local<K: ToBytes, V: CLTyped + FromBytes>(
     key: &K,
 ) -> Result<Option<V>, bytesrepr::Error> {
     let key_bytes = key.to_bytes()?;
-    do_read(ReadType::Local, key_bytes)
-}
 
-enum ReadType {
-    Global,
-    Local,
-}
-
-fn do_read<T: CLTyped + FromBytes>(
-    read_type: ReadType,
-    key_bytes: Vec<u8>,
-) -> Result<Option<T>, bytesrepr::Error> {
     let value_size = {
         let mut value_size = MaybeUninit::uninit();
-        let ret = match read_type {
-            ReadType::Global => unsafe {
-                ext_ffi::read_value(key_bytes.as_ptr(), key_bytes.len(), value_size.as_mut_ptr())
-            },
-            ReadType::Local => unsafe {
-                ext_ffi::read_value_local(
-                    key_bytes.as_ptr(),
-                    key_bytes.len(),
-                    value_size.as_mut_ptr(),
-                )
-            },
+        let ret = unsafe {
+            ext_ffi::read_value_local(key_bytes.as_ptr(), key_bytes.len(), value_size.as_mut_ptr())
         };
         match error::result_from(ret) {
             Ok(_) => unsafe { value_size.assume_init() },
