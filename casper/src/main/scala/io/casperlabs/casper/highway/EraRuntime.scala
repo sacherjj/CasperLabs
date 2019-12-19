@@ -2,7 +2,7 @@ package io.casperlabs.casper.highway
 
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
 
-class EraRuntime(conf: HighwayConf, era: Era) {
+class EraRuntime(conf: HighwayConf, val era: Era) {
 
   val bookingBoundaries =
     conf.criticalBoundaries(
@@ -25,6 +25,7 @@ class EraRuntime(conf: HighwayConf, era: Era) {
 
   val isBookingBoundary = isBoundary(bookingBoundaries)(_, _)
   val isKeyBoundary     = isBoundary(keyBoundaries)(_, _)
+  val isSwitchBoundary  = (mpbr: Ticks, br: Ticks) => mpbr < era.endTick && era.endTick <= br
 
 }
 

@@ -16,4 +16,8 @@ package object highway {
   /** Ticks (a point in time or a duration) in an arbitrary time unit. */
   type Ticks = Long @@ TicksTag
   def Ticks(t: Long) = t.asInstanceOf[Ticks]
+  implicit class TicksOps(val a: Ticks) extends AnyVal {
+    def plus(b: Ticks)  = Ticks(a + b)
+    def minus(b: Ticks) = Ticks(a - b)
+  }
 }
