@@ -1,5 +1,6 @@
 package io.casperlabs.casper.highway
 
+import cats.Id
 import com.google.protobuf.ByteString
 import java.util.concurrent.TimeUnit
 import io.casperlabs.casper.consensus.BlockSummary
@@ -22,7 +23,7 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
 
   "EraRuntime" when {
     "started with the genesis block" should {
-      val runtime = EraRuntime.fromGenesis(conf, genesis)
+      val runtime = EraRuntime.fromGenesis[Id](conf, genesis)
 
       "use the genesis ticks for the era" in {
         runtime.era.startTick shouldBe conf.genesisEraStartTick

@@ -2,7 +2,7 @@ package io.casperlabs.casper.highway
 
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
 
-class EraRuntime(conf: HighwayConf, val era: Era) {
+class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 
   val bookingBoundaries =
     conf.criticalBoundaries(
@@ -30,8 +30,8 @@ class EraRuntime(conf: HighwayConf, val era: Era) {
 }
 
 object EraRuntime {
-  def fromGenesis(conf: HighwayConf, genesis: BlockSummary): EraRuntime =
-    new EraRuntime(
+  def fromGenesis[F[_]](conf: HighwayConf, genesis: BlockSummary): EraRuntime[F] =
+    new EraRuntime[F](
       conf,
       Era(
         keyBlockHash = genesis.blockHash,
