@@ -8,7 +8,6 @@ import org.scalatest._
 
 class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
   import HighwayConf._
-  import MilliTicks._
 
   val conf = HighwayConf(
     tickUnit = TimeUnit.MILLISECONDS,
@@ -16,7 +15,7 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingTicks = days(10),
     entropyTicks = hours(3),
-    postEraVotingDuration = VotingDuration.FixedLength(Ticks(0))
+    postEraVotingDuration = VotingDuration.FixedLength(days(2))
   )
 
   val genesis = BlockSummary().withBlockHash(ByteString.copyFromUtf8("genesis"))
@@ -26,8 +25,8 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
       val runtime = EraRuntime.fromGenesis[Id](conf, genesis)
 
       "use the genesis ticks for the era" in {
-        runtime.era.startTick shouldBe conf.genesisEraStartTick
-        runtime.era.endTick shouldBe conf.genesisEraEndTick
+        conf.toInstant(Ticks(runtime.era.startTick)) shouldBe conf.genesisEraStartTick
+        conf.toInstant(Ticks(runtime.era.endTick)) shouldBe conf.genesisEraEndTick
       }
 
       "use the genesis block as key and booking block" in {

@@ -1,22 +1,18 @@
 package io.casperlabs.casper.highway
 
+import java.time.Instant
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
 
 class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 
+  val startTick = conf.toInstant(Ticks(era.startTick))
+  val endTick   = conf.toInstant(Ticks(era.endTick))
+
   val bookingBoundaries =
-    conf.criticalBoundaries(
-      Ticks(era.startTick),
-      Ticks(era.endTick),
-      delayTicks = conf.bookingTicks
-    )
+    conf.criticalBoundaries(startTick, endTick, delayTicks = conf.bookingTicks)
 
   val keyBoundaries =
-    conf.criticalBoundaries(
-      Ticks(era.startTick),
-      Ticks(era.endTick),
-      delayTicks = conf.keyTicks
-    )
+    conf.criticalBoundaries(startTick, endTick, delayTicks = conf.keyTicks)
 
   /** When we handle an incoming block or create a new one we may have to do additional work:
     * - if the block is a booking block, we have to execute the auction to pick the validators for the upcoming era
@@ -24,10 +20,10 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
     * These blocks can be identified by their round ID being after a boundary (a deadline),
     * while their main parent was still before the deadline.
     */
-  private def isBoundary(boundaries: List[Ticks])(
-      mainParentBlockRoundId: Ticks,
-      blockRoundId: Ticks
-  ) = boundaries.exists(t => mainParentBlockRoundId < t && t <= blockRoundId)
+  private def isBoundary(boundaries: List[Instant])(
+      mainParentBlockRoundId: Instant,
+      blockRoundId: Instant
+  ) = boundaries.exists(t => mainParentBlockRoundId.isBefore(t) && !blockRoundId.isBefore(t))
 
   val isBookingBoundary = isBoundary(bookingBoundaries)(_, _)
   val isKeyBoundary     = isBoundary(keyBoundaries)(_, _)
@@ -40,7 +36,8 @@ class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
     * ones that can finalize it by building ballots on top of it. The cannot
     * build more blocks on them though.
     */
-  val isSwitchBoundary = (mpbr: Ticks, br: Ticks) => mpbr < era.endTick && era.endTick <= br
+  val isSwitchBoundary = (mpbr: Instant, br: Instant) =>
+    mpbr.isBefore(endTick) && !br.isBefore(endTick)
 
 }
 
@@ -51,8 +48,8 @@ object EraRuntime {
       Era(
         keyBlockHash = genesis.blockHash,
         bookingBlockHash = genesis.blockHash,
-        startTick = conf.genesisEraStartTick,
-        endTick = conf.genesisEraEndTick,
+        startTick = conf.toTicks(conf.genesisEraStartTick),
+        endTick = conf.toTicks(conf.genesisEraEndTick),
         bonds = genesis.getHeader.getState.bonds
       )
     )
