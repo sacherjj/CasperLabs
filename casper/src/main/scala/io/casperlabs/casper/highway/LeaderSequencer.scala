@@ -33,23 +33,41 @@ object LeaderSequencer {
   /** Make a function that assigns a leader to each round, deterministically,
     * with a relative frequency based on their weight. */
   def makeSequencer(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): Ticks => PublicKeyBS = {
-    val validators = bonds.toList.toVector.map { x =>
-      PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value)
+    // Make a list of (validator, from, to) triplets.
+    type ValidatorRange = (PublicKeyBS, BigInt, BigInt)
+
+    val (validators, total) = {
+      val acc = bonds
+        .foldLeft(List.empty[ValidatorRange] -> BigInt(0)) {
+          case ((ranges, total), bond) =>
+            val key   = PublicKey(bond.validatorPublicKey)
+            val stake = BigInt(bond.getStake.value)
+            // This should be trivial; the auction should not allow 0 bids,
+            // but if it did, there would be no way to pick between them.
+            require(stake > 0, "Bonds must be positive.")
+            val from = total
+            val to   = total + stake
+            ((key, from, to) :: ranges) -> to
+        }
+      // Keep the order of validator, it's coming from the block, same for everyone.
+      val ranges = acc._1.reverse.toVector
+      // Using BigDecimal to be able to multiply with a Double later.
+      val total = BigDecimal(acc._2)
+      ranges -> total
     }
-    // Using BigDecimal to be able to multiply with a Double later.
-    val total = BigDecimal(validators.map(_._2).sum)
 
-    // The auction should not allow 0 bids, but if it was, there would be no way to pick between them.
-    require(validators.forall(_._2 > 0), "Bonds must be positive.")
-
-    // Given a target sum of bonds, seek the validator with a total cumulative weight in that range.
-    def seek(target: BigInt, i: Int = 0, acc: BigInt = 0): PublicKeyBS = {
-      val b = validators(i)._2
-      // Using > instead of >= so a validator has the lower, but not the upper extremum.
-      if (acc + b > target || i == validators.size - 1)
-        validators(i)._1
-      else
-        seek(target, i + 1, acc + b)
+    // Given a target sum of bonds, find the validator with a total cumulative weight in that range.
+    def bisect(target: BigInt, i: Int = 0, j: Int = validators.size - 1): PublicKeyBS = {
+      val k = (i + j) / 2
+      val v = validators(k)
+      // The first validator has the 0 inclusive, upper exclusive.
+      if (v._2 <= target && target < v._3 || i == j) {
+        v._1
+      } else if (target < v._2) {
+        bisect(target, i, k)
+      } else {
+        bisect(target, k + 1, j)
+      }
     }
 
     (tick: Ticks) => {
@@ -67,7 +85,7 @@ object LeaderSequencer {
       // Integer arithmetic is supposed to be safer than Double.
       val t = (total * r).toBigInt
       // Find the first validator over the target.
-      seek(t)
+      bisect(t)
     }
   }
 

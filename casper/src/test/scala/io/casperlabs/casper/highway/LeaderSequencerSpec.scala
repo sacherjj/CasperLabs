@@ -56,7 +56,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
     "pick validators proportionately to their weight" in {
       val rnd    = new scala.util.Random()
       val total  = 1000 + 2000 + 3000
-      val rounds = 1000
+      val rounds = 10000
       val counts =
         List
           .fill(rounds)(Ticks(rnd.nextLong))
