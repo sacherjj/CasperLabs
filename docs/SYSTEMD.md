@@ -4,18 +4,19 @@ Note: This doc applies to packages installed via a package manager such as apt,
  yum, dnf, etc. However, these methods can still be utilized if you build the 
 targets yourself.
 
-With the `deb` and `rpm` packages of the node and execution engine we install 
-default versions of systemd unit files that users can chose to utilize. Since 
-the CasperLabs software relies on end-user specific flags (for keypaths, 
-bootstrap address, etc.), we've opted to give users an *almost* production 
-ready version of these systemd unit files. The node unit file references an 
-`example-configuration.toml` which should be copied and edited to reflect paths
- paths for end-user specific changes. The `example-configuration.toml` lives 
-under `/etc/casperlabs/` by default.
+With the`deb` and `rpm` packages of the node and execution engine we install
+default versions of systemd unit files that users can chose to utilize. Since
+the CasperLabs software relies on end-user specific flags (for keypaths,
+bootstrap address, etc.), we've opted to give users an *almost* production
+ready version of these systemd unit files.
 
-These unit-files by default are stored under `/lib/systemd/system` and we recommend 
-that they are copied over to `/etc/systemd/system` so adequate changes can be 
-made for use.
+These unit-files by default are stored under `/lib/systemd/system` and we 
+recommend that they are copied over to `/etc/systemd/system` so adequate changes
+ can be made for use.
+
+The node unit file references an `example-configuration.toml` which should be 
+copied and edited to reflect paths for end-user specific changes. The 
+`example-configuration.toml` lives under `/etc/casperlabs/` by default.
 
 ### Copying files to recommended location for modification
 
