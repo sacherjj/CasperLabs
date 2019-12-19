@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use contract_ffi::{
     key::Key,
     value::{
@@ -16,8 +18,6 @@ use crate::{
     support::test_support::{self, ExecuteRequestBuilder, InMemoryWasmTestBuilder},
     test::{DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ADDR},
 };
-
-use std::convert::TryInto;
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
