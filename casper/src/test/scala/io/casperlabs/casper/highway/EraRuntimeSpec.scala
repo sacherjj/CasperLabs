@@ -11,12 +11,12 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
   import MilliTicks._
 
   val conf = HighwayConf(
-    TimeUnit.MILLISECONDS,
-    date(2019, 12, 9),
+    tickUnit = TimeUnit.MILLISECONDS,
+    genesisEraStartTick = date(2019, 12, 9),
     eraDuration = EraDuration.FixedLength(days(7)),
     bookingTicks = days(10),
     entropyTicks = hours(3),
-    VotingDuration.FixedLength(Ticks(0))
+    postEraVotingDuration = VotingDuration.FixedLength(Ticks(0))
   )
 
   val genesis = BlockSummary().withBlockHash(ByteString.copyFromUtf8("genesis"))

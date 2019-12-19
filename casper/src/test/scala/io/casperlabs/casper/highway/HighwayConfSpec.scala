@@ -7,12 +7,12 @@ class HighwayConfSpec extends WordSpec with Matchers with TickUtils {
   import HighwayConf._
 
   val init = HighwayConf(
-    TimeUnit.MILLISECONDS,
-    Ticks(0),
-    EraDuration.FixedLength(Ticks(0)),
-    Ticks(0),
-    Ticks(0),
-    VotingDuration.FixedLength(Ticks(0))
+    genesisEraStartTick = Ticks(0),
+    tickUnit = TimeUnit.MILLISECONDS,
+    eraDuration = EraDuration.FixedLength(Ticks(0)),
+    bookingTicks = Ticks(0),
+    entropyTicks = Ticks(0),
+    postEraVotingDuration = VotingDuration.FixedLength(Ticks(0))
   )
 
   "eraEndTick" when {
