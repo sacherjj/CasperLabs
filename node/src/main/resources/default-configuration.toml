@@ -46,6 +46,9 @@ max-num-of-connections = 500
 # Maximum size of message that can be sent via transport layer.
 max-message-size = 4194304
 
+# Size of the buffer to store emitted block events
+event-stream-buffer-size = 10
+
 # Target parallelism for execution engine requests.
 engine-parallelism = 1
 

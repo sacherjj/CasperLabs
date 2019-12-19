@@ -13,6 +13,7 @@ const optionDefinitions = [
   { name: "to-public-key-path", type: String },
   { name: "amount", type: BigInt },
   { name: "payment-amount", type: BigInt },
+  { name: "gas-price", type: Number, defaultValue: 10},
 ];
 
 const options = commandLineArgs(optionDefinitions);
@@ -44,11 +45,12 @@ const deploy = transfer.deploy(
   args,
   options["payment-amount"],
   contractKeys.publicKey,
-  contractKeys);
+  contractKeys,
+  options["gas-price"]);
 
 const deployHashBase16 = hex(deploy.getDeployHash_asU8());
 
-console.log(`Transfering tokens to account ${accountPublicKeyBase16}`);
+console.log(`Transferring tokens to account ${accountPublicKeyBase16}`);
 console.log(`Deploying ${deployHashBase16} to ${options["host-url"]}`);
 
 const deployService = new DeployService(options["host-url"]);
