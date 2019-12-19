@@ -36,7 +36,8 @@ object LeaderSequencer {
     val validators = bonds.toList.toVector.map { x =>
       PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value)
     }
-    val total = validators.map(_._2).sum.doubleValue
+    // Using BigDecimal to be able to multiply with a Double later.
+    val total = BigDecimal(validators.map(_._2).sum)
 
     // The auction should not allow 0 bids, but if it was, there would be no way to pick between them.
     require(validators.forall(_._2 > 0), "Bonds must be positive.")
@@ -61,9 +62,9 @@ object LeaderSequencer {
       val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
       random.setSeed(tickSeed)
       // Pick a number between [0, 1) and use it to find a validator.
-      val r = random.nextDouble()
-      // Integer arithmetic is supposed to be safer than double.
-      val t = BigDecimal.valueOf(total * r).toBigInt
+      val r = BigDecimal.valueOf(random.nextDouble())
+      // Integer arithmetic is supposed to be safer than Double.
+      val t = (total * r).toBigInt
       // Find the first validator over the target.
       seek(t)
     }
