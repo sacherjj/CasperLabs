@@ -4,6 +4,7 @@ import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.consensus.Bond
 import java.security.SecureRandom
+import java.nio.{ByteBuffer, ByteOrder}
 
 object LeaderSequencer {
 
@@ -68,14 +69,9 @@ object LeaderSequencer {
   }
 
   private def longToBytesLittleEndian(i: Long): Array[Byte] =
-    Array(
-      i.toByte,
-      (i >>> 8).toByte,
-      (i >>> 16).toByte,
-      (i >>> 24).toByte,
-      (i >>> 32).toByte,
-      (i >>> 40).toByte,
-      (i >>> 48).toByte,
-      (i >>> 56).toByte
-    )
+    ByteBuffer
+      .allocate(8)
+      .order(ByteOrder.LITTLE_ENDIAN)
+      .putLong(i)
+      .array
 }
