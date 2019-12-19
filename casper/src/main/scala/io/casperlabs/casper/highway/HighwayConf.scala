@@ -20,8 +20,6 @@ final case class HighwayConf(
 ) {
   import HighwayConf._
 
-  private val NanosPerSec = 1000000000L
-
   /** Time to go back before the start of the era for picking the key block. */
   def keyTicks: FiniteDuration =
     bookingTicks minus entropyTicks
@@ -30,16 +28,18 @@ final case class HighwayConf(
     * number of ticks since the Unix epch to an instant in time.
     */
   def toInstant(t: Ticks): Instant = {
-    val n = tickUnit.toNanos(t)
-    val s = tickUnit.toSeconds(t)
-    Instant.ofEpochSecond(s, n - s * NanosPerSec)
+    val d = FiniteDuration(t, tickUnit)
+    Instant.ofEpochSecond(0) plus d
   }
 
   /** Convert an instant in time to the number of ticks we can store in the era model,
     * or assign to a round ID in a block.
     */
-  def toTicks(t: Instant): Ticks =
-    Ticks(tickUnit.convert(t.getEpochSecond * NanosPerSec + t.getNano.toLong, TimeUnit.NANOSECONDS))
+  def toTicks(t: Instant): Ticks = {
+    val s = tickUnit.convert(t.getEpochSecond, TimeUnit.SECONDS)
+    val n = tickUnit.convert(t.getNano.toLong, TimeUnit.NANOSECONDS)
+    Ticks(s + n)
+  }
 
   private def eraEndTick(startTick: Instant, duration: EraDuration): Instant = {
     import EraDuration.CalendarUnit._
