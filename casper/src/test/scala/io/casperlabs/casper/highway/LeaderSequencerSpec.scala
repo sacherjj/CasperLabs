@@ -1,12 +1,13 @@
 package io.casperlabs.casper.highway
 
+import cats.data.NonEmptyList
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.casper.consensus.Bond
 import io.casperlabs.casper.consensus.state
 import org.scalatest._
 
-class LeaderSequencerSpec extends WordSpec with Matchers {
+class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
   "toByteArray" should {
     "concatenate bits to a byte array, padding on the right" in {
       val bits =
@@ -39,7 +40,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers {
   }
 
   "makeSequencer" should {
-    val bonds = Vector(
+    val bonds = NonEmptyList.of(
       Bond(ByteString.copyFromUtf8("Alice")).withStake(state.BigInt("1000")),
       Bond(ByteString.copyFromUtf8("Bob")).withStake(state.BigInt("2000")),
       Bond(ByteString.copyFromUtf8("Charlie")).withStake(state.BigInt("3000"))
@@ -65,7 +66,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers {
               counts.updated(v, counts(v) + 1)
           }
 
-      bonds.foreach { bond =>
+      forAll(bonds.toList) { bond =>
         val w = bond.getStake.value.toDouble / total
         counts(bond.validatorPublicKey).toDouble / rounds shouldBe (w +- 0.05)
       }

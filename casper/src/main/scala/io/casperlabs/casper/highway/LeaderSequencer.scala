@@ -1,5 +1,6 @@
 package io.casperlabs.casper.highway
 
+import cats.data.NonEmptyList
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
 import io.casperlabs.casper.consensus.Bond
@@ -31,13 +32,13 @@ object LeaderSequencer {
 
   /** Make a function that assigns a leader to each round, deterministically,
     * with a relative frequency based on their weight. */
-  def makeSequencer(leaderSeed: Array[Byte], bonds: Seq[Bond]): Ticks => PublicKeyBS = {
-    val validators = bonds.map { x =>
+  def makeSequencer(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): Ticks => PublicKeyBS = {
+    val validators = bonds.toList.toVector.map { x =>
       PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value)
-    }.toVector
+    }
     val total = validators.map(_._2).sum.doubleValue
 
-    require(validators.nonEmpty, "Bonds cannot be empty.")
+    // The auction should not allow 0 bids, but if it was, there would be no way to pick between them.
     require(validators.forall(_._2 > 0), "Bonds must be positive.")
 
     // Given a target sum of bonds, seek the validator with a total cumulative weight in that range.
