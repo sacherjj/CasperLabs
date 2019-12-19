@@ -1,3 +1,5 @@
+//! Home of [`URef`](crate::uref::URef), which represents an unforgeable reference.
+
 use alloc::{format, string::String, vec::Vec};
 
 use base16;

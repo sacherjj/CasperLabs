@@ -1,3 +1,6 @@
+//! Home of [`ArgsParser`](crate::args_parser::ArgsParser), a trait used for parsing contract
+//! arguments from n-ary tuples.
+
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
@@ -8,10 +11,11 @@ use crate::{
     value::{CLTyped, CLValue, CLValueError},
 };
 
-/// Parses `Self` into a byte representation that is ABI compliant.
+/// Types which implement [`ArgsParser`] can be parsed into an ABI-compliant byte representation
+/// suitable for passing as arguments to a contract.
 ///
-/// It means that each type of the tuple has to implement `CLTyped + ToBytes`.  Implemented for
-/// tuples of various sizes.
+/// It is primarily implemented for n-ary tuples of values which themselves implement [`ToBytes`]
+/// and [`CLTyped`].
 pub trait ArgsParser {
     fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
 

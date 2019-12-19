@@ -1,3 +1,6 @@
+//! Home of [`Phase`](crate::execution::Phase), which represents the phase in which a given contract
+//! is executing.
+
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;

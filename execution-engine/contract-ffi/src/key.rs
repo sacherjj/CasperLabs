@@ -1,3 +1,6 @@
+//! Home of [`Key`](crate::key::Key), the type for indexing all data stored on the CasperLabs
+//! Platform.
+
 use alloc::{format, vec::Vec};
 
 use base16;

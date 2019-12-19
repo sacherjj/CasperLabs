@@ -1,3 +1,5 @@
+//! Contains functions for generating arbitrary values for use by [`proptest`](proptest).
+
 use alloc::{collections::BTreeMap, string::String, vec};
 
 use proptest::{

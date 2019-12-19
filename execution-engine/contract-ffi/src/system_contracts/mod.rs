@@ -1,10 +1,7 @@
-//! Supporting code for system contract implementation.
+//! Contains support for implementing system contracts.
 //!
-//! Submodules contains supporting code and logic that is shared between host
-//! and the contract implementation.
-//!
-//! Naming of the modules is related to actual system contract that is user of
-//! the supporting code i.e. mint.
+//! Each submodule contains support code and logic that is shared between host
+//! and the system contract .
 mod error;
 pub mod mint;
 pub mod pos;

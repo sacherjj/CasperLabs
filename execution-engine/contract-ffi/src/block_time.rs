@@ -1,3 +1,6 @@
+//! Home of [`BlockTime`](crate::block_time::BlockTime), an internal type used in the execution of
+//! contracts.
+
 use alloc::vec::Vec;
 
 use crate::bytesrepr::{Error, FromBytes, ToBytes, U64_SERIALIZED_LENGTH};
