@@ -1,6 +1,9 @@
 package io.casperlabs.casper.highway
 
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.casper.consensus.Bond
+import java.security.SecureRandom
 
 object LeaderSequencer {
 
@@ -24,4 +27,51 @@ object LeaderSequencer {
 
   def seed(parentSeed: Array[Byte], magicBits: Seq[Boolean]) =
     Blake2b256.hash(parentSeed ++ toByteArray(magicBits))
+
+  /** Make a function that assigns a leader to each round, deterministically,
+    * with a relative frequency based on their weight. */
+  def makeSequencer(leaderSeed: Array[Byte], bonds: Seq[Bond]): Ticks => PublicKeyBS = {
+    val validators = bonds.map { x =>
+      PublicKey(x.validatorPublicKey) -> BigInt(x.getStake.value).doubleValue
+    }.toVector
+    val total = validators.map(_._2).sum
+
+    require(validators.nonEmpty, "Bonds cannot be empty.")
+    require(validators.forall(_._2 > 0), "Bonds must be positive.")
+
+    // Given an `r` in [0, 1), seek the validator with a total cumulative weight in that range.
+    def seek(target: Double, i: Int = 0, acc: Double = 0): PublicKeyBS = {
+      val b = validators(i)._2
+      // Using > instead of >= so a validator has the lower, but not the upper extremum.
+      if (acc + b > target || i == validators.size - 1)
+        validators(i)._1
+      else
+        seek(target, i + 1, acc + b)
+    }
+
+    (t: Ticks) => {
+      // On Linux SecureRandom uses NativePRNG, and ignores the seed.
+      // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
+      // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
+      val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
+      // Ticks need to be deterministic, so each time we have to reset the seed.
+      val tickSeed = leaderSeed ++ longToBytesLittleEndian(t)
+      random.setSeed(tickSeed)
+      // Pick a number between [0, 1) and use it to find a validator.
+      val r = random.nextDouble()
+      seek(total * r)
+    }
+  }
+
+  private def longToBytesLittleEndian(i: Long): Array[Byte] =
+    Array(
+      i.toByte,
+      (i >>> 8).toByte,
+      (i >>> 16).toByte,
+      (i >>> 24).toByte,
+      (i >>> 32).toByte,
+      (i >>> 40).toByte,
+      (i >>> 48).toByte,
+      (i >>> 56).toByte
+    )
 }

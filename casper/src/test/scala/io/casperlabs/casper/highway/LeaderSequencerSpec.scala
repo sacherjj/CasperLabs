@@ -1,7 +1,10 @@
 package io.casperlabs.casper.highway
 
-import org.scalatest._
+import com.google.protobuf.ByteString
 import io.casperlabs.crypto.hash.Blake2b256
+import io.casperlabs.casper.consensus.Bond
+import io.casperlabs.casper.consensus.state
+import org.scalatest._
 
 class LeaderSequencerSpec extends WordSpec with Matchers {
   "toByteArray" should {
@@ -35,4 +38,37 @@ class LeaderSequencerSpec extends WordSpec with Matchers {
     }
   }
 
+  "makeSequencer" should {
+    val bonds = Vector(
+      Bond(ByteString.copyFromUtf8("Alice")).withStake(state.BigInt("1000")),
+      Bond(ByteString.copyFromUtf8("Bob")).withStake(state.BigInt("2000")),
+      Bond(ByteString.copyFromUtf8("Charlie")).withStake(state.BigInt("3000"))
+    )
+
+    val leaderOf = LeaderSequencer.makeSequencer("leader-seed".getBytes, bonds)
+
+    "create a deterministic function" in {
+      val tick = Ticks(System.currentTimeMillis)
+      leaderOf(tick) shouldBe leaderOf(tick)
+    }
+
+    "pick validators proportionately to their weight" in {
+      val rnd    = new scala.util.Random()
+      val total  = 1000 + 2000 + 3000
+      val rounds = 1000
+      val counts =
+        List
+          .fill(rounds)(Ticks(rnd.nextLong))
+          .foldLeft(Map.empty[ByteString, Int].withDefaultValue(0)) {
+            case (counts, tick) =>
+              val v = leaderOf(tick)
+              counts.updated(v, counts(v) + 1)
+          }
+
+      bonds.foreach { bond =>
+        val w = bond.getStake.value.toDouble / total
+        counts(bond.validatorPublicKey).toDouble / rounds shouldBe (w +- 0.05)
+      }
+    }
+  }
 }
