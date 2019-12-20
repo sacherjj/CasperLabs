@@ -96,7 +96,7 @@ steps:
   commands:
   - "cd execution-engine/"
   - "make setup-rs"
-  - "make clean test-rs test-contracts-rs"
+  - "make test-rs test-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
@@ -115,7 +115,7 @@ steps:
   commands:
   - "cd execution-engine"
   - "make setup-ts"
-  - "make clean test-ts test-contracts-ts"
+  - "make test-ts test-contracts-ts"
   image: "casperlabs/buildenv:latest"
   when:
     event:
