@@ -1,3 +1,6 @@
+//! Contains definitions for panic and allocation error handlers, along with other `#[no_std]`
+//! support code.
+
 #[panic_handler]
 #[no_mangle]
 pub fn panic(_info: &::core::panic::PanicInfo) -> ! {

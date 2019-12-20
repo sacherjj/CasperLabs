@@ -1,3 +1,6 @@
+//! Home of [`CLValue`](crate::value::CLValue), the type representing data stored and manipulated on
+//! the CasperLabs Platform.
+
 pub mod account;
 mod cl_type;
 mod cl_value;

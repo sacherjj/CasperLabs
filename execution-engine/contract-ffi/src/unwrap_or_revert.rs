@@ -1,3 +1,6 @@
+//! Home of [`UnwrapOrRevert`](crate::unwrap_or_revert::UnwrapOrRevert), a convenience trait for
+//! unwrapping values.
+
 use crate::contract_api::{runtime, Error};
 
 /// A trait which provides syntactic sugar for unwrapping a type or calling

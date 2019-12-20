@@ -1,3 +1,5 @@
+//! Contains serialization and deserialization code for types used throughout the system.
+
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;

@@ -1,3 +1,5 @@
+//! Contains support for writing smart contracts.
+
 pub mod account;
 mod contract_ref;
 mod error;
