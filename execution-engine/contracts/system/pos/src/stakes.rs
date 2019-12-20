@@ -81,7 +81,7 @@ impl StakesProvider for ContractStakes {
             }
         }
         for name in new_urefs {
-            runtime::put_key(&name, &Key::Hash([0; 32]));
+            runtime::put_key(&name, Key::Hash([0; 32]));
         }
     }
 }

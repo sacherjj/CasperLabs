@@ -14,7 +14,7 @@ pub fn delegate() {
     // Appends " Hello, world!" to a [66; 32] local key with spaces trimmed.
     // Two runs should yield value "Hello, world! Hello, world!"
     // read from local state
-    let mut res: String = storage::read_local(LOCAL_KEY)
+    let mut res: String = storage::read_local(&LOCAL_KEY)
         .unwrap_or_default()
         .unwrap_or_default();
 
@@ -23,7 +23,7 @@ pub fn delegate() {
     storage::write_local(LOCAL_KEY, res);
 
     // Read (this should exercise cache)
-    let mut res: String = storage::read_local(LOCAL_KEY)
+    let mut res: String = storage::read_local(&LOCAL_KEY)
         .unwrap_or_revert()
         .unwrap_or_revert();
     // Append

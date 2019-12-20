@@ -12,6 +12,7 @@ use contract_ffi::{
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
     uref::URef,
+    value::CLValue,
 };
 
 const LIST_KEY: &str = "list";
@@ -56,7 +57,7 @@ fn sub(name: String) -> Option<TURef<Vec<String>>> {
     } else {
         let init_message = vec![String::from("Welcome!")];
         let new_key = storage::new_turef(init_message);
-        runtime::put_key(&name, &new_key.clone().into());
+        runtime::put_key(&name, new_key.clone().into());
         update_list(name);
         Some(new_key)
     }
@@ -89,9 +90,13 @@ pub extern "C" fn mailing_list_ext() {
             Some(turef) => {
                 let extra_uref = URef::new(turef.addr(), turef.access_rights());
                 let extra_urefs = vec![extra_uref];
-                runtime::ret(Some(Key::from(turef)), extra_urefs);
+                let return_value = CLValue::from_t(Some(Key::from(turef))).unwrap_or_revert();
+                runtime::ret(return_value, extra_urefs);
             }
-            _ => runtime::ret(Option::<Key>::None, Vec::new()),
+            _ => {
+                let return_value = CLValue::from_t(Option::<Key>::None).unwrap_or_revert();
+                runtime::ret(return_value, Vec::new())
+            }
         },
         //Note that this is totally insecure. In reality
         //the pub method would be only available under an
@@ -115,5 +120,5 @@ pub extern "C" fn call() {
     mailing_list_urefs.insert(key_name, list_key.into());
 
     let pointer = storage::store_function_at_hash(MAILING_LIST_EXT, mailing_list_urefs);
-    runtime::put_key(MAILING_KEY, &pointer.into())
+    runtime::put_key(MAILING_KEY, pointer.into())
 }

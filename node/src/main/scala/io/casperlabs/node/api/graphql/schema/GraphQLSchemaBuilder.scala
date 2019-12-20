@@ -45,6 +45,15 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
     flatToSet(projections, Set.empty)
   }
 
+  private def blockView(projections: Vector[ProjectedName]): BlockInfo.View =
+    blockView(projectionTerms(projections))
+
+  private def blockView(terms: Set[String]): BlockInfo.View =
+    if (terms contains "childHashes")
+      BlockInfo.View.FULL
+    else
+      BlockInfo.View.BASIC
+
   private def deployView(projections: Vector[ProjectedName]): Option[DeployInfo.View] =
     deployView(projectionTerms(projections))
 
@@ -70,7 +79,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                         .getBlockInfoWithDeploysOpt[F](
                           blockHashBase16 = blockHashPrefix,
                           maybeDeployView = deployView(projections),
-                          blockView = BlockInfo.View.BASIC
+                          blockView = blockView(projections)
                         )
               } yield res).unsafeToFuture
             }
@@ -85,7 +94,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   depth = context.arg(blocks.arguments.Depth),
                   maxRank = context.arg(blocks.arguments.MaxRank),
                   maybeDeployView = deployView(projections),
-                  blockView = BlockInfo.View.BASIC
+                  blockView = blockView(projections)
                 )
                 .unsafeToFuture
             }
@@ -247,7 +256,7 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream: Log: Ru
                   .getBlockInfoWithDeploys[F](
                     blockHash = blockHash,
                     maybeDeployView = deployView(terms),
-                    blockView = BlockInfo.View.BASIC
+                    blockView = blockView(terms)
                   )
                   .map(Action(_))
               }

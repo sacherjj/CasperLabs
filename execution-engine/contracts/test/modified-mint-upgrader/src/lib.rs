@@ -18,12 +18,12 @@ pub extern "C" fn modified_mint_ext() {
 pub extern "C" fn call() {
     let mint_pointer = system::get_mint();
 
-    let mint_turef = match mint_pointer {
+    let mint_uref = match mint_pointer {
         ContractRef::Hash(_) => {
             runtime::revert(Error::User(CustomError::ContractPointerHash as u16))
         }
-        ContractRef::TURef(turef) => turef,
+        ContractRef::URef(uref) => uref,
     };
 
-    runtime::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_turef);
+    runtime::upgrade_contract_at_uref(EXT_FUNCTION_NAME, mint_uref);
 }

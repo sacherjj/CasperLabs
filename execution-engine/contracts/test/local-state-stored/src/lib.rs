@@ -16,9 +16,9 @@ pub extern "C" fn delegate() {
 #[no_mangle]
 pub extern "C" fn call() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
-        .into_turef()
+        .into_uref()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    runtime::put_key(CONTRACT_NAME, &key);
+    runtime::put_key(CONTRACT_NAME, key);
 }

@@ -4,7 +4,7 @@ use core::{any::type_name, fmt, marker::PhantomData};
 
 use crate::{
     uref::{AccessRights, URef},
-    value::Value,
+    value::CLTyped,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -32,11 +32,8 @@ pub struct TURef<T> {
     _marker: PhantomData<T>,
 }
 
-impl<T> TURef<T> {
-    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> Self
-    where
-        T: Into<Value>,
-    {
+impl<T: CLTyped> TURef<T> {
+    pub fn new(addr: [u8; 32], access_rights: AccessRights) -> Self {
         TURef {
             addr,
             access_rights,
@@ -75,8 +72,8 @@ impl<T> core::fmt::Display for TURef<T> {
         write!(
             f,
             "TURef({}, {}; {})",
-            HexFmt(&self.addr()),
-            self.access_rights(),
+            HexFmt(&self.addr),
+            self.access_rights,
             type_name::<T>()
         )
     }
@@ -86,7 +83,7 @@ impl<T> core::fmt::Display for TURef<T> {
 mod tests {
     use alloc::string::{String, ToString};
 
-    use crate::{contract_api::TURef, uref::AccessRights, value::Value};
+    use crate::{contract_api::TURef, key::Key, uref::AccessRights};
 
     #[test]
     fn turef_as_string() {
@@ -100,10 +97,10 @@ mod tests {
         }
 
         {
-            let turef: TURef<Value> = TURef::new(addr_array, AccessRights::READ_ADD_WRITE);
+            let turef: TURef<Key> = TURef::new(addr_array, AccessRights::READ_ADD_WRITE);
             assert_eq!(
                 turef.to_string(),
-                "TURef(3030303030303030303030303030303030303030303030303030303030303030, READ_ADD_WRITE; casperlabs_contract_ffi::value::Value)"
+                "TURef(3030303030303030303030303030303030303030303030303030303030303030, READ_ADD_WRITE; casperlabs_contract_ffi::key::Key)"
             );
         }
     }

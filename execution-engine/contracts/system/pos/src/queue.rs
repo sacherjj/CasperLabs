@@ -1,14 +1,12 @@
-use alloc::vec::Vec;
-use core::{convert::TryFrom, result};
+use alloc::{boxed::Box, vec::Vec};
+use core::result;
 
 use contract_ffi::{
+    block_time::BlockTime,
     bytesrepr::{self, FromBytes, ToBytes},
     contract_api::storage,
     system_contracts::pos::{Error, Result},
-    value::{
-        account::{BlockTime, PublicKey},
-        Value, U512,
-    },
+    value::{account::PublicKey, CLType, CLTyped, U512},
 };
 
 const BONDING_KEY: u8 = 1;
@@ -59,6 +57,12 @@ impl ToBytes for QueueEntry {
     }
 }
 
+impl CLTyped for QueueEntry {
+    fn cl_type() -> CLType {
+        CLType::Any
+    }
+}
+
 pub trait QueueProvider {
     /// Reads bonding queue.
     fn read_bonding() -> Queue;
@@ -67,10 +71,10 @@ pub trait QueueProvider {
     fn read_unbonding() -> Queue;
 
     /// Writes bonding queue.
-    fn write_bonding(queue: &Queue);
+    fn write_bonding(queue: Queue);
 
     /// Writes unbonding queue.
-    fn write_unbonding(queue: &Queue);
+    fn write_unbonding(queue: Queue);
 }
 
 /// A `QueueProvider` that reads and writes the queue to/from the contract's
@@ -80,25 +84,25 @@ pub struct QueueLocal;
 impl QueueProvider for QueueLocal {
     /// Reads bonding queue from the local state of the contract.
     fn read_bonding() -> Queue {
-        storage::read_local(BONDING_KEY)
+        storage::read_local(&BONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
 
     /// Reads unbonding queue from the local state of the contract.
     fn read_unbonding() -> Queue {
-        storage::read_local(UNBONDING_KEY)
+        storage::read_local(&UNBONDING_KEY)
             .unwrap_or_default()
             .unwrap_or_default()
     }
 
     /// Writes bonding queue to the local state of the contract.
-    fn write_bonding(queue: &Queue) {
+    fn write_bonding(queue: Queue) {
         storage::write_local(BONDING_KEY, queue);
     }
 
     /// Writes unbonding queue to the local state of the contract.
-    fn write_unbonding(queue: &Queue) {
+    fn write_unbonding(queue: Queue) {
         storage::write_local(UNBONDING_KEY, queue);
     }
 }
@@ -136,29 +140,6 @@ impl Queue {
     }
 }
 
-impl TryFrom<Value> for Queue {
-    type Error = Error;
-
-    fn try_from(value: Value) -> Result<Self> {
-        let bytes = match value {
-            Value::ByteArray(bytes) => bytes,
-            _ => return Err(Error::QueueNotStoredAsByteArray),
-        };
-        let (queue, rest) =
-            Queue::from_bytes(&bytes).map_err(|_| Error::QueueDeserializationFailed)?;
-        if !rest.is_empty() {
-            return Err(Error::QueueDeserializationExtraBytes);
-        }
-        Ok(queue)
-    }
-}
-
-impl Into<Value> for &Queue {
-    fn into(self) -> Value {
-        Value::ByteArray(self.to_bytes().expect("Serialization cannot fail"))
-    }
-}
-
 impl FromBytes for Queue {
     fn from_bytes(bytes: &[u8]) -> result::Result<(Self, &[u8]), bytesrepr::Error> {
         let (len, mut bytes) = u64::from_bytes(bytes)?;
@@ -176,20 +157,24 @@ impl ToBytes for Queue {
     fn to_bytes(&self) -> result::Result<Vec<u8>, bytesrepr::Error> {
         let mut bytes = (self.0.len() as u64).to_bytes()?; // TODO: Allocate correct capacity.
         for entry in &self.0 {
-            bytes.extend(entry.to_bytes()?);
+            bytes.append(&mut entry.to_bytes()?);
         }
         Ok(bytes)
+    }
+}
+
+impl CLTyped for Queue {
+    fn cl_type() -> CLType {
+        CLType::List(Box::new(QueueEntry::cl_type()))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use contract_ffi::{
+        block_time::BlockTime,
         system_contracts::pos::Error,
-        value::{
-            account::{BlockTime, PublicKey},
-            U512,
-        },
+        value::{account::PublicKey, U512},
     };
 
     use crate::queue::{Queue, QueueEntry};

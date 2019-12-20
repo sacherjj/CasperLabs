@@ -11,6 +11,7 @@ use alloc::vec;
 use alloc::{string::String, vec::Vec};
 
 use contract_ffi::{
+    block_time::BlockTime,
     contract_api::{runtime, system},
     execution::Phase,
     key::Key,
@@ -18,8 +19,8 @@ use contract_ffi::{
     unwrap_or_revert::UnwrapOrRevert,
     uref::{AccessRights, URef},
     value::{
-        account::{BlockTime, PublicKey, PurseId},
-        U512,
+        account::{PublicKey, PurseId},
+        CLValue, U512,
     },
 };
 
@@ -91,7 +92,7 @@ fn bond<Q: QueueProvider, S: StakesProvider>(
     stakes.validate_bonding(&validator, amount)?;
 
     queue.push(validator, amount, timestamp)?;
-    Q::write_bonding(&queue);
+    Q::write_bonding(queue);
     Ok(())
 }
 
@@ -116,7 +117,7 @@ fn unbond<Q: QueueProvider, S: StakesProvider>(
     // actual payment will be made later, after the unbonding delay.
     // contract_api::transfer_dry_run(POS_PURSE, dest, amount)?;
     queue.push(validator, payout, timestamp)?;
-    Q::write_unbonding(&queue);
+    Q::write_unbonding(queue);
     Ok(())
 }
 
@@ -129,11 +130,11 @@ fn step<Q: QueueProvider, S: StakesProvider>(timestamp: BlockTime) -> Result<Vec
     let unbonds = unbonding_queue.pop_due(timestamp.saturating_sub(BlockTime::new(UNBOND_DELAY)));
 
     if !unbonds.is_empty() {
-        Q::write_unbonding(&unbonding_queue);
+        Q::write_unbonding(unbonding_queue);
     }
 
     if !bonds.is_empty() {
-        Q::write_bonding(&bonding_queue);
+        Q::write_bonding(bonding_queue);
         let mut stakes = S::read()?;
         for entry in bonds {
             stakes.bond(&entry.validator, entry.amount);
@@ -174,7 +175,7 @@ fn get_rewards_purse() -> Result<PurseId> {
 /// location is the main purse of the deployer's account.
 fn set_refund(purse_id: URef) {
     if let Phase::Payment = runtime::get_phase() {
-        runtime::put_key(REFUND_PURSE_KEY, &Key::URef(purse_id));
+        runtime::put_key(REFUND_PURSE_KEY, Key::URef(purse_id));
     } else {
         runtime::revert(Error::SetRefundPurseCalledOutsidePayment)
     }
@@ -318,10 +319,8 @@ pub fn delegate() {
             // Limit the access rights so only balance query and deposit are allowed.
             let rights_controlled_purse =
                 PurseId::new(URef::new(purse.value().addr(), AccessRights::READ_ADD));
-            runtime::ret(
-                rights_controlled_purse,
-                vec![rights_controlled_purse.value()],
-            );
+            let return_value = CLValue::from_t(rights_controlled_purse).unwrap_or_revert();
+            runtime::ret(return_value, vec![rights_controlled_purse.value()]);
         }
         "set_refund_purse" => {
             let purse_id: PurseId = runtime::get_arg(1)
@@ -333,11 +332,13 @@ pub fn delegate() {
             // We purposely choose to remove the access rights so that we do not
             // accidentally give rights for a purse to some contract that is not
             // supposed to have it.
-            let result = get_refund_purse().map(|p| p.value().remove_access_rights());
-            if let Some(uref) = result {
-                runtime::ret(Some(PurseId::new(uref)), vec![uref]);
+            let maybe_purse_uref = get_refund_purse().map(|p| p.value().remove_access_rights());
+            if let Some(uref) = maybe_purse_uref {
+                let return_value = CLValue::from_t(Some(PurseId::new(uref))).unwrap_or_revert();
+                runtime::ret(return_value, vec![uref]);
             } else {
-                runtime::ret(result, Vec::new());
+                let return_value = CLValue::from_t::<Option<URef>>(None).unwrap_or_revert();
+                runtime::ret(return_value, Vec::new());
             }
         }
         "finalize_payment" => {
@@ -364,11 +365,9 @@ mod tests {
     use std::{cell::RefCell, iter};
 
     use contract_ffi::{
+        block_time::BlockTime,
         system_contracts::pos::Result,
-        value::{
-            account::{BlockTime, PublicKey},
-            U512,
-        },
+        value::{account::PublicKey, U512},
     };
 
     use crate::{
@@ -400,12 +399,12 @@ mod tests {
             UNBONDING.with(|ub| ub.borrow().clone())
         }
 
-        fn write_bonding(queue: &Queue) {
-            BONDING.with(|b| b.replace(queue.clone()));
+        fn write_bonding(queue: Queue) {
+            BONDING.with(|b| b.replace(queue));
         }
 
-        fn write_unbonding(queue: &Queue) {
-            UNBONDING.with(|ub| ub.replace(queue.clone()));
+        fn write_unbonding(queue: Queue) {
+            UNBONDING.with(|ub| ub.replace(queue));
         }
     }
 

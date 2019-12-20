@@ -3,30 +3,48 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::bytesrepr::{Error, ToBytes};
+use crate::{
+    bytesrepr::{Error, ToBytes},
+    value::{CLTyped, CLValue, CLValueError},
+};
 
 /// Parses `Self` into a byte representation that is ABI compliant.
-/// It means that each type of the tuple have to implement `ToBytes`.
-/// Implemented for tuples of various sizes.
+///
+/// It means that each type of the tuple has to implement `CLTyped + ToBytes`.  Implemented for
+/// tuples of various sizes.
 pub trait ArgsParser {
-    /// `parse` returns `Vec<Vec<u8>>` because we want to be able to
-    /// discriminate between elements of the tuple and retain the order.
-    fn parse(&self) -> Result<Vec<Vec<u8>>, Error>;
+    fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
+
+    #[doc(hidden)]
+    /// This parses the args to a `Vec<Vec<u8>` so that we can continue to support this form being
+    /// received from Node in Deploy requests.  Once Node has been altered to support `CLValue`
+    /// fully, we can remove this method and receive args as serialized `Vec<CLValue>`.
+    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error>;
 }
 
 impl ArgsParser for () {
-    fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
+    fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
+        Ok(Vec::new())
+    }
+
+    fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
         Ok(Vec::new())
     }
 }
 
 macro_rules! impl_argsparser_tuple {
     ( $($name:ident)+) => (
-        impl<$($name: ToBytes),*> ArgsParser for ($($name,)*) {
+        impl<$($name: CLTyped + ToBytes),*> ArgsParser for ($($name,)*) {
             #[allow(non_snake_case)]
-            fn parse(&self) -> Result<Vec<Vec<u8>>, Error> {
-                let ($(ref $name,)+) = *self;
-                Ok(vec![$(ToBytes::to_bytes($name)?,)+])
+            fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
+                let ($($name,)+) = self;
+                Ok(vec![$(CLValue::from_t($name)?,)+])
+            }
+
+            #[allow(non_snake_case)]
+            fn parse_to_vec_u8(self) -> Result<Vec<Vec<u8>>, Error> {
+                let ($($name,)+) = self;
+                Ok(vec![$(ToBytes::into_bytes($name)?,)+])
             }
         }
     );

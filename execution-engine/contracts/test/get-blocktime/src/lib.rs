@@ -1,9 +1,9 @@
 #![no_std]
 
 use contract_ffi::{
+    block_time::BlockTime,
     contract_api::{runtime, Error},
     unwrap_or_revert::UnwrapOrRevert,
-    value::account::BlockTime,
 };
 
 #[no_mangle]

@@ -9,10 +9,10 @@ use contract_ffi::{
     uref::{AccessRights, URef},
     value::{
         account::{PublicKey, PurseId},
-        Value, U512,
+        U512,
     },
 };
-use engine_shared::transform::Transform;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG};
 
@@ -74,7 +74,7 @@ fn should_run_pos_install_contract() {
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
     {
-        Some(Transform::Write(Value::Contract(contract))) => contract.named_keys(),
+        Some(Transform::Write(StoredValue::Contract(contract))) => contract.named_keys(),
 
         _ => panic!("Expected contract to be written under the key"),
     };

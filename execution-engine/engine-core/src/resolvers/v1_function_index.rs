@@ -22,13 +22,13 @@ pub enum FunctionIndex {
     PutKeyFuncIndex = 13,
     StoreFnIndex = 14,
     StoreFnAtHashIndex = 15,
-    IsValidFnIndex = 16,
+    IsValidURefFnIndex = 16,
     RevertFuncIndex = 17,
     AddAssociatedKeyFuncIndex = 18,
     RemoveAssociatedKeyFuncIndex = 19,
     UpdateAssociatedKeyFuncIndex = 20,
     SetActionThresholdFuncIndex = 21,
-    SerNamedKeysFuncIndex = 22,
+    LoadNamedKeysFuncIndex = 22,
     RemoveKeyFuncIndex = 23,
     GetCallerIndex = 24,
     GetBlocktimeIndex = 25,
@@ -69,11 +69,13 @@ mod tests {
     fn primitive_to_enum() {
         FunctionIndex::try_from(19).expect("Unable to create enum from number");
     }
+
     #[test]
     fn enum_to_primitive() {
         let element = FunctionIndex::UpdateAssociatedKeyFuncIndex;
         let _primitive: usize = element.into();
     }
+
     #[test]
     fn invalid_index() {
         assert!(FunctionIndex::try_from(123_456_789usize).is_err());

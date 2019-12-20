@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
@@ -11,6 +11,7 @@ use std::{
 use grpc::RequestOptions;
 use lazy_static::lazy_static;
 use lmdb::DatabaseFlags;
+use protobuf::RepeatedField;
 use rand::Rng;
 
 use contract_ffi::{
@@ -19,9 +20,8 @@ use contract_ffi::{
     key::Key,
     uref::URef,
     value::{
-        account::{Account, PublicKey, PurseId},
-        contract::Contract,
-        SemVer, Value, U512,
+        account::{PublicKey, PurseId},
+        CLValue, SemVer, U512,
     },
 };
 use engine_core::{
@@ -42,11 +42,11 @@ use engine_grpc_server::engine_server::{
     ipc_grpc::ExecutionEngineService,
     mappings::{MappingError, TransformMap},
     state::{self, ProtocolVersion},
-    transforms,
+    transforms::TransformEntry,
 };
 use engine_shared::{
-    additive_map::AdditiveMap, gas::Gas, newtypes::Blake2bHash, os::get_page_size,
-    transform::Transform,
+    account::Account, additive_map::AdditiveMap, contract::Contract, gas::Gas,
+    newtypes::Blake2bHash, os::get_page_size, stored_value::StoredValue, transform::Transform,
 };
 use engine_storage::{
     global_state::{in_memory::InMemoryGlobalState, lmdb::LmdbGlobalState, StateProvider},
@@ -55,8 +55,6 @@ use engine_storage::{
     trie_store::lmdb::LmdbTrieStore,
 };
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use protobuf::RepeatedField;
-use transforms::TransformEntry;
 
 use crate::test::{
     CONTRACT_MINT_INSTALL, CONTRACT_POS_INSTALL, CONTRACT_STANDARD_PAYMENT, DEFAULT_CHAIN_NAME,
@@ -98,10 +96,7 @@ impl DeployItemBuilder {
 
     pub fn with_payment_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
         let wasm_bytes = read_wasm_file_bytes(file_name);
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut deploy_code = DeployCode::new();
         deploy_code.set_args(args);
         deploy_code.set_code(wasm_bytes);
@@ -112,10 +107,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item = StoredContractHash::new();
         item.set_args(args);
         item.set_hash(hash);
@@ -126,10 +118,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item = StoredContractURef::new();
         item.set_args(args);
         item.set_uref(uref.addr().to_vec());
@@ -140,10 +129,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item = StoredContractName::new();
         item.set_args(args);
         item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
@@ -155,10 +141,7 @@ impl DeployItemBuilder {
 
     pub fn with_session_code(mut self, file_name: &str, args: impl ArgsParser) -> Self {
         let wasm_bytes = read_wasm_file_bytes(file_name);
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut deploy_code = DeployCode::new();
         deploy_code.set_code(wasm_bytes);
         deploy_code.set_args(args);
@@ -169,10 +152,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item: StoredContractHash = StoredContractHash::new();
         item.set_args(args);
         item.set_hash(hash);
@@ -183,10 +163,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item: StoredContractURef = StoredContractURef::new();
         item.set_args(args);
         item.set_uref(uref.addr().to_vec());
@@ -197,10 +174,7 @@ impl DeployItemBuilder {
     }
 
     pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
-        let args = args
-            .parse()
-            .and_then(|args_bytes| ToBytes::to_bytes(&args_bytes))
-            .expect("should serialize args");
+        let args = Self::serialize_args(args);
         let mut item = StoredContractName::new();
         item.set_args(args);
         item.set_stored_contract_name(uref_name.to_owned()); // <-- named uref
@@ -226,6 +200,13 @@ impl DeployItemBuilder {
 
     pub fn build(self) -> DeployItem {
         self.deploy_item
+    }
+
+    fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
+        args.parse_to_vec_u8()
+            .expect("should convert to `Vec<CLValue>`")
+            .into_bytes()
+            .expect("should serialize args")
     }
 }
 
@@ -459,15 +440,14 @@ impl Default for UpgradeRequestBuilder {
 
 /// Builder for simple WASM test
 pub struct WasmTestBuilder<S> {
-    /// Engine state is wrapped in Rc<> to workaround missing `impl Clone for
-    /// EngineState`
+    /// [`EngineState`] is wrapped in [`Rc`] to work around a missing [`Clone`] implementation
     engine_state: Rc<EngineState<S>>,
     exec_responses: Vec<ExecuteResponse>,
     upgrade_responses: Vec<UpgradeResponse>,
     genesis_hash: Option<Vec<u8>>,
     post_state_hash: Option<Vec<u8>>,
-    /// Cached transform maps after subsequent successful runs
-    /// i.e. transforms[0] is for first run() call etc.
+    /// Cached transform maps after subsequent successful runs i.e. `transforms[0]` is for first
+    /// exec call etc.
     transforms: Vec<AdditiveMap<Key, Transform>>,
     bonded_validators: Vec<HashMap<PublicKey, U512>>,
     /// Cached genesis transforms
@@ -731,7 +711,7 @@ where
         maybe_post_state: Option<Vec<u8>>,
         base_key: Key,
         path: &[&str],
-    ) -> Option<Value> {
+    ) -> Option<StoredValue> {
         let post_state = maybe_post_state
             .or_else(|| self.post_state_hash.clone())
             .expect("builder must have a post-state hash");
@@ -986,11 +966,13 @@ where
         let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
         let balance_uref = self
             .query(None, balance_mapping_key, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should find balance uref");
 
         self.query(None, balance_uref, &[])
-            .and_then(|v| v.try_into().ok())
+            .and_then(|v| CLValue::try_from(v).ok())
+            .and_then(|cl_value| cl_value.into_t().ok())
             .expect("should parse balance into a U512")
     }
 
@@ -999,7 +981,7 @@ where
             .query(None, Key::Account(addr), &[])
             .expect("should query account");
 
-        if let Value::Account(account) = account_value {
+        if let StoredValue::Account(account) = account_value {
             Some(account)
         } else {
             None
@@ -1007,11 +989,11 @@ where
     }
 
     pub fn get_contract(&self, contract_uref: URef) -> Option<Contract> {
-        let contract_value: Value = self
+        let contract_value: StoredValue = self
             .query(None, Key::URef(contract_uref), &[])
             .expect("should have contract value");
 
-        if let Value::Contract(contract) = contract_value {
+        if let StoredValue::Contract(contract) = contract_value {
             Some(contract)
         } else {
             None
@@ -1163,7 +1145,7 @@ pub fn get_exec_costs(exec_response: &ExecuteResponse) -> Vec<Gas> {
 #[allow(clippy::implicit_hasher)]
 pub fn get_account(transforms: &AdditiveMap<Key, Transform>, account: &Key) -> Option<Account> {
     transforms.get(account).and_then(|transform| {
-        if let Transform::Write(Value::Account(account)) = transform {
+        if let Transform::Write(StoredValue::Account(account)) = transform {
             Some(account.to_owned())
         } else {
             None
