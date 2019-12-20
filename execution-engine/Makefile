@@ -18,6 +18,7 @@ PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdep
 SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+
 CLIENT_CONTRACTS_TS   = $(shell find ./contracts-ts/client   -mindepth 1 -maxdepth 1 -type d)
 
 BENCH_CONTRACTS     := $(patsubst %, build-contract-rs/%, $(BENCH_CONTRACTS))
