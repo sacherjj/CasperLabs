@@ -487,7 +487,9 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
   class MockGossipService extends GossipService[Task] {
     override def newBlocks(request: NewBlocksRequest)                                       = ???
     override def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    override def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest)     = ???
+    override def streamLatestMessages(
+        request: StreamLatestMessagesRequest
+    ): Iterant[Task, Block.Justification] = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[Task, BlockSummary]                                    = ???

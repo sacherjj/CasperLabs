@@ -1,10 +1,10 @@
 use contract_ffi::{
     key::Key,
-    value::{ProtocolVersion, Value, U512},
+    value::{CLValue, ProtocolVersion, U512},
 };
 use engine_core::engine_state::{upgrade::ActivationPoint, Error};
 use engine_grpc_server::engine_server::ipc::DeployCode;
-use engine_shared::transform::Transform;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 use engine_wasm_prep::wasm_costs::WasmCosts;
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
-const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
+const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
 const PAYMENT_AMOUNT: u64 = 200_000_000;
 
@@ -84,7 +84,7 @@ fn should_upgrade_system_contract() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -138,13 +138,13 @@ fn should_upgrade_system_contract() {
 
     builder.commit();
 
-    let version_value: Value = builder
+    let version_value: StoredValue = builder
         .query(None, *version_uref, &[])
         .expect("should find version_uref value");
 
     assert_eq!(
         version_value,
-        Value::String("1.1.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0".to_string()).unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -162,7 +162,7 @@ fn should_upgrade_system_contract_on_patch_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -216,13 +216,13 @@ fn should_upgrade_system_contract_on_patch_bump() {
 
     builder.commit();
 
-    let version_value: Value = builder
+    let version_value = builder
         .query(None, *version_uref, &[])
         .expect("should find version_uref value");
 
     assert_eq!(
         version_value,
-        Value::String("1.1.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0").unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -240,7 +240,7 @@ fn should_upgrade_system_contract_on_minor_bump() {
     builder.run_genesis(&*DEFAULT_GENESIS_CONFIG);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -294,13 +294,13 @@ fn should_upgrade_system_contract_on_minor_bump() {
 
     builder.commit();
 
-    let version_value: Value = builder
+    let version_value = builder
         .query(None, *version_uref, &[])
         .expect("should find version_uref value");
 
     assert_eq!(
         version_value,
-        Value::String("1.1.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0").unwrap()),
         "expected new version endpoint output"
     );
 }
@@ -361,7 +361,7 @@ fn should_allow_only_wasm_costs_minor_version() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -405,7 +405,7 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
     let new_costs = get_upgraded_wasm_costs();
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()
@@ -457,13 +457,13 @@ fn should_upgrade_system_contract_and_wasm_costs_major() {
 
     builder.commit();
 
-    let version_value: Value = builder
+    let version_value: StoredValue = builder
         .query(None, *version_uref, &[])
         .expect("should find version_uref value");
 
     assert_eq!(
         version_value,
-        Value::String("1.1.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.1.0".to_string()).unwrap()),
         "expected new version endpoint output"
     );
 
@@ -489,7 +489,7 @@ fn should_not_downgrade() {
     let new_protocol_version = ProtocolVersion::from_parts(2, 0, 0);
 
     let mut upgrade_request = {
-        let bytes = test_support::read_wasm_file_bytes(MODIFIED_MINT_UPGRADER_CONTRACT_NAME);
+        let bytes = test_support::read_wasm_file_bytes(MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME);
         let mut installer_code = DeployCode::new();
         installer_code.set_code(bytes);
         UpgradeRequestBuilder::new()

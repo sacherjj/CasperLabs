@@ -54,7 +54,7 @@ services:
     build:
       context: ./
       dockerfile: ./grpcwebproxy/Dockerfile
-    image: casperlabs/grpcwebproxy
+    image: casperlabs/grpcwebproxy:${CL_VERSION}
     container_name: grpcwebproxy
     ports:
       # This is just exposed for debug purposes. Access it through Nginx reverse proxy instead.
@@ -65,8 +65,9 @@ services:
     command:
       - /grpcwebproxy
       - --backend_addr=node-0:40401
-      - --backend_tls=true
+      - --backend_tls=false
       - --backend_tls_noverify
+      - --use_websockets
       - --backend_max_call_recv_msg_size=16777216
       - --allow_all_origins
       - --server_tls_cert_file=/etc/tls/certificate.pem
@@ -77,7 +78,7 @@ services:
   # CasperLabs Explorer available at https://localhost:8443
   # The URL needs to be enabled in Auth0 for login/logout to work.
   explorer:
-    image: casperlabs/explorer:latest
+    image: casperlabs/explorer:${CL_VERSION}
     container_name: explorer
     networks:
       - casperlabs

@@ -1,8 +1,8 @@
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use std::collections::BTreeMap;
 
-use crate::{
-    bytesrepr::{Error, FromBytes, ToBytes, U32_SIZE, U64_SIZE},
-    key::{Key, UREF_SIZE},
+use contract_ffi::{
+    bytesrepr::{Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U64_SERIALIZED_LENGTH},
+    key::{Key, KEY_UREF_SERIALIZED_LENGTH},
     value::ProtocolVersion,
 };
 
@@ -49,20 +49,26 @@ impl Contract {
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
+
+    pub fn take_named_keys(self) -> BTreeMap<String, Key> {
+        self.named_keys
+    }
 }
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        if self.bytes.len() + UREF_SIZE * self.named_keys.len() + U64_SIZE
-            >= u32::max_value() as usize - U32_SIZE * 2
+        if self.bytes.len()
+            + KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len()
+            + U64_SERIALIZED_LENGTH
+            >= u32::max_value() as usize - U32_SERIALIZED_LENGTH * 2
         {
             return Err(Error::OutOfMemoryError);
         }
-        let size: usize = U32_SIZE +                    //size for length of bytes
-                    self.bytes.len() +                  //size for elements of bytes
-                    U32_SIZE +                          //size for length of named_keys
-                    UREF_SIZE * self.named_keys.len() + //size for named_keys elements
-                    U64_SIZE; //size for protocol_version
+        let size: usize = U32_SERIALIZED_LENGTH +                        //size for length of bytes
+                    self.bytes.len() +                                   //size for elements of bytes
+                    U32_SERIALIZED_LENGTH +                              //size for length of named_keys
+                    KEY_UREF_SERIALIZED_LENGTH * self.named_keys.len() + //size for named_keys elements
+                    U64_SERIALIZED_LENGTH; //size for protocol_version
 
         let mut result = Vec::with_capacity(size);
         result.append(&mut self.bytes.to_bytes()?);
@@ -85,5 +91,22 @@ impl FromBytes for Contract {
             },
             rem3,
         ))
+    }
+}
+
+pub mod gens {
+    use proptest::{collection::vec, prelude::*};
+
+    use contract_ffi::gens::{named_keys_arb, protocol_version_arb};
+
+    use super::Contract;
+
+    pub fn contract_arb() -> impl Strategy<Value = Contract> {
+        protocol_version_arb().prop_flat_map(move |protocol_version_arb| {
+            named_keys_arb(20).prop_flat_map(move |urefs| {
+                vec(any::<u8>(), 1..1000)
+                    .prop_map(move |body| Contract::new(body, urefs.clone(), protocol_version_arb))
+            })
+        })
     }
 }

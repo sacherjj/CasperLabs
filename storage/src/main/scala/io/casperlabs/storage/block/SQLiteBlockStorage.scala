@@ -1,6 +1,7 @@
 package io.casperlabs.storage.block
 
 import cats._
+import cats.data.NonEmptyList
 import cats.effect._
 import cats.implicits._
 import com.google.protobuf.ByteString
@@ -10,20 +11,23 @@ import doobie.util.transactor.Transactor
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
+import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.ipc.TransformEntry
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
-import io.casperlabs.storage.block.BlockStorage.{BlockHash, MeteredBlockStorage}
+import io.casperlabs.storage.block.BlockStorage.{BlockHash, DeployHash, MeteredBlockStorage}
 import io.casperlabs.storage.util.DoobieCodecs
 import io.casperlabs.storage.{BlockMsgWithTransform, BlockStorageMetricsSource}
 
-class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
+class SQLiteBlockStorage[F[_]: Bracket[*[_], Throwable]: Fs2Compiler](
     readXa: Transactor[F],
     writeXa: Transactor[F]
 ) extends BlockStorage[F]
     with DoobieCodecs {
+
+  import SQLiteBlockStorage.blockInfoCols
 
   override def get(blockHash: BlockHash): F[Option[BlockMsgWithTransform]] =
     get(sql"""|SELECT block_hash, data
@@ -91,10 +95,10 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
 
   override def getBlockInfoByPrefix(blockHashPrefix: String): F[Option[BlockInfo]] = {
     def query(lowerBound: Array[Byte], upperBound: Array[Byte]) =
-      sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
-            |FROM block_metadata
-            |WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
-            |LIMIT 1""".stripMargin
+      (fr"""SELECT """ ++ blockInfoCols() ++ fr"""
+            FROM block_metadata
+            WHERE block_hash>=$lowerBound AND block_hash<=$upperBound
+            LIMIT 1""")
         .query[BlockInfo]
         .option
         .transact(readXa)
@@ -146,18 +150,36 @@ class SQLiteBlockStorage[F[_]: Bracket[?[_], Throwable]: Fs2Compiler](
     getBlockInfo(blockHash).map(_.flatMap(_.summary))
 
   override def getBlockInfo(blockHash: BlockHash): F[Option[BlockInfo]] =
-    sql"""|SELECT data, block_size, deploy_error_count, deploy_cost_total
-          |FROM block_metadata
-          |WHERE block_hash=$blockHash""".stripMargin
+    (fr"""SELECT """ ++ blockInfoCols() ++ fr"""
+          FROM block_metadata
+          WHERE block_hash=$blockHash""")
       .query[BlockInfo]
       .option
       .transact(readXa)
 
-  override def findBlockHashesWithDeployHash(deployHash: ByteString): F[Seq[BlockHash]] =
-    sql"""|SELECT block_hash
-          |FROM deploy_process_results
-          |WHERE deploy_hash=$deployHash
-          |ORDER BY create_time_millis""".stripMargin.query[BlockHash].to[Seq].transact(readXa)
+  override def findBlockHashesWithDeployHashes(
+      deployHashes: List[DeployHash]
+  ): F[Map[DeployHash, Set[BlockHash]]] =
+    NonEmptyList
+      .fromList[ByteString](deployHashes)
+      .fold(Map.empty[DeployHash, Set[BlockHash]].pure[F]) { nfl =>
+        val sql = fr"""|SELECT deploy_hash, block_hash
+                       |FROM deploy_process_results
+                       |WHERE """.stripMargin ++ Fragments.in(fr"deploy_hash", nfl)
+
+        sql
+          .query[(DeployHash, BlockHash)]
+          .to[Seq]
+          .transact(readXa)
+          .map(_.groupBy(_._1))
+          .map { deployHashToBlockHashesMap: Map[DeployHash, Seq[(DeployHash, BlockHash)]] =>
+            deployHashes.map { d =>
+              val value =
+                deployHashToBlockHashesMap.get(d).fold(Set.empty[BlockHash])(_.map(_._2).toSet)
+              (d, value)
+            }.toMap
+          }
+      }
 
   override def checkpoint(): F[Unit] = ().pure[F]
 
@@ -184,4 +206,11 @@ object SQLiteBlockStorage {
                        }
                      )
     } yield blockStorage: BlockStorage[F]
+
+  // Helper function to avoid having to duplicate the list of columns of `BlockInfo` to read it from the `block_metadata` table.
+  private[storage] def blockInfoCols(alias: String = "") = {
+    val cols =
+      Seq("data", "block_size", "deploy_error_count", "deploy_cost_total", "deploy_gas_price_avg")
+    Fragment.const(cols.map(col => if (alias.isEmpty) col else s"${alias}.${col}").mkString(", "))
+  }
 }

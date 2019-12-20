@@ -66,13 +66,14 @@ object Dependencies {
   val scalacheck             = "org.scalacheck"             %% "scalacheck"                     % "1.13.5" % "test"
   val scalacheckNoTest       = "org.scalacheck"             %% "scalacheck"                     % "1.13.5"
   val scalacheckShapeless    = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13"      % "1.1.8" % "test"
-  val graphvizJava           = "guru.nidi"                  % "graphviz-java"                   % "0.8.3"
+  val graphvizJava           = "guru.nidi"                  % "graphviz-java"                   % "0.12.1"
   val scalactic              = "org.scalactic"              %% "scalactic"                      % "3.0.5" % "test"
   val scalapbCompiler        = "com.thesamet.scalapb"       %% "compilerplugin"                 % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntime         = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion % "protobuf"
   val scalapbRuntimeLib      = "com.thesamet.scalapb"       %% "scalapb-runtime"                % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntimegGrpc    = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"           % scalapb.compiler.Version.scalapbVersion
   val scalapbCirce           = "io.github.scalapb-json"     %% "scalapb-circe"                  % "0.2.2"
+  val pbdirect               = "beyondthelines"             %% "pbdirect"                       % "0.1.0"
   val grpcNetty              = "io.grpc"                    % "grpc-netty"                      % scalapb.compiler.Version.grpcJavaVersion
   val nettyAll               = "io.netty"                   % "netty-all"                       % "4.1.22.Final"
   val nettyTransNativeEpoll  = "io.netty"                   % "netty-transport-native-epoll"    % "4.1.22.Final" classifier "linux-x86_64"

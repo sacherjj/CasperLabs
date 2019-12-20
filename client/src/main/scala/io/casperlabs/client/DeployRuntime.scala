@@ -2,10 +2,10 @@ package io.casperlabs.client
 import java.io._
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 
 import cats.Show
-import cats.effect.{Sync, Timer}
+import cats.effect.{Resource, Sync, Timer}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import guru.nidi.graphviz.engine._
@@ -18,6 +18,7 @@ import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.{Base16, Base64}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.util.{CertificateHelper, CertificatePrinter}
 import io.casperlabs.shared.FilesAPI
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
@@ -107,19 +108,8 @@ object DeployRuntime {
     arg(name, Deploy.Arg.Value.Value.BytesValue(ByteString.copyFrom(value)))
 
   // This is true for any array but I didn't want to go as far as writing type classes.
-  // Binary format of an array is constructed from:
-  // length (u32/integer in binary) ++ bytes
-  private def serializeArray(ba: Array[Byte]): Array[Byte] = {
-    val serLen = serializeInt(ba.length)
-    serLen ++ ba
-  }
-
-  private def serializeInt(i: Int): Array[Byte] =
-    java.nio.ByteBuffer
-      .allocate(4)
-      .order(ByteOrder.LITTLE_ENDIAN)
-      .putInt(i)
-      .array()
+  private def serializeArray(ba: Array[Byte]): Array[Byte] =
+    ba
 
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
@@ -162,11 +152,18 @@ object DeployRuntime {
       bytesStandard: Boolean,
       json: Boolean
   ): F[Unit] =
-    gracefulExit(
+    gracefulExit({
+      val key = if (keyVariant == "local") {
+        val parts          = keyValue.split(":")
+        val seed           = parts(0)
+        val rest           = parts(1)
+        val abiEncodedRest = Base16.encode(serializeArray(Base16.decode(rest)))
+        s"$seed:$abiEncodedRest"
+      } else keyValue
       DeployService[F]
-        .queryState(blockHash, keyVariant, keyValue, path)
+        .queryState(blockHash, keyVariant, key, path)
         .map(_.map(Printer.print(_, bytesStandard, json)))
-    )
+    })
 
   def balance[F[_]: Sync: DeployService](address: String, blockHash: String): F[Unit] =
     gracefulExit {
@@ -215,12 +212,13 @@ object DeployRuntime {
           .visualizeDag(depth, showJustificationLines)
           .rethrow
 
-      val useJdkRenderer = Sync[F].delay(Graphviz.useEngine(new GraphvizJdkEngine))
+      val useJdkRenderer = Sync[F].delay(Graphviz.useDefaultEngines())
 
       def writeToFile(out: String, format: Format, dag: String) =
         Sync[F].delay(
           Graphviz
             .fromString(dag)
+            .totalMemory(1000000000)
             .render(format)
             .toFile(new File(s"$out"))
         ) >> Sync[F].delay(println(s"Wrote $out"))
@@ -277,7 +275,7 @@ object DeployRuntime {
   def transferCLI[F[_]: Sync: DeployService: FilesAPI](
       deployConfig: DeployConfig,
       privateKeyFile: File,
-      recipientPublicKeyBase64: String,
+      recipientPublicKey: PublicKey,
       amount: Long
   ): F[Unit] =
     for {
@@ -298,7 +296,7 @@ object DeployRuntime {
             deployConfig,
             publicKey,
             privateKey,
-            recipientPublicKeyBase64,
+            recipientPublicKey,
             amount
           )
     } yield ()
@@ -307,31 +305,23 @@ object DeployRuntime {
       deployConfig: DeployConfig,
       senderPublicKey: PublicKey,
       senderPrivateKey: PrivateKey,
-      recipientPublicKeyBase64: String,
+      recipientPublicKey: PublicKey,
       amount: Long,
       exit: Boolean = true,
       ignoreOutput: Boolean = false
   ): F[Unit] =
-    for {
-      account <- MonadThrowable[F].fromOption(
-                  Base64.tryDecode(recipientPublicKeyBase64),
-                  new IllegalArgumentException(
-                    s"Failed to parse base64 encoded account: $recipientPublicKeyBase64"
-                  )
-                )
-      _ <- deployFileProgram[F](
-            from = None,
-            deployConfig.withSessionResource(TRANSFER_WASM_FILE),
-            maybeEitherPublicKey = senderPublicKey.asRight[String].some,
-            maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
-            List(
-              bytesArg("account", account),
-              longArg("amount", amount)
-            ),
-            exit,
-            ignoreOutput
-          )
-    } yield ()
+    deployFileProgram[F](
+      from = None,
+      deployConfig.withSessionResource(TRANSFER_WASM_FILE),
+      maybeEitherPublicKey = senderPublicKey.asRight[String].some,
+      maybeEitherPrivateKey = senderPrivateKey.asRight[String].some,
+      List(
+        bytesArg("account", recipientPublicKey),
+        longArg("amount", amount)
+      ),
+      exit,
+      ignoreOutput
+    )
 
   private def readKey[F[_]: Sync, A](keyFile: File, keyType: String, f: String => Option[A]): F[A] =
     readFileAsString[F](keyFile) >>= { key =>
@@ -365,7 +355,7 @@ object DeployRuntime {
   /** Constructs a [[Deploy]] from the provided arguments and writes it to a file (or STDOUT).
     */
   def makeDeploy[F[_]: Sync](
-      from: ByteString,
+      from: PublicKey,
       deployConfig: DeployConfig,
       sessionArgs: Seq[Deploy.Arg]
   ): Deploy = {
@@ -383,7 +373,7 @@ object DeployRuntime {
         consensus.Deploy
           .Header()
           .withTimestamp(System.currentTimeMillis)
-          .withAccountPublicKey(from)
+          .withAccountPublicKey(ByteString.copyFrom(from))
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
@@ -435,7 +425,7 @@ object DeployRuntime {
     }
 
   def deployFileProgram[F[_]: Sync: DeployService](
-      from: Option[String],
+      from: Option[PublicKey],
       deployConfig: DeployConfig,
       maybeEitherPublicKey: Option[Either[String, PublicKey]],
       maybeEitherPrivateKey: Option[Either[String, PrivateKey]],
@@ -455,9 +445,7 @@ object DeployRuntime {
 
     val deploy = for {
       accountPublicKey <- Sync[F].fromOption(
-                           from
-                             .map(account => ByteString.copyFrom(Base16.decode(account)))
-                             .orElse(maybePublicKey.map(ByteString.copyFrom)),
+                           from orElse maybePublicKey,
                            new IllegalArgumentException("--from or --public-key must be presented")
                          )
     } yield {
@@ -509,4 +497,55 @@ object DeployRuntime {
     new String(Files.readAllBytes(file.toPath), StandardCharsets.UTF_8)
   }
 
+  def keygen[F[_]: Sync](
+      outputDirectory: File
+  ): F[Unit] = {
+    val path                     = outputDirectory.toPath
+    val validatorPrivPath: Path  = path.resolve("validator-private.pem")
+    val validatorPubPath: Path   = path.resolve("validator-public.pem")
+    val validatorIdPath: Path    = path.resolve("validator-id")
+    val validatorIdHexPath: Path = path.resolve("validator-id-hex")
+    val nodePrivPath: Path       = path.resolve("node.key.pem")
+    val nodeCertPath: Path       = path.resolve("node.certificate.pem")
+    val nodeIdPath: Path         = path.resolve("node-id")
+
+    val program = for {
+      (valPriv, valPub) <- Sync[F].delay(Ed25519.newKeyPair)
+      _                 <- writeToFile(validatorPrivPath, printValidatorPriv(valPriv))
+      _                 <- writeToFile(validatorPubPath, printValidatorPub(valPub))
+      _                 <- writeToFile(validatorIdPath, Base64.encode(valPub))
+      _                 <- writeToFile(validatorIdHexPath, Base16.encode(valPub))
+      nodeKeyPair       <- Sync[F].delay(CertificateHelper.generateKeyPair(false))
+      nodeCert          <- Sync[F].delay(CertificateHelper.generate(nodeKeyPair))
+      _                 <- writeToFile(nodePrivPath, CertificatePrinter.printPrivateKey(nodeKeyPair.getPrivate))
+      _                 <- writeToFile(nodeCertPath, CertificatePrinter.print(nodeCert))
+      nodeId <- Sync[F].fromOption(
+                 CertificateHelper.publicAddress(nodeKeyPair.getPublic),
+                 new IllegalArgumentException("Certificate's public key is corrupted.")
+               )
+      _ <- writeToFile(nodeIdPath, Base16.encode(nodeId))
+
+    } yield s"Keys successfully created in directory: ${path.toAbsolutePath.toString}"
+
+    gracefulExit(program.attempt)
+  }
+
+  private def writeToFile[F[_]: Sync](path: Path, text: String): F[Unit] =
+    Resource
+      .fromAutoCloseable {
+        Sync[F].delay { new BufferedWriter(new FileWriter(new File(path.toString))) }
+      }
+      .use(buff => Sync[F].delay(buff.write(text)))
+
+  private def printValidatorPriv(privateKey: PrivateKey): String =
+    s"""-----BEGIN PRIVATE KEY-----
+       |${Base64.encode(privateKey)}
+       |-----END PRIVATE KEY-----
+       |""".stripMargin
+
+  private def printValidatorPub(publicKey: PublicKey): String =
+    s"""-----BEGIN PUBLIC KEY-----
+       |${Base64.encode(publicKey)}
+       |-----END PUBLIC KEY-----
+       |""".stripMargin
 }

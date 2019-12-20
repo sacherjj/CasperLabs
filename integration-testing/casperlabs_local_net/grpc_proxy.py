@@ -502,6 +502,13 @@ def block_summary(block):
     )
 
 
+def block_justification(block):
+    return consensus.Block.Justification(
+        validator_public_key=block.header.validator_public_key,
+        latest_block_hash=block.block_hash,
+    )
+
+
 def update_hashes_and_signature(block, private_key):
     """Updates in-place block.header.body_hash, block.block_hash and block.signature."""
     block.header.body_hash = blake2b_hash(block.body.SerializeToString())

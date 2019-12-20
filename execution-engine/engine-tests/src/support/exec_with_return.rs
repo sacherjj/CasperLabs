@@ -2,11 +2,12 @@ use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
 use contract_ffi::{
     args_parser::ArgsParser,
-    bytesrepr::{self, FromBytes},
+    block_time::BlockTime,
+    bytesrepr::FromBytes,
     execution::Phase,
     key::Key,
     uref::URef,
-    value::{account::BlockTime, ProtocolVersion, U512},
+    value::{CLTyped, CLValue, ProtocolVersion, U512},
 };
 use engine_core::{
     engine_state::{
@@ -44,7 +45,7 @@ where
     S: StateProvider,
     S::Error: Into<execution::Error>,
     EngineState<S>: ExecutionEngineService,
-    T: FromBytes,
+    T: FromBytes + CLTyped,
 {
     let prestate = builder
         .get_post_state_hash()
@@ -69,7 +70,7 @@ where
     let gas_limit = Gas::new(U512::from(std::u64::MAX));
     let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
-    let arguments: Vec<Vec<u8>> = args.parse().expect("should be able to serialize args");
+    let arguments: Vec<CLValue> = args.parse().expect("should be able to serialize args");
     let base_key = Key::Account(address);
 
     let account = builder.get_account(address).expect("should find account");
@@ -120,6 +121,7 @@ where
             &account,
             correlation_id,
             &preprocessor,
+            &protocol_version,
         )
         .expect("should get wasm module");
 
@@ -140,7 +142,10 @@ where
                         let effect = runtime.context().effect();
                         let urefs = ret_urefs.clone();
 
-                        let value: T = bytesrepr::deserialize(runtime.result())
+                        let value: T = runtime
+                            .take_host_buf()
+                            .expect("should have return value in the host_buf")
+                            .into_t()
                             .expect("should deserialize return value");
 
                         Some((value, urefs, effect))

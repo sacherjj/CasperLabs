@@ -24,7 +24,7 @@ export class BlockContainer {
     private errors: ErrorContainer,
     private casperService: CasperService,
     private balanceService: BalanceService
-  ) {}
+  ) { }
 
   /** Call whenever the page switches to a new block. */
   @action
@@ -43,7 +43,7 @@ export class BlockContainer {
   async loadBlock() {
     if (this.blockHash == null) return;
     await this.errors.capture(
-      this.casperService.getBlockInfo(this.blockHash).then(block => {
+      this.casperService.getBlockInfo(this.blockHash, BlockInfo.View.FULL).then(block => {
         this.block = block;
       })
     );

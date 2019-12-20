@@ -5,14 +5,15 @@ use bitflags::bitflags;
 use hex_fmt::HexFmt;
 
 use crate::{
-    bytesrepr::{self, OPTION_SIZE, U32_SIZE},
+    bytesrepr::{self, OPTION_TAG_SERIALIZED_LENGTH, U32_SERIALIZED_LENGTH},
     contract_api::TURef,
+    value::CLTyped,
 };
 
-pub const UREF_ADDR_SIZE: usize = 32;
-pub const ACCESS_RIGHTS_SIZE: usize = 1;
-pub const UREF_SIZE_SERIALIZED: usize =
-    U32_SIZE + UREF_ADDR_SIZE + OPTION_SIZE + ACCESS_RIGHTS_SIZE;
+pub const UREF_ADDR_LENGTH: usize = 32;
+pub const ACCESS_RIGHTS_SERIALIZED_LENGTH: usize = 1;
+pub const UREF_SERIALIZED_LENGTH: usize =
+    UREF_ADDR_LENGTH + OPTION_TAG_SERIALIZED_LENGTH + ACCESS_RIGHTS_SERIALIZED_LENGTH;
 
 bitflags! {
     #[allow(clippy::derive_hash_xor_eq)]
@@ -74,7 +75,7 @@ impl bytesrepr::FromBytes for AccessRights {
 
 /// Represents an unforgeable reference
 #[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct URef([u8; UREF_ADDR_SIZE], Option<AccessRights>);
+pub struct URef([u8; UREF_ADDR_LENGTH], Option<AccessRights>);
 
 impl core::fmt::Display for URef {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -96,22 +97,22 @@ impl core::fmt::Debug for URef {
 
 impl URef {
     /// Creates a [`URef`] from an id and access rights.
-    pub fn new(id: [u8; UREF_ADDR_SIZE], access_rights: AccessRights) -> Self {
+    pub fn new(id: [u8; UREF_ADDR_LENGTH], access_rights: AccessRights) -> Self {
         URef(id, Some(access_rights))
     }
 
     /// Creates a [`URef`] from an id and optional access rights.  [`URef::new`]
     /// is the preferred constructor for most common use-cases.
-    #[cfg(feature = "gens")]
+    #[cfg(any(test, feature = "gens"))]
     pub(crate) fn unsafe_new(
-        id: [u8; UREF_ADDR_SIZE],
+        id: [u8; UREF_ADDR_LENGTH],
         maybe_access_rights: Option<AccessRights>,
     ) -> Self {
         URef(id, maybe_access_rights)
     }
 
     /// Returns the address of this URef.
-    pub fn addr(&self) -> [u8; UREF_ADDR_SIZE] {
+    pub fn addr(&self) -> [u8; UREF_ADDR_LENGTH] {
         self.0
     }
 
@@ -182,7 +183,7 @@ impl URef {
 
 impl bytesrepr::ToBytes for URef {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = Vec::with_capacity(UREF_SIZE_SERIALIZED);
+        let mut result = Vec::with_capacity(UREF_SERIALIZED_LENGTH);
         result.append(&mut self.0.to_bytes()?);
         result.append(&mut self.1.to_bytes()?);
         Ok(result)
@@ -215,7 +216,7 @@ impl bytesrepr::FromBytes for Vec<URef> {
 impl bytesrepr::ToBytes for Vec<URef> {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let size = self.len() as u32;
-        let mut result: Vec<u8> = Vec::with_capacity(U32_SIZE);
+        let mut result: Vec<u8> = Vec::with_capacity(U32_SERIALIZED_LENGTH);
         result.extend(size.to_bytes()?);
         result.extend(
             self.iter()
@@ -228,7 +229,7 @@ impl bytesrepr::ToBytes for Vec<URef> {
     }
 }
 
-impl<T> From<TURef<T>> for URef {
+impl<T: CLTyped> From<TURef<T>> for URef {
     fn from(input: TURef<T>) -> Self {
         URef(input.addr(), Some(input.access_rights()))
     }

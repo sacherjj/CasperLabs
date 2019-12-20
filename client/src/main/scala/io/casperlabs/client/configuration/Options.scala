@@ -2,12 +2,17 @@ package io.casperlabs.client.configuration
 
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.TimeUnit
 
 import cats.syntax.option._
 import guru.nidi.graphviz.engine.Format
 import io.casperlabs.client.BuildInfo
+import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.codec.{Base16, Base64}
 import org.apache.commons.io.IOUtils
 import org.rogach.scallop._
+
+import scala.concurrent.duration.FiniteDuration
 
 object Options {
   val hexCheck: String => Boolean  = _.matches("[0-9a-fA-F]+")
@@ -15,6 +20,8 @@ object Options {
 
   val fileCheck: File => Boolean = file =>
     file.exists() && file.canRead && !file.isDirectory && file.isFile
+
+  val directoryCheck: File => Boolean = dir => dir.exists() && dir.canWrite && dir.isDirectory
 
   trait DeployOptions { self: Subcommand =>
     def sessionRequired: Boolean = true
@@ -106,7 +113,7 @@ object Options {
       required = false
     )
 
-    val ttl = opt[Int](
+    val ttlMillis = opt[Int](
       descr = "Time to live. Time (in milliseconds) that the deploy will remain valid for.",
       validate = _ > 0,
       required = false,
@@ -186,6 +193,24 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     override val argType: ArgType.V = ArgType.SINGLE
   }
 
+  implicit val publicKeyConverter: ValueConverter[PublicKey] = new ValueConverter[PublicKey] {
+    override def parse(s: List[(String, List[String])]): Either[String, Option[PublicKey]] =
+      s match {
+        case (List((_, List(v)))) =>
+          if (hashCheck(v)) {
+            Right(Some(PublicKey(Base16.decode(v))))
+          } else {
+            Base64.tryDecode(v) match {
+              case None        => Left("Could not parse as either base16 or base64 value.")
+              case Some(bytes) => Right(Some(PublicKey(bytes)))
+            }
+          }
+        case Nil => Right(None)
+        case _   => Left("Provide a single base16 or base64 value.")
+      }
+    override val argType: ArgType.V = ArgType.SINGLE
+  }
+
   version(
     s"CasperLabs Client ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
   )
@@ -200,7 +225,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val host =
     opt[String](
       descr = "Hostname or IP of node on which the gRPC service is running.",
-      required = true
+      required = false,
+      default = Option("localhost")
     )
 
   val nodeId =
@@ -227,9 +253,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   val makeDeploy = new Subcommand("make-deploy") with DeployOptions {
     descr("Constructs a deploy that can be signed and sent to a node.")
 
-    val from = opt[String](
+    val from = opt[PublicKey](
       descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
+        "The public key of the account which is the context of this deployment; base16 or base64 encoded.",
       required = false
     )
 
@@ -283,9 +309,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "on the configuration of the Casper instance."
     )
 
-    val from = opt[String](
+    val from = opt[PublicKey](
       descr =
-        "The public key of the account which is the context of this deployment, base16 encoded.",
+        "The public key of the account which is the context of this deployment; base16 or base64 encoded.",
       required = false
     )
 
@@ -491,8 +517,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
 
     val targetAccount =
-      opt[String](
-        descr = "base64 representation of target account's public key",
+      opt[PublicKey](
+        descr = "The target account's public key; base16 or base64 encoded.",
         required = true
       )
   }
@@ -504,7 +530,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
     val depth =
       opt[Int](
+        name = "depth",
         descr = "depth in terms of block height",
+        validate = _ > 0,
         required = true
       )
     val showJustificationLines =
@@ -556,7 +584,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         name = "key",
         descr = "Base16 encoding of the base key.",
         required = true,
-        validate = hexCheck
+        validate = (key: String) => {
+          keyType() match {
+            case "local" =>
+              key.split(":") match {
+                case arr @ Array(_, _) => arr.forall(hexCheck)
+                case _                 => false
+              }
+            case _ => hexCheck(key)
+          }
+        }
       )
 
     val path =
@@ -588,6 +625,32 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       )
   }
   addSubcommand(balance)
+
+  val keygen = new Subcommand("keygen") {
+    descr("Generates keys.")
+    banner(
+      """| Usage: casperlabs-client keygen <existingOutputDirectory>
+         | Command will override existing files!
+         | Generated files:
+         |   node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+         |                         # derived from node.key.pem
+         |   node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+         |                         # derived from node.key.pem
+         |   node.key.pem          # secp256r1 private key
+         |   validator-id          # validator ID in Base64 format; can be used in accounts.csv
+         |                         # derived from validator.public.pem
+         |   validator-id-hex      # validator ID in hex, derived from validator.public.pem
+         |   validator-private.pem # ed25519 private key
+         |   validator-public.pem  # ed25519 public key""".stripMargin
+    )
+
+    val outputDirectory = trailArg[File](
+      descr = "Output directory for keys. Should already exists.",
+      validate = directoryCheck,
+      required = true
+    )
+  }
+  addSubcommand(keygen)
 
   verify()
 }

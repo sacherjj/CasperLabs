@@ -1,4 +1,6 @@
 @import 'sb-admin/variables.scss';
+@import 'account-selector';
+@import 'toggle-button';
 
 #mainNav.navbar-dark {
   .username {
@@ -44,9 +46,11 @@ button.link {
   font-family: arial, sans-serif;
   color: #007bff;
 }
+
 button.link:hover {
   text-decoration: underline;
 }
+
 button.icon-button {
   color: inherit;
 }
@@ -54,6 +58,7 @@ button.icon-button {
 div.svg-container {
   position: relative;
 }
+
 div.svg-hint {
   position: absolute;
   bottom: 0;
@@ -63,27 +68,34 @@ div.svg-hint {
   color: white;
   padding: 5px;
 }
+
 #mainNav.navbar-dark .navbar-collapse .navbar-sidenav {
   background: #000000;
 }
+
 .bg-dark {
   background-color: #000000 !important;
 }
+
 .navbar-brand img {
   height: 28px;
 }
+
 #mainNav.navbar-dark .navbar-collapse .navbar-sidenav li.active a {
   color: white !important;
   background-color: #b70404;
 }
+
 .jumbotron {
   padding: 2rem 1rem;
   margin-bottom: 2rem;
   background-color: #efeded;
 }
+
 footer.sticky-footer {
   background-color: #efeded;
 }
+
 //.bg-success {
 //  background-color: #b70404!important;
 //}

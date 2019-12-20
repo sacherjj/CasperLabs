@@ -2,7 +2,12 @@ import { observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService } from 'casperlabs-sdk';
-import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import {
+  BlockInfo,
+  Event
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
+import { Subscription } from 'rxjs';
+import { ToggleStore } from '../components/ToggleButton';
 
 export class DagStep {
   constructor(private container: DagContainer) {}
@@ -55,6 +60,9 @@ export class DagContainer {
   @observable selectedBlock: BlockInfo | undefined = undefined;
   @observable depth = 10;
   @observable maxRank = 0;
+  @observable validatorsListToggleStore: ToggleStore = new ToggleStore(false);
+  @observable lastFinalizedBlock: BlockInfo | undefined = undefined;
+  @observable eventsSubscriber: Subscription | null = null;
 
   constructor(
     private errors: ErrorContainer,
@@ -79,6 +87,28 @@ export class DagContainer {
           this.blocks = blocks;
         })
     );
+
+    await this.errors.capture(
+      this.casperService.getLatestBlockInfo().then(block => {
+        this.lastFinalizedBlock = block;
+      })
+    );
+
+    if (this.eventsSubscriber && !this.eventsSubscriber.closed) {
+      return;
+    } else {
+      let subscribeTopics = {
+        blockAdded: true,
+        blockFinalized: false
+      };
+      let obs = this.casperService.subscribeEvents(subscribeTopics);
+
+      this.eventsSubscriber = obs.subscribe({
+        next(event: Event) {
+          console.log("received event");
+        }
+      });
+    }
   }
 }
 

@@ -17,11 +17,7 @@ fn purse_to_key(p: PurseId) -> Key {
 const POS_BOND: &str = "bond";
 
 fn bond(pos: ContractRef, amount: &U512, source: PurseId) {
-    runtime::call_contract::<_, ()>(
-        pos,
-        &(POS_BOND, *amount, source),
-        &vec![purse_to_key(source)],
-    );
+    runtime::call_contract::<_, ()>(pos, (POS_BOND, *amount, source), vec![purse_to_key(source)]);
 }
 
 #[no_mangle]

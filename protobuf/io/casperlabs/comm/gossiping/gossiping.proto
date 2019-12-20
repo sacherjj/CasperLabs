@@ -14,8 +14,8 @@ service GossipService {
     // as necessary to synchronize DAGs between peers.
     rpc StreamAncestorBlockSummaries(StreamAncestorBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
 
-    // Retrieve the tips of the DAG as the callee knows them, to kick off synchronization between peers.
-    rpc StreamDagTipBlockSummaries(StreamDagTipBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
+    // Retrieve latest messages as the callee knows them.
+    rpc StreamLatestMessages(StreamLatestMessagesRequest) returns (stream io.casperlabs.casper.consensus.Block.Justification);
 
     // Retrieve arbitrary block summaries, if the callee knows about them.
     rpc StreamBlockSummaries(StreamBlockSummariesRequest) returns (stream io.casperlabs.casper.consensus.BlockSummary);
@@ -71,7 +71,7 @@ message StreamAncestorBlockSummariesRequest {
     uint32 max_depth = 3;
 }
 
-message StreamDagTipBlockSummariesRequest {}
+message StreamLatestMessagesRequest {}
 
 message GetBlockChunkedRequest {
     bytes block_hash = 1;

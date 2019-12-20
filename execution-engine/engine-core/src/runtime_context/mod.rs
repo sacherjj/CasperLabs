@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     convert::{TryFrom, TryInto},
-    fmt::Display,
+    fmt::Debug,
     rc::Rc,
 };
 
@@ -12,19 +12,24 @@ use blake2::{
 };
 
 use contract_ffi::{
+    block_time::BlockTime,
     bytesrepr::{deserialize, ToBytes},
     execution::Phase,
-    key::{Key, LOCAL_SEED_SIZE},
+    key::{Key, LOCAL_SEED_LENGTH},
     uref::{AccessRights, URef},
     value::{
+        self,
         account::{
-            Account, ActionType, AddKeyFailure, BlockTime, PublicKey, PurseId, RemoveKeyFailure,
-            SetThresholdFailure, UpdateKeyFailure, Weight,
+            ActionType, AddKeyFailure, PublicKey, PurseId, RemoveKeyFailure, SetThresholdFailure,
+            UpdateKeyFailure, Weight,
         },
-        Contract, ProtocolVersion, Value,
+        CLType, CLValue, ProtocolVersion,
     },
 };
-use engine_shared::{gas::Gas, newtypes::CorrelationId};
+use engine_shared::{
+    account::Account, contract::Contract, gas::Gas, newtypes::CorrelationId,
+    stored_value::StoredValue,
+};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 
 use crate::{
@@ -60,7 +65,7 @@ pub struct RuntimeContext<'a, R> {
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
     account: &'a Account,
-    args: Vec<Vec<u8>>,
+    args: Vec<CLValue>,
     authorization_keys: BTreeSet<PublicKey>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
@@ -77,8 +82,9 @@ pub struct RuntimeContext<'a, R> {
     protocol_data: ProtocolData,
 }
 
-impl<'a, R: StateReader<Key, Value>> RuntimeContext<'a, R>
+impl<'a, R> RuntimeContext<'a, R>
 where
+    R: StateReader<Key, StoredValue>,
     R::Error: Into<Error>,
 {
     #[allow(clippy::too_many_arguments)]
@@ -86,7 +92,7 @@ where
         state: Rc<RefCell<TrackingCopy<R>>>,
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
-        args: Vec<Vec<u8>>,
+        args: Vec<CLValue>,
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
@@ -151,7 +157,7 @@ where
     ) -> Result<(), Error> {
         contract.named_keys_mut().remove(name);
 
-        let contract_value = Value::Contract(contract);
+        let contract_value = StoredValue::Contract(contract);
 
         self.state.borrow_mut().write(key, contract_value);
 
@@ -171,25 +177,20 @@ where
                     account
                 };
                 self.named_keys.remove(name);
-                let account_value = self.make_validated_value(account)?;
+                let account_value = self.account_to_validated_value(account)?;
                 self.state.borrow_mut().write(public_key, account_value);
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
                 let contract: Contract = {
-                    let value: Value = self
+                    let value: StoredValue = self
                         .state
                         .borrow_mut()
                         .read(self.correlation_id, &contract_uref)
                         .map_err(Into::into)?
                         .ok_or_else(|| Error::KeyNotFound(contract_uref))?;
 
-                    value.try_into().map_err(|found| {
-                        Error::TypeMismatch(engine_shared::transform::TypeMismatch {
-                            expected: "Contract".to_owned(),
-                            found,
-                        })
-                    })?
+                    value.try_into().map_err(Error::TypeMismatch)?
                 };
 
                 self.named_keys.remove(name);
@@ -228,7 +229,7 @@ where
         &self.account
     }
 
-    pub fn args(&self) -> &Vec<Vec<u8>> {
+    pub fn args(&self) -> &Vec<CLValue> {
         &self.args
     }
 
@@ -260,7 +261,7 @@ where
         self.base_key
     }
 
-    pub fn seed(&self) -> [u8; LOCAL_SEED_SIZE] {
+    pub fn seed(&self) -> [u8; LOCAL_SEED_LENGTH] {
         match self.base_key {
             Key::Account(bytes) => bytes,
             Key::Hash(bytes) => bytes,
@@ -290,7 +291,7 @@ where
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
         let mut pre_hash_bytes = Vec::with_capacity(36); //32 bytes for deploy hash + 4 bytes ID
         pre_hash_bytes.extend_from_slice(&self.deploy_hash);
-        pre_hash_bytes.append(&mut self.fn_store_id().to_bytes()?);
+        pre_hash_bytes.append(&mut self.fn_store_id().into_bytes()?);
 
         self.inc_fn_store_id();
 
@@ -301,7 +302,7 @@ where
         Ok(hash_bytes)
     }
 
-    pub fn new_uref(&mut self, value: Value) -> Result<Key, Error> {
+    pub fn new_uref(&mut self, value: StoredValue) -> Result<Key, Error> {
         let uref = {
             let addr = self.address_generator.borrow_mut().create_address();
             URef::new(addr, AccessRights::READ_ADD_WRITE)
@@ -314,17 +315,17 @@ where
 
     /// Puts `key` to the map of named keys of current context.
     pub fn put_key(&mut self, name: String, key: Key) -> Result<(), Error> {
-        // No need to perform actual validation on the base key because an account or
-        // contract (i.e. the element stored under `base_key`) is allowed to add
-        // new named keys to itself.
-        let named_key_value = self.make_validated_value((name.clone(), key))?;
+        // No need to perform actual validation on the base key because an account or contract (i.e.
+        // the element stored under `base_key`) is allowed to add new named keys to itself.
+        let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
+        self.validate_value(&named_key_value)?;
 
         self.add_gs_unsafe(self.base_key(), named_key_value)?;
         self.insert_key(name, key);
         Ok(())
     }
 
-    pub fn read_ls(&mut self, key: &[u8]) -> Result<Option<Value>, Error> {
+    pub fn read_ls(&mut self, key: &[u8]) -> Result<Option<CLValue>, Error> {
         let seed = self.seed();
         self.read_ls_with_seed(seed, key)
     }
@@ -332,24 +333,33 @@ where
     /// DO NOT EXPOSE THIS VIA THE FFI
     pub fn read_ls_with_seed(
         &mut self,
-        seed: [u8; LOCAL_SEED_SIZE],
+        seed: [u8; LOCAL_SEED_LENGTH],
         key_bytes: &[u8],
-    ) -> Result<Option<Value>, Error> {
+    ) -> Result<Option<CLValue>, Error> {
+        let key = Key::local(seed, key_bytes);
+        let maybe_stored_value = self
+            .state
+            .borrow_mut()
+            .read(self.correlation_id, &key)
+            .map_err(Into::into)?;
+
+        if let Some(stored_value) = maybe_stored_value {
+            Ok(Some(stored_value.try_into().map_err(Error::TypeMismatch)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn write_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
+        let seed = self.seed();
         let key = Key::local(seed, key_bytes);
         self.state
             .borrow_mut()
-            .read(self.correlation_id, &key)
-            .map_err(Into::into)
-    }
-
-    pub fn write_ls(&mut self, key_bytes: &[u8], value: Value) -> Result<(), Error> {
-        let seed = self.seed();
-        let key = Key::local(seed, key_bytes);
-        self.state.borrow_mut().write(key, value);
+            .write(key, StoredValue::CLValue(cl_value));
         Ok(())
     }
 
-    pub fn read_gs(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+    pub fn read_gs(&mut self, key: &Key) -> Result<Option<StoredValue>, Error> {
         self.validate_readable(key)?;
         self.validate_key(key)?;
 
@@ -360,35 +370,36 @@ where
     }
 
     /// DO NOT EXPOSE THIS VIA THE FFI
-    pub fn read_gs_direct(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+    pub fn read_gs_direct(&mut self, key: &Key) -> Result<Option<StoredValue>, Error> {
         self.state
             .borrow_mut()
             .read(self.correlation_id, key)
             .map_err(Into::into)
     }
 
-    /// This method is a wrapper over `read_gs` in the sense
-    /// that it extracts the type held by a Value stored in the
-    /// global state in a type safe manner.
+    /// This method is a wrapper over `read_gs` in the sense that it extracts the type held by a
+    /// `StoredValue` stored in the global state in a type safe manner.
     ///
-    /// This is useful if you want to get the exact type
-    /// from global state.
+    /// This is useful if you want to get the exact type from global state.
     pub fn read_gs_typed<T>(&mut self, key: &Key) -> Result<T, Error>
     where
-        T: TryFrom<Value>,
-        T::Error: Display,
+        T: TryFrom<StoredValue>,
+        T::Error: Debug,
     {
         let value = match self.read_gs(&key)? {
             None => return Err(Error::KeyNotFound(*key)),
             Some(value) => value,
         };
 
-        value.try_into().map_err(|s| {
-            Error::FunctionNotFound(format!("Value at {:?} has invalid type: {}", key, s))
+        value.try_into().map_err(|error| {
+            Error::FunctionNotFound(format!(
+                "Type mismatch for value under {:?}: {:?}",
+                key, error
+            ))
         })
     }
 
-    pub fn write_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
+    pub fn write_gs(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
         self.validate_value(&value)?;
@@ -396,7 +407,7 @@ where
         Ok(())
     }
 
-    pub fn read_account(&mut self, key: &Key) -> Result<Option<Value>, Error> {
+    pub fn read_account(&mut self, key: &Key) -> Result<Option<StoredValue>, Error> {
         if let Key::Account(_) = key {
             self.validate_key(key)?;
             self.state
@@ -411,7 +422,7 @@ where
     pub fn write_account(&mut self, key: Key, account: Account) -> Result<(), Error> {
         if let Key::Account(_) = key {
             self.validate_key(&key)?;
-            let account_value = self.make_validated_value(account)?;
+            let account_value = self.account_to_validated_value(account)?;
             self.state.borrow_mut().write(key, account_value);
             Ok(())
         } else {
@@ -419,7 +430,7 @@ where
         }
     }
 
-    pub fn store_function(&mut self, contract: Value) -> Result<[u8; 32], Error> {
+    pub fn store_function(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
         self.validate_value(&contract)?;
         if let Key::URef(contract_ref) = self.new_uref(contract)? {
             Ok(contract_ref.addr())
@@ -429,7 +440,7 @@ where
         }
     }
 
-    pub fn store_function_at_hash(&mut self, contract: Value) -> Result<[u8; 32], Error> {
+    pub fn store_function_at_hash(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
         let new_hash = self.new_function_address()?;
         self.validate_value(&contract)?;
         let hash_key = Key::Hash(new_hash);
@@ -459,29 +470,51 @@ where
     }
 
     /// Validates whether keys used in the `value` are not forged.
-    pub fn validate_value(&self, value: &Value) -> Result<(), Error> {
+    fn validate_value(&self, value: &StoredValue) -> Result<(), Error> {
         match value {
-            Value::Int32(_)
-            | Value::UInt128(_)
-            | Value::UInt256(_)
-            | Value::UInt512(_)
-            | Value::ByteArray(_)
-            | Value::ListInt32(_)
-            | Value::String(_)
-            | Value::ListString(_)
-            | Value::Unit
-            | Value::UInt64(_) => Ok(()),
-            Value::NamedKey(_, key) => self.validate_key(&key),
-            Value::Key(key) => self.validate_key(&key),
-            Value::Account(account) => {
+            StoredValue::CLValue(cl_value) => match cl_value.cl_type() {
+                CLType::Bool
+                | CLType::I32
+                | CLType::I64
+                | CLType::U8
+                | CLType::U32
+                | CLType::U64
+                | CLType::U128
+                | CLType::U256
+                | CLType::U512
+                | CLType::Unit
+                | CLType::String
+                | CLType::Option(_)
+                | CLType::List(_)
+                | CLType::FixedList(..)
+                | CLType::Result { .. }
+                | CLType::Map { .. }
+                | CLType::Tuple1(_)
+                | CLType::Tuple3(_)
+                | CLType::Any => Ok(()),
+                CLType::Key => {
+                    let key: Key = cl_value.to_owned().into_t()?; // TODO: optimize?
+                    self.validate_key(&key)
+                }
+                CLType::URef => {
+                    let uref: URef = cl_value.to_owned().into_t()?; // TODO: optimize?
+                    self.validate_uref(&uref)
+                }
+                tuple @ CLType::Tuple2(_) if *tuple == value::named_key_type() => {
+                    let (_name, key): (String, Key) = cl_value.to_owned().into_t()?; // TODO: optimize?
+                    self.validate_key(&key)
+                }
+                CLType::Tuple2(_) => Ok(()),
+            },
+            StoredValue::Account(account) => {
                 // This should never happen as accounts can't be created by contracts.
-                // I am putting this here for the sake of completness.
+                // I am putting this here for the sake of completeness.
                 account
                     .named_keys()
                     .values()
                     .try_for_each(|key| self.validate_key(key))
             }
-            Value::Contract(contract) => contract
+            StoredValue::Contract(contract) => contract
                 .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
@@ -535,13 +568,13 @@ where
         }
     }
 
-    pub fn deserialize_keys(&self, bytes: &[u8]) -> Result<Vec<Key>, Error> {
+    pub fn deserialize_keys(&self, bytes: Vec<u8>) -> Result<Vec<Key>, Error> {
         let keys: Vec<Key> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_key(k))?;
         Ok(keys)
     }
 
-    pub fn deserialize_urefs(&self, bytes: &[u8]) -> Result<Vec<URef>, Error> {
+    pub fn deserialize_urefs(&self, bytes: Vec<u8>) -> Result<Vec<URef>, Error> {
         let keys: Vec<URef> = deserialize(bytes)?;
         keys.iter().try_for_each(|k| self.validate_uref(k))?;
         Ok(keys)
@@ -577,7 +610,7 @@ where
         }
     }
 
-    // Tests whether reading from the `key` is valid.
+    /// Tests whether reading from the `key` is valid.
     pub fn is_readable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) => &self.base_key() == key,
@@ -596,7 +629,7 @@ where
         }
     }
 
-    // Test whether writing to `key` is valid.
+    /// Tests whether writing to `key` is valid.
     pub fn is_writeable(&self, key: &Key) -> bool {
         match key {
             Key::Account(_) | Key::Hash(_) => false,
@@ -610,19 +643,20 @@ where
     /// values can't be added, either because they're not a Monoid or if the
     /// value stored under `key` has different type, then `TypeMismatch`
     /// errors is returned.
-    pub fn add_gs(&mut self, key: Key, value: Value) -> Result<(), Error> {
+    pub fn add_gs(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
         self.validate_addable(&key)?;
         self.validate_key(&key)?;
         self.validate_value(&value)?;
         self.add_gs_unsafe(key, value)
     }
 
-    fn add_gs_unsafe(&mut self, key: Key, value: Value) -> Result<(), Error> {
+    fn add_gs_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
         match self.state.borrow_mut().add(self.correlation_id, key, value) {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
             Ok(AddResult::TypeMismatch(type_mismatch)) => Err(Error::TypeMismatch(type_mismatch)),
+            Ok(AddResult::Serialization(error)) => Err(Error::BytesRepr(error)),
         }
     }
 
@@ -659,7 +693,7 @@ where
             account
         };
 
-        let account_value = self.make_validated_value(account)?;
+        let account_value = self.account_to_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -693,7 +727,7 @@ where
             .remove_associated_key(public_key)
             .map_err(Error::from)?;
 
-        let account_value = self.make_validated_value(account)?;
+        let account_value = self.account_to_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -731,7 +765,7 @@ where
             .update_associated_key(public_key, weight)
             .map_err(Error::from)?;
 
-        let account_value = self.make_validated_value(account)?;
+        let account_value = self.account_to_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -769,7 +803,7 @@ where
             .set_action_threshold(action_type, threshold)
             .map_err(Error::from)?;
 
-        let account_value = self.make_validated_value(account)?;
+        let account_value = self.account_to_validated_value(account)?;
 
         self.state.borrow_mut().write(key, account_value);
 
@@ -784,7 +818,7 @@ where
     ) -> Result<(), Error> {
         let protocol_version = self.protocol_version();
         let contract = Contract::new(bytes, named_keys, protocol_version);
-        let contract = Value::Contract(contract);
+        let contract = StoredValue::Contract(contract);
 
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
@@ -805,11 +839,9 @@ where
         attenuate_uref_for_account(&self.account(), uref)
     }
 
-    /// Creates validated instance of [`Value`].
-    ///
-    /// Converts its argument into a [`Value`] and validates any keys it may contain.
-    fn make_validated_value(&self, input: impl Into<Value>) -> Result<Value, Error> {
-        let value = input.into();
+    /// Creates validated instance of `StoredValue` from `account`.
+    fn account_to_validated_value(&self, account: Account) -> Result<StoredValue, Error> {
+        let value = StoredValue::Account(account);
         self.validate_value(&value)?;
         Ok(value)
     }

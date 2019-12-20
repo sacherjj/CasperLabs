@@ -16,8 +16,7 @@ enum Arg {
     Amount = 0,
 }
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let amount: U512 = runtime::get_arg(Arg::Amount as u32)
         .unwrap_or_revert_with(Error::MissingArgument)
         .unwrap_or_revert_with(Error::InvalidArgument);
@@ -26,8 +25,13 @@ pub extern "C" fn call() {
 
     let pos_pointer = system::get_proof_of_stake();
 
-    let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
+    let payment_purse: PurseId = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,), vec![]);
 
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert();
+}
+
+#[cfg(not(feature = "lib"))]
+#[no_mangle]
+pub extern "C" fn call() {
+    delegate();
 }

@@ -8,6 +8,7 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
+    value::CLValue,
 };
 
 const COUNT_KEY: &str = "count";
@@ -33,17 +34,23 @@ impl Into<ApiError> for Error {
 
 #[no_mangle]
 pub extern "C" fn counter_ext() {
-    let turef: TURef<i32> = runtime::get_key(COUNT_KEY).unwrap().to_turef().unwrap();
+    let turef: TURef<i32> = runtime::get_key(COUNT_KEY)
+        .unwrap_or_revert()
+        .to_turef()
+        .unwrap_or_revert_with(ApiError::UnexpectedKeyVariant);
+
     let method_name: String = runtime::get_arg(Arg::MethodName as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
+
     match method_name.as_str() {
         INC_METHOD => storage::add(turef, 1),
         GET_METHOD => {
             let result = storage::read(turef)
                 .unwrap_or_revert_with(ApiError::Read)
                 .unwrap_or_revert_with(ApiError::ValueNotFound);
-            runtime::ret(result, Vec::new());
+            let return_value = CLValue::from_t(result).unwrap_or_revert();
+            runtime::ret(return_value, Vec::new());
         }
         _ => runtime::revert(Error::UnknownMethodName),
     }
@@ -59,5 +66,5 @@ pub extern "C" fn call() {
     counter_urefs.insert(key_name, counter_local_key.into());
 
     let pointer = storage::store_function_at_hash(COUNTER_EXT, counter_urefs);
-    runtime::put_key(COUNTER_KEY, &pointer.into());
+    runtime::put_key(COUNTER_KEY, pointer.into());
 }

@@ -3,7 +3,7 @@ package io.casperlabs.smartcontracts
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.applicative._
 import cats.syntax.apply._
 import cats.syntax.flatMap._
@@ -18,9 +18,10 @@ import io.netty.channel.kqueue.{KQueueDomainSocketChannel, KQueueEventLoopGroup}
 import io.netty.channel.unix.DomainSocketAddress
 import monix.eval.TaskLift
 
-class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
+class ExecutionEngineConf[F[_]: Concurrent: Log: TaskLift: Metrics](
     addr: Path,
-    maxMessageSize: Int
+    maxMessageSize: Int,
+    parallelism: Int
 ) {
   val channelType =
     if (Epoll.isAvailable) classOf[EpollDomainSocketChannel] else classOf[KQueueDomainSocketChannel]
@@ -61,7 +62,7 @@ class ExecutionEngineConf[F[_]: Sync: Log: TaskLift: Metrics](
       stub    <- Sync[F].delay(IpcGrpcMonix.stub(channel))
     } yield Resource.make(
       Sync[F].delay(
-        new GrpcExecutionEngineService[F](addr, stub, maxMessageSize)
+        new GrpcExecutionEngineService[F](addr, stub, maxMessageSize, parallelism)
       )
     )(_ => stop(channel))
 

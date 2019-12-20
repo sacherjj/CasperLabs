@@ -23,7 +23,7 @@ enum CustomError {
 pub extern "C" fn delegate() {
     local_state::delegate();
     // read from local state
-    let mut res: String = storage::read_local(local_state::LOCAL_KEY)
+    let mut res: String = storage::read_local(&local_state::LOCAL_KEY)
         .unwrap_or_default()
         .unwrap_or_default();
 
@@ -32,7 +32,7 @@ pub extern "C" fn delegate() {
     storage::write_local(local_state::LOCAL_KEY, res);
 
     // Read back
-    let res: String = storage::read_local(local_state::LOCAL_KEY)
+    let res: String = storage::read_local(&local_state::LOCAL_KEY)
         .unwrap_or_revert_with(Error::User(CustomError::UnableToReadMutatedLocalKey as u16))
         .unwrap_or_revert_with(Error::User(
             CustomError::LocalKeyReadMutatedBytesRepr as u16,
@@ -49,9 +49,9 @@ pub extern "C" fn delegate() {
 #[no_mangle]
 pub extern "C" fn call() {
     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
-        .into_turef()
+        .into_uref()
         .unwrap_or_revert_with(Error::UnexpectedContractRefVariant)
         .into();
 
-    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, &key);
+    contract_ffi::contract_api::runtime::put_key(CONTRACT_NAME, key);
 }

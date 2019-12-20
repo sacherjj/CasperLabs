@@ -1,11 +1,11 @@
 use contract_ffi::{
     bytesrepr::{self, FromBytes, ToBytes},
-    uref::{AccessRights, URef, UREF_SIZE_SERIALIZED},
+    uref::{AccessRights, URef, UREF_SERIALIZED_LENGTH},
 };
-use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SIZE_SERIALIZED};
+use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SERIALIZED_LENGTH};
 
-const PROTOCOL_DATA_SIZE_SERIALIZED: usize =
-    WASM_COSTS_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED + UREF_SIZE_SERIALIZED;
+const PROTOCOL_DATA_SERIALIZED_LENGTH: usize =
+    WASM_COSTS_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -67,7 +67,7 @@ impl ProtocolData {
 
 impl ToBytes for ProtocolData {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut ret: Vec<u8> = Vec::with_capacity(PROTOCOL_DATA_SIZE_SERIALIZED);
+        let mut ret: Vec<u8> = Vec::with_capacity(PROTOCOL_DATA_SERIALIZED_LENGTH);
         ret.append(&mut self.wasm_costs.to_bytes()?);
         ret.append(&mut self.mint.to_bytes()?);
         ret.append(&mut self.proof_of_stake.to_bytes()?);

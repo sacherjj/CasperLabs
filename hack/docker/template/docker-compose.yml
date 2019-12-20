@@ -25,6 +25,12 @@ services:
     image: casperlabs/node:${CL_VERSION}
     container_name: node-${NODE_NUMBER}
     hostname: node-${NODE_NUMBER}
+    ports:
+      # Port for deploys
+      - 404${NODE_NUMBER}1:40401
+      # Port for proposals
+      - 404${NODE_NUMBER}2:40402
+      # For now HTTP is exposed only from node-0 via the socat proxy in the common docker-compose.yml
     volumes:
       # Volume for a socket to be created and shared with the execution engine.
       - socketvolume:/root/.casperlabs/sockets
@@ -50,7 +56,7 @@ services:
       CL_TLS_KEY: /root/.casperlabs/node/node.key.pem
       CL_TLS_API_CERTIFICATE: /root/.casperlabs/node/node.certificate.pem
       CL_TLS_API_KEY: /root/.casperlabs/node/node.key.pem
-      CL_GRPC_USE_TLS: "true"
+      CL_GRPC_USE_TLS: "false"
       CL_METRICS_PROMETHEUS: "true"
       CL_CASPER_AUTO_PROPOSE_ENABLED: ${CL_CASPER_AUTO_PROPOSE_ENABLED}
     entrypoint:

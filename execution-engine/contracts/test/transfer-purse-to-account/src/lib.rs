@@ -34,9 +34,9 @@ pub extern "C" fn call() {
     let result = format!("{:?}", transfer_result);
 
     let result_uref: Key = storage::new_turef(result).into();
-    runtime::put_key(TRANSFER_RESULT_UREF_NAME, &result_uref);
+    runtime::put_key(TRANSFER_RESULT_UREF_NAME, result_uref);
     runtime::put_key(
         MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
-        &storage::new_turef(final_balance).into(),
+        storage::new_turef(final_balance).into(),
     );
 }

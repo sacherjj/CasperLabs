@@ -80,14 +80,14 @@ object Main {
         )
       case Transfer(
           amount,
-          recipientPublicKeyBase64,
+          recipientPublicKey,
           contracts,
           privateKey
           ) =>
         DeployRuntime.transferCLI[F](
           contracts,
           privateKey,
-          recipientPublicKeyBase64,
+          recipientPublicKey,
           amount
         )
       case Deploy(
@@ -118,7 +118,7 @@ object Main {
           baseAccount <- publicKey match {
                           case None =>
                             // This should be safe because we validate that one of --from, --public-key is present.
-                            ByteString.copyFrom(Base16.decode(from.get)).pure[F]
+                            from.get.pure[F]
                           case Some(publicKeyFile) =>
                             for {
                               content <- DeployRuntime.readFileAsString[F](publicKeyFile)
@@ -128,7 +128,7 @@ object Main {
                                               s"Failed to parse public key file ${publicKeyFile.getPath()}"
                                             )
                                           )
-                            } yield ByteString.copyFrom(publicKey)
+                            } yield publicKey
                         }
           deploy = DeployRuntime.makeDeploy[F](
             baseAccount,
@@ -158,5 +158,8 @@ object Main {
 
       case Balance(address, blockHash) =>
         DeployRuntime.balance[F](address, blockHash)
+
+      case Keygen(outputDirectory) =>
+        DeployRuntime.keygen[F](outputDirectory)
     }
 }

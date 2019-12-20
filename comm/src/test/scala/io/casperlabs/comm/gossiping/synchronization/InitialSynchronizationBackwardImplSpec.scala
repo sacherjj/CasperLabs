@@ -5,14 +5,14 @@ import java.util.concurrent.TimeoutException
 import cats.effect.concurrent.Semaphore
 import cats.syntax.either._
 import com.google.protobuf.ByteString
-import io.casperlabs.casper.consensus.{Approval, BlockSummary}
+import io.casperlabs.casper.consensus.{Approval, Block, BlockSummary}
 import io.casperlabs.comm.discovery.{Node, NodeDiscovery, NodeIdentifier}
 import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.SynchronizationError
 import io.casperlabs.comm.gossiping.synchronization.InitialSynchronizationBackwardImplSpec.TestFixture
 import io.casperlabs.comm.gossiping.synchronization.Synchronizer.SyncError
 import io.casperlabs.metrics.Metrics
-import io.casperlabs.models.ArbitraryConsensus
+import io.casperlabs.models.{ArbitraryConsensus, Message}
 import io.casperlabs.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -210,11 +210,11 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   }
 
   object MockBackend extends GossipServiceServer.Backend[Task] {
-    def hasBlock(blockHash: ByteString)             = ???
-    def getBlockSummary(blockHash: ByteString)      = ???
-    def getBlock(blockHash: ByteString)             = ???
-    def listTips                                    = ???
-    def dagTopoSort(startRank: Long, endRank: Long) = ???
+    override def hasBlock(blockHash: ByteString)                = ???
+    override def getBlockSummary(blockHash: ByteString)         = ???
+    override def getBlock(blockHash: ByteString)                = ???
+    override def latestMessages: Task[Set[Block.Justification]] = ???
+    override def dagTopoSort(startRank: Long, endRank: Long)    = ???
   }
 
   object MockSynchronizer extends Synchronizer[Task] {
@@ -255,11 +255,18 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
     }
   }
 
-  class MockGossipService(tips: List[BlockSummary]) extends GossipService[Task] {
+  class MockGossipService(latestMessages: Map[ByteString, Set[Message]])
+      extends GossipService[Task] {
     def newBlocks(request: NewBlocksRequest)                                       = ???
     def streamAncestorBlockSummaries(request: StreamAncestorBlockSummariesRequest) = ???
-    def streamDagTipBlockSummaries(request: StreamDagTipBlockSummariesRequest) =
-      Iterant.fromList[Task, BlockSummary](tips)
+    def streamLatestMessages(
+        request: StreamLatestMessagesRequest
+    ): Iterant[Task, Block.Justification] =
+      Iterant.fromSeq(
+        latestMessages.values
+          .flatMap(_.map(m => Block.Justification(m.validatorId, m.messageHash)))
+          .toSeq
+      )
     def streamBlockSummaries(request: StreamBlockSummariesRequest)                 = ???
     def getBlockChunked(request: GetBlockChunkedRequest)                           = ???
     def getGenesisCandidate(request: GetGenesisCandidateRequest)                   = ???
@@ -270,7 +277,7 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
   object TestFixture {
     def apply(
         nodes: List[Node],
-        tips: List[BlockSummary],
+        latestMessages: List[BlockSummary],
         sync: (Node, Seq[ByteString]) => Task[Boolean] = (_, _) => Task(true),
         selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
@@ -278,8 +285,13 @@ object InitialSynchronizationBackwardImplSpec extends ArbitraryConsensus {
         skipFailedNodesInNextRounds: Boolean = false,
         roundPeriod: FiniteDuration = 25.millis
     )(test: (InitialSynchronization[Task], MockGossipServiceServer) => Task[Unit]): Unit = {
-      val mockGossipServiceServer                = new MockGossipServiceServer(sync)
-      val mockGossipService: GossipService[Task] = new MockGossipService(tips)
+      val mockGossipServiceServer = new MockGossipServiceServer(sync)
+      val mockGossipService: GossipService[Task] = new MockGossipService(
+        latestMessages
+          .map(Message.fromBlockSummary(_).get)
+          .groupBy(_.validatorId)
+          .mapValues(_.toSet)
+      )
       val effect = new InitialSynchronizationBackwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
         mockGossipServiceServer,

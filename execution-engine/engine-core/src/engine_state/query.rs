@@ -1,11 +1,12 @@
+use contract_ffi::key::Key;
+use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
+
 use crate::tracking_copy::TrackingCopyQueryResult;
-use contract_ffi::{key::Key, value::Value};
-use engine_shared::newtypes::Blake2bHash;
 
 pub enum QueryResult {
     RootNotFound,
     ValueNotFound(String),
-    Success(Value),
+    Success(StoredValue),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

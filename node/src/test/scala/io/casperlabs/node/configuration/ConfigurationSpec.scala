@@ -73,6 +73,8 @@ class ConfigurationSpec
       dataDir = Paths.get("/tmp"),
       maxNumOfConnections = 1,
       maxMessageSize = 1,
+      eventStreamBufferSize = 1,
+      engineParallelism = 1,
       chunkSize = 1,
       relayFactor = 1,
       relaySaturation = 1,
@@ -120,9 +122,11 @@ class ConfigurationSpec
       standalone = false,
       autoProposeEnabled = false,
       autoProposeCheckInterval = FiniteDuration(1, TimeUnit.SECONDS),
+      autoProposeBallotInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccCount = 1,
-      maxBlockSizeBytes = 1
+      maxBlockSizeBytes = 1,
+      minTtl = FiniteDuration(1, TimeUnit.HOURS)
     )
     val tls = Tls(
       certificate = Paths.get("/tmp/test.crt"),
@@ -133,7 +137,8 @@ class ConfigurationSpec
     val blockStorage = Configuration.BlockStorage(
       cacheMaxSizeBytes = 1,
       cacheNeighborhoodBefore = 1,
-      cacheNeighborhoodAfter = 1
+      cacheNeighborhoodAfter = 1,
+      deployStreamChunkSize = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

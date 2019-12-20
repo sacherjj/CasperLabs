@@ -1,7 +1,7 @@
-use contract_ffi::{key::Key, value::Value};
+use contract_ffi::{key::Key, value::CLValue};
 use engine_shared::{
     additive_map::AdditiveMap, gas::Gas, motes::Motes, newtypes::CorrelationId,
-    transform::Transform,
+    stored_value::StoredValue, transform::Transform,
 };
 use engine_storage::global_state::StateReader;
 
@@ -174,6 +174,7 @@ impl ExecutionResultBuilder {
         let mut transforms = AdditiveMap::new();
 
         let new_balance = account_main_purse_balance - max_payment_cost;
+        let new_balance_value = StoredValue::CLValue(CLValue::from_t(new_balance.value()).ok()?);
 
         let account_main_purse_normalize = account_main_purse.normalize();
         let rewards_purse_normalize = rewards_purse.normalize();
@@ -181,7 +182,7 @@ impl ExecutionResultBuilder {
         ops.insert(account_main_purse_normalize, Op::Write);
         transforms.insert(
             account_main_purse_normalize,
-            Transform::Write(Value::UInt512(new_balance.value())),
+            Transform::Write(new_balance_value),
         );
 
         ops.insert(rewards_purse_normalize, Op::Add);
@@ -201,7 +202,7 @@ impl ExecutionResultBuilder {
         })
     }
 
-    pub fn build<R: StateReader<Key, Value>>(
+    pub fn build<R: StateReader<Key, StoredValue>>(
         self,
         reader: &R,
         correlation_id: CorrelationId,
@@ -275,13 +276,13 @@ impl ExecutionResultBuilder {
     /// In the case we are writing the same value as was there originally,
     /// it is equivalent to having a `Transform::Identity` and `Op::Read`.
     /// This function makes that reduction before returning the `ExecutionEffect`.
-    fn reduce_identity_writes<R: StateReader<Key, Value>>(
+    fn reduce_identity_writes<R: StateReader<Key, StoredValue>>(
         mut ops: AdditiveMap<Key, Op>,
         mut transforms: AdditiveMap<Key, Transform>,
         reader: &R,
         correlation_id: CorrelationId,
     ) -> ExecutionEffect {
-        let kvs: Vec<(Key, Value)> = transforms
+        let kvs: Vec<(Key, StoredValue)> = transforms
             .keys()
             .filter_map(|k| match transforms.get(k) {
                 Some(Transform::Write(_)) => reader

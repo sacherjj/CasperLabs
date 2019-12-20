@@ -22,14 +22,14 @@ pub extern "C" fn call() {
 
     // Add new urefs
     let hello_world_key: Key = storage::new_turef(String::from("Hello, world!")).into();
-    runtime::put_key("hello-world", &hello_world_key);
+    runtime::put_key("hello-world", hello_world_key);
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 1);
 
     // Verify if the uref is present
     assert!(runtime::has_key("hello-world"));
 
     let big_value_key: Key = storage::new_turef(U512::max_value()).into();
-    runtime::put_key("big-value", &big_value_key);
+    runtime::put_key("big-value", big_value_key);
 
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num + 2);
 
@@ -47,6 +47,7 @@ pub extern "C" fn call() {
 
     // Read data through dedicated FFI function
     let uref1 = runtime::get_key("hello-world").unwrap_or_revert();
+
     let turef = uref1.to_turef().unwrap_or_revert_with(Error::User(101));
     let hello_world = storage::read(turef);
     assert_eq!(hello_world, Ok(Some("Hello, world!".to_string())));
@@ -84,5 +85,6 @@ pub extern "C" fn call() {
     // Cleaned up state
     assert!(!runtime::has_key("hello-world"));
     assert!(!runtime::has_key("big-value"));
+
     assert_eq!(runtime::list_named_keys().len(), initi_uref_num);
 }

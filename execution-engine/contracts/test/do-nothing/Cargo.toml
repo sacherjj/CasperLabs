@@ -5,7 +5,7 @@ authors = ["Michael Birch <birchmd@casperlabs.io>"]
 edition = "2018"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 bench = false
 doctest = false
 test = false
@@ -13,6 +13,7 @@ test = false
 [features]
 default = []
 std = ["contract-ffi/std" ]
+lib = []
 
 [dependencies]
 contract-ffi = { path = "../../../contract-ffi", package = "casperlabs-contract-ffi" }

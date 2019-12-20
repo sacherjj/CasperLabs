@@ -5,11 +5,12 @@ import cats.effect._
 import cats.effect.concurrent._
 import cats.implicits._
 import cats.mtl.DefaultApplicativeAsk
+import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
-import eu.timepit.refined.auto._
-import io.casperlabs.{casper, shared}
-import io.casperlabs.casper.consensus.BlockSummary
+import io.casperlabs.casper
+import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
+import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{DeriveValidation, consensus, _}
@@ -18,17 +19,22 @@ import io.casperlabs.comm.gossiping._
 import io.casperlabs.comm.gossiping.synchronization._
 import io.casperlabs.crypto.Keys.PrivateKey
 import io.casperlabs.ipc.TransformEntry
+import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.p2p.EffectsTestInstances._
 import io.casperlabs.shared.{Cell, Log, SemaphoreMap, Time}
 import io.casperlabs.storage.block._
 import io.casperlabs.storage.dag._
 import io.casperlabs.storage.deploy.DeployStorage
-import monix.eval.Task
 import monix.tail.Iterant
 import logstage.LogIO
-import scala.collection.immutable.Queue
+import io.casperlabs.shared.LogStub
 
+import scala.collection.immutable.Queue
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
+
+@silent("is never used")
 class GossipServiceCasperTestNode[F[_]](
     local: Node,
     genesis: consensus.Block,
@@ -36,6 +42,7 @@ class GossipServiceCasperTestNode[F[_]](
     semaphoresMap: SemaphoreMap[F, ByteString],
     semaphore: Semaphore[F],
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]] = None,
+    minTTL: FiniteDuration = 1.minute,
     chainName: String = "casperlabs",
     relaying: Relaying[F],
     gossipService: GossipServiceCasperTestNodeFactory.TestGossipService[F]
@@ -45,7 +52,8 @@ class GossipServiceCasperTestNode[F[_]](
     blockStorage: BlockStorage[F],
     dagStorage: DagStorage[F],
     deployStorage: DeployStorage[F],
-    finalityDetector: FinalityDetectorVotingMatrix[F],
+    deployBuffer: DeployBuffer[F],
+    finalityDetector: MultiParentFinalizer[F],
     val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -55,14 +63,14 @@ class GossipServiceCasperTestNode[F[_]](
       sk,
       genesis,
       maybeMakeEE
-    ) (concurrentF, blockStorage, dagStorage, deployStorage, metricEff, casperState) {
+    ) (concurrentF, blockStorage, dagStorage, deployStorage, deployBuffer, metricEff, casperState) {
 
   implicit val raiseInvalidBlock = casper.validation.raiseValidateErrorThroughApplicativeError[F]
-
   implicit val broadcaster: Broadcaster[F] =
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
   implicit val derivedValidation = DeriveValidation.deriveValidationImpl[F]
+  implicit val eventEmitter      = TestEventEmitter.create[F]
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -80,6 +88,7 @@ class GossipServiceCasperTestNode[F[_]](
       Some(validatorId),
       genesis,
       chainName,
+      minTTL,
       upgrades = Nil
     )
 
@@ -133,14 +142,23 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
     initStorage() flatMap {
       case (blockStorage, dagStorage, deployStorage) =>
+        implicit val ds = deployStorage
         for {
           casperState  <- Cell.mvarCell[F, CasperState](CasperState())
           semaphoreMap <- SemaphoreMap[F, ByteString](1)
           semaphore    <- Semaphore[F](1)
+          chainName    = "casperlabs"
+          minTTL       = 1.minute
+          deployBuffer = DeployBuffer.create[F](chainName, minTTL)
           dag          <- dagStorage.getRepresentation
           _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
+          multiParentFinalizer <- MultiParentFinalizer.empty(
+                                   dag,
+                                   genesis.blockHash,
+                                   finalityDetector
+                                 )
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
@@ -148,13 +166,16 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             semaphoreMap,
             semaphore,
             relaying = relaying,
-            gossipService = new TestGossipService[F]()
+            gossipService = new TestGossipService[F](),
+            chainName = chainName,
+            minTTL = minTTL
           ) (
             concurrentF,
             blockStorage,
             dagStorage,
             deployStorage,
-            finalityDetector,
+            deployBuffer,
+            multiParentFinalizer,
             timeEff,
             metricEff,
             casperState,
@@ -220,6 +241,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
 
           initStorage() flatMap {
             case (blockStorage, dagStorage, deployStorage) =>
+              implicit val ds = deployStorage
               for {
                 casperState <- Cell.mvarCell[F, CasperState](
                                 CasperState()
@@ -229,6 +251,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
                 dag              <- dagStorage.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
+                multiParentFinalizer <- MultiParentFinalizer.empty(
+                                         dag,
+                                         genesis.blockHash,
+                                         finalityDetector
+                                       )
+                chainName    = "casperlabs"
+                minTTL       = 1.minute
+                deployBuffer = DeployBuffer.create[F](chainName, minTTL)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
@@ -237,13 +267,16 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   semaphore,
                   relaying = relaying,
                   gossipService = gossipService,
-                  maybeMakeEE = maybeMakeEE
+                  maybeMakeEE = maybeMakeEE,
+                  chainName = chainName,
+                  minTTL = minTTL
                 ) (
                   concurrentF,
                   blockStorage,
                   dagStorage,
                   deployStorage,
-                  finalityDetector,
+                  deployBuffer,
+                  multiParentFinalizer,
                   timeEff,
                   metricEff,
                   casperState,
@@ -431,7 +464,7 @@ object GossipServiceCasperTestNodeFactory {
                            .get(blockHash)
                            .map(_.map(mwt => mwt.getBlockMessage))
 
-                     override def listTips = ???
+                     override def latestMessages: F[Set[Block.Justification]] = ???
 
                      override def dagTopoSort(startRank: Long, endRank: Long) = ???
                    },
@@ -548,9 +581,9 @@ object GossipServiceCasperTestNodeFactory {
     override def getGenesisCandidate(
         request: GetGenesisCandidateRequest
     ): F[consensus.GenesisCandidate] = ???
-    override def streamDagTipBlockSummaries(
-        request: StreamDagTipBlockSummariesRequest
-    ): Iterant[F, consensus.BlockSummary] = ???
+    override def streamLatestMessages(
+        request: StreamLatestMessagesRequest
+    ): Iterant[F, Block.Justification] = ???
     override def streamBlockSummaries(
         request: StreamBlockSummariesRequest
     ): Iterant[F, consensus.BlockSummary] = ???

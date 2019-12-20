@@ -7,7 +7,10 @@ use crate::{
     bytesrepr,
     contract_api::turef::AccessRightsError,
     system_contracts::{mint, pos},
-    value::account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+    value::{
+        account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
+        CLValueError,
+    },
 };
 
 /// All `Error` variants defined in this library other than `Error::User` will convert to a `u32`
@@ -85,6 +88,8 @@ pub enum Error {
     NoAccessRights,
     /// A given type could be derived from a `Value`.
     ValueConversion,
+    /// A given type could be derived from a `CLValue`.
+    CLTypeMismatch,
     /// Early end of stream when deserializing.
     EarlyEndOfStream,
     /// Formatting error.
@@ -117,6 +122,12 @@ pub enum Error {
     PurseNotCreated,
     /// An unhandled value, likely representing a bug in the code.
     Unhandled,
+    /// Passing a buffer of a size that is too small to complete an operation
+    BufferTooSmall,
+    /// No data available in the host buffer.
+    HostBufferEmpty,
+    /// Data in the host buffer is full and should be consumed first by read operation
+    HostBufferFull,
     /// Error specific to Mint contract.
     Mint(u8),
     /// Error specific to Proof of Stake contract.
@@ -186,6 +197,15 @@ impl From<AccessRightsError> for Error {
     }
 }
 
+impl From<CLValueError> for Error {
+    fn from(error: CLValueError) -> Self {
+        match error {
+            CLValueError::Serialization(bytesrepr_error) => bytesrepr_error.into(),
+            CLValueError::Type(_) => Error::CLTypeMismatch,
+        }
+    }
+}
+
 impl From<mint::Error> for Error {
     fn from(error: mint::Error) -> Self {
         Error::Mint(error as u8)
@@ -218,22 +238,26 @@ impl From<Error> for u32 {
             Error::Transfer => 15,
             Error::NoAccessRights => 16,
             Error::ValueConversion => 17,
-            Error::EarlyEndOfStream => 18,
-            Error::FormattingError => 19,
-            Error::LeftOverBytes => 20,
-            Error::OutOfMemoryError => 21,
-            Error::MaxKeysLimit => 22,
-            Error::DuplicateKey => 23,
-            Error::PermissionDenied => 24,
-            Error::MissingKey => 25,
-            Error::ThresholdViolation => 26,
-            Error::KeyManagementThresholdError => 27,
-            Error::DeploymentThresholdError => 28,
-            Error::PermissionDeniedError => 29,
-            Error::InsufficientTotalWeight => 30,
-            Error::InvalidSystemContract => 31,
-            Error::PurseNotCreated => 32,
-            Error::Unhandled => 33,
+            Error::CLTypeMismatch => 18,
+            Error::EarlyEndOfStream => 19,
+            Error::FormattingError => 20,
+            Error::LeftOverBytes => 21,
+            Error::OutOfMemoryError => 22,
+            Error::MaxKeysLimit => 23,
+            Error::DuplicateKey => 24,
+            Error::PermissionDenied => 25,
+            Error::MissingKey => 26,
+            Error::ThresholdViolation => 27,
+            Error::KeyManagementThresholdError => 28,
+            Error::DeploymentThresholdError => 29,
+            Error::PermissionDeniedError => 30,
+            Error::InsufficientTotalWeight => 31,
+            Error::InvalidSystemContract => 32,
+            Error::PurseNotCreated => 33,
+            Error::Unhandled => 34,
+            Error::BufferTooSmall => 35,
+            Error::HostBufferEmpty => 36,
+            Error::HostBufferFull => 37,
             Error::Mint(value) => MINT_ERROR_OFFSET + u32::from(value),
             Error::ProofOfStake(value) => POS_ERROR_OFFSET + u32::from(value),
             Error::User(value) => RESERVED_ERROR_MAX + 1 + u32::from(value),
@@ -263,6 +287,7 @@ impl Debug for Error {
             Error::Transfer => write!(f, "Error::Transfer")?,
             Error::NoAccessRights => write!(f, "Error::NoAccessRights")?,
             Error::ValueConversion => write!(f, "Error::ValueConversion")?,
+            Error::CLTypeMismatch => write!(f, "Error::CLTypeMismatch")?,
             Error::EarlyEndOfStream => write!(f, "Error::EarlyEndOfStream")?,
             Error::FormattingError => write!(f, "Error::FormattingError")?,
             Error::LeftOverBytes => write!(f, "Error::LeftOverBytes")?,
@@ -279,6 +304,9 @@ impl Debug for Error {
             Error::InvalidSystemContract => write!(f, "Error::InvalidSystemContract")?,
             Error::PurseNotCreated => write!(f, "Error::PurseNotCreated")?,
             Error::Unhandled => write!(f, "Error::Unhandled")?,
+            Error::BufferTooSmall => write!(f, "Error::BufferTooSmall")?,
+            Error::HostBufferEmpty => write!(f, "Error::HostBufferEmpty")?,
+            Error::HostBufferFull => write!(f, "Error::HostBufferFull")?,
             Error::Mint(value) => write!(f, "Error::Mint({})", value)?,
             Error::ProofOfStake(value) => write!(f, "Error::ProofOfStake({})", value)?,
             Error::User(value) => write!(f, "Error::User({})", value)?,
@@ -314,22 +342,26 @@ pub fn result_from(value: i32) -> Result<(), Error> {
         15 => Err(Error::Transfer),
         16 => Err(Error::NoAccessRights),
         17 => Err(Error::ValueConversion),
-        18 => Err(Error::EarlyEndOfStream),
-        19 => Err(Error::FormattingError),
-        20 => Err(Error::LeftOverBytes),
-        21 => Err(Error::OutOfMemoryError),
-        22 => Err(Error::MaxKeysLimit),
-        23 => Err(Error::DuplicateKey),
-        24 => Err(Error::PermissionDenied),
-        25 => Err(Error::MissingKey),
-        26 => Err(Error::ThresholdViolation),
-        27 => Err(Error::KeyManagementThresholdError),
-        28 => Err(Error::DeploymentThresholdError),
-        29 => Err(Error::PermissionDeniedError),
-        30 => Err(Error::InsufficientTotalWeight),
-        31 => Err(Error::InvalidSystemContract),
-        32 => Err(Error::PurseNotCreated),
-        33 => Err(Error::Unhandled),
+        18 => Err(Error::CLTypeMismatch),
+        19 => Err(Error::EarlyEndOfStream),
+        20 => Err(Error::FormattingError),
+        21 => Err(Error::LeftOverBytes),
+        22 => Err(Error::OutOfMemoryError),
+        23 => Err(Error::MaxKeysLimit),
+        24 => Err(Error::DuplicateKey),
+        25 => Err(Error::PermissionDenied),
+        26 => Err(Error::MissingKey),
+        27 => Err(Error::ThresholdViolation),
+        28 => Err(Error::KeyManagementThresholdError),
+        29 => Err(Error::DeploymentThresholdError),
+        30 => Err(Error::PermissionDeniedError),
+        31 => Err(Error::InsufficientTotalWeight),
+        32 => Err(Error::InvalidSystemContract),
+        33 => Err(Error::PurseNotCreated),
+        34 => Err(Error::Unhandled),
+        35 => Err(Error::BufferTooSmall),
+        36 => Err(Error::HostBufferEmpty),
+        37 => Err(Error::HostBufferFull),
         _ => {
             if value > RESERVED_ERROR_MAX as i32 && value <= (2 * RESERVED_ERROR_MAX + 1) as i32 {
                 Err(Error::User(value as u16))
@@ -411,6 +443,7 @@ mod tests {
         round_trip(Err(Error::Transfer));
         round_trip(Err(Error::NoAccessRights));
         round_trip(Err(Error::ValueConversion));
+        round_trip(Err(Error::CLTypeMismatch));
         round_trip(Err(Error::EarlyEndOfStream));
         round_trip(Err(Error::FormattingError));
         round_trip(Err(Error::LeftOverBytes));
@@ -427,6 +460,9 @@ mod tests {
         round_trip(Err(Error::InvalidSystemContract));
         round_trip(Err(Error::PurseNotCreated));
         round_trip(Err(Error::Unhandled));
+        round_trip(Err(Error::BufferTooSmall));
+        round_trip(Err(Error::HostBufferEmpty));
+        round_trip(Err(Error::HostBufferFull));
         round_trip(Err(Error::Mint(0)));
         round_trip(Err(Error::Mint(u8::MAX)));
         round_trip(Err(Error::ProofOfStake(0)));

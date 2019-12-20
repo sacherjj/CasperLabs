@@ -107,7 +107,7 @@ slow:
 		mkdir -p keys/account-$$i ; \
 		../key-management/docker-gen-keys.sh .casperlabs/node-$$i ; \
 		../key-management/docker-gen-account-keys.sh keys/account-$$i ; \
-		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)+2*$$i )) ; \
+		BOND=$$(( $(CL_CASPER_NUM_VALIDATORS)*10+$$i )) ; \
 		(cat .casperlabs/node-$$i/validator-id; echo ",0,$$BOND") >> .casperlabs/chainspec/genesis/accounts.csv ; \
 		((i = i + 1)) ; \
 	done'

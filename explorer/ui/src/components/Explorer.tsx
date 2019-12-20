@@ -2,9 +2,9 @@ import React from 'react';
 import { observer } from 'mobx-react';
 import DagContainer from '../containers/DagContainer';
 import {
-  RefreshableComponent,
   LinkButton,
   ListInline,
+  RefreshableComponent,
   shortHash
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
@@ -15,6 +15,8 @@ import { DagStepButtons } from './BlockList';
 import { Link } from 'react-router-dom';
 import Pages from './Pages';
 import { encodeBase16 } from 'casperlabs-sdk';
+import { BondedValidatorsTable } from './BondedValidatorsTable';
+import { ToggleButton } from './ToggleButton';
 
 interface Props {
   dag: DagContainer;
@@ -47,6 +49,13 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                   {dag.hasBlocks && (
                     <span>Select a block to see its details.</span>
                   )}
+                  {dag.selectedBlock && (
+                    <ToggleButton
+                      title={'Show bonded validators'}
+                      toggleStore={dag.validatorsListToggleStore}
+                      size="sm"
+                    />
+                  )}
                 </ListInline>
               }
               onSelected={block => {
@@ -54,7 +63,7 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                 if (
                   current &&
                   current.getSummary()!.getBlockHash_asB64() ===
-                  block.getSummary()!.getBlockHash_asB64()
+                    block.getSummary()!.getBlockHash_asB64()
                 ) {
                   dag.selectedBlock = undefined;
                 } else {
@@ -83,6 +92,14 @@ export default class Explorer extends RefreshableComponent<Props, {}> {
                       blockHashBase16
                   );
                 }}
+              />
+            </div>
+          )}
+          {dag.selectedBlock && dag.validatorsListToggleStore.isPressed && (
+            <div className="col-sm-12">
+              <BondedValidatorsTable
+                block={dag.selectedBlock}
+                lastFinalizedBlock={dag.lastFinalizedBlock}
               />
             </div>
           )}
@@ -167,7 +184,11 @@ class BlockDetails extends React.Component<{
               );
             // Genesis doesn't have a validator.
             return (
-              (validatorBond && validatorBond.getStake() && Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
+              (validatorBond &&
+                validatorBond.getStake() &&
+                Number(
+                  validatorBond.getStake()!.getValue()
+                ).toLocaleString()) ||
               null
             );
           })()

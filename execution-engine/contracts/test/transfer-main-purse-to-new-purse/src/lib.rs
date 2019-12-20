@@ -23,5 +23,5 @@ pub extern "C" fn call() {
     let source: PurseId = account::get_main_purse();
     let destination = system::create_purse();
     system::transfer_from_purse_to_purse(source, destination, amount).unwrap_or_revert();
-    runtime::put_key(&destination_name, &destination.value().into());
+    runtime::put_key(&destination_name, destination.value().into());
 }

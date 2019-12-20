@@ -10,7 +10,7 @@ import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.casper.validation.Errors.ValidateErrorWrapper
-import io.casperlabs.p2p.EffectsTestInstances.LogStub
+import io.casperlabs.shared.LogStub
 import io.casperlabs.shared.Cell
 import io.casperlabs.storage.block.BlockStorage
 import io.casperlabs.storage.dag.IndexedDagStorage
@@ -33,6 +33,7 @@ class EquivocationDetectorTest
 
   def createBlockAndTestEquivocateDetector(
       parentsHashList: Seq[BlockHash],
+      lfb: Block,
       creator: Validator = ByteString.EMPTY,
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       rankOfLowestBaseBlockExpect: Option[Long]
@@ -45,6 +46,7 @@ class EquivocationDetectorTest
       dag <- dagStorage.getRepresentation
       b <- createBlock[Task](
             parentsHashList,
+            keyBlockHash = lfb.blockHash,
             creator,
             justifications = justifications
           )
@@ -69,6 +71,7 @@ class EquivocationDetectorTest
 
   def createBlockAndCheckEquivocatorsFromViewOfBlock(
       parentsHashList: Seq[BlockHash],
+      lfb: Block,
       creator: Validator = ByteString.EMPTY,
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       rankOfLowestBaseBlockExpect: Option[Long],
@@ -81,6 +84,7 @@ class EquivocationDetectorTest
     for {
       block <- createBlockAndTestEquivocateDetector(
                 parentsHashList,
+                lfb,
                 creator,
                 justifications,
                 rankOfLowestBaseBlockExpect
@@ -119,17 +123,20 @@ class EquivocationDetectorTest
                                                             )
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
+                 genesis,
                  v0,
                  rankOfLowestBaseBlockExpect = None
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
                 rankOfLowestBaseBlockExpect = None
               )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
                 rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
@@ -164,16 +171,19 @@ class EquivocationDetectorTest
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(genesis.blockHash),
+                genesis,
                 v0,
                 rankOfLowestBaseBlockExpect = None
               )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
+                 genesis,
                  v0,
                  rankOfLowestBaseBlockExpect = Some(0)
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b2.blockHash),
+                genesis,
                 v1,
                 justifications = HashMap(v0 -> b2.blockHash),
                 rankOfLowestBaseBlockExpect = None
@@ -211,29 +221,34 @@ class EquivocationDetectorTest
           genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
+                 genesis,
                  v1,
                  rankOfLowestBaseBlockExpect = None
                )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
+                 genesis,
                  v1,
                  justifications = HashMap(v1 -> b1.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b2.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v1 -> b2.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           b4 <- createBlockAndTestEquivocateDetector(
                  Seq(b3.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v0 -> b3.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b4.blockHash),
+                genesis,
                 v1,
                 justifications = HashMap(v0 -> b4.blockHash, v1 -> b1.blockHash),
                 rankOfLowestBaseBlockExpect = None
@@ -270,24 +285,28 @@ class EquivocationDetectorTest
                                                             )
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v0 -> genesis.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
                 rankOfLowestBaseBlockExpect = None
               )
           b3 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash),
                  rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b3.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b3.blockHash),
                 rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
@@ -326,18 +345,21 @@ class EquivocationDetectorTest
                                                             )
           b1 <- createBlockAndTestEquivocateDetector(
                  Seq(genesis.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v0 -> genesis.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           b2 <- createBlockAndTestEquivocateDetector(
                  Seq(b1.blockHash),
+                 genesis,
                  v0,
                  justifications = HashMap(v0 -> b1.blockHash),
                  rankOfLowestBaseBlockExpect = None
                )
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b2.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b2.blockHash),
                 rankOfLowestBaseBlockExpect = None
@@ -345,6 +367,7 @@ class EquivocationDetectorTest
           // When v0 creates first equivocation, then the rank of lowest base block is the rank of b2
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b2.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b2.blockHash),
                 rankOfLowestBaseBlockExpect = b2.getHeader.rank.some
@@ -353,6 +376,7 @@ class EquivocationDetectorTest
           // equivocation is smaller, then update the rank of lowest base block to be the rank of b1
           _ <- createBlockAndTestEquivocateDetector(
                 Seq(b1.blockHash),
+                genesis,
                 v0,
                 justifications = HashMap(v0 -> b1.blockHash),
                 rankOfLowestBaseBlockExpect = b1.getHeader.rank.some
@@ -371,14 +395,10 @@ class EquivocationDetectorTest
         implicit0(casperState: Cell[Task, CasperState]) <- Cell.mvarCell[Task, CasperState](
                                                             CasperState()
                                                           )
-        genesis <- createBlockAndCheckEquivocatorsFromViewOfBlock(
-                    Seq(),
-                    ByteString.EMPTY,
-                    rankOfLowestBaseBlockExpect = None,
-                    visibleEquivocatorExpected = Set.empty
-                  )
+        genesis <- createAndStoreBlock[Task](Seq(), ByteString.EMPTY)
         a1 <- createBlockAndCheckEquivocatorsFromViewOfBlock(
                Seq(genesis.blockHash),
+               genesis,
                v1,
                justifications = HashMap(v1 -> genesis.blockHash),
                rankOfLowestBaseBlockExpect = None,
@@ -386,6 +406,7 @@ class EquivocationDetectorTest
              )
         a2 <- createBlockAndCheckEquivocatorsFromViewOfBlock(
                Seq(genesis.blockHash),
+               genesis,
                v1,
                justifications = HashMap(v1 -> genesis.blockHash),
                rankOfLowestBaseBlockExpect = 0L.some,
@@ -393,6 +414,7 @@ class EquivocationDetectorTest
              )
         b <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(a2.blockHash),
+              genesis,
               v2,
               justifications = HashMap(v1 -> a2.blockHash, v2 -> genesis.blockHash),
               rankOfLowestBaseBlockExpect = None,
@@ -401,6 +423,7 @@ class EquivocationDetectorTest
 
         c <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(b.blockHash),
+              genesis,
               v1,
               justifications = HashMap(v1 -> a1.blockHash, v2 -> b.blockHash),
               rankOfLowestBaseBlockExpect = 0L.some,
@@ -410,6 +433,7 @@ class EquivocationDetectorTest
         // this block isn't shown in the diagram
         _ <- createBlockAndCheckEquivocatorsFromViewOfBlock(
               Seq(c.blockHash),
+              genesis,
               v1,
               justifications = HashMap(v1 -> c.blockHash, v2 -> b.blockHash),
               rankOfLowestBaseBlockExpect = 0L.some,

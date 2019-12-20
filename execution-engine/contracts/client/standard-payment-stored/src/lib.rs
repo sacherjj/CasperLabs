@@ -2,41 +2,63 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
-    contract_api::{account, runtime, storage, system, Error},
+    contract_api::{runtime, storage, Error as ApiError},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    value::{account::PurseId, U512},
 };
 
-const GET_PAYMENT_PURSE: &str = "get_payment_purse";
-const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
+const DESTINATION_HASH: &str = "hash";
+const DESTINATION_UREF: &str = "uref";
 const PAY_FUNCTION_NAME: &str = "pay";
+const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
+
+#[repr(u16)]
+enum Error {
+    UnknownDestination = 1,
+}
+
+impl Into<ApiError> for Error {
+    fn into(self) -> ApiError {
+        ApiError::User(self as u16)
+    }
+}
 
 enum Arg {
-    Amount = 0,
+    Destination = 0,
 }
 
 #[no_mangle]
 pub extern "C" fn pay() {
-    let amount: U512 = runtime::get_arg(Arg::Amount as u32)
-        .unwrap_or_revert_with(Error::MissingArgument)
-        .unwrap_or_revert_with(Error::InvalidArgument);
-    let main_purse: PurseId = account::get_main_purse();
+    standard_payment::delegate();
+}
 
-    let pos_pointer = system::get_proof_of_stake();
+fn store_at_hash() -> Key {
+    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    let pointer = storage::store_function_at_hash(PAY_FUNCTION_NAME, named_keys);
+    pointer.into()
+}
 
-    let payment_purse: PurseId =
-        runtime::call_contract(pos_pointer, &(GET_PAYMENT_PURSE,), &vec![]);
-
-    system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
+fn store_at_uref() -> Key {
+    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    storage::store_function(PAY_FUNCTION_NAME, named_keys)
+        .into_uref()
+        .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
+        .into()
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let named_keys: BTreeMap<String, Key> = BTreeMap::new();
-    let pointer = storage::store_function_at_hash(PAY_FUNCTION_NAME, named_keys);
-    runtime::put_key(STANDARD_PAYMENT_CONTRACT_NAME, &pointer.into());
+    let destination: String = runtime::get_arg(Arg::Destination as u32)
+        .unwrap_or_revert_with(ApiError::MissingArgument)
+        .unwrap_or_revert_with(ApiError::InvalidArgument);
+
+    let key = match destination.as_str() {
+        DESTINATION_HASH => store_at_hash(),
+        DESTINATION_UREF => store_at_uref(),
+        _ => runtime::revert(Error::UnknownDestination),
+    };
+    runtime::put_key(STANDARD_PAYMENT_CONTRACT_NAME, key);
 }

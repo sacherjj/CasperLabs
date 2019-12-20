@@ -1,25 +1,26 @@
-use contract_ffi::value::Value;
-use engine_shared::transform::Transform;
+use contract_ffi::value::CLValue;
+use engine_shared::{stored_value::StoredValue, transform::Transform};
 
 use crate::{
     support::test_support::{ExecuteRequestBuilder, InMemoryWasmTestBuilder},
     test::{DEFAULT_ACCOUNT_ADDR, DEFAULT_GENESIS_CONFIG},
 };
 
-const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
+const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
-const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
-const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
-const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
-const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
-const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
-const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
 const HELLO: &str = "Hello";
+const LOCAL_STATE_STORED_CALLER_CONTRACT_NAME: &str = "local_state_stored_caller";
+const LOCAL_STATE_STORED_CONTRACT_NAME: &str = "local_state_stored";
+const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgrader";
 const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
 const METHOD_VERSION: &str = "version";
 const PURSE_1: &str = "purse_1";
+const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
+const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
+const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
+const STORE_AT_UREF: &str = "uref";
 const TOTAL_PURSES: usize = 3;
 
 #[ignore]
@@ -32,7 +33,12 @@ fn should_upgrade_do_nothing_to_do_something() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                (STORE_AT_UREF.to_string(),),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -148,7 +154,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         original_version,
-        Value::String("1.0.0".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.0.0".to_string()).unwrap()),
         "should be original version"
     );
 
@@ -179,7 +185,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     assert_eq!(
         upgraded_version,
-        Value::String("1.0.1".to_string()),
+        StoredValue::CLValue(CLValue::from_t("1.0.1".to_string()).unwrap()),
         "should be original version"
     );
 }
@@ -410,7 +416,14 @@ fn should_maintain_local_state_across_upgrade() {
     let (local_state_key, original_local_state_value) = transform_map
         .iter()
         .find_map(|(key, transform)| match transform {
-            Transform::Write(Value::String(s)) if s.contains(HELLO) => Some((*key, s.clone())),
+            Transform::Write(StoredValue::CLValue(cl_value)) => {
+                let s = cl_value.to_owned().into_t::<String>().unwrap_or_default();
+                if s.contains(HELLO) {
+                    Some((*key, s.clone()))
+                } else {
+                    None
+                }
+            }
             _ => None,
         })
         .expect("local state Write should exist");
@@ -449,7 +462,9 @@ fn should_maintain_local_state_across_upgrade() {
 
     let write = {
         match transform {
-            Transform::Write(Value::String(s)) => Some(s.to_owned()),
+            Transform::Write(StoredValue::CLValue(cl_value)) => {
+                cl_value.to_owned().into_t::<String>().ok()
+            }
             _ => None,
         }
     }

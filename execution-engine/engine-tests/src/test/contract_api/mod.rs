@@ -19,6 +19,8 @@ mod mint_purse;
 #[cfg(test)]
 mod revert;
 #[cfg(test)]
+mod subcall;
+#[cfg(test)]
 mod transfer;
 #[cfg(test)]
 mod transfer_purse_to_account;

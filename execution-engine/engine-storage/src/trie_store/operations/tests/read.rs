@@ -28,7 +28,7 @@ mod partial_tries {
             let test_leaves = TEST_LEAVES;
             let (used, unused) = test_leaves.split_at(num_leaves);
 
-            check_leaves::<_, _, error::Error>(
+            check_leaves::<_, _, _, _, error::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
@@ -49,7 +49,7 @@ mod partial_tries {
             let test_leaves = TEST_LEAVES;
             let (used, unused) = test_leaves.split_at(num_leaves);
 
-            check_leaves::<_, _, in_memory::Error>(
+            check_leaves::<_, _, _, _, in_memory::Error>(
                 correlation_id,
                 &context.environment,
                 &context.store,
@@ -75,7 +75,7 @@ mod full_tries {
     #[test]
     fn lmdb_reads_from_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = LmdbTestContext::new(&[]).unwrap();
+        let context = LmdbTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (state_index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -86,7 +86,7 @@ mod full_tries {
             for (num_leaves, state) in states[..state_index].iter().enumerate() {
                 let test_leaves = TEST_LEAVES;
                 let (used, unused) = test_leaves.split_at(num_leaves);
-                check_leaves::<_, _, error::Error>(
+                check_leaves::<_, _, _, _, error::Error>(
                     correlation_id,
                     &context.environment,
                     &context.store,
@@ -102,7 +102,7 @@ mod full_tries {
     #[test]
     fn in_memory_reads_from_n_leaf_full_trie_had_expected_results() {
         let correlation_id = CorrelationId::new();
-        let context = InMemoryTestContext::new(&[]).unwrap();
+        let context = InMemoryTestContext::new(EMPTY_HASHED_TEST_TRIES).unwrap();
         let mut states: Vec<Blake2bHash> = Vec::new();
 
         for (state_index, generator) in TEST_TRIE_GENERATORS.iter().enumerate() {
@@ -113,7 +113,7 @@ mod full_tries {
             for (num_leaves, state) in states[..state_index].iter().enumerate() {
                 let test_leaves = TEST_LEAVES;
                 let (used, unused) = test_leaves.split_at(num_leaves);
-                check_leaves::<_, _, in_memory::Error>(
+                check_leaves::<_, _, _, _, in_memory::Error>(
                     correlation_id,
                     &context.environment,
                     &context.store,

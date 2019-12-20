@@ -63,5 +63,5 @@ impl Preprocessor {
 
 // Returns a parity Module from bytes without making modifications or limits
 pub fn deserialize(module_bytes: &[u8]) -> Result<Module, PreprocessingError> {
-    parity_wasm::deserialize_buffer::<Module>(&module_bytes).map_err(Into::into)
+    parity_wasm::deserialize_buffer::<Module>(module_bytes).map_err(Into::into)
 }

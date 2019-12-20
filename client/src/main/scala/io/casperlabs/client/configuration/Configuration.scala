@@ -4,6 +4,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, InputStream}
 import java.nio.file.Files
 import io.casperlabs.client.configuration.Options.DeployOptions
 import io.casperlabs.casper.consensus.Deploy.{Arg, Code}, Code.Contract
+import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
 import org.apache.commons.io._
 
@@ -75,7 +76,7 @@ object DeployConfig {
       ),
       gasPrice = args.gasPrice(),
       paymentAmount = args.paymentAmount.toOption,
-      timeToLive = args.ttl.toOption,
+      timeToLive = args.ttlMillis.toOption,
       dependencies = args.dependencies.toOption
         .getOrElse(List.empty)
         .map(d => ByteString.copyFrom(Base16.decode(d))),
@@ -135,7 +136,7 @@ sealed trait Formatting {
 }
 
 final case class MakeDeploy(
-    from: Option[String],
+    from: Option[PublicKey],
     publicKey: Option[File],
     deployConfig: DeployConfig,
     deployPath: Option[File]
@@ -153,7 +154,7 @@ final case class PrintDeploy(
     with Formatting
 
 final case class Deploy(
-    from: Option[String],
+    from: Option[PublicKey],
     deployConfig: DeployConfig,
     publicKey: Option[File],
     privateKey: Option[File]
@@ -189,7 +190,7 @@ final case class Bond(
 ) extends Configuration
 final case class Transfer(
     amount: Long,
-    recipientPublicKeyBase64: String,
+    recipientPublicKey: PublicKey,
     deployConfig: DeployConfig,
     privateKey: File
 ) extends Configuration
@@ -221,6 +222,10 @@ final case class Query(
     json: Boolean
 ) extends Configuration
     with Formatting
+
+final case class Keygen(
+    outputDirectory: File
+) extends Configuration
 
 object Configuration {
 
@@ -330,6 +335,8 @@ object Configuration {
           options.balance.address(),
           options.balance.blockHash()
         )
+      case options.keygen =>
+        Keygen(options.keygen.outputDirectory())
     }
     conf map (connect -> _)
   }
