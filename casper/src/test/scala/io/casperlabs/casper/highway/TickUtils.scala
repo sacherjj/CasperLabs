@@ -1,6 +1,8 @@
 package io.casperlabs.casper.highway
 
 import java.util.Calendar
+import java.time.Instant
+import scala.concurrent.duration._
 
 trait TickUtils {
   def dateTimestamp(y: Int, m: Int, d: Int): Timestamp = {
@@ -10,9 +12,7 @@ trait TickUtils {
     Timestamp(c.getTimeInMillis)
   }
 
-  object MilliTicks {
-    def days(d: Long)                = hours(d * 24)
-    def hours(h: Long)               = Ticks(h * 60 * 60 * 1000)
-    def date(y: Int, m: Int, d: Int) = Ticks(dateTimestamp(y, m, d))
-  }
+  def days(d: Long)                = d.days
+  def hours(h: Long)               = h.hours
+  def date(y: Int, m: Int, d: Int) = Instant.ofEpochMilli(dateTimestamp(y, m, d))
 }

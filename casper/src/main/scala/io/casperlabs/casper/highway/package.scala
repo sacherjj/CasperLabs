@@ -1,5 +1,7 @@
 package io.casperlabs.casper
 
+import java.time.Instant
+import scala.concurrent.duration.FiniteDuration
 import shapeless.tag.@@
 
 package highway {
@@ -13,11 +15,16 @@ package object highway {
   type Timestamp = Long @@ TimestampTag
   def Timestamp(t: Long) = t.asInstanceOf[Timestamp]
 
-  /** Ticks (a point in time or a duration) in an arbitrary time unit. */
+  /** Ticks since Unix epoch in the Highway specific time unit. */
   type Ticks = Long @@ TicksTag
   def Ticks(t: Long) = t.asInstanceOf[Ticks]
-  implicit class TicksOps(val a: Ticks) extends AnyVal {
-    def plus(b: Ticks)  = Ticks(a + b)
-    def minus(b: Ticks) = Ticks(a - b)
+
+  implicit class InstantOps(val a: Instant) extends AnyVal {
+    def plus(b: FiniteDuration) =
+      a.plus(b.length, b.unit.toChronoUnit)
+
+    def minus(b: FiniteDuration) =
+      a.minus(b.length, b.unit.toChronoUnit)
   }
+
 }
