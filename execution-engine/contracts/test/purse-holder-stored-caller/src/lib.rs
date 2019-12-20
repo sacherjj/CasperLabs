@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
 use contract_ffi::{
     contract_api::{runtime, storage, ContractRef, Error},
@@ -44,11 +44,8 @@ pub extern "C" fn call() {
 
     match method_name.as_str() {
         METHOD_VERSION => {
-            let version: String = runtime::call_contract(
-                purse_holder_contract_pointer.clone(),
-                (method_name,),
-                vec![],
-            );
+            let version: String =
+                runtime::call_contract(purse_holder_contract_pointer.clone(), (method_name,));
             let version_key = storage::new_turef(version).into();
             runtime::put_key(METHOD_VERSION, version_key);
         }
@@ -60,7 +57,6 @@ pub extern "C" fn call() {
             runtime::call_contract::<_, ()>(
                 purse_holder_contract_pointer.clone(),
                 (method_name, purse_name),
-                vec![],
             );
         }
     };

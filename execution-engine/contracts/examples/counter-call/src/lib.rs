@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec::Vec;
-
 use contract_ffi::{
     contract_api::{runtime, Error},
     unwrap_or_revert::UnwrapOrRevert,
@@ -22,11 +18,11 @@ pub extern "C" fn call() {
 
     {
         let args = (INC_METHOD,);
-        runtime::call_contract::<_, ()>(contract_ref.clone(), args, Vec::new());
+        runtime::call_contract::<_, ()>(contract_ref.clone(), args);
     }
 
     let _result: i32 = {
         let args = (GET_METHOD,);
-        runtime::call_contract(contract_ref, args, Vec::new())
+        runtime::call_contract(contract_ref, args)
     };
 }

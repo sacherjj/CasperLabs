@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String};
 
 use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
@@ -50,7 +50,7 @@ pub extern "C" fn counter_ext() {
                 .unwrap_or_revert_with(ApiError::Read)
                 .unwrap_or_revert_with(ApiError::ValueNotFound);
             let return_value = CLValue::from_t(result).unwrap_or_revert();
-            runtime::ret(return_value, Vec::new());
+            runtime::ret(return_value);
         }
         _ => runtime::revert(Error::UnknownMethodName),
     }

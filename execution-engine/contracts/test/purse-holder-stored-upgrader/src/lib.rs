@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
 use contract_ffi::{
     contract_api::{runtime, storage, system, Error},
@@ -66,7 +66,7 @@ pub extern "C" fn apply_method() {
             let purse_name = purse_name();
             runtime::remove_key(&purse_name);
         }
-        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert(), vec![]),
+        METHOD_VERSION => runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert()),
         _ => runtime::revert(CustomError::UnknownMethodName),
     }
 }

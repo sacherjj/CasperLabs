@@ -492,41 +492,29 @@ where
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
-    fn ret(
-        &mut self,
-        value_ptr: u32,
-        value_size: usize,
-        extra_urefs_ptr: u32,
-        extra_urefs_size: usize,
-    ) -> Trap {
+    fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
         self.host_buf = None;
         let mem_get = self
             .memory
             .get(value_ptr, value_size)
-            .map_err(Error::Interpreter)
-            .and_then(|x| {
-                let urefs_bytes = self.bytes_from_mem(extra_urefs_ptr, extra_urefs_size)?;
-                let urefs = self.context.deserialize_urefs(urefs_bytes)?;
-                Ok((x, urefs))
-            });
+            .map_err(Error::Interpreter);
         match mem_get {
-            Ok((buf, urefs)) => {
+            Ok(buf) => {
                 // Set the result field in the runtime and return the proper element of the `Error`
                 // enum indicating that the reason for exiting the module was a call to ret.
                 self.host_buf = bytesrepr::deserialize(buf).ok();
+
+                // TODO(Fraser): extract all URefs now held in `self.host_buf`.
+                let urefs = vec![];
+
                 Error::Ret(urefs).into()
             }
             Err(e) => e.into(),
         }
     }
 
-    /// Calls contract living under a `key`, with supplied `args` and extra `urefs`.
-    fn call_contract(
-        &mut self,
-        key: Key,
-        args_bytes: Vec<u8>,
-        urefs_bytes: Vec<u8>,
-    ) -> Result<CLValue, Error> {
+    /// Calls contract living under a `key`, with supplied `args`.
+    fn call_contract(&mut self, key: Key, args_bytes: Vec<u8>) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -560,7 +548,8 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let extra_urefs = self.context.deserialize_keys(urefs_bytes)?;
+        // TODO(Fraser): extract and validate all URefs provided in `args`.
+        let extra_urefs = vec![];
 
         let mut refs = contract.take_named_keys();
 
@@ -580,7 +569,6 @@ where
         &mut self,
         key: Key,
         args_bytes: Vec<u8>,
-        urefs_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buf() {
@@ -588,7 +576,7 @@ where
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        let result = self.call_contract(key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(key, args_bytes)?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
         if let Err(error) = self.write_host_buf(result) {
@@ -931,9 +919,7 @@ where
             ArgsParser::parse(args)?.into_bytes()?
         };
 
-        let urefs_bytes = Vec::<Key>::new().into_bytes()?;
-
-        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes)?;
         let purse_uref = result.into_t()?;
 
         Ok(PurseId::new(purse_uref))
@@ -961,9 +947,7 @@ where
             ArgsParser::parse(args)?.into_bytes()?
         };
 
-        let urefs_bytes = vec![Key::URef(source_value), Key::URef(target_value)].into_bytes()?;
-
-        let result = self.call_contract(mint_contract_key, args_bytes, urefs_bytes)?;
+        let result = self.call_contract(mint_contract_key, args_bytes)?;
         let result: Result<(), mint::Error> = result.into_t()?;
         Ok(result.map_err(system_contracts::Error::from)?)
     }

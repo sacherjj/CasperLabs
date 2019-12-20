@@ -11,7 +11,6 @@ use contract_ffi::{
     contract_api::{runtime, storage, Error as ApiError, TURef},
     key::Key,
     unwrap_or_revert::UnwrapOrRevert,
-    uref::URef,
     value::CLValue,
 };
 
@@ -88,14 +87,12 @@ pub extern "C" fn mailing_list_ext() {
     match method_name.as_str() {
         "sub" => match sub(arg1) {
             Some(turef) => {
-                let extra_uref = URef::new(turef.addr(), turef.access_rights());
-                let extra_urefs = vec![extra_uref];
                 let return_value = CLValue::from_t(Some(Key::from(turef))).unwrap_or_revert();
-                runtime::ret(return_value, extra_urefs);
+                runtime::ret(return_value);
             }
             _ => {
                 let return_value = CLValue::from_t(Option::<Key>::None).unwrap_or_revert();
-                runtime::ret(return_value, Vec::new())
+                runtime::ret(return_value)
             }
         },
         //Note that this is totally insecure. In reality

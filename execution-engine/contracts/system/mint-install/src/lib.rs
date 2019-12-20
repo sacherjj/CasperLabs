@@ -1,9 +1,5 @@
 #![no_std]
 
-extern crate alloc;
-
-use alloc::vec;
-
 use contract_ffi::{
     contract_api::{runtime, storage, Error},
     unwrap_or_revert::UnwrapOrRevert,
@@ -26,5 +22,5 @@ pub extern "C" fn call() {
 
     let return_value = CLValue::from_t(uref).unwrap_or_revert();
 
-    runtime::ret(return_value, vec![uref]);
+    runtime::ret(return_value);
 }
