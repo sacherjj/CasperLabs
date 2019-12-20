@@ -63,7 +63,7 @@ use crate::test::{
 
 pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 pub const COMPILED_WASM_DEFAULT_PATH: &str = "../target/wasm32-unknown-unknown/release";
-pub const COMPILED_WASM_TYPESCRIPT_PATH: &str = "../target/wasm32-ts";
+pub const COMPILED_WASM_TYPESCRIPT_PATH: &str = "../target-as";
 pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: [u8; 32] = [48u8; 32];
 pub const GENESIS_INITIAL_BALANCE: u64 = 100_000_000_000;
