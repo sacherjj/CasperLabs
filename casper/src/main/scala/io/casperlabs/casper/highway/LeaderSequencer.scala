@@ -13,16 +13,14 @@ object LeaderSequencer {
     * padding them with zeroes on the right.
     */
   def toByteArray(bits: Seq[Boolean]): Array[Byte] = {
-    val size   = bits.size
-    val pad    = 8 - size % 8
-    val padded = bits.padTo(size + pad, false)
-    val arr    = Array.fill(padded.size / 8)(0)
-    padded.zipWithIndex.foreach {
+    val arr = Array.fill(math.ceil(bits.size / 8.0).toInt)(0)
+    bits.zipWithIndex.foreach {
       case (bit, i) =>
-        val a = i / 8
-        val b = 7 - i % 8
-        val s = (if (bit) 1 else 0) << b
-        arr(a) = arr(a) | s
+        if (bit) {
+          val a = i / 8
+          val b = 7 - i % 8
+          arr(a) = arr(a) | 1 << b
+        }
     }
     arr.map(_.toByte)
   }
