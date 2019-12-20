@@ -137,7 +137,7 @@ object MultiParentFinalizerTest extends BlockGenerator {
   /** Finalizes a `start` block.
     *
     * To finalize a block, we need level-1 summit (i.e. enough validators has to see enough validators voting for a block).
-    * The easiest way to achieve this is to a layer of messages that build on top of block we want to finalize.
+    * The easiest way to achieve this is to add a layer of messages that build on top of block we want to finalize.
     *
     * Returns last block hash in chain.
     */
