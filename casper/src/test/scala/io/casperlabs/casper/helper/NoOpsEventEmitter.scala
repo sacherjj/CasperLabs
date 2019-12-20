@@ -23,9 +23,7 @@ object NoOpsEventEmitter {
 
 object TestEventEmitter {
   // Can't reuse production version because it couples `EventEmitter` with `EventStream`.
-  def create[F[_]: Sync: DeployStorage: BlockStorage: Log: Metrics](
-      implicit lfbContainer: LastFinalizedBlockHashContainer[F]
-  ): EventEmitter[F] =
+  def create[F[_]: Sync: DeployStorage: BlockStorage: Log: Metrics]: EventEmitter[F] =
     new EventEmitter[F] {
       // Production `EventEmitter` publishes `BlockAdded` event to the observable.
       // We don't need it in tests at the moment.
@@ -34,6 +32,6 @@ object TestEventEmitter {
       // Mimicks production `EventEmitter` impl.
       // Some tests depend on what is being done there.
       override def newLFB(lfb: BlockHash, indirectlyFinalized: Set[BlockHash]): F[Unit] =
-        lfbContainer.set(lfb) *> DeployBuffer.removeFinalizedDeploys[F](indirectlyFinalized + lfb)
+        DeployBuffer.removeFinalizedDeploys[F](indirectlyFinalized + lfb)
     }
 }

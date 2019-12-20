@@ -26,7 +26,7 @@ import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
 }
 
 object EventStream {
-  def create[F[_]: Concurrent: FinalizedBlocksStream: LastFinalizedBlockHashContainer: DeployStorage: BlockStorage: Log: Metrics](
+  def create[F[_]: Concurrent: DeployStorage: BlockStorage: Log: Metrics](
       scheduler: Scheduler,
       eventStreamBufferSize: Int
   ): EventStream[F] = {
@@ -50,13 +50,7 @@ object EventStream {
         }
 
       override def newLFB(lfb: BlockHash, indirectlyFinalized: Set[BlockHash]): F[Unit] =
-        for {
-          _ <- LastFinalizedBlockHashContainer[F].set(lfb)
-          _ <- Log[F]
-                .debug(s"Removing finalized deploys after adding ${lfb -> "block"}") *>
-                DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
-          // TODO: Persist finalized blocks in the DB.
-        } yield ()
+        DeployBuffer.removeFinalizedDeploys(indirectlyFinalized + lfb).forkAndLog
     }
   }
 }

@@ -175,7 +175,8 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                   secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
                 Log[F].info(
                   s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-                ) >> EventEmitter[F].newLFB(mainParent, secondary)
+                ) >> LastFinalizedBlockHashContainer[F].set(mainParent) *> EventEmitter[F]
+                  .newLFB(mainParent, secondary)
               }
             }
       } yield ()
