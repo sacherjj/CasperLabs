@@ -35,12 +35,15 @@ The main files that an end-user would need to update are the `configuration.toml
 
 #### Congifiguration Toml
 
-The example configuration toml you copied just needs a few tweaks made which 
-are specific to your node before being ready to use.
+The example configuration toml you copied comes completely commented out and thus 
+needs a few tweaks made which are specific to your node before being ready 
+to use.
 
 The minimum amount of settings you will want to change to allow you connect as 
 a readonly node:
 - bootstrap
+- data-dir
+- socket
 - certificate
 - key 
 
