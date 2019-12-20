@@ -18,7 +18,7 @@ PROFILING_CONTRACTS   = $(shell find ./contracts/profiling   -mindepth 1 -maxdep
 SRE_CONTRACTS         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SYSTEM_CONTRACTS      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 TEST_CONTRACTS        = $(shell find ./contracts/test        -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
-CONTRACTS_TS          = $(shell find ./contracts-ts          -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
+CLIENT_CONTRACTS_TS   = $(shell find ./contracts-ts/client   -mindepth 1 -maxdepth 1 -type d)
 
 BENCH_CONTRACTS     := $(patsubst %, build-contract-rs/%, $(BENCH_CONTRACTS))
 CLIENT_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(CLIENT_CONTRACTS))
@@ -29,7 +29,7 @@ SRE_CONTRACTS       := $(patsubst %, build-contract-rs/%, $(SRE_CONTRACTS))
 SYSTEM_CONTRACTS    := $(patsubst %, build-contract-rs/%, $(SYSTEM_CONTRACTS))
 TEST_CONTRACTS      := $(patsubst %, build-contract-rs/%, $(TEST_CONTRACTS))
 
-CONTRACTS_TS        := $(patsubst %, build-contract-ts/%, $(CONTRACTS_TS))
+CLIENT_CONTRACTS_TS := $(patsubst %, build-contract-ts/%, $(CLIENT_CONTRACTS_TS))
 
 INTEGRATION_CONTRACTS += \
 	bonding-call \
@@ -91,7 +91,7 @@ build-contracts-rs: \
 	$(TEST_CONTRACTS)
 
 build-contract-ts/%:
-	cd contracts-ts/$* && $(NPM) run asbuild
+	cd $* && $(NPM) run asbuild
 
 .PHONY: build-integration-contracts
 build-integration-contracts: $(INTEGRATION_CONTRACTS)
@@ -101,7 +101,7 @@ build-example-contracts: $(EXAMPLE_CONTRACTS)
 
 .PHONY: build-contracts-ts
 build-contracts-ts: \
-	$(CONTRACTS_TS)
+	$(CLIENT_CONTRACTS_TS)
 
 .PHONY: test
 test:
