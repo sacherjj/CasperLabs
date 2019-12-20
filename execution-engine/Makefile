@@ -122,7 +122,7 @@ test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
 .PHONY: test-contracts-ts
-test-contracts-ts: build-contracts-ts
+test-contracts-ts: build-contracts-rs build-contracts-ts
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
 .PHONY: test-contracts
