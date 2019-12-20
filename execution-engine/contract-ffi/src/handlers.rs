@@ -1,4 +1,4 @@
-//! Contains definitions for panic and allocation error handlers, along with other `#[nostd]`
+//! Contains definitions for panic and allocation error handlers, along with other `#[no_std]`
 //! support code.
 
 #[panic_handler]

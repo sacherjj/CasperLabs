@@ -1,4 +1,4 @@
-//! Contains functions for generating arbitrary values for use by [`proptest`](proptest).
+//! Contains functions for generating arbitrary values for use by [`Proptest`](https://crates.io/crates/proptest).
 
 use alloc::{collections::BTreeMap, string::String, vec};
 

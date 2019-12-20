@@ -31,7 +31,7 @@
 //!     let value: i32 = runtime::get_arg(0)
 //!         // Unwrap the `Option`, returning an error if there was no argument supplied.
 //!         .unwrap_or_revert_with(Error::MissingArgument)
-//!         // Unwrap the `Result` containing the deserialized argument or returns an error
+//!         // Unwrap the `Result` containing the deserialized argument or return an error
 //!         // if there was a deserialization error.
 //!         .unwrap_or_revert_with(Error::InvalidArgument);
 //!
