@@ -95,8 +95,8 @@ steps:
     CARGO_FLAGS: "--locked"
   commands:
   - "cd execution-engine/"
-  - "make setup"
-  - "make test test-contracts"
+  - "make setup-rs"
+  - "make test-rs test-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
@@ -110,6 +110,20 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
+
+- name: as-compile-test-pr
+  commands:
+  - "cd execution-engine"
+  - "make setup-ts"
+  - "make test-ts test-contracts-ts"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/contract-ffi-ts/**"
+      - "**/contracts-ts/**"
 
 - name: run-cargo-fmt-pr
   commands:
@@ -170,31 +184,6 @@ steps:
       - "integration-testing/**"
 
 
-- name: ts-verify-contract-api
-  commands:
-  - "cd execution-engine/contract-ffi-ts"
-  - "npm install --only=dev"
-  - "npm run asbuild"
-  - "npm run test"
-  image: "casperlabs/buildenv:latest"
-  when:
-    event:
-    - pull_request
-    changeset:
-      includes:
-      - "**/contract-ffi-ts/**"
-
-- name: ts-build-contracts
-  commands:
-  - "cd execution-engine"
-  - "make build-contracts-ts"
-  image: "casperlabs/buildenv:latest"
-  when:
-    event:
-    - pull_request
-    changeset:
-      includes:
-      - "**/contracts-ts/**"
 
 # This section is for bors' branches only
 
