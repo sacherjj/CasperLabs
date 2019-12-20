@@ -308,7 +308,7 @@ lazy val node = (project in file("node"))
     /* Packaging */
     linuxPackageMappings ++= {
       val service_file = baseDirectory.value / "casperlabs-node.service"
-      val example_toml = baseDirectory.value / "../packaging/example-configuration.toml"
+      val example_toml = baseDirectory.value / "src/main/resources/default-configuration.toml"
       Seq(
         packageMapping(service_file -> "/lib/systemd/system/casperlabs-node.service"),
         packageMapping(example_toml -> "/etc/casperlabs/example-configuration.toml")

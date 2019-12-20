@@ -57,3 +57,18 @@ fi
 if [ -d ${DEFAULT_DATA_DIRECTORY} ] ; then
     chown ${DEFAULT_USERNAME}:${DEFAULT_USERNAME} ${DEFAULT_DATA_DIRECTORY}
 fi
+
+# File Manipulation
+# ---
+# Some sed magic on DEFAULT_TOML
+# Neat trick on SED_CHECK :)
+SED_CHECK=$(command -v sed >/dev/null 2>&1)$?
+if [ "$SED_CHECK" -eq "0"  ] && [ -f ${DEFAULT_TOML} ]; then
+    # comment all lines
+    sed -i 's/^\([^#].*\)/# \1/g' ${DEFAULT_TOML}
+    # change defaults to /var/lib/casperlabs or /etc/casperlabs
+    VAR_ARRAY=(data-dir socket certificate key api-certificate api-key)
+    for i in ${VAR_ARRAY[@]}; do sed -i "/$i/s/\$HOME\/./\/var\/lib\//" ${DEFAULT_TOML}; done
+    ETC_ARRAY=(chain-spec-path)
+    for i in ${ETC_ARRAY[@]}; do sed -i "/$i/s/\$HOME\/./\/etc\//" ${DEFAULT_TOML}; done
+fi
