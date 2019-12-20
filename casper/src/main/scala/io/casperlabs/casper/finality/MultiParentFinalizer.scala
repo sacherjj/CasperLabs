@@ -58,7 +58,6 @@ object MultiParentFinalizer {
                                               dag
                                             )
                             _ <- finalizedBlocksCache.update(_ ++ justFinalized + newLFB)
-                            // TODO: Persist finalized blocks in the DB.
                           } yield Some(FinalizedBlocks(newLFB, justFinalized))
                       }
         } yield finalized)

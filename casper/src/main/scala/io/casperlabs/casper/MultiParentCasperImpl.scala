@@ -156,37 +156,29 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
       _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "block"}")
-      finalizedBlocks <- if (status == Valid) updateLastFinalizedBlock(block, dag)
-                        else Set.empty[BlockHash].pure[F]
-      // Remove any deploys from the buffer which are in finalized blocks.
-      _ <- {
-        Log[F]
-          .debug(s"Removing finalized deploys after adding ${hashPrefix -> "block"}") *>
-          DeployBuffer.removeFinalizedDeploys[F](finalizedBlocks).forkAndLog
-      }.whenA(finalizedBlocks.nonEmpty)
+      _ <- updateLastFinalizedBlock(block, dag).whenA(status == Valid)
       _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "block"}")
     } yield status
   }
 
   /** Update the finalized block; return true if it changed. */
-  private def updateLastFinalizedBlock(block: Block, dag: DagRepresentation[F]): F[Set[BlockHash]] =
+  private def updateLastFinalizedBlock(block: Block, dag: DagRepresentation[F]): F[Unit] =
     Metrics[F].timer("updateLastFinalizedBlock") {
       for {
         result <- MultiParentFinalizer[F].onNewBlockAdded(block)
-        changed <- result.fold(Set.empty[BlockHash].pure[F]) {
-                    case fb @ FinalizedBlocks(mainParent, secondary) => {
-                      val mainParentFinalizedStr = PrettyPrinter.buildString(
-                        mainParent
-                      )
-                      val secondaryParentsFinalizedStr =
-                        secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
-                      Log[F].info(
-                        s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
-                      ) >>
-                        LastFinalizedBlockHashContainer[F].set(mainParent).as(fb.finalizedBlocks)
-                    }
-                  }
-      } yield changed
+        _ <- result.traverse {
+              case fb @ FinalizedBlocks(mainParent, secondary) => {
+                val mainParentFinalizedStr = PrettyPrinter.buildString(
+                  mainParent
+                )
+                val secondaryParentsFinalizedStr =
+                  secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+                Log[F].info(
+                  s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                ) >> EventEmitter[F].newLFB(mainParent, secondary)
+              }
+            }
+      } yield ()
     }
 
   /** Check that either we have the block already scheduled but missing dependencies, or it's in the store */
