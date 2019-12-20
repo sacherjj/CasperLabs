@@ -90,11 +90,21 @@ final case class HighwayConf(
     * exactly one booking boundary per era, except in the genesis
     * which has more, so that multiple following eras can find
     * booking blocks in it.
-    * For example era 2 will use 1a, and era 3 will use 1b:
-    *   1a     1b     2      3
-    * | .      .   |  .   |  .   |
-    * The function returns the list of ticks that are a certain delay
-    * back from the start of a upcoming era.
+    *
+    * Given a start and end tick for any particular era E,
+    * the function returns the list of ticks that are at a
+    * certain delay before the start of another era coming after E.
+    *
+    * This handles eras of different lengths: it filters out the upcoming
+    * boundaries so that they fall between start and end.
+    *
+    * For example, if the Genesis era was chosen to be 3 weeks long,
+    * we'd see the following booking blocks (B) appear; so Genesis would have 2,
+    * and E1 would have just 1, used by E3.
+    *  G : |....................|
+    *  E1:            B         |......|
+    *  E2:                   B         |......|
+    *  E3:                          B         |......|
     */
   def criticalBoundaries(
       start: Instant,
