@@ -20,8 +20,11 @@ package object highway {
   def Ticks(t: Long) = t.asInstanceOf[Ticks]
 
   implicit class InstantOps(val a: Instant) extends AnyVal {
-    def plus(b: FiniteDuration)  = a.plusNanos(b.toNanos)
-    def minus(b: FiniteDuration) = a.minusNanos(b.toNanos)
+    def plus(b: FiniteDuration) =
+      a.plus(b.length, b.unit.toChronoUnit)
+
+    def minus(b: FiniteDuration) =
+      a.minus(b.length, b.unit.toChronoUnit)
   }
 
 }
