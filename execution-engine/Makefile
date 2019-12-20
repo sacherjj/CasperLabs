@@ -109,7 +109,7 @@ test:
 	$(CARGO) test $(CARGO_FLAGS) --all -- --nocapture
 
 .PHONY: test-contracts
-test-contracts: build-contracts-rs
+test-contracts: build-contracts
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 
 .PHONY: check-format
