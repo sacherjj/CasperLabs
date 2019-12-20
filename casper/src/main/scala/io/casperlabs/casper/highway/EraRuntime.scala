@@ -2,6 +2,7 @@ package io.casperlabs.casper.highway
 
 import java.time.Instant
 import io.casperlabs.casper.consensus.{BlockSummary, Era}
+import io.casperlabs.crypto.Keys.PublicKeyBS
 
 class EraRuntime[F[_]](conf: HighwayConf, val era: Era) {
 

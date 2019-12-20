@@ -236,7 +236,13 @@ message Era {
     // this is where the bonds are coming, included in the era for reference.
     bytes booking_block_hash = 5;
     // The random seed compiled from the magic bits between the booking block and the key block.
-    int64 leader_seed = 6;
+    // 1. Concatenate all the magic bits into an array of bytes, padding on the right with 0s to make it divisble by 8.
+    // 2. Concatenate the byte array to the parent leader seed.
+    // 3. Let the leader_seed be the blake2b256 hash of the resulting array.
+    // 4. Convert any uint64 tick to bytes in little-endian format.
+    // 5. Concatentate the the bytes of the tick to the leader_seed and use the array as a seed to a SHA1PRNG generator.
+    // 6. Generate a random double r between [0, 1) and seek the first validator in `bonds` where the total cumulative weight exceeds r * total.
+    bytes leader_seed = 6;
     // Bonded validator weights from the booking block.
     repeated Bond bonds = 7;
 }

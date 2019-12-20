@@ -32,7 +32,7 @@ class EraRuntimeConfSpec extends WordSpec with Matchers with TickUtils {
       "use the genesis block as key and booking block" in {
         runtime.era.keyBlockHash shouldBe genesis.blockHash
         runtime.era.bookingBlockHash shouldBe genesis.blockHash
-        runtime.era.leaderSeed shouldBe 0L
+        runtime.era.leaderSeed shouldBe ByteString.EMPTY
       }
 
       "not assign a parent era" in {
