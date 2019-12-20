@@ -16,7 +16,8 @@ import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.equivocations.EquivocationDetector
-import io.casperlabs.casper.finality.CommitteeWithConsensusValue
+import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
+import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.util._
 import io.casperlabs.casper.util.ProtocolVersions.Config
@@ -58,7 +59,7 @@ final case class CasperState(
 )
 
 @silent("is never used")
-class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: FinalityDetectorVotingMatrix: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
+class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: DagStorage: DeployBuffer: ExecutionEngineService: LastFinalizedBlockHashContainer: MultiParentFinalizer: DeployStorage: Validation: Fs2Compiler: DeploySelection: CasperLabsProtocol: EventEmitter](
     validatorSemaphoreMap: SemaphoreMap[F, ByteString],
     statelessExecutor: MultiParentCasperImpl.StatelessExecutor[F],
     validatorId: Option[ValidatorIdentity],
@@ -155,38 +156,30 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       hashPrefix = PrettyPrinter.buildString(block.blockHash)
       // Update the last finalized block; remove finalized deploys from the buffer
       _ <- Log[F].debug(s"Updating last finalized block after adding ${hashPrefix -> "block"}")
-      updatedLFB <- if (status == Valid) updateLastFinalizedBlock(block, dag)
-                   else false.pure[F]
-      // Remove any deploys from the buffer which are in finalized blocks.
-      _ <- {
-        Log[F]
-          .debug(s"Removing finalized deploys after adding ${hashPrefix -> "block"}") *>
-          LastFinalizedBlockHashContainer[F].get >>= { lfb =>
-          DeployBuffer.removeFinalizedDeploys[F](lfb).forkAndLog
-        }
-      }.whenA(updatedLFB)
+      _ <- updateLastFinalizedBlock(block, dag).whenA(status == Valid)
       _ <- Log[F].debug(s"Finished adding ${hashPrefix -> "block"}")
     } yield status
   }
 
   /** Update the finalized block; return true if it changed. */
-  private def updateLastFinalizedBlock(block: Block, dag: DagRepresentation[F]): F[Boolean] =
+  private def updateLastFinalizedBlock(block: Block, dag: DagRepresentation[F]): F[Unit] =
     Metrics[F].timer("updateLastFinalizedBlock") {
       for {
-        lastFinalizedBlockHash <- LastFinalizedBlockHashContainer[F].get
-        result <- FinalityDetectorVotingMatrix[F].onNewBlockAddedToTheBlockDag(
-                   dag,
-                   block,
-                   lastFinalizedBlockHash
-                 )
-        changed <- result.fold(false.pure[F]) {
-                    case CommitteeWithConsensusValue(validator, quorum, consensusValue) =>
-                      Log[F].info(
-                        s"New last finalized block hash is ${PrettyPrinter.buildString(consensusValue)}."
-                      ) >>
-                        LastFinalizedBlockHashContainer[F].set(consensusValue).as(true)
-                  }
-      } yield changed
+        result <- MultiParentFinalizer[F].onNewBlockAdded(block)
+        _ <- result.traverse {
+              case fb @ FinalizedBlocks(mainParent, secondary) => {
+                val mainParentFinalizedStr = PrettyPrinter.buildString(
+                  mainParent
+                )
+                val secondaryParentsFinalizedStr =
+                  secondary.map(PrettyPrinter.buildString).mkString("{", ", ", "}")
+                Log[F].info(
+                  s"New last finalized block hashes are ${mainParentFinalizedStr -> null}, ${secondaryParentsFinalizedStr -> null}."
+                ) >> LastFinalizedBlockHashContainer[F].set(mainParent) *> EventEmitter[F]
+                  .newLFB(mainParent, secondary)
+              }
+            }
+      } yield ()
     }
 
   /** Check that either we have the block already scheduled but missing dependencies, or it's in the store */
@@ -523,12 +516,17 @@ object MultiParentCasperImpl {
               hashes =>
                 DagOperations.latestCommonAncestorsMainParent[F](dag, hashes).map(_.messageHash)
             }
-      implicit0(finalizer: FinalityDetectorVotingMatrix[F]) <- FinalityDetectorVotingMatrix
-                                                                .of[F](
-                                                                  dag,
-                                                                  lca,
-                                                                  faultToleranceThreshold
-                                                                )
+      finalityDetector <- FinalityDetectorVotingMatrix
+                           .of[F](
+                             dag,
+                             lca,
+                             faultToleranceThreshold
+                           )
+      implicit0(multiParentFinalizer: MultiParentFinalizer[F]) <- MultiParentFinalizer.empty[F](
+                                                                   dag,
+                                                                   lca,
+                                                                   finalityDetector
+                                                                 )
       _ <- LastFinalizedBlockHashContainer[F].set(lca)
     } yield new MultiParentCasperImpl[F](
       semaphoreMap,

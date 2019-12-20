@@ -136,29 +136,17 @@ object DeployBuffer {
     *
     * Those deploys won't be requeued anymore.
     */
-  def removeFinalizedDeploys[F[_]: MonadThrowable: DagStorage: DeployStorage: BlockStorage: Log: Metrics](
-      lfb: BlockHash
+  def removeFinalizedDeploys[F[_]: MonadThrowable: DeployStorage: BlockStorage: Log: Metrics](
+      lfbs: Set[BlockHash]
   ): F[Unit] = Metrics[F].timer("removeFinalizedDeploys") {
     for {
-      dag          <- DagStorage[F].getRepresentation
       deployHashes <- DeployStorageReader[F].readProcessedHashes
 
       blockHashes <- BlockStorage[F]
                       .findBlockHashesWithDeployHashes(deployHashes)
                       .map(_.values.flatten.toList.distinct)
 
-      lastFinalizedBlock <- dag.lookupUnsafe(lfb)
-
-      finalizedBlockHashes <- blockHashes.filterA { blockHash =>
-                               // NODE-930. To be replaced when we implement finality streams.
-                               dag.lookup(blockHash) map {
-                                 // This is just a mock finality formula that still allows some
-                                 // chance for orhpans to be re-queued in blocks ahead of the
-                                 // last finalized blocks.
-                                 _.fold(false)(_.rank <= lastFinalizedBlock.rank)
-                               }
-                             }
-
+      finalizedBlockHashes = blockHashes.filter(lfbs.contains(_))
       _ <- finalizedBlockHashes.traverse { blockHash =>
             removeDeploysInBlock[F](blockHash) flatMap { removed =>
               Log[F]
@@ -177,8 +165,9 @@ object DeployBuffer {
       blockHash: BlockHash
   ): F[Long] =
     for {
-      block              <- ProtoUtil.unsafeGetBlock[F](blockHash)
-      deploysToRemove    = block.body.get.deploys.map(_.deploy.get).toList
+      block           <- ProtoUtil.unsafeGetBlock[F](blockHash)
+      deploysToRemove = block.body.get.deploys.map(_.deploy.get).toList
+      // NOTE: Do we really need this metric? It will make unncessary calls to the DB.
       initialHistorySize <- DeployStorageReader[F].sizePendingOrProcessed()
       _                  <- DeployStorageWriter[F].markAsFinalized(deploysToRemove)
       deploysRemoved <- DeployStorageReader[F]

@@ -10,6 +10,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.MultiParentCasperImpl.Broadcaster
+import io.casperlabs.casper.finality.MultiParentFinalizer
 import io.casperlabs.casper.finality.votingmatrix.FinalityDetectorVotingMatrix
 import io.casperlabs.casper.validation.Validation
 import io.casperlabs.casper.{DeriveValidation, consensus, _}
@@ -52,7 +53,7 @@ class GossipServiceCasperTestNode[F[_]](
     dagStorage: DagStorage[F],
     deployStorage: DeployStorage[F],
     deployBuffer: DeployBuffer[F],
-    finalityDetector: FinalityDetectorVotingMatrix[F],
+    finalityDetector: MultiParentFinalizer[F],
     val timeEff: LogicalTime[F],
     metricEff: Metrics[F],
     casperState: Cell[F, CasperState],
@@ -69,7 +70,7 @@ class GossipServiceCasperTestNode[F[_]](
     Broadcaster.fromGossipServices(Some(validatorId), relaying)
   implicit val deploySelection   = DeploySelection.create[F](5 * 1024 * 1024)
   implicit val derivedValidation = DeriveValidation.deriveValidationImpl[F]
-  implicit val eventEmitter      = NoOpsEventEmitter.create[F]()
+  implicit val eventEmitter      = TestEventEmitter.create[F]
 
   // `addBlock` called in many ways:
   // - test proposes a block on the node that created it
@@ -153,6 +154,11 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
           _            <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
           finalityDetector <- FinalityDetectorVotingMatrix
                                .of[F](dag, genesis.blockHash, faultToleranceThreshold)
+          multiParentFinalizer <- MultiParentFinalizer.empty(
+                                   dag,
+                                   genesis.blockHash,
+                                   finalityDetector
+                                 )
           node = new GossipServiceCasperTestNode[F](
             identity,
             genesis,
@@ -169,7 +175,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
             dagStorage,
             deployStorage,
             deployBuffer,
-            finalityDetector,
+            multiParentFinalizer,
             timeEff,
             metricEff,
             casperState,
@@ -245,9 +251,14 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                 _                <- blockStorage.put(genesis.blockHash, genesis, Seq.empty)
                 dag              <- dagStorage.getRepresentation
                 finalityDetector <- FinalityDetectorVotingMatrix.of[F](dag, genesis.blockHash, 0.1)
-                chainName        = "casperlabs"
-                minTTL           = 1.minute
-                deployBuffer     = DeployBuffer.create[F](chainName, minTTL)
+                multiParentFinalizer <- MultiParentFinalizer.empty(
+                                         dag,
+                                         genesis.blockHash,
+                                         finalityDetector
+                                       )
+                chainName    = "casperlabs"
+                minTTL       = 1.minute
+                deployBuffer = DeployBuffer.create[F](chainName, minTTL)
                 node = new GossipServiceCasperTestNode[F](
                   peer,
                   genesis,
@@ -265,7 +276,7 @@ trait GossipServiceCasperTestNodeFactory extends HashSetCasperTestNodeFactory {
                   dagStorage,
                   deployStorage,
                   deployBuffer,
-                  finalityDetector,
+                  multiParentFinalizer,
                   timeEff,
                   metricEff,
                   casperState,
