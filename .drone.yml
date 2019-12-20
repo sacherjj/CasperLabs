@@ -169,6 +169,37 @@ steps:
       - "**/.drone.yml"
       - "integration-testing/**"
 
+
+- name: ts-verify-contract-api
+  environment:
+    CARGO_FLAGS: "--locked"
+  commands:
+  - "cd execution-engine/contract-ffi-ts"
+  - "npm install --dev"
+  - "npm run asbuild"
+  - "npm run test"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/contract-ffi-ts/**"
+
+- name: ts-build-contracts
+  environment:
+    CARGO_FLAGS: "--locked"
+  commands:
+  - "cd execution-engine"
+  - "make build-contracts"
+  image: "casperlabs/buildenv:latest"
+  when:
+    event:
+    - pull_request
+    changeset:
+      includes:
+      - "**/contracts-ts/**"
+
 # This section is for bors' branches only
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
