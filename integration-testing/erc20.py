@@ -88,10 +88,13 @@ class SmartContract:
                 raise Exception(
                     f"Arguments ({kwargs.keys()}) don't match parameters ({parameters.keys()}) of method {name}"
                 )
-            arguments = ABI.args(
-                [ABI.string_value("method", name)]
-                + [parameters[p](p, kwargs[p]) for p in parameters]
+            # If using proxy make sure that token_hash ('erc20') is the first argument
+            args = (
+                [parameters[p](p, kwargs[p]) for p in parameters if p == "erc20"]
+                + [ABI.string_value("method", name)]
+                + [parameters[p](p, kwargs[p]) for p in parameters if p != "erc20"]
             )
+            arguments = ABI.args(args)
 
             arguments_string = (
                 f"{name}({','.join(f'{p}={kwargs[p]}' for p in parameters)})"
@@ -242,7 +245,9 @@ boss.call_contract(
     )
 )
 
+# balance = boss.call_contract(abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash_hex))
+# print(f"{agent0} balance={balance}")
 balance = boss.call_contract(
-    abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash_hex)
+    abc.balance(faucet.public_key_hex, faucet.public_key_hex, block_hash_hex)
 )
-print(f"{agent0} balance={balance}")
+print(f"{faucet} balance={balance}")
