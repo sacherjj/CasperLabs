@@ -245,6 +245,7 @@ boss.call_contract(
     )
 )
 
+block_hash_hex = next(node.client.showBlocks(1)).summary.block_hash.hex()
 # balance = boss.call_contract(abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash_hex))
 # print(f"{agent0} balance={balance}")
 balance = boss.call_contract(
