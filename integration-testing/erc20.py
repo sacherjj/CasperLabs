@@ -148,8 +148,18 @@ class ERC20(SmartContract):
         self.token_name = token_name
         self.proxy_name = "erc20_proxy"
 
+    def proxy_hash(self, bound_agent, deployer_public_hex, block_hash):
+        return self.contract_hash_by_name(
+            bound_agent, deployer_public_hex, self.proxy_name, block_hash
+        )
+
+    def token_hash(self, bound_agent, deployer_public_hex, block_hash):
+        return self.contract_hash_by_name(
+            bound_agent, deployer_public_hex, self.token_name, block_hash
+        )
+
     def deploy(self, initial_balance=None):
-        deploy = super().method("deploy")(
+        deploy = self.method("deploy")(
             token_name=self.token_name, initial_balance=initial_balance
         )
 
@@ -159,14 +169,14 @@ class ERC20(SmartContract):
 
         return execute
 
-    def balance(self, deployer_public_hex, account_public_hex, block_hash):
+    def balance(self, deployer_public_hex, account_public_hex, block_hash_hex):
         def execute(bound_agent):
-            token_hash = self.contract_hash_by_name(
-                bound_agent, deployer_public_hex, self.token_name, block_hash.hex()
+            token_hash = self.token_hash(
+                bound_agent, deployer_public_hex, block_hash_hex
             )
             key = f"{token_hash.hex()}:{BALANCE_KEY_SIZE_HEX}{BALANCE_BYTE}{account_public_hex}"
             response = bound_agent.node.client.queryState(
-                block_hash.hex(), key=key, path="", keyType="local"
+                block_hash_hex, key=key, path="", keyType="local"
             )
             return int(response.big_int.value)
 
@@ -178,23 +188,25 @@ class ERC20(SmartContract):
         sender_private_key,
         recipient_public_key_hex,
         amount,
-        block_hash,
+        block_hash_hex,
     ):
-        transfer_method = super().method("transfer")
+        method_transfer = self.method("transfer")
 
         def execute(bound_agent):
-            token_hash = self.contract_hash_by_name(
-                bound_agent, deployer_public_hex, self.token_name, block_hash
+            token_hash = self.token_hash(
+                bound_agent, deployer_public_hex, block_hash_hex
             )
-            proxy_hash = self.contract_hash_by_name(
-                bound_agent, deployer_public_hex, self.proxy_name, block_hash
+            proxy_hash = self.proxy_hash(
+                bound_agent, deployer_public_hex, block_hash_hex
             )
-            transfer = transfer_method(
+            transfer = method_transfer(
                 erc20=token_hash,
                 recipient=bytes.fromhex(recipient_public_key_hex),
                 amount=amount,
             )
-            response = transfer(bound_agent, session_hash=proxy_hash)
+            response = transfer(
+                bound_agent, private_key=sender_private_key, session_hash=proxy_hash
+            )
             return response  # TODO
 
         return execute
@@ -213,23 +225,24 @@ boss = faucet.on(node)
 
 boss.call_contract(abc.deploy(initial_balance=TOTAL_SUPPLY))
 print(f"Deployed ERC20")
-block_hash = next(node.client.showBlocks(1)).summary.block_hash
+block_hash_hex = next(node.client.showBlocks(1)).summary.block_hash.hex()
+# import pdb; pdb.set_trace()
 balance = boss.call_contract(
-    abc.balance(faucet.public_key_hex, faucet.public_key_hex, block_hash)
+    abc.balance(faucet.public_key_hex, faucet.public_key_hex, block_hash_hex)
 )
 print(f"{faucet} balance={balance}")
 
 boss.call_contract(
     abc.transfer(
-        faucet.public_key_hex,
-        faucet.private_key,
-        agent0.public_key_hex,
-        50,
-        block_hash.hex(),
+        deployer_public_hex=faucet.public_key_hex,
+        sender_private_key=faucet.private_key,
+        recipient_public_key_hex=agent0.public_key_hex,
+        amount=50,
+        block_hash_hex=block_hash_hex,
     )
 )
 
-balance = faucet.on(node).call_contract(
-    abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash)
+balance = boss.call_contract(
+    abc.balance(agent0.public_key_hex, agent0.public_key_hex, block_hash_hex)
 )
 print(f"{agent0} balance={balance}")
