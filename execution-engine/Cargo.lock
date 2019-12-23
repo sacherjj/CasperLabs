@@ -1291,6 +1291,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "local-state-add"
+version = "0.1.0"
+dependencies = [
+ "casperlabs-contract-ffi 0.21.0",
+]
+
+[[package]]
 name = "local-state-stored"
 version = "0.1.0"
 dependencies = [
